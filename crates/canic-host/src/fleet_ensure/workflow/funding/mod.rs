@@ -1,17 +1,27 @@
 //! Module: fleet_ensure::workflow::funding
 //!
-//! Responsibility: review and resume a paused operation's exact Ledger shortfall.
+//! Responsibility: review and resume a paused operation's exact native or Ledger shortfall.
 //! Boundary: preserves protocol effects and delegates transfers to the existing adapter.
+
+mod native;
 
 use crate::fleet_ensure::{
     model::{
-        EffectState, EnsureAction, EstateFundingRequiredRecord, EstateFundingReviewRecord,
-        FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord,
+        EffectState, EnsureAction, EstateFundingRequiredRecord, FleetEnsureCompletion,
+        FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord, FundingPauseRecord,
+        FundingReviewRecord,
     },
     ops::{EnsurePaths, EnsurePlatform, action_sha256, funding as records, write_journal},
     workflow::{EnsureWorkflowError, estate_funding_error, estate_funding_record_is_exact},
 };
 use std::collections::BTreeSet;
+
+pub(super) fn native_review_applicable(
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+) -> bool {
+    native::applicable(plan, journal)
+}
 
 pub(super) fn verify<E: std::error::Error + 'static>(
     plan: &FleetEnsurePlan,
@@ -29,33 +39,46 @@ pub(super) fn verify<E: std::error::Error + 'static>(
                 .checked_add(1)
         })
         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-    if journal.funding_reviews.len() > maximum_reviews {
+    native::verify(plan, journal, state)?;
+    if journal
+        .funding_reviews
+        .iter()
+        .filter(|review| matches!(review.pause, FundingPauseRecord::Estate(_)))
+        .count()
+        > maximum_reviews
+    {
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
     let mut incomplete = false;
     for review in &journal.funding_reviews {
+        if incomplete {
+            return Err(EnsureWorkflowError::JournalIntegrity);
+        }
+        incomplete = review
+            .effect
+            .as_ref()
+            .is_none_or(|effect| effect.state != EffectState::Applied);
+        let FundingPauseRecord::Estate(pause) = &review.pause else {
+            continue;
+        };
         let EnsureAction::FundEstate {
             created_at_time, ..
         } = review.action
         else {
             return Err(EnsureWorkflowError::JournalIntegrity);
         };
-        let expected = records::review(&review.pause, created_at_time);
-        if incomplete
-            || review.action != expected.action
+        let expected = records::review(pause, created_at_time);
+        if review.action != expected.action
             || review.review_sha256 != expected.review_sha256
             || created_at_time == 0
-            || !estate_funding_record_is_exact(&review.pause, plan, state)
-            || !identities.insert((
-                &review.pause.root,
-                &review.pause.pending_creation_operation_id,
-            ))
+            || !estate_funding_record_is_exact(pause, plan, state)
+            || !identities.insert((&pause.root, &pause.pending_creation_operation_id))
         {
             return Err(EnsureWorkflowError::JournalIntegrity);
         }
         if let Some(effect) = &review.effect {
             if effect.action_sha256 != action_sha256(&review.action)
-                || effect.destination_pre_cycles != Some(review.pause.available_cycles)
+                || effect.destination_pre_cycles != Some(review.pause.available_cycles())
                 || effect.pre_cycles.is_none()
                 || effect.created_principal.is_some()
                 || effect.pre_canister_version.is_some()
@@ -74,7 +97,7 @@ pub(super) fn verify<E: std::error::Error + 'static>(
             .is_none_or(|effect| effect.state != EffectState::Applied);
         if incomplete
             && (journal.completion != FleetEnsureCompletion::InProgress
-                || journal.estate_funding_required.as_ref() != Some(&review.pause))
+                || journal.estate_funding_required.as_ref() != Some(pause))
         {
             return Err(EnsureWorkflowError::JournalIntegrity);
         }
@@ -89,17 +112,20 @@ pub(super) fn prepare<P: EnsurePlatform>(
     state: &FleetEnsureStateRecord,
     created_at_time: u64,
     platform: &mut P,
-) -> Result<Option<EstateFundingReviewRecord>, EnsureWorkflowError<P::Error>> {
+) -> Result<Option<FundingReviewRecord>, EnsureWorkflowError<P::Error>> {
     if let Some(review) = journal.funding_reviews.last()
         && review
             .effect
             .as_ref()
             .is_none_or(|effect| effect.state != EffectState::Applied)
     {
+        if review.effect.is_none() && matches!(review.pause, FundingPauseRecord::Native(_)) {
+            return native::refresh(paths, plan, journal, state, created_at_time, platform);
+        }
         return Ok(Some(review.clone()));
     }
     let Some(pause) = &journal.estate_funding_required else {
-        return Ok(None);
+        return native::prepare(paths, plan, journal, state, created_at_time, platform);
     };
     if covered(journal, pause) {
         return Ok(None);
@@ -109,6 +135,9 @@ pub(super) fn prepare<P: EnsurePlatform>(
         .chain(journal.funding_reviews.iter().map(|review| &review.action))
         .filter_map(|action| match action {
             EnsureAction::FundEstate {
+                created_at_time, ..
+            }
+            | EnsureAction::Fund {
                 created_at_time, ..
             } => Some(*created_at_time),
             _ => None,
@@ -132,14 +161,26 @@ fn verify_balance<P: EnsurePlatform>(
     plan: &FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
     state: &FleetEnsureStateRecord,
-    review: &EstateFundingReviewRecord,
+    review: &FundingReviewRecord,
     platform: &mut P,
 ) -> Result<u128, EnsureWorkflowError<P::Error>> {
     let observation = platform
         .observe(&plan.operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
-    let pause = &review.pause;
-    verify_root_authority(plan, state, &observation, pause)?;
+    let FundingPauseRecord::Estate(pause) = &review.pause else {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    };
+    verify_root_authority(
+        plan,
+        state,
+        observation
+            .canisters
+            .get(&pause.root)
+            .and_then(Option::as_ref)
+            .ok_or(EnsureWorkflowError::DriftedBeforeApply)?,
+        &pause.root,
+        &pause.root_principal,
+    )?;
     let domain = observation
         .estate_funding_domains
         .get(&pause.root)
@@ -224,8 +265,9 @@ struct FundingRootAuthority<'a> {
 fn verify_root_authority<E: std::error::Error + 'static>(
     plan: &FleetEnsurePlan,
     state: &FleetEnsureStateRecord,
-    observation: &crate::fleet_ensure::model::FleetObservation,
-    pause: &EstateFundingRequiredRecord,
+    live: &crate::fleet_ensure::model::LiveCanister,
+    root: &str,
+    root_principal: &str,
 ) -> Result<(), EnsureWorkflowError<E>> {
     let desired = plan
         .reviewed_desired
@@ -235,13 +277,8 @@ fn verify_root_authority<E: std::error::Error + 'static>(
     let configured = desired
         .canisters
         .iter()
-        .find(|configured| configured.name == pause.root)
+        .find(|configured| configured.name == root)
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-    let live = observation
-        .canisters
-        .get(&pause.root)
-        .and_then(Option::as_ref)
-        .ok_or(EnsureWorkflowError::DriftedBeforeApply)?;
     let mut expected = configured.controllers.clone();
     for controller in &configured.controller_canisters {
         let principal = state
@@ -268,7 +305,7 @@ fn verify_root_authority<E: std::error::Error + 'static>(
     };
     let reviewed = FundingRootAuthority {
         controllers: &expected,
-        principal: &pause.root_principal,
+        principal: root_principal,
     };
     let running = live.status == crate::fleet_ensure::model::CanisterRuntimeStatus::Running
         && !live.reinstall_required;
@@ -300,10 +337,20 @@ pub(super) fn resume<P: EnsurePlatform>(
     digest: &str,
     platform: &mut P,
 ) -> Result<(), EnsureWorkflowError<P::Error>> {
+    if journal
+        .funding_reviews
+        .last()
+        .is_some_and(|review| matches!(review.pause, FundingPauseRecord::Native(_)))
+    {
+        return native::resume(paths, plan, journal, state, digest, platform);
+    }
     let Some(index) = journal.funding_reviews.len().checked_sub(1) else {
         return Ok(());
     };
     let review = &journal.funding_reviews[index];
+    let FundingPauseRecord::Estate(pause) = &review.pause else {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    };
     let retained_intent = review.effect.is_some();
     if review
         .effect
@@ -315,11 +362,11 @@ pub(super) fn resume<P: EnsurePlatform>(
     if review.effect.is_none() {
         if digest != review.review_sha256 {
             return Err(EnsureWorkflowError::EstateFundingRequired(Box::new(
-                estate_funding_error(&review.pause),
+                estate_funding_error(pause),
             )));
         }
         let source = verify_balance(plan, journal, state, review, platform)?;
-        let intent = records::intent(&review.action, source, review.pause.available_cycles);
+        let intent = records::intent(&review.action, source, review.pause.available_cycles());
         journal.funding_reviews[index].effect = Some(intent);
         write_journal(paths, journal)?;
     }
@@ -333,7 +380,13 @@ pub(super) fn resume<P: EnsurePlatform>(
             let observation = platform
                 .observe(&plan.operation_id, state)
                 .map_err(EnsureWorkflowError::Platform)?;
-            verify_root_authority(plan, state, &observation, &review.pause)?;
+            let root = review.pause.root();
+            let live = observation
+                .canisters
+                .get(root)
+                .and_then(Option::as_ref)
+                .ok_or(EnsureWorkflowError::DriftedBeforeApply)?;
+            verify_root_authority(plan, state, live, root, review.pause.root_principal())?;
         }
         // Retrying the exact timestamp/account/amount returns the same Ledger block.
         // A lost response retains this intent; no new transfer identity is allocated.
@@ -370,8 +423,8 @@ pub(super) fn resume<P: EnsurePlatform>(
     Ok(())
 }
 
-fn applied<E: std::error::Error + 'static>(
-    review: &EstateFundingReviewRecord,
+pub(super) fn applied<E: std::error::Error + 'static>(
+    review: &FundingReviewRecord,
 ) -> Result<(), EnsureWorkflowError<E>> {
     let effect = review
         .effect
@@ -379,8 +432,8 @@ fn applied<E: std::error::Error + 'static>(
         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     let debit = review
         .pause
-        .shortfall_cycles
-        .checked_add(review.pause.ledger_fee_cycles);
+        .shortfall_cycles()
+        .checked_add(review.pause.ledger_fee_cycles());
     if effect.state != EffectState::Applied
         || effect.receipt.as_ref().is_none_or(String::is_empty)
         || effect
@@ -400,8 +453,11 @@ pub(super) fn covered(
     pause: &EstateFundingRequiredRecord,
 ) -> bool {
     journal.funding_reviews.iter().any(|review| {
-        review.pause.root == pause.root
-            && review.pause.pending_creation_operation_id == pause.pending_creation_operation_id
+        let FundingPauseRecord::Estate(retained) = &review.pause else {
+            return false;
+        };
+        retained.root == pause.root
+            && retained.pending_creation_operation_id == pause.pending_creation_operation_id
             && review
                 .effect
                 .as_ref()
@@ -417,14 +473,14 @@ pub(super) fn totals<E: std::error::Error + 'static>(
         .funding_reviews
         .iter()
         .filter(|review| {
-            root.is_none_or(|root| root == review.pause.root) && review.effect.is_some()
+            root.is_none_or(|root| matches!(&review.pause, FundingPauseRecord::Estate(pause) if root == pause.root)) && review.effect.is_some()
         })
         .try_fold((0_u128, 0_u128), |(amount, fees), review| {
             Ok((
                 amount
-                    .checked_add(review.pause.shortfall_cycles)
+                    .checked_add(review.pause.shortfall_cycles())
                     .ok_or(EnsureWorkflowError::JournalIntegrity)?,
-                fees.checked_add(review.pause.ledger_fee_cycles)
+                fees.checked_add(review.pause.ledger_fee_cycles())
                     .ok_or(EnsureWorkflowError::JournalIntegrity)?,
             ))
         })

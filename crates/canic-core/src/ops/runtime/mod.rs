@@ -8,6 +8,7 @@ pub mod bootstrap;
 pub mod cycles_funding;
 pub mod env;
 pub mod fleet_activation;
+pub mod funding_usage;
 pub mod init_payload;
 pub mod install_source;
 pub mod log;

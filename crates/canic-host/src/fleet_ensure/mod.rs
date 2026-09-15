@@ -11,6 +11,7 @@ mod json;
 pub mod model;
 pub mod ops;
 pub mod policy;
+pub mod view;
 pub mod workflow;
 
 #[cfg(test)]

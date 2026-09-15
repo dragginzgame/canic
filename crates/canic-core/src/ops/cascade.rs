@@ -6,10 +6,13 @@
 
 use crate::{
     InternalError,
-    dto::cascade::{StateSnapshotInput, TopologyPathNode, TopologySnapshotInput},
+    dto::cascade::{
+        StateCascadeReport, StateSnapshotInput, TopologyPathNode, TopologySnapshotInput,
+    },
     ids::CanisterRole,
-    ops::{prelude::*, rpc::RpcOps},
+    ops::{cascade_report::StateCascadeReportOps, prelude::*, rpc::RpcOps},
     protocol,
+    view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
 };
 use candid::CandidType;
 use serde::Deserialize;
@@ -168,8 +171,18 @@ enum StoreCommandFragment<'a> {
 
 #[derive(CandidType, Deserialize)]
 enum StoreCommandResponseFragment {
-    SynchronizeState,
+    SynchronizeState(StateCascadeReport),
     SynchronizeTopology,
+}
+
+#[derive(CandidType)]
+enum ComponentCommandFragment<'a> {
+    SynchronizeState(&'a StateSnapshotInput),
+}
+
+#[derive(CandidType, Deserialize)]
+enum ComponentCommandResponseFragment {
+    SynchronizeState(StateCascadeReport),
 }
 
 impl CascadeOps {
@@ -277,19 +290,37 @@ impl CascadeOps {
     }
 
     pub async fn send_state_snapshot(
-        pid: Principal,
+        target: StateCascadeTarget,
         snapshot: &StateSnapshotInput,
-    ) -> Result<(), InternalError> {
-        let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
-            pid,
-            protocol::CANIC_WASM_STORE_COMMAND,
-            StoreCommandFragment::SynchronizeState(snapshot),
-        )
-        .await?;
-        match response {
-            StoreCommandResponseFragment::SynchronizeState => Ok(()),
-            StoreCommandResponseFragment::SynchronizeTopology => Err(InternalError::conflict()),
-        }
+    ) -> Result<StateCascadeReport, InternalError> {
+        let report = match target.endpoint {
+            StateCascadeEndpoint::Store => {
+                let response: StoreCommandResponseFragment = RpcOps::call_rpc_result(
+                    target.canister_id,
+                    protocol::CANIC_WASM_STORE_COMMAND,
+                    StoreCommandFragment::SynchronizeState(snapshot),
+                )
+                .await?;
+                match response {
+                    StoreCommandResponseFragment::SynchronizeState(report) => report,
+                    StoreCommandResponseFragment::SynchronizeTopology => {
+                        return Err(InternalError::conflict());
+                    }
+                }
+            }
+            StateCascadeEndpoint::Component => {
+                let ComponentCommandResponseFragment::SynchronizeState(report) =
+                    RpcOps::call_rpc_result(
+                        target.canister_id,
+                        protocol::CANIC_COMMAND,
+                        ComponentCommandFragment::SynchronizeState(snapshot),
+                    )
+                    .await?;
+                report
+            }
+        };
+        StateCascadeReportOps::validate_reply(target.canister_id, &report)?;
+        Ok(report)
     }
 
     pub async fn send_topology_snapshot(
@@ -304,7 +335,7 @@ impl CascadeOps {
         .await?;
         match response {
             StoreCommandResponseFragment::SynchronizeTopology => Ok(()),
-            StoreCommandResponseFragment::SynchronizeState => Err(InternalError::conflict()),
+            StoreCommandResponseFragment::SynchronizeState(_) => Err(InternalError::conflict()),
         }
     }
 }

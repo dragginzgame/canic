@@ -13,6 +13,7 @@ use crate::{
     ids::CanisterRole,
     log,
     log::Topic,
+    model::cycles_funding::CHILD_FUNDING_COMMAND_KIND,
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, RecoveryReason, ReplayActor,
     },
@@ -38,10 +39,10 @@ use crate::{
         cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
         replay::mark_recovery_required_after_failure,
         rpc::{RootCapabilityAuthority, RpcWorkflowError},
+        runtime::cycles::CycleWorkflow,
     },
 };
 
-const ROOT_REQUEST_CYCLES_COMMAND_KIND: &str = "root.request_cycles.v1";
 const ROOT_REQUEST_CYCLES_VALUE_TRANSFER_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_ROOT_REQUEST_CYCLES_VALUE_TRANSFER_OPERATIONS_PER_WINDOW: u64 = 60;
 const MIN_ROOT_REQUEST_CYCLES_AFTER_RESERVATION: u128 = 1_000_000_000;
@@ -419,9 +420,18 @@ async fn execute_authorized_request_cycles(
     let ledger_before_grant = CyclesFundingLedgerOps::snapshot(ctx.caller);
     CyclesFundingLedgerOps::record_child_grant(ctx.caller, grant.approved_cycles, ctx.now);
 
-    if let Err(err) =
-        MgmtOps::deposit_cycles_with_permit(&cost_permit, ctx.caller, grant.approved_cycles).await
-    {
+    let transfer =
+        MgmtOps::deposit_cycles_with_permit(&cost_permit, ctx.caller, grant.approved_cycles).await;
+    // Reconcile even after a rejected call: the current balance owns demand.
+    // A scheduling failure must not replace the transfer's result or its receipt.
+    if let Err(error) = CycleWorkflow::reconcile_after_transfer() {
+        log!(
+            Topic::Cycles,
+            Error,
+            "funding deadline reconciliation after child transfer failed: {error}"
+        );
+    }
+    if let Err(err) = transfer {
         CyclesFundingLedgerOps::restore_child_snapshot(ctx.caller, ledger_before_grant);
         let err = CostGuardWorkflow::recover_after_failure(&cost_permit, IcOps::now_secs(), err);
         let err =
@@ -565,7 +575,7 @@ pub(super) fn request_cycles_cost_guard_request(
 
 fn root_request_cycles_command_kind() -> Result<CommandKind, crate::model::replay::CommandKindError>
 {
-    CommandKind::new(ROOT_REQUEST_CYCLES_COMMAND_KIND)
+    CommandKind::new(CHILD_FUNDING_COMMAND_KIND)
 }
 
 pub(super) fn mark_request_cycles_external_effect(
@@ -595,7 +605,7 @@ pub(super) fn mark_request_cycles_external_effect(
         Topic::Rpc,
         Info,
         "request cycles replay effect marked effect=deposit_cycles command_kind={} caller={} approved_cycles={}",
-        ROOT_REQUEST_CYCLES_COMMAND_KIND,
+        CHILD_FUNDING_COMMAND_KIND,
         ctx.caller,
         approved_cycles
     );
@@ -620,7 +630,7 @@ fn preserve_request_cycles_recovery_required(
         Topic::Rpc,
         Error,
         "request cycles replay recovery required effect=deposit_cycles command_kind={} caller={} approved_cycles={} diagnostic={}",
-        ROOT_REQUEST_CYCLES_COMMAND_KIND,
+        CHILD_FUNDING_COMMAND_KIND,
         ctx.caller,
         approved_cycles,
         diagnostic

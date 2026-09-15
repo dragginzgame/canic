@@ -122,6 +122,13 @@ canic-control-plane = { path = "../canic-control-plane", optional = true }
 }
 
 fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
+    compile_infrastructure_fixture_at(
+        context,
+        &crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
+    );
+}
+
+fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &Path) {
     let output = crate::cargo_command()
         .args(["build", "--locked", "--offline", "--manifest-path"])
         .arg(context.workspace_root.join("Cargo.toml"))
@@ -129,14 +136,11 @@ fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
             "--target",
             "wasm32-unknown-unknown",
             "--profile",
-            "fast",
+            context.profile.target_dir_name(),
             "--features",
             "canic/fleet",
         ])
-        .env(
-            "CARGO_TARGET_DIR",
-            crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
-        )
+        .env("CARGO_TARGET_DIR", target)
         .env("RUSTC_WRAPPER", "")
         .output()
         .unwrap();
@@ -145,6 +149,63 @@ fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn first_release_build_admits_cargo_discovery_of_absent_package_prefixed_build_script() {
+    run_with_private_cargo_target(first_release_build_with_absent_cargo_input);
+}
+
+fn first_release_build_with_absent_cargo_input() {
+    let (root, mut context) = infrastructure_build_fixture();
+    context.profile = crate::canister_build::CanisterBuildProfile::Release;
+    let manifest = context.workspace_root.join("Cargo.toml");
+    let contents = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        contents.replace(
+            "edition = \"2024\"",
+            "edition = \"2024\"\nbuild = \"src/build.rs\"",
+        ),
+    )
+    .unwrap();
+    let source = context.workspace_root.join("src/build.rs");
+    fs::write(
+        &source,
+        "fn main() { println!(\"cargo::rerun-if-changed=app/src/build.rs\"); }\n",
+    )
+    .unwrap();
+    let missing = context.workspace_root.join("app/src/build.rs");
+    let before = input_snapshot(&context, &[]).unwrap();
+    assert!(!before.files.contains_key(missing.to_str().unwrap()));
+    for target in [
+        crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
+        crate::canister_build::cache::declaration_target_root(&context.workspace_root),
+    ] {
+        let record = target.join("wasm32-unknown-unknown/release/reuse_app.d");
+        assert!(!record.exists());
+        compile_infrastructure_fixture_at(&context, &target);
+        assert!(
+            fs::read_to_string(record)
+                .unwrap()
+                .contains(missing.to_str().unwrap())
+        );
+    }
+    assert!(!missing.exists());
+    let after = input_snapshot(&context, &[]).unwrap();
+    assert_eq!(after.files[missing.to_str().unwrap()], "absent");
+    before.validate_after(&after).unwrap();
+    assert_ne!(before.digest(), after.digest());
+    compile_infrastructure_fixture(&context);
+    let replay = input_snapshot(&context, &[]).unwrap();
+    after.validate_after(&replay).unwrap();
+    assert_eq!(after.digest(), replay.digest());
+
+    fs::write(&source, b"fn main() {}\n").unwrap();
+    assert!(
+        matches!(after.validate_after(&input_snapshot(&context, &[]).unwrap()), Err(BuildReuseError::ChangedInput(path)) if path == source)
+    );
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

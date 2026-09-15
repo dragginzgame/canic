@@ -1,12 +1,13 @@
 use canic_core::{
-    cdk::types::{Principal, TC},
+    cdk::types::Principal,
     control_plane_support::{
         error::InternalError,
         model::replay::CommandKind,
         ops::{
-            cost_guard::{CostGuardPermit, CostGuardRequest},
+            cost_guard::{CostGuardPermit, CostGuardRequest, CostGuardReserveError},
             ic::IcOps,
         },
+        policy::deployment::MINIMUM_DEPLOYMENT_RESERVE_CYCLES,
         workflow::cost_guard::{CostGuardWorkflow, map_cost_guard_reserve_error},
     },
     replay_policy::CostClass,
@@ -14,7 +15,6 @@ use canic_core::{
 
 const CONTROL_PLANE_DEPLOYMENT_QUOTA_WINDOW_SECONDS: u64 = 60;
 const MAX_CONTROL_PLANE_DEPLOYMENT_OPERATIONS_PER_WINDOW: u64 = 64;
-const MIN_CONTROL_PLANE_CYCLES_AFTER_RESERVATION: u128 = TC;
 
 pub const COMPONENT_CREATE_COMMAND_KIND: &str = "management.control_plane.component_create.v1";
 pub const COMPONENT_CHILD_CREATE_COMMAND_KIND: &str =
@@ -67,7 +67,12 @@ fn reserve_control_plane_deployment_cost_guard(
         max_operations_per_window: MAX_CONTROL_PLANE_DEPLOYMENT_OPERATIONS_PER_WINDOW,
         current_cycle_balance: IcOps::canister_cycle_balance().to_u128(),
         cycle_reservation_cycles,
-        min_cycles_after_reservation: MIN_CONTROL_PLANE_CYCLES_AFTER_RESERVATION,
+        min_cycles_after_reservation: MINIMUM_DEPLOYMENT_RESERVE_CYCLES,
     })
-    .map_err(map_cost_guard_reserve_error)
+    .map_err(|error| match error {
+        CostGuardReserveError::CycleReserveRejected { .. } => {
+            InternalError::public(canic_core::diagnostics::codes::DEPLOYMENT_CYCLE_RESERVE_REQUIRED)
+        }
+        other => map_cost_guard_reserve_error(other),
+    })
 }

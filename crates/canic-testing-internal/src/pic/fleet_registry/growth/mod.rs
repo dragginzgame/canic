@@ -14,6 +14,8 @@ use canic_host::{
 use serde_json::json;
 use std::{fs, os::unix::fs::PermissionsExt as _, path::Path};
 
+pub(super) use catalog::tests::synthetic_growth_catalog_meets_host_agreement_policy;
+
 pub(super) fn generate(
     workspace: &Path,
     config: &Path,
@@ -93,6 +95,7 @@ esac
     .unwrap();
     fs::set_permissions(&wrapper, fs::Permissions::from_mode(0o700)).unwrap();
     let generated = generate_desired_fleet(&FleetGenerateRequest {
+        catalog_progress: None,
         app_config: config,
         environment: "ic",
         fleet: &retained.fleet,

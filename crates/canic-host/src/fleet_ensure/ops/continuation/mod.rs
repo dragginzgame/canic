@@ -8,6 +8,7 @@ use crate::{
         model::{
             DesiredFleet, FleetEnsureContinuationAuthority, FleetEnsureJournalRecord,
             FleetEnsurePlan, FleetEnsureSuccessorPhaseRecord, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
+            StartupFundingRequirement,
         },
         ops::{EnsurePaths, EnsureStateError, artifact_sha256, is_sha256, read_plan, write_plan},
         policy::expected_plan_sha256,
@@ -19,11 +20,15 @@ use crate::{
 use canic_core::{
     cdk::utils::hash::sha256_hex, dto::root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
 };
-use std::{collections::BTreeSet, path::Path};
+use std::{
+    collections::{BTreeMap, BTreeSet},
+    path::Path,
+};
 
 pub(super) fn resolve_authority(
     root: &Path,
     desired: &DesiredFleet,
+    startup: &mut BTreeMap<String, StartupFundingRequirement>,
 ) -> Result<Option<FleetEnsureContinuationAuthority>, EnsureStateError> {
     let Some(bootstrap) = desired.bootstrap.as_ref() else {
         return Ok(None);
@@ -87,6 +92,7 @@ pub(super) fn resolve_authority(
         })
         .and_then(|attempts| u32::try_from(attempts).ok())
         .ok_or_else(|| invalid("fixture publication retry bound overflow"))?;
+    bind_startup_steps(desired, startup, per_root, fixture_steps)?;
     Ok(Some(FleetEnsureContinuationAuthority {
         fixture_publication_retry_attempts,
         app_config_sha256: artifact_sha256(root, &protocol.app_config)?,
@@ -97,6 +103,36 @@ pub(super) fn resolve_authority(
         root_candid_sha256: artifact_sha256(root, &protocol.root_candid)?,
         store_candid_sha256: artifact_sha256(root, &protocol.store_candid)?,
     }))
+}
+
+/// Attribute each Root's own bounded catalogue, including its imports and shared orchestration.
+fn bind_startup_steps(
+    desired: &DesiredFleet,
+    startup: &mut BTreeMap<String, StartupFundingRequirement>,
+    per_root: u64,
+    fixture_steps: u64,
+) -> Result<(), EnsureStateError> {
+    let Some(bootstrap) = &desired.bootstrap else {
+        return Ok(());
+    };
+    let retries = fixture_steps
+        .checked_mul(u64::from(
+            desired.maximum_stalled_observations.saturating_sub(1),
+        ))
+        .ok_or_else(|| invalid("Root retry step bound overflow"))?;
+    for root in &bootstrap.roots {
+        let requirement = startup
+            .get_mut(&root.root)
+            .ok_or_else(|| invalid("Root startup requirement is missing"))?;
+        // Store publication is included conservatively, but other Roots' catalogues are not.
+        requirement.maximum_continuation_steps = per_root
+            .checked_add(root.canister_pool_imports.len() as u64)
+            .and_then(|steps| steps.checked_add(2))
+            .and_then(|steps| steps.checked_add(retries))
+            .and_then(|steps| u32::try_from(steps).ok())
+            .ok_or_else(|| invalid("Root startup step bound overflow"))?;
+    }
+    Ok(())
 }
 
 fn fixture_publication_steps(root: &Path, desired: &DesiredFleet) -> Result<u64, EnsureStateError> {

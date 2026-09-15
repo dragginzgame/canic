@@ -25,8 +25,8 @@ pub use error::IcpCommandError;
 pub use identity::IcpIdentityAccountFormat;
 pub use management::IcpManagementCallError;
 pub use model::{
-    IcpCanisterStatusReport, IcpCanisterStatusSettings, IcpCli, IcpRawOutput, IcpSnapshot,
-    LocalReplicaTarget,
+    IcpCanisterQueryStats, IcpCanisterStatusReport, IcpCanisterStatusSettings,
+    IcpCanisterVisibility, IcpCli, IcpRawOutput, IcpSnapshot, LocalReplicaTarget,
 };
 pub(crate) use response::response_bytes;
 pub use response::{IcpJsonResponseError, decode_json_result_response};

@@ -4,6 +4,7 @@
 
 mod bundle;
 mod capacity;
+mod uploaded;
 
 use crate::{
     durable_io::read_regular_bytes,
@@ -30,6 +31,7 @@ use std::{collections::BTreeMap, path::Path};
 
 pub use bundle::{manifest_digest, publish_bundle, verify_bundle};
 pub use capacity::{asset_capacity, payload_inventory};
+pub use uploaded::{FrontendAssetReader, IcpFrontendAssetReader, prepare_uploaded};
 
 /// Maximum source/binding size per file, protecting host memory during export and verification.
 pub const MAX_FRONTEND_FILE_BYTES: usize = 4 * 1024 * 1024;

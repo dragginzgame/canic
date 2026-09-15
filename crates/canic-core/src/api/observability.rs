@@ -17,6 +17,13 @@ use candid::Principal;
 pub struct ObservabilityApi;
 
 impl ObservabilityApi {
+    /// Return child funding usage without changing grants, reservations or replay state.
+    pub fn child_funding(
+        child: Principal,
+    ) -> Result<crate::dto::observability::ChildFundingUsage, Error> {
+        observability::child_funding(child).map_err(Into::into)
+    }
+
     /// Observe one canister that independently recognizes this Root as a controller.
     pub async fn observe_root_controlled_canister(
         canister_id: Principal,

@@ -102,6 +102,7 @@ impl ComponentRegistryOps {
             .ok_or_else(InternalError::unavailable)?;
         validate_partition_record(&partition)?;
         let record = RootComponentChildAllocationRecord {
+            last_failure: None,
             operation_id,
             component: decision.component,
             parent_canister_id: decision.parent_canister_id,

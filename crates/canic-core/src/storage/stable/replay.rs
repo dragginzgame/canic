@@ -295,6 +295,24 @@ impl ReplayReceiptStore {
         })
     }
 
+    /// Retain unresolved effects beyond ordinary replay expiry for funding observations.
+    pub(crate) fn pending_for_actor_command(
+        actor: ReplayActor,
+        command_kind: &str,
+        now_ns: u64,
+    ) -> Vec<ReplayReceiptRecord> {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            map.iter()
+                .map(|entry| entry.value())
+                .filter(|record| {
+                    record.actor == actor
+                        && record.command_kind == command_kind
+                        && record_is_pending(record, now_ns)
+                })
+                .collect()
+        })
+    }
+
     #[must_use]
     pub(crate) fn pending_len_for_command_kind(command_kind: &str, now_ns: u64) -> usize {
         REPLAY_RECEIPTS.with_borrow(|map| {

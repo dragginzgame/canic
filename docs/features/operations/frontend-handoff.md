@@ -161,3 +161,56 @@ requires Node.js and the example's npm dependencies. The recorded final run take
 148.27 seconds (174 seconds including the runner); its frontend/SDK phase takes
 4.01 seconds. The one-role fixture's complete bundle is 136,858 bytes. These are
 controlled qualification measurements, not a Toko workload or asset-upload cost.
+
+## Verify the uploaded handoff after sync
+
+Keep the existing asset uploader. After it completes, read back the exact handoff:
+
+```sh
+canic --environment ic frontend verify-uploaded frontend/canic --sha256 <independently-retained-digest> --canister <asset-principal> --prefix /canic --json
+```
+
+The command checks the local bundle first, binds the environment and asset Principal,
+checks the connected network's trust identity, and reads the identity encoding of
+all declared files with the asset canister's `get`/`get_chunk` queries. It compares
+actual bytes, lengths and SHA-256, including the exact uploaded manifest JSON.
+The asset uploader must retain SHA-256 metadata and identity encodings.
+A missing asset, changed content, wrong target, unsupported encoding or exhausted
+budget returns a typed failure and a nonzero exit. Rerunning verification has no
+canister mutation effect.
+
+Upload the manifest and role binding files beneath `--prefix`. Upload the generated
+`.well-known/ii-alternative-origins` at `/.well-known/ii-alternative-origins`, regardless
+of that prefix. The JSON report lists the exact remote keys that were checked.
+The prefix `/` selects the root for all handoff files.
+
+ICP 1.5 allows explicit sync steps after a recipe's sync steps. Append a script
+step to the externally owned asset canister's existing recipe declaration:
+
+```yaml
+sync:
+  steps:
+    - type: script
+      commands:
+        - >-
+          canic --environment "$ICP_CLI_ENVIRONMENT" frontend verify-uploaded frontend/canic
+          --sha256 "$CANIC_FRONTEND_SHA256" --canister "$ICP_CLI_CID" --prefix /canic --json
+```
+
+Set `CANIC_FRONTEND_SHA256` from the independently retained build input. Resolve
+`frontend/canic` relative to the canister's configured directory. ICP's
+[script sync context](https://github.com/dfinity/icp-cli/blob/v1.5.0/crates/icp/src/canister/sync/script.rs)
+supplies the selected environment and current asset canister ID. Conflicting
+explicit and script-context targets reject. Fleet descendants are taken from the
+verified handoff; they need not exist in ICP's canister ID store.
+
+This is a host script integration. ICP's experimental project bundler rejects
+script sync steps; it is not a portable WASI sync plugin. Capacity review belongs
+before upload, since recipe-appended verification runs after upload.
+
+Readback bounds are 4 MiB per file, at most 64 chunks per file, 30 seconds per query
+and 120 seconds for all asset queries. HTTP responses and Candid decoding are also
+bounded. Local ICP identity/network discovery precedes that query deadline.
+The check observes exact asset content, not an atomic snapshot of every file,
+HTTP certification, CORS, content-type headers, caching or a browser II ceremony.
+Those remain the asset owner's delivery checks.

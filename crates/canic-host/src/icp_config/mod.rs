@@ -1,8 +1,18 @@
+//! Local ICP configuration inspection and Canic App membership validation.
+//!
+//! Owns the inline config projection; ICP owns build/recipe execution and network state.
+
+mod manifest;
+
+#[cfg(test)]
+mod tests;
+
 use crate::{
     config_discovery::{
         ConfigDiscoveryError, current_canic_workspace_root,
         discover_workspace_canic_config_choices, workspace_app_roots,
     },
+    icp_config::manifest::IcpManifest,
     release_set::{AppConfigError, AppConfigSnapshot, WorkspaceDiscoveryError, icp_root},
     workspace_discovery::discover_icp_root_from,
 };
@@ -10,9 +20,12 @@ use canic_core::ids::BuildNetwork;
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
+    io::Read as _,
     path::{Path, PathBuf},
 };
 use thiserror::Error as ThisError;
+
+pub use manifest::IcpManifestError;
 
 const ICP_CONFIG_FILE: &str = "icp.yaml";
 pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
@@ -23,6 +36,11 @@ pub const DEFAULT_LOCAL_GATEWAY_PORT: u16 = 8000;
 
 #[derive(Debug, ThisError)]
 pub enum IcpConfigError {
+    #[error("{}: {source}", path.display())]
+    Manifest {
+        path: PathBuf,
+        source: IcpManifestError,
+    },
     #[error("could not find icp.yaml from {}", start.display())]
     NoIcpRoot { start: PathBuf },
 
@@ -55,16 +73,19 @@ pub struct IcpProjectConfigReport {
     pub environments: Vec<String>,
     pub missing_canisters: Vec<String>,
     pub missing_environments: Vec<String>,
+    /// Required App roles excluded by each declared environment's selection.
+    pub missing_environment_canisters: BTreeMap<String, Vec<String>>,
     pub local_network_present: bool,
 }
 
 impl IcpProjectConfigReport {
     #[must_use]
-    pub const fn is_ready(&self) -> bool {
+    pub fn is_ready(&self) -> bool {
         self.icp_yaml_present
             && self.local_network_present
             && self.missing_canisters.is_empty()
             && self.missing_environments.is_empty()
+            && self.missing_environment_canisters.is_empty()
     }
 
     #[must_use]
@@ -88,6 +109,12 @@ impl IcpProjectConfigReport {
                 self.missing_environments.join(", ")
             ));
         }
+        for (environment, canisters) in &self.missing_environment_canisters {
+            issues.push(format!(
+                "environment {environment} excludes required canisters: {}",
+                canisters.join(", ")
+            ));
+        }
         issues
     }
 }
@@ -100,44 +127,24 @@ pub(crate) fn configured_local_gateway_port() -> Result<u16, IcpConfigError> {
 
 /// Return the configured local ICP gateway port for one ICP project root.
 pub fn configured_local_gateway_port_from_root(root: &Path) -> Result<u16, IcpConfigError> {
-    let source = fs::read_to_string(root.join(ICP_CONFIG_FILE))?;
-    Ok(local_gateway_port_from_yaml(&source))
+    let path = root.join(ICP_CONFIG_FILE);
+    let (source, _) = read_optional_icp_yaml(&path)?;
+    local_gateway_port_from_yaml(&source)
+        .map_err(|source| IcpConfigError::Manifest { path, source })
 }
 
 /// Resolve a selected ICP environment to the build-time network class used by Canic.
 ///
-/// The implicit `local` and `ic` environments resolve without project config.
-/// Other names must exist under `environments` in `icp.yaml`; their declared
-/// ICP network decides whether Cargo builds a local/test or IC mainnet artifact.
+/// Explicit environment declarations take precedence over implicit local/ic defaults.
+/// Canic reads inline network identity without resolving recipes or dependencies.
 pub fn resolve_icp_build_network_from_root(
     root: &Path,
     environment: &str,
 ) -> Result<BuildNetwork, IcpConfigError> {
-    let environment = environment.trim();
-    if environment.is_empty() {
-        return Err(IcpConfigError::Config(
-            "ICP environment name must not be empty".to_string(),
-        ));
-    }
-    match environment {
-        "local" => return Ok(BuildNetwork::Local),
-        "ic" => return Ok(BuildNetwork::Ic),
-        _ => {}
-    }
-
     let path = root.join(ICP_CONFIG_FILE);
-    let source = fs::read_to_string(&path).map_err(|err| {
-        if err.kind() == std::io::ErrorKind::NotFound {
-            IcpConfigError::Config(format!(
-                "ICP environment '{environment}' cannot be resolved because {} is missing",
-                path.display()
-            ))
-        } else {
-            IcpConfigError::Io(err)
-        }
-    })?;
+    let (source, _) = read_optional_icp_yaml(&path)?;
     resolve_icp_build_network_from_yaml(&source, environment)
-        .map_err(|message| IcpConfigError::Config(format!("{}: {message}", path.display())))
+        .map_err(|source| IcpConfigError::Manifest { path, source })
 }
 
 /// Inspect whether `icp.yaml` contains the entries implied by Canic App configs.
@@ -156,23 +163,38 @@ pub fn inspect_canic_icp_yaml_from_root(
     let path = root.join(ICP_CONFIG_FILE);
     let (source, icp_yaml_present) = read_optional_icp_yaml(&path)?;
     let spec = discover_project_spec(root, app_filter)?;
-    let configured_canisters = top_level_named_items(&source, "canisters:");
-    let configured_environments = top_level_named_items(&source, "environments:");
-    let lines = source.lines().collect::<Vec<_>>();
-    let local_network_present = local_network_block(&lines).is_some();
+    let manifest = IcpManifest::parse(&source).map_err(|source| IcpConfigError::Manifest {
+        path: path.clone(),
+        source,
+    })?;
+    let local_network_present = icp_yaml_present;
 
     let missing_canisters = spec
         .canisters
         .iter()
-        .filter(|name| !configured_canisters.contains(*name))
+        .filter(|name| !manifest.has_canister(name))
         .cloned()
         .collect::<Vec<_>>();
     let missing_environments = spec
         .environments
         .keys()
-        .filter(|name| !configured_environments.contains(*name))
+        .filter(|name| !manifest.has_environment(name))
         .cloned()
         .collect::<Vec<_>>();
+
+    let missing_environment_canisters = spec
+        .environments
+        .iter()
+        .filter(|(environment, _)| manifest.has_environment(environment))
+        .filter_map(|(environment, roles)| {
+            let missing = roles
+                .iter()
+                .filter(|role| !manifest.contains(environment, role))
+                .cloned()
+                .collect::<Vec<_>>();
+            (!missing.is_empty()).then(|| (environment.clone(), missing))
+        })
+        .collect();
 
     Ok(IcpProjectConfigReport {
         path,
@@ -182,13 +204,18 @@ pub fn inspect_canic_icp_yaml_from_root(
         environments: spec.environments.into_keys().collect(),
         missing_canisters,
         missing_environments,
+        missing_environment_canisters,
         local_network_present,
     })
 }
 
 fn read_optional_icp_yaml(path: &Path) -> Result<(String, bool), IcpConfigError> {
-    match fs::read_to_string(path) {
-        Ok(source) => Ok((source, true)),
+    match fs::File::open(path) {
+        Ok(file) => {
+            let mut source = String::new();
+            file.take(1024 * 1024 + 1).read_to_string(&mut source)?;
+            Ok((source, true))
+        }
         Err(err) if err.kind() == std::io::ErrorKind::NotFound => Ok((String::new(), false)),
         Err(err) => Err(err.into()),
     }
@@ -278,196 +305,13 @@ fn display_workspace_app_roots(root: &Path) -> String {
         .join(" or ")
 }
 
-fn top_level_section(lines: &[&str], header: &str) -> Option<(usize, usize)> {
-    let start = lines
-        .iter()
-        .position(|line| line_indent(line) == 0 && line.trim() == header)?;
-    let end = lines
-        .iter()
-        .enumerate()
-        .skip(start + 1)
-        .find(|(_, line)| {
-            !line.trim().is_empty() && line_indent(line) == 0 && !line.trim_start().starts_with('#')
-        })
-        .map_or(lines.len(), |(index, _)| index);
-    Some((start, end))
-}
-
 fn resolve_icp_build_network_from_yaml(
     source: &str,
     environment: &str,
-) -> Result<BuildNetwork, String> {
-    let lines = source.lines().collect::<Vec<_>>();
-    let (_, environment_start, environment_end) =
-        named_item_block(&lines, "environments:", environment)?.ok_or_else(|| {
-            format!(
-                "ICP environment '{environment}' is not declared under environments; add it or use the implicit local/ic environment"
-            )
-        })?;
-    let configured_network =
-        item_scalar_field(&lines, environment_start, environment_end, "network")?.ok_or_else(
-            || format!("ICP environment '{environment}' has no configured backing network"),
-        )?;
-
-    match configured_network.as_str() {
-        "ic" => Ok(BuildNetwork::Ic),
-        "local" => Ok(BuildNetwork::Local),
-        _ => {
-            let (_, network_start, network_end) =
-                named_item_block(&lines, "networks:", &configured_network)?.ok_or_else(|| {
-                    format!(
-                        "ICP environment '{environment}' references undeclared backing network '{configured_network}'"
-                    )
-                })?;
-            let mode = item_scalar_field(&lines, network_start, network_end, "mode")?
-                .ok_or_else(|| format!("ICP backing network '{configured_network}' has no mode"))?;
-            match mode.as_str() {
-                // ICP CLI reserves the implicit `ic` network for mainnet.
-                // Declared managed and connected networks are non-mainnet build classes.
-                "connected" | "managed" => Ok(BuildNetwork::Local),
-                _ => Err(format!(
-                    "ICP backing network '{configured_network}' has unsupported mode '{mode}'"
-                )),
-            }
-        }
-    }
+) -> Result<BuildNetwork, IcpManifestError> {
+    IcpManifest::parse(source)?.build_network(environment)
 }
 
-fn named_item_block(
-    lines: &[&str],
-    section: &str,
-    name: &str,
-) -> Result<Option<(String, usize, usize)>, String> {
-    let Some((section_start, section_end)) = top_level_section(lines, section) else {
-        return Ok(None);
-    };
-    let starts = lines[section_start + 1..section_end]
-        .iter()
-        .enumerate()
-        .filter_map(|(offset, line)| {
-            if line_indent(line) != 2 {
-                return None;
-            }
-            line.trim()
-                .strip_prefix("- name:")
-                .map(trim_yaml_scalar)
-                .filter(|item_name| !item_name.is_empty())
-                .map(|item_name| (item_name.to_string(), section_start + 1 + offset))
-        })
-        .collect::<Vec<_>>();
-    let matches = starts
-        .iter()
-        .enumerate()
-        .filter(|(_, (item_name, _))| item_name == name)
-        .collect::<Vec<_>>();
-    let [(match_index, (item_name, start))] = matches.as_slice() else {
-        return if matches.is_empty() {
-            Ok(None)
-        } else {
-            Err(format!("duplicate '{name}' entries under {section}"))
-        };
-    };
-    let end = starts
-        .get(match_index + 1)
-        .map_or(section_end, |(_, next_start)| *next_start);
-    Ok(Some((item_name.clone(), *start, end)))
+fn local_gateway_port_from_yaml(source: &str) -> Result<u16, IcpManifestError> {
+    IcpManifest::parse(source)?.local_gateway_port()
 }
-
-fn item_scalar_field(
-    lines: &[&str],
-    start: usize,
-    end: usize,
-    field: &str,
-) -> Result<Option<String>, String> {
-    let prefix = format!("{field}:");
-    let values = lines[start + 1..end]
-        .iter()
-        .filter_map(|line| {
-            if line_indent(line) != 4 {
-                return None;
-            }
-            line.trim()
-                .strip_prefix(&prefix)
-                .map(trim_yaml_scalar)
-                .filter(|value| !value.is_empty())
-                .map(str::to_string)
-        })
-        .collect::<Vec<_>>();
-    match values.as_slice() {
-        [] => Ok(None),
-        [value] => Ok(Some(value.clone())),
-        _ => Err(format!(
-            "duplicate '{field}' fields in '{}'",
-            section_name(lines, start)
-        )),
-    }
-}
-
-fn section_name<'a>(lines: &'a [&'a str], start: usize) -> &'a str {
-    lines[start]
-        .trim()
-        .strip_prefix("- name:")
-        .map_or("item", trim_yaml_scalar)
-}
-
-fn local_gateway_port_from_yaml(source: &str) -> u16 {
-    let lines = source.lines().collect::<Vec<_>>();
-    let Some((start, end)) = local_network_block(&lines) else {
-        return DEFAULT_LOCAL_GATEWAY_PORT;
-    };
-
-    lines[start..end]
-        .iter()
-        .find_map(|line| {
-            line.trim()
-                .strip_prefix("port:")
-                .and_then(|value| value.trim().parse::<u16>().ok())
-        })
-        .unwrap_or(DEFAULT_LOCAL_GATEWAY_PORT)
-}
-
-fn local_network_block(lines: &[&str]) -> Option<(usize, usize)> {
-    let (section_start, section_end) = top_level_section(lines, "networks:")?;
-    let start = lines[section_start + 1..section_end]
-        .iter()
-        .position(|line| line_indent(line) == 2 && line.trim() == "- name: local")?
-        + section_start
-        + 1;
-    let end = lines[start + 1..section_end]
-        .iter()
-        .position(|line| line_indent(line) == 2 && line.trim_start().starts_with("- name:"))
-        .map_or(section_end, |offset| start + 1 + offset);
-    Some((start, end))
-}
-
-fn top_level_named_items(source: &str, header: &str) -> BTreeSet<String> {
-    let lines = source.lines().collect::<Vec<_>>();
-    let Some((start, end)) = top_level_section(&lines, header) else {
-        return BTreeSet::new();
-    };
-
-    lines[start + 1..end]
-        .iter()
-        .filter_map(|line| {
-            if line_indent(line) != 2 {
-                return None;
-            }
-            line.trim()
-                .strip_prefix("- name:")
-                .map(trim_yaml_scalar)
-                .filter(|name| !name.is_empty())
-                .map(str::to_string)
-        })
-        .collect()
-}
-
-fn trim_yaml_scalar(value: &str) -> &str {
-    value.trim().trim_matches('"').trim_matches('\'')
-}
-
-fn line_indent(line: &str) -> usize {
-    line.chars().take_while(|c| *c == ' ').count()
-}
-
-#[cfg(test)]
-mod tests;

@@ -1,3 +1,306 @@
+# Current Canic handoff — 2026-09-15
+
+Packages and published base remain **0.110.16** at
+`a875c6498721bd89ca98549e38389b8280910d68`. Development extends the existing
+**0.110.17** draft. The maintainer selected the completed fixes for release on
+2026-09-15, with receipt-safe ICP conversion and complete live recovery forecasts
+kept as follow-up work. **The selected batch and changelog are ready for the
+maintainer-directed release flow.** Only that flow's complete validation and
+version/publication steps remain; no broad validation is newly claimed.
+No version, commit, push, deployment or sibling mutation was performed.
+
+Native recovery in this release uses an already-funded operator Cycles Ledger
+account. It does not admit unexplained mint credits into a retained operation.
+The scope decision supersedes earlier checkpoint statements that those larger
+additions blocked .17; it does not close their upstream acceptance criteria,
+the parked auth/E9 investigation, downstream adoption or the 0.110 minor.
+
+## CANIC-172/174 child funding observations — 2026-09-15
+
+The [child funding observation report](../audits/reports/2026-09/2026-09-15/canic-172-child-funding-usage.md)
+records protected per-child charged usage, pending operations and known/unknown
+transfer reservations. Generation now resolves each seeded Workload's actual
+funding parent and role from its exact committed allocation. Physical Root
+custody does not imply that Root funds a nested shard. Root-funded usage is
+queried; descendants explicitly require their parent's update relay, and Ready
+or unresolved assets never imply unused allowance. Generation stays query-only.
+The selected Root code, operator, pool claim and allocation participants bind
+these diagnostics beside the fresh-ledger scenario.
+No new store, spending authority or grant behavior is introduced. Native tests,
+host/CLI regressions, scoped Clippy and the real IC grant/replay case pass.
+Live child allowances now reuse the runtime's lifetime and cooldown policy.
+Allocation evidence retains the release set and Spec hash; generation requires
+the selected release build and compiled Spec hash before interpreting charges.
+The preview reports the lifetime limit, remaining allowance after charges,
+remaining cooldown and next-request policy cap. Any pending operation keeps
+that cap unknown; reservations are not deducted twice. These figures are not
+remaining demand, parent liquidity or funding authority. The existing minimum
+Root-recovery top-up remains independent of descendant telemetry availability.
+Nested parent attribution is native/transport-qualified; collecting those
+parents' ledgers belongs in the existing budgeted recovery observation path.
+Complete descendant collection, live placement matching and recovery-quote
+integration remain accepted follow-up work outside the selected .17 release.
+
+## CANIC-166/171 recovery proof — 2026-09-15
+
+The [source-bound activation reset proof](../audits/reports/2026-09/2026-09-15/canic-166-171-activation-reset.md)
+passes on real sealed canisters. It reproduces Published Components with a
+Prepared Root and conflicting Store activation identity, then qualifies review,
+source preservation, lost preparation Stop response, positive observed credit,
+Root reinstall response loss and both effect-free replays. Exactly one Root
+reinstall occurs. Starting balances and original source evidence remain intact.
+The positive credit is controlled fixture input, not attribution of Toko's
+original credit. Full Ensure convergence for this exact conflict is outside the
+new prerequisite proof. Runtime/recovery admission is unchanged. The auth/E9
+investigation remains parked at the maintainer's request.
+
+## ic-query 0.43.1 integration — 2026-09-15
+
+The dependency now selects published 0.43.1. `MainnetCatalogClient` replaces the
+one-shot live loader and retains endpoint-local upstream history across caller
+attempts. Generation adopts concurrent collection and narrow upstream retries;
+heartbeats and typed timeouts retain active endpoints and Registry progress.
+One-hour freshness, the agreement floor, cache-only recovery and the shared
+ten-minute deadline remain in force. Ten host catalog tests, three CLI tests,
+generation/apply/replay, the synthetic fixture/inventory checks and scoped
+host/CLI/internal-testing all-target/all-feature Clippy pass.
+The live sample took 63,253 ms cold, 3 ms cached and
+13,851 ms for simulated expiry with the retained client (162 instead of 316
+queries). A new process still starts without history prefixes. The
+[integration report](../audits/reports/2026-09/2026-09-15/ic-query-0.43.1.md)
+records exact evidence, limits and validation. This extends the existing
+0.110.17 draft; complete-batch readiness remains subject to independent work.
+
+## Earlier ic-query dependency update — 2026-09-15
+
+Updated the published host dependency from 0.42.0 to 0.43.0 and forwarded
+upstream boxed catalog failures directly. Four focused catalog regressions and
+all-target/all-feature warning-denied Clippy for host/internal-testing pass.
+The maintainer then accepted the Canic improvements: one-hour freshness for new
+generation, two-endpoint agreement, acquisition diagnostics outside desired-state
+digests, and cache-only recovery observations. Insufficient-assurance caches
+require explicit stronger acquisition during generation; failed replacement
+preserves the old bytes without accepting them. Seven catalog regressions, CLI
+rendering, the synthetic fixture/inventory checks, generation/apply/replay and
+scoped host/CLI/internal-testing Clippy pass. The isolated read-only mainnet
+probe initially timed out at 90 seconds. The accepted follow-up traced sequential
+endpoint collection and routing-key history scans, then added a shared ten-minute
+acquisition deadline, typed cancellation and ten-second CLI progress heartbeats.
+Nine host catalog tests, two CLI rendering tests, generation/apply/replay and
+host/CLI all-target/all-feature Clippy pass. Timeout preserves the old cache,
+releases its lock and permits immediate retry. The final live production-loader
+sample completed agreement at Registry version 64,108 in 148,245 ms; immediate
+cache reuse took 3 ms with identical authority. The wider consumer Clippy attempt
+hit private-access errors in the concurrently added activation-reset fixture;
+that independent work was left untouched.
+The [integration review](../audits/reports/2026-09/2026-09-15/ic-query-0.43.md)
+records exact evidence and limitations. The existing 0.110.17 changelog draft
+includes the update; complete-batch readiness remains subject to the independent
+work below.
+
+## Toko feedback and completed corrections
+
+The read-only Toko ledger remains unchanged through CANIC-175. SHA-256:
+`614cfd58b9b612ca162279b2496a13c42cc98226d6760399558d79142063e9c6`.
+Its latest review confirms CANIC-174 and prioritizes startup funding, recovery,
+unchanged-release reuse, inspection costs and originating diagnostics.
+
+- CANIC-156: protected Root inspection now returns exact SDK liquid/required
+  reserve values, a pre-attempt native balance and the exact Root/target. Host
+  adapters preserve typed E162 diagnostics and reject invalid evidence. The
+  numerical failure and recovery are qualified. A protected reserve query now
+  precedes uncached host inspections when declared by the exact bound contract,
+  including prepared-Root recovery, and stops
+  observed shortfalls before the update. The IC proof preserves other prepared
+  fences and shows why a sufficient query cannot guarantee update admission.
+  Retained source contracts without the selector keep their protected inspection
+  path without an invented reserve estimate; invalid contracts and failed declared
+  queries still stop inspection. Whole-recovery funding preview remains open.
+- CANIC-139: absent-input/first-build reuse correction and focused Cargo proof pass.
+- CANIC-170/171/173: selected signer binding, bounded Stop settlement credits and
+  unique configured Principal projection are implemented. The original encrypted
+  password incident remains Candidate attribution. Source-bound preparation and
+  Root-reset interruption/replay IC evidence now passes.
+- CANIC-172/174: reviewed startup grants and execution reserves are prepaid through
+  existing Create/Fund actions, including bounded fresh continuation. The runtime's
+  unchanged 1T deployment floor has one policy owner. Supplementary native quotes
+  also preserve the selected Root's bootstrap request threshold plus one cycle
+  and any higher configured minimum, then add the existing observation/update margin.
+- CANIC-172/174: generation now reports live Coordinator window usage,
+  reservations, successful automatic totals/caps and pending Root operations.
+  Selected code, operator, Root set and policy must match; unavailable observations
+  do not imply zero use. Runtime window admission rejects accounting overflow.
+  Seeded direct-child ledger/reservation observations are now also visible;
+  recursive descendants and recovery-quote integration remain unfinished.
+- CANIC-174: actual child-grant settlement resamples balance and reconciles the
+  existing funding timer without treating transfers as computation burn. The IC
+  reproduction and corrected grant/deadline/replay journey pass.
+- CANIC-158/159/172: initial child failures retain their exact operation, Root,
+  diagnostic and retry category through Coordinator status and the production
+  host observer. The IC case proves E163 and recovery of the same claim. Explicit
+  authority failures and existing origins remain authoritative; no new store exists.
+- CANIC-172: the combined IC case now recovers the same E163 initial-child claim
+  through one production-host native withdrawal, two lost responses, terminal
+  conservation and effect-free replay. Original balances and receipts stay fixed.
+  Its local Ledger stub uses zero fees; the earlier native case covers nonzero fees.
+- CANIC-175: role-specific state dispatch, partial outcomes, timer reconciliation
+  and Readonly/Stopped recovery pass the composed multi-role IC case.
+- Dependencies are IcyDB 0.257.13, ic-query 0.43.1 and ic-memory 0.13.3. The isolated composed-Wasm
+  outlining experiment was discarded after byte-identical results; its
+  [evidence](../audits/working/icydb033-composed-wasm/outlining.md) retains exact identities.
+
+The [design tracker](../design/0.110-fleet-runtime-contraction/status.md),
+[open changelog](../changelog/0.110.md),
+[native funding report](../audits/reports/2026-09/2026-09-14/canic-172-native-funding.md),
+[child report](../audits/reports/2026-09/2026-09-14/canic-172-child-reserve.md) and
+[grant/startup report](../audits/reports/2026-09/2026-09-14/canic-174-funding-deadline.md)
+own details and qualification limits.
+
+## ICP CLI 1.5 integration completed — 2026-09-15
+
+The maintainer accepted the [assessment](../audits/reports/2026-09/2026-09-15/icp-1.5.0-integration.md)
+fixes and improvements, explicitly selecting read-only frontend verification.
+The [implementation report](../audits/reports/2026-09/2026-09-15/icp-1.5.0-implementation.md)
+records selected-environment builds, structural YAML and effective membership checks,
+the 1.5 CLI floor, context-local version qualification, `inspect management` and
+`frontend verify-uploaded`. Existing uploaders retain upload ownership; the ICP
+integration is a host script, not a portable WASI plugin.
+
+Targeted regressions, helper/help checks, native ICP probes and scoped host/CLI
+Clippy pass. The recovery package's scoped Clippy rerun also passes after the
+typed-error layout correction. The open 0.110.17 changelog is updated; package
+versions remain 0.110.16. These completed outcomes are included in the selected
+.17 release. No publication or deployment occurred.
+
+## Accepted follow-up work after the selected release
+
+The maintainer explicitly separated these additions from .17 on 2026-09-15.
+They remain accepted and sequenced ahead of B1, without allocating another
+patch number. See the [release scope and batch owners](../design/0.110-fleet-runtime-contraction/status.md#selected-release-scope--2026-09-15).
+
+1. Account for exact operator ICP mint credits/fees/receipts without rewriting the
+   operation's original balances. ICP CLI 1.5.0 mint output alone lacks transaction
+   identities and is insufficient authority. No live spending is authorized here.
+2. Collect descendant ledgers through the existing budgeted recovery-observation
+   relay, preserving query-only generation. Seeded Workloads now have exact
+   allocation-derived parent/role attribution. Finish live placement matching and integrate usage/reservations into
+   startup/recovery quotes. Coordinator and direct-child accounting are visible
+   beside the initial-demand scenario; that scenario still assumes fresh child ledgers.
+   Selected-policy live allowances are now projected, including cooldown and
+   pending uncertainty. They do not close descendant observation or demand
+   calculation. Do not add mandatory relay calls to minimum native recovery:
+   an underfunded Root may need that top-up before it can afford telemetry.
+3. Finish CANIC-156's whole-recovery funding preview. The new inspection
+   query reports one call's reserve, not ingress/execution or complete recovery demand.
+
+B1 remains accepted subsequent work after Toko feedback: matched rows 8/10/12
+and remaining attribution against the frozen v0.110.5 baseline. It is separate
+from operator recovery qualification. No next-minor closeout is authorized.
+
+## Latest focused validation
+
+All own checks have finished. No build is left running. Check host-visible
+shared target locks before the next source edit or Cargo command.
+
+- Release-scope preparation changes documentation only. Current-document
+  semantics and whitespace checks pass; new links were reviewed. The selected
+  scope reuses the focused implementation evidence below. No source changes,
+  Cargo reruns or complete validation were made for this scope decision.
+- CANIC-172/174 child usage: core reservation/expiry tests, host/CLI projection,
+  participant binding and generated-estate apply/replay pass in
+  `/tmp/canic-child-usage-core.log`, `/tmp/canic-child-usage-host-cli.log` and
+  `/tmp/canic-child-usage-bindings-generation.log`. The grant/deadline/replay IC
+  case passes in `/tmp/canic-child-usage-ic.log`, including Prepared Root and
+  controller access. Final scoped all-target/all-feature Clippy passes in
+  `/tmp/canic-child-usage-final-clippy.log`. Pending in-flight reservation evidence
+  is native qualification; the IC case observes settled grants and exact replay.
+  The parent-attribution follow-up passes thirteen host startup tests plus CLI
+  rendering in `/tmp/canic-funding-parent-tests.log`, retained-estate generation/
+  apply/replay in `/tmp/canic-funding-parent-generation.log`, and final scoped
+  host/CLI Clippy in `/tmp/canic-funding-parent-final-clippy.log`. The new proof
+  covers nested parents, conflicting/incomplete allocations, query-only transport
+  and no queries for Ready assets. No runtime code changed in this follow-up.
+  Live allowance qualification passes sixteen host startup cases, CLI rendering,
+  five authoritative runtime-policy cases and retained-estate generation/replay
+  in `/tmp/canic-live-allowance-tests.log`. The focused cases cover exact cooldown
+  expiry, request/lifetime caps, exhausted and over-limit charges, pending and
+  missing reservation evidence, and changed build/Spec/role rejection. The
+  runtime's existing arithmetic is shared without changing grant decisions.
+  Final all-target/all-feature core/host/CLI Clippy passes in
+  `/tmp/canic-live-allowance-final-clippy.log`; formatting, layering, document
+  semantics and whitespace checks pass. No own build remains running.
+- CANIC-166/171: the single source-bound preparation/Root-reset PocketIC case
+  passes in `/tmp/canic-activation-reset-ic.log`, including a positive Stop credit,
+  exact source archives, wrong-digest rejection, two lost responses and no
+  repeated reset. Final scoped internal-testing Clippy and pure catalog checks
+  pass in `/tmp/canic-activation-reset-final-clippy.log` and
+  `/tmp/canic-activation-reset-inventory.log`. Formatting, layering, document
+  semantics and whitespace checks pass. No complete Fleet convergence or live
+  Toko recovery is newly claimed.
+- Bound inspection contract correction: twenty-four focused host inspection,
+  pool and Candid binding cases pass in
+  `/tmp/canic-source-inspection-final-tests.log`; generated retained-estate
+  planning/apply/replay passes in `/tmp/canic-source-inspection-generation.log`.
+  Final host all-target/all-feature warning-denied Clippy passes in
+  `/tmp/canic-source-inspection-final-clippy.log`. Formatting, layering,
+  document semantics and whitespace checks pass. This is host qualification;
+  the runtime code is unchanged and no additional IC recovery proof is claimed.
+  The initial-child funding pause cannot substitute for CANIC-166's exact
+  published-Components/Prepared-Root/Store-identity conflict. The separate
+  source-bound preparation and reset IC journey above now qualifies that case.
+- CANIC-156 preflight: sixteen host inspection cases, three bounded pool cases
+  and retained-estate planning/apply/replay pass in
+  `/tmp/canic-inspection-preflight-host.log`,
+  `/tmp/canic-inspection-preflight-batch.log` and
+  `/tmp/canic-inspection-preflight-generation.log`. Final host fee validation and
+  scoped Clippy pass in `/tmp/canic-inspection-preflight-final-host.log` and
+  `/tmp/canic-inspection-preflight-final-clippy.log`; owning-package and IC-target
+  Clippy also pass. `/tmp/canic-inspection-preflight-ic.log` qualifies the prepared
+  Root query, controller/fence behavior, exact call cost, query shortfall and
+  recovery. The [recovery report](../audits/reports/2026-09/2026-09-14/toko-recovery-followups.md)
+  records raw samples and the query/update admission distinction.
+  All twenty host regressions pass again on the final candidate, including the
+  concurrent ic-query 0.43 update, in
+  `/tmp/canic-inspection-preflight-final-regressions.log`. Formatting, layering,
+  document semantics and whitespace checks pass.
+- CANIC-156 numerical inspection: focused core/host inspection cases pass in
+  `/tmp/canic-inspection-numeric-tests.log`; core/host/facade/Root-probe scoped
+  all-target/all-feature Clippy passes in `/tmp/canic-inspection-numeric-clippy.log`.
+  The changed integration target's Clippy passes in
+  `/tmp/canic-inspection-numeric-ic-clippy.log`. The single PocketIC case passes in
+  `/tmp/canic-inspection-numeric-ic.log`, including controller rejection, positive
+  native balance, numerical failure and recovery without adding cycles. Its ten
+  selected source files stayed unchanged (`/tmp/canic-inspection-numeric-source.sha256`).
+- Coordinator usage projection: four host accounting/transport cases, six core
+  grant-policy cases, generated-estate planning/replay and CLI rendering pass.
+  Logs: `/tmp/canic-startup-usage-tests.log`, `/tmp/canic-startup-usage-policy.log`,
+  `/tmp/canic-startup-usage-generation.log`, `/tmp/canic-startup-usage-cli.log`.
+  Core/host/CLI all-target/all-feature warning-denied Clippy passes in
+  `/tmp/canic-startup-usage-clippy.log`. This is native/transport qualification,
+  not a new IC lifecycle or live Toko funding proof.
+- Combined initial-child/native-withdrawal IC case:
+  `/tmp/canic-native-child-ic.log` (PASS). Formatting, layering, document semantics
+  and whitespace checks pass. The transient host error-size/grouping blocker
+  recorded in `/tmp/canic-native-child-clippy.log` and
+  `/tmp/canic-native-child-owned-clippy.log` is resolved. The scoped internal
+  package rerun passes in `/tmp/canic-icp150-internal-clippy.log`; no suppressions
+  were added.
+  The pure governed catalogue regression passes in
+  `/tmp/canic-native-child-inventory.log`.
+- Generated-estate planning, recovery-threshold authority/rejection and replay:
+  `/tmp/canic-native-threshold-planning.log`.
+- Seven native funding review/recovery cases and scoped host Clippy:
+  `/tmp/canic-native-threshold-recovery.log`, `/tmp/canic-native-threshold-clippy.log`.
+- Initial-child E163, real host observation and same-claim readiness IC case:
+  `/tmp/canic-child-origin-host-ic.log`; internal-testing Clippy:
+  `/tmp/canic-child-origin-host-clippy.log`.
+- Earlier focused child-state, startup arithmetic, Candid equality, terminal-child
+  exclusion, governed inventory and native withdrawal/reply-loss proofs also pass;
+  their reports retain the logs. No complete workspace validation is claimed.
+
+The checkpoints below are retained pre-transaction history. Their old package,
+readiness and remaining-work statements do not supersede this current handoff.
+
 <!-- canic-status-summary:start -->
 # Validated release snapshot
 

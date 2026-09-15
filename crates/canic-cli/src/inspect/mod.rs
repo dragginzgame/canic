@@ -1,8 +1,10 @@
 //! Module: canic_cli::inspect
 //!
-//! Responsibility: inspect one current Fleet canister's runtime-observed Canic status.
+//! Responsibility: inspect one canister's Canic runtime or management status.
 //! Does not own: ensure planning, runtime endpoint DTOs, or broad topology fanout.
 //! Boundary: resolves one terminal ensure target, selects its role-owned Runtime status, and renders a report.
+
+mod management;
 
 use crate::{
     cli::{
@@ -41,8 +43,8 @@ Examples:
   canic inspect canister aaaaa-aa
   canic inspect fleet demo-local --role root
 
-Inspect is read-only. It queries the guarded role-owned Runtime selector for
-one explicit target and does not fan out across Fleet roles. Use
+Runtime inspection queries the guarded role-owned Runtime selector for
+one explicit target. Management inspection reports visibility and query counters. Use
 the Fleet form only after one current `fleet ensure` operation converges.";
 
 #[derive(Debug, ThisError)]
@@ -212,6 +214,10 @@ where
     }
     if print_leaf_help_or_version(&args) {
         return Ok(());
+    }
+
+    if args.first().is_some_and(|arg| arg == "management") {
+        return management::run(args.into_iter().skip(1));
     }
 
     let options = InspectOptions::parse(args)?;
@@ -534,11 +540,12 @@ fn validate_principal(value: &str) -> Result<(), InspectCommandError> {
 fn command() -> ClapCommand {
     ClapCommand::new("inspect")
         .bin_name("canic inspect")
-        .about("Inspect runtime-observed status for one current Canic canister")
+        .about("Inspect Canic runtime or management status for one canister")
         .disable_help_flag(true)
         .subcommand_required(true)
         .subcommand(canister_command())
         .subcommand(fleet_command())
+        .subcommand(management::command())
         .after_help(INSPECT_HELP_AFTER)
 }
 
@@ -600,6 +607,7 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
         .and_then(|leaf| match leaf {
             "canister" => Some(canister_usage as fn() -> String),
             "fleet" => Some(fleet_usage as fn() -> String),
+            "management" => Some(management::usage as fn() -> String),
             _ => None,
         })
     else {

@@ -17,6 +17,7 @@ mod platform;
 mod protocol;
 pub(super) mod recovery;
 pub(super) mod reinstall;
+pub(super) mod startup_funding;
 
 use crate::{
     durable_io::{
@@ -256,6 +257,15 @@ pub trait EnsurePlatform {
         Ok(None)
     }
 
+    /// Inspect one configured Root and the operator Ledger without runtime queries.
+    fn observe_native_funding(
+        &mut self,
+        _root: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Option<crate::fleet_ensure::model::NativeFundingObservation>, Self::Error> {
+        Ok(None)
+    }
+
     fn observe(
         &mut self,
         operation_id: &str,
@@ -395,6 +405,14 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error("startup funding configuration differs from the reviewed deployment configuration")]
+    StartupConfigurationMismatch,
+
+    #[error("startup funding configuration is unavailable: {0}")]
+    StartupConfiguration(#[source] Box<crate::release_set::AppConfigError>),
+
+    #[error("startup funding requirement is invalid: {0}")]
+    StartupFunding(#[source] Box<crate::fleet_ensure::policy::EnsurePolicyError>),
     #[error(
         "retained activation source does not prove an Applied host prefix followed by Issued provisioning"
     )]
@@ -545,6 +563,19 @@ pub(crate) fn compact_inline_plan(
     Ok(true)
 }
 
+/// Remove untyped inventory names superseded by a current configured binding.
+/// Unique dynamic assets and conflicting configured owners remain for verification.
+pub(crate) fn retain_configured_principal_bindings(state: &mut FleetEnsureStateRecord) {
+    let configured = state
+        .topology
+        .keys()
+        .filter_map(|name| state.principals.get(name).cloned())
+        .collect::<BTreeSet<_>>();
+    state.principals.retain(|name, principal| {
+        state.topology.contains_key(name) || !configured.contains(principal)
+    });
+}
+
 pub fn read_state(
     paths: &EnsurePaths,
     fleet: &str,
@@ -579,8 +610,12 @@ pub fn resolve_desired_artifacts(
     root: &Path,
     desired: &DesiredFleet,
 ) -> Result<DesiredFleetArtifacts, EnsureStateError> {
+    let mut startup_funding_by_root = startup_funding::resolve(root, desired)?;
+    let continuation =
+        continuation::resolve_authority(root, desired, &mut startup_funding_by_root)?;
     let mut artifacts = DesiredFleetArtifacts {
-        continuation: continuation::resolve_authority(root, desired)?,
+        continuation,
+        startup_funding_by_root,
         ..DesiredFleetArtifacts::default()
     };
     for canister in &desired.canisters {

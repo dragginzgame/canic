@@ -15,9 +15,18 @@ impl IcpCli {
         parse_icp_cli_version(output).is_some_and(is_supported_icp_cli_version)
     }
 
-    /// Resolve and validate the installed ICP CLI version.
+    /// Qualify the CLI once per context; unsuccessful probes are retried.
     pub fn compatible_version(&self) -> Result<String, IcpCommandError> {
-        compatible_version_output(&self.executable, self.cwd.as_deref())
+        let mut cached = self.compatible_version.lock().map_err(|_| {
+            IcpCommandError::Io(io::Error::other("ICP version qualification lock poisoned"))
+        })?;
+        if let Some(version) = cached.as_ref() {
+            return Ok(version.clone());
+        }
+        let version = compatible_version_output(&self.executable, self.cwd.as_deref())?;
+        *cached = Some(version.clone());
+        drop(cached);
+        Ok(version)
     }
 }
 
@@ -32,7 +41,7 @@ pub(super) fn parse_icp_cli_version(output: &str) -> Option<IcpCliVersion> {
 /// Return whether an ICP CLI version is supported by this Canic release.
 #[must_use]
 pub(super) const fn is_supported_icp_cli_version(version: IcpCliVersion) -> bool {
-    version.major == 1 && version.minor >= 2
+    version.major == 1 && version.minor >= 5
 }
 
 pub(super) fn compatible_version_output(

@@ -13,9 +13,11 @@ individual verdicts or establish a month-wide validation result.
   [B1-04](2026-09-04/wasm-ablation-b1-04.md).
 - September 5: [day summary](2026-09-05/summary.md), including shared-CBOR
   attribution and the Fleet/Toko Miner source audit.
+- September 15: [ICP CLI 1.5.0 integration assessment](2026-09-15/summary.md),
+  including the build-environment defect, config inspection and prioritized
+  adoption recommendations with disposable CLI evidence.
 
 Open follow-up remains with the accepted B1 work and current Fleet correction
 batch. The Fleet review additionally identifies exact whole-release reuse,
 build-pass reduction and bounded concurrency as sequenced improvement inputs.
 It does not accept B1, open a later minor, or establish deployment readiness.
-

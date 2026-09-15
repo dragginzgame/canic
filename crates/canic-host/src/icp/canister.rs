@@ -51,7 +51,7 @@ impl IcpCli {
             CanisterCallMode::Update,
         );
         self.record_remote_call();
-        run_output(&mut command)
+        run_output(&mut command, self)
     }
 
     /// Query one canister method with raw binary Candid arguments from a file.
@@ -72,7 +72,7 @@ impl IcpCli {
             CanisterCallMode::Query,
         );
         self.record_remote_call();
-        run_output(&mut command)
+        run_output(&mut command, self)
     }
 
     fn canister_binary_args_command(
@@ -117,7 +117,7 @@ impl IcpCli {
             CanisterCallMode::Update,
         );
         self.record_remote_call();
-        run_output(&mut command)
+        run_output(&mut command, self)
     }
 
     /// Query one canister method with no arguments, optional local Candid, and optional JSON output.
@@ -137,7 +137,7 @@ impl IcpCli {
             CanisterCallMode::Query,
         );
         self.record_remote_call();
-        run_output(&mut command)
+        run_output(&mut command, self)
     }
 
     /// Query one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
@@ -158,7 +158,7 @@ impl IcpCli {
             CanisterCallMode::Query,
         );
         self.record_remote_call();
-        run_output(&mut command)
+        run_output(&mut command, self)
     }
 
     fn canister_text_args_command(
@@ -194,7 +194,7 @@ impl IcpCli {
         command.args(["metadata", canister, metadata_name]);
         self.add_target_args(&mut command);
         self.record_remote_call();
-        run_output(&mut command)
+        run_output(&mut command, self)
     }
 
     /// Top up one canister with cycles.
@@ -221,7 +221,7 @@ impl IcpCli {
         command.arg("--json");
         self.add_target_args(&mut command);
         self.record_remote_call();
-        run_json(&mut command)
+        run_json(&mut command, self)
     }
 
     /// Stop one canister.

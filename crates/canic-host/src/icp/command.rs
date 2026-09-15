@@ -34,6 +34,8 @@ impl IcpCli {
             local_replica: None,
             inherited_fd: None,
             identity_password_file: configured_identity_password_file(),
+            selected_identity: std::sync::Arc::default(),
+            compatible_version: std::sync::Arc::default(),
         }
     }
 
@@ -52,7 +54,11 @@ impl IcpCli {
     /// Return a copy of this ICP CLI context rooted at one project directory.
     #[must_use]
     pub fn with_cwd(mut self, cwd: impl Into<PathBuf>) -> Self {
-        self.cwd = Some(cwd.into());
+        let cwd = Some(cwd.into());
+        if self.cwd != cwd {
+            self.compatible_version = std::sync::Arc::default();
+        }
+        self.cwd = cwd;
         self
     }
 
@@ -116,7 +122,14 @@ impl IcpCli {
     }
 
     pub(crate) fn add_target_args(&self, command: &mut Command) {
+        self.add_selected_identity_arg(command);
         add_target_args(command, self.environment(), self.local_replica.as_ref());
+    }
+
+    pub(super) fn add_selected_identity_arg(&self, command: &mut Command) {
+        if let Some(identity) = self.selected_identity.get() {
+            command.arg("--identity").arg(identity);
+        }
     }
 }
 

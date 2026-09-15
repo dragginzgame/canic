@@ -41,6 +41,7 @@ fn retryable_nonroot_bootstrap_error(error: &crate::InternalError) -> bool {
         crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE,
         crate::diagnostics::codes::PLATFORM_FAILED,
         crate::diagnostics::codes::PLATFORM_UNAVAILABLE,
+        crate::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES,
         crate::diagnostics::codes::CAPACITY_INSUFFICIENT,
         crate::diagnostics::codes::STATE_UNAVAILABLE,
     ]
@@ -60,5 +61,17 @@ mod tests {
         assert!(!retryable_nonroot_bootstrap_error(
             &crate::InternalError::resource_exhausted()
         ));
+    }
+
+    #[test]
+    fn nonroot_bootstrap_preserves_retry_after_typed_liquid_cycle_failure() {
+        let failure = ic_cdk::call::CallFailed::InsufficientLiquidCycleBalance(
+            ic_cdk::call::InsufficientLiquidCycleBalance {
+                available: 50,
+                required: 100,
+            },
+        );
+        let error = crate::InternalError::from(crate::infra::ic::IcInfraError::from(failure));
+        assert!(retryable_nonroot_bootstrap_error(&error));
     }
 }

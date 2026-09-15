@@ -136,6 +136,28 @@ pub(super) fn build_five_component_root_wasm() -> Vec<u8> {
     read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
 }
 
+/// Build the existing audit Root with the managed-child fixture's exact config.
+#[cfg(test)]
+pub(super) fn build_child_reserve_root_wasm() -> Vec<u8> {
+    let workspace_root = workspace_root();
+    let _serial_guard = CANISTER_BUILD_SERIAL
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    let target_dir = test_target_dir(&workspace_root).join("child-reserve");
+    let config_path = initial_shard_root_canister_config_path(&workspace_root);
+    build_internal_test_wasm_canisters_with_env(
+        &workspace_root,
+        &target_dir,
+        &["root_probe"],
+        CanicWasmBuildProfile::Fast,
+        &[(
+            canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
+            config_path.to_str().expect("config path UTF-8"),
+        )],
+    );
+    read_built_wasm(&target_dir, "root_probe")
+}
+
 /// Build the exact local Root whose only top-level Hub requires one initial Shard.
 #[cfg(test)]
 pub(super) fn build_initial_shard_root_wasm() -> Vec<u8> {

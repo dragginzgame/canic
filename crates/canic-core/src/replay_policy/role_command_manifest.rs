@@ -364,6 +364,13 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    snapshot_convergent(
+        "SynchronizeState",
+        "cascade.sync_state.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
 ];
 
 /// Canonical replay-policy rows for Wasm Store command variants.

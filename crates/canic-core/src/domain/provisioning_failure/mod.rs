@@ -14,6 +14,7 @@ pub enum ProvisioningFailureStage {
     CoordinatorStatus,
     ComponentOrigin,
     ComponentAllocation,
+    ComponentChildAllocation,
     ComponentRuntime,
     ComponentMembership,
     ComponentCommit,

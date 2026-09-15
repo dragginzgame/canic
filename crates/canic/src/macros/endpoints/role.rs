@@ -124,6 +124,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum ObservabilityRequest {
             Binding,
+            ChildFunding(::canic::__internal::candid::Principal),
             CycleBalance,
             CycleHistory(::canic::dto::page::PageRequest),
             #[cfg(canic_capability_automatic_topup)]
@@ -139,6 +140,7 @@ macro_rules! __canic_emit_managed_status_endpoint {
         #[serde(crate = "::canic::__internal::serde")]
         pub enum ObservabilityResponse {
             Binding(::canic::ids::ManagedCanisterBinding),
+            ChildFunding(::canic::dto::observability::ChildFundingUsage),
             CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
             CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
             #[cfg(canic_capability_automatic_topup)]
@@ -158,6 +160,10 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 ObservabilityRequest::Binding => {
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::managed_binding()
                         .map(ObservabilityResponse::Binding)
+                }
+                ObservabilityRequest::ChildFunding(child) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child)
+                        .map(ObservabilityResponse::ChildFunding)
                 }
                 ObservabilityRequest::CycleBalance => Ok(
                     ObservabilityResponse::CycleBalance(
@@ -391,6 +397,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum ObservabilityRequest {
+            ChildFunding(::canic::__internal::candid::Principal),
             CycleBalance,
             CycleHistory(::canic::dto::page::PageRequest),
             #[cfg(canic_capability_automatic_topup)]
@@ -406,6 +413,7 @@ macro_rules! __canic_emit_local_status_endpoint {
         )]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum ObservabilityResponse {
+            ChildFunding(::canic::dto::observability::ChildFundingUsage),
             CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
             CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
             #[cfg(canic_capability_automatic_topup)]
@@ -421,6 +429,12 @@ macro_rules! __canic_emit_local_status_endpoint {
             request: ObservabilityRequest,
         ) -> Result<ObservabilityResponse, ::canic::Error> {
             match request {
+                ObservabilityRequest::ChildFunding(child) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::child_funding(
+                        child,
+                    )
+                    .map(ObservabilityResponse::ChildFunding)
+                }
                 ObservabilityRequest::CycleBalance => Ok(ObservabilityResponse::CycleBalance(
                     ::canic::dto::role::CycleBalanceStatusResponse {
                         cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
@@ -508,6 +522,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ),
             #[cfg(canic_capability_child_provisioning)]
             RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityEnvelopeV1),
+            SynchronizeState(::canic::dto::cascade::StateSnapshotInput),
         }
 
         #[derive(
@@ -540,6 +555,7 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ),
             #[cfg(canic_capability_child_provisioning)]
             RespondCapability(::canic::dto::capability::NonrootCyclesCapabilityResponseV1),
+            SynchronizeState(::canic::dto::cascade::StateCascadeReport),
         }
 
         #[doc(hidden)]
@@ -564,12 +580,25 @@ macro_rules! __canic_emit_managed_command_endpoint {
         }
 
         #[$crate::canic_update(
+            internal,
             public,
             payload(max_bytes = ::canic::__internal::core::ingress::payload::DEFAULT_UPDATE_INGRESS_MAX_BYTES)
         )]
         async fn canic_command(
             command: CanisterCommand,
         ) -> Result<CanisterCommandResponse, ::canic::Error> {
+            if !matches!(&command, CanisterCommand::SynchronizeState(_)) {
+                $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                    $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                    $crate::__internal::core::ids::EndpointCall {
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_COMMAND,
+                        ),
+                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                    },
+                )
+                    .map_err(::canic::Error::from)?;
+            }
             match command {
                 #[cfg(canic_capability_fleet_admission_projection)]
                 CanisterCommand::ActivateFleetAdmission(request) => {
@@ -664,7 +693,16 @@ macro_rules! __canic_emit_managed_command_endpoint {
                         envelope,
                     )
                     .await
-                    .map(CanisterCommandResponse::RespondCapability)
+                        .map(CanisterCommandResponse::RespondCapability)
+                }
+                CanisterCommand::SynchronizeState(snapshot) => {
+                    let caller = $crate::__internal::cdk::api::msg_caller();
+                    $crate::__internal::core::access::auth::is_parent(caller)
+                        .await
+                        .map_err(::canic::Error::from)?;
+                    $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot)
+                        .await
+                        .map(CanisterCommandResponse::SynchronizeState)
                 }
             }
         }
@@ -753,6 +791,10 @@ macro_rules! __canic_role_metrics_status {
 macro_rules! __canic_sensitive_observability_response {
     ($request:expr) => {{
         match $request {
+            ::canic::dto::observability::CanisterObservabilityRequest::ChildFunding(child) => {
+                $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child)
+                    .map(::canic::dto::observability::CanisterObservabilityResponse::ChildFunding)
+            }
             ::canic::dto::observability::CanisterObservabilityRequest::CycleBalance => Ok(
                 ::canic::dto::observability::CanisterObservabilityResponse::CycleBalance(
                     ::canic::dto::role::CycleBalanceStatusResponse {

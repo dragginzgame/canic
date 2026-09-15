@@ -37,12 +37,13 @@ ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
+serde-saphyr = { workspace = true }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 syn = { workspace = true, features = ["full", "visit"] }
 thiserror = { workspace = true }
-tokio = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
 toml = { workspace = true }
 url = { workspace = true }
 

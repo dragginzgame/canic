@@ -6055,7 +6055,7 @@ fn reviewed_desired(plan: &FleetEnsurePlan) -> Option<&DesiredFleet> {
         .map(crate::fleet_ensure::model::ReviewedDesiredFleetRecord::desired)
 }
 
-fn typed_protocol_action(operation_id: &str) -> EnsureAction {
+pub(super) fn typed_protocol_action(operation_id: &str) -> EnsureAction {
     let operation_id = canic_core::cdk::utils::hash::decode_hex(operation_id)
         .ok()
         .and_then(|bytes| <[u8; 32]>::try_from(bytes).ok())

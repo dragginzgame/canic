@@ -26,7 +26,9 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
-    env, fs,
+    env,
+    ffi::OsStr,
+    fs,
     io::{self, Read},
     path::{Path, PathBuf},
     process::Command,
@@ -508,12 +510,7 @@ fn collect_files(
         }
         for entry in fs::read_dir(path)? {
             let entry = entry?;
-            if source
-                && matches!(
-                    entry.file_name().to_str(),
-                    Some("target" | ".git" | ".canic" | ".icp" | ".tmp")
-                )
-            {
+            if source && source_entry_is_excluded(&entry.file_name()) {
                 continue;
             }
             collect_files(root, &entry.path(), files, source)?;
@@ -522,6 +519,13 @@ fn collect_files(
         return Err(BuildReuseError::Unsupported(path.to_path_buf()));
     }
     Ok(())
+}
+
+fn source_entry_is_excluded(name: &OsStr) -> bool {
+    matches!(
+        name.to_str(),
+        Some("target" | ".git" | ".canic" | ".icp" | ".tmp")
+    )
 }
 
 fn add_optional(path: &Path, files: &mut BTreeMap<String, String>) -> Result<(), BuildReuseError> {

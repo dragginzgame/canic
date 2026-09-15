@@ -33,7 +33,7 @@ use crate::{
         IcpManagementCallError, LocalReplicaTarget, run_status,
     },
     icp_config::resolve_icp_build_network_from_root,
-    subnet_catalog::load_mainnet_subnet_catalog,
+    subnet_catalog::load_cached_mainnet_subnet_catalog,
 };
 use candid::{CandidType, Nat, Principal};
 use canic_core::{
@@ -507,6 +507,22 @@ enum RootInspectionCommand {
 #[derive(CandidType, Deserialize)]
 enum RootInspectionResponse {
     InspectCanister(RootInspectionStatus),
+    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
+}
+
+impl RootInspectionResponse {
+    fn into_status(
+        self,
+        root: Principal,
+        target: Principal,
+    ) -> Result<RootInspectionStatus, crate::CanisterProtocolError> {
+        match self {
+            Self::InspectCanister(status) => Ok(status),
+            Self::InspectionReserveRequired(evidence) => Err(
+                crate::CanisterProtocolError::inspection_reserve(root, target, evidence),
+            ),
+        }
+    }
 }
 
 #[derive(CandidType, Clone, Deserialize)]
@@ -589,6 +605,9 @@ enum RejectionCode {
 
 #[derive(Debug, ThisError)]
 pub enum IcpEnsurePlatformError {
+    #[error("mainnet Subnet Catalog observation failed: {0}")]
+    SubnetCatalog(#[source] Box<ic_query::subnet_catalog::SubnetCatalogLoadFailure>),
+
     #[error("cycle arithmetic overflow while executing {0}")]
     Arithmetic(&'static str),
 
@@ -966,6 +985,7 @@ impl IcpEnsurePlatform {
     }
 
     fn require_operator(&self) -> Result<(), IcpEnsurePlatformError> {
+        self.icp.bind_selected_identity()?;
         let actual = self.icp.identity_principal_text()?;
         if actual != self.desired.operator {
             return Err(IcpEnsurePlatformError::OperatorMismatch {
@@ -1263,18 +1283,27 @@ impl IcpEnsurePlatform {
                     ));
                 }
                 let target = parse_principal("reset pool asset", &asset.principal)?;
-                let RootInspectionResponse::InspectCanister(response) = call_with_candid(
+                let root_pid = parse_principal("reset Root", root)?;
+                let candid = candid_by_root.get(root_name).ok_or_else(|| {
+                    pool_configuration_error("missing reset read contract".to_string())
+                })?;
+                crate::canister_protocol::inspection::preflight_inspection(
+                    &self.icp, candid, root_pid, target,
+                )
+                .map_err(current_protocol::CurrentProtocolError::from)?;
+                let response: RootInspectionResponse = call_with_candid(
                     &self.icp,
-                    candid_by_root.get(root_name).ok_or_else(|| {
-                        pool_configuration_error("missing reset read contract".to_string())
-                    })?,
-                    parse_principal("reset Root", root)?,
+                    candid,
+                    root_pid,
                     canic_protocol::CANIC_ROOT_COMMAND,
                     &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
                         canister_id: target,
                     }),
                 )
                 .map_err(current_protocol::CurrentProtocolError::from)?;
+                let response = response
+                    .into_status(root_pid, target)
+                    .map_err(current_protocol::CurrentProtocolError::from)?;
                 if !response
                     .settings
                     .controllers
@@ -2019,7 +2048,14 @@ impl IcpEnsurePlatform {
         candid: &Path,
         authority: PoolInspectionAuthority,
     ) -> Result<RootInspectionStatus, IcpEnsurePlatformError> {
-        let RootInspectionResponse::InspectCanister(response) = call_with_candid(
+        crate::canister_protocol::inspection::preflight_inspection(
+            icp,
+            candid,
+            authority.root,
+            authority.target,
+        )
+        .map_err(current_protocol::CurrentProtocolError::from)?;
+        let response: RootInspectionResponse = call_with_candid(
             icp,
             candid,
             authority.root,
@@ -2029,7 +2065,10 @@ impl IcpEnsurePlatform {
             }),
         )
         .map_err(current_protocol::CurrentProtocolError::from)?;
-        Ok(response)
+        response
+            .into_status(authority.root, authority.target)
+            .map_err(current_protocol::CurrentProtocolError::from)
+            .map_err(Into::into)
     }
 
     // Only a successfully validated consumer may retain a response in this observation.
@@ -3055,16 +3094,24 @@ impl EnsurePlatform for IcpEnsurePlatform {
             self.root_protocol_candid()?
         };
         for asset in intent.assets.iter().filter(|asset| asset.root == root_name) {
-            let RootInspectionResponse::InspectCanister(status) = call_with_candid(
+            let target = parse_principal("reset asset", &asset.principal)?;
+            crate::canister_protocol::inspection::preflight_inspection(
+                &self.icp, &candid, principal, target,
+            )
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+            let response: RootInspectionResponse = call_with_candid(
                 &self.icp,
                 &candid,
                 principal,
                 canic_protocol::CANIC_ROOT_COMMAND,
                 &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                    canister_id: parse_principal("reset asset", &asset.principal)?,
+                    canister_id: target,
                 }),
             )
             .map_err(current_protocol::CurrentProtocolError::from)?;
+            let status = response
+                .into_status(principal, target)
+                .map_err(current_protocol::CurrentProtocolError::from)?;
             let mut controllers = status
                 .settings
                 .controllers
@@ -3102,8 +3149,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 })?
                 .as_secs();
             Some(
-                load_mainnet_subnet_catalog(&self.root, now)
-                    .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?,
+                load_cached_mainnet_subnet_catalog(&self.root, now)
+                    .map_err(IcpEnsurePlatformError::SubnetCatalog)?,
             )
         } else {
             None
@@ -3475,9 +3522,8 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     })?
                     .as_secs();
                 Some(
-                    load_mainnet_subnet_catalog(&platform.root, now).map_err(|error| {
-                        IcpEnsurePlatformError::RootManagement(error.to_string())
-                    })?,
+                    load_cached_mainnet_subnet_catalog(&platform.root, now)
+                        .map_err(IcpEnsurePlatformError::SubnetCatalog)?,
                 )
             } else {
                 None
@@ -3519,6 +3565,59 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 roots,
             }))
         })
+    }
+
+    fn observe_native_funding(
+        &mut self,
+        root: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<crate::fleet_ensure::model::NativeFundingObservation>, Self::Error> {
+        self.require_operator()?;
+        let configured = self
+            .desired
+            .canisters
+            .iter()
+            .find(|configured| {
+                configured.name == root
+                    && configured.kind == DesiredCanisterKind::Root
+                    && configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
+            })
+            .ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement(
+                    "native funding requires a configured Root".into(),
+                )
+            })?;
+        let principal = self
+            .current_principal(state, &configured.name)
+            .ok_or_else(|| {
+                IcpEnsurePlatformError::RootManagement(
+                    "native funding requires an allocated Root".into(),
+                )
+            })?;
+        let live = self.status_optional(principal)?.ok_or_else(|| {
+            IcpEnsurePlatformError::RootManagement("native funding Root is unavailable".into())
+        })?;
+        if let Some(wasm) = &configured.wasm {
+            let expected = artifact_hash(&resolve_path(&self.root, wasm))?;
+            if live.module_sha256.as_deref() != Some(&expected) {
+                return Err(IcpEnsurePlatformError::RootManagement(
+                    "native funding Root module differs from the reviewed artifact".into(),
+                ));
+            }
+        }
+        let fee = ledger_fee_cycles(self.icp.canister_query_candid(
+            &self.desired.cycles_ledger,
+            "icrc1_fee",
+            &(),
+            None,
+        )?)?;
+        let operator_cycles = self.cycles_ledger_balance(&self.desired.operator)?;
+        Ok(Some(crate::fleet_ensure::model::NativeFundingObservation {
+            cycles_ledger: self.desired.cycles_ledger.clone(),
+            ledger_fee_cycles: fee,
+            live,
+            operator_cycles,
+        }))
     }
 
     fn observe(
@@ -4825,6 +4924,51 @@ mod tests {
     use canic_core::dto::pool::CanisterPoolAssetStatus;
 
     #[test]
+    fn identity_binding_keeps_operator_fence_before_effects() {
+        let mut fixture = ProtocolOwnersFixture::new();
+        std::fs::write(
+            fixture.root.join("icp"),
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp 1.5.0'; exit 0; fi
+while [ "$1" = --project-root-override ] || [ "$1" = --identity-password-file ]; do shift 2; done
+if [ "$1 $2" = 'identity default' ]; then echo selected; exit 0; fi
+if [ "$1 $2" = 'identity principal' ]; then cat principal; exit 0; fi
+echo effect >> effects
+"#,
+        )
+        .unwrap();
+        std::fs::write(fixture.root.join("principal"), "operator").unwrap();
+        fixture.platform.require_operator().unwrap();
+        std::fs::write(fixture.root.join("principal"), "changed-principal").unwrap();
+        let action = EnsureAction::Start {
+            name: "root".into(),
+            principal: "root".into(),
+        };
+        let receipt = EffectRecord {
+            maintenance_attempts: 0,
+            publication_attempts: 0,
+            action_sha256: crate::fleet_ensure::ops::action_sha256(&action),
+            created_principal: None,
+            destination_post_cycles: None,
+            destination_pre_cycles: None,
+            post_cycles: None,
+            pre_cycles: None,
+            pre_canister_version: None,
+            progress_identity: None,
+            receipt: None,
+            state: crate::fleet_ensure::model::EffectState::Issued,
+        };
+        assert!(matches!(
+            fixture
+                .platform
+                .apply("operation", &action, &receipt, &fixture.state),
+            Err(IcpEnsurePlatformError::OperatorMismatch { .. })
+        ));
+        assert!(!fixture.root.join("effects").exists());
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[test]
     fn inactive_source_inventory_rejects_spare_capacity_pending_work_and_omissions() {
         let root = crate::fleet_ensure::model::RootActivationResetRecord {
             root: "root".to_string(),
@@ -4931,6 +5075,117 @@ mod tests {
         }
     }
 
+    #[cfg(unix)]
+    #[test]
+    fn pool_inspection_preflight_stops_before_update_and_requeries_on_retry() {
+        let mut fixture = PoolInspectionFixture::new();
+        let root = fixture.root_id;
+        let target = fixture.target;
+        let path = fixture.owners.root.clone();
+        fixture.inspection_hook(&format!(
+            "touch '{}'",
+            path.join("inspection-attempted").display()
+        ));
+        PoolInspectionFixture::reserve_response(&path, root, target, 99);
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                let error = platform
+                    .inspect_pool_balance(
+                        "pool",
+                        &root.to_text(),
+                        &target.to_text(),
+                        InspectedModule::Any,
+                    )
+                    .unwrap_err();
+                let IcpEnsurePlatformError::CurrentProtocol(
+                    current_protocol::CurrentProtocolError::Transport(
+                        crate::CanisterProtocolError::InspectionPreflightReserve(evidence),
+                    ),
+                ) = error
+                else {
+                    panic!("preflight reserve shortfall");
+                };
+                assert_eq!(evidence.available_liquid_cycles, 99);
+                assert!(!path.join("inspection-attempted").exists());
+                PoolInspectionFixture::reserve_response(&path, root, target, 100);
+                assert_eq!(
+                    platform.inspect_pool_balance(
+                        "pool",
+                        &root.to_text(),
+                        &target.to_text(),
+                        InspectedModule::Any,
+                    )?,
+                    1000
+                );
+                assert!(path.join("inspection-attempted").exists());
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_inspection_retains_protected_reserve_evidence() {
+        let mut fixture = PoolInspectionFixture::new();
+        let root = fixture.root_id;
+        let target = fixture.target;
+        let path = fixture.owners.root.clone();
+        let evidence = canic_core::dto::canister::CanisterInspectionReserveResponse {
+            caller: root,
+            canister_id: target,
+            native_cycles: 1000,
+            available_liquid_cycles: 50,
+            required_liquid_cycles: 100,
+        };
+        let bytes = candid::encode_one(Ok::<_, canic_core::dto::error::Error>(
+            RootInspectionResponse::InspectionReserveRequired(evidence.clone()),
+        ))
+        .unwrap();
+        std::fs::write(
+            path.join("inspection.json"),
+            serde_json::json!({"response_bytes": hex_bytes(bytes)}).to_string(),
+        )
+        .unwrap();
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                let error = platform
+                    .inspect_pool_balance(
+                        "pool",
+                        &root.to_text(),
+                        &target.to_text(),
+                        InspectedModule::Any,
+                    )
+                    .unwrap_err();
+                let IcpEnsurePlatformError::CurrentProtocol(
+                    current_protocol::CurrentProtocolError::Transport(
+                        crate::CanisterProtocolError::InspectionReserve(actual),
+                    ),
+                ) = error
+                else {
+                    panic!("typed reserve failure");
+                };
+                assert_eq!(*actual, evidence);
+                PoolInspectionFixture::response(&path, root, 1000);
+                assert_eq!(
+                    platform.inspect_pool_balance(
+                        "pool",
+                        &root.to_text(),
+                        &target.to_text(),
+                        InspectedModule::Any
+                    )?,
+                    1000
+                );
+                Ok(())
+            })
+            .unwrap();
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
     #[test]
     fn pool_funding_binds_reset_lifecycle_without_weakening_ready_inspection() {
         let failed = CanisterPoolAssetStatus::Failed {
@@ -4985,7 +5240,7 @@ mod tests {
         std::fs::write(
             fixture.root.join("icp"),
             format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\ncat '{}'/balance.json\n",
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\ncat '{}'/balance.json\n",
                 fixture.root.display(),
             ),
         )
@@ -5111,7 +5366,7 @@ mod tests {
             fs::write(root.join("owner.wasm"), b"current-owner-module").unwrap();
             let executable = root.join("icp");
             fs::write(&executable, format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != status ]; do shift; done\nshift\nprintf '%s\\n' \"$1\" >> '{}'/calls\ncat '{}'/\"$1\".json\n",
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != status ]; do shift; done\nshift\nprintf '%s\\n' \"$1\" >> '{}'/calls\ncat '{}'/\"$1\".json\n",
                 root.display(), root.display(),
             )).unwrap();
             fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
@@ -5187,7 +5442,9 @@ mod tests {
                     coordinator_candid: "unused.did".to_string(),
                     store_candid: "unused.did".to_string(),
                 });
-            std::fs::write(owners.root.join("root.did"), "service : {}").unwrap();
+            std::fs::write(owners.root.join("root.did"),
+                "service : { canic_observability : (variant { InspectionReserve : record { canister_id : principal } }) -> () query }"
+            ).unwrap();
             std::fs::write(owners.root.join("operator"), operator.to_text()).unwrap();
             for id in [root_id, Principal::from_slice(&[3])] {
                 std::fs::write(
@@ -5201,15 +5458,74 @@ mod tests {
                 .unwrap();
             }
             std::fs::write(owners.root.join("icp"), format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ] && [ \"$1\" != identity ]; do shift; done\ncase \"$1\" in\nidentity) cat '{}'/operator;;\ncanister) shift; case \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) if [ -e '{}'/fail ]; then exit 1; fi; cat '{}'/inspection.json;;\n*) exit 1;;\nesac;;\n*) exit 1;;\nesac\n",
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ] && [ \"$1\" != identity ]; do shift; done\ncase \"$1\" in\nidentity) cat '{}'/operator;;\ncanister) shift; case \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) if [ -e '{}'/fail ]; then exit 1; fi; cat '{}'/inspection.json;;\n*) exit 1;;\nesac;;\n*) exit 1;;\nesac\n",
                 owners.root.display(), owners.root.display(), owners.root.display(), owners.root.display(),
             )).unwrap();
+            let script = std::fs::read_to_string(owners.root.join("icp")).unwrap();
+            let reserve_route = format!(
+                r#"call) if [ "$3" = canic_observability ]; then
+for expected in '{}'/reserve-"$2"-*.bin; do
+    if cmp -s "$5" "$expected"; then cat "${{expected%.bin}}.json"; exit; fi
+done
+exit 1
+fi
+if"#,
+                owners.root.display()
+            );
+            std::fs::write(
+                owners.root.join("icp"),
+                script.replace("call) if", &reserve_route),
+            )
+            .unwrap();
             Self::response(&owners.root, root_id, 1_000);
+            for (caller, target) in [
+                (root_id, Principal::from_slice(&[4])),
+                (root_id, Principal::from_slice(&[5])),
+                (Principal::from_slice(&[3]), Principal::from_slice(&[4])),
+            ] {
+                Self::reserve_response(&owners.root, caller, target, 1_000);
+            }
             Self {
                 owners,
                 root_id,
                 target: Principal::from_slice(&[4]),
             }
+        }
+
+        fn reserve_response(path: &Path, caller: Principal, target: Principal, liquid: u128) {
+            use crate::canister_protocol::inspection::{
+                InspectionReserveRequest, InspectionReserveResponse,
+            };
+            let base = path.join(format!("reserve-{caller}-{target}"));
+            std::fs::write(
+                base.with_extension("bin"),
+                candid::encode_one(InspectionReserveRequest::InspectionReserve(
+                    CanisterInspectionRequest {
+                        canister_id: target,
+                    },
+                ))
+                .unwrap(),
+            )
+            .unwrap();
+            let response = Ok::<_, canic_core::dto::error::Error>(
+                InspectionReserveResponse::InspectionReserve(
+                    canic_core::dto::canister::CanisterInspectionReserveResponse {
+                        caller,
+                        canister_id: target,
+                        native_cycles: 1000,
+                        available_liquid_cycles: liquid,
+                        required_liquid_cycles: 100,
+                    },
+                ),
+            );
+            std::fs::write(
+                base.with_extension("json"),
+                serde_json::json!({
+                    "response_bytes": hex_bytes(candid::encode_one(response).unwrap()),
+                })
+                .to_string(),
+            )
+            .unwrap();
         }
 
         fn response(path: &Path, controller: Principal, cycles: u128) {
@@ -5291,6 +5607,7 @@ mod tests {
             let mut entries = Vec::new();
             for index in 0..pool_count {
                 let target = Principal::from_slice(&[u8::try_from(index + 10).unwrap()]);
+                Self::reserve_response(&owners.root, fixture.root_id, target, 1_000);
                 let mut configured = root.clone();
                 configured.name = format!("pool-{index:03}");
                 configured.kind = DesiredCanisterKind::Pool;
@@ -5516,7 +5833,7 @@ printf 'finish\n' >> events
         assert_eq!(maximum, bound);
         assert_eq!(
             fixture.owners.platform.icp.remote_call_count(),
-            u64::try_from(pool_count).unwrap() + 2
+            2 * u64::try_from(pool_count).unwrap() + 2
         );
         assert!(
             fixture
@@ -5559,7 +5876,7 @@ printf 'finish\n' >> events
         }
         assert!(!events.contains("pool-004"));
         assert!(events.find("finish:pool-001").unwrap() < events.find("finish:pool-000").unwrap());
-        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 6);
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 10);
         assert!(
             fixture
                 .owners
@@ -5578,7 +5895,7 @@ printf 'finish\n' >> events
             })
             .unwrap();
         assert_eq!(observed.len(), 6);
-        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 13);
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 22);
         std::fs::remove_dir_all(path).unwrap();
     }
 
@@ -5626,7 +5943,7 @@ printf 'finish\n' >> events
             );
             assert!(!events.contains(&format!("pool-{:03}", invalid_index - 1)));
             assert!(!events.contains("pool-004"));
-            assert_eq!(fixture.owners.platform.icp.remote_call_count(), 5);
+            assert_eq!(fixture.owners.platform.icp.remote_call_count(), 8);
             assert!(
                 fixture
                     .owners
@@ -5663,7 +5980,7 @@ printf 'finish\n' >> events
                         assert_eq!(platform.inspect_pool_balance("pool", &fixture.root_id.to_text(), &live.principal, InspectedModule::Any)?, live.cycles);
                     }
                     assert_eq!(platform.icp.remote_call_count(), configured_calls);
-                    assert_eq!(configured_calls, u64::from(pool_count) + 2);
+                    assert_eq!(configured_calls, 2 * u64::from(pool_count) + 2);
                     println!("pool_batch_benchmark assets={pool_count} concurrent={concurrent} configured_ms={configured_ms} configured_calls={configured_calls} extra_balance_calls=0 latency_ms=20");
                     Ok(observed)
                 }).unwrap();
@@ -5691,7 +6008,7 @@ printf 'finish\n' >> events
                 let configured_elapsed = started.elapsed();
                 let configured_calls = platform.icp.remote_call_count();
                 assert_eq!(observed.len(), usize::try_from(pool_count).unwrap() + 1);
-                assert_eq!(configured_calls, u64::from(pool_count) + 2);
+                assert_eq!(configured_calls, 2 * u64::from(pool_count) + 2);
                 let started = std::time::Instant::now();
                 for live in observed.values().filter_map(Option::as_ref).filter(|live| live.principal != root) {
                     assert_eq!(live.cycles, 1_000);
@@ -5844,7 +6161,7 @@ printf 'finish\n' >> events
                 ));
                 PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 800);
                 assert_eq!(inspect(platform)?, 800);
-                assert_eq!(platform.icp.remote_call_count(), 4);
+                assert_eq!(platform.icp.remote_call_count(), 7);
                 // Funding accepts the same response, but fresh observation must still
                 // establish its own exact Root artifact and controller authority.
                 assert_eq!(
@@ -5881,6 +6198,76 @@ printf 'finish\n' >> events
 
     #[cfg(unix)]
     #[test]
+    fn pool_inspection_honors_bound_source_contract_without_bypassing_query_failures() {
+        let fixture = PoolInspectionFixture::new();
+        let root = fixture.root_id.to_text();
+        let target = fixture.target.to_text();
+        let path = &fixture.owners.root;
+        let platform = &fixture.owners.platform;
+        let candid_path = path.join("root.did");
+        let current = std::fs::read_to_string(&candid_path).unwrap();
+        std::fs::write(
+            &candid_path,
+            "service : { canic_observability : (variant { CycleBalance }) -> () query }",
+        )
+        .unwrap();
+        let inspect =
+            || platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any);
+        assert_eq!(inspect().unwrap(), 1000);
+        // Source observation still checks Root authority and executes protected inspection.
+        assert_eq!(platform.icp.remote_call_count(), 2);
+        std::fs::write(&candid_path, &current).unwrap();
+        PoolInspectionFixture::reserve_response(path, fixture.root_id, fixture.target, 99);
+        let before = platform.icp.remote_call_count();
+        assert!(matches!(
+            inspect(),
+            Err(IcpEnsurePlatformError::CurrentProtocol(
+                current_protocol::CurrentProtocolError::Transport(
+                    CanisterProtocolError::InspectionPreflightReserve(_)
+                )
+            ))
+        ));
+        assert_eq!(platform.icp.remote_call_count() - before, 2);
+        // A declared query that fails cannot fall through to the inspection update.
+        std::fs::write(
+            path.join(format!(
+                "reserve-{}-{}.json",
+                fixture.root_id, fixture.target
+            )),
+            "invalid response",
+        )
+        .unwrap();
+        let before = platform.icp.remote_call_count();
+        assert!(matches!(
+            inspect(),
+            Err(IcpEnsurePlatformError::CurrentProtocol(
+                current_protocol::CurrentProtocolError::Transport(
+                    CanisterProtocolError::Response { .. }
+                )
+            ))
+        ));
+        assert_eq!(platform.icp.remote_call_count() - before, 2);
+        std::fs::write(&candid_path, "invalid Candid").unwrap();
+        let before = platform.icp.remote_call_count();
+        assert!(matches!(
+            inspect(),
+            Err(IcpEnsurePlatformError::CurrentProtocol(
+                current_protocol::CurrentProtocolError::Transport(
+                    CanisterProtocolError::InspectionContract { .. }
+                )
+            ))
+        ));
+        assert_eq!(platform.icp.remote_call_count() - before, 1);
+        std::fs::write(&candid_path, current).unwrap();
+        PoolInspectionFixture::reserve_response(path, fixture.root_id, fixture.target, 1000);
+        let before = platform.icp.remote_call_count();
+        assert_eq!(inspect().unwrap(), 1000);
+        assert_eq!(platform.icp.remote_call_count() - before, 3);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn pool_inspection_snapshot_expires_after_success_and_failure() {
         let mut fixture = PoolInspectionFixture::new();
         let root = fixture.root_id.to_text();
@@ -5896,8 +6283,8 @@ printf 'finish\n' >> events
                 assert_eq!(inspect(platform)?, 1_000);
                 PoolInspectionFixture::response(path, fixture.root_id, 900);
                 assert_eq!(inspect(platform)?, 1_000);
-                // One Root status and one protected asset inspection serve both projections.
-                assert_eq!(platform.icp.remote_call_count(), 2);
+                // Root status, reserve preflight and inspection serve both projections.
+                assert_eq!(platform.icp.remote_call_count(), 3);
                 Ok(())
             })
             .unwrap();
@@ -6033,7 +6420,7 @@ printf 'finish\n' >> events
                     platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any)?,
                     800
                 );
-                assert_eq!(platform.icp.remote_call_count(), 4);
+                assert_eq!(platform.icp.remote_call_count(), 7);
                 Ok(())
             })
             .unwrap();
@@ -6124,7 +6511,7 @@ printf 'finish\n' >> events
             fs::write(fixture.root.join("pool.json"), serde_json::json!({"response_bytes": hex_bytes(candid::encode_one(response).unwrap())}).to_string()).unwrap();
             let executable = fixture.root.join("icp");
             fs::write(&executable, format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ]; do shift; done\nshift\nsleep 0.05\ncase \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) cat '{}'/pool.json;;\n*) exit 1;;\nesac\n",
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ]; do shift; done\nshift\nsleep 0.05\ncase \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) cat '{}'/pool.json;;\n*) exit 1;;\nesac\n",
                 fixture.root.display(), fixture.root.display())).unwrap();
             fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
             let timings = Arc::new(Mutex::new(Vec::new()));
@@ -6314,7 +6701,7 @@ printf 'finish\n' >> events
         };
         fs::write(&response, status(1_000)).expect("write initial live balance");
         fs::write(&executable, format!(
-            "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.3.0'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\ncat '{}'\n",
+            "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\ncat '{}'\n",
             commands.display(), response.display(),
         )).expect("write observation transport");
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
@@ -6453,7 +6840,7 @@ printf 'finish\n' >> events
 
     #[cfg(unix)]
     #[test]
-    fn icp_1_3_public_non_controller_status_is_typed_unavailable_evidence() {
+    fn icp_1_5_public_non_controller_status_is_typed_unavailable_evidence() {
         use std::{fs, os::unix::fs::PermissionsExt};
 
         let canister = "rrkah-fqaaa-aaaaa-aaaaq-cai";
@@ -6463,12 +6850,12 @@ printf 'finish\n' >> events
         let commands = root.join("commands.log");
         let script = format!(
             "#!/bin/sh\n\
-             if [ \"$1\" = \"--version\" ]; then echo 'icp 1.3.0'; exit 0; fi\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'icp 1.5.0'; exit 0; fi\n\
              printf '%s\\n' \"$*\" >> '{}'\n\
              printf '%s\\n' '{{\"id\":\"{canister}\",\"controllers\":[\"rdmx6-jaaaa-aaaaa-aaadq-cai\"],\"module_hash\":null}}'\n",
             commands.display(),
         );
-        fs::write(&executable, script).expect("write fake ICP 1.3.0");
+        fs::write(&executable, script).expect("write fake ICP 1.5.0");
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
             .expect("make fake ICP executable");
         let desired = DesiredFleet {
@@ -6522,7 +6909,7 @@ printf 'finish\n' >> events
         let commands = root.join("commands.log");
         let canister = "rrkah-fqaaa-aaaaa-aaaaq-cai";
         let status_json = format!(
-            r#"{{"id":"{canister}","name":"coordinator","status":"Running","settings":{{"controllers":["rdmx6-jaaaa-aaaaa-aaadq-cai"]}},"module_hash":"0x{}","memory_size":"1","cycles":"1000000000000","query_stats":{{}}}}"#,
+            r#"{{"id":"{canister}","name":"coordinator","status":"Running","settings":{{"controllers":["rdmx6-jaaaa-aaaaa-aaadq-cai"]}},"module_hash":"0x{}","memory_size":"1","cycles":"1000000000000","query_stats":{{"num_calls_total":"0","num_instructions_total":"0","request_payload_bytes_total":"0","response_payload_bytes_total":"0"}}}}"#,
             "11".repeat(32),
         );
         let response_bytes = candid::encode_one(CanonicalManagementCanisterStatusFixture {
@@ -6532,7 +6919,7 @@ printf 'finish\n' >> events
         .expect("encode independently modelled management status");
         let script = format!(
             "#!/bin/sh\n\
-             if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp 1.3.0'; exit 0; fi\n\
+             if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp 1.5.0'; exit 0; fi\n\
              printf '%s\\n' \"$*\" >> '{}'\n\
              case \"$*\" in\n\
                *\"canister status {canister}\"*) printf '%s\\n' '{}' ;;\n\
@@ -6541,14 +6928,14 @@ printf 'finish\n' >> events
             commands.display(),
             status_json,
         );
-        fs::write(&executable, script).expect("write fake ICP 1.3.0");
+        fs::write(&executable, script).expect("write fake ICP 1.5.0");
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
             .expect("make fake ICP executable");
         let icp = IcpCli::new(executable.to_string_lossy(), Some("ic".to_string()));
 
         let projected = icp
             .canister_status_report(canister)
-            .expect("read ICP 1.3.0 status projection");
+            .expect("read ICP 1.5.0 status projection");
         assert_eq!(projected.canister_version, None);
         let exact = exact_install_canister_status_with(
             canister,
@@ -6571,7 +6958,7 @@ printf 'finish\n' >> events
 
         fs::write(
             &executable,
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 1.3.0'; exit 0; fi\necho '{\"not_response_bytes\":true}'\n",
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 1.5.0'; exit 0; fi\necho '{\"not_response_bytes\":true}'\n",
         )
         .expect("replace unavailable management fixture");
         let error = exact_install_canister_status_with(canister, None, None, |_| {
@@ -6657,6 +7044,12 @@ printf 'finish\n' >> events
 
         let mut fixture = PoolInspectionFixture::fresh(1);
         fixture.target = Principal::from_slice(&[10]);
+        PoolInspectionFixture::reserve_response(
+            &fixture.owners.root,
+            fixture.root_id,
+            fixture.target,
+            1_000,
+        );
         let root_id = fixture.root_id.to_text();
         let target = fixture.target.to_text();
         let mut desired = fixture.owners.platform.desired.clone();

@@ -93,7 +93,8 @@ enum RootInventoryCommand {
 
 #[derive(CandidType, Deserialize)]
 enum RootInventoryCommandResponse {
-    InspectCanister(CanisterStatusResponse),
+    InspectCanister(Box<CanisterStatusResponse>),
+    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
 }
 
 #[derive(CandidType)]
@@ -1563,6 +1564,12 @@ fn inspect_root_controlled_canister(
     root: Principal,
     canister_id: Principal,
 ) -> Result<CanisterStatusResponse, CurrentProtocolError> {
+    crate::canister_protocol::inspection::preflight_inspection(
+        icp,
+        root_candid_path,
+        root,
+        canister_id,
+    )?;
     let response: RootInventoryCommandResponse = terminal_observation(
         "root_controlled_canister",
         call_with_candid(
@@ -1573,8 +1580,12 @@ fn inspect_root_controlled_canister(
             &RootInventoryCommand::InspectCanister(CanisterInspectionRequest { canister_id }),
         ),
     )?;
-    let RootInventoryCommandResponse::InspectCanister(status) = response;
-    Ok(status)
+    match response {
+        RootInventoryCommandResponse::InspectCanister(status) => Ok(*status),
+        RootInventoryCommandResponse::InspectionReserveRequired(evidence) => Err(
+            crate::CanisterProtocolError::inspection_reserve(root, canister_id, evidence).into(),
+        ),
+    }
 }
 
 fn observed_cycle_balance(status: &CanisterStatusResponse) -> Result<u128, CurrentProtocolError> {
@@ -2268,6 +2279,7 @@ mod tests {
     ) -> RootComponentChildAllocationResponse {
         let root = member.binding.fleet_subnet_root;
         RootComponentChildAllocationResponse {
+            last_failure: None,
             operation_id,
             component: member.binding.component,
             parent_canister_id: member.binding.canister_id,

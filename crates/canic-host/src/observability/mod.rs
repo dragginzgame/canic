@@ -37,11 +37,13 @@ enum RootCommandFragment {
 #[derive(CandidType, Deserialize)]
 enum RootCommandResponseFragment {
     InspectCanister(Box<CanisterStatusResponse>),
+    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
     ObserveCanister(CanisterObservabilityResponse),
 }
 
 #[derive(CandidType)]
 enum RootStatusRequestFragment {
+    ChildFunding(Principal),
     CycleBalance,
     CycleHistory(canic_core::dto::page::PageRequest),
     MemoryAllocations,
@@ -50,6 +52,7 @@ enum RootStatusRequestFragment {
 
 #[derive(CandidType, Deserialize)]
 enum RootStatusResponseFragment {
+    ChildFunding(canic_core::dto::observability::ChildFundingUsage),
     CycleBalance(canic_core::dto::role::CycleBalanceStatusResponse),
     CycleHistory(Page<canic_core::dto::cycles::CycleTrackerEntry>),
     MemoryAllocations(canic_core::dto::memory::MemoryAllocationsResponse),
@@ -92,6 +95,9 @@ pub enum FleetObservabilityError {
     #[error("Fleet Subnet Root does not expose cycle top-up history")]
     RootCycleTopupsUnsupported,
 
+    #[error("Wasm Store does not maintain child funding grants")]
+    StoreChildFundingUnsupported,
+
     #[error("Wasm Store does not expose cycle top-up history")]
     StoreCycleTopupsUnsupported,
 
@@ -126,6 +132,12 @@ pub fn observe_fleet_canister(
     let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
     let target = parse_principal("observability target", &entry.pid)?;
     if matches!(&request, CanisterObservabilityRequest::CycleBalance) {
+        crate::canister_protocol::inspection::preflight_inspection(
+            icp,
+            &binding.candid_path,
+            root_canister,
+            target,
+        )?;
         let response: RootCommandResponseFragment = call_canister_with_arg(
             icp,
             &binding,
@@ -135,8 +147,19 @@ pub fn observe_fleet_canister(
                 canister_id: target,
             }),
         )?;
-        let RootCommandResponseFragment::InspectCanister(response) = response else {
-            return Err(FleetObservabilityError::UnexpectedRootResponse);
+        let response = match response {
+            RootCommandResponseFragment::InspectCanister(response) => response,
+            RootCommandResponseFragment::InspectionReserveRequired(evidence) => {
+                return Err(CanisterProtocolError::inspection_reserve(
+                    root_canister,
+                    target,
+                    evidence,
+                )
+                .into());
+            }
+            RootCommandResponseFragment::ObserveCanister(_) => {
+                return Err(FleetObservabilityError::UnexpectedRootResponse);
+            }
         };
         let cycles = u128::try_from(response.cycles.0).map_err(|_| {
             FleetObservabilityError::CycleBalanceOverflow {
@@ -150,6 +173,7 @@ pub fn observe_fleet_canister(
     if entry.role.as_deref() == Some(CanisterRole::WASM_STORE.as_str()) {
         return observe_store(icp, icp_root, environment, entry, request);
     }
+    let expected_child = child_funding_target(&request);
     let response: RootCommandResponseFragment = call_canister_with_arg(
         icp,
         &binding,
@@ -163,7 +187,7 @@ pub fn observe_fleet_canister(
     let RootCommandResponseFragment::ObserveCanister(response) = response else {
         return Err(FleetObservabilityError::UnexpectedRootResponse);
     };
-    Ok(response)
+    verify_child_funding_response(response, target, expected_child)
 }
 
 fn observe_store(
@@ -174,6 +198,9 @@ fn observe_store(
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
     let request = match request {
+        CanisterObservabilityRequest::ChildFunding(_) => {
+            return Err(FleetObservabilityError::StoreChildFundingUnsupported);
+        }
         CanisterObservabilityRequest::CycleHistory(page) => {
             StoreStatusRequestFragment::CycleHistory(page)
         }
@@ -210,7 +237,11 @@ fn observe_root(
     root: &RegistryEntry,
     request: CanisterObservabilityRequest,
 ) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
+    let expected_child = child_funding_target(&request);
     let request = match request {
+        CanisterObservabilityRequest::ChildFunding(child) => {
+            RootStatusRequestFragment::ChildFunding(child)
+        }
         CanisterObservabilityRequest::CycleBalance => RootStatusRequestFragment::CycleBalance,
         CanisterObservabilityRequest::CycleHistory(page) => {
             RootStatusRequestFragment::CycleHistory(page)
@@ -234,7 +265,10 @@ fn observe_root(
         protocol::CANIC_OBSERVABILITY,
         &request,
     )?;
-    Ok(match response {
+    let response = match response {
+        RootStatusResponseFragment::ChildFunding(response) => {
+            CanisterObservabilityResponse::ChildFunding(response)
+        }
         RootStatusResponseFragment::CycleBalance(response) => {
             CanisterObservabilityResponse::CycleBalance(response)
         }
@@ -247,7 +281,31 @@ fn observe_root(
         RootStatusResponseFragment::MemoryAllocations(response) => {
             CanisterObservabilityResponse::MemoryAllocations(response)
         }
-    })
+    };
+    verify_child_funding_response(response, root_canister, expected_child)
+}
+
+const fn child_funding_target(request: &CanisterObservabilityRequest) -> Option<Principal> {
+    match request {
+        CanisterObservabilityRequest::ChildFunding(child) => Some(*child),
+        _ => None,
+    }
+}
+
+fn verify_child_funding_response(
+    response: CanisterObservabilityResponse,
+    parent: Principal,
+    child: Option<Principal>,
+) -> Result<CanisterObservabilityResponse, FleetObservabilityError> {
+    if let Some(child) = child {
+        let CanisterObservabilityResponse::ChildFunding(value) = &response else {
+            return Err(FleetObservabilityError::UnexpectedRootResponse);
+        };
+        if (value.parent, value.child) != (parent, child) {
+            return Err(FleetObservabilityError::UnexpectedRootResponse);
+        }
+    }
+    Ok(response)
 }
 
 fn fleet_subnet_root_entry<'a>(
@@ -295,6 +353,39 @@ fn parse_principal(field: &'static str, value: &str) -> Result<Principal, FleetO
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn child_funding_response_binds_parent_and_child_for_direct_and_relayed_reads() {
+        let parent = Principal::from_slice(&[1]);
+        let child = Principal::from_slice(&[2]);
+        let usage = canic_core::dto::observability::ChildFundingUsage {
+            parent,
+            child,
+            observed_at_ns: 10,
+            accounted_cycles: 0.into(),
+            last_accounted_at_secs: 0,
+            pending_operations: 0,
+            reserved_cycles: Some(0.into()),
+        };
+        assert!(
+            verify_child_funding_response(
+                CanisterObservabilityResponse::ChildFunding(usage.clone()),
+                parent,
+                Some(child)
+            )
+            .is_ok()
+        );
+        for (wrong_parent, wrong_child) in [(child, child), (parent, parent)] {
+            assert!(matches!(
+                verify_child_funding_response(
+                    CanisterObservabilityResponse::ChildFunding(usage.clone()),
+                    wrong_parent,
+                    Some(wrong_child)
+                ),
+                Err(FleetObservabilityError::UnexpectedRootResponse)
+            ));
+        }
+    }
 
     fn entry(pid: &str, role: &str, parent: Option<&str>) -> RegistryEntry {
         RegistryEntry {

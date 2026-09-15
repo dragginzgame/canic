@@ -7,6 +7,21 @@ use canic_core::ids::{CanisterRole, CanonicalNetworkId};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+///
+/// FrontendUploadedInput
+///
+/// Exact local handoff and external target for read-only post-sync verification.
+///
+
+pub struct FrontendUploadedInput {
+    pub directory: PathBuf,
+    pub manifest_sha256: String,
+    pub environment: String,
+    pub network: CanonicalNetworkId,
+    pub canister_id: Principal,
+    pub prefix: String,
+}
+
 /// Explicit finite limits for an external asset payload review.
 pub struct FrontendAssetCapacityInput {
     pub environment: String,

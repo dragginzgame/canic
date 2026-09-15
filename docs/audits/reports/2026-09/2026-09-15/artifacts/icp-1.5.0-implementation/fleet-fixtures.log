@@ -1,0 +1,16 @@
+   Compiling canic-host v0.110.16 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 19s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-40d70a399afb43ac)
+
+running 6 tests
+test fleet_ensure::ops::platform::tests::completed_withdrawal_outside_bounds_fails_without_endless_observation ... ok
+test fleet_ensure::ops::platform::tests::identity_binding_keeps_operator_fence_before_effects ... ok
+test fleet_ensure::ops::platform::tests::observation_snapshot_expires_before_effects_and_after_failed_observation ... ok
+test fleet_ensure::ops::platform::tests::funding_pause_uses_fresh_ledger_balance_without_completing_protocol_work ... ok
+test fleet_ensure::ops::platform::tests::configured_observation_benchmark_retains_snapshot_call_bound ... ok
+test fleet_ensure::generate::tests::generated_multi_component_retained_estate_plans_applies_and_replays_without_effect ... ok
+
+test result: ok. 6 passed; 0 failed; 0 ignored; 0 measured; 668 filtered out; finished in 2.75s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.gANJ0J

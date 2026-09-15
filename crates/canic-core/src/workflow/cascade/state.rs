@@ -1,23 +1,22 @@
+//! Module: workflow::cascade::state
 //!
-//! State cascade workflow.
-//!
-//! Coordinates propagation of internal state snapshots across the subnet topology.
-//! Root canisters initiate cascades; non-root canisters apply and forward snapshots.
-//!
-//! Layering rules:
-//! - Workflow operates on `StateSnapshot` (internal)
-//! - `StateSnapshotInput` is used only for transport (RPC / API)
-//! - Snapshot assembly lives in `workflow::cascade::snapshot`
-//! - Persistence and mutation live in ops
+//! Responsibility: apply state snapshots and collect bounded downstream outcomes.
+//! Does not own: endpoint authorization, stable records or RPC serialization.
+//! Boundary: exact parent authority precedes local application and role-owned fanout.
 
 use crate::{
     InternalError,
-    cdk::types::Principal,
-    dto::cascade::StateSnapshotInput,
+    dto::{
+        cascade::{StateCascadeReport, StateSnapshotInput},
+        fleet_activation::FleetActivationPhase,
+    },
+    ids::CanisterRole,
     log,
     log::Topic,
     ops::{
         cascade::CascadeOps,
+        cascade_report::StateCascadeReportOps,
+        ic::IcOps,
         runtime::{
             env::EnvOps,
             fleet_activation::FleetActivationRuntimeOps,
@@ -32,40 +31,18 @@ use crate::{
             state::fleet::FleetStateOps,
         },
     },
-    workflow::cascade::{
-        snapshot::{
-            StateSnapshot, adapter::StateSnapshotAdapter, state_snapshot_debug,
-            state_snapshot_is_empty,
+    view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget},
+    workflow::{
+        cascade::{
+            snapshot::{StateSnapshot, adapter::StateSnapshotAdapter, state_snapshot_is_empty},
+            warn_if_large,
         },
-        warn_if_large,
+        runtime::cycles::CycleWorkflow,
     },
 };
 
-///
-/// StateCascadeWorkflow
-/// Orchestrates state snapshot propagation and local application.
-///
+/// State application and fanout through each recipient's current command contract.
 pub struct StateCascadeWorkflow;
-
-#[derive(Default)]
-struct FanoutFailures {
-    count: usize,
-    first: Option<InternalError>,
-}
-
-impl FanoutFailures {
-    const fn push(&mut self, _pid: Principal, error: InternalError) {
-        self.count += 1;
-        self.first = Some(match self.first.take() {
-            None => error,
-            Some(first) => first,
-        });
-    }
-
-    const fn into_error(self) -> Option<InternalError> {
-        self.first
-    }
-}
 
 fn prepared_state_snapshot_hash(
     view: &StateSnapshotInput,
@@ -77,201 +54,131 @@ fn prepared_state_snapshot_hash(
 }
 
 impl StateCascadeWorkflow {
-    // ───────────────────────── Root cascade ─────────────────────────
-
-    /// Cascade a state snapshot to one explicit root-owned direct-child inventory.
+    /// Root targets retain their inventory-derived role through transport.
     pub(crate) async fn root_cascade_state_to(
         snapshot: &StateSnapshot,
-        children: &[Principal],
-    ) -> Result<(), InternalError> {
+        children: &[StateCascadeTarget],
+    ) -> Result<StateCascadeReport, InternalError> {
         EnvOps::require_root()?;
-
-        if state_snapshot_is_empty(snapshot) {
-            CascadeMetrics::record(
-                MetricOperation::RootFanout,
-                MetricSnapshot::State,
-                MetricOutcome::Skipped,
-                MetricReason::EmptySnapshot,
-            );
-            log!(
-                Topic::Sync,
-                Info,
-                "sync.state: root cascade skipped (empty snapshot)"
-            );
-            return Ok(());
-        }
-
-        CascadeMetrics::record(
+        Self::fanout(
+            snapshot,
+            children,
+            StateCascadeReport::default(),
             MetricOperation::RootFanout,
-            MetricSnapshot::State,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
-
-        log!(
-            Topic::Sync,
-            Info,
-            "sync.state: root cascade start snapshot={}",
-            state_snapshot_debug(snapshot)
-        );
-
-        warn_if_large("root state cascade", children.len());
-
-        let mut failures = FanoutFailures::default();
-
-        for &pid in children {
-            if let Err(err) = Self::send_snapshot(pid, snapshot).await {
-                log!(
-                    Topic::Sync,
-                    Warn,
-                    "sync.state: failed to cascade to {pid}: {err}",
-                );
-                failures.push(pid, err);
-            }
-        }
-
-        if failures.count > 0 {
-            CascadeMetrics::record(
-                MetricOperation::RootFanout,
-                MetricSnapshot::State,
-                MetricOutcome::Failed,
-                MetricReason::PartialFailure,
-            );
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.state: {} child cascade(s) failed",
-                failures.count,
-            );
-            return Err(failures
-                .into_error()
-                .expect("positive failure count must retain first cause"));
-        }
-
-        CascadeMetrics::record(
-            MetricOperation::RootFanout,
-            MetricSnapshot::State,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
-        Ok(())
+        )
+        .await
     }
 
-    // ──────────────────────── Non-root cascade ──────────────────────
-
-    /// Handle a received state snapshot on a non-root canister:
-    /// - apply it locally
-    /// - forward it to direct children using the children cache
-    pub async fn nonroot_cascade_state(view: StateSnapshotInput) -> Result<(), InternalError> {
+    /// Apply locally, reconcile the local funding owner and report each subtree.
+    pub async fn nonroot_cascade_state(
+        view: StateSnapshotInput,
+    ) -> Result<StateCascadeReport, InternalError> {
         EnvOps::deny_root()?;
         let activation_hash = prepared_state_snapshot_hash(&view)?;
-
         let snapshot = StateSnapshotAdapter::from_input(view);
+        Self::apply_state_with_activation(&snapshot, activation_hash)?;
+        let reconciliation_error = Self::reconcile_funding(&snapshot).err().map(Into::into);
+        let report = StateCascadeReportOps::applied(IcOps::canister_self(), reconciliation_error);
+        let children = CanisterChildrenOps::pids()
+            .into_iter()
+            .map(|canister_id| {
+                let endpoint = match CanisterChildrenOps::role_parent(canister_id) {
+                    Some((role, _)) if role == CanisterRole::WASM_STORE => {
+                        StateCascadeEndpoint::Store
+                    }
+                    _ => StateCascadeEndpoint::Component,
+                };
+                StateCascadeTarget {
+                    canister_id,
+                    endpoint,
+                }
+            })
+            .collect::<Vec<_>>();
+        Self::fanout(&snapshot, &children, report, MetricOperation::NonrootFanout).await
+    }
 
-        if state_snapshot_is_empty(&snapshot) {
+    fn reconcile_funding(snapshot: &StateSnapshot) -> Result<(), InternalError> {
+        if snapshot.fleet_state.is_none() {
+            return Ok(());
+        }
+        let active = if FleetActivationRuntimeOps::is_standalone_local() {
+            true
+        } else {
+            FleetActivationOps::status(false)
+                .map_err(crate::ops::storage::StorageOpsError::from)?
+                .phase
+                == FleetActivationPhase::Active
+        };
+        if active {
+            CycleWorkflow::start()?;
+        }
+        Ok(())
+    }
+
+    async fn fanout(
+        snapshot: &StateSnapshot,
+        children: &[StateCascadeTarget],
+        mut report: StateCascadeReport,
+        operation: MetricOperation,
+    ) -> Result<StateCascadeReport, InternalError> {
+        if state_snapshot_is_empty(snapshot) {
             CascadeMetrics::record(
-                MetricOperation::NonrootFanout,
+                operation,
                 MetricSnapshot::State,
                 MetricOutcome::Skipped,
                 MetricReason::EmptySnapshot,
             );
-            log!(
-                Topic::Sync,
-                Info,
-                "sync.state: non-root cascade skipped (empty snapshot)"
-            );
-            return Ok(());
+            return Ok(report);
         }
-
         CascadeMetrics::record(
-            MetricOperation::NonrootFanout,
+            operation,
             MetricSnapshot::State,
             MetricOutcome::Started,
             MetricReason::Ok,
         );
-
-        log!(
-            Topic::Sync,
-            Info,
-            "sync.state: non-root cascade start snapshot={}",
-            state_snapshot_debug(&snapshot)
-        );
-
-        // Apply locally before forwarding.
-        CascadeMetrics::record(
-            MetricOperation::LocalApply,
-            MetricSnapshot::State,
-            MetricOutcome::Started,
-            MetricReason::Ok,
-        );
-        if let Err(err) = Self::apply_state_with_activation(&snapshot, activation_hash) {
-            CascadeMetrics::record(
-                MetricOperation::LocalApply,
-                MetricSnapshot::State,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
-            CascadeMetrics::record(
-                MetricOperation::NonrootFanout,
-                MetricSnapshot::State,
-                MetricOutcome::Failed,
-                MetricReason::from_error(&err),
-            );
-            return Err(err);
-        }
-        CascadeMetrics::record(
-            MetricOperation::LocalApply,
-            MetricSnapshot::State,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
-        );
-        // Cascade using children cache only (never registry).
-        let child_pids = CanisterChildrenOps::pids();
-        warn_if_large("non-root state cascade", child_pids.len());
-
-        let mut failures = FanoutFailures::default();
-
-        for pid in child_pids {
-            if let Err(err) = Self::send_snapshot(pid, &snapshot).await {
+        warn_if_large("state cascade", children.len());
+        let view = StateSnapshotAdapter::to_input(snapshot);
+        for &target in children {
+            // A newer local command must not cause the older invocation to send
+            // its obsolete snapshot to additional children after an await.
+            let result = if snapshot.fleet_state == Some(FleetStateOps::snapshot_input()) {
+                Self::send_snapshot(target, &view).await
+            } else {
+                Err(InternalError::conflict())
+            };
+            let result =
+                result.and_then(|incoming| StateCascadeReportOps::merge(&mut report, incoming));
+            if let Err(error) = result {
                 log!(
                     Topic::Sync,
                     Warn,
-                    "sync.state: failed to cascade to {pid}: {err}",
+                    "sync.state: target {} remains unconfirmed: {error}",
+                    target.canister_id
                 );
-                failures.push(pid, err);
+                StateCascadeReportOps::merge(
+                    &mut report,
+                    StateCascadeReportOps::unconfirmed(target.canister_id, error),
+                )?;
             }
         }
-
-        if failures.count > 0 {
-            CascadeMetrics::record(
-                MetricOperation::NonrootFanout,
-                MetricSnapshot::State,
-                MetricOutcome::Failed,
-                MetricReason::PartialFailure,
-            );
-            log!(
-                Topic::Sync,
-                Warn,
-                "sync.state: {} child cascade(s) failed",
-                failures.count,
-            );
-            return Err(failures
-                .into_error()
-                .expect("positive failure count must retain first cause"));
-        }
-
+        let complete = StateCascadeReportOps::require_complete(&report).is_ok();
         CascadeMetrics::record(
-            MetricOperation::NonrootFanout,
+            operation,
             MetricSnapshot::State,
-            MetricOutcome::Completed,
-            MetricReason::Ok,
+            if complete {
+                MetricOutcome::Completed
+            } else {
+                MetricOutcome::Failed
+            },
+            if complete {
+                MetricReason::Ok
+            } else {
+                MetricReason::PartialFailure
+            },
         );
-        Ok(())
+        Ok(report)
     }
 
-    // ─────────────────────── Local application ──────────────────────
-
-    /// Prepare and apply one received non-root snapshot with exact activation evidence.
     fn apply_state_with_activation(
         snapshot: &StateSnapshot,
         activation_hash: Option<[u8; 32]>,
@@ -280,78 +187,49 @@ impl StateCascadeWorkflow {
             .map(FleetActivationOps::prepare_applied_state_snapshot)
             .transpose()
             .map_err(crate::ops::storage::StorageOpsError::from)?;
-        Self::apply_state_replacements(snapshot);
-        if let Some(prepared) = activation_evidence {
-            FleetActivationOps::commit_prepared_snapshot(prepared);
-        }
-        Ok(())
-    }
-
-    fn apply_state_replacements(snapshot: &StateSnapshot) {
         if let Some(fleet) = snapshot.fleet_state {
             FleetStateOps::import_input(fleet);
         }
+        if let Some(prepared) = activation_evidence {
+            FleetActivationOps::commit_prepared_snapshot(prepared);
+        }
+        CascadeMetrics::record(
+            MetricOperation::LocalApply,
+            MetricSnapshot::State,
+            MetricOutcome::Completed,
+            MetricReason::Ok,
+        );
+        Ok(())
     }
 
-    // ───────────────────────── Transport ────────────────────────────
-
-    /// Send a state snapshot to another canister.
-    ///
-    /// Converts internal snapshot → DTO exactly once.
-    async fn send_snapshot(pid: Principal, snapshot: &StateSnapshot) -> Result<(), InternalError> {
-        let view = StateSnapshotAdapter::to_input(snapshot);
-
+    async fn send_snapshot(
+        target: StateCascadeTarget,
+        view: &StateSnapshotInput,
+    ) -> Result<StateCascadeReport, InternalError> {
         CascadeMetrics::record(
             MetricOperation::ChildSend,
             MetricSnapshot::State,
             MetricOutcome::Started,
             MetricReason::Ok,
         );
-
-        match CascadeOps::send_state_snapshot(pid, &view).await {
-            Ok(()) => {
-                CascadeMetrics::record(
-                    MetricOperation::ChildSend,
-                    MetricSnapshot::State,
-                    MetricOutcome::Completed,
-                    MetricReason::Ok,
-                );
-                Ok(())
-            }
-            Err(err) => {
-                CascadeMetrics::record(
-                    MetricOperation::ChildSend,
-                    MetricSnapshot::State,
-                    MetricOutcome::Failed,
-                    MetricReason::SendFailed,
-                );
-                Err(err)
-            }
-        }
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn fanout_failures_preserve_first_typed_cause() {
-        let mut failures = FanoutFailures::default();
-        failures.push(
-            Principal::from_slice(&[1; 29]),
-            InternalError::auth_material_stale(),
+        let result = CascadeOps::send_state_snapshot(target, view).await;
+        let complete = result
+            .as_ref()
+            .is_ok_and(|report| StateCascadeReportOps::require_complete(report).is_ok());
+        CascadeMetrics::record(
+            MetricOperation::ChildSend,
+            MetricSnapshot::State,
+            if complete {
+                MetricOutcome::Completed
+            } else {
+                MetricOutcome::Failed
+            },
+            if complete {
+                MetricReason::Ok
+            } else {
+                MetricReason::PartialFailure
+            },
         );
-        failures.push(
-            Principal::from_slice(&[2; 29]),
-            InternalError::lifecycle_failure(),
-        );
-
-        let err = failures.into_error().expect("failure must be retained");
-        assert_eq!(err.code(), crate::diagnostics::codes::SECURITY_CONFLICT);
-        assert_eq!(
-            err.public_error().code(),
-            crate::diagnostics::codes::SECURITY_CONFLICT.raw_code()
-        );
+        result
     }
 }

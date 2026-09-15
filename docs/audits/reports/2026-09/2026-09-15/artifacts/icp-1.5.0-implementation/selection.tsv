@@ -1,0 +1,6 @@
+explicit_environment	selected	proof	unset	PASS
+conflicting_inherited_default	selected	proof	local	PASS
+empty_environment	no_build	PASS
+explicit_excluded_canister	rejected_before_build	PASS
+unknown_environment	rejected_before_build	PASS
+environment_bundle	selected_only_archive_and_manifest	PASS

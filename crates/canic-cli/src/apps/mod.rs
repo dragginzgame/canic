@@ -48,6 +48,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum AppCommandError {
+    #[error("ICP configuration does not include every required App environment and role")]
+    IncompleteIcpConfig,
+
     #[error("{0}")]
     Usage(String),
 
@@ -319,7 +322,15 @@ where
     let options = AppCheckOptions::parse(args)?;
     let report = inspect_canic_icp_yaml(Some(&options.app))?;
     print_config_report(&report);
-    Ok(())
+    require_ready_config(&report)
+}
+
+fn require_ready_config(report: &IcpProjectConfigReport) -> Result<(), AppCommandError> {
+    if report.is_ready() {
+        Ok(())
+    } else {
+        Err(AppCommandError::IncompleteIcpConfig)
+    }
 }
 
 fn run_create<I>(args: I) -> Result<(), AppCommandError>

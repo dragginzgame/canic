@@ -195,17 +195,58 @@ fn schedule_component_child_allocation_after(
                     operation_id,
                     Duration::ZERO,
                 ),
-                Err(_) => schedule_component_child_allocation_after(
-                    component,
-                    operation_id,
-                    Duration::from_secs(1),
-                ),
+                Err(error) => {
+                    canic_core::log!(
+                        canic_core::log::Topic::Fleet,
+                        Warn,
+                        "child allocation attempt failed operation_id={operation_id:?} diagnostic={}",
+                        error.code()
+                    );
+                    let delay = ComponentRegistryOps::child_allocation(component, operation_id)
+                        .ok()
+                        .flatten()
+                        .and_then(|allocation| allocation.last_failure)
+                        .map_or(Duration::from_secs(60), |failure| {
+                            Duration::from_nanos(
+                                failure.retry_at_ns.saturating_sub(IcOps::now_nanos()),
+                            )
+                        });
+                    schedule_component_child_allocation_after(component, operation_id, delay);
+                }
             }
         },
     );
 }
 
 async fn advance_component_child_allocation_once(
+    component: ComponentInstanceId,
+    operation_id: [u8; 32],
+) -> Result<bool, InternalError> {
+    let before = ComponentRegistryOps::child_allocation(component, operation_id)?
+        .ok_or_else(InternalError::unavailable)?;
+    match Box::pin(advance_component_child_allocation_step(
+        component,
+        operation_id,
+    ))
+    .await
+    {
+        Ok(complete) => {
+            ComponentRegistryOps::clear_child_failure_after_progress(&before, complete)?;
+            Ok(complete)
+        }
+        Err(error) => {
+            ComponentRegistryOps::record_child_failure(
+                component,
+                operation_id,
+                &error,
+                IcOps::now_nanos(),
+            )?;
+            Err(error)
+        }
+    }
+}
+
+async fn advance_component_child_allocation_step(
     component: ComponentInstanceId,
     operation_id: [u8; 32],
 ) -> Result<bool, InternalError> {

@@ -80,3 +80,57 @@ fn real_source_edits_and_inventory_growth_are_distinct_failures() {
     ));
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn discovered_absence_requires_a_complete_prebuild_directory_scan() {
+    let root = temp_dir("reuse-discovered-absence");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/build.rs"), b"fn main() {}\n").unwrap();
+    let before = snapshot(&root);
+    let missing = root.join("app/src/build.rs");
+    let mut after = snapshot(&root);
+    add_optional(&missing, &mut after.files).unwrap();
+    before.validate_after(&after).unwrap();
+    assert_ne!(before.digest(), after.digest());
+
+    // Once the absent input is recorded, its later creation invalidates reuse.
+    fs::create_dir_all(missing.parent().unwrap()).unwrap();
+    fs::write(&missing, b"new build input").unwrap();
+    assert!(
+        matches!(after.validate_after(&snapshot(&root)), Err(BuildReuseError::ChangedInput(path)) if path == missing)
+    );
+    fs::remove_dir_all(root.join("app")).unwrap();
+
+    // Admission of one absent input must not hide a subsequent source addition.
+    let added = root.join("z.rs");
+    fs::write(&added, b"new source").unwrap();
+    add_optional(&added, &mut after.files).unwrap();
+    assert!(
+        matches!(before.validate_after(&after), Err(BuildReuseError::ChangedInput(path)) if path == added)
+    );
+    fs::remove_file(added).unwrap();
+
+    for name in ["target", ".git", ".canic", ".icp", ".tmp"] {
+        let unscanned = root.join(name).join("input.rs");
+        fs::create_dir_all(unscanned.parent().unwrap()).unwrap();
+        fs::write(&unscanned, b"existed before compilation").unwrap();
+        let before = snapshot(&root);
+        fs::remove_file(&unscanned).unwrap();
+        let mut after = snapshot(&root);
+        add_optional(&unscanned, &mut after.files).unwrap();
+        assert!(
+            matches!(before.validate_after(&after), Err(BuildReuseError::UnobservedInput(path)) if path == unscanned)
+        );
+    }
+    for unobserved in [
+        root.join("missing/../unknown.rs"),
+        root.with_extension("external.rs"),
+    ] {
+        let mut after = snapshot(&root);
+        add_optional(&unobserved, &mut after.files).unwrap();
+        assert!(
+            matches!(before.validate_after(&after), Err(BuildReuseError::UnobservedInput(path)) if path == unobserved)
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}

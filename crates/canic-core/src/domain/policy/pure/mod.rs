@@ -12,6 +12,7 @@ pub mod component_allocation;
 pub mod component_child_allocation;
 pub mod cycles;
 pub mod cycles_funding;
+pub mod deployment;
 pub mod env;
 pub mod fleet_activation;
 pub mod fleet_admission;

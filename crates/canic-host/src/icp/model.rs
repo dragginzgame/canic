@@ -3,8 +3,8 @@ use std::path::PathBuf;
 use serde::{Deserialize, Serialize};
 
 pub(super) const LOCAL_ICP_TARGET: &str = "local";
-pub(super) const REQUIRED_ICP_CLI_VERSION: &str = "1.2.0";
-pub(super) const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.2.0, <2.0.0";
+pub(super) const REQUIRED_ICP_CLI_VERSION: &str = "1.5.0";
+pub(super) const ICP_CLI_SUPPORTED_VERSION_RANGE: &str = ">=1.5.0, <2.0.0";
 
 /// Direct local replica endpoint used when ICP project state is unavailable.
 ///
@@ -41,6 +41,8 @@ pub struct IcpCli {
     pub(super) local_replica: Option<LocalReplicaTarget>,
     pub(super) inherited_fd: Option<i32>,
     pub(super) identity_password_file: Option<PathBuf>,
+    pub(super) selected_identity: std::sync::Arc<std::sync::OnceLock<String>>,
+    pub(super) compatible_version: std::sync::Arc<std::sync::Mutex<Option<String>>>,
 }
 
 ///
@@ -83,6 +85,7 @@ pub struct IcpCanisterStatusReport {
     pub cycles: Option<String>,
     pub reserved_cycles: Option<String>,
     pub idle_cycles_burned_per_day: Option<String>,
+    pub query_stats: Option<IcpCanisterQueryStats>,
 }
 
 ///
@@ -100,6 +103,9 @@ pub struct IcpCanisterStatusSettings {
     pub wasm_memory_limit: Option<String>,
     pub wasm_memory_threshold: Option<String>,
     pub log_memory_limit: Option<String>,
+    pub log_visibility: Option<IcpCanisterVisibility>,
+    pub snapshot_visibility: Option<IcpCanisterVisibility>,
+    pub status_visibility: Option<IcpCanisterVisibility>,
 }
 
 /// Transport context identity excludes informational counters.
@@ -111,6 +117,7 @@ struct IcpCommandIdentity<'a> {
     local_replica: Option<&'a LocalReplicaTarget>,
     inherited_fd: Option<i32>,
     identity_password_file: Option<&'a std::path::Path>,
+    selected_identity: Option<&'a str>,
 }
 
 impl IcpCli {
@@ -122,6 +129,7 @@ impl IcpCli {
             local_replica: self.local_replica.as_ref(),
             inherited_fd: self.inherited_fd,
             identity_password_file: self.identity_password_file.as_deref(),
+            selected_identity: self.selected_identity.get().map(String::as_str),
         }
     }
 }
@@ -132,3 +140,30 @@ impl PartialEq for IcpCli {
     }
 }
 impl Eq for IcpCli {}
+///
+/// IcpCanisterVisibility
+///
+/// Visibility of one management observation surface; this grants no controller authority.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(tag = "type", content = "value", deny_unknown_fields)]
+pub enum IcpCanisterVisibility {
+    AllowedViewers(Vec<candid::Principal>),
+    Controllers,
+    Public,
+}
+
+///
+/// IcpCanisterQueryStats
+///
+/// Cumulative query counters preserving ICP's numeric text without narrowing.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct IcpCanisterQueryStats {
+    pub num_calls_total: String,
+    pub num_instructions_total: String,
+    pub request_payload_bytes_total: String,
+    pub response_payload_bytes_total: String,
+}

@@ -6,6 +6,7 @@
 
 mod child_activation;
 mod child_allocation;
+mod child_failure;
 mod component_retirement;
 mod directory_refresh;
 mod initial_inventory;
@@ -2241,6 +2242,7 @@ fn child_allocation_record_to_view(
     record: RootComponentChildAllocationRecord,
 ) -> RootComponentChildAllocationView {
     RootComponentChildAllocationView {
+        last_failure: record.last_failure.map(child_failure::view),
         operation_id: record.operation_id,
         component: record.component,
         parent_canister_id: record.parent_canister_id,
@@ -6128,6 +6130,7 @@ fn child_record_to_directory_view(
 fn validate_child_allocation_record(
     record: &RootComponentChildAllocationRecord,
 ) -> Result<(), InternalError> {
+    child_failure::validate(record.last_failure)?;
     if record.operation_id == [0; 32]
         || record.component != record.reserved_against_registry.component
         || record.reserved_against_registry.revision == 0

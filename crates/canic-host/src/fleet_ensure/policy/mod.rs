@@ -8,6 +8,7 @@ mod creation_fee;
 pub(super) mod recovery;
 pub(super) mod reinstall;
 pub(in crate::fleet_ensure) mod root_reinstall;
+pub(super) mod startup_funding;
 
 use crate::{
     component_topology::{
@@ -44,6 +45,14 @@ pub(super) use creation_fee::validate_creation_fee_scope;
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum EnsurePolicyError {
+    #[error(
+        "Root {root} startup role {role} cannot receive {shortfall_cycles} required cycles under its configured top-up/lifetime policy"
+    )]
+    StartupRoleFundingUnavailable {
+        root: String,
+        role: String,
+        shortfall_cycles: u128,
+    },
     #[error(
         "this Fleet operation creates on multiple subnets {subnets:?}, but management_creation_fee_cycles supplies only one exact fee; mixed-subnet creation is unsupported and no effect was authorized; retain this operation's evidence and review placement so new creations use one subnet (existing identities on other subnets may be reused or reinstalled)"
     )]
@@ -250,6 +259,7 @@ struct CycleBounds {
     update_burn: u128,
 }
 
+#[derive(Clone)]
 struct PlanAccumulator {
     canisters: Vec<CanisterPlan>,
     execution_burn: u128,
@@ -576,11 +586,13 @@ pub fn compile_plan(
         .try_fold(observed_native_cycles, |total, cycles| {
             checked_add(total, *cycles, "observed controlled cycles")
         })?;
-    tranche_protocol_actions(
+    startup_funding::planning::tranche(
         desired,
+        artifacts,
         observation,
         bounds,
         observed_native_cycles,
+        created_at_time,
         &mut accumulator,
         &mut protocol_actions,
     )?;
@@ -607,6 +619,16 @@ pub fn compile_plan(
     let reconciliation_only = !protocol_actions.is_empty() && protocol_actions.iter().all(|action| matches!(action,
         EnsureAction::FleetProtocol { action, .. } if matches!(action.as_ref(), CurrentFleetProtocolAction::ReconcilePoolAsset { .. })
     ));
+    if continuation.is_some() {
+        startup_funding::planning::prepay_continuation(
+            desired,
+            artifacts,
+            observation,
+            bounds,
+            created_at_time,
+            &mut accumulator,
+        )?;
+    }
     append_pool_reconciliation_funding(
         desired,
         observation,
@@ -2987,44 +3009,60 @@ fn required_estate_creation_count(
 fn initial_role_tree_size(
     spec: &canic_core::control_plane_support::config::ComponentSpec,
 ) -> Result<u32, EnsurePolicyError> {
-    let mut instances = BTreeMap::from([(spec.component_role.clone(), 1_u32)]);
-    let mut total = 0_u32;
-    for _ in 0..=spec.spawn_grants.len() {
-        let mut advanced = false;
-        for grant in &spec.spawn_grants {
-            if instances.contains_key(&grant.child_role) {
-                continue;
-            }
-            let Some(parent_instances) = instances.get(&grant.parent_role).copied() else {
-                continue;
-            };
-            let child_instances = parent_instances
-                .checked_mul(grant.initial_instances_per_parent)
+    initial_role_instances(spec)?
+        .values()
+        .try_fold(0_u32, |sum, count| {
+            sum.checked_add(*count)
                 .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                    field: "estate initial child count",
+                    field: "estate initial workload count",
+                })
+        })
+}
+
+fn initial_role_instances(
+    spec: &canic_core::control_plane_support::config::ComponentSpec,
+) -> Result<BTreeMap<canic_core::ids::CanisterRole, u32>, EnsurePolicyError> {
+    let mut instances = BTreeMap::<canic_core::ids::CanisterRole, u32>::new();
+    let mut frontier = BTreeMap::from([(spec.component_role.clone(), 1_u32)]);
+    for _ in 0..=spec.spawn_grants.len() {
+        let mut next = BTreeMap::<canic_core::ids::CanisterRole, u32>::new();
+        for (role, count) in frontier {
+            let total = instances.entry(role.clone()).or_default();
+            *total = total
+                .checked_add(count)
+                .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                    field: "estate initial workload count",
                 })?;
-            instances.insert(grant.child_role.clone(), child_instances);
-            advanced = true;
-        }
-        if !advanced {
-            total = instances.values().try_fold(0_u32, |sum, count| {
-                sum.checked_add(*count)
+            for grant in spec
+                .spawn_grants
+                .iter()
+                .filter(|grant| grant.parent_role == role && grant.initial_instances_per_parent > 0)
+            {
+                let children = count
+                    .checked_mul(grant.initial_instances_per_parent)
                     .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                        field: "estate initial workload count",
-                    })
-            })?;
-            break;
+                        field: "estate initial child count",
+                    })?;
+                let total = next.entry(grant.child_role.clone()).or_default();
+                *total =
+                    total
+                        .checked_add(children)
+                        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                            field: "estate initial child count",
+                        })?;
+            }
         }
+        if next.is_empty() {
+            return Ok(instances);
+        }
+        frontier = next;
     }
-    if total == 0 {
-        return Err(EnsurePolicyError::EstateFundingTopology {
-            reason: format!(
-                "Component Spec {} initial child graph did not converge",
-                spec.component_spec
-            ),
-        });
-    }
-    Ok(total)
+    Err(EnsurePolicyError::EstateFundingTopology {
+        reason: format!(
+            "Component Spec {} initial child graph did not converge",
+            spec.component_spec
+        ),
+    })
 }
 
 fn tranche_protocol_actions(

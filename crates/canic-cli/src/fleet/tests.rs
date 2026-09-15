@@ -5,7 +5,8 @@ use canic_host::fleet_ensure::{
         ActualCycleConservation, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
         CycleConservation, DesiredFleet, DesiredFleetArtifacts, EnsureAction,
         EstateFundingDomainPlan, FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan,
-        FleetEnsurePlanScope, FleetObservation, LiveCanister,
+        FleetEnsurePlanScope, FleetObservation, FundingPauseRecord, FundingReviewRecord,
+        LiveCanister, NativeFundingRequiredRecord,
     },
     ops::{EnsurePaths, write_journal, write_plan},
     policy::compile_plan,
@@ -316,6 +317,7 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
             final_controlled_cycles: 1_001_498_000_000_000,
             measured_execution_burn_cycles: 2_000_000_000,
             observed_starting_cycles: 1_000_000_000_000_000,
+            observed_settlement_credit_cycles: 0,
             operator_debit_cycles: 1_500_000_000_000,
             received_new_funding_cycles: 1_500_000_000_000,
         }),
@@ -425,7 +427,7 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
              \n  native_topup app: cycles_ledger_withdraw=1.000Q ledger=ledger target={principal} deficit=2.000B margin=0.500B expected_native_post=1.002T\
              \nconservation_equation: 0.000B observed controlled + 179.101T maximum operator debit - 3.501T maximum unavoidable fees - 1.000T maximum Root-funded creation fees - 82.000T maximum execution burn = 101.600T expected remaining\
              \nmeasured_estate_funding_cycles: 10.000T\
-             \nmeasured_conservation: 1.000Q observed starting + 1.500T received funding - 500.000B exact Root-funded creation fees - 2.000B measured execution burn = 1.001Q final controlled"
+             \nmeasured_conservation: 1.000Q observed starting + 1.500T received funding + 0.000B observed settlement credit - 500.000B exact Root-funded creation fees - 2.000B measured execution burn = 1.001Q final controlled"
         )
     );
 }
@@ -635,4 +637,54 @@ fn observation_timing_is_informational_and_preserves_failed_call_counts() {
     assert_eq!(json["observation"]["remote_call_attempts"], 4);
     assert_eq!(json["observation"]["succeeded"], false);
     assert!(json.get("progress").is_none());
+}
+
+#[test]
+fn native_funding_review_reports_destination_amount_and_approval() {
+    let principal = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+    let mut report = cycle_quantity_report(principal);
+    let digest = "42".repeat(32);
+    report.funding_review = Some(FundingReviewRecord {
+        action: EnsureAction::Fund {
+            pool_funding: None,
+            amount: 95,
+            created_at_time: 99,
+            expected_post_cycles: 105,
+            funding_deficit_cycles: 90,
+            funding_margin_cycles: 5,
+            ledger: "ledger".into(),
+            name: "root-0".into(),
+            principal: principal.into(),
+        },
+        effect: None,
+        pause: FundingPauseRecord::Native(NativeFundingRequiredRecord {
+            available_cycles: 10,
+            cycles_ledger: "ledger".into(),
+            funding_margin_cycles: 5,
+            ledger_fee_cycles: 5,
+            minimum_cycles: 100,
+            operation_id: report.plan.operation_id.clone(),
+            plan_sha256: report.plan.plan_sha256.clone(),
+            provisioning_action_sha256: "24".repeat(32),
+            root: "root-0".into(),
+            root_principal: principal.into(),
+            shortfall_cycles: 95,
+        }),
+        review_sha256: digest.clone(),
+    });
+    let text = render_text_report(&report);
+    assert!(text.contains("funding_destination: root_native_balance"));
+    assert!(text.contains(&format!("funding_root: {principal}")));
+    assert!(text.contains(&format!("funding_apply: --apply {digest}")));
+    let json = report_json_value(&report).unwrap();
+    assert_eq!(json["funding_review"]["pause"]["kind"], "native");
+    assert_eq!(
+        json["funding_review"]["pause"]["evidence"]["shortfall_cycles"],
+        "95"
+    );
+    assert_eq!(
+        json["funding_review"]["pause"]["evidence"]["ledger_fee_cycles"],
+        "5"
+    );
+    assert!(json["funding_review"]["effect"].is_null());
 }

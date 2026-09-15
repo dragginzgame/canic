@@ -39,7 +39,7 @@ set -euo pipefail
 
 for arg in "$@"; do
     if [ "$arg" = "--version" ]; then
-        echo "icp-cli 1.2.0"
+        echo "icp-cli 1.5.0"
         exit 0
     fi
 done

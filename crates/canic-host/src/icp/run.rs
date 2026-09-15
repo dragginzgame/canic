@@ -10,13 +10,13 @@ use crate::{output_with_executable_busy_retry, spawn_with_executable_busy_retry}
 use super::{
     command::{command_display, configure_inherited_fd, ensure_command_compatible},
     error::IcpCommandError,
-    model::IcpRawOutput,
+    model::{IcpCli, IcpRawOutput},
     version::compatible_version_output,
 };
 
 /// Execute a command and capture trimmed stdout.
-pub(super) fn run_output(command: &mut Command) -> Result<String, IcpCommandError> {
-    ensure_command_compatible(command)?;
+pub(super) fn run_output(command: &mut Command, icp: &IcpCli) -> Result<String, IcpCommandError> {
+    icp.ensure_compatible_command(command)?;
     run_output_unchecked(command)
 }
 
@@ -24,8 +24,11 @@ pub(super) fn run_output(command: &mut Command) -> Result<String, IcpCommandErro
 ///
 /// The caller owns and must zero the returned allocation. This path neither
 /// converts stdout into a `String` nor retains it in a diagnostic.
-pub(super) fn run_secret_output(command: &mut Command) -> Result<Vec<u8>, IcpCommandError> {
-    ensure_command_compatible(command)?;
+pub(super) fn run_secret_output(
+    command: &mut Command,
+    icp: &IcpCli,
+) -> Result<Vec<u8>, IcpCommandError> {
+    icp.ensure_compatible_command(command)?;
     let display = command_display(command);
     let mut output = output_with_executable_busy_retry(command)?;
     if output.status.success() {
@@ -70,11 +73,11 @@ pub fn run_output_with_stderr(command: &mut Command) -> Result<String, IcpComman
 }
 
 /// Execute a command and parse successful stdout as JSON.
-pub(super) fn run_json<T>(command: &mut Command) -> Result<T, IcpCommandError>
+pub(super) fn run_json<T>(command: &mut Command, icp: &IcpCli) -> Result<T, IcpCommandError>
 where
     T: serde::de::DeserializeOwned,
 {
-    ensure_command_compatible(command)?;
+    icp.ensure_compatible_command(command)?;
     let display = command_display(command);
     let output = output_with_executable_busy_retry(command)?;
     if output.status.success() {
@@ -209,4 +212,19 @@ fn exit_status_label(status: std::process::ExitStatus) -> String {
     status
         .code()
         .map_or_else(|| "signal".to_string(), |code| code.to_string())
+}
+// Operation-local successful qualification is informational, never controller authority.
+impl IcpCli {
+    pub(super) fn ensure_compatible_command(
+        &self,
+        command: &Command,
+    ) -> Result<(), IcpCommandError> {
+        if command.get_program() == std::ffi::OsStr::new(&self.executable)
+            && command.get_current_dir() == self.cwd.as_deref()
+        {
+            self.compatible_version().map(|_| ())
+        } else {
+            ensure_command_compatible(command)
+        }
+    }
 }

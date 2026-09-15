@@ -7,9 +7,13 @@
 #[cfg(test)]
 mod tests;
 
-use super::{BuildReuseError, add_optional, collect_files, hash_field};
+use super::{BuildReuseError, add_optional, collect_files, hash_field, source_entry_is_excluded};
 use sha2::{Digest, Sha256};
-use std::{collections::BTreeMap, fs, path::Path};
+use std::{
+    collections::BTreeMap,
+    fs,
+    path::{Component, Path},
+};
 
 /// Pre-build source bytes and non-file authority retained until cache recording.
 pub(super) struct BuildInputSnapshot {
@@ -56,23 +60,50 @@ impl BuildInputSnapshot {
                 return Err(BuildReuseError::ChangedInput(path.into()));
             }
         }
-        if let Some(path) = after
+        for (path, value) in after
             .files
-            .keys()
-            .chain(retained.keys())
-            .find(|path| !self.files.contains_key(*path))
+            .iter()
+            .chain(&retained)
+            .filter(|(path, _)| !self.files.contains_key(*path))
         {
-            // Additions within a previously scanned source tree are actual source changes.
-            if Path::new(path).ancestors().skip(1).any(|ancestor| {
-                ancestor
-                    .to_str()
-                    .and_then(|key| self.files.get(key))
-                    .is_some_and(|value| value == "directory")
-            }) {
+            if self.observed_absence(Path::new(path)) {
+                // Cargo can first name a missing input after compilation. A complete
+                // earlier directory scan already proved absence beneath a missing entry.
+                if value == "absent" {
+                    continue;
+                }
                 return Err(BuildReuseError::ChangedInput(path.into()));
             }
             return Err(BuildReuseError::UnobservedInput(path.into()));
         }
         Ok(())
+    }
+
+    fn observed_absence(&self, path: &Path) -> bool {
+        let Some(directory) = path.ancestors().skip(1).find(|ancestor| {
+            ancestor
+                .to_str()
+                .and_then(|key| self.files.get(key))
+                .is_some_and(|value| value == "directory")
+        }) else {
+            return false;
+        };
+        let suffix = path.strip_prefix(directory).expect("path ancestor");
+        if !suffix
+            .components()
+            .all(|component| matches!(component, Component::Normal(_)))
+        {
+            return false;
+        }
+        let Some(Component::Normal(name)) = suffix.components().next() else {
+            return false;
+        };
+        // Excluded entries were never scanned, even when their parent was. Do not
+        // turn their first observation into retrospective source authority.
+        !source_entry_is_excluded(name)
+            && directory
+                .join(name)
+                .to_str()
+                .is_some_and(|key| !self.files.contains_key(key))
     }
 }

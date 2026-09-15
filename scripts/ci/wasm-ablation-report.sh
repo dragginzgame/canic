@@ -8,6 +8,7 @@ BUILD_HARNESS_SOURCE="$METHOD_ROOT/scripts/ci/wasm-ablation-build-artifact.rs"
 EXPERIMENTS="$METHOD_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
 ARTIFACTS="$METHOD_ROOT/scripts/ci/wasm-ablation-artifacts.tsv"
 FUNCTION_COUNTER_SOURCE="$METHOD_ROOT/scripts/ci/wasm-replica-function-count.rs"
+BASELINE_SOURCE_COMMIT="50f40171d6177c3d1e490b1fdb5f6163323b2cd5"
 FROZEN_IC_VALIDATOR_COMMIT="2f8dc21e2e5c37a4cae7f65d2a4230ac8f143e5a"
 IC_REPLICA_MAX_DEFINED_FUNCTIONS=50000
 IC_REPLICA_REQUIRED_FUNCTION_RESERVE=2500
@@ -76,7 +77,8 @@ select_artifacts() {
     ' "$ARTIFACTS"
 }
 
-check_manifests() {
+# Validate historical inputs without checking out, rebasing or modifying product source.
+check_manifests() (
     local expected_experiment_header
     local expected_artifact_header
     local sequence
@@ -96,6 +98,18 @@ check_manifests() {
     local owner
     local selector
     local experiment_ids
+    local source_repository
+    local source_index
+
+    source_repository="$(git -C "$METHOD_ROOT" rev-parse --show-toplevel)" ||
+        fail "the ablation method requires its source repository"
+    git -C "$source_repository" cat-file -e "$BASELINE_SOURCE_COMMIT^{commit}" ||
+        fail "the frozen ablation source commit is unavailable"
+    source_index="$(mktemp)"
+    rm -f "$source_index"
+    trap 'rm -f "$source_index" "$source_index.lock"' EXIT
+    export GIT_INDEX_FILE="$source_index"
+    git -C "$source_repository" read-tree "$BASELINE_SOURCE_COMMIT"
 
     expected_experiment_header=$'sequence\texperiment\tstate\tswitch_kind\tswitch_value\tswitch_sha256\tartifact_selectors\timmediate_baseline\tinstruction_evidence\tsource_owners'
     expected_artifact_header=$'artifact_id\tgroup\tconfig_path\tcanister'
@@ -128,7 +142,8 @@ check_manifests() {
         [[ "$canister" =~ ^[a-z0-9_]+$ ]] || fail "invalid canister name: $canister"
         [[ "$config_path" != /* && "$config_path" != ../* ]] ||
             fail "artifact config must remain repository-relative: $config_path"
-        [[ -f "$METHOD_ROOT/$config_path" ]] || fail "missing artifact config: $config_path"
+        git -C "$source_repository" cat-file -e "$BASELINE_SOURCE_COMMIT:$config_path" ||
+            fail "missing artifact config in frozen source: $config_path"
     done <"$ARTIFACTS"
 
     while IFS=$'\t' read -r sequence experiment state switch_kind switch_value switch_sha256 \
@@ -155,7 +170,8 @@ check_manifests() {
         for owner in "${owner_values[@]}"; do
             [[ "$owner" != /* && "$owner" != ../* ]] ||
                 fail "source owner must remain repository-relative: $owner"
-            [[ -e "$METHOD_ROOT/$owner" ]] || fail "missing source owner for $experiment: $owner"
+            git -C "$source_repository" cat-file -e "$BASELINE_SOURCE_COMMIT:$owner" ||
+                fail "missing source owner in frozen source for $experiment: $owner"
         done
         if [[ "$immediate_baseline" != "-" && "$immediate_baseline" != v* ]]; then
             case $'\n'"$experiment_ids"$'\n' in
@@ -170,10 +186,8 @@ check_manifests() {
                 fail "$state patch experiment lacks an exact SHA-256: $experiment"
             [[ "$(file_hash "$METHOD_ROOT/$switch_value")" == "$switch_sha256" ]] ||
                 fail "$state patch experiment SHA-256 does not match: $experiment"
-            if [[ "$state" == "specified" ]]; then
-                git -C "$METHOD_ROOT" apply --check "$METHOD_ROOT/$switch_value" ||
-                    fail "specified patch no longer applies to the current source: $switch_value"
-            fi
+            git -C "$source_repository" apply --cached --check "$METHOD_ROOT/$switch_value" ||
+                fail "patch does not apply to frozen source $BASELINE_SOURCE_COMMIT: $switch_value"
         elif [[ "$switch_sha256" != "-" ]]; then
             fail "non-runnable or non-patch experiment has a switch SHA-256: $experiment"
         fi
@@ -188,7 +202,7 @@ check_manifests() {
     fi
     [[ -f "$FUNCTION_COUNTER_SOURCE" ]] || fail "missing replica function counter source"
     [[ -f "$BUILD_HARNESS_SOURCE" ]] || fail "missing structured artifact build harness source"
-}
+)
 
 ACTION=""
 EXPERIMENT=""
@@ -281,6 +295,8 @@ else
         fail "experiment is not runnable until its one-switch input exists: $EXPERIMENT"
 fi
 [[ "$SWITCH_KIND" != "cross_commit" ]] || fail "cross-commit comparison requires its separately frozen compatible pair"
+[[ "$(git -C "$METHOD_ROOT" rev-parse "$EXPECTED_SOURCE^{commit}")" == "$BASELINE_SOURCE_COMMIT" ]] ||
+    fail "experiment requires frozen source $BASELINE_SOURCE_COMMIT"
 
 selected_run_artifacts() {
     local selected_artifacts
@@ -340,6 +356,10 @@ EXPECTED_COMMIT="$(git -C "$PRODUCT_ROOT" rev-parse "$EXPECTED_SOURCE^{commit}")
     fail "product worktree is at $SOURCE_COMMIT, expected $EXPECTED_COMMIT"
 BASE_SOURCE_TREE="$(git -C "$PRODUCT_ROOT" rev-parse 'HEAD^{tree}')"
 BASE_CARGO_LOCK_SHA256="$(file_hash "$PRODUCT_ROOT/Cargo.lock")"
+
+# Resolve Rust tooling from the same frozen checkout for harness preparation,
+# counter compilation, artifact builds and recorded tool identities.
+cd "$PRODUCT_ROOT"
 
 RUN_STEM="$EXPERIMENT-${SOURCE_COMMIT:0:12}"
 if [[ "$RUN_MODE" != "retained" ]]; then

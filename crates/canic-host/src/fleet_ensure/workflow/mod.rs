@@ -11,6 +11,7 @@ mod funding_tests;
 mod reinstall;
 mod retained_plan;
 mod root_reinstall;
+mod settlement;
 
 use crate::fleet_ensure::{
     dto::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState},
@@ -26,8 +27,8 @@ use crate::fleet_ensure::{
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
         compact_inline_plan, lock_operation, read_plan, read_root_start_authority, read_state,
-        reserve_fixture_publication_attempt, resolve_desired_artifacts, write_journal, write_plan,
-        write_state,
+        reserve_fixture_publication_attempt, resolve_desired_artifacts,
+        retain_configured_principal_bindings, write_journal, write_plan, write_state,
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
@@ -277,6 +278,9 @@ where
     #[error(transparent)]
     EstateFundingRequired(Box<EstateFundingRequiredError>),
 
+    #[error("native Root funding needs explicit approval of review {review_sha256}")]
+    NativeFundingRequired { review_sha256: String },
+
     #[error(transparent)]
     Policy(#[from] EnsurePolicyError),
 
@@ -300,7 +304,12 @@ pub fn retained_reinstall_apply_plan<E: std::error::Error + 'static>(
     validate_path_labels(environment, requested_fleet)?;
     let paths = EnsurePaths::under(root, environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
-    let Some(plan) = retained_plan::read(&paths, environment, requested_fleet)? else {
+    // The staged review owns apply; its source remains receipt-only evidence.
+    let plan = match crate::fleet_ensure::ops::reinstall::adoption::review(&paths)? {
+        Some(review) => Some(review),
+        None => retained_plan::read(&paths, environment, requested_fleet)?,
+    };
+    let Some(plan) = plan else {
         return Ok(None);
     };
     let plan = verified_plan(plan)?;
@@ -409,7 +418,9 @@ where
         )?;
         let state = read_state(&paths, requested_fleet)?;
         verify_journal(&journal, &retained, requested_fleet, &state)?;
-        if journal.estate_funding_required.is_some() {
+        if journal.estate_funding_required.is_some()
+            || funding::native_review_applicable(&retained, &journal)
+        {
             if let Some(reviewed) = retained.reviewed_desired.as_deref() {
                 platform
                     .bind_reviewed_desired(reviewed.desired())
@@ -3191,9 +3202,11 @@ where
     }
     let (estate_funding_cycles, exact_estate_creation_fee_cycles) =
         reconcile_estate_funding(plan, journal, state, terminal)?;
+    let observed_settlement_credit_cycles = settlement::observed_credit(plan, journal)?;
     let available = journal
         .initial_controlled_cycles
         .checked_add(received_new_funding_cycles)
+        .and_then(|cycles| cycles.checked_add(observed_settlement_credit_cycles))
         .ok_or_else(|| {
             EnsureWorkflowError::Conservation(
                 "terminal controlled-cycle arithmetic overflowed".to_string(),
@@ -3210,7 +3223,7 @@ where
         .checked_sub(final_controlled_cycles)
         .ok_or_else(|| {
             EnsureWorkflowError::Conservation(
-                "terminal estate contains more cycles than starting estate plus received funding"
+                "terminal estate exceeds starting cycles, received funding and bounded observed credits"
                     .to_string(),
             )
         })?;
@@ -3227,6 +3240,7 @@ where
         final_controlled_cycles,
         measured_execution_burn_cycles,
         observed_starting_cycles: journal.initial_controlled_cycles,
+        observed_settlement_credit_cycles,
         operator_debit_cycles,
         received_new_funding_cycles,
     })
@@ -3968,6 +3982,7 @@ fn publish_terminal_state(
             )
         })
         .collect();
+    retain_configured_principal_bindings(state);
     Ok(())
 }
 
@@ -4049,10 +4064,6 @@ fn merge_terminal_inventory<E>(
 where
     E: std::error::Error + 'static,
 {
-    if inventory.entries.is_empty() {
-        state.active_registry = inventory.active_registry;
-        return Ok(());
-    }
     let entries = inventory.entries;
     let mut names_by_principal = state
         .principals
@@ -5048,6 +5059,102 @@ mod tests {
 
         journal.effects[0].state = EffectState::Issued;
         assert!(prior_fleet_protocol_effect_started(&actions, &journal, 1));
+    }
+
+    #[test]
+    fn configured_projection_publishes_unique_bindings_without_losing_dynamic_cycles() {
+        let asset = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        let dynamic = "ryjl3-tyaaa-aaaaa-aaaba-cai";
+        for kind in ["pool", "component"] {
+            let desired = serde_json::from_value(serde_json::json!({
+                "canisters": [{
+                    "controllers": [], "initial_cycles": "0", "kind": kind,
+                    "minimum_cycles": "0", "name": "configured", "presence": "present",
+                    "principal": asset, "replace": false, "subnet": "subnet"
+                }],
+                "cycles_ledger": "um5iw-rqaaa-aaaaq-qaaba-cai",
+                "environment": "local", "fleet": "fleet", "ledger_fee_cycles": "0",
+                "management_creation_fee_cycles": "0", "material_cycle_threshold": "1",
+                "maximum_observation_burn_cycles": "1", "maximum_stalled_observations": 2,
+                "maximum_update_burn_cycles": "2", "operator": asset,
+                "schema_version": FLEET_ENSURE_SCHEMA_VERSION, "treasury": "configured"
+            }))
+            .expect("current desired projection");
+            let (mut state, mut journal) = retained_evidence();
+            journal.effects.clear();
+            state.principals = BTreeMap::from([
+                ("configured".to_string(), asset.to_string()),
+                (format!("observed:{asset}"), asset.to_string()),
+                (format!("observed:{dynamic}"), dynamic.to_string()),
+            ]);
+            state.retained_cycles_by_principal =
+                BTreeMap::from([(asset.to_string(), 100), (dynamic.to_string(), 60)]);
+            let cycles = state.retained_cycles_by_principal.clone();
+            let journal_before = serde_json::to_vec(&journal).expect("journal before projection");
+            let plan = estate_funding_plan();
+
+            publish_terminal_state(&desired, &plan, &journal, &mut state)
+                .expect("publish current configured topology");
+            assert_eq!(
+                state.principals,
+                BTreeMap::from([
+                    ("configured".to_string(), asset.to_string()),
+                    (format!("observed:{dynamic}"), dynamic.to_string()),
+                ])
+            );
+            assert_eq!(state.retained_cycles_by_principal, cycles);
+            let published = state.clone();
+            publish_terminal_state(&desired, &plan, &journal, &mut state)
+                .expect("repeat projection");
+            assert_eq!(state, published);
+            assert_eq!(
+                serde_json::to_vec(&journal).expect("journal after projection"),
+                journal_before
+            );
+        }
+    }
+
+    #[test]
+    fn configured_projection_preserves_duplicate_authority_rejection() {
+        let asset = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+        for configured in [false, true] {
+            let (mut state, _) = retained_evidence();
+            state.principals = BTreeMap::from([
+                ("first".to_string(), asset.to_string()),
+                ("second".to_string(), asset.to_string()),
+            ]);
+            if configured {
+                let topology = crate::fleet_ensure::model::FleetEnsureTopologyRecord {
+                    kind: crate::fleet_ensure::model::DesiredCanisterKind::Pool,
+                    module_hash: None,
+                    parent: None,
+                    protocol_binding: None,
+                    role: None,
+                };
+                state.topology = BTreeMap::from([
+                    ("first".to_string(), topology.clone()),
+                    ("second".to_string(), topology),
+                ]);
+            }
+            let before = state.clone();
+            retain_configured_principal_bindings(&mut state);
+            assert_eq!(state, before);
+            for entries in [Vec::new(), vec![terminal_component_entry(asset, "parent")]] {
+                assert!(matches!(
+                    merge_terminal_inventory::<std::io::Error>(
+                        &mut state,
+                        crate::fleet_ensure::ops::TerminalFleetInventory {
+                            entries,
+                            ..Default::default()
+                        }
+                    ),
+                    Err(EnsureWorkflowError::TerminalInventory(
+                        TerminalInventoryError::DuplicateRetainedPrincipal
+                    ))
+                ));
+                assert_eq!(state, before);
+            }
+        }
     }
 
     #[test]

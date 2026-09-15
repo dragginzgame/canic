@@ -1268,6 +1268,7 @@ type ProvisioningFailureStage = variant {
   RootActivation;
   ComponentMembership;
   StoreCatalog;
+  ComponentChildAllocation;
   ComponentAllocation;
   StoreStatus;
   CoordinatorStatus;

@@ -23,11 +23,11 @@ participant = ["dep:icydb", "dep:canic-composed-empty-schema"]
 canic = { path = "../../../crates/canic", default-features = false, features = [] }
 candid = "0.10"
 ic-cdk = "0.20.2"
-icydb = { version = "=0.257.9", default-features = false, features = ["metrics"], optional = true }
+icydb = { version = "=0.257.12", default-features = false, features = ["metrics"], optional = true }
 
 [build-dependencies]
 canic = { path = "../../../crates/canic", default-features = false }
-icydb = { version = "=0.257.9", default-features = false, optional = true }
+icydb = { version = "=0.257.12", default-features = false, optional = true }
 canic-composed-empty-schema = { path = "schema", optional = true }
 
 [profile.release]

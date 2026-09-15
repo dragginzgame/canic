@@ -39,6 +39,14 @@ pub mod model {
 }
 
 pub mod policy {
+    pub mod cycles_funding {
+        pub use crate::domain::policy::pure::cycles_funding::{
+            FundingDecision, FundingPolicyViolation, cooldown_retry_after_secs, evaluate,
+            remaining_child_budget,
+        };
+        pub use crate::model::cycles_funding::{FundingLedgerSnapshot, FundingLimits};
+    }
+
     pub mod component_allocation {
         pub use crate::domain::policy::pure::component_allocation::{
             ComponentAllocationPolicyError, PeerComponentProvisioningInput,
@@ -57,11 +65,16 @@ pub mod policy {
         };
     }
 
+    pub mod deployment {
+        pub use crate::domain::policy::pure::deployment::MINIMUM_DEPLOYMENT_RESERVE_CYCLES;
+    }
+
     pub mod fleet_funding {
         pub use crate::domain::policy::pure::fleet_funding::{
             FleetFundingAutomaticUsageSnapshot, FleetFundingWindowSnapshot,
             FleetRootGrantAuthorityMatch, FleetRootGrantAvailability, FleetRootGrantDecision,
             FleetRootGrantDecisionInput, FleetRootGrantNoGrantReason, decide_fleet_root_grant,
+            funding_window_remaining,
         };
     }
 }
@@ -200,6 +213,9 @@ pub mod ops {
 }
 
 pub mod view {
+    pub mod state_cascade {
+        pub use crate::view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget};
+    }
     pub mod fleet_activation {
         pub use crate::view::fleet_activation::{
             FleetActivationTransition, FleetActivationWasmStoreView,
@@ -250,9 +266,16 @@ pub mod workflow {
         /// Apply one root Fleet-state command to an exact caller-supplied child inventory.
         pub async fn execute_fleet_command_to(
             cmd: crate::dto::state::FleetCommand,
-            root_children: &[crate::cdk::types::Principal],
-        ) -> Result<crate::dto::state::FleetCommandResponse, crate::error::InternalError> {
-            crate::workflow::state::FleetStateWorkflow::execute_command_to(cmd, root_children).await
+            root_children: &[crate::view::state_cascade::StateCascadeTarget],
+            reconcile_funding: bool,
+        ) -> Result<crate::dto::state::FleetCommandExecutionResponse, crate::error::InternalError>
+        {
+            crate::workflow::state::FleetStateWorkflow::execute_command_to(
+                cmd,
+                root_children,
+                reconcile_funding,
+            )
+            .await
         }
     }
 }

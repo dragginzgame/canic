@@ -17,7 +17,7 @@ pub const fn evaluate(
         return Err(FundingPolicyViolation::CooldownActive { retry_after_secs });
     }
 
-    let remaining_budget = limits.max_per_child.saturating_sub(ledger.granted_total);
+    let remaining_budget = remaining_child_budget(limits, ledger);
     if remaining_budget == 0 {
         return Err(FundingPolicyViolation::MaxPerChild {
             max_per_child: limits.max_per_child,
@@ -43,6 +43,12 @@ pub const fn evaluate(
         clamped_max_per_request,
         clamped_max_per_child,
     })
+}
+
+/// Return lifetime headroom after all ledger charges, including unresolved grants.
+#[must_use]
+pub const fn remaining_child_budget(limits: FundingLimits, ledger: FundingLedgerSnapshot) -> u128 {
+    limits.max_per_child.saturating_sub(ledger.granted_total)
 }
 
 /// Return the active cooldown window for an observed child grant ledger.

@@ -45,6 +45,22 @@ pub struct SetStateResponse<T> {
     pub changed: bool,
 }
 
+/// Local mutation receipt and the independently observed downstream results.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetStateCommandResult<T> {
+    pub change: SetStateResponse<T>,
+    pub propagation: crate::dto::cascade::StateCascadeReport,
+    pub reconciliation_error: Option<crate::dto::error::Error>,
+}
+
+/// Workflow result before the endpoint selects its command-specific response.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct FleetCommandExecutionResponse {
+    pub change: FleetCommandResponse,
+    pub propagation: crate::dto::cascade::StateCascadeReport,
+    pub reconciliation_error: Option<crate::dto::error::Error>,
+}
+
 //
 // FleetStateInput
 //

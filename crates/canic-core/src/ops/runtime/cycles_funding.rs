@@ -24,7 +24,7 @@ impl CyclesFundingLedgerOps {
         CyclesFundingLedgerStoreOps::snapshot(child).unwrap_or_default()
     }
 
-    /// Record a successful grant for cooldown and child-budget accounting.
+    /// Charge a grant before transfer; the workflow restores the snapshot after rejection.
     pub fn record_child_grant(child: Principal, granted_cycles: u128, now_secs: u64) {
         CyclesFundingLedgerStoreOps::record_child_grant(child, granted_cycles, now_secs);
     }

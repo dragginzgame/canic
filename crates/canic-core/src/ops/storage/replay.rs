@@ -21,6 +21,15 @@ const REPLAY_RECEIPT_SLOT_KEY_DOMAIN: &[u8] = b"canic-replay-receipt-slot-key:v1
 pub struct ReplayReceiptOps;
 
 impl ReplayReceiptOps {
+    /// Read one actor's unresolved command receipts without mutating retention.
+    pub(crate) fn pending_for_actor_command(
+        actor: ReplayActor,
+        command_kind: &CommandKind,
+        now_ns: u64,
+    ) -> Vec<ReplayReceiptRecord> {
+        ReplayReceiptStore::pending_for_actor_command(actor, command_kind.as_str(), now_ns)
+    }
+
     /// Build a shared receipt slot key from domain, command kind, and operation id.
     #[must_use]
     pub fn slot_key(command_kind: &CommandKind, operation_id: OperationId) -> ReplayReceiptSlotKey {

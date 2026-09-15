@@ -4,6 +4,8 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod startup_funding;
+mod subnet_catalog;
 #[cfg(test)]
 mod tests;
 
@@ -533,6 +535,7 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         })?;
     }
     let generated = generate_desired_fleet(&FleetGenerateRequest {
+        catalog_progress: Some(&subnet_catalog::print_progress),
         app_config: &resolve_from_root(&root, &options.app_config),
         environment,
         fleet: &options.fleet,
@@ -553,6 +556,11 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         format_cycles(generated.observed_controlled_cycles)
     );
     println!("desired: {}", output.display());
+    print!(
+        "{}",
+        subnet_catalog::render(generated.subnet_catalog.as_ref())
+    );
+    print!("{}", startup_funding::render(&generated.startup_funding));
     Ok(())
 }
 
@@ -721,22 +729,7 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
     append_reinstall_guidance(&mut lines, report);
     append_estate_funding_domains(&mut lines, conservation);
     append_canister_summaries(&mut lines, report);
-    if let Some(review) = &report.funding_review {
-        lines.extend([
-            format!("funding_review_sha256: {}", review.review_sha256),
-            format!("funding_root: {}", review.pause.root_principal),
-            format!("funding_ledger: {}", review.pause.cycles_ledger),
-            format!(
-                "additional_funding_cycles: {}",
-                format_cycles(review.pause.shortfall_cycles)
-            ),
-            format!(
-                "additional_ledger_fee_cycles: {}",
-                format_cycles(review.pause.ledger_fee_cycles)
-            ),
-            format!("funding_apply: --apply {}", review.review_sha256),
-        ]);
-    }
+    append_funding_review(&mut lines, report);
     lines.push(format!(
         "conservation_equation: {} observed controlled + {} maximum operator debit - {} maximum unavoidable fees - {} maximum Root-funded creation fees - {} maximum execution burn = {} expected remaining",
         format_cycles(conservation.observed_controlled_cycles),
@@ -752,15 +745,44 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
             format_cycles(actual.estate_funding_cycles)
         ));
         lines.push(format!(
-            "measured_conservation: {} observed starting + {} received funding - {} exact Root-funded creation fees - {} measured execution burn = {} final controlled",
+            "measured_conservation: {} observed starting + {} received funding + {} observed settlement credit - {} exact Root-funded creation fees - {} measured execution burn = {} final controlled",
             format_cycles(actual.observed_starting_cycles),
             format_cycles(actual.received_new_funding_cycles),
+            format_cycles(actual.observed_settlement_credit_cycles),
             format_cycles(actual.exact_estate_creation_fee_cycles),
             format_cycles(actual.measured_execution_burn_cycles),
             format_cycles(actual.final_controlled_cycles)
         ));
     }
     lines.join("\n")
+}
+
+fn append_funding_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
+    if let Some(review) = &report.funding_review {
+        lines.extend([
+            format!("funding_review_sha256: {}", review.review_sha256),
+            format!("funding_root: {}", review.pause.root_principal()),
+            format!(
+                "funding_destination: {}",
+                match &review.pause {
+                    canic_host::fleet_ensure::model::FundingPauseRecord::Estate(_) =>
+                        "root_ledger_account",
+                    canic_host::fleet_ensure::model::FundingPauseRecord::Native(_) =>
+                        "root_native_balance",
+                }
+            ),
+            format!("funding_ledger: {}", review.pause.cycles_ledger()),
+            format!(
+                "additional_funding_cycles: {}",
+                format_cycles(review.pause.shortfall_cycles())
+            ),
+            format!(
+                "additional_ledger_fee_cycles: {}",
+                format_cycles(review.pause.ledger_fee_cycles())
+            ),
+            format!("funding_apply: --apply {}", review.review_sha256),
+        ]);
+    }
 }
 
 fn append_recovery_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {

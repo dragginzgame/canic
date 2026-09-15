@@ -433,6 +433,22 @@ type RoleOverviewResponse = record {
   protocol_profile_digest : blob;
 };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
+type StateCascadeReport = record {
+  successful_targets : nat64;
+  reconciliation_failures : nat64;
+  unconfirmed_targets : nat64;
+  omitted_targets : nat64;
+  targets : vec StateCascadeTargetOutcome;
+};
+type StateCascadeTargetOutcome = record {
+  canister_id : principal;
+  result : StateCascadeTargetResult;
+};
+type StateCascadeTargetResult = variant {
+  Applied;
+  AppliedWithReconciliationFailure : Error;
+  Unconfirmed : Error;
+};
 type StateSnapshotInput = record { fleet_state : opt FleetStateInput };
 type StoreCatalogReadRequest = variant {
   Storage;
@@ -468,7 +484,7 @@ type StoreCommandResponse = variant {
   FixtureSource : Result_2;
   RespondCapability : NonrootCyclesCapabilityResponseV1;
   PrepareChunkSet : TemplateChunkSetInfoResponse;
-  SynchronizeState;
+  SynchronizeState : StateCascadeReport;
   StageManifest;
   InspectTemplate : TemplateChunkSetInfoResponse;
   ReclaimDeletionCycles : WasmStoreDeletionCycleReclamationResponse;

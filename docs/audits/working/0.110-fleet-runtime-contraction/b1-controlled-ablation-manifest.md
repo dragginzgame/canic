@@ -2,8 +2,8 @@
 
 Date: 2026-09-05
 State: experiment and artifact manifests plus frozen function counter
-executable; rows 2, 3, 4, 5 and 11 measured, row 6 qualified, three source
-switches specified and remaining immutable measurements open
+executable; rows 2, 3, 4, 5, 6 and 11 measured, rows 8, 10 and 12 qualified,
+remaining source switches and immutable measurements open
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Baseline authority: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
@@ -17,9 +17,10 @@ capability fixtures. The runner can execute the unchanged baseline, the fixed
 `Page<T>` cohort, the measured row 2 global-storage-registration and row 11
 payload-adapter switches, and the measured row 3 activation-persistence, row 4
 authorization-persistence and row 5 shared-CBOR switches.
-Row 6 is qualified across its complete canonical-plus-runtime selector. Rows
-8, 10 and 12 have exact audit-only patches against the unchanged `v0.110.5`
-source, but remain non-runnable until their selected build sets are qualified.
+Row 6 now has a retained matched measurement across all twelve selected artifacts.
+Rows 8, 10 and 12 are qualified across their complete selected artifact
+sets against the unchanged `v0.110.5` source. Rows 10 and 12 passed their
+fourteen- and eleven-artifact selectors on 2026-09-14 with their original patches.
 The runner refuses every other
 experiment until its exact one-switch patch or compatible cross-commit input
 exists.
@@ -88,7 +89,11 @@ downstream observation remains non-binding pressure evidence only.
 The executable source is `scripts/ci/wasm-ablation-experiments.tsv`. Every row
 names its switch identity, immediate baseline, artifact selectors, instruction
 disposition and exact source owners. A runnable or specified patch must match
-the row's exact SHA-256 before the runner accepts the catalog.
+the row's exact SHA-256 before the runner accepts the catalog. Preflight checks
+patch applicability and source paths against the frozen baseline Git tree using
+a temporary index, independently of the current method checkout. Executions
+require that exact baseline source; the runner never rebases an experiment
+onto a newer product release.
 
 | Row | Experiment | Primary Canic owner | Current switch state |
 | ---: | --- | --- | --- |
@@ -97,13 +102,13 @@ the row's exact SHA-256 before the runner accepts the catalog.
 | 3 | activation records/codecs | activation model, stable storage and mapper | measured; material inclusive all-role result, activation parity open |
 | 4 | authorization records/codecs | auth model, stable storage, ops and workflow | measured; material canonical-plus-runtime-fixture result, persistence and authorization parity open |
 | 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | measured; material canonical-plus-runtime/blob-fixture result, codec and persistence parity open |
-| 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | ready; canonical roles plus runtime fixture qualified |
+| 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | measured; canonical roles plus runtime fixture, recovery parity open |
 | 7 | current versus exact role/capability expansion | build, start and endpoint macros | planned patch |
-| 8 | endpoint Candid type construction | endpoint procedural expansion | specified patch; build qualification open |
+| 8 | endpoint Candid type construction | endpoint procedural expansion | ready; all fourteen selected artifacts qualified |
 | 9 | Candid type documentation | reachable DTOs, IDs and endpoint types | planned patch |
-| 10 | Candid serialization/newtype adapters | IDs, DTOs and endpoint adapters | specified patch; build qualification open |
+| 10 | Candid serialization/newtype adapters | IDs, DTOs and endpoint adapters | ready; all fourteen selected artifacts qualified |
 | 11 | payload-limited async adapters | endpoint expansion and ingress payload owner | ready; immutable selected-fixture measurement retained |
-| 12 | metrics providers | role endpoint projection and runtime metrics ops | specified patch; build qualification open |
+| 12 | metrics providers | role endpoint projection and runtime metrics ops | ready; all eleven canonical artifacts qualified |
 | 13 | configuration/provisioning providers | Root projection and control-plane providers | planned patch |
 | 14 | command providers | managed, Root, Coordinator and Store projections | planned patch |
 | 15 | timer/watchdog providers | lifecycle macros, timer authority and Root watchdog | planned patch |
@@ -316,8 +321,15 @@ subsequent non-retainable qualification builds all eleven canonical roles plus
 transform record and final Wasm, gzip, Candid and independent function count
 validates, and the exact product source and lock are restored. The run does not
 execute watchdog ownership/recovery journeys, provide an optimized delta or
-claim behavior parity. Row 6 is therefore `ready` for governed two-pair
-measurement.
+claim behavior parity. The subsequent September 14 retained measurement passes
+both baseline and variant determinism for all twelve artifacts. The eleven
+canonical artifacts lose 1,242,984 optimized code bytes and 2,297 defined
+functions in aggregate; the runtime fixture loses another 113,041 code bytes
+and 234 functions. The role-dependent result ranges from unchanged Coordinator
+code size to approximately 8.9% reductions for App and Scale Replica. Row 6 is
+therefore `measured`, with no watchdog recovery parity or production deletion
+claim. Exact identities and vectors are in the
+[measurement report](../../reports/2026-09/2026-09-14/b1-recovery-dispatch-measurement.md).
 
 Row 8's exact patch identity is bound by the executable experiment manifest.
 It marks ordinary IC CDK query/update expansions as Candid-hidden and omits the
@@ -332,9 +344,9 @@ a different protocol-profile digest and embedded Candid metadata. It is
 declaration-construction attribution, not a pure code-section result and not a
 Candid, metadata or wire-compatibility proposal. Type construction that remains
 reachable from runtime serialization is outside this switch and belongs to row
-10. The exact patch applies to the byte-identical current and `v0.110.5` macro
-expander. Its macro unit suite passes, as does this narrow isolated role-shape
-compile:
+10. The macro patch was checked against the then-current and `v0.110.5`
+expander. Its recorded macro unit suite passed, as did this narrow isolated
+role-shape compile:
 
 ```text
 CARGO_NET_OFFLINE=true cargo check --offline --locked \
@@ -359,9 +371,12 @@ Qualification may now select one exact experiment-owned artifact so a repaired
 counterfactual boundary can be checked without rebuilding unrelated artifacts;
 this remains development-only and cannot produce retention-eligible evidence.
 
-The complete canonical plus three-fixture selector has not passed against the
-current exact patch identity and no immutable optimized before/after delta
-exists, so row 8 remains `specified`.
+On 2026-09-14, the complete canonical plus three-fixture selector passed against
+the unchanged exact patch and frozen `v0.110.5` source. All fourteen artifacts
+passed Wasm, gzip, Candid and structured metric checks, with source and lock
+restored. Row 8 is now `ready`; this single variant qualification supplies no
+retained before/after delta, determinism or runtime parity claim. See the
+[qualification report](../../reports/2026-09/2026-09-14/b1-row8-qualification.md).
 
 Row 10's exact patch identity is bound by the executable experiment manifest.
 For ordinary endpoints it makes the IC CDK runtime wrapper Candid-hidden, gives
@@ -377,7 +392,7 @@ reply codec, makes no reply or wire-parity claim and does not remove request
 deserialization or direct inter-canister Candid encoders. It measures only the
 reachable outbound `CandidType::idl_serialize` and transparent-newtype
 machinery that becomes unnecessary at the endpoint reply boundary. The exact
-patch applies to the byte-identical current and `v0.110.5` macro expander. Its
+patch was checked against the then-current and `v0.110.5` macro expander. Its
 macro unit suite passes, as does this narrow isolated role-shape compile:
 
 ```text
@@ -395,7 +410,10 @@ An exact `canonical_app` development qualification also passes artifact, gzip,
 Candid and structured-metric validation in 179 seconds. These single-artifact
 builds are qualification evidence only: they do not satisfy the runner's
 two-build determinism, complete selected-artifact matrix or immutable delta
-requirements, so row 10 remains `specified` and no savings value is retained.
+requirements. On 2026-09-14, the unchanged patch passed the complete fourteen-
+artifact qualification on frozen `v0.110.5`. Row 10 is now `ready`, with no
+retained savings or runtime-parity claim. See the
+[qualification report](../../reports/2026-09/2026-09-14/b1-row10-row12-qualification.md).
 
 Row 11's exact patch identity is bound by the executable experiment manifest
 and remains byte-identical to the switch retained by its immutable report.
@@ -448,7 +466,7 @@ recording, DTO/Candid types or the surrounding status endpoint, and it overlaps
 row 16 only at that endpoint's Metrics branch. The empty result is deliberately
 not behaviorally equivalent, so the switch makes no metrics or runtime parity
 claim and is not a production deletion proposal. The exact patch applies to
-the byte-identical current and `v0.110.5` helper anchor and passes this narrow
+the then-current and `v0.110.5` helper anchor and passed this narrow
 isolated role-shape compile:
 
 ```text
@@ -460,8 +478,10 @@ Those packages cover control-plane-heavy Root, an ordinary application role
 and Store projection. They do not qualify all eleven canonical artifacts, run
 a metrics journey or provide an immutable optimized delta. An exact
 `canonical_app` development qualification passes artifact, gzip, Candid and
-structured-metric validation in 186 seconds. The complete selector remains
-unqualified, so row 12 stays `specified` and no savings value is retained.
+structured-metric validation in 186 seconds. On 2026-09-14, the unchanged patch
+passed all eleven canonical artifacts on frozen `v0.110.5`. Row 12 is now
+`ready`, with no retained savings or metrics-parity claim. See the
+[qualification report](../../reports/2026-09/2026-09-14/b1-row10-row12-qualification.md).
 
 ## Artifact Vector And Validator Boundary
 
@@ -565,9 +585,8 @@ bash scripts/ci/wasm-ablation-report.sh \
 
 ## Next Step
 
-Qualify rows 8, 10 and 12 against every selected artifact on a clean candidate,
-then measure ready row 6 and the newly qualified experiments
-through the governed runner. Measured row 2 confirms the direct hypothesis
+Measure ready rows 8, 10 and 12 through the governed runner, then finish
+the remaining source switches and B1 evidence. Measured row 2 confirms the direct hypothesis
 behind B2 but does not supply its required lifecycle parity; measured row 3
 provides inclusive activation-persistence pressure while measured rows 4 and
 5 provide differently scoped and intentionally overlapping

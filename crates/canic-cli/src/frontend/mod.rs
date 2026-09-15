@@ -10,7 +10,11 @@ use crate::cli::{
 };
 use crate::support::icp_target::IcpTargetOptions;
 use canic_host::{
-    frontend::{FrontendError, model::FrontendAssetCapacityInput, ops, workflow},
+    frontend::{
+        FrontendError,
+        model::{FrontendAssetCapacityInput, FrontendUploadedInput},
+        ops, workflow,
+    },
     icp_config::resolve_current_canic_icp_root,
 };
 use clap::Command;
@@ -53,6 +57,12 @@ fn command() -> Command {
         .subcommand(Command::new("verify").about("Verify files against an independently retained digest")
             .arg(value_arg("directory").required(true))
             .arg(value_arg("sha256").long("sha256").required(true)))
+        .subcommand(Command::new("verify-uploaded").about("Read back uploaded handoff files from an asset canister")
+            .arg(value_arg("directory").required(true))
+            .arg(value_arg("sha256").long("sha256").required(true))
+            .arg(value_arg("canister").long("canister").required(true).value_parser(clap::value_parser!(candid::Principal)))
+            .arg(value_arg("prefix").long("prefix").required(true).help("Exact remote handoff directory, such as /canic"))
+            .after_help("Example:\n  canic --environment ic frontend verify-uploaded browser/canic --sha256 <digest> --canister <principal> --prefix /canic"))
         .after_help("Examples:\n  canic frontend export demo --input frontend-local.json --out browser/canic\n  canic frontend verify browser/canic --sha256 <digest>\n  canic --environment ic frontend export demo --input frontend-ic.json --out browser/canic --json")
 }
 
@@ -66,6 +76,9 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), FrontendComma
     let (action, leaf) = matches.subcommand().expect("required frontend subcommand");
     if action == "capacity" {
         return capacity(&matches, leaf);
+    }
+    if action == "verify-uploaded" {
+        return verify_uploaded(&matches, leaf);
     }
     let manifest = match action {
         "export" => {
@@ -97,6 +110,78 @@ pub fn run(args: impl IntoIterator<Item = OsString>) -> Result<(), FrontendComma
         );
         println!("sha256: {}", manifest.manifest_sha256);
         println!("role instances: {}", manifest.roles.len());
+    }
+    Ok(())
+}
+
+fn verify_uploaded(
+    matches: &clap::ArgMatches,
+    leaf: &clap::ArgMatches,
+) -> Result<(), FrontendCommandError> {
+    let target = IcpTargetOptions::parse(matches);
+    let root = resolve_current_canic_icp_root()?;
+    let input = FrontendUploadedInput {
+        directory: required_string(leaf, "directory").into(),
+        manifest_sha256: required_string(leaf, "sha256"),
+        environment: target.environment.clone(),
+        network: canic_host::network::resolve_canonical_network_id_from_root(
+            &root,
+            &target.environment,
+        )
+        .map_err(FrontendError::from)?,
+        canister_id: *leaf
+            .get_one::<candid::Principal>("canister")
+            .expect("required Principal"),
+        prefix: required_string(leaf, "prefix"),
+    };
+    let selected_environment = sync_variable("ICP_CLI_ENVIRONMENT")?;
+    let selected_canister = sync_variable("ICP_CLI_CID")?;
+    validate_sync_context(
+        &input.environment,
+        input.canister_id,
+        selected_environment.as_deref(),
+        selected_canister.as_deref(),
+    )?;
+    ops::prepare_uploaded(&input)?;
+    let mut reader = ops::IcpFrontendAssetReader::new(&target.icp_cli(&root), &input)?;
+    let report = workflow::verify_uploaded(&input, &mut reader)?;
+    if matches.get_flag("json") {
+        println!("{}", serde_json::to_string_pretty(&report)?);
+    } else {
+        println!(
+            "Verified {} handoff files on {} ({})",
+            report.files.len(),
+            report.canister_id,
+            report.environment
+        );
+        println!("sha256: {}", report.manifest_sha256);
+    }
+    Ok(())
+}
+
+fn sync_variable(name: &str) -> Result<Option<String>, FrontendError> {
+    match std::env::var(name) {
+        Ok(value) => Ok(Some(value)),
+        Err(std::env::VarError::NotPresent) => Ok(None),
+        Err(std::env::VarError::NotUnicode(_)) => Err(FrontendError::Environment),
+    }
+}
+
+fn validate_sync_context(
+    environment: &str,
+    canister: candid::Principal,
+    selected_environment: Option<&str>,
+    selected_canister: Option<&str>,
+) -> Result<(), FrontendError> {
+    if selected_environment.is_some_and(|selected| selected != environment) {
+        return Err(FrontendError::Environment);
+    }
+    if let Some(selected) = selected_canister {
+        let selected =
+            candid::Principal::from_text(selected).map_err(|_| FrontendError::Principal)?;
+        if selected != canister {
+            return Err(FrontendError::Principal);
+        }
     }
     Ok(())
 }
@@ -151,4 +236,61 @@ fn capacity(
         .into());
     }
     Ok(())
+}
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+#[cfg(test)]
+mod tests {
+    use super::*;
+    #[test]
+    fn sync_context_rejects_another_environment_or_asset() {
+        let canister = candid::Principal::from_slice(&[1]);
+        validate_sync_context("proof", canister, Some("proof"), Some(&canister.to_text())).unwrap();
+        validate_sync_context("proof", canister, None, None).unwrap();
+        assert!(matches!(
+            validate_sync_context("proof", canister, Some("local"), None),
+            Err(FrontendError::Environment)
+        ));
+        assert!(matches!(
+            validate_sync_context("proof", canister, None, Some("2vxsx-fae")),
+            Err(FrontendError::Principal)
+        ));
+        assert!(matches!(
+            validate_sync_context("proof", canister, None, Some("invalid")),
+            Err(FrontendError::Principal)
+        ));
+    }
+    #[test]
+    fn uploaded_verification_requires_independent_digest_and_exact_target() {
+        let command = || super::command();
+        assert!(
+            command()
+                .try_get_matches_from([
+                    "frontend",
+                    "verify-uploaded",
+                    "browser/canic",
+                    "--sha256",
+                    "digest",
+                    "--canister",
+                    "rrkah-fqaaa-aaaaa-aaaaq-cai",
+                    "--prefix",
+                    "/canic"
+                ])
+                .is_ok()
+        );
+        assert!(
+            command()
+                .try_get_matches_from([
+                    "frontend",
+                    "verify-uploaded",
+                    "browser/canic",
+                    "--canister",
+                    "rrkah-fqaaa-aaaaa-aaaaq-cai",
+                    "--prefix",
+                    "/canic"
+                ])
+                .is_err()
+        );
+    }
 }

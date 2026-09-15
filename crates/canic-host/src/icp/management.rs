@@ -18,7 +18,7 @@ use thiserror::Error as ThisError;
 
 use super::{
     model::IcpCli,
-    run::{run_json, run_output, run_secret_output},
+    run::{run_json, run_secret_output},
 };
 
 const MANAGEMENT_CANISTER_STATUS: &str = "canister_status";
@@ -106,16 +106,35 @@ impl IcpCli {
     ///
     /// The caller owns reviewed effect authority and durable intent before using it.
     pub fn authenticated_agent(&self) -> Result<Agent, IcpManagementCallError> {
+        self.build_authenticated_agent(None)
+    }
+
+    /// Resolve the same selected identity and network with bounded HTTP response bodies.
+    pub(crate) fn authenticated_agent_with_response_limit(
+        &self,
+        maximum: usize,
+    ) -> Result<Agent, IcpManagementCallError> {
+        self.build_authenticated_agent(Some(maximum))
+    }
+
+    fn build_authenticated_agent(
+        &self,
+        maximum: Option<usize>,
+    ) -> Result<Agent, IcpManagementCallError> {
         let environment = self
             .environment
             .as_deref()
             .ok_or(IcpManagementCallError::MissingEnvironment)?;
         let network = self.network_status(environment)?;
         let identity = self.exported_active_identity()?;
-        let agent = Agent::builder()
+        let mut builder = Agent::builder()
             .with_url(&network.api_url)
             .with_arc_identity(identity)
-            .with_ingress_expiry(MANAGEMENT_INGRESS_EXPIRY)
+            .with_ingress_expiry(MANAGEMENT_INGRESS_EXPIRY);
+        if let Some(maximum) = maximum {
+            builder = builder.with_max_response_body_size(maximum);
+        }
+        let agent = builder
             .build()
             .map_err(IcpManagementCallError::AgentBuild)?;
         let root_key = canic_core::cdk::utils::hash::decode_hex(&network.root_key)
@@ -138,20 +157,18 @@ impl IcpCli {
         }
         let mut command = self.command();
         command.args(["network", "status", "--environment", environment, "--json"]);
-        run_json(&mut command).map_err(Into::into)
+        run_json(&mut command, self).map_err(Into::into)
     }
 
     fn exported_active_identity(&self) -> Result<Arc<dyn Identity>, IcpManagementCallError> {
-        let mut default_command = self.command();
-        default_command.args(["identity", "default"]);
-        let identity_name = run_output(&mut default_command)?;
+        let identity_name = self.selected_identity_name()?;
 
         let mut export_command = self.command();
         export_command.args(["identity", "export", &identity_name]);
         if let Some(password_file) = self.identity_password_file.as_deref() {
             export_command.arg("--password-file").arg(password_file);
         }
-        let mut pem = run_secret_output(&mut export_command)?;
+        let mut pem = run_secret_output(&mut export_command, self)?;
         let identity = parse_exported_identity(&pem);
         pem.fill(0);
         let identity = identity?;

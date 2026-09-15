@@ -7,7 +7,7 @@
 use crate::workflow::state::FleetStateWorkflow;
 use canic_core::dto::{
     error::Error,
-    state::{FleetCommand, FleetCommandResponse},
+    state::{FleetCommand, FleetCommandExecutionResponse},
 };
 
 ///
@@ -19,7 +19,9 @@ use canic_core::dto::{
 pub struct FleetStateApi;
 
 impl FleetStateApi {
-    pub async fn execute_command(cmd: FleetCommand) -> Result<FleetCommandResponse, Error> {
+    pub async fn execute_command(
+        cmd: FleetCommand,
+    ) -> Result<FleetCommandExecutionResponse, Error> {
         FleetStateWorkflow::execute_command(cmd)
             .await
             .map_err(Error::from)

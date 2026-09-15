@@ -168,6 +168,8 @@ pub(super) const CURRENT_REASONS: &[DiagnosticEntry] = &[
     DiagnosticEntry::new(159, "AUTH_TOKEN_EXPIRED", "authentication", "The delegated authentication token has expired.", None),
     DiagnosticEntry::new(160, "WASM_STORE_CHUNK_MISSING", "wasm_store", "A required Wasm Store chunk or chunk set is missing.", None),
     DiagnosticEntry::new(161, "WASM_STORE_MANIFEST_MISSING", "wasm_store", "A required Wasm Store manifest or exact release is missing.", None),
+    DiagnosticEntry::new(162, "PLATFORM_INSUFFICIENT_LIQUID_CYCLES", "platform", "The calling canister has insufficient liquid cycles to schedule an outbound call.", Some("Inspect the calling canister's liquid balance and freezing reserve; a positive native balance does not establish usable call headroom. Review funding before retrying.")),
+    DiagnosticEntry::new(163, "DEPLOYMENT_CYCLE_RESERVE_REQUIRED", "capacity", "The Root lacks the native cycle reserve required for a deployment step.", Some("Inspect the retained allocation and Root balance, then review same-operation native funding. Ready pool capacity does not supply Root execution reserve.")),
 ];
 
 pub(super) const RETIRED_REASONS: &[super::RetiredDiagnosticEntry] = &[];

@@ -73,6 +73,11 @@ struct AutomaticTopupConfig {
     target: AutomaticTopupTarget,
 }
 
+enum DeadlineUpdate {
+    Exact,
+    KeepEarlier,
+}
+
 enum AutomaticTopupTarget {
     Parent { amount: Cycles },
     RootCoordinator,
@@ -152,7 +157,24 @@ impl CycleWorkflow {
                 current_request.as_ref(),
                 &sample,
                 previous,
+                DeadlineUpdate::Exact,
             ),
+        )
+    }
+
+    /// Refresh demand after a value transfer without interpreting its debit as burn.
+    /// The fresh sample also becomes the baseline for the next safety observation.
+    pub(crate) fn reconcile_after_transfer() -> Result<(), InternalError> {
+        let config = Self::automatic_topup_config()?;
+        let current_request = Self::current_root_request(config.as_ref())?;
+        let sample = Self::read_sample();
+        Self::record_observation(&sample);
+        Self::reconcile_from_sample(
+            config.as_ref(),
+            current_request.as_ref(),
+            &sample,
+            None,
+            DeadlineUpdate::KeepEarlier,
         )
     }
 
@@ -161,6 +183,7 @@ impl CycleWorkflow {
         current_request: Option<&FleetRootFundingRequest>,
         sample: &CycleBalanceSample,
         previous: Option<policy::cycles::CycleBalanceObservation>,
+        update: DeadlineUpdate,
     ) -> Result<(), InternalError> {
         let deadline = config
             .and_then(|config| {
@@ -181,7 +204,7 @@ impl CycleWorkflow {
                 ))
             })
             .transpose()?;
-        Self::reconcile_timer(deadline)?;
+        Self::reconcile_timer(deadline, update)?;
         Ok(())
     }
 
@@ -661,7 +684,7 @@ impl CycleWorkflow {
         }
     }
 
-    fn reconcile_timer(deadline_ns: Option<u64>) -> Result<(), TimerError> {
+    fn reconcile_timer(deadline_ns: Option<u64>, update: DeadlineUpdate) -> Result<(), TimerError> {
         require_active()?;
         if deadline_ns.is_some() {
             Self::declare_timer()?;
@@ -673,7 +696,13 @@ impl CycleWorkflow {
             TimerAuthorityWorkflow::ensure_async_job_recovery_watchdog_with_automatic_topup()?;
         }
         if let Some(result) = with_owned_once(&TOPUP_TIMER, |registration| {
-            registration.reconcile_schedule(deadline_ns.map(TimerSchedule::At))
+            match (update, deadline_ns.map(TimerSchedule::At)) {
+                // A transfer may advance a safety check, but must not postpone one.
+                (DeadlineUpdate::KeepEarlier, Some(schedule)) => {
+                    registration.ensure_scheduled(schedule)
+                }
+                (_, schedule) => registration.reconcile_schedule(schedule),
+            }
         })? {
             result?;
         }
