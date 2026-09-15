@@ -15,6 +15,61 @@ The scope decision supersedes earlier checkpoint statements that those larger
 additions blocked .17; it does not close their upstream acceptance criteria,
 the parked auth/E9 investigation, downstream adoption or the 0.110 minor.
 
+## IcyDB 0.257.15 update — 2026-09-15
+
+Crates.io's sparse index and Cargo search confirm 0.257.15 as the latest
+published non-yanked release at this update; upstream's 0.257.16 notes are still
+development work. The workspace advances from 0.257.13 and the isolated composed
+fixture from 0.257.12. All six IcyDB packages align at 0.257.15 in both lockfiles;
+SQL stays disabled, the empty composed participant retains metrics, and each
+graph retains ic-memory 0.13.3. No Canic Rust API edits were needed.
+
+All seven cases in `icydb_lifecycle_composition` pass, including checkpoint/row
+commit, Store delivery and interrupted recovery, participant traps, restoration
+and timer custody. Logs: `/tmp/canic-icydb-025715-lifecycle-ic.log`,
+`/tmp/canic-icydb-025715-lifecycle-clippy.log`,
+`/tmp/canic-icydb-025715-integration-clippy.log` and
+`/tmp/canic-icydb-025715-composed-clippy.log`. Owning fixtures and the integration
+target pass scoped Clippy; both isolated host/participant selections pass Wasm
+declaration-mode Clippy. Resolved features and versions were checked with locked
+offline metadata. No new composed runtime size/instruction result is claimed;
+historical measurements retain their exact sources and dependencies.
+
+The existing zlib-rs update and release-test fixes are preserved. Sibling
+repositories were read-only. The selected .17 batch and changelog remain ready
+for the maintainer-directed complete release gate; no package-version bump,
+commit, push, deployment or broad suite ran for this dependency update.
+
+## Release-test corrections — 2026-09-15
+
+The three failed governed cases are corrected and individually qualified.
+Fixture accounting now includes reviewed Root startup prepayment, and the
+reinstall fixture backs its mock Ledger and accounts for the reviewed startup
+withdrawal. Continuation reserves may equal their ceiling when fully funded;
+additional unreviewed spending must still pause. The selected-build wipe fixture
+now retries only typed `ProvisioningRetryPending`, at most 64 times after the
+initial attempt, always using the same reviewed plan. Both funded and separately
+funded recovery paths use that helper; other errors return immediately.
+Runtime funding, recovery semantics and approval boundaries are unchanged.
+
+- Generated reinstall: `/tmp/canic-release-reinstall-final.log` passes.
+- Failed imports: `/tmp/canic-release-failed-imports.log` passes.
+- Complete mixed topology, both deliberate wipes, conservation, replay and
+  memory checks: `/tmp/canic-release-mixed-topology-complete.log` passes.
+- Owning-package all-target/all-feature warning-denied Clippy:
+  `/tmp/canic-release-fixture-clippy.log` passes.
+
+The maintainer authorized stopping the concurrent validation; its processes had
+already exited when checked, so no signal was sent. A concurrent lockfile update
+to zlib-rs 0.6.8 interrupted one earlier offline metadata check. That update was
+preserved and the exact locked crate fetched; the final mixed-topology run and
+Clippy use it. The final lockfile and fixture hashes remained unchanged, recorded
+in `/tmp/canic-release-mixed-topology-inputs.sha256`. The two earlier targeted
+passes predate that lockfile update. All own checks have finished; no complete
+suite rerun, version bump, commit or push was performed for this correction.
+The selected .17 batch and changelog are ready for the maintainer-directed
+complete release gate. Deferred RF2/RF3 and auth/E9 scope remain unchanged.
+
 ## CANIC-172/174 child funding observations — 2026-09-15
 
 The [child funding observation report](../audits/reports/2026-09/2026-09-15/canic-172-child-funding-usage.md)
@@ -145,7 +200,7 @@ unchanged-release reuse, inspection costs and originating diagnostics.
   Its local Ledger stub uses zero fees; the earlier native case covers nonzero fees.
 - CANIC-175: role-specific state dispatch, partial outcomes, timer reconciliation
   and Readonly/Stopped recovery pass the composed multi-role IC case.
-- Dependencies are IcyDB 0.257.13, ic-query 0.43.1 and ic-memory 0.13.3. The isolated composed-Wasm
+- Dependencies are IcyDB 0.257.15, ic-query 0.43.1 and ic-memory 0.13.3. The isolated composed-Wasm
   outlining experiment was discarded after byte-identical results; its
   [evidence](../audits/working/icydb033-composed-wasm/outlining.md) retains exact identities.
 

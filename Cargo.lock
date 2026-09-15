@@ -2570,9 +2570,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.257.13"
+version = "0.257.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7112ab644f490a2e9a69c89eeae51081be416bd3d62efd0f2d186800c28852c"
+checksum = "6accb7c6737df85ec54e1ed407d52ec530b2b8b06495a2a1925f7e4be557dfa0"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2588,9 +2588,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.257.13"
+version = "0.257.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b884871e10a68fedaf882e5bde90fb495f8d6af3fb93c7b1613f57aa507df945"
+checksum = "83ab580054eca9b8d79b0d73b343f87a71cae816d5ea77f1ab294c903c60ffdd"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2613,18 +2613,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.257.13"
+version = "0.257.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77fcca13329ce9e27a1b4129c7a73bc351e0ffceda2fe00e827a4af96e3ac9f3"
+checksum = "6e005b13824b92c6f5421d4af08718b4106a6bab6a6c9b2a1dae80de7a1d1566"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.257.13"
+version = "0.257.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5ba000b1e825fc8fc51c960c7459ebb3fc0c177333dc229eeee5922c48666415"
+checksum = "5d59508767589a9b93759f3656888f2669a997f4b3ee7ccd8c2b7b402f90f3db"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2644,9 +2644,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.257.13"
+version = "0.257.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "493cdf29f244c0e050c53b0cf65434b04170786f1c8ae08a937f8568d6e99030"
+checksum = "52728c4d9fe9ea1e36a016edb1f80e1b2f167513f7c6d4f833fc347e84460ea6"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2661,9 +2661,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.257.13"
+version = "0.257.15"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f079aa4cf708080a7c25dec1138cc9cc141140ada6e8a34a9234404be7ce9f5f"
+checksum = "85449c01ba62879c1dd80a1f1afa41f2e61d5d6f302d8b1cb6f2a5a229c4d065"
 dependencies = [
  "candid",
  "derive_more",
@@ -5598,9 +5598,9 @@ dependencies = [
 
 [[package]]
 name = "zlib-rs"
-version = "0.6.7"
+version = "0.6.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "34b31d188d9d685a4f9c7b46d6e36631b07058d2cfe190267adce54dc230bf12"
+checksum = "b268e58e7c693d7c271f93ffc4ba3b380412554231c85bf61ca7af91042a4112"
 
 [[package]]
 name = "zmij"
