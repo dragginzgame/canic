@@ -1,3 +1,5 @@
+mod complete;
+
 use super::*;
 use crate::test_support::temp_dir;
 use std::io::Write as _;

@@ -5,6 +5,7 @@
 //! Boundary: source bytes and admitted tools key a cache; immutable release records remain authority.
 
 mod dependencies;
+mod diagnostics;
 mod snapshot;
 #[cfg(test)]
 mod tests;
@@ -13,7 +14,7 @@ use crate::{
     build_toolchain::BuildToolchain,
     canister_build::WorkspaceBuildContext,
     cargo_metadata::cargo_metadata_catalog_for_manifest,
-    durable_io::{lock_file, read_regular_bytes, write_bytes},
+    durable_io::{lock_file_with_progress, read_regular_bytes, write_bytes},
     release_build::validate_finalized_release_build_manifest,
     release_set::{
         AppConfigSnapshot, load_persisted_application_artifact_union,
@@ -32,6 +33,7 @@ use std::{
     io::{self, Read},
     path::{Path, PathBuf},
     process::Command,
+    time::{Duration, Instant},
 };
 use thiserror::Error;
 
@@ -50,7 +52,19 @@ pub struct CompleteBuildReuse {
     tool_paths: Vec<PathBuf>,
     inputs: BuildInputSnapshot,
     record_path: PathBuf,
+    diagnostics: diagnostics::InputDiagnostics,
     _lock: fs::File,
+}
+
+///
+/// BuildReuseProgress
+///
+/// Host progress while acquiring the complete-build lock, before collecting inputs.
+///
+
+pub enum BuildReuseProgress {
+    WaitingForLock(Duration),
+    LockFinished(Duration),
 }
 
 ///
@@ -120,12 +134,17 @@ impl CompleteBuildReuse {
     pub(crate) fn prepare(
         context: &WorkspaceBuildContext,
         tools: &BuildToolchain,
+        mut progress: impl FnMut(BuildReuseProgress),
     ) -> Result<Self, BuildReuseError> {
-        let lock = lock_file(
+        let lock_started = Instant::now();
+        let lock = lock_file_with_progress(
             &context
                 .icp_root
                 .join(".canic/locks/complete-build-reuse.lock"),
-        )?;
+            |elapsed| progress(BuildReuseProgress::WaitingForLock(elapsed)),
+        );
+        progress(BuildReuseProgress::LockFinished(lock_started.elapsed()));
+        let lock = lock?;
         let mut tool_paths = vec![
             env::current_exe()?,
             tools.ic_wasm().path().to_path_buf(),
@@ -156,6 +175,7 @@ impl CompleteBuildReuse {
             tool_paths.push(path);
         }
         let inputs = input_snapshot(context, &tool_paths)?;
+        let diagnostics = diagnostics::InputDiagnostics::capture(context, &tool_paths, &inputs);
         let record_path = context
             .icp_root
             .join(".canic/build-reuse")
@@ -165,8 +185,16 @@ impl CompleteBuildReuse {
             tool_paths,
             inputs,
             record_path,
+            diagnostics,
             _lock: lock,
         })
+    }
+
+    /// Explain a miss using optional prior observations, without changing hit admission.
+    #[must_use]
+    pub fn miss_reason(&self) -> String {
+        self.diagnostics
+            .explain_miss(&self.context.icp_root.join(".canic/build-reuse"))
     }
 
     /// Return a hit only after checking every recorded output and all release manifest bindings.
@@ -208,6 +236,8 @@ impl CompleteBuildReuse {
             ));
         }
         let manifest_path = verify_release(&self.context, record.release_build_id)?;
+        self.diagnostics
+            .retain(&self.context.icp_root.join(".canic/build-reuse"));
         Ok(Some(ReusedCompleteBuild {
             release_build_id: record.release_build_id,
             manifest_path,
@@ -234,6 +264,8 @@ impl CompleteBuildReuse {
             roles,
         };
         write_bytes(&record_path, &serde_json::to_vec(&record)?)?;
+        diagnostics::InputDiagnostics::capture(&self.context, &self.tool_paths, &after)
+            .retain(&self.context.icp_root.join(".canic/build-reuse"));
         Ok(())
     }
 

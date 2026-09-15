@@ -1,5 +1,109 @@
 # Canic 0.110 Implementation Status
 
+## Selected .18 dependency and build correction batch — 2026-09-15
+
+The maintainer selected the completed dependency/cache/CI fixes for release and
+preserved RF2 for the next batch. The release tree now contains CANIC-177's
+ic-timers 0.7.1 and CDK/macros 0.20.3/ic0 1.2.0 alignment, CANIC-176's cache and
+lock diagnostics, cold-runner CI repair and CANIC-014 changelog clarification.
+RF2's incomplete source, dependency additions and journal changes are absent.
+The exact 33-file RF2 patch and byte-verified backup are preserved locally under
+`.tmp/rf2-preserved-20260915T180303Z/`; the current handoff owns restoration details.
+The existing RF2 design remains accepted after .18, before RF3 and B1.
+
+This necessary dependency/operator correction stays in 0.110 despite the
+12-release guideline: published Canic's exact timer pin blocks downstream CDK
+adoption. RF2 is not being declared complete or split into a published partial
+payment flow. No minor closeout, version change or publication is implied.
+
+The selected .18 batch is ready for the maintainer-directed release flow, with
+its root/detailed changelog ready. The 31 host and 27 CLI regressions, 22
+dependency/macro/timer tests, scoped warning-denied Clippy, main Canic Wasm check,
+standalone fixture native check and cheap changed-surface guards pass. The
+complete release gate/version/publication flow remains maintainer-directed.
+The current handoff records exact logs, preservation/restore instructions and
+qualification limits. The development checkpoints below describe preserved RF2
+work and earlier qualification, rather than the selected .18 source.
+
+## Post-release continuation — 2026-09-15
+
+The maintainer confirms 0.110.17 is pushed; local HEAD is release commit
+`5693d9c31`, and the generated receipt records complete validation for source
+`035bcd8dd`. The selected .17 release is published, not an open readiness task.
+Earlier checkpoints below retain their historical scope.
+
+RF2 is now active, ahead of RF3 and B1. The
+[RF2 implementation contract](0.110-design.md#rf2-receipt-safe-operator-icp-conversion)
+records exact approval/intent bindings, ICP/CMC/deposit receipt reconciliation,
+net-credit conservation, refund/expiry handling and the focused qualification
+sequence. Protocol review confirmed that cached CMC results need independent
+deposit binding and that gross minted cycles differ from net Ledger credit.
+The first implementation portion adds named intent/receipt/outcome records,
+pure checked accounting and deterministic ICP/CMC requests. It preserves exact
+transfer identity across serialized restart, binds the deposit memo to reviewed
+inputs, and retains duplicate, expiry, Processing/refund and mint-result evidence.
+The existing journal now retains one conversion review and separately approved
+exact transfer bytes. Restart/repeated approval is byte-stable; approved intents
+cannot be replaced or cancelled, and ordinary funding effects remain fenced
+while conversion is unresolved. Transfer replies and exact notification intent/
+outcomes now survive restart too. Known transaction locators cannot be replaced;
+mint/refund outcomes stay uncredited until receipt verification. Forty-five
+selected host mint/funding tests and the CLI funding consumer pass, including
+unchanged starting balances and already-funded recovery regressions. Wire and
+journal checks do not authenticate receipts.
+
+The Cycles Ledger deposit verifier now authenticates the reviewed network root,
+Ledger certificate and tip witness, contiguous hash chain and exact mint account,
+memo and net/fee/gross accounting. It bounds verification before hashing and
+rejects unsupported signed integers before the upstream hasher can panic. Its
+wire projection matches the reviewed Ledger's `Value` contract, including Nat64,
+and hashes borrowed blocks. The private verified result cannot be deserialized
+or independently admit a credit. All 46 selected mint tests pass, including 14
+native receipt cases; host all-target/all-feature Clippy and layering pass.
+Exact logs, dependency identities and native-evidence limitations are in the
+handoff.
+
+ICP receipt ops now signs a one-block replicated read and authenticates its exact
+request-status reply, then validates the original protobuf transfer fields without
+default fees or substituted timestamps. It rejects foreign read identities,
+changed bindings, unsupported encodings and exhausted verification budgets.
+The Ledger can now authorize one exact archive callback through its certified
+reply. Only that private authorization permits signing an archive read; a separate
+certificate must admit the archive's canister range and authenticate the exact
+request and transfer. Unsupported callbacks, widened ranges, recursive redirects,
+missing/extra blocks and typed archive errors stay unresolved. Shared certificate
+verification and native test helpers serve both Ledgers; locked prost 0.14.4 is
+explicit in the host. All 61 selected mint tests pass, including six archive cases;
+host all-target/all-feature Clippy, layering and current-document guards pass.
+Bounded acquisition and durable read/retry ownership,
+once-only credit integration, timestamp uniqueness, CLI propagation and PocketIC
+qualification remain. No payment or receipt read was submitted.
+
+New Confirmed CANIC-176 takes priority over the next RF2 portion. The code now
+explains cache misses with optional redacted input comparison and separates
+lock waiting from verification without changing identity or admission. All 18
+focused cache/lock regressions pass, including finalized hits, tampering,
+isolated environment changes and independent-process contention. Host/CLI
+Clippy passes; Toko launcher acceptance follows publication. Operator build
+documentation and the existing .18 draft include the completed correction.
+Toko's CANIC-172 mint-recovery acceptance cases fit the existing RF2 contract.
+
+Toko's new .17 adoption assessment retains CANIC-156/174 for RF2/RF3 and reopens
+CANIC-014 for contradictory changelog release-state prose. The maintained notes
+and ownership guidance are corrected in the open .18 draft; immutable tags are
+unchanged and release/adoption remains due. Other .17 fixes are now Adopted,
+with downstream acceptance limitations retained. The current handoff records
+the updated feedback hash. Concurrent cold-runner CI and parked idea work remain
+intact. Toko's final update reports passing .17 CI, eight unchanged-build cache
+hits and application state/partial-retry qualification, with cold discovery and
+production Root/Store evidence still separate. These downstream results were
+read, not rerun here. The scan adds no confirmed defect. RF2 and the combined
+worktree are not push-ready; this continuation does
+not close an upstream issue or the minor. CANIC-177's dependency conflict is now
+resolved by published ic-timers 0.7.1: Canic resolves ic0 1.2.0 and ic-cdk/macros
+0.20.3 with one timer provider. The current handoff owns focused qualification
+status; downstream publication/adoption remains separate.
+
 ## Selected release scope — 2026-09-15
 
 The maintainer selected **prepare the completed fixes for release**, using an
@@ -40,7 +144,7 @@ It does not close 0.110 or authorize implementation in another minor.
 
 | Batch | Outcome and owner | Required evidence | Status |
 | --- | --- | --- | --- |
-| RF2 | Receipt-safe ICP conversion within retained recovery; host funding/journal owner | Exact transfer and mint identities, credits, fees and receipts; unchanged original balances; interrupted/lost-response recovery, conservation and effect-free replay; focused host and PocketIC qualification | Accepted follow-up, after selected .17 release |
+| RF2 | Receipt-safe ICP conversion within retained recovery; host funding/journal owner | Exact transfer and mint identities, credits, fees and receipts; unchanged original balances; interrupted/lost-response recovery, conservation and effect-free replay; focused host and PocketIC qualification | Preserved for the next batch after selected .18; exact requests, durable review/approval/replies and certified deposit/ICP transfer/archive verification pass native regressions in the saved patch; bounded acquisition/read recovery, credit/CLI integration, timestamp uniqueness and IC qualification remain |
 | RF3 | Complete live recovery funding forecasts; host observation/planning owners using runtime policy | Budgeted descendant relay, exact role/placement and policy binding, live usage/reservations in demand quotes, unavailable/underfunded telemetry, full recovery reserve scope; focused policy, transport and IC evidence | Accepted follow-up after RF2, ahead of B1 |
 
 The current diagnostics are allowances and individual inspection reserves, not

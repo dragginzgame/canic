@@ -128,6 +128,49 @@ pub fn lock_file(path: &Path) -> io::Result<fs::File> {
 pub(crate) fn lock_regular_file_with_parents(
     path: &Path,
 ) -> Result<fs::File, RegularFileLockError> {
+    open_regular_lock_file(path, |file| {
+        #[cfg(not(windows))]
+        rustix::fs::flock(file, rustix::fs::FlockOperation::LockExclusive)
+            .map_err(errno_to_lock_error)?;
+        Ok(())
+    })
+}
+
+/// Acquire the same exclusive lock, reporting contention while preserving its lifetime.
+pub(crate) fn lock_file_with_progress(
+    path: &Path,
+    mut waiting: impl FnMut(std::time::Duration),
+) -> io::Result<fs::File> {
+    let started = std::time::Instant::now();
+    open_regular_lock_file(path, |file| {
+        #[cfg(not(windows))]
+        {
+            let mut next_report = std::time::Duration::from_secs(1);
+            loop {
+                match rustix::fs::flock(file, rustix::fs::FlockOperation::NonBlockingLockExclusive)
+                {
+                    Ok(()) => break,
+                    Err(rustix::io::Errno::WOULDBLOCK) => {
+                        let elapsed = started.elapsed();
+                        if elapsed >= next_report {
+                            waiting(elapsed);
+                            next_report = elapsed + std::time::Duration::from_secs(5);
+                        }
+                        std::thread::sleep(std::time::Duration::from_millis(100));
+                    }
+                    Err(error) => return Err(errno_to_lock_error(error)),
+                }
+            }
+        }
+        Ok(())
+    })
+    .map_err(|error| io::Error::other(format!("cannot lock regular file: {error:?}")))
+}
+
+fn open_regular_lock_file(
+    path: &Path,
+    acquire: impl FnOnce(&fs::File) -> Result<(), RegularFileLockError>,
+) -> Result<fs::File, RegularFileLockError> {
     match create_new_bytes_with_parents(path, &[]) {
         Ok(()) => {}
         Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
@@ -142,7 +185,7 @@ pub(crate) fn lock_regular_file_with_parents(
     {
         use rustix::{
             fd::OwnedFd,
-            fs::{FileType, FlockOperation, Mode, OFlags, flock, fstat, open},
+            fs::{FileType, Mode, OFlags, fstat, open},
         };
 
         let fd: OwnedFd = open(
@@ -156,7 +199,7 @@ pub(crate) fn lock_regular_file_with_parents(
             return Err(RegularFileLockError::NotRegular);
         }
         let file = fs::File::from(fd);
-        flock(&file, FlockOperation::LockExclusive).map_err(errno_to_lock_error)?;
+        acquire(&file)?;
         Ok(file)
     }
 

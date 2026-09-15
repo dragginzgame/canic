@@ -532,14 +532,14 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     let root = workspace_root();
     let lock = read_source(&root, "Cargo.lock");
 
-    assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.0"]);
+    assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.1"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
     assert_eq!(
         dependency_version(&workspace_dependencies, "ic-timers"),
-        "=0.7.0"
+        "=0.7.1"
     );
     let icydb_version = dependency_version(&workspace_dependencies, "icydb")
         .strip_prefix('=')

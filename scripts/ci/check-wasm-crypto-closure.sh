@@ -5,6 +5,10 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
+# Prime the locked Wasm graph before offline inspection, including on cold CI
+# runners whose tool-installation cache does not contain workspace dependencies.
+cargo fetch --locked --target wasm32-unknown-unknown
+
 CANONICAL_PACKAGE_PROFILES=(
     canic/fleet-coordinator-canister:none
     canic/control-plane:none

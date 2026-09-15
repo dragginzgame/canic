@@ -21,9 +21,10 @@ use crate::{
 use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
-    CanisterArtifactBuildOptions, CanisterArtifactBuilder, CanisterBuildProfile,
-    ConfiguredCanisterArtifactBuildOutput, WorkspaceBuildContext, copy_icp_wasm_output,
-    print_workspace_build_context_once, read_wasm_artifact_metrics,
+    BuildReuseProgress, CanisterArtifactBuildOptions, CanisterArtifactBuilder,
+    CanisterBuildProfile, CompleteBuildReuse, ConfiguredCanisterArtifactBuildOutput,
+    WorkspaceBuildContext, copy_icp_wasm_output, print_workspace_build_context_once,
+    read_wasm_artifact_metrics,
 };
 use canic_host::evidence_envelope::{CommandProvenanceV1, command_path_for_root};
 use canic_host::{
@@ -265,13 +266,8 @@ fn build_complete_app(
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     let lookup_started = Instant::now();
-    let reuse = match builder.prepare_complete_build_reuse(&context) {
-        Ok(reuse) => Some(reuse),
-        Err(error) => {
-            eprintln!("Build reuse unavailable: {error}");
-            None
-        }
-    };
+    let (reuse, lock_elapsed) = prepare_build_reuse(builder, &context);
+    let mut miss_reason = "input comparison unavailable".to_string();
     if let Some(reuse) = &reuse {
         match reuse.load() {
             Ok(Some(hit)) => {
@@ -283,7 +279,10 @@ fn build_complete_app(
                 }
                 eprintln!(
                     "Build phase input/output verification: {:.2}s",
-                    lookup_started.elapsed().as_secs_f64()
+                    lookup_started
+                        .elapsed()
+                        .saturating_sub(lock_elapsed)
+                        .as_secs_f64()
                 );
                 TerminalStyle::detected().print_section(
                     "Build complete",
@@ -301,8 +300,11 @@ fn build_complete_app(
                 );
                 return Ok(());
             }
-            Ok(None) => {}
-            Err(error) => eprintln!("Build cache rejected: {error}"),
+            Ok(None) => miss_reason = reuse.miss_reason(),
+            Err(error) => {
+                eprintln!("Build cache rejected: {error}");
+                miss_reason = "retained output/evidence rejected".into();
+            }
         }
     }
     let all_roles = ["fleet_coordinator".to_string(), "wasm_store".to_string()]
@@ -310,11 +312,14 @@ fn build_complete_app(
         .chain(roles.iter().cloned())
         .collect::<Vec<_>>();
     for role in &all_roles {
-        eprintln!("Build cache {role}: miss (new complete release identity)");
+        eprintln!("Build cache {role}: miss ({miss_reason})");
     }
     eprintln!(
         "Build phase input/output verification: {:.2}s",
-        lookup_started.elapsed().as_secs_f64()
+        lookup_started
+            .elapsed()
+            .saturating_sub(lock_elapsed)
+            .as_secs_f64()
     );
     let release = plan_release_build_for_profile_and_network(
         &context.icp_root,
@@ -351,6 +356,35 @@ fn build_complete_app(
         manifest_path.display()
     );
     Ok(())
+}
+
+fn prepare_build_reuse(
+    builder: &CanisterArtifactBuilder,
+    context: &WorkspaceBuildContext,
+) -> (Option<CompleteBuildReuse>, Duration) {
+    let mut lock_elapsed = Duration::ZERO;
+    let reuse = match builder.prepare_complete_build_reuse(context, |progress| match progress {
+        BuildReuseProgress::WaitingForLock(elapsed) => {
+            eprintln!(
+                "Waiting for complete-build reuse lock: {:.2}s",
+                elapsed.as_secs_f64()
+            );
+        }
+        BuildReuseProgress::LockFinished(elapsed) => {
+            lock_elapsed = elapsed;
+            eprintln!(
+                "Build phase reuse lock acquisition: {:.2}s",
+                elapsed.as_secs_f64()
+            );
+        }
+    }) {
+        Ok(reuse) => Some(reuse),
+        Err(error) => {
+            eprintln!("Build reuse unavailable: {error}");
+            None
+        }
+    };
+    (reuse, lock_elapsed)
 }
 
 fn build_command() -> ClapCommand {
