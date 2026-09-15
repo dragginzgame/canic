@@ -9581,14 +9581,28 @@ esac
             reason = "qualification asserts the existing public workflow error variants"
         )]
         let apply = |plan: &canic_host::fleet_ensure::model::FleetEnsurePlan| {
-            fleet_ensure_workflow::apply(
-                root,
-                desired,
-                &digest,
-                &desired.fleet,
-                &plan.plan_sha256,
-                &mut platform(),
-            )
+            // Child initialization can outlive one host observation window.
+            // Resume the same reviewed plan; other failures still fail immediately.
+            for attempt in 0..=64 {
+                let result = fleet_ensure_workflow::apply(
+                    root,
+                    desired,
+                    &digest,
+                    &desired.fleet,
+                    &plan.plan_sha256,
+                    &mut platform(),
+                );
+                if attempt == 64
+                    || !matches!(
+                        result,
+                        Err(EnsureWorkflowError::ProvisioningRetryPending { .. })
+                    )
+                {
+                    return result;
+                }
+                std::thread::sleep(Duration::from_secs(1));
+            }
+            unreachable!("the last attempt returns its exact result")
         };
         let first = apply(reset);
         if !underfunded {

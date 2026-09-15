@@ -18,6 +18,21 @@ reports. The root and detailed changelogs describe the complete selected scope.
 Packages remain .16; the .17 draft is untagged. The complete release gate has
 not been run by this readiness pass. No version or Git publication occurred.
 
+The subsequent release-test failures are corrected: startup prepayment is
+included in fixture conservation and mock Ledger backing; a fully funded
+continuation may reach its ceiling; and both selected-build wipe paths resume
+typed pending initialization against the same reviewed plan with bounded retries.
+All three failed cases pass individually, and owning-package Clippy passes.
+The [current handoff](../../status/current.md#release-test-corrections--2026-09-15)
+records logs and the concurrent dependency-update boundary. Runtime semantics
+and the selected release scope are unchanged; the complete gate remains due.
+
+Both maintained IcyDB fixtures now select published 0.257.15, with six aligned
+packages in each lockfile, SQL disabled and ic-memory 0.13.3 retained. Seven
+focused PocketIC cases and fixture/integration/composed declaration-mode Clippy
+pass without Rust API edits. The [dependency handoff](../../status/current.md#icydb-025715-update--2026-09-15)
+records the qualification; historical Wasm measurements are unchanged.
+
 The line already exceeds the advisory twelve-release guideline. This boundary
 keeps necessary recovery and operator corrections on their affected 0.110 line
 without delaying them for a new payment state machine or full forecasting.
