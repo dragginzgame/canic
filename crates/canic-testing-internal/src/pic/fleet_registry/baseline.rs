@@ -8206,7 +8206,9 @@ esac
             || failed_reserve
             || matches!(
                 funding,
-                FundingJourney::NativeFunding | FundingJourney::NativeChildFunding
+                FundingJourney::NativeFunding
+                    | FundingJourney::NativeChildFunding
+                    | FundingJourney::Reinstall
             )
         {
             pic.add_cycles(cycles_ledger, operator_balance);
@@ -8967,16 +8969,14 @@ esac
 
         assert_generated_fixture_receipts(&pic, root, store, operator, &pools, &generated_fixtures);
 
-        let requested_controlled_cycles = requested
-            .into_iter()
-            .map(|(_, cycles)| cycles)
-            .sum::<u128>();
         let final_controlled_cycles = [coordinator, root, store]
             .into_iter()
             .chain(pools.iter().copied())
             .map(|canister| pic.cycle_balance(canister))
             .sum::<u128>();
-        let requested_controlled_cycles = requested_controlled_cycles + repair_funding;
+        // Include the reviewed Root startup prepayment in creation accounting,
+        // just as the Ledger debit and precreated result do above.
+        let requested_controlled_cycles = total_requested + repair_funding;
         let measured_execution_burn_cycles = requested_controlled_cycles
             .checked_sub(final_controlled_cycles)
             .expect("fresh estate cannot gain unreviewed controlled cycles");
@@ -10436,7 +10436,8 @@ exec '{}' "$@"
                 .all(|canister| canister.principal.is_some())
         );
         let mut desired = generated.desired;
-        // Increase conservative allowances to force affordable continuation admission.
+        // Exercise conservative continuation allowances; reviewed startup funding
+        // may cover either a prefix or the complete continuation ceiling.
         desired.maximum_observation_burn_cycles = "2T".into();
         desired.maximum_update_burn_cycles = "2T".into();
         let digest = desired_sha256(&desired);
@@ -10595,8 +10596,10 @@ exec '{}' "$@"
         );
         assert!(full.plan.continuation.is_some());
         let recovery = full.plan.recovery_review.as_ref().unwrap();
-        assert!(recovery.continuation_reserve_cycles < recovery.whole_continuation_ceiling_cycles);
+        assert!(recovery.continuation_reserve_cycles > 0);
+        assert!(recovery.continuation_reserve_cycles <= recovery.whole_continuation_ceiling_cycles);
         assert_eq!(recovery.known_pool_funding.len(), 6);
+        let reviewed_startup_funding = full.plan.conservation.maximum_operator_debit_cycles;
         let paused = fleet_ensure_workflow::apply(
             root,
             &desired,
@@ -10618,9 +10621,9 @@ exec '{}' "$@"
         assert!(details.actions.iter().any(|action| action.kind == "fund"));
         assert_eq!(
             ledger_account_balance(pic, ledger, operator),
-            operator_before
+            operator_before.clone() - Nat::from(reviewed_startup_funding)
         );
-        let mut total_funding = 0_u128;
+        let mut total_funding = reviewed_startup_funding;
         let mut reviews_remaining = 8;
         let (ready, latest) = loop {
             assert!(reviews_remaining > 0, "bounded recovery reviews");
