@@ -99,6 +99,7 @@ macro_rules! canic_emit_root_command_endpoint {
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
             InspectCanister(::canic::dto::canister::CanisterStatusResponse),
+            InspectionReserveRequired(::canic::dto::canister::CanisterInspectionReserveResponse),
             InspectCanisterHistory(::canic::dto::canister::CanisterHistoryResponse),
             MaintainPool(::canic::dto::pool::PoolMaintenanceResponse),
             ObserveCanister(::canic::dto::observability::CanisterObservabilityResponse),
@@ -124,9 +125,9 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             RetryPoolRefill(::canic::dto::pool::PoolRefillRetryResponse),
             RetryPoolReset(::canic::dto::pool::PoolResetRetryResponse),
-            SetCyclesFunding(::canic::dto::state::SetStateResponse<bool>),
+            SetCyclesFunding(::canic::dto::state::FleetStateCommandResult<bool>),
             SetFleetStatus(
-                ::canic::dto::state::SetStateResponse<::canic::dto::state::FleetStatus>,
+                ::canic::dto::state::FleetStateCommandResult<::canic::dto::state::FleetStatus>,
             ),
             SynchronizeComponentDirectories(
                 ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationResponse,
@@ -180,6 +181,7 @@ macro_rules! canic_emit_root_command_endpoint {
         }
 
         #[$crate::canic_update(
+            internal,
             public,
             payload(max_bytes = ::canic::__internal::core::control_plane_support::ops::component_provisioning_plan::MAX_FLEET_SUBNET_ROOT_PROVISIONING_ACCEPTANCE_PAYLOAD_BYTES)
         )]
@@ -190,6 +192,19 @@ macro_rules! canic_emit_root_command_endpoint {
                 clippy::large_stack_frames,
                 reason = "the large root command dispatch future is immediately heap-boxed"
             )] async move {
+            // State recovery must remain reachable while ordinary updates are fenced.
+            if !matches!(&command, RootCommand::SetCyclesFunding(_) | RootCommand::SetFleetStatus(_)) {
+                $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                    $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                    $crate::__internal::core::ids::EndpointCall {
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_ROOT_COMMAND,
+                        ),
+                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                    },
+                )
+                    .map_err(::canic::Error::from)?;
+            }
             if !$crate::__internal::core::ingress::payload::payload_within_limit(
                 $crate::__internal::cdk::raw::msg_arg_data_size(),
                 command.__canic_payload_max_bytes(),
@@ -447,11 +462,18 @@ macro_rules! canic_emit_root_command_endpoint {
                     Ok(RootCommandResponse::ImportPoolCanister(response))
                 }
                 RootCommand::InspectCanister(request) => {
-                    $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_status(
+                    $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_inspection(
                         request.canister_id,
                     )
                     .await
-                    .map(RootCommandResponse::InspectCanister)
+                    .map(|outcome| match outcome {
+                        ::canic::dto::canister::CanisterInspectionOutcome::Status(status) => {
+                            RootCommandResponse::InspectCanister(*status)
+                        }
+                        ::canic::dto::canister::CanisterInspectionOutcome::ReserveRequired(evidence) => {
+                            RootCommandResponse::InspectionReserveRequired(evidence)
+                        }
+                    })
                 }
                 RootCommand::InspectCanisterHistory(request) => {
                     $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_history(request.canister_id)
@@ -716,9 +738,11 @@ macro_rules! canic_emit_root_command_endpoint {
                         ::canic::dto::state::FleetCommand::SetCyclesFundingEnabled(request.enabled),
                     )
                     .await?;
-                    match response {
-                        ::canic::dto::state::FleetCommandResponse::CyclesFundingEnabled(response) => {
-                            Ok(RootCommandResponse::SetCyclesFunding(response))
+                    match response.change {
+                        ::canic::dto::state::FleetCommandResponse::CyclesFundingEnabled(change) => {
+                            Ok(RootCommandResponse::SetCyclesFunding(::canic::dto::state::FleetStateCommandResult {
+                                change, propagation: response.propagation, reconciliation_error: response.reconciliation_error,
+                            }))
                         }
                         _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
                     }
@@ -728,9 +752,11 @@ macro_rules! canic_emit_root_command_endpoint {
                         ::canic::dto::state::FleetCommand::SetStatus(request.status),
                     )
                     .await?;
-                    match response {
-                        ::canic::dto::state::FleetCommandResponse::Status(response) => {
-                            Ok(RootCommandResponse::SetFleetStatus(response))
+                    match response.change {
+                        ::canic::dto::state::FleetCommandResponse::Status(change) => {
+                            Ok(RootCommandResponse::SetFleetStatus(::canic::dto::state::FleetStateCommandResult {
+                                change, propagation: response.propagation, reconciliation_error: response.reconciliation_error,
+                            }))
                         }
                         _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
                     }
@@ -831,9 +857,11 @@ macro_rules! canic_emit_root_status_endpoint {
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum ObservabilityRequest {
+            ChildFunding(::canic::__internal::candid::Principal),
             CycleBalance,
             CycleHistory(::canic::dto::page::PageRequest),
             Health,
+            InspectionReserve(::canic::dto::canister::CanisterInspectionRequest),
             Logs(::canic::dto::role::LogStatusRequest),
             MemoryAllocations,
             Metrics(::canic::dto::role::MetricsStatusRequest),
@@ -843,9 +871,11 @@ macro_rules! canic_emit_root_status_endpoint {
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum ObservabilityResponse {
+            ChildFunding(::canic::dto::observability::ChildFundingUsage),
             CycleBalance(::canic::dto::role::CycleBalanceStatusResponse),
             CycleHistory(::canic::dto::page::Page<::canic::dto::cycles::CycleTrackerEntry>),
             Health(::canic::dto::runtime::CanicHealthStatus),
+            InspectionReserve(::canic::dto::canister::CanisterInspectionReserveResponse),
             Logs(::canic::dto::page::Page<::canic::dto::log::LogEntry>),
             MemoryAllocations(::canic::dto::memory::MemoryAllocationsResponse),
             Metrics(::canic::dto::page::Page<::canic::dto::metrics::MetricEntry>),
@@ -856,9 +886,15 @@ macro_rules! canic_emit_root_status_endpoint {
         async fn canic_observability(
             request: ObservabilityRequest,
         ) -> Result<ObservabilityResponse, ::canic::Error> {
-            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(false)?;
+            $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(
+                matches!(&request, ObservabilityRequest::InspectionReserve(_) | ObservabilityRequest::ChildFunding(_)),
+            )?;
 
             match request {
+                ObservabilityRequest::ChildFunding(child) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::child_funding(child)
+                        .map(ObservabilityResponse::ChildFunding)
+                }
                 ObservabilityRequest::CycleBalance => Ok(ObservabilityResponse::CycleBalance(
                     ::canic::dto::role::CycleBalanceStatusResponse {
                         cycles: $crate::__internal::cdk::api::canister_cycle_balance(),
@@ -874,6 +910,10 @@ macro_rules! canic_emit_root_status_endpoint {
                         $crate::__internal::cdk::api::time(),
                     )),
                 )),
+                ObservabilityRequest::InspectionReserve(request) => {
+                    $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_inspection_reserve(request.canister_id)
+                        .map(ObservabilityResponse::InspectionReserve)
+                }
                 ObservabilityRequest::Logs(request) => Ok(ObservabilityResponse::Logs(
                     $crate::__internal::core::api::log::LogQuery::page(
                         request.crate_name,

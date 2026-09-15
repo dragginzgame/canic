@@ -13,6 +13,13 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::Deserialize;
 
+/// Read exact parent-local child funding evidence after controller authentication.
+pub fn child_funding(
+    child: Principal,
+) -> Result<crate::dto::observability::ChildFundingUsage, InternalError> {
+    crate::ops::runtime::funding_usage::child(child)
+}
+
 #[derive(CandidType)]
 enum CanisterCommandFragment {
     Observe(CanisterObservabilityRequest),

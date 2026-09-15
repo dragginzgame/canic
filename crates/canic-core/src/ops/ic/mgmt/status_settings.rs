@@ -5,9 +5,26 @@
 //! Boundary: `MgmtOps` extension for status/settings calls and DTO projection.
 
 use super::*;
-use crate::dto::canister::CanisterHistoryResponse;
+use crate::dto::canister::{
+    CanisterHistoryResponse, CanisterInspectionOutcome, CanisterInspectionReserveResponse,
+};
 
 impl MgmtOps {
+    /// Sample native/liquid balances and the exact call reserve without an IC call.
+    pub fn canister_inspection_reserve(
+        canister_pid: Principal,
+    ) -> Result<CanisterInspectionReserveResponse, InternalError> {
+        let required_liquid_cycles =
+            MgmtInfra::canister_status_call_cost(canister_pid).map_err(OpsError::from)?;
+        Ok(CanisterInspectionReserveResponse {
+            caller: crate::ops::ic::IcOps::canister_self(),
+            canister_id: canister_pid,
+            native_cycles: ic_cdk::api::canister_cycle_balance(),
+            available_liquid_cycles: ic_cdk::api::canister_liquid_cycle_balance(),
+            required_liquid_cycles,
+        })
+    }
+
     /// Preserve replicated history and its exact requested target for host recovery.
     pub async fn canister_history(
         canister_pid: Principal,
@@ -21,6 +38,32 @@ impl MgmtOps {
             canister_id: canister_pid,
             history_candid: response.into_bytes(),
         })
+    }
+
+    /// Preserve exact SDK reserve admission evidence for a controller-owned inspection.
+    pub async fn canister_inspection(
+        canister_pid: Principal,
+    ) -> Result<CanisterInspectionOutcome, InternalError> {
+        let native_cycles = crate::ops::ic::IcOps::canister_cycle_balance().to_u128();
+        match management_call_infra(
+            ManagementCallMetricOperation::CanisterStatus,
+            MgmtInfra::canister_status(canister_pid),
+        )
+        .await
+        {
+            Ok(status) => {
+                SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+                Ok(CanisterInspectionOutcome::Status(Box::new(
+                    Self::canister_status_to_dto(canister_status_from_infra(status)),
+                )))
+            }
+            Err(error) => inspection_failure(
+                canister_pid,
+                crate::ops::ic::IcOps::canister_self(),
+                native_cycles,
+                error,
+            ),
+        }
     }
 
     /// Observe the independent monotonic management-history count for one Canister.
@@ -146,5 +189,79 @@ fn query_stats_to_dto(stats: QueryStatsSnapshot) -> QueryStats {
         num_instructions_total: stats.num_instructions_total,
         request_payload_bytes_total: stats.request_payload_bytes_total,
         response_payload_bytes_total: stats.response_payload_bytes_total,
+    }
+}
+
+fn inspection_failure(
+    canister_id: Principal,
+    caller: Principal,
+    native_cycles: u128,
+    error: IcInfraError,
+) -> Result<CanisterInspectionOutcome, InternalError> {
+    match error {
+        IcInfraError::CallFailed(ic_cdk::call::CallFailed::InsufficientLiquidCycleBalance(
+            error,
+        )) => Ok(CanisterInspectionOutcome::ReserveRequired(
+            CanisterInspectionReserveResponse {
+                caller,
+                canister_id,
+                native_cycles,
+                available_liquid_cycles: error.available,
+                required_liquid_cycles: error.required,
+            },
+        )),
+        error => Err(OpsError::from(error).into()),
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::diagnostics::codes;
+    use ic_cdk::call::{CallFailed, CallPerformFailed, InsufficientLiquidCycleBalance};
+
+    #[test]
+    fn protected_inspection_retains_exact_reserve_numbers_and_target() {
+        let caller = Principal::from_slice(&[1]);
+        let target = Principal::from_slice(&[2]);
+        let response = inspection_failure(
+            target,
+            caller,
+            1000,
+            CallFailed::InsufficientLiquidCycleBalance(InsufficientLiquidCycleBalance {
+                available: 50,
+                required: 100,
+            })
+            .into(),
+        )
+        .unwrap();
+        let bytes = candid::encode_one(response).unwrap();
+        let decoded: CanisterInspectionOutcome = candid::decode_one(&bytes).unwrap();
+        let CanisterInspectionOutcome::ReserveRequired(evidence) = decoded else {
+            panic!("expected protected reserve evidence");
+        };
+        assert_eq!(
+            evidence,
+            CanisterInspectionReserveResponse {
+                caller,
+                canister_id: target,
+                native_cycles: 1000,
+                available_liquid_cycles: 50,
+                required_liquid_cycles: 100,
+            }
+        );
+        let error = inspection_failure(
+            target,
+            caller,
+            1000,
+            CallFailed::CallPerformFailed(CallPerformFailed).into(),
+        )
+        .err()
+        .unwrap();
+        assert_eq!(error.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
     }
 }

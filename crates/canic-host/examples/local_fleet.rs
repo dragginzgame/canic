@@ -161,6 +161,7 @@ fn execute(
         } => {
             let environment = session.status()?.environment;
             let generated = session.generate_fleet(&FleetGenerateRequest {
+                catalog_progress: None,
                 app_config: &root.join(app_config),
                 environment: &environment,
                 fleet: &fleet,

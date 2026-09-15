@@ -3,6 +3,9 @@
 //! Responsibility: own authoritative cycles-funding limits and ledger values.
 //! Does not own: funding decisions, stable record conversion, or grant execution.
 
+/// Replay command identity shared by child funding execution and protected observations.
+pub const CHILD_FUNDING_COMMAND_KIND: &str = "root.request_cycles.v1";
+
 ///
 /// FundingLimits
 ///

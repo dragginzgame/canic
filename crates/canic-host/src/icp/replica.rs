@@ -39,7 +39,7 @@ impl IcpCli {
         let mut command = self.local_replica_command_in("status", cwd);
         add_debug_arg(&mut command, debug);
         command.arg("--json");
-        run_json(&mut command)
+        run_json(&mut command, self)
     }
 
     /// Return whether one ICP project root owns a running local ICP replica.

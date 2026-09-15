@@ -571,6 +571,7 @@ pub struct RootComponentAllocationView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentChildAllocationView {
+    pub last_failure: Option<RootComponentChildAllocationFailureView>,
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
     pub parent_canister_id: Principal,
@@ -585,6 +586,15 @@ pub struct RootComponentChildAllocationView {
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
     pub progress: RootComponentChildAllocationProgressView,
+}
+
+/// Read-only latest child allocation diagnostic and its bounded retry deadline.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct RootComponentChildAllocationFailureView {
+    pub diagnostic_code: u16,
+    pub failed_at_ns: u64,
+    pub consecutive_failures: u32,
+    pub retry_at_ns: u64,
 }
 
 ///

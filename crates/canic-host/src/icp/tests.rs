@@ -28,7 +28,7 @@ fn parses_icp_cli_versions_from_common_output() {
 }
 
 #[test]
-fn icp_cli_version_range_requires_1_2_or_newer_within_major_one() {
+fn icp_cli_version_range_requires_1_5_or_newer_within_major_one() {
     assert!(!is_supported_icp_cli_version(IcpCliVersion {
         major: 0,
         minor: 0,
@@ -46,12 +46,12 @@ fn icp_cli_version_range_requires_1_2_or_newer_within_major_one() {
     }));
     assert!(is_supported_icp_cli_version(IcpCliVersion {
         major: 1,
-        minor: 2,
+        minor: 5,
         patch: 0
     }));
     assert!(is_supported_icp_cli_version(IcpCliVersion {
         major: 1,
-        minor: 3,
+        minor: 6,
         patch: 9
     }));
     assert!(!is_supported_icp_cli_version(IcpCliVersion {
@@ -89,7 +89,7 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
     assert!(err.to_string().contains("found: icp development build"));
     assert!(
         err.to_string()
-            .contains("required: icp-cli >=1.2.0, <2.0.0")
+            .contains("required: icp-cli >=1.5.0, <2.0.0")
     );
     assert!(
         err.to_string()
@@ -355,4 +355,136 @@ fn parses_public_non_controller_canister_status_report_json() {
     );
     assert_eq!(report.cycles, None);
     assert_eq!(report.settings, None);
+}
+#[cfg(unix)]
+#[test]
+fn successful_version_qualification_is_shared_only_within_one_context() {
+    use std::{fs, os::unix::fs::PermissionsExt};
+    let root = unique_temp_dir("canic-icp-version-context");
+    fs::create_dir_all(&root).unwrap();
+    let executable = root.join("icp");
+    fs::write(&executable, "#!/bin/sh\nif [ \"$1\" = --version ]; then\n echo probe >> probes\n echo 'icp 1.5.0'\nelse\n echo identity\nfi\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    let context = IcpCli::new(executable.to_string_lossy(), Some("local".into())).with_cwd(&root);
+    context.compatible_version().unwrap();
+    context
+        .clone()
+        .with_cwd(&root)
+        .compatible_version()
+        .unwrap();
+    context.identity_principal_text().unwrap();
+    assert_eq!(
+        fs::read_to_string(root.join("probes"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    IcpCli::new(executable.to_string_lossy(), Some("local".into()))
+        .with_cwd(&root)
+        .compatible_version()
+        .unwrap();
+    assert_eq!(
+        fs::read_to_string(root.join("probes"))
+            .unwrap()
+            .lines()
+            .count(),
+        2
+    );
+    let other = root.join("other");
+    fs::create_dir(&other).unwrap();
+    context.with_cwd(&other).compatible_version().unwrap();
+    assert_eq!(
+        fs::read_to_string(other.join("probes"))
+            .unwrap()
+            .lines()
+            .count(),
+        1
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn failed_version_qualification_is_retried_without_running_the_command() {
+    use std::{fs, os::unix::fs::PermissionsExt};
+    let root = unique_temp_dir("canic-icp-version-retry");
+    fs::create_dir_all(&root).unwrap();
+    let executable = root.join("icp");
+    fs::write(&executable, "#!/bin/sh\nif [ \"$1\" = --version ]; then\n if [ -f ready ]; then echo 'icp 1.5.0'; else echo 'icp 1.4.9'; fi\nelse\n echo effect >> effects\n echo identity\nfi\n").unwrap();
+    fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+    let context = IcpCli::new(executable.to_string_lossy(), Some("local".into())).with_cwd(&root);
+    assert!(matches!(
+        context.identity_principal_text(),
+        Err(IcpCommandError::IncompatibleCliVersion { .. })
+    ));
+    assert!(!root.join("effects").exists());
+    fs::write(root.join("ready"), "").unwrap();
+    context.identity_principal_text().unwrap();
+    assert!(root.join("effects").is_file());
+    fs::remove_dir_all(root).unwrap();
+}
+#[test]
+fn current_visibility_and_query_statistics_preserve_viewers_without_controller_authority() {
+    let report: IcpCanisterStatusReport = serde_json::from_value(serde_json::json!({
+        "id": "rrkah-fqaaa-aaaaa-aaaaq-cai",
+        "settings": {
+            "controllers": [],
+            "status_visibility": {"type": "AllowedViewers", "value": ["2vxsx-fae"]},
+            "snapshot_visibility": {"type": "Controllers"},
+            "log_visibility": {"type": "Public"}
+        },
+        "query_stats": {
+            "num_calls_total": "18446744073709551616",
+            "num_instructions_total": "42",
+            "request_payload_bytes_total": "10",
+            "response_payload_bytes_total": "20"
+        }
+    }))
+    .unwrap();
+    let settings = report.settings.unwrap();
+    assert!(settings.controllers.is_empty());
+    assert_eq!(
+        settings.status_visibility,
+        Some(IcpCanisterVisibility::AllowedViewers(vec![
+            ::candid::Principal::anonymous()
+        ]))
+    );
+    assert_eq!(
+        settings.snapshot_visibility,
+        Some(IcpCanisterVisibility::Controllers)
+    );
+    assert_eq!(settings.log_visibility, Some(IcpCanisterVisibility::Public));
+    assert_eq!(
+        report.query_stats.unwrap().num_calls_total,
+        "18446744073709551616"
+    );
+    for visibility in [
+        serde_json::json!({"type": "AllowedViewers"}),
+        serde_json::json!({"type": "AllowedViewers", "value": ["invalid-principal"]}),
+        serde_json::json!({"type": "Unknown"}),
+    ] {
+        assert!(serde_json::from_value::<IcpCanisterVisibility>(visibility).is_err());
+    }
+}
+
+#[test]
+fn icp_1_5_floor_rejects_every_earlier_minor() {
+    for minor in 0..5 {
+        assert!(!is_supported_icp_cli_version(IcpCliVersion {
+            major: 1,
+            minor,
+            patch: 999
+        }));
+    }
+}
+
+#[test]
+fn incomplete_query_statistics_are_not_reported_as_zero() {
+    assert!(
+        serde_json::from_value::<IcpCanisterStatusReport>(serde_json::json!({
+            "id": "rrkah-fqaaa-aaaaa-aaaaq-cai", "query_stats": {}
+        }))
+        .is_err()
+    );
 }

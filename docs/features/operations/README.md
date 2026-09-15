@@ -7,6 +7,9 @@ automated workflows without merging their authority.
 
 ## What It Provides
 
+See [ICP integration](icp-integration.md) for selected builds, effective config
+checks, management visibility and read-only frontend sync verification.
+
 - App creation, role scaffolding, attachment, and configuration inspection
 - canonical network enrollment and local replica lifecycle
 - current desired-state generation from release authority and either explicit

@@ -4,6 +4,46 @@ use crate::{frontend::model::FrontendManifestRecord, registry::RegistryEntry};
 use canic_core::ids::CanonicalNetworkId;
 use std::collections::BTreeMap;
 
+///
+/// FrontendAssetChunkView
+///
+/// First asset query response, before comparison with the exact handoff identity.
+///
+
+pub struct FrontendAssetChunkView {
+    pub content: Vec<u8>,
+    pub total_length: u64,
+    pub encoding: String,
+    pub sha256: Option<Vec<u8>>,
+}
+
+///
+/// FrontendUploadedFileView
+///
+/// Expected remote identity of one verified handoff file.
+///
+
+#[derive(Debug, Eq, PartialEq, serde::Serialize)]
+pub struct FrontendUploadedFileView {
+    pub key: String,
+    pub bytes: u64,
+    pub sha256: String,
+}
+
+///
+/// FrontendUploadView
+///
+/// Exact files observed during one read-only asset verification.
+///
+
+#[derive(Debug, Eq, PartialEq, serde::Serialize)]
+pub struct FrontendUploadView {
+    pub environment: String,
+    pub canister_id: candid::Principal,
+    pub manifest_sha256: String,
+    pub files: Vec<FrontendUploadedFileView>,
+}
+
 /// Bounded byte inventory of exactly the static assets selected for upload.
 #[derive(Debug, Eq, PartialEq, serde::Serialize)]
 pub struct FrontendPayloadView {

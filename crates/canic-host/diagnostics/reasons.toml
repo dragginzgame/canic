@@ -1129,3 +1129,19 @@ name = "WASM_STORE_MANIFEST_MISSING"
 origin = "wasm_store"
 summary = "A required Wasm Store manifest or exact release is missing."
 retired = false
+
+[[reason]]
+code = 162
+name = "PLATFORM_INSUFFICIENT_LIQUID_CYCLES"
+origin = "platform"
+summary = "The calling canister has insufficient liquid cycles to schedule an outbound call."
+guidance = "Inspect the calling canister's liquid balance and freezing reserve; a positive native balance does not establish usable call headroom. Review funding before retrying."
+retired = false
+
+[[reason]]
+code = 163
+name = "DEPLOYMENT_CYCLE_RESERVE_REQUIRED"
+origin = "capacity"
+summary = "The Root lacks the native cycle reserve required for a deployment step."
+guidance = "Inspect the retained allocation and Root balance, then review same-operation native funding. Ready pool capacity does not supply Root execution reserve."
+retired = false

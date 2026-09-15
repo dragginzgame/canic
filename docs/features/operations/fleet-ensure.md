@@ -107,6 +107,39 @@ pool identity remains in the conservation set as it moves from idle bootstrap
 capacity through claimed state to a Component workload, without receiving pool
 minimum top-ups or being counted twice.
 
+Mainnet generation reports catalog acquisition progress on stderr, including the
+active endpoints, elapsed time and completed endpoint collections, with a heartbeat
+every ten seconds. Both endpoints collect concurrently. Heartbeats include each
+endpoint's latest Registry pin, history watermark, record read or retry and query
+attempt count. Acquisition has a shared ten-minute deadline. A timeout stops
+collection, preserves the previous cache and releases the refresh lock so
+generation can be retried. Completed endpoint collection is not yet validated
+agreement; generation proceeds only after the final validated result.
+
+Host callers may retain `MainnetCatalogClient` across attempts to reuse upstream
+validated history prefixes in memory. Each acquisition still checks current
+snapshot agreement and freshness. A new CLI process starts without those prefixes.
+
+Mainnet generation accepts catalogs at most one hour old. Missing, invalid,
+lower-assurance or expired caches are refreshed by comparing Registry version
+and canonical payload through `https://ic0.app` and `https://icp-api.io`.
+Both endpoint results must agree; an outage or disagreement stops generation
+and leaves the previous cache intact. There is no single-endpoint fallback.
+This is endpoint agreement, not certification or a guarantee of independent
+providers. Cached evidence must meet at least the same assurance level; its
+actual contributing endpoints are shown in the report.
+
+The `subnet_catalog` generation summary reports cache disposition/path,
+collection time, observation time, age/maximum age, Registry version, catalog
+digest, assurance and source endpoints. Local generation reports that the
+catalog is not applicable. These observations accompany the generated result;
+they are not fields of `fleets/<fleet>.toml` and do not alter its review digest.
+Root-management and reinstall observations use the validated cache without
+refreshing it. They do not impose the new-generation age limit or silently
+replace reviewed placement; a missing or insufficient-assurance cache fails
+closed. Rerun generation to acquire acceptable evidence, then review any changed
+desired state before proceeding.
+
 A retained Root that cannot serve the current protected endpoint requires a
 management observation before any protected query. For a stopped Root,
 `root_start_prerequisite` seals the exact Principal, Subnet, controller set and

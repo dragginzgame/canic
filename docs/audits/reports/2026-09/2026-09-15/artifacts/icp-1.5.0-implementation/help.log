@@ -1,0 +1,58 @@
+   Compiling tokio v1.53.1
+   Compiling futures-util v0.3.34
+   Compiling ic-error-types v0.2.0
+   Compiling zerovec v0.11.8
+   Compiling zerotrie v0.2.5
+   Compiling aws-lc-rs v1.18.1
+   Compiling candid v0.10.35
+   Compiling ciborium v0.2.2
+   Compiling ed25519-consensus v2.1.0
+   Compiling ic_principal v0.1.5
+   Compiling ic-certification v3.2.0
+   Compiling handlebars v6.4.4
+   Compiling ic-stable-structures v0.7.2
+   Compiling ic-ed25519 v0.6.0
+   Compiling tinystr v0.8.4
+   Compiling potential_utf v0.1.6
+   Compiling icu_collections v2.3.0
+   Compiling icu_locale_core v2.3.0
+   Compiling ic-memory v0.13.3
+   Compiling rustls-webpki v0.103.15
+   Compiling rustls v0.23.45
+   Compiling icu_provider v2.3.1
+   Compiling icu_properties v2.3.0
+   Compiling icu_normalizer v2.3.0
+   Compiling ic-transport-types v0.49.2
+   Compiling candid_parser v0.4.1
+   Compiling canic-backup v0.110.16 (/home/adam/projects/canic/crates/canic-backup)
+   Compiling futures-executor v0.3.34
+   Compiling canic-core v0.110.16 (/home/adam/projects/canic/crates/canic-core)
+   Compiling ic-cdk-macros v0.20.2
+   Compiling futures v0.3.34
+   Compiling idna_adapter v1.2.2
+   Compiling idna v1.1.0
+   Compiling url v2.5.8
+   Compiling ic-cdk v0.20.2
+   Compiling hyper v1.11.1
+   Compiling tower v0.5.3
+   Compiling tokio-util v0.7.19
+   Compiling tower-http v0.6.11
+   Compiling hyper-util v0.1.20
+   Compiling tokio-rustls v0.26.5
+   Compiling rustls-platform-verifier v0.7.0
+   Compiling hyper-rustls v0.27.9
+   Compiling reqwest v0.13.5
+   Compiling ic-agent v0.49.2
+   Compiling ic-query v0.42.0
+   Compiling canic-control-plane v0.110.16 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.16 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.16 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 14s
+     Running tests/subcommand_order.rs (target/debug/deps/subcommand_order-644650b29397e1b1)
+
+running 2 tests
+test no_arguments_prints_help_successfully ... ok
+test command_help_is_ordered_and_concise ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.46s
+

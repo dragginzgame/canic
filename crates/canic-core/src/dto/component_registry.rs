@@ -1119,6 +1119,7 @@ pub struct RootComponentAllocationResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildAllocationResponse {
+    pub last_failure: Option<RootComponentChildAllocationFailure>,
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
     pub parent_canister_id: Principal,
@@ -1133,6 +1134,15 @@ pub struct RootComponentChildAllocationResponse {
     pub phase: RootComponentAllocationPhase,
     pub creation: Option<RootComponentCreationEvidence>,
     pub installation: Option<RootComponentChildInstallEvidence>,
+}
+
+/// Latest bounded failure of a retained child allocation; not lifecycle progress.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildAllocationFailure {
+    pub diagnostic_code: u16,
+    pub failed_at_ns: u64,
+    pub consecutive_failures: u32,
+    pub retry_at_ns: u64,
 }
 
 ///
@@ -2543,6 +2553,7 @@ mod tests {
             canister_id: child,
         };
         let response = RootComponentChildAllocationResponse {
+            last_failure: None,
             operation_id: request.operation_id,
             component,
             parent_canister_id: parent,

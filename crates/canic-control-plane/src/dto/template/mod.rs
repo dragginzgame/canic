@@ -234,7 +234,7 @@ pub enum StoreCommandResponse {
     ReclaimDeletionCycles(WasmStoreDeletionCycleReclamationResponse),
     RespondCapability(NonrootCyclesCapabilityResponseV1),
     StageManifest,
-    SynchronizeState,
+    SynchronizeState(canic_core::dto::cascade::StateCascadeReport),
     SynchronizeTopology,
 }
 

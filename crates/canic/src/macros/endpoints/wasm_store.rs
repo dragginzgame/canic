@@ -55,6 +55,7 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
         }
 
         #[$crate::canic_update(
+            internal,
             public,
             payload(max_bytes = ::canic::__internal::core::protocol::CASCADE_SNAPSHOT_MAX_BYTES)
         )]
@@ -62,6 +63,19 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             command: ::canic::dto::template::StoreCommand,
         ) -> Result<::canic::dto::template::StoreCommandResponse, ::canic::Error> {
             use ::canic::dto::template::{StoreCommand, StoreCommandResponse};
+
+            if !matches!(&command, StoreCommand::SynchronizeState(_)) {
+                $crate::__internal::core::access::expr::eval_default_fleet_guard(
+                    $crate::__internal::core::access::expr::DefaultFleetGuard::AllowsUpdates,
+                    $crate::__internal::core::ids::EndpointCall {
+                        endpoint: $crate::__internal::core::ids::EndpointId::new(
+                            $crate::__internal::core::protocol::CANIC_WASM_STORE_COMMAND,
+                        ),
+                        kind: $crate::__internal::core::ids::EndpointCallKind::Update,
+                    },
+                )
+                    .map_err(::canic::Error::from)?;
+            }
 
             let caller = $crate::__internal::cdk::api::msg_caller();
             if matches!(
@@ -178,8 +192,8 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
                 }
                 StoreCommand::SynchronizeState(snapshot) => {
                     $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot)
-                        .await?;
-                    Ok(StoreCommandResponse::SynchronizeState)
+                        .await
+                        .map(StoreCommandResponse::SynchronizeState)
                 }
                 StoreCommand::SynchronizeTopology(snapshot) => {
                     $crate::__internal::core::api::cascade::CascadeApi::sync_topology(

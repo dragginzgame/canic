@@ -15,6 +15,24 @@ use thiserror::Error;
 /// Typed rejection at the frontend handoff boundary.
 #[derive(Debug, Error)]
 pub enum FrontendError {
+    #[error("uploaded frontend asset differs from the handoff: {key}")]
+    AssetMismatch { key: String },
+
+    #[error("asset prefix must be an absolute path with ordinary nonempty segments")]
+    AssetPrefix,
+
+    #[error("asset query failed: {0}")]
+    AssetQuery(#[source] Box<ic_agent::AgentError>),
+
+    #[error("asset query returned an invalid or oversized Candid response")]
+    AssetResponse,
+
+    #[error("asset verification exceeded its query deadline")]
+    AssetTimeout,
+
+    #[error(transparent)]
+    Management(#[from] Box<crate::icp::IcpManagementCallError>),
+
     #[error("frontend derivation origin differs from the reviewed Fleet admission namespace")]
     AdmissionOrigin,
 

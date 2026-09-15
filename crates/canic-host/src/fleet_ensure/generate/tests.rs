@@ -1,4 +1,5 @@
 use super::*;
+use crate::fleet_ensure::view::startup_funding::StartupNativeBalance;
 use crate::{
     fleet_ensure::{
         model::{
@@ -652,6 +653,7 @@ fn generation_rejects_component_demand_above_pool_target_before_observation() {
     )
     .expect("write estate seed");
     let request = FleetGenerateRequest {
+        catalog_progress: None,
         app_config: &app_config,
         environment: "local",
         fleet: "staging",
@@ -855,6 +857,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     };
     let icp = write_icp("stopped");
     let request = FleetGenerateRequest {
+        catalog_progress: None,
         app_config: &app_config,
         environment: "local",
         fleet: "retained-multi-component",
@@ -909,9 +912,33 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     write_icp("running");
     let generated = generate_desired_fleet(&request).expect("generate from live retained estate");
+    assert_eq!(generated.subnet_catalog, None);
     assert_eq!(generated.observed_canisters, 5);
     assert_eq!(generated.observed_controlled_cycles, 319_900_000_000_000);
     assert_eq!(generated.release_build_id, release_build_id);
+    assert_eq!(
+        generated.startup_funding.coordinator_balance,
+        StartupNativeBalance::Observed(270_000_000_000_000)
+    );
+    assert_eq!(
+        generated.startup_funding.coordinator_spendable_cycles,
+        60_000_000_000_000
+    );
+    assert!(matches!(
+        generated.startup_funding.coordinator_usage,
+        crate::fleet_ensure::view::startup_funding::StartupCoordinatorUsage::Unavailable(
+            crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::SelectedBuildNotInstalled
+        )
+    ));
+    let startup_root = &generated.startup_funding.roots[0];
+    assert_eq!(startup_root.root, "root-0");
+    assert_eq!(
+        startup_root.balance,
+        StartupNativeBalance::Observed(30_000_000_000_000)
+    );
+    assert_eq!(startup_root.child_grants_cycles, 0);
+    assert_eq!(startup_root.shortfall_cycles, 0);
+    assert_eq!(startup_root.components.len(), 1);
     let desired = generated.desired;
     assert_eq!(
         desired
@@ -944,6 +971,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         (
             principal.clone(),
             ObservedCanister {
+                pool_status: None,
                 cycles,
                 module_sha256: None,
                 subnet: subnet.clone(),
@@ -951,6 +979,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         )
     })
     .collect::<BTreeMap<_, _>>();
+    assert_startup_balance_evidence(
+        config.model(),
+        &desired,
+        &observed,
+        &coordinator,
+        &fleet_root,
+    );
     assert_eq!(
         desired
             .canisters
@@ -1016,6 +1051,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     .expect("replay durable fresh estate seed");
     assert_eq!(repeated_id, fresh_id);
     let mut fresh = generate_desired_fleet(&FleetGenerateRequest {
+        catalog_progress: None,
         app_config: &app_config,
         environment: "local",
         fleet: "fresh-multi-component",
@@ -1043,6 +1079,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     .expect("write invalid fresh estate seed fixture");
     assert!(matches!(
         generate_desired_fleet(&FleetGenerateRequest {
+            catalog_progress: None,
             app_config: &app_config,
             environment: "local",
             fleet: "fresh-invalid-units",
@@ -1211,6 +1248,15 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .subnet = bootstrap.coordinator_subnet.to_string();
     let fresh_plan = compile_fresh(&single_subnet)
         .expect("compile fresh estate creation on one reviewed fee subnet");
+    crate::fleet_ensure::policy::startup_funding::qualify_creation(
+        &root,
+        &single_subnet,
+        &desired
+            .protocol
+            .as_ref()
+            .unwrap()
+            .component_group_placements,
+    );
     let ordered_fresh_actions = workflow::ordered_actions(&fresh_plan);
     let root_install_index = ordered_fresh_actions
         .iter()
@@ -1989,6 +2035,21 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         no_apply_platform.mutations, 0,
         "public generation and planning remain effect-free"
     );
+    let no_apply_paths = EnsurePaths::under(
+        &root,
+        &no_apply_desired.environment,
+        &no_apply_desired.fleet,
+    );
+    let no_apply_state = read_state(&no_apply_paths, &no_apply_desired.fleet).unwrap();
+    let no_apply_observation = no_apply_platform
+        .observe(&source_digest, &no_apply_state)
+        .unwrap();
+    crate::fleet_ensure::policy::startup_funding::qualify(
+        &root,
+        &no_apply_desired,
+        &no_apply_observation,
+        no_apply.plan.protocol_actions,
+    );
 
     let mut recovery_desired = desired.clone();
     recovery_desired.fleet = "retained-multi-component-recovery".to_string();
@@ -2013,6 +2074,11 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
                 .get(&configured.name)
                 .cloned();
             live.reinstall_required = true;
+            if configured.kind == DesiredCanisterKind::Root {
+                // This journey qualifies already-funded reinstall ordering; the startup
+                // qualification above covers the separate funding review and accounting.
+                live.cycles = 500_000_000_000_000;
+            }
             if matches!(
                 configured.kind,
                 DesiredCanisterKind::Coordinator | DesiredCanisterKind::Store
@@ -2033,14 +2099,19 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     let ordered = workflow::ordered_actions(&recovery.plan);
     let store_index = ordered
         .iter()
-        .position(|action| action.name() == "store-0")
+        .position(
+            |action| matches!(action, EnsureAction::Install { name, .. } if name == "store-0"),
+        )
         .expect("Store reinstall");
     let root_index = ordered
         .iter()
-        .position(|action| action.name() == "root-0")
+        .position(|action| matches!(action, EnsureAction::Install { name, .. } if name == "root-0"))
         .expect("Root reinstall");
     assert!(store_index < root_index);
-    assert_eq!(ordered.len(), 5);
+    assert!(ordered.iter().all(|action| matches!(
+        action,
+        EnsureAction::Fund { .. } | EnsureAction::Install { .. } | EnsureAction::Start { .. }
+    )));
     assert_eq!(
         ordered
             .iter()
@@ -2393,6 +2464,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .find(|canister| canister.kind == DesiredCanisterKind::Root)
         .expect("configured retained Root");
     let stopped_request = FleetGenerateRequest {
+        catalog_progress: None,
         app_config: &app_config,
         environment: &stopped_desired.environment,
         fleet: &stopped_desired.fleet,
@@ -2473,6 +2545,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         },
     );
     let later_request = FleetGenerateRequest {
+        catalog_progress: None,
         app_config: &app_config,
         environment: &stopped_desired.environment,
         fleet: &stopped_desired.fleet,
@@ -3060,6 +3133,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     );
 
     let mut platform = RetainedEnsurePlatform::new(&desired, &observed, &pool_one);
+    // This final replay journey starts with the reviewed startup budget already funded.
+    platform.live.get_mut(&fleet_root).unwrap().cycles = 500_000_000_000_000;
+    let starting_native_cycles = platform.total_cycles();
     let planned = workflow::plan(
         &root,
         &desired,
@@ -3095,7 +3171,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         platform.mutations, 3,
         "only retained infrastructure reinstalls"
     );
-    assert_eq!(platform.total_cycles(), 319_900_000_000_000);
+    assert_eq!(platform.total_cycles(), starting_native_cycles);
 
     let second = workflow::plan(
         &root,
@@ -3889,6 +3965,41 @@ fn retained_ensure_state(
     }
 }
 
+fn assert_startup_balance_evidence(
+    config: &canic_core::bootstrap::compiled::ConfigModel,
+    desired: &DesiredFleet,
+    observed: &BTreeMap<String, ObservedCanister>,
+    coordinator: &str,
+    root: &str,
+) {
+    let mut low = observed.clone();
+    low.get_mut(coordinator).unwrap().cycles = 209_000_000_000_000;
+    low.get_mut(root).unwrap().cycles = 1_000_000_000_000;
+    let forecast = startup_funding::forecast(config, desired, &low).unwrap();
+    assert_eq!(forecast.coordinator_spendable_cycles, 0);
+    assert_eq!(forecast.roots[0].shortfall_cycles, 9_000_000_000_001);
+    low.remove(root);
+    assert!(matches!(
+        startup_funding::forecast(config, desired, &low),
+        Err(FleetGenerateError::Authority(_))
+    ));
+
+    let mut fresh = desired.clone();
+    for canister in &mut fresh.canisters {
+        canister.principal = None;
+    }
+    let forecast = startup_funding::forecast(config, &fresh, &BTreeMap::new()).unwrap();
+    assert_eq!(
+        forecast.coordinator_balance,
+        StartupNativeBalance::ConfiguredCreation(270_000_000_000_000)
+    );
+    assert_eq!(
+        forecast.roots[0].balance,
+        StartupNativeBalance::ConfiguredCreation(30_000_000_000_000)
+    );
+    assert_eq!(forecast.roots[0].shortfall_cycles, 0);
+}
+
 fn multi_component_config() -> &'static str {
     r#"
 [app]
@@ -4538,15 +4649,20 @@ fi
             },
         }),
     ));
+    write_inspection_reserve_responses(root, fleet_root, store, pool);
     let script = format!(
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
-  printf '%s\n' 'icp 1.3.0'
+  printf '%s\n' 'icp 1.5.0'
   exit 0
 fi
 while [ "$1" = "--project-root-override" ] || [ "$1" = "--identity-password-file" ]; do
   shift 2
 done
+if [ "$1" = "identity" ] && [ "$2" = "default" ]; then
+  printf '%s\n' 'fixture-operator'
+  exit 0
+fi
 if [ "$1" = "identity" ] && [ "$2" = "principal" ]; then
   printf '%s\n' '{operator}'
   exit 0
@@ -4584,6 +4700,12 @@ if [ "$1" = "canister" ] && [ "$2" = "start" ] && [ "$3" = "{fleet_root}" ]; the
 fi
 if [ "$1" = "canister" ] && [ "$2" = "call" ]; then
 {controller_cycle_case}
+  if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_observability" ]; then
+    for expected in '{reserve_root}'/reserve-*.bin; do
+      if cmp -s "$6" "$expected"; then cat "${{expected%.bin}}.json"; exit; fi
+    done
+    exit 1
+  fi
   if [ "$3" = "{fleet_root}" ] && [ "$4" = "canic_root_command" ]; then
     printf '%s\n' '{inspection}'
     exit 0
@@ -4618,11 +4740,52 @@ exit 42
         counter = counter.display(),
         root_start_count = root_start_count.display(),
         root_started = root_started.display(),
+        reserve_root = root.display(),
     );
     fs::write(&executable, script).expect("write fake ICP executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
         .expect("make fake ICP executable runnable");
     executable
+}
+
+#[cfg(unix)]
+fn write_inspection_reserve_responses(
+    root: &Path,
+    caller: &str,
+    store: &str,
+    pool: &CanisterPoolResponse,
+) {
+    use crate::canister_protocol::inspection::{
+        InspectionReserveRequest, InspectionReserveResponse,
+    };
+    let caller = Principal::from_text(caller).unwrap();
+    for canister_id in pool
+        .entries
+        .iter()
+        .map(|entry| entry.canister_id)
+        .chain([Principal::from_text(store).unwrap()])
+    {
+        let base = root.join(format!("reserve-{canister_id}"));
+        fs::write(
+            base.with_extension("bin"),
+            candid::encode_one(InspectionReserveRequest::InspectionReserve(
+                canic_core::dto::canister::CanisterInspectionRequest { canister_id },
+            ))
+            .unwrap(),
+        )
+        .unwrap();
+        let response =
+            Ok::<_, canic_core::dto::error::Error>(InspectionReserveResponse::InspectionReserve(
+                canic_core::dto::canister::CanisterInspectionReserveResponse {
+                    caller,
+                    canister_id,
+                    native_cycles: 30_000_000_000_000,
+                    available_liquid_cycles: 20_000_000_000_000,
+                    required_liquid_cycles: 50_000_000_000,
+                },
+            ));
+        fs::write(base.with_extension("json"), candid_response_json(&response)).unwrap();
+    }
 }
 
 #[derive(candid::CandidType)]
@@ -4715,7 +4878,12 @@ fn infrastructure_artifacts(
         fs::create_dir_all(absolute.parent().expect("artifact parent"))
             .expect("create artifact parent");
         fs::write(&absolute, &bytes).expect("write artifact");
-        fs::write(absolute.with_extension("did"), b"service : {};").expect("write Candid");
+        let candid = if role == CanicInfrastructureRole::FleetSubnetRoot {
+            "service : { canic_observability : (variant { InspectionReserve : record { canister_id : principal } }) -> () query }"
+        } else {
+            "service : {};"
+        };
+        fs::write(absolute.with_extension("did"), candid).expect("write Candid");
         CanicInfrastructureArtifactEntry {
             role,
             package: role.as_str().to_string(),
@@ -4732,7 +4900,7 @@ fn infrastructure_artifacts(
             ),
             wasm_gz_size_bytes: 1,
             wasm_gz_sha256_hex: "00".repeat(32),
-            candid_sha256: Sha256::digest(b"service : {};").into(),
+            candid_sha256: Sha256::digest(candid.as_bytes()).into(),
             protocol_profile_digest: ProtocolProfileDigest::from_bytes([marker; 32]),
         }
     })

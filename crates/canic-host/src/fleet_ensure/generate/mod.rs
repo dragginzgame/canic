@@ -4,6 +4,7 @@
 //! Does not own: artifact builds, identity invention, paid effects, or convergence.
 //! Boundary: release artifacts are local authority; every retained Principal is explicit and live-verified.
 
+mod startup_funding;
 #[cfg(test)]
 mod tests;
 
@@ -36,7 +37,7 @@ use crate::{
         load_persisted_canic_infrastructure_artifact_manifest,
         load_persisted_current_release_set_manifest,
     },
-    subnet_catalog::load_mainnet_subnet_catalog,
+    subnet_catalog::MainnetCatalogClient,
 };
 use candid::{Nat, Principal};
 use canic_core::{
@@ -55,7 +56,7 @@ use canic_core::{
     protocol,
     shared_support::fleet_admission_policy::compile_fleet_admission_policy_template,
 };
-use ic_query::subnet_catalog::SubnetSpecialization;
+use ic_query::subnet_catalog::{CatalogLoadOutcome, SubnetSpecialization};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -94,6 +95,8 @@ pub fn fresh_pool_creation_funding(readiness_floor: u128) -> Result<u128, FleetG
 
 /// Exact local and live inputs for one no-effect desired-state generation.
 pub struct FleetGenerateRequest<'a> {
+    pub catalog_progress:
+        Option<&'a (dyn Fn(&crate::subnet_catalog::view::CatalogAcquisitionProgress) + Sync)>,
     pub app_config: &'a Path,
     pub environment: &'a str,
     pub fleet: &'a str,
@@ -118,11 +121,16 @@ pub struct GeneratedDesiredFleet {
     pub observed_canisters: usize,
     pub observed_controlled_cycles: u128,
     pub release_build_id: ReleaseBuildId,
+    pub subnet_catalog: Option<crate::subnet_catalog::view::SubnetCatalogObservation>,
+    pub startup_funding: crate::fleet_ensure::view::startup_funding::StartupFundingForecast,
 }
 
 /// Typed no-effect Fleet generation failure.
 #[derive(Debug, ThisError)]
 pub enum FleetGenerateError {
+    #[error("mainnet Subnet Catalog acquisition failed: {0}")]
+    SubnetCatalog(#[from] Box<crate::subnet_catalog::acquisition::CatalogAcquisitionError>),
+
     #[error(transparent)]
     Frontend(#[from] crate::frontend::FrontendError),
 
@@ -600,6 +608,7 @@ fn require_fresh_seed_authority(
 
 #[derive(Clone)]
 struct ObservedCanister {
+    pool_status: Option<canic_core::dto::pool::CanisterPoolAssetStatus>,
     cycles: u128,
     module_sha256: Option<String>,
     subnet: String,
@@ -687,6 +696,7 @@ struct EstateObservationRequest<'a, 'request> {
     source: &'a FleetSource,
     topology: &'a crate::component_topology::PlannedFleetTopology,
     local_replica: Option<&'a LocalReplicaTarget>,
+    catalog: Option<&'a CatalogLoadOutcome>,
 }
 
 #[derive(candid::CandidType)]
@@ -828,8 +838,16 @@ fn generate(
     let root_candid = candid_sidecar(request.root, root_artifact)?;
     let store_candid = candid_sidecar(request.root, store_artifact)?;
     let root_candid_path = request.root.join(&root_candid);
+    let generation_time = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_err(|_| FleetGenerateError::Clock)?
+        .as_secs();
+    let catalog =
+        validate_generation_authority(request, &source, operator, local_replica, generation_time)?;
+    let subnet_catalog = catalog
+        .as_ref()
+        .map(|outcome| crate::subnet_catalog::ops::observation(outcome, generation_time));
     let observed = if seed.fresh_estate {
-        validate_fresh_generation_authority(request, &source, operator, local_replica)?;
         BTreeMap::new()
     } else {
         observe_estate(&EstateObservationRequest {
@@ -842,6 +860,7 @@ fn generate(
             source: &source,
             topology: &topology,
             local_replica,
+            catalog: catalog.as_ref(),
         })?
     };
     let treasury = seed
@@ -881,20 +900,40 @@ fn generate(
             FleetGenerateError::Authority("observed controlled cycle total overflowed".to_string())
         })
     })?;
+    let mut startup_funding = startup_funding::forecast(config.model(), &desired, &observed)?;
+    startup_funding.coordinator_usage = startup_funding::observe_usage(
+        request,
+        &desired,
+        &observed,
+        &coordinator_artifact.wasm_sha256_hex,
+        local_replica,
+    );
+    startup_funding::observe_children(
+        request,
+        &desired,
+        &observed,
+        &root_artifact.wasm_sha256_hex,
+        local_replica,
+        &mut startup_funding,
+    );
+    startup_funding::apply_allowances(config.model(), &desired, &mut startup_funding);
     Ok(GeneratedDesiredFleet {
         desired,
         observed_canisters: observed.len(),
         observed_controlled_cycles,
         release_build_id: request.release_build_id,
+        subnet_catalog,
+        startup_funding,
     })
 }
 
-fn validate_fresh_generation_authority(
+fn validate_generation_authority(
     request: &FleetGenerateRequest<'_>,
     source: &FleetSource,
     operator: Principal,
     local_replica: Option<&LocalReplicaTarget>,
-) -> Result<(), FleetGenerateError> {
+    now: u64,
+) -> Result<Option<CatalogLoadOutcome>, FleetGenerateError> {
     let icp = IcpCli::new(
         request.icp_executable,
         Some(request.environment.to_string()),
@@ -912,14 +951,10 @@ fn validate_fresh_generation_authority(
     let network = resolve_icp_build_network_from_root(request.root, request.environment)
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
     if network != BuildNetwork::Ic {
-        return Ok(());
+        return Ok(None);
     }
-    let now = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .map_err(|_| FleetGenerateError::Clock)?
-        .as_secs();
-    let catalog = load_mainnet_subnet_catalog(request.root, now)
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let catalog =
+        MainnetCatalogClient::default().load(request.root, now, request.catalog_progress)?;
     require_fiduciary_acknowledgement(
         &catalog.catalog,
         &source.coordinator.subnet.subnet,
@@ -934,7 +969,7 @@ fn validate_fresh_generation_authority(
             "Fleet Subnet Root",
         )?;
     }
-    Ok(())
+    Ok(Some(catalog))
 }
 
 fn fresh_root_pool_count(
@@ -1319,6 +1354,7 @@ fn observe_estate(
         source,
         topology,
         local_replica,
+        catalog,
     } = input;
     let icp = IcpCli::new(
         request.icp_executable,
@@ -1326,44 +1362,6 @@ fn observe_estate(
     )
     .with_cwd(request.root.to_path_buf())
     .with_local_replica(local_replica.cloned());
-    let active = icp
-        .identity_principal_text()
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    if active != operator.to_text() {
-        return Err(FleetGenerateError::Authority(format!(
-            "active identity {active} differs from protected operator {operator}"
-        )));
-    }
-    let network = resolve_icp_build_network_from_root(request.root, request.environment)
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    let catalog = if network == BuildNetwork::Ic {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .map_err(|_| FleetGenerateError::Clock)?
-            .as_secs();
-        Some(
-            load_mainnet_subnet_catalog(request.root, now)
-                .map_err(|error| FleetGenerateError::Authority(error.to_string()))?,
-        )
-    } else {
-        None
-    };
-    if let Some(catalog) = &catalog {
-        require_fiduciary_acknowledgement(
-            &catalog.catalog,
-            &source.coordinator.subnet.subnet,
-            source.coordinator.subnet.acknowledge_fiduciary_cost,
-            "Coordinator",
-        )?;
-        for root in &source.fleet_subnet_roots {
-            require_fiduciary_acknowledgement(
-                &catalog.catalog,
-                &root.placement_subnet,
-                root.acknowledge_fiduciary_cost,
-                "Fleet Subnet Root",
-            )?;
-        }
-    }
     let mut expected = BTreeMap::new();
     insert_expected_canister(
         &mut expected,
@@ -1474,6 +1472,7 @@ fn observe_estate(
             .insert(
                 status.id.clone(),
                 ObservedCanister {
+                    pool_status: None,
                     cycles,
                     module_sha256,
                     subnet,
@@ -1848,7 +1847,7 @@ fn observe_root_owned_pool_assets(
                         root.root
                     )));
                 }
-                if found.insert(principal, asset.cycles.to_u128()).is_some() {
+                if found.insert(principal, asset).is_some() {
                     return Err(FleetGenerateError::SeedTopology(format!(
                         "Root {} repeats a pool identity",
                         root.root
@@ -1868,22 +1867,25 @@ fn observe_root_owned_pool_assets(
             start_after = next;
         }
         for principal in expected {
-            let cycles = found.get(principal).copied().ok_or_else(|| {
+            let asset = found.get(principal).ok_or_else(|| {
                 FleetGenerateError::SeedTopology(format!(
                     "Root {} does not retain seeded identity {principal}",
                     root.root
                 ))
             })?;
-            if let Some(entry) = observed.get(principal) {
+            let cycles = asset.cycles.to_u128();
+            if let Some(entry) = observed.get_mut(principal) {
                 if entry.cycles != cycles {
                     return Err(FleetGenerateError::Authority(format!(
                         "Root-owned and direct cycle observations differ for {principal}"
                     )));
                 }
+                entry.pool_status = Some(asset.status.clone());
             } else {
                 observed.insert(
                     principal.to_string(),
                     ObservedCanister {
+                        pool_status: Some(asset.status.clone()),
                         cycles,
                         module_sha256: None,
                         subnet: root.placement_subnet.clone(),

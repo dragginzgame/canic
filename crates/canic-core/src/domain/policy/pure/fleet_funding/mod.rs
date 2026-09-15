@@ -208,12 +208,26 @@ fn window_admits(
     requested_cycles: u128,
     maximum_cycles: u128,
 ) -> bool {
+    funding_window_remaining(snapshot, current_window_start_secs, maximum_cycles)
+        .is_some_and(|remaining| requested_cycles <= remaining)
+}
+
+/// Return the uncommitted current-window allowance; invalid accounting grants no allowance.
+#[must_use]
+pub fn funding_window_remaining(
+    snapshot: Option<FleetFundingWindowSnapshot>,
+    current_window_start_secs: u64,
+    maximum_cycles: u128,
+) -> Option<u128> {
+    let Some(snapshot) =
+        snapshot.filter(|value| value.window_start_secs == current_window_start_secs)
+    else {
+        return Some(maximum_cycles);
+    };
     let used = snapshot
-        .filter(|snapshot| snapshot.window_start_secs == current_window_start_secs)
-        .and_then(|snapshot| snapshot.spent_cycles.checked_add(snapshot.reserved_cycles))
-        .unwrap_or(0);
-    used.checked_add(requested_cycles)
-        .is_some_and(|total| total <= maximum_cycles)
+        .spent_cycles
+        .checked_add(snapshot.reserved_cycles)?;
+    maximum_cycles.checked_sub(used)
 }
 
 fn automatic_usage_admits(
@@ -236,6 +250,61 @@ mod tests {
         cdk::types::Cycles,
         ids::{CyclesFundingBudget, FleetFundingProfile, FleetSubnetRootFundingPolicy},
     };
+
+    #[test]
+    fn overflowing_or_excess_window_usage_cannot_admit_a_grant() {
+        let coordinator = coordinator_policy();
+        let root = root_policy();
+        let overflow = FleetFundingWindowSnapshot {
+            window_start_secs: 3_600,
+            spent_cycles: u128::MAX,
+            reserved_cycles: 1,
+        };
+        let mut value = input(&coordinator, &root);
+        value.fleet_window = Some(overflow);
+        assert_eq!(
+            decide_fleet_root_grant(&value),
+            FleetRootGrantDecision::NoGrant(FleetRootGrantNoGrantReason::FleetWindowExhausted)
+        );
+        value.fleet_window = None;
+        value.root_window = Some(overflow);
+        assert_eq!(
+            decide_fleet_root_grant(&value),
+            FleetRootGrantDecision::NoGrant(FleetRootGrantNoGrantReason::RootWindowExhausted)
+        );
+        assert_eq!(
+            funding_window_remaining(Some(overflow), 3_600, u128::MAX),
+            None
+        );
+        assert_eq!(
+            funding_window_remaining(Some(overflow), 7_200, 100),
+            Some(100)
+        );
+        assert_eq!(
+            funding_window_remaining(
+                Some(FleetFundingWindowSnapshot {
+                    window_start_secs: 3_600,
+                    spent_cycles: 70,
+                    reserved_cycles: 30,
+                }),
+                3_600,
+                100
+            ),
+            Some(0)
+        );
+        assert_eq!(
+            funding_window_remaining(
+                Some(FleetFundingWindowSnapshot {
+                    window_start_secs: 3_600,
+                    spent_cycles: 70,
+                    reserved_cycles: 31,
+                }),
+                3_600,
+                100
+            ),
+            None
+        );
+    }
 
     #[test]
     fn grants_exact_target_and_charges_reservation_time_windows() {

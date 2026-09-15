@@ -1810,3 +1810,34 @@ fn public_health_canonical_types_match_rust() {
             .expect("canonical public health equals current Rust contract");
     }
 }
+
+#[test]
+fn provisioning_failure_stage_matches_canonical_candid() {
+    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
+    let (mut env, _) = CandidSource::Text(&did).load().expect("Coordinator Candid");
+    let canonical = env.find_type("ProvisioningFailureStage").unwrap().clone();
+    let mut rust = TypeContainer::new();
+    let ty = rust.add::<canic::dto::component_provisioning::ProvisioningFailureStage>();
+    let ty = env.merge_type(rust.env, ty);
+    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+        .expect("protected provisioning stage equals the current Rust contract");
+}
+
+#[cfg(any(
+    feature = "control-plane",
+    feature = "fleet-coordinator-canister",
+    feature = "wasm-store-canister"
+))]
+#[test]
+fn state_cascade_store_response_matches_canonical_candid() {
+    let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
+    let (mut env, _) = CandidSource::Text(&did)
+        .load()
+        .expect("canonical Store Candid");
+    let canonical = env.find_type("StoreCommandResponse").unwrap().clone();
+    let mut rust = TypeContainer::new();
+    let ty = rust.add::<canic_control_plane::dto::template::StoreCommandResponse>();
+    let ty = env.merge_type(rust.env, ty);
+    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+        .expect("Store response contract equals current Rust, including cascade outcomes");
+}

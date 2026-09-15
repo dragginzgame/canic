@@ -8,7 +8,7 @@ use crate::{
     cdk::candid::Principal,
     infra::ic::{
         IcInfraError,
-        call::{Call, CallResult},
+        call::{Call, CallBuilder, CallResult},
     },
 };
 
@@ -52,16 +52,15 @@ impl MgmtInfra {
     pub async fn canister_status(
         canister_pid: Principal,
     ) -> Result<InfraCanisterStatusResult, IcInfraError> {
-        let args = InfraCanisterIdRecord {
-            canister_id: canister_pid,
-        };
-        let response = Call::bounded_wait(Principal::management_canister(), "canister_status")
-            .with_arg(args)?
-            .execute()
-            .await?;
+        let response = canister_status_call(canister_pid)?.execute().await?;
         let (status,): (InfraCanisterStatusResult,) = response.candid_tuple()?;
 
         Ok(status)
+    }
+
+    /// Quote the same encoded status call without scheduling an outbound effect.
+    pub fn canister_status_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
+        Ok(canister_status_call(canister_pid)?.cost())
     }
 
     /// Update canister settings through the management canister.
@@ -73,4 +72,12 @@ impl MgmtInfra {
 
         Ok(())
     }
+}
+
+fn canister_status_call(canister_pid: Principal) -> Result<CallBuilder<'static>, IcInfraError> {
+    Call::bounded_wait(Principal::management_canister(), "canister_status").with_arg(
+        InfraCanisterIdRecord {
+            canister_id: canister_pid,
+        },
+    )
 }

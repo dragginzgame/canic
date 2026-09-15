@@ -1,5 +1,330 @@
 # Canic 0.110 Implementation Status
 
+## Selected release scope — 2026-09-15
+
+The maintainer selected **prepare the completed fixes for release**, using an
+already-funded operator Cycles Ledger account for native recovery. Receipt-safe
+ICP conversion and complete live recovery forecasts stay as accepted follow-up
+work. This decision supersedes the earlier checkpoint readiness statements below.
+
+The selected .17 batch is **ready for the maintainer-directed release flow**:
+same-operation native withdrawal and receipt recovery, startup reserves and
+grant-timer correction, source-bound activation preparation/reset, role-correct
+state fanout, inspection diagnostics/preflight, child usage/allowance diagnostics,
+unchanged-release reuse and the completed ICP/IcyDB/ic-query integrations.
+Direct positive, rejection and interruption/replay evidence is recorded in the
+[current handoff](../../status/current.md#latest-focused-validation) and linked
+reports. The root and detailed changelogs describe the complete selected scope.
+Packages remain .16; the .17 draft is untagged. The complete release gate has
+not been run by this readiness pass. No version or Git publication occurred.
+
+The line already exceeds the advisory twelve-release guideline. This boundary
+keeps necessary recovery and operator corrections on their affected 0.110 line
+without delaying them for a new payment state machine or full forecasting.
+It does not close 0.110 or authorize implementation in another minor.
+
+| Batch | Outcome and owner | Required evidence | Status |
+| --- | --- | --- | --- |
+| RF2 | Receipt-safe ICP conversion within retained recovery; host funding/journal owner | Exact transfer and mint identities, credits, fees and receipts; unchanged original balances; interrupted/lost-response recovery, conservation and effect-free replay; focused host and PocketIC qualification | Accepted follow-up, after selected .17 release |
+| RF3 | Complete live recovery funding forecasts; host observation/planning owners using runtime policy | Budgeted descendant relay, exact role/placement and policy binding, live usage/reservations in demand quotes, unavailable/underfunded telemetry, full recovery reserve scope; focused policy, transport and IC evidence | Accepted follow-up after RF2, ahead of B1 |
+
+The current diagnostics are allowances and individual inspection reserves, not
+complete recovery demand or new spending authority. Minimum native recovery
+must remain possible before a Root can afford descendant telemetry. RF2/RF3
+retain CANIC-156/172/174's uncompleted criteria; publication/adoption and actual
+Toko recovery remain separate. The original password incident is unproven and
+auth/E9 remains parked. No upstream issue is declared fully closed by this
+scope decision.
+
+## Earlier implementation checkpoints
+
+The dated entries below preserve their original scope and evidence. Use the
+selected release scope above for current readiness and follow-up sequencing.
+
+## CANIC-172/174 child usage checkpoint — 2026-09-15
+
+Protected child-funding observations now expose charged totals, unresolved
+operations and exact retained transfer reservations, with unknown evidence
+explicit. Generation binds selected Root code/operator/participants and displays
+seeded direct-child observations alongside its fresh-ledger startup scenario.
+The [report](../../audits/reports/2026-09/2026-09-15/canic-172-child-funding-usage.md)
+records native expiry/settlement tests, host binding and generation/replay checks,
+CLI coverage, scoped Clippy and the real IC grant/replay/controller proof.
+No new state or paid effect is introduced. Recursive descendants, exact live
+placement matching, recovery quotes and operator mint receipts remain open.
+The parent-attribution follow-up now joins each current seeded Workload claim
+to its exact committed allocation. It reports the immediate funding parent and
+role even for nested children. Only Root-funded Workloads use Root's ledger;
+descendant ledger reads explicitly require the existing update relay. Ready,
+unresolved and conflicting assets never become zero usage. Generation stays
+query-only; further collection belongs in budgeted recovery observation. Native
+parent/transport tests, CLI rendering, generation/replay and scoped Clippy pass.
+The live allowance follow-up now shares runtime policy for charged lifetime
+headroom, cooldown and the next-request cap. It binds allocation release-build
+identity and Spec hash to the selected configuration; pending operations retain
+an unknown cap and reservations are not deducted twice. Native policy, host/CLI
+and generation/replay tests pass. This is policy allowance, not live demand or
+spending authority. Minimum native recovery remains independent of optional
+descendant telemetry, which may require a funded Root to relay. Full descendant
+collection and remaining-demand quotes are still open.
+The existing .17 draft remains the release target and is not yet push-ready.
+
+## Accepted ICP 1.5 integration work — 2026-09-15
+
+The maintainer accepted the [ICP 1.5 audit](../../audits/reports/2026-09/2026-09-15/icp-1.5.0-integration.md)
+fixes and improvements. Delivery remains in the open 0.110.17 draft:
+
+1. Host build/config correctness: bind script builds to ICP's selected environment,
+   parse inline YAML structurally, check effective App role membership, and qualify
+   current CLI contracts and selective builds. Preserve complete Canic build closure.
+   Positive cases and conflicting/malformed/omitted/empty selection cases belong together.
+2. Host/operator inspection: retain typed visibility and query statistics without
+   treating viewers as controllers, and reuse successful local version qualification
+   within one transport context. Fresh contexts and failed probes must recheck;
+   network state, controller authority and balances remain live observations.
+3. Frontend: integrate read-only post-sync verification with the existing exact-digest
+   handoff. Bind the selected environment, asset Principal and uploaded file identities;
+   test wrong target, changed content and immediate repeat verification. Asset upload
+   ownership and a new mutation/recovery protocol are outside this delivery.
+
+Each outcome includes focused tests, diagnostics, active documentation and cleanup.
+No publication, deployment or broad validation is authorized by this acceptance.
+Existing native recovery evidence and B1 work retain their independent readiness gates.
+
+Completed: the [implementation report](../../audits/reports/2026-09/2026-09-15/icp-1.5.0-implementation.md)
+retains the focused host/CLI, Fleet fixture, helper, help-surface and native ICP
+evidence. Scoped host/CLI and internal-testing Clippy pass. The frontend adapter
+uses a documented host script with bounded query readback; portable WASI plugin
+distribution remains optional future work. The open patch draft is updated;
+these completed ICP outcomes do not close the independent release-batch gates.
+
+## CANIC-156 inspection preflight and diagnostics — 2026-09-15
+
+Host pool/reset, terminal inventory and cycle-observation paths now query the
+exact next inspection target's reserve through controller-only Root observability.
+The query shares the actual encoded status-call builder, schedules no outbound
+call and admits only this additional variant through the prepared-Root fence.
+The host rejects mismatched or impossible evidence and observed shortfalls before
+the update, without caching a failed preflight or assigning a minimum fee.
+One query is added per uncached inspection; bounded pool concurrency and reuse
+of successful inspection state remain qualified.
+
+The host first checks the exact bound Candid structurally. Retained source
+contracts without the reserve selector keep their protected inspection path and
+supply no quote. Declared selectors must pass preflight; invalid contracts and
+query failures cannot fall through to inspection. This fixes the new preflight's
+unconditional request against retained Roots without changing source authority,
+reset admission, or executable plan contracts.
+
+The controller-owned Root inspection now preserves the SDK's exact liquid-cycle
+admission failure as `InspectionReserveRequired`. It binds caller and target,
+reports native balance sampled before the attempt and the SDK's available/required
+liquid cycles, and issues no additional observation call. Only this exact SDK
+variant is classified as insufficient funding; other failures retain their cause.
+Host pool/reset/inventory/telemetry adapters validate the evidence and keep failed
+inspections out of their observation cache. A later retry reads fresh status.
+
+Focused core/host cases, scoped Clippy and the positive-balance PocketIC case
+pass. The existing [recovery report](../../audits/reports/2026-09/2026-09-14/toko-recovery-followups.md)
+records qualification and limitations, including the prepared-Root query and
+shortfall proof. A sufficient query cannot guarantee admission of the later
+update, which reserves execution cycles and observes later state. Whole-recovery
+funding preview remains open; one outbound-call reserve does not authorize a
+funding amount or cover ingress, reset, readiness and later pool demand.
+
+## CANIC-172/174 startup funding — 2026-09-14
+
+Desired-state generation now exposes the zero-burn initial-grant scenario,
+request/lifetime/window constraints and Coordinator headroom without changing
+funding authority. A shared initial-role counting correction includes every
+parent path and rejects cyclic initial demand within a fixed graph bound.
+Four pure cases, four generation/pool/replay regressions, the CLI evidence-label
+and raw-shortfall case, scoped Clippy and source guards pass. See the
+[funding report](../../audits/reports/2026-09/2026-09-14/canic-174-funding-deadline.md).
+Pending provisioning on observed Roots now adds configuration-bound startup
+demand and selected execution reserves to reviewed native funding. Existing
+top-ups retain one Ledger fee; deferred provisioning drops its increment and
+terminal replay does not refill a startup allowance. Focused planning evidence
+also covers source mismatch, typed demand rejection and exact plan identity.
+Fresh continuation now prepays startup funding through its initial Create/Fund
+actions, using Root-local artifact/import/retry bounds. The generated-estate
+and ten continuation regressions pass, followed by the exact IC withdrawal,
+response-loss, conservation and replay case. Runtime admission, startup planning
+and supplementary native reviews now share the unchanged 1T deployment floor;
+five startup and seven native funding cases pass. The protected initial-child
+origin also reaches the Coordinator in a passing IC E163/same-claim recovery
+case, now including the production host observer and selected-operator transport.
+Recovery quotes also preserve the selected Root's bootstrap request threshold,
+with missing/duplicate authority and overflow rejection. The generated-estate
+case, seven withdrawal regressions, host-observer IC case and scoped host/internal
+Clippy pass. See the [child report](../../audits/reports/2026-09/2026-09-14/canic-172-child-reserve.md).
+The combined E163 initial-child/native-withdrawal journey also passes, retaining
+the same claim through two lost responses, terminal conservation and replay
+(`/tmp/canic-native-child-ic.log`). Its local Ledger stub uses zero fees.
+Generation now projects live Coordinator window spend/reservations, successful
+automatic usage and pending Root operations through its existing protected query.
+Exact selected code, operator, Root set and policy are required; unavailable
+observations never imply an unused budget. Runtime window admission also rejects
+accounting overflow. Seeded direct-child observations are now qualified above;
+recursive child coverage, recovery-quote integration and exact operator mint
+receipts remain open before B1.
+The four usage/transport cases, six runtime policy cases, generated-estate replay
+and CLI rendering regression pass, as does scoped all-target/all-feature Clippy
+for core, host and CLI. The funding report records qualification limits.
+Toko's latest follow-up confirms CANIC-174, agrees with these priorities and
+adds no issue ID.
+The .17 draft is updated; the complete accepted batch is not push-ready.
+
+## CANIC-174 grant deadline checkpoint — 2026-09-14
+
+The IC owner-path regression confirms the unchanged deadline after a real
+child grant crosses the Root reserve. The cycle owner now resamples transfer
+settlement, advances the existing timer and preserves earlier safety checks
+without interpreting transfers as computation burn. Final IC qualification,
+scoped Clippy, formatting, layering and inventory/source guards pass. The [report](../../audits/reports/2026-09/2026-09-14/canic-174-funding-deadline.md)
+records the baseline failure, behavior and limits. Bootstrap forecasts and the
+remaining CANIC-172 funding/recovery work remain part of the open .17 batch.
+
+## CANIC-172 native funding checkpoint — 2026-09-14
+
+The current funding owner now reviews native Root supplementation against an
+issued provisioning action, with exact management/Ledger authority, separate
+approval, fixed withdrawal identity, receipt recovery and original-balance
+conservation. Unapproved quotes can refresh; approved intents cannot. Eleven
+host tests, one CLI report case, scoped Clippy and source guards pass. The
+[report](../../audits/reports/2026-09/2026-09-14/canic-172-native-funding.md)
+records the current tagged pause shape and evidence limits.
+
+The composed issued-operation IC withdrawal case now passes both lost-response
+boundaries, exact deposit/debit accounting, terminal conservation and replay.
+Its synthetic high host minimum does not reproduce the E163 low-reserve child
+claim; the subsequent combined claim/withdrawal case above now closes that gap.
+Exact operator mint-credit receipts and live grant/reservation forecasts remain;
+CANIC-174 owner-path qualification is recorded above. The shared estate-pause IC regression, final scoped
+Clippy and inventory/source guards also pass. Earlier interruption/preview
+evidence and B1 are still open.
+The .17 changelog reflects this step; packages remain .16 and the whole batch
+is not push-ready. No publication, deployment or live funding ran.
+
+## CANIC-172 child reserve checkpoint — 2026-09-14
+
+The open .17 draft distinguishes the deployment reserve rejection as E163 and
+retains bounded child-allocation failure evidence with capped retry backoff.
+Native persistence/capacity/progress cases, scoped Clippy and the governed
+low-reserve IC claim/readiness/replay proof pass. The
+[report](../../audits/reports/2026-09/2026-09-14/canic-172-child-reserve.md)
+separates this correction from outstanding operator funding review, exact
+mint/withdrawal/fee accounting and bootstrap demand forecasting. CANIC-174 and
+the earlier interruption/preview evidence remain ahead of B1. The .17
+changelog is updated; the complete batch remains open and unpublished.
+
+## CANIC-175 state cascade — 2026-09-14
+
+The open .17 draft now routes snapshots through each recipient's owned command,
+reports bounded partial outcomes and reconciles Root funding before fanout.
+The final focused IC case passes role propagation, authority rejection, stopped
+Shard failure, retry and Readonly/Stopped restoration while unrelated commands
+remain fenced. Native report/Root tests, Candid equality, scoped Clippy, default
+feature protocol tests and layering pass. The
+[report](../../audits/reports/2026-09/2026-09-14/canic-175-state-cascade.md)
+records the hard cut and synthetic-fixture limits.
+
+Prioritize CANIC-172 native funding and CANIC-174 timing/forecast evidence next;
+positive-credit interruption and richer reserve previews remain. B1 expansion
+stays behind this feedback. The full release batch remains open, with .16
+packages and the updated .17 draft; no Git publication or deployment ran.
+
+## B1 recovery-dispatch measurement — 2026-09-14
+
+Row 6 passes the complete twelve-artifact matched measurement on immutable
+`v0.110.5`: two byte-identical baseline builds and two byte-identical candidate
+builds per artifact. Canonical artifact sums fall by 1,242,984 code bytes and
+2,297 functions in the destructive audit variant. The
+[report](../../audits/reports/2026-09/2026-09-14/b1-recovery-dispatch-measurement.md)
+retains identities, vectors, tooling correction and limitations. This supplies
+attribution, not recovery parity or a production deletion. Rows 8/10/12 and
+remaining B1 evidence are still open. The post-run feedback refresh advances
+to CANIC-175. CANIC-173's configured inventory projection is fixed and passes
+focused publication/replay/authority regressions and host Clippy. The
+[new feedback report](../../audits/reports/2026-09/2026-09-14/toko-recovery-172-175.md)
+sequences CANIC-175 state-cascade correction, CANIC-172 native funding review
+and CANIC-174 timing qualification ahead of further contraction measurements.
+
+## Source-bound recovery qualification — 2026-09-15
+
+CANIC-166/171's [focused IC proof](../../audits/reports/2026-09/2026-09-15/canic-166-171-activation-reset.md)
+now passes: real Published Components/Prepared Root/Store identity conflict,
+source-bound review and exact archives, wrong-digest rejection, positive Stop
+credit with unchanged starting balances, lost Stop and Root reinstall responses,
+and both effect-free replays. Exactly one Root reset occurs. Scoped internal
+Clippy and catalog qualification pass. The proof ends at the reset prerequisite;
+it does not establish live staging recovery or subsequent full convergence for
+that exact conflict. Exact mint accounting, child-grant forecasts and the
+whole-recovery funding preview still block complete .17 readiness. Auth/E9 is
+parked at the maintainer's request; no runtime authority was relaxed.
+
+## Recovery feedback implementation — 2026-09-14
+
+The open .17 draft now corrects CANIC-166 staged-review apply selection,
+CANIC-171 bounded observed Stop-credit accounting and CANIC-170 operation
+identity binding. CANIC-156 gains an exact liquid-cycle admission diagnostic,
+qualified through the real Root inspection path in one focused PocketIC case.
+Native recovery/identity/conservation, CLI, diagnostic-register and scoped lint
+checks pass. The [follow-up report](../../audits/reports/2026-09/2026-09-14/toko-recovery-followups.md)
+records scope, source identities, tests and limitations.
+
+The source-bound positive-credit interruption proof is now qualified above.
+The full batch remains open for richer funding accounting/preview work; B1
+matched measurements remain subsequent accepted work. Available downstream
+items already have shipped Canic implementations.
+Package versions remain .16; the .17 changelog includes the required actual
+conservation field and E162. No Git publication, deployment or sibling edit ran.
+
+## Post-release continuation — 2026-09-14
+
+`v0.110.16` is tagged at `a875c6498721bd89ca98549e38389b8280910d68`;
+the maintainer reports publication complete and explicitly continues 0.110.
+The completed OP1–OP4, memory and recovery checkpoints below are historical
+development evidence for that release. Their former open-.16 wording does not
+describe a new draft. The
+[initial feedback review](../../audits/reports/2026-09/2026-09-14/toko-upstream-feedback.md)
+initially reached CANIC-169 and separated shipped implementation from
+remaining downstream qualification. Toko's working lock already selects .16.
+
+No patch is allocated just for this reconciliation. Remaining accepted B1
+attribution continues within 0.110; necessary correctness follow-ups stay on
+the affected line despite the advisory twelve-release guideline. This does not
+open 0.111, accept B1, or unpark role-specific stable initialization.
+
+## B1 qualification checkpoint — 2026-09-14
+
+The subsequent requested dependency update pins both maintained IcyDB fixture
+graphs to 0.257.12, with SQL disabled and shared ic-memory 0.13.3. All seven
+focused lifecycle/import PocketIC cases and both fixture/schema Clippy groups
+pass without Rust source changes. The open .17 draft includes this update;
+historical ablation identities and verdicts remain unchanged.
+
+Row 8 now passes the complete fourteen-artifact selector on immutable
+`v0.110.5`, with its original patch and restored source/lock. Historical patch
+preflight is repaired to use the frozen tree instead of the evolving method
+checkout. The [report](../../audits/reports/2026-09/2026-09-14/b1-row8-qualification.md)
+preserves exact evidence and limits. The .17 changelog draft records the audit
+tooling change; package versions remain .16. The later row 10/12 qualifications
+below pass; B1's matched measurements remain due. This is not a full-batch
+push-readiness handoff.
+
+## CANIC-139 follow-up — 2026-09-14
+
+The later downstream refresh identifies a confirmed reuse-verifier defect in
+published .16: newly recorded absent Cargo inputs beneath scanned directories
+were reported as changed source. The open .17 correction admits only absence
+proved by the pre-build scan, sharing its exact directory exclusions. Real
+changes and unobserved inputs still reject reuse. All 12 scoped reuse cases
+and host all-target/all-feature Clippy pass; the
+[report](../../audits/reports/2026-09/2026-09-14/canic-139-absent-inputs.md)
+records the real first-release Cargo reproducer and limits. This completes the
+bounded correction without accepting B1 or claiming downstream staging success.
+
 ## Promoted operator batches — 2026-09-13
 
 The maintainer explicitly requests CANIC-010/008/002/017 in 0.110 now. Their
@@ -634,15 +959,16 @@ Date: 2026-09-06
   lifecycle-composition fixture to the exact IcyDB 0.253.0 family with default
   features disabled. It adds no IcyDB edge to a production Canic crate and
   changes no Fleet runtime capability or B1/B2 verdict.
-- Row 8 remains `specified`. Its first full development qualification passed
-  ten canonical artifacts before the Wasm Store correctly enforced canonical
-  Candid parity. The audit-only switch now isolates that counterfactual
-  comparison and the exact Store artifact qualifies, but the complete selector
-  has not passed against the current patch identity and no retained measurement
-  is claimed.
-- Rows 10 and 12 remain `specified`; their exact canonical-App development
-  qualifications pass, while their complete selectors and immutable paired
-  measurements remain open.
+- Row 8 is `ready` after the September 14 complete fourteen-artifact
+  qualification on frozen `v0.110.5`. The existing audit-only Store Candid
+  accommodation remains confined to the experiment. Exact source/lock and
+  artifact evidence is in the
+  [qualification report](../../audits/reports/2026-09/2026-09-14/b1-row8-qualification.md).
+  No retained paired measurement or runtime parity is claimed.
+- Rows 10 and 12 are `ready` after complete fourteen- and eleven-artifact
+  qualifications on September 14, using their original patches and frozen
+  source/lock. The [report](../../audits/reports/2026-09/2026-09-14/b1-row10-row12-qualification.md)
+  preserves exact evidence. Immutable paired measurements remain open.
 
 Design: [Fleet runtime contraction](0.110-design.md)
 
@@ -728,7 +1054,7 @@ Current canonical-role evidence:
 
 | Batch | Outcome | Direct evidence | Status |
 | --- | --- | --- | --- |
-| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, immutable all-role row 3 inclusive activation-persistence attribution supporting role-selected separation without activation parity, immutable canonical-plus-runtime-fixture row 4 authorization-persistence attribution without persistence or authorization parity, immutable canonical-plus-runtime/blob-fixture row 5 shared-CBOR-helper attribution without codec or persistence parity, selected-artifact qualification for row 6, specified audit-only rows 8, 10 and 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, complete selected-artifact build qualification for the remaining specified rows, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
+| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, immutable all-role row 3 inclusive activation-persistence attribution supporting role-selected separation without activation parity, immutable canonical-plus-runtime-fixture row 4 authorization-persistence attribution without persistence or authorization parity, immutable canonical-plus-runtime/blob-fixture row 5 shared-CBOR-helper attribution without codec or persistence parity, immutable canonical-plus-runtime-fixture row 6 recovery-dispatch attribution without recovery parity, selected-artifact qualification for rows 8, 10 and 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
 | B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked overall on B1; bounded auth stable-declaration sub-slice explicitly active and targeted role evidence passes |
 | B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked overall on B2 decision; bounded auth-record split explicitly active without selecting another codec cut |
 | B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, continued absence of the hard-deleted temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
@@ -736,30 +1062,38 @@ Current canonical-role evidence:
 
 ## Deferred From 0.110
 
-- Host-only semantic-version inventory, release-narrative cleanup and status
-  redesign return to later operator planning.
+- Broader host semantic-version inventory and status redesign return to later
+  operator planning. CANIC-014's generated release snapshot shipped in .16.
 - Indexed estates, a bounded reserve Fleet and cycle-safe source disposition
   remain 0.111 work.
 - Adaptive lanes, broad automatic funding, batches and 1,000-canister
   qualification are unscheduled.
-- The generic runtime Observatory is an unnumbered idea.
+- The host-owned generic observatory shipped in .16 as OP3; renderer and
+  application profiles remain outside canonical canister runtime roles.
 
 ## Next Authorized Action
 
-VS1 throughput, the restored CANIC-162 allocation report and published IcyDB
-0.257.4 / ic-memory 0.13.2 composition are qualified. The same open .14 batch
-and changelog are ready for the maintainer-selected release gate. Do not infer
-broad validation or publication authority.
-The contraction work below remains sequenced separately and gains no completion
-credit from faster tests.
+The .16 release is complete. The later September 14 CANIC-139 correction above
+is complete in the open .17 draft; downstream adoption remains outstanding.
+Keep downstream adoption, installed-state measurements and authorized staging
+recovery separate from Canic source completion. The maintainer's continuation
+keeps the contraction sequence below active in 0.110; faster tests and the
+published memory consolidation do not complete its attribution evidence.
 
-Finish focused review of the explicitly authorized authorization-persistence
-slice and keep its targeted optimized-artifact evidence separate from complete
-B2 remeasurement. This does not accept B1 or authorize another state family.
+The focused authorization-persistence source review confirms separate
+feature-selected stores and restore paths, with no new defect found. It adds
+no runtime parity or B2 remeasurement evidence and authorizes no other state
+family. Row 8 endpoint-declaration construction is now fully build-qualified.
 
-Then continue B1 from immutable `v0.110.5`: qualify row 8 endpoint-declaration
-construction and rows 10 and 12 endpoint-reply
-serialization and metrics-provider attribution. Then
+The latest downstream refresh remains CANIC-175. The selected .17 correction
+batch is ready as defined above, including positive-credit reset interruption,
+native withdrawal and grant/deadline qualification. Release execution remains
+maintainer-directed. Follow-up RF2/RF3 preserve the remaining receipt-conversion
+and complete live funding-preview criteria. The original identity-prompt cause
+and exact staging rejection remain unproven; auth/E9 stays parked.
+
+After RF2/RF3, continue B1 from immutable `v0.110.5` with retained matched measurements for
+ready rows 8, 10 and 12; row 6's retained measurement is complete. Then
 complete the remaining controlled ablations,
 optimized generated-
 surface absence, generic cohort and accepted allowances and obtain compatible

@@ -27,6 +27,26 @@ pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
     ];
     stage(&paths, &plan).unwrap();
     assert_eq!(review(&paths).unwrap(), Some(plan.clone()));
+    assert_eq!(
+        crate::fleet_ensure::workflow::retained_reinstall_apply_plan::<std::io::Error>(
+            &root,
+            "local",
+            "source",
+            &plan.plan_sha256,
+        )
+        .unwrap(),
+        Some(plan.clone())
+    );
+    assert!(
+        crate::fleet_ensure::workflow::retained_reinstall_apply_plan::<std::io::Error>(
+            &root,
+            "local",
+            "source",
+            &"0".repeat(64),
+        )
+        .unwrap()
+        .is_none()
+    );
     assert_eq!(fs::read(&paths.plan).unwrap(), before[0]);
     assert_eq!(fs::read(&paths.journal).unwrap(), before[1]);
     assert_eq!(fs::read(&paths.state).unwrap(), before[2]);

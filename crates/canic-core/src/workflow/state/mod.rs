@@ -8,10 +8,16 @@ pub mod query;
 
 use crate::{
     InternalError,
-    cdk::types::Principal,
-    dto::state::{FleetCommand, FleetCommandResponse},
-    ops::{runtime::env::EnvOps, storage::state::fleet::FleetStateOps},
-    workflow::cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
+    dto::state::{FleetCommand, FleetCommandExecutionResponse},
+    ops::{
+        cascade_report::StateCascadeReportOps, runtime::env::EnvOps,
+        storage::state::fleet::FleetStateOps,
+    },
+    view::state_cascade::StateCascadeTarget,
+    workflow::{
+        cascade::{snapshot::StateSnapshotBuilder, state::StateCascadeWorkflow},
+        runtime::cycles::CycleWorkflow,
+    },
 };
 
 ///
@@ -35,13 +41,24 @@ impl FleetStateWorkflow {
     /// exclusively at the API boundary.
     pub async fn execute_command_to(
         cmd: FleetCommand,
-        root_children: &[Principal],
-    ) -> Result<FleetCommandResponse, InternalError> {
+        root_children: &[StateCascadeTarget],
+        reconcile_funding: bool,
+    ) -> Result<FleetCommandExecutionResponse, InternalError> {
         EnvOps::require_root()?;
+        let builder = StateSnapshotBuilder::new()?;
         let response = FleetStateOps::apply_command(cmd);
-        let snapshot = StateSnapshotBuilder::new()?.with_fleet_state().build();
-        StateCascadeWorkflow::root_cascade_state_to(&snapshot, root_children).await?;
-
-        Ok(response)
+        let reconciliation_error = if reconcile_funding {
+            CycleWorkflow::start().err().map(Into::into)
+        } else {
+            None
+        };
+        let snapshot = builder.with_fleet_state().build();
+        let propagation =
+            StateCascadeWorkflow::root_cascade_state_to(&snapshot, root_children).await?;
+        Ok(StateCascadeReportOps::command_response(
+            response,
+            propagation,
+            reconciliation_error,
+        ))
     }
 }

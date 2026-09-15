@@ -12,6 +12,10 @@ use crate::fleet_ensure::{
 use std::{io, path::PathBuf};
 
 const ROOT: &str = "rrkah-fqaaa-aaaaa-aaaaq-cai";
+// Native cases keep a 90-cycle deficit below the real deployment floor while
+// retaining the small exact fee/burn deltas used by the accounting assertions.
+const NATIVE_BASE: u128 =
+    canic_core::control_plane_support::policy::deployment::MINIMUM_DEPLOYMENT_RESERVE_CYCLES - 100;
 
 struct Fixture {
     root: PathBuf,
@@ -74,9 +78,10 @@ impl Fixture {
             plan,
             platform: FundingPlatform {
                 balance: 40,
+                native_balance: 10,
                 operator: 1000,
                 transfers: BTreeSet::new(),
-                lose_reply: false,
+                fault: FundingTransportFault::None,
                 drift_fee: false,
                 drift_controller: false,
             },
@@ -112,12 +117,20 @@ impl Drop for Fixture {
     }
 }
 
+#[derive(Eq, PartialEq)]
+enum FundingTransportFault {
+    None,
+    LostReply,
+    LostPostObservation,
+}
+
 struct FundingPlatform {
     drift_controller: bool,
     balance: u128,
+    native_balance: u128,
     operator: u128,
     transfers: BTreeSet<String>,
-    lose_reply: bool,
+    fault: FundingTransportFault,
     drift_fee: bool,
 }
 
@@ -143,7 +156,7 @@ impl EnsurePlatform for FundingPlatform {
                 } else {
                     vec![ROOT.into()]
                 },
-                cycles: 10,
+                cycles: self.native_balance,
                 module_sha256: None,
                 principal: ROOT.into(),
                 reinstall_required: false,
@@ -164,6 +177,23 @@ impl EnsurePlatform for FundingPlatform {
             creation_execution_margin_cycles: 5,
         });
         Ok(observation)
+    }
+    fn observe_native_funding(
+        &mut self,
+        _: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Option<NativeFundingObservation>, Self::Error> {
+        if self.fault == FundingTransportFault::LostPostObservation && !self.transfers.is_empty() {
+            self.fault = FundingTransportFault::None;
+            return Err(io::Error::other("post-withdrawal observation unavailable"));
+        }
+        let observed = self.observe("operation", state)?;
+        Ok(Some(NativeFundingObservation {
+            cycles_ledger: "um5iw-rqaaa-aaaaq-qaaba-cai".into(),
+            ledger_fee_cycles: observed.ledger_fee_cycles,
+            live: observed.canisters["root"].clone().unwrap(),
+            operator_cycles: self.operator,
+        }))
     }
     fn observe_effect(
         &mut self,
@@ -196,19 +226,21 @@ impl EnsurePlatform for FundingPlatform {
         _: &EffectRecord,
         _: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
-        let EnsureAction::FundEstate {
-            amount,
-            ledger_fee_cycles,
-            ..
-        } = action
-        else {
-            unreachable!()
+        let (amount, fee, balance) = match action {
+            EnsureAction::FundEstate {
+                amount,
+                ledger_fee_cycles,
+                ..
+            } => (*amount, *ledger_fee_cycles, &mut self.balance),
+            EnsureAction::Fund { amount, .. } => (*amount, 5, &mut self.native_balance),
+            _ => unreachable!(),
         };
         if self.transfers.insert(action_sha256(action)) {
-            self.balance += amount;
-            self.operator -= amount + ledger_fee_cycles;
+            *balance += amount;
+            self.operator -= amount + fee;
         }
-        if std::mem::take(&mut self.lose_reply) {
+        if self.fault == FundingTransportFault::LostReply {
+            self.fault = FundingTransportFault::None;
             return Err(io::Error::other("lost fixture reply"));
         }
         Ok(EffectOutcome {
@@ -303,7 +335,7 @@ fn funding_review_preserves_operation_and_requires_its_exact_digest() {
     let report = fixture.review().unwrap();
     assert_eq!(report.plan, fixture.plan);
     let review = report.funding_review.unwrap();
-    assert_eq!(review.pause.shortfall_cycles, 60);
+    assert_eq!(review.pause.shortfall_cycles(), 60);
     assert!(review.effect.is_none());
     assert_eq!(fixture.review().unwrap().funding_review, Some(review));
     let digest = fixture.plan.plan_sha256.clone();
@@ -326,7 +358,7 @@ fn funding_review_preserves_operation_and_requires_its_exact_digest() {
 fn funding_review_recovers_lost_reply_and_replays_without_another_debit() {
     let mut fixture = Fixture::new();
     let review = fixture.review().unwrap().funding_review.unwrap();
-    fixture.platform.lose_reply = true;
+    fixture.platform.fault = FundingTransportFault::LostReply;
     assert!(matches!(
         fixture.apply(&review.review_sha256),
         Err(EnsureWorkflowError::Platform(_))
@@ -409,7 +441,10 @@ fn funding_review_rejects_fee_balance_and_authority_drift_before_debit() {
     ));
     fixture.platform.drift_controller = false;
     let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
-    journal.funding_reviews[0].pause.shortfall_cycles += 1;
+    let FundingPauseRecord::Estate(pause) = &mut journal.funding_reviews[0].pause else {
+        panic!("estate review");
+    };
+    pause.shortfall_cycles += 1;
     write_journal(&fixture.paths, &journal).unwrap();
     assert!(matches!(
         fixture.apply(&review.review_sha256),
@@ -444,5 +479,308 @@ fn completed_funding_review_cannot_authorize_a_later_plan() {
         fixture.apply(&review.review_sha256),
         Err(EnsureWorkflowError::PlanDigestMismatch { .. })
     ));
+    assert_eq!(fixture.platform.transfers.len(), 1);
+}
+
+impl Fixture {
+    fn native() -> Self {
+        let mut fixture = Self::new();
+        fixture.platform.native_balance += NATIVE_BASE;
+        fixture.plan.canisters[0].observed_cycles += NATIVE_BASE;
+        fixture.desired.canisters[0].kind = DesiredCanisterKind::Root;
+        fixture.desired.canisters[0].minimum_cycles = "0.0000001B".into();
+        fixture.desired.maximum_observation_burn_cycles = "0.000000002B".into();
+        fixture.desired.maximum_update_burn_cycles = "0.000000003B".into();
+        fixture.plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(
+            &fixture.desired,
+        )));
+        let mut action = crate::fleet_ensure::tests::typed_protocol_action(&"12".repeat(32));
+        let EnsureAction::FleetProtocol {
+            action: protocol, ..
+        } = &mut action
+        else {
+            unreachable!()
+        };
+        let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = protocol.as_mut()
+        else {
+            unreachable!()
+        };
+        request
+            .plan
+            .directory_confirmation_roots
+            .push(ROOT.parse().unwrap());
+        fixture.plan.protocol_actions.push(action.clone());
+        fixture.plan.conservation.maximum_execution_burn_cycles = 40;
+        fixture.plan.plan_sha256 = expected_plan_sha256(&fixture.plan);
+        let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+        journal.estate_funding_required = None;
+        journal.initial_controlled_cycles += NATIVE_BASE;
+        journal.plan_sha256.clone_from(&fixture.plan.plan_sha256);
+        let mut effect = crate::fleet_ensure::ops::funding::intent(&action, 10 + NATIVE_BASE, 10);
+        effect.state = EffectState::Issued;
+        effect.receipt = Some("retained-provisioning".into());
+        journal.effects.push(effect);
+        write_plan(&fixture.paths, &fixture.plan).unwrap();
+        write_journal(&fixture.paths, &journal).unwrap();
+        fixture
+    }
+
+    fn native_review(
+        &mut self,
+    ) -> Result<Option<FundingReviewRecord>, EnsureWorkflowError<io::Error>> {
+        let mut journal = read_journal(&self.paths).unwrap().unwrap();
+        let state = read_state(&self.paths, "fleet").unwrap();
+        funding::prepare(
+            &self.paths,
+            &self.plan,
+            &mut journal,
+            &state,
+            99,
+            &mut self.platform,
+        )
+    }
+
+    fn native_resume(&mut self, digest: &str) -> Result<(), EnsureWorkflowError<io::Error>> {
+        let mut journal = read_journal(&self.paths).unwrap().unwrap();
+        let state = read_state(&self.paths, "fleet").unwrap();
+        funding::verify(&self.plan, &journal, &state)?;
+        funding::resume(
+            &self.paths,
+            &self.plan,
+            &mut journal,
+            &state,
+            digest,
+            &mut self.platform,
+        )
+    }
+}
+
+#[test]
+fn native_funding_review_preserves_issued_operation_and_separate_approval() {
+    let mut fixture = Fixture::native();
+    let before = read_journal(&fixture.paths).unwrap().unwrap();
+    let review = fixture.review().unwrap().funding_review.unwrap();
+    assert_eq!(review.pause.shortfall_cycles(), 95);
+    assert!(matches!(review.pause, FundingPauseRecord::Native(_)));
+    assert!(review.effect.is_none());
+    assert_eq!(fixture.native_review().unwrap(), Some(review.clone()));
+    assert!(matches!(
+        fixture.native_resume(&fixture.plan.plan_sha256.clone()),
+        Err(EnsureWorkflowError::NativeFundingRequired { .. })
+    ));
+    assert!(fixture.platform.transfers.is_empty());
+    fixture.native_resume(&review.review_sha256).unwrap();
+    let after = read_journal(&fixture.paths).unwrap().unwrap();
+    assert_eq!(after.effects, before.effects);
+    assert_eq!(after.operation_id, before.operation_id);
+    assert_eq!(after.plan_sha256, before.plan_sha256);
+    assert_eq!(
+        after.initial_operator_cycles,
+        before.initial_operator_cycles
+    );
+    assert_eq!(
+        after.initial_controlled_cycles,
+        before.initial_controlled_cycles
+    );
+    assert_eq!(
+        after.initial_estate_funding_cycles_by_root,
+        before.initial_estate_funding_cycles_by_root
+    );
+    assert_eq!(
+        (
+            fixture.platform.operator,
+            fixture.platform.native_balance,
+            fixture.platform.balance
+        ),
+        (900, 105 + NATIVE_BASE, 40)
+    );
+    fixture.native_resume(&review.review_sha256).unwrap();
+    fixture.platform.native_balance = 10 + NATIVE_BASE;
+    assert!(fixture.native_review().unwrap().is_none());
+    assert_eq!(fixture.platform.transfers.len(), 1);
+}
+
+#[test]
+fn native_funding_review_recovers_lost_withdrawal_and_conserves_exact_credit() {
+    let mut fixture = Fixture::native();
+    let review = fixture.native_review().unwrap().unwrap();
+    fixture.platform.fault = FundingTransportFault::LostReply;
+    assert!(matches!(
+        fixture.native_resume(&review.review_sha256),
+        Err(EnsureWorkflowError::Platform(_))
+    ));
+    let issued = read_journal(&fixture.paths).unwrap().unwrap();
+    assert_eq!(
+        issued.funding_reviews[0].effect.as_ref().unwrap().state,
+        EffectState::Intent
+    );
+    for unexplained in [995, 899, 1001] {
+        fixture.platform.operator = unexplained;
+        assert!(matches!(
+            fixture.native_resume(&review.review_sha256),
+            Err(EnsureWorkflowError::DriftedBeforeApply)
+        ));
+        assert_eq!(fixture.platform.transfers.len(), 1);
+    }
+    fixture.platform.operator = 900;
+    fixture.platform.native_balance -= 35;
+    fixture.native_resume(&review.review_sha256).unwrap();
+    assert_eq!(fixture.platform.transfers.len(), 1);
+    let journal = read_journal(&fixture.paths).unwrap().unwrap();
+    let state = read_state(&fixture.paths, "fleet").unwrap();
+    funding::verify::<io::Error>(&fixture.plan, &journal, &state).unwrap();
+    let terminal = fixture.platform.observe("operation", &state).unwrap();
+    let actual =
+        verify_terminal_conservation::<io::Error>(&fixture.plan, &journal, &state, &terminal)
+            .unwrap();
+    assert_eq!(actual.operator_debit_cycles, 100);
+    assert_eq!(actual.received_new_funding_cycles, 95);
+    assert_eq!(actual.exact_unavoidable_fee_cycles, 5);
+    assert_eq!(actual.estate_funding_cycles, 0);
+    assert_eq!(actual.measured_execution_burn_cycles, 35);
+    assert_eq!(actual.observed_starting_cycles, 50 + NATIVE_BASE);
+    assert_eq!(actual.final_controlled_cycles, 110 + NATIVE_BASE);
+}
+
+#[test]
+fn native_funding_review_rejects_drift_and_unreceipted_operator_credit() {
+    let mut fixture = Fixture::native();
+    fixture.platform.operator += 1;
+    assert!(matches!(
+        fixture.native_review(),
+        Err(EnsureWorkflowError::DriftedBeforeApply)
+    ));
+    fixture.platform.operator -= 1;
+    let review = fixture.native_review().unwrap().unwrap();
+    for drift in 0..3 {
+        fixture.platform.drift_fee = drift == 0;
+        fixture.platform.drift_controller = drift == 1;
+        fixture.platform.native_balance = NATIVE_BASE + if drift == 2 { 4 } else { 10 };
+        assert!(matches!(
+            fixture.native_resume(&review.review_sha256),
+            Err(EnsureWorkflowError::DriftedBeforeApply)
+        ));
+    }
+    fixture.platform.drift_controller = false;
+    fixture.platform.native_balance = 10 + NATIVE_BASE;
+    let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+    let FundingPauseRecord::Native(pause) = &mut journal.funding_reviews[0].pause else {
+        unreachable!()
+    };
+    pause.shortfall_cycles += 1;
+    write_journal(&fixture.paths, &journal).unwrap();
+    assert!(matches!(
+        fixture.native_resume(&review.review_sha256),
+        Err(EnsureWorkflowError::JournalIntegrity)
+    ));
+    assert!(fixture.platform.transfers.is_empty());
+}
+
+#[test]
+fn native_funding_review_requires_issued_provisioning_and_rejects_duplicate_authority() {
+    let mut fixture = Fixture::native();
+    let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+    journal.effects[0].state = EffectState::Intent;
+    write_journal(&fixture.paths, &journal).unwrap();
+    assert!(fixture.native_review().unwrap().is_none());
+    journal.effects[0].state = EffectState::Issued;
+    write_journal(&fixture.paths, &journal).unwrap();
+    let review = fixture.native_review().unwrap().unwrap();
+    fixture.native_resume(&review.review_sha256).unwrap();
+    let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+    journal
+        .funding_reviews
+        .push(journal.funding_reviews[0].clone());
+    let state = read_state(&fixture.paths, "fleet").unwrap();
+    assert!(matches!(
+        funding::verify::<io::Error>(&fixture.plan, &journal, &state),
+        Err(EnsureWorkflowError::JournalIntegrity)
+    ));
+    journal.funding_reviews.pop();
+    journal.funding_reviews[0]
+        .effect
+        .as_mut()
+        .unwrap()
+        .post_cycles = Some(901);
+    assert!(matches!(
+        funding::verify::<io::Error>(&fixture.plan, &journal, &state),
+        Err(EnsureWorkflowError::JournalIntegrity)
+    ));
+}
+
+#[test]
+fn native_funding_review_retains_receipt_when_post_observation_is_lost() {
+    let mut fixture = Fixture::native();
+    let review = fixture.native_review().unwrap().unwrap();
+    fixture.platform.fault = FundingTransportFault::LostPostObservation;
+    assert!(matches!(
+        fixture.native_resume(&review.review_sha256),
+        Err(EnsureWorkflowError::Platform(_))
+    ));
+    let journal = read_journal(&fixture.paths).unwrap().unwrap();
+    let effect = journal.funding_reviews[0].effect.as_ref().unwrap();
+    assert_eq!(effect.state, EffectState::Issued);
+    assert_eq!(effect.receipt.as_deref(), Some("7"));
+    assert!(effect.post_cycles.is_none());
+    fixture.native_resume(&review.review_sha256).unwrap();
+    assert_eq!(fixture.platform.transfers.len(), 1);
+    assert_eq!(fixture.platform.operator, 900);
+}
+
+#[test]
+fn native_funding_review_does_not_credit_a_root_outside_provisioning_scope() {
+    let mut fixture = Fixture::native();
+    let EnsureAction::FleetProtocol { action, .. } = &mut fixture.plan.protocol_actions[0] else {
+        unreachable!()
+    };
+    let CurrentFleetProtocolAction::ProvisionComponents { request, .. } = action.as_mut() else {
+        unreachable!()
+    };
+    request.plan.directory_confirmation_roots.clear();
+    fixture.plan.plan_sha256 = expected_plan_sha256(&fixture.plan);
+    let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+    journal.plan_sha256.clone_from(&fixture.plan.plan_sha256);
+    journal.effects[0].action_sha256 = action_sha256(&fixture.plan.protocol_actions[0]);
+    write_plan(&fixture.paths, &fixture.plan).unwrap();
+    write_journal(&fixture.paths, &journal).unwrap();
+    assert!(fixture.native_review().unwrap().is_none());
+    assert_eq!(read_journal(&fixture.paths).unwrap().unwrap(), journal);
+    assert!(fixture.platform.transfers.is_empty());
+}
+
+#[test]
+fn native_funding_review_refreshes_only_unapproved_expired_quotes() {
+    let mut fixture = Fixture::native();
+    let first = fixture.native_review().unwrap().unwrap();
+    fixture.platform.native_balance = 4 + NATIVE_BASE;
+    let refreshed = fixture.native_review().unwrap().unwrap();
+    assert_ne!(refreshed.review_sha256, first.review_sha256);
+    assert_eq!(refreshed.pause.shortfall_cycles(), 101);
+    assert!(matches!(
+        fixture.native_resume(&first.review_sha256),
+        Err(EnsureWorkflowError::NativeFundingRequired { .. })
+    ));
+    assert!(fixture.platform.transfers.is_empty());
+    fixture.platform.native_balance = 101 + NATIVE_BASE;
+    assert!(fixture.native_review().unwrap().is_none());
+    assert!(
+        read_journal(&fixture.paths)
+            .unwrap()
+            .unwrap()
+            .funding_reviews
+            .is_empty()
+    );
+    fixture.platform.native_balance = 4 + NATIVE_BASE;
+    let approved = fixture.native_review().unwrap().unwrap();
+    fixture.platform.fault = FundingTransportFault::LostReply;
+    assert!(matches!(
+        fixture.native_resume(&approved.review_sha256),
+        Err(EnsureWorkflowError::Platform(_))
+    ));
+    fixture.platform.native_balance = 1 + NATIVE_BASE;
+    let retained = fixture.native_review().unwrap().unwrap();
+    assert_eq!(retained.review_sha256, approved.review_sha256);
+    assert_eq!(retained.action, approved.action);
+    assert!(retained.effect.is_some());
     assert_eq!(fixture.platform.transfers.len(), 1);
 }

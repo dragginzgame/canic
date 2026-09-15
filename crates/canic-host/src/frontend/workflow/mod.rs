@@ -1,6 +1,8 @@
-//! Export orchestration over the selected terminal Fleet review.
+//! Frontend handoff export and read-only asset verification orchestration.
 //!
-//! Network effects and static-asset deployment are not part of this workflow.
+//! Export uses terminal Fleet authority; verification queries uploaded assets without mutation.
+
+mod uploaded;
 
 use crate::{
     fleet_ensure::ops::{EnsurePaths, lock_operation},
@@ -11,6 +13,8 @@ use crate::{
     },
 };
 use std::path::Path;
+
+pub use uploaded::verify_uploaded;
 
 /// Export an explicit selection from one stable terminal review under its Fleet operation lock.
 pub fn prepare_handoff(

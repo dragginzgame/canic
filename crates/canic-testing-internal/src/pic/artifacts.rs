@@ -342,6 +342,25 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
 ) {
+    build_internal_test_wasm_canisters_with_features(
+        workspace_root,
+        target_dir,
+        packages,
+        profile,
+        extra_env,
+        &[],
+    );
+}
+
+/// Build an audit participant with its explicitly derived role features.
+pub(super) fn build_internal_test_wasm_canisters_with_features(
+    workspace_root: &Path,
+    target_dir: &Path,
+    packages: &[&str],
+    profile: CanicWasmBuildProfile,
+    extra_env: &[(&str, &str)],
+    features: &[String],
+) {
     assert!(
         !packages.is_empty(),
         "internal PocketIC Wasm build requires at least one package"
@@ -357,6 +376,10 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
 
     let mut cargo_args = profile.cargo_profile_args().to_vec();
     cargo_args.push("--locked");
+    let features = features.join(",");
+    if !features.is_empty() {
+        cargo_args.extend(["--features", features.as_str()]);
+    }
 
     let mut build_env = vec![
         ("CARGO_INCREMENTAL", "0"),

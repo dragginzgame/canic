@@ -559,6 +559,12 @@ async fn activate_component_step(
         ))
         .await
         .map_err(|error| {
+            let error =
+                match ComponentRegistryOps::initial_child_failure(allocation.component, &error) {
+                    Ok(Some(origin)) => error.with_observed_provisioning_failure(origin),
+                    Ok(None) => error,
+                    Err(observation_error) => observation_error,
+                };
             activation_member_failure(ProvisioningFailureStage::ComponentRuntime, &member, error)
         })?;
     }

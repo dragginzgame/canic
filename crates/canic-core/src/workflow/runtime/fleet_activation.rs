@@ -187,7 +187,12 @@ impl FleetActivationWorkflow {
         )
         .map_err(StorageOpsError::from)?;
 
-        StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &[wasm_store.pid]).await?;
+        let targets = [crate::view::state_cascade::StateCascadeTarget {
+            canister_id: wasm_store.pid,
+            endpoint: crate::view::state_cascade::StateCascadeEndpoint::Store,
+        }];
+        let report = StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &targets).await?;
+        crate::ops::cascade_report::StateCascadeReportOps::require_complete(&report)?;
         CascadeOps::send_topology_snapshot(wasm_store.pid, &topology).await?;
         Self::status()
     }
@@ -388,7 +393,12 @@ impl FleetActivationWorkflow {
         let state_input = StateSnapshotAdapter::to_input(&state_snapshot);
         let topology = TopologyCascadeWorkflow::root_wasm_store_snapshot_input(wasm_store)?;
 
-        StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &[wasm_store]).await?;
+        let targets = [crate::view::state_cascade::StateCascadeTarget {
+            canister_id: wasm_store,
+            endpoint: crate::view::state_cascade::StateCascadeEndpoint::Store,
+        }];
+        let report = StateCascadeWorkflow::root_cascade_state_to(&state_snapshot, &targets).await?;
+        crate::ops::cascade_report::StateCascadeReportOps::require_complete(&report)?;
         CascadeOps::send_topology_snapshot(wasm_store, &topology).await?;
         Self::complete_provisioned_nonroot_activation(
             wasm_store,

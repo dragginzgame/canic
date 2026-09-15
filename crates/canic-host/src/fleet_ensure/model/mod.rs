@@ -385,7 +385,24 @@ pub struct DesiredFleetArtifacts {
     pub init_arg_sha256_by_canister: BTreeMap<String, String>,
     pub init_candid_sha256_by_canister: BTreeMap<String, String>,
     pub wasm_sha256_by_canister: BTreeMap<String, String>,
+    pub startup_funding_by_root: BTreeMap<String, StartupFundingRequirement>,
     pub(crate) protocol_by_step: BTreeMap<String, ProtocolArtifactDigests>,
+}
+
+/// Configuration-bound startup demand; live grant usage and execution are separate inputs.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StartupFundingRequirement {
+    /// Root-local upper bound from the selected continuation artifact catalogue.
+    pub maximum_continuation_steps: u32,
+    pub minimum_native_cycles: u128,
+    pub unfunded_role: Option<StartupRoleShortfall>,
+}
+
+/// A role whose fresh lifetime allowance or disabled top-up cannot supply initial demand.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StartupRoleShortfall {
+    pub role: canic_core::ids::CanisterRole,
+    pub cycles: u128,
 }
 
 /// Content identities for one declarative protocol transition.
@@ -883,6 +900,10 @@ pub struct ActualCycleConservation {
     pub measured_execution_burn_cycles: u128,
     #[serde(with = "u128_text")]
     pub observed_starting_cycles: u128,
+    /// Bounded net credits observed across exact activation-recovery Stop receipts.
+    /// This observation does not classify their origin as refunds or funding.
+    #[serde(with = "u128_text")]
+    pub observed_settlement_credit_cycles: u128,
     #[serde(with = "u128_text")]
     pub operator_debit_cycles: u128,
     #[serde(with = "u128_text")]
@@ -1377,7 +1398,7 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
-    pub funding_reviews: Vec<EstateFundingReviewRecord>,
+    pub funding_reviews: Vec<FundingReviewRecord>,
     pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
     pub completion: FleetEnsureCompletion,
     #[serde(deserialize_with = "serialization::required_option")]
@@ -1437,7 +1458,7 @@ pub enum FleetEnsureSuccessorReviewReason {
 
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct FleetEnsureReport {
-    pub funding_review: Option<EstateFundingReviewRecord>,
+    pub funding_review: Option<FundingReviewRecord>,
     pub actual_conservation: Option<ActualCycleConservation>,
     pub effects_applied: u32,
     pub plan: FleetEnsurePlan,
@@ -1448,12 +1469,112 @@ pub struct FleetEnsureReport {
 /// The nullable effect is the durable approval boundary; planning never sets it.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct EstateFundingReviewRecord {
+pub struct FundingReviewRecord {
     pub action: EnsureAction,
     #[serde(deserialize_with = "serialization::required_option")]
     pub effect: Option<EffectRecord>,
-    pub pause: EstateFundingRequiredRecord,
+    pub pause: FundingPauseRecord,
     pub review_sha256: String,
+}
+
+/// Funding destination and retained-operation reason for an additional reviewed credit.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(
+    tag = "kind",
+    content = "evidence",
+    rename_all = "snake_case",
+    deny_unknown_fields
+)]
+pub enum FundingPauseRecord {
+    Estate(EstateFundingRequiredRecord),
+    Native(NativeFundingRequiredRecord),
+}
+
+impl FundingPauseRecord {
+    /// Root name retained by the original operation.
+    #[must_use]
+    pub fn root(&self) -> &str {
+        match self {
+            Self::Estate(p) => &p.root,
+            Self::Native(p) => &p.root,
+        }
+    }
+
+    /// Exact receiver Principal on the reviewed Ledger.
+    #[must_use]
+    pub fn root_principal(&self) -> &str {
+        match self {
+            Self::Estate(p) => &p.root_principal,
+            Self::Native(p) => &p.root_principal,
+        }
+    }
+
+    /// Ledger that owns the operator's source account.
+    #[must_use]
+    pub fn cycles_ledger(&self) -> &str {
+        match self {
+            Self::Estate(p) => &p.cycles_ledger,
+            Self::Native(p) => &p.cycles_ledger,
+        }
+    }
+
+    /// Cycles observed at the destination before review.
+    #[must_use]
+    pub const fn available_cycles(&self) -> u128 {
+        match self {
+            Self::Estate(p) => p.available_cycles,
+            Self::Native(p) => p.available_cycles,
+        }
+    }
+
+    /// Exact additional amount requiring approval.
+    #[must_use]
+    pub const fn shortfall_cycles(&self) -> u128 {
+        match self {
+            Self::Estate(p) => p.shortfall_cycles,
+            Self::Native(p) => p.shortfall_cycles,
+        }
+    }
+
+    /// Exact operator Ledger fee, separately accounted from the credit.
+    #[must_use]
+    pub const fn ledger_fee_cycles(&self) -> u128 {
+        match self {
+            Self::Estate(p) => p.ledger_fee_cycles,
+            Self::Native(p) => p.ledger_fee_cycles,
+        }
+    }
+}
+
+/// Native reserve review bound to one already-issued provisioning effect and Root.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct NativeFundingRequiredRecord {
+    #[serde(with = "u128_text")]
+    pub available_cycles: u128,
+    pub cycles_ledger: String,
+    #[serde(with = "u128_text")]
+    pub funding_margin_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub ledger_fee_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub minimum_cycles: u128,
+    pub operation_id: String,
+    pub plan_sha256: String,
+    pub provisioning_action_sha256: String,
+    pub root: String,
+    pub root_principal: String,
+    #[serde(with = "u128_text")]
+    pub shortfall_cycles: u128,
+}
+
+/// Management/Ledger evidence available even while runtime activation is incomplete.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct NativeFundingObservation {
+    pub cycles_ledger: String,
+    pub ledger_fee_cycles: u128,
+    pub live: LiveCanister,
+    pub operator_cycles: u128,
 }
 
 mod u128_text {

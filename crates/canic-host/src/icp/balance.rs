@@ -39,7 +39,7 @@ impl IcpCli {
         command.args(["cycles", "balance", "--json"]);
         self.add_target_args(&mut command);
         self.record_remote_call();
-        let output = run_json::<BalanceOutput>(&mut command)?;
+        let output = run_json::<BalanceOutput>(&mut command, self)?;
         parse_cycles(&output.balance)
     }
 
@@ -49,7 +49,7 @@ impl IcpCli {
         command.args(["token", "balance", "--json"]);
         self.add_target_args(&mut command);
         self.record_remote_call();
-        let output = run_json::<BalanceOutput>(&mut command)?;
+        let output = run_json::<BalanceOutput>(&mut command, self)?;
         parse_icp_e8s(&output.balance)
     }
 }
@@ -123,15 +123,15 @@ fn invalid_amount(unit: &'static str, value: &str) -> IcpBalanceError {
 mod tests {
     use super::*;
 
-    const ICP_CLI_1_3_CYCLES_BALANCE_JSON: &str = r#"{"balance":"3_519_900_000_000 cycles"}"#;
-    const ICP_CLI_1_3_TOKEN_BALANCE_JSON: &str = r#"{"balance":"1.23456780 ICP"}"#;
+    const ICP_CLI_1_5_CYCLES_BALANCE_JSON: &str = r#"{"balance":"3_519_900_000_000 cycles"}"#;
+    const ICP_CLI_1_5_TOKEN_BALANCE_JSON: &str = r#"{"balance":"1.23456780 ICP"}"#;
 
     #[test]
-    fn decodes_icp_cli_one_three_balance_json_goldens() {
-        let cycles: BalanceOutput = serde_json::from_str(ICP_CLI_1_3_CYCLES_BALANCE_JSON)
-            .expect("ICP CLI 1.3 cycles balance JSON");
-        let token: BalanceOutput = serde_json::from_str(ICP_CLI_1_3_TOKEN_BALANCE_JSON)
-            .expect("ICP CLI 1.3 token balance JSON");
+    fn decodes_icp_cli_one_five_balance_json_goldens() {
+        let cycles: BalanceOutput = serde_json::from_str(ICP_CLI_1_5_CYCLES_BALANCE_JSON)
+            .expect("ICP CLI 1.5 cycles balance JSON");
+        let token: BalanceOutput = serde_json::from_str(ICP_CLI_1_5_TOKEN_BALANCE_JSON)
+            .expect("ICP CLI 1.5 token balance JSON");
 
         assert_eq!(parse_cycles(&cycles.balance).unwrap(), 3_519_900_000_000);
         assert_eq!(parse_icp_e8s(&token.balance).unwrap(), 123_456_780);

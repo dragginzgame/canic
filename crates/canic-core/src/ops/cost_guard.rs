@@ -153,6 +153,34 @@ impl From<CostGuardReserveError> for InternalError {
 pub struct CostGuardOps;
 
 impl CostGuardOps {
+    /// Observe the exact payer's retained transfer reservation without changing its state.
+    pub(crate) fn observe_transfer_reservation(
+        settlement: &ReplayCostGuardSettlement,
+        payer: Principal,
+        now_secs: u64,
+    ) -> Option<u128> {
+        let record = IntentStoreOps::load(settlement.reservation_intent_id).ok()??;
+        let expected = cycle_reservation_key(CostClass::ValueTransfer, payer).ok()?;
+        if record.resource_key != expected {
+            return None;
+        }
+        match record.state {
+            crate::storage::stable::intent::IntentState::Pending => {
+                if record.ttl_secs.is_some_and(|ttl| {
+                    record
+                        .created_at
+                        .checked_add(ttl)
+                        .is_none_or(|expires| now_secs >= expires)
+                }) {
+                    return None;
+                }
+                Some(u128::from(record.quantity))
+            }
+            crate::storage::stable::intent::IntentState::Committed
+            | crate::storage::stable::intent::IntentState::Aborted => Some(0),
+        }
+    }
+
     /// reserve
     ///
     /// Reserve quota and cycle budget before a workflow crosses an expensive side-effect boundary.
@@ -338,11 +366,18 @@ fn quota_resource_key(
 fn reservation_resource_key(
     request: &CostGuardRequest,
 ) -> Result<IntentResourceKey, CostGuardReserveError> {
+    cycle_reservation_key(request.cost_class, request.payer)
+}
+
+fn cycle_reservation_key(
+    cost_class: CostClass,
+    payer: Principal,
+) -> Result<IntentResourceKey, CostGuardReserveError> {
     cost_key([
         "cost",
         "reserve",
-        cost_class_label(request.cost_class),
-        &hash_principal(request.payer),
+        cost_class_label(cost_class),
+        &hash_principal(payer),
     ])
 }
 

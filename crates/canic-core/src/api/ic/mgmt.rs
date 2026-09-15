@@ -7,7 +7,9 @@
 use crate::{
     cdk::types::Principal,
     dto::{
-        canister::{CanisterHistoryResponse, CanisterStatusResponse},
+        canister::{
+            CanisterHistoryResponse, CanisterInspectionOutcome, CanisterInspectionReserveResponse,
+        },
         error::Error,
     },
     workflow::ic::mgmt::MgmtWorkflow,
@@ -20,6 +22,13 @@ use crate::{
 pub struct MgmtApi;
 
 impl MgmtApi {
+    /// Observe a controller-selected target's inspection reserve without an IC call.
+    pub fn canister_inspection_reserve(
+        pid: Principal,
+    ) -> Result<CanisterInspectionReserveResponse, Error> {
+        MgmtWorkflow::canister_inspection_reserve(pid).map_err(Error::from)
+    }
+
     /// Inspect the latest replicated management history of an authenticated target.
     pub async fn canister_history(pid: Principal) -> Result<CanisterHistoryResponse, Error> {
         MgmtWorkflow::canister_history(pid)
@@ -27,8 +36,9 @@ impl MgmtApi {
             .map_err(Error::from)
     }
 
-    pub async fn canister_status(pid: Principal) -> Result<CanisterStatusResponse, Error> {
-        MgmtWorkflow::canister_status(pid)
+    /// Inspect a target while retaining protected numerical reserve failures.
+    pub async fn canister_inspection(pid: Principal) -> Result<CanisterInspectionOutcome, Error> {
+        MgmtWorkflow::canister_inspection(pid)
             .await
             .map_err(Error::from)
     }

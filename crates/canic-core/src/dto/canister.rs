@@ -8,6 +8,24 @@ pub struct CanisterInspectionRequest {
     pub canister_id: Principal,
 }
 
+/// Protected reserve sample for an exact target's management status call.
+/// A preflight query is indicative; only an attempted call reports SDK admission failure.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CanisterInspectionReserveResponse {
+    pub caller: Principal,
+    pub canister_id: Principal,
+    pub native_cycles: u128,
+    pub available_liquid_cycles: u128,
+    pub required_liquid_cycles: u128,
+}
+
+/// Protected inspection result; a reserve failure never implies that the target is absent.
+#[derive(CandidType, Deserialize)]
+pub enum CanisterInspectionOutcome {
+    Status(Box<CanisterStatusResponse>),
+    ReserveRequired(CanisterInspectionReserveResponse),
+}
+
 /// Replicated upstream management history for one exact inspection target.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct CanisterHistoryResponse {

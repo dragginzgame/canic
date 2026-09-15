@@ -7,7 +7,7 @@ fn defaults_local_gateway_port_without_network_config() {
     let source = "canisters: []\n";
 
     assert_eq!(
-        local_gateway_port_from_yaml(source),
+        local_gateway_port_from_yaml(source).expect("valid configuration"),
         DEFAULT_LOCAL_GATEWAY_PORT
     );
 }
@@ -16,14 +16,20 @@ fn defaults_local_gateway_port_without_network_config() {
 fn reads_local_gateway_port_from_network_config() {
     let source = "networks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8001\n";
 
-    assert_eq!(local_gateway_port_from_yaml(source), 8001);
+    assert_eq!(
+        local_gateway_port_from_yaml(source).expect("valid configuration"),
+        8001
+    );
 }
 
 #[test]
 fn ignores_nested_networks_keys_when_reading_local_gateway_port() {
     let source = "canisters:\n  - name: root\n    metadata:\n      networks:\n        - local\n\nnetworks:\n  - name: local\n    mode: managed\n    gateway:\n      bind: 127.0.0.1\n      port: 8010\n";
 
-    assert_eq!(local_gateway_port_from_yaml(source), 8010);
+    assert_eq!(
+        local_gateway_port_from_yaml(source).expect("valid configuration"),
+        8010
+    );
 }
 
 #[test]
@@ -106,9 +112,15 @@ fn build_network_resolution_rejects_incomplete_config() {
     )
     .expect_err("unsupported network mode should fail");
 
-    assert!(missing_target.contains("is not declared"));
-    assert!(missing_backing_network.contains("references undeclared backing network 'private'"));
-    assert!(unsupported_mode.contains("unsupported mode 'mystery'"));
+    assert!(
+        matches!(missing_target, IcpManifestError::UnknownEnvironment { environment } if environment == "staging")
+    );
+    assert!(
+        matches!(missing_backing_network, IcpManifestError::UnknownNetwork { network, .. } if network == "private")
+    );
+    assert!(
+        matches!(unsupported_mode, IcpManifestError::NetworkMode { mode, .. } if mode == "mystery")
+    );
 }
 
 #[test]
@@ -366,4 +378,120 @@ fn write_test_config(path: &Path, app: &str, roles: &[&str]) {
         .expect("write config source");
     }
     fs::write(path, source).expect("write config");
+}
+
+#[test]
+fn structured_yaml_resolves_reordered_flow_and_default_environments() {
+    let source = "canisters: [{name: root}]\nenvironments:\n- {network: ic, name: local}\n- {name: ic, network: local}\n- {name: proof}\n";
+    assert_eq!(
+        resolve_icp_build_network_from_yaml(source, "local").unwrap(),
+        BuildNetwork::Ic
+    );
+    assert_eq!(
+        resolve_icp_build_network_from_yaml(source, "ic").unwrap(),
+        BuildNetwork::Local
+    );
+    assert_eq!(
+        resolve_icp_build_network_from_yaml(source, "proof").unwrap(),
+        BuildNetwork::Local
+    );
+}
+
+#[test]
+fn membership_distinguishes_omitted_empty_and_selected_canisters() {
+    let source = "canisters: [{name: root}, {name: app}]\nenvironments:\n- {name: all}\n- {name: none, canisters: []}\n- {name: selected, canisters: [root]}\n";
+    let manifest = IcpManifest::parse(source).unwrap();
+    assert!(manifest.contains("all", "app"));
+    assert!(manifest.contains("ic", "app"));
+    assert!(!manifest.contains("none", "root"));
+    assert!(manifest.contains("selected", "root"));
+    assert!(!manifest.contains("selected", "app"));
+    assert!(!manifest.contains("unknown", "root"));
+}
+
+#[test]
+fn readiness_reports_roles_excluded_by_the_app_environment() {
+    let root = temp_dir("canic-icp-selected-membership");
+    write_test_config(&root.join("apps/toko/canic.toml"), "toko", &["root", "app"]);
+    fs::write(
+        root.join("icp.yaml"),
+        "canisters: [{name: root}, {name: app}]\nenvironments: [{name: toko, canisters: [root]}]\n",
+    )
+    .unwrap();
+    let report = inspect_canic_icp_yaml_from_root(&root, Some("toko")).unwrap();
+    assert!(report.missing_canisters.is_empty());
+    assert!(report.missing_environments.is_empty());
+    assert_eq!(
+        report.missing_environment_canisters,
+        BTreeMap::from([("toko".to_string(), vec!["app".to_string()])])
+    );
+    assert!(!report.is_ready());
+    fs::write(
+        root.join("icp.yaml"),
+        "canisters: [{name: root}, {name: app}]\nenvironments: [{name: toko}]\n",
+    )
+    .unwrap();
+    assert!(
+        inspect_canic_icp_yaml_from_root(&root, Some("toko"))
+            .unwrap()
+            .is_ready()
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn local_projection_rejects_unresolved_or_ambiguous_authority() {
+    assert!(matches!(
+        IcpManifest::parse("canisters: [canisters/root.yaml]"),
+        Err(IcpManifestError::ExternalManifest { .. })
+    ));
+    assert!(matches!(
+        IcpManifest::parse("dependencies: [dependency.yaml]"),
+        Err(IcpManifestError::Dependencies)
+    ));
+    assert!(matches!(
+        IcpManifest::parse("canisters: [{name: root}, {name: root}]"),
+        Err(IcpManifestError::DuplicateName { .. })
+    ));
+    assert!(matches!(
+        IcpManifest::parse("canisters: []\ncanisters: []"),
+        Err(IcpManifestError::Yaml(_))
+    ));
+    assert!(matches!(
+        IcpManifest::parse("environments: [{name: demo, canisters: [missing]}]"),
+        Err(IcpManifestError::UnknownCanister { .. })
+    ));
+    assert!(matches!(
+        IcpManifest::parse(
+            "canisters: [{name: root}]\nenvironments: [{name: demo, canisters: [root, root]}]"
+        ),
+        Err(IcpManifestError::DuplicateCanister { .. })
+    ));
+    assert!(matches!(
+        IcpManifest::parse("networks: [{name: local, mode: managed, gateway: {port: 0}}]"),
+        Err(IcpManifestError::GatewayPort)
+    ));
+    assert!(matches!(
+        IcpManifest::parse("networks: [{name: ic, mode: connected}]"),
+        Err(IcpManifestError::MainnetOverride)
+    ));
+    assert!(matches!(
+        IcpManifest::parse(&" ".repeat(1024 * 1024 + 1)),
+        Err(IcpManifestError::TooLarge)
+    ));
+}
+
+#[test]
+fn malformed_config_cannot_hide_behind_an_implicit_environment() {
+    let root = temp_dir("canic-icp-malformed-implicit");
+    fs::create_dir_all(&root).unwrap();
+    fs::write(root.join("icp.yaml"), "environments: [").unwrap();
+    assert!(matches!(
+        resolve_icp_build_network_from_root(&root, "local"),
+        Err(IcpConfigError::Manifest {
+            source: IcpManifestError::Yaml(_),
+            ..
+        })
+    ));
+    fs::remove_dir_all(root).unwrap();
 }

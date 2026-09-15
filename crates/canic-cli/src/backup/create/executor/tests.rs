@@ -13,6 +13,7 @@ fn report(id: &str, status: &str) -> IcpCanisterStatusReport {
         cycles: None,
         reserved_cycles: None,
         idle_cycles_burned_per_day: None,
+        query_stats: None,
     }
 }
 

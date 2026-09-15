@@ -5,8 +5,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNNER="$ROOT/scripts/ci/wasm-ablation-report.sh"
 COUNTER_SOURCE="$ROOT/scripts/ci/wasm-replica-function-count.rs"
-SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/canic-wasm-function-count-test.XXXXXX")"
-trap 'rm -rf "$SCRATCH"' EXIT
+mkdir -p "$ROOT/.tmp"
+SCRATCH="$(mktemp -d "$ROOT/.tmp/canic-wasm-function-count-test.XXXXXX")"
+cleanup() {
+    if [[ -f "$SCRATCH/product/.git" ]]; then
+        git -C "$ROOT" worktree remove "$SCRATCH/product"
+    fi
+    rm -rf "$SCRATCH"
+}
+trap cleanup EXIT
 
 rustc --edition 2024 -D warnings -C debuginfo=0 -C strip=symbols \
     --remap-path-prefix "$ROOT=canic" \
@@ -34,22 +41,72 @@ bash "$RUNNER" --help | rg -q -- '--smoke'
 bash "$RUNNER" --help | rg -q -- '--qualify'
 bash "$RUNNER" --help | rg -q -- '--artifact <artifact-id>'
 
+# Starting in a later method checkout must not select its Rust toolchain for
+# the frozen product's harness preparation or provenance. Stop at the first
+# Cargo invocation so this regression does not compile a product artifact.
+git -C "$ROOT" worktree add --quiet --detach "$SCRATCH/product" \
+    50f40171d6177c3d1e490b1fdb5f6163323b2cd5
+mkdir -p "$SCRATCH/bin"
+cat >"$SCRATCH/bin/cargo" <<'EOF'
+#!/usr/bin/env bash
+set -euo pipefail
+pwd >"$B1_TEST_CARGO_CWD"
+printf '%s\n' "$@" >"$B1_TEST_CARGO_ARGS"
+exit 91
+EOF
+chmod +x "$SCRATCH/bin/cargo"
+if (
+    cd "$ROOT"
+    PATH="$SCRATCH/bin:$PATH" TMPDIR="$SCRATCH" \
+        B1_TEST_CARGO_CWD="$SCRATCH/cargo-cwd" \
+        B1_TEST_CARGO_ARGS="$SCRATCH/cargo-args" \
+        bash "$RUNNER" --smoke --experiment b1-06-unconditional-recovery-dispatch \
+            --source 50f40171d6177c3d1e490b1fdb5f6163323b2cd5 \
+            --product-root "$SCRATCH/product" --output-root "$SCRATCH/output"
+) >"$SCRATCH/toolchain-context.log" 2>&1; then
+    echo "ablation runner ignored the failed Cargo preflight" >&2
+    exit 1
+fi
+[[ "$(cat "$SCRATCH/cargo-cwd")" == "$SCRATCH/product" ]]
+[[ "$(head -n 1 "$SCRATCH/cargo-args")" == "metadata" ]]
+[[ -z "$(git -C "$SCRATCH/product" status --porcelain=v1)" ]]
+git -C "$ROOT" worktree remove "$SCRATCH/product"
+
 HASH_CHECK_ROOT="$SCRATCH/hash-check"
 mkdir -p "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-patches"
 cp "$RUNNER" "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh"
 cp "$ROOT/scripts/ci/wasm-ablation-artifacts.tsv" "$HASH_CHECK_ROOT/scripts/ci/"
 cp "$ROOT/scripts/ci/wasm-ablation-build-artifact.rs" "$HASH_CHECK_ROOT/scripts/ci/"
 cp "$COUNTER_SOURCE" "$HASH_CHECK_ROOT/scripts/ci/wasm-replica-function-count.rs"
-cp "$ROOT/scripts/ci/wasm-ablation-patches/b1-02-global-storage-registration.patch" \
+cp "$ROOT"/scripts/ci/wasm-ablation-patches/*.patch \
     "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-patches/"
-ln -s "$ROOT/apps" "$HASH_CHECK_ROOT/apps"
-ln -s "$ROOT/canisters" "$HASH_CHECK_ROOT/canisters"
-ln -s "$ROOT/crates" "$HASH_CHECK_ROOT/crates"
+cp "$ROOT/scripts/ci/wasm-ablation-experiments.tsv" "$HASH_CHECK_ROOT/scripts/ci/"
+# This method copy deliberately has no product source paths. The frozen Git tree
+# supplies those inputs; changes in the active checkout must not rebase an ablation.
+bash "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh" --check >/dev/null
 awk -F '\t' 'BEGIN { OFS=FS } $1 == "02" { $6 = sprintf("%064d", 0) } { print }' \
     "$ROOT/scripts/ci/wasm-ablation-experiments.tsv" \
     >"$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
 if bash "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh" --check >/dev/null 2>&1; then
     echo "ablation manifest accepted a mismatched patch SHA-256" >&2
+    exit 1
+fi
+
+# A self-consistent patch digest cannot authorize a patch for another source tree.
+cat >"$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-patches/b1-02-global-storage-registration.patch" <<'EOF'
+diff --git a/missing-ablation-source.rs b/missing-ablation-source.rs
+--- a/missing-ablation-source.rs
++++ b/missing-ablation-source.rs
+@@ -1 +1 @@
+-missing
++changed
+EOF
+PATCH_SHA256="$(sha256sum "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-patches/b1-02-global-storage-registration.patch" | awk '{print $1}')"
+awk -F '\t' -v digest="$PATCH_SHA256" 'BEGIN { OFS=FS } $1 == "02" { $6 = digest } { print }' \
+    "$ROOT/scripts/ci/wasm-ablation-experiments.tsv" \
+    >"$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
+if bash "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh" --check >/dev/null 2>&1; then
+    echo "ablation manifest accepted a hash-matched patch for the wrong source" >&2
     exit 1
 fi
 
@@ -71,7 +128,10 @@ if bash "$RUNNER" --list --artifact canonical_app >/dev/null 2>&1; then
 fi
 
 LISTING="$(bash "$RUNNER" --list)"
-[[ "$(printf '%s\n' "$LISTING" | wc -l)" -eq 19 ]]
+printf '%s\n' "$LISTING" | awk -F '\t' '
+    NR > 1 { if (sequences[$1]++ || experiments[$2]++) exit 1; rows++ }
+    END { if (!rows) exit 1 }
+'
 printf '%s\n' "$LISTING" | rg -q $'^01\tb1-01-current-baseline\tready\tnone\t'
 printf '%s\n' "$LISTING" | rg -q $'^02\tb1-02-global-storage-registration\tready\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^03\tb1-03-activation-record-codecs\tready\tpatch\tcanonical$'
@@ -79,31 +139,16 @@ printf '%s\n' "$LISTING" | rg -q $'^04\tb1-04-authorization-record-codecs\tready
 printf '%s\n' "$LISTING" | rg -q $'^05\tb1-05-relevant-cbor-stub\tready\tpatch\tcanonical,runtime_probe,blob_storage_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^06\tb1-06-unconditional-recovery-dispatch\tready\tpatch\tcanonical,runtime_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^07\tb1-07-exact-role-capability-expansion\tplanned\tpatch\tcanonical$'
-printf '%s\n' "$LISTING" | rg -q $'^08\tb1-08-endpoint-candid-type-construction\tspecified\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
+printf '%s\n' "$LISTING" | rg -q $'^08\tb1-08-endpoint-candid-type-construction\tready\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^09\tb1-09-candid-type-documentation\tplanned\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
-printf '%s\n' "$LISTING" | rg -q $'^10\tb1-10-candid-serialization-newtypes\tspecified\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
+printf '%s\n' "$LISTING" | rg -q $'^10\tb1-10-candid-serialization-newtypes\tready\tpatch\tcanonical,runtime_probe,payload_limit_probe,blob_storage_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^11\tb1-11-payload-limited-async-adapters\tready\tpatch\tpayload_limit_probe$'
-printf '%s\n' "$LISTING" | rg -q $'^12\tb1-12-metrics-providers\tspecified\tpatch\tcanonical$'
+printf '%s\n' "$LISTING" | rg -q $'^12\tb1-12-metrics-providers\tready\tpatch\tcanonical$'
 printf '%s\n' "$LISTING" | rg -q $'^17\tb1-17-page-generic-cohort\tready\tenv_matrix\tleaf_probe$'
 printf '%s\n' "$LISTING" | rg -q $'^18\tb1-18-pool-ledger-hard-cut\tplanned\tcross_commit\tcanonical$'
 if printf '%s\n' "$LISTING" | rg -qi 'toko'; then
     echo "consumer-specific artifact entered the Canic ablation listing" >&2
     exit 1
 fi
-
-for experiment in \
-    b1-06-unconditional-recovery-dispatch \
-    b1-08-endpoint-candid-type-construction \
-    b1-10-candid-serialization-newtypes \
-    b1-12-metrics-providers; do
-    if bash "$RUNNER" \
-        --experiment "$experiment" \
-        --source HEAD \
-        --product-root /tmp \
-        --output-root /tmp >/dev/null 2>&1; then
-        echo "specified but unqualified experiment was runnable: $experiment" >&2
-        exit 1
-    fi
-done
 
 echo "Wasm ablation report tests passed"

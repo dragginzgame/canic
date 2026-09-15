@@ -411,3 +411,26 @@ enabled = false
     .expect("write canic config");
     dir
 }
+#[test]
+fn app_check_rejects_an_environment_that_excludes_required_roles() {
+    let mut report = IcpProjectConfigReport {
+        path: "icp.yaml".into(),
+        icp_root: ".".into(),
+        icp_yaml_present: true,
+        canisters: vec!["root".into()],
+        environments: vec!["demo".into()],
+        missing_canisters: vec![],
+        missing_environments: vec![],
+        local_network_present: true,
+        missing_environment_canisters: std::collections::BTreeMap::from([(
+            "demo".into(),
+            vec!["root".into()],
+        )]),
+    };
+    assert!(matches!(
+        require_ready_config(&report),
+        Err(AppCommandError::IncompleteIcpConfig)
+    ));
+    report.missing_environment_canisters.clear();
+    require_ready_config(&report).unwrap();
+}

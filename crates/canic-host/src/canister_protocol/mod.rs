@@ -5,6 +5,8 @@
 //! Boundary: domain workflows supply exact Canister, method, and arguments through explicit
 //! query or update operations.
 
+pub mod inspection;
+
 use crate::{
     icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
     protocol_binding::ResolvedProtocolBinding,
@@ -34,6 +36,21 @@ enum ProtocolCallMode {
 
 #[derive(Debug, ThisError)]
 pub enum CanisterProtocolError {
+    #[error("invalid bound inspection contract for Root {caller}: {detail}")]
+    InspectionContract { caller: Principal, detail: String },
+
+    #[error("Root {} inspection preflight for {} observed native={} cycles, liquid={} cycles, required outbound reserve={} cycles. Inspection was not attempted. Review Root funding or freezing reserve and retry with a fresh observation.", .0.caller, .0.canister_id, .0.native_cycles, .0.available_liquid_cycles, .0.required_liquid_cycles)]
+    InspectionPreflightReserve(Box<canic_core::dto::canister::CanisterInspectionReserveResponse>),
+
+    #[error("{}: Root {} cannot inspect {}: native={} cycles, liquid={} cycles, required outbound reserve={} cycles. Review Root funding or freezing reserve before retrying.", canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES, .0.caller, .0.canister_id, .0.native_cycles, .0.available_liquid_cycles, .0.required_liquid_cycles)]
+    InspectionReserve(Box<canic_core::dto::canister::CanisterInspectionReserveResponse>),
+
+    #[error("Root {caller} returned invalid reserve evidence for inspection of {target}")]
+    InvalidInspectionReserve {
+        caller: Principal,
+        target: Principal,
+    },
+
     #[error("failed to encode Candid arguments for {method} on Canister {canister}: {source}")]
     ArgumentEncoding {
         canister: Principal,
@@ -70,7 +87,25 @@ pub enum CanisterProtocolError {
 }
 
 impl CanisterProtocolError {
+    pub(crate) fn inspection_reserve(
+        caller: Principal,
+        target: Principal,
+        evidence: canic_core::dto::canister::CanisterInspectionReserveResponse,
+    ) -> Self {
+        if evidence.caller != caller
+            || evidence.canister_id != target
+            || evidence.available_liquid_cycles >= evidence.required_liquid_cycles
+            || evidence.available_liquid_cycles > evidence.native_cycles
+        {
+            return Self::InvalidInspectionReserve { caller, target };
+        }
+        Self::InspectionReserve(Box::new(evidence))
+    }
+
     pub(crate) fn is_rejected_with(&self, code: RegisteredDiagnosticCode) -> bool {
+        if matches!(self, Self::InspectionReserve(_)) {
+            return code == canic_core::diagnostics::codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES;
+        }
         matches!(
             self,
             Self::Response {
@@ -296,6 +331,55 @@ mod tests {
     #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
     struct EmptyVectorArgument {
         values: Vec<u64>,
+    }
+
+    #[test]
+    fn inspection_reserve_requires_exact_authority_and_retains_numeric_cause() {
+        use canic_core::{diagnostics::codes, dto::canister::CanisterInspectionReserveResponse};
+        let root = Principal::from_slice(&[1]);
+        let target = Principal::from_slice(&[2]);
+        let evidence = CanisterInspectionReserveResponse {
+            caller: root,
+            canister_id: target,
+            native_cycles: 1000,
+            available_liquid_cycles: 50,
+            required_liquid_cycles: 100,
+        };
+        let error = CanisterProtocolError::inspection_reserve(root, target, evidence.clone());
+        assert!(error.is_rejected_with(codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES));
+        assert!(!error.is_rejected_with(codes::PLATFORM_UNAVAILABLE));
+        let CanisterProtocolError::InspectionReserve(actual) = &error else {
+            panic!("reserve evidence");
+        };
+        assert_eq!(**actual, evidence);
+        assert!(error.to_string().contains(
+            "native=1000 cycles, liquid=50 cycles, required outbound reserve=100 cycles"
+        ));
+        for invalid in [
+            CanisterInspectionReserveResponse {
+                caller: target,
+                ..evidence.clone()
+            },
+            CanisterInspectionReserveResponse {
+                canister_id: root,
+                ..evidence.clone()
+            },
+            CanisterInspectionReserveResponse {
+                available_liquid_cycles: 100,
+                ..evidence.clone()
+            },
+            CanisterInspectionReserveResponse {
+                native_cycles: 49,
+                ..evidence
+            },
+        ] {
+            let error = CanisterProtocolError::inspection_reserve(root, target, invalid);
+            assert!(matches!(
+                error,
+                CanisterProtocolError::InvalidInspectionReserve { .. }
+            ));
+            assert!(!error.is_rejected_with(codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES));
+        }
     }
 
     #[test]

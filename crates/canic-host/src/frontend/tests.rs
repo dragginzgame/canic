@@ -377,3 +377,138 @@ fn independent_sdk_consumer_verifies_canonical_bundle_and_rejects_tampering() {
     assert!(!verify(&bundle.manifest.manifest_sha256).status.success());
     fs::remove_dir_all(root).unwrap();
 }
+mod uploaded {
+    use super::*;
+    use crate::frontend::{ops::FrontendAssetReader, view::FrontendAssetChunkView, workflow};
+    use canic_core::cdk::utils::hash::{decode_hex, sha256_hex};
+    use std::collections::BTreeMap;
+
+    struct Assets {
+        files: BTreeMap<String, Vec<u8>>,
+        reads: usize,
+        corrupt: bool,
+        truncate: bool,
+    }
+    impl FrontendAssetReader for Assets {
+        fn first(&mut self, key: &str) -> Result<FrontendAssetChunkView, FrontendError> {
+            self.reads += 1;
+            let bytes = self.files.get(key).ok_or(FrontendError::AssetResponse)?;
+            let mut content = bytes[..bytes.len().min(128)].to_vec();
+            if self.corrupt && !content.is_empty() {
+                content[0] ^= 1;
+            }
+            Ok(FrontendAssetChunkView {
+                content,
+                total_length: bytes.len() as u64,
+                encoding: "identity".into(),
+                sha256: Some(decode_hex(&sha256_hex(bytes)).unwrap()),
+            })
+        }
+        fn next(&mut self, key: &str, digest: &[u8], index: u64) -> Result<Vec<u8>, FrontendError> {
+            self.reads += 1;
+            let bytes = self.files.get(key).ok_or(FrontendError::AssetResponse)?;
+            assert_eq!(digest, decode_hex(&sha256_hex(bytes)).unwrap());
+            if self.truncate {
+                return Ok(Vec::new());
+            }
+            let start = usize::try_from(index).unwrap() * 128;
+            Ok(bytes[start..(start + 128).min(bytes.len())].to_vec())
+        }
+    }
+    #[test]
+    fn readback_rejects_changed_target_or_content_and_repeats_without_effects() {
+        let root = temp_dir("canic-frontend-uploaded");
+        let bundle = prepared_bundle(&root);
+        let directory = root.join("bundle");
+        ops::publish_bundle(&directory, &bundle).unwrap();
+        let mut input = FrontendUploadedInput {
+            directory: directory.clone(),
+            manifest_sha256: bundle.manifest.manifest_sha256.clone(),
+            environment: bundle.manifest.environment.clone(),
+            network: bundle.manifest.canonical_network_id,
+            canister_id: bundle.manifest.asset.as_ref().unwrap().canister_id,
+            prefix: "/canic".into(),
+        };
+        let mut files = bundle
+            .files
+            .iter()
+            .map(|(key, bytes)| {
+                (
+                    if key.starts_with(".well-known/") {
+                        format!("/{key}")
+                    } else {
+                        format!("/canic/{key}")
+                    },
+                    bytes.clone(),
+                )
+            })
+            .collect::<BTreeMap<_, _>>();
+        files.insert(
+            "/canic/canic-frontend.json".into(),
+            fs::read(directory.join("canic-frontend.json")).unwrap(),
+        );
+        let mut assets = Assets {
+            files,
+            reads: 0,
+            corrupt: false,
+            truncate: false,
+        };
+        let first = workflow::verify_uploaded(&input, &mut assets).unwrap();
+        let reads = assets.reads;
+        assert!(reads > first.files.len());
+        assert_eq!(
+            workflow::verify_uploaded(&input, &mut assets).unwrap(),
+            first
+        );
+        assert_eq!(assets.reads, reads * 2);
+        assets.corrupt = true;
+        assert!(matches!(
+            workflow::verify_uploaded(&input, &mut assets),
+            Err(FrontendError::AssetMismatch { .. })
+        ));
+        assets.corrupt = false;
+        assets.truncate = true;
+        assert!(matches!(
+            workflow::verify_uploaded(&input, &mut assets),
+            Err(FrontendError::AssetMismatch { .. })
+        ));
+        assets.truncate = false;
+        let before = assets.reads;
+        input.canister_id = Principal::anonymous();
+        assert!(matches!(
+            workflow::verify_uploaded(&input, &mut assets),
+            Err(FrontendError::Principal)
+        ));
+        input.canister_id = bundle.manifest.asset.as_ref().unwrap().canister_id;
+        input.environment = "wrong".into();
+        assert!(matches!(
+            workflow::verify_uploaded(&input, &mut assets),
+            Err(FrontendError::Environment)
+        ));
+        input.environment = bundle.manifest.environment;
+        for prefix in [
+            "",
+            "canic",
+            "/canic/",
+            "/canic/../private",
+            "//canic",
+            "/canic%2fprivate",
+            "/canic?query",
+        ] {
+            input.prefix = prefix.into();
+            assert!(matches!(
+                workflow::verify_uploaded(&input, &mut assets),
+                Err(FrontendError::AssetPrefix)
+            ));
+        }
+        assert_eq!(assets.reads, before);
+        input.prefix = "/canic".into();
+        input.manifest_sha256 = "00".repeat(32);
+        assert!(matches!(
+            workflow::verify_uploaded(&input, &mut assets),
+            Err(FrontendError::Integrity)
+        ));
+        assert_eq!(assets.reads, before);
+        fs::remove_dir_all(root).unwrap();
+    }
+}

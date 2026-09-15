@@ -15,7 +15,7 @@ impl IcpCli {
         command.args(["snapshot", "create", canister]);
         command.arg("--json");
         self.add_target_args(&mut command);
-        run_json(&mut command)
+        run_json(&mut command, self)
     }
 
     /// List the authoritative snapshots currently retained for one canister.
@@ -24,7 +24,7 @@ impl IcpCli {
         command.args(["snapshot", "list", canister]);
         command.arg("--json");
         self.add_target_args(&mut command);
-        run_json::<IcpSnapshotInventory>(&mut command).map(|inventory| inventory.snapshots)
+        run_json::<IcpSnapshotInventory>(&mut command, self).map(|inventory| inventory.snapshots)
     }
 
     /// Download one canister snapshot into an artifact directory.

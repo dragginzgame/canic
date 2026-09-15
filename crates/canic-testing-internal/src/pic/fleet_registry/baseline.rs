@@ -23,6 +23,17 @@ const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 pub(in crate::pic) use tests::{governed_fleet_journey_cases, governed_pocketic_cases};
 
 mod tests {
+    #[cfg(test)]
+    mod activation_reset;
+    #[cfg(test)]
+    mod child_reserve;
+    #[cfg(test)]
+    mod funding_deadline;
+    #[cfg(test)]
+    mod native_funding;
+    #[cfg(test)]
+    mod state_cascade;
+
     use super::*;
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
     #[cfg(test)]
@@ -1827,7 +1838,19 @@ case " $* " in
         : > "$wrapper_root/lost-funding-response"
         exit 73
       fi
+      if [ -f "$wrapper_root/lose-funded-observation" ]; then
+        : > "$wrapper_root/funded-observation-pending"
+      fi
       exit 0
+    fi
+    ;;
+esac
+case " $* " in
+  *" canister call "*" icrc1_balance_of "*)
+    if [ -f "$wrapper_root/funded-observation-pending" ] &&
+       [ ! -e "$wrapper_root/lost-funded-observation" ]; then
+      : > "$wrapper_root/lost-funded-observation"
+      exit 79
     fi
     ;;
 esac
@@ -2067,6 +2090,7 @@ exec icp "$@"
         .unwrap();
         let generated = session
             .generate_fleet(&canic_host::fleet_ensure::FleetGenerateRequest {
+                catalog_progress: None,
                 app_config: &retained_config,
                 environment: &initial.environment,
                 fleet: "development",
@@ -2577,6 +2601,9 @@ exec icp "$@"
         let snapshot = AppConfigSnapshot::load(config_path)
             .expect("load literal-zero release build config for Cargo inputs");
         let mut packages = BTreeSet::from(["canic".to_string(), "canic-host".to_string()]);
+        if native_funding::uses_audit_root(config_path) {
+            packages.insert("root_probe".to_string());
+        }
         for role in configured_roles {
             let role = CanisterRole::from(role.clone());
             if role.is_root() {
@@ -2608,8 +2635,6 @@ exec icp "$@"
         )
         .with_cargo_profile_args(["--profile", "fast", "--locked"])
         .with_extra_env(environment);
-        let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
-            .expect("resolve literal-zero release Cargo build inputs");
         let config_relative = config_path
             .strip_prefix(workspace_root)
             .expect("literal-zero config must be workspace-confined")
@@ -2630,7 +2655,6 @@ exec icp "$@"
         .with_environment(environment)
         .with_input("build-config", config_path)
         .with_input("icp-config", &workspace_root.join("icp.yaml"))
-        .with_cargo_build_inputs("literal-zero-release-cargo", &cargo_build, &cargo_inputs)
         .with_prune_policy_at_most_every(
             internal_test_artifact_prune_policy(),
             internal_test_artifact_maintenance_interval(),
@@ -2642,6 +2666,24 @@ exec icp "$@"
             CanicWasmBuildProfile::Fast,
             &environment,
         );
+        // Root package generation may add inputs beneath the configured audit package.
+        // Capture the complete workspace graph only after that preparation finishes.
+        let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
+            .expect("resolve literal-zero release Cargo build inputs");
+        cache = cache.with_cargo_build_inputs(
+            "literal-zero-release-cargo",
+            &cargo_build,
+            &cargo_inputs,
+        );
+        if native_funding::uses_audit_root(config_path) {
+            cache = cache.with_input(
+                "audit-root-build-helper",
+                &workspace_root.join("crates/canic-testing-internal/src/pic/artifacts.rs"),
+            );
+            cache = cache.with_input("audit-root-builder", &workspace_root.join(
+                "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/native_funding/artifact/mod.rs"
+            ));
+        }
         for (name, path) in outputs {
             cache = cache.with_output(name, path);
         }
@@ -2896,12 +2938,15 @@ exec icp "$@"
         let configured = builder
             .build_workspace_configured_canister_artifacts(&context, configured_roles)
             .expect("build literal-zero Root and Component artifacts");
-        let root = configured
+        let mut root = configured
             .iter()
             .find(|output| output.role == "root")
             .expect("literal-zero Root artifact")
             .output
             .clone();
+        if native_funding::uses_audit_root(config_path) {
+            native_funding::bind_audit_root(&context, &mut root);
+        }
         let components = configured
             .iter()
             .filter(|output| output.role != "root")
@@ -6645,12 +6690,15 @@ exec icp "$@"
     #[cfg(test)]
     #[derive(Clone, Copy)]
     enum FundingJourney {
+        ActivationReset,
         Fresh,
         Reinstall,
         FailedImports,
         Estate,
         FailedReserve,
         FundingPause,
+        NativeFunding,
+        NativeChildFunding,
     }
 
     #[test]
@@ -7840,7 +7888,10 @@ esac
         let failed_reserve = matches!(funding, FundingJourney::FailedReserve);
         let fund_estate = matches!(
             funding,
-            FundingJourney::Estate | FundingJourney::FailedReserve | FundingJourney::FundingPause
+            FundingJourney::Estate
+                | FundingJourney::FailedReserve
+                | FundingJourney::FundingPause
+                | FundingJourney::NativeFunding
         );
         let build_network = if fund_estate {
             BuildNetwork::Ic
@@ -7855,6 +7906,7 @@ esac
                 "canisters/audit/root_probe/frontend.toml"
             }
             1 => "canisters/audit/root_probe/activation.toml",
+            2 => "canisters/audit/root_probe/native-child-recovery.toml",
             4 => "canisters/audit/root_probe/four-workloads.toml",
             5 => "apps/test/test-configs/generated-mixed-topology.toml",
             19 => "canisters/audit/root_probe/retained-estate.toml",
@@ -8148,9 +8200,15 @@ esac
             .expect("literal-zero Cycles Ledger Principal");
         pic.create_canister_with_id(None, None, cycles_ledger)
             .expect("create canonical Cycles Ledger stub principal");
-        let total_requested = requested.iter().map(|(_, cycles)| cycles).sum::<u128>();
+        let mut total_requested = requested.iter().map(|(_, cycles)| cycles).sum::<u128>();
         let operator_balance = 2_000_000_000_000_000_u128;
-        if funded_import_repair || failed_reserve {
+        if funded_import_repair
+            || failed_reserve
+            || matches!(
+                funding,
+                FundingJourney::NativeFunding | FundingJourney::NativeChildFunding
+            )
+        {
             pic.add_cycles(cycles_ledger, operator_balance);
         }
         assert!(operator_balance > total_requested);
@@ -8250,6 +8308,34 @@ esac
         )
         .expect("plan literal-zero estate through production adapter");
         let initial_actions = planned_actions(&planned.plan);
+        // The Ledger stub returns precreated canisters. Match the initial reviewed
+        // Root balance, including startup prepayment, before any host effect occurs.
+        let root_name = &desired
+            .canisters
+            .iter()
+            .find(|canister| {
+                canister.kind == canic_host::fleet_ensure::model::DesiredCanisterKind::Root
+            })
+            .unwrap()
+            .name;
+        let root_creation_cycles = initial_actions
+            .iter()
+            .find_map(|action| match action {
+                EnsureAction::Create {
+                    name,
+                    requested_initial_cycles,
+                    ..
+                } if name == root_name => Some(*requested_initial_cycles),
+                _ => None,
+            })
+            .unwrap();
+        let startup_credit = root_creation_cycles
+            .checked_sub(ROOT_INSTALL_CYCLES)
+            .unwrap();
+        if startup_credit > 0 {
+            pic.add_cycles(root, startup_credit);
+            total_requested += startup_credit;
+        }
         assert_eq!(
             initial_actions
                 .iter()
@@ -8279,8 +8365,12 @@ esac
         );
         let desired = if fund_estate
             || funded_import_repair
-            || matches!(funding, FundingJourney::Reinstall)
-        {
+            || matches!(
+                funding,
+                FundingJourney::Reinstall
+                    | FundingJourney::NativeChildFunding
+                    | FundingJourney::ActivationReset
+            ) {
             prepare_journey_infrastructure(
                 &pic,
                 &adapter_root,
@@ -8292,7 +8382,7 @@ esac
             desired
         };
         let desired_identity = desired_sha256(&desired);
-        if !autonomous_assets.is_empty() {
+        if !autonomous_assets.is_empty() || matches!(funding, FundingJourney::NativeChildFunding) {
             prepare_ready_imports(&pic, root, operator, &pools);
             let desired = if initial_workload_count == 1 {
                 let config = retain_generated_journey_source(&adapter_root, &config_path);
@@ -8325,6 +8415,15 @@ esac
                 imported: &pools,
                 repair_failed_reserve: failed_reserve,
                 funding_pause: matches!(funding, FundingJourney::FundingPause),
+                native_pause: match funding {
+                    FundingJourney::NativeFunding => {
+                        Some(native_funding::Scenario::SyntheticMinimum)
+                    }
+                    FundingJourney::NativeChildFunding => {
+                        Some(native_funding::Scenario::ChildClaim)
+                    }
+                    _ => None,
+                },
                 readiness_floor,
                 operator_after_initial_creation: operator_balance
                     - total_requested
@@ -8340,6 +8439,25 @@ esac
             return;
         }
 
+        if matches!(funding, FundingJourney::ActivationReset) {
+            prepare_ready_imports(&pic, root, operator, &pools);
+            activation_reset::assert_journey(ReinstallJourney {
+                adapter_root: &adapter_root,
+                config: &config_path,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                pic: &pic,
+                desired: &desired,
+                coordinator,
+                root,
+                store,
+                pools: &pools,
+            });
+            pic.stop_live();
+            phase.finish();
+            journey_span.finish();
+            return;
+        }
         if matches!(funding, FundingJourney::Reinstall) {
             phase = phase.next("initial_working_fleet");
             prepare_ready_imports(&pic, root, operator, &pools);
@@ -10260,6 +10378,7 @@ exec '{}' "$@"
         };
         write_imports(&imports);
         let request = canic_host::fleet_ensure::FleetGenerateRequest {
+            catalog_progress: None,
             app_config: &config_path,
             environment: "local",
             fleet: &input.desired.fleet,
@@ -10270,6 +10389,7 @@ exec '{}' "$@"
             source: &source,
         };
         let current_request = canic_host::fleet_ensure::FleetGenerateRequest {
+            catalog_progress: None,
             release_build_id: old_bootstrap.release_build_id,
             ..request
         };
@@ -10277,6 +10397,7 @@ exec '{}' "$@"
             .expect("validate all terminal assets against the still-current Root");
         assert_eq!(current.observed_canisters, 27);
         let request = canic_host::fleet_ensure::FleetGenerateRequest {
+            catalog_progress: None,
             release_build_id: replacement,
             ..current_request
         };
@@ -10726,6 +10847,7 @@ exec '{}' "$@"
         imported: &'a [Principal],
         repair_failed_reserve: bool,
         funding_pause: bool,
+        native_pause: Option<native_funding::Scenario>,
         readiness_floor: u128,
         operator_after_initial_creation: u128,
     }
@@ -10874,16 +10996,20 @@ exec '{}' "$@"
             &plan.environment,
             &plan.fleet,
         );
-        for canister in &mut plan.canisters {
-            canister
-                .actions
-                .retain(|action| !matches!(action, EnsureAction::FundEstate { .. }));
-        }
-        plan.conservation.maximum_operator_debit_cycles = 0;
-        plan.conservation.maximum_new_funding_cycles = 0;
-        plan.conservation.maximum_unavoidable_fee_cycles = 0;
-        for domain in &mut plan.conservation.estate_funding_domains {
-            domain.maximum_funding_cycles = 0;
+        if input.native_pause.is_some() {
+            native_funding::omit_forecast_native_funding(plan, input.root);
+        } else {
+            for canister in &mut plan.canisters {
+                canister
+                    .actions
+                    .retain(|action| !matches!(action, EnsureAction::FundEstate { .. }));
+            }
+            plan.conservation.maximum_operator_debit_cycles = 0;
+            plan.conservation.maximum_new_funding_cycles = 0;
+            plan.conservation.maximum_unavoidable_fee_cycles = 0;
+            for domain in &mut plan.conservation.estate_funding_domains {
+                domain.maximum_funding_cycles = 0;
+            }
         }
         plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(plan);
         canic_host::fleet_ensure::ops::write_plan(&paths, plan).unwrap();
@@ -10928,6 +11054,12 @@ exec '{}' "$@"
                         .observe_effect(&plan.operation_id, action, &effect, state)
                         .unwrap();
                     if observed.applied {
+                        effect.post_cycles = match observed.post_cycles {
+                            Some(cycles) => Some(cycles),
+                            None => platform.action_cycles(action, state).unwrap(),
+                        };
+                        effect.destination_post_cycles =
+                            platform.action_destination_cycles(action, state).unwrap();
                         effect.state = EffectState::Applied;
                         break;
                     }
@@ -10950,6 +11082,10 @@ exec '{}' "$@"
         reason = "one composed production journey binds lost transfer, autonomous creation, terminal conservation and replay"
     )]
     fn assert_funded_autonomous_journey(input: AutonomousFundingJourney<'_>) {
+        if input.native_pause.is_some() {
+            native_funding::assert_issued_native_funding(&input);
+            return;
+        }
         let new_platform = |desired: &DesiredFleet| {
             IcpEnsurePlatform::new(
                 desired.clone(),
@@ -11065,7 +11201,7 @@ exec '{}' "$@"
             .expect("ordinary planning exposes exact funding review");
             assert_eq!(report.plan.plan_sha256, planned.plan.plan_sha256);
             let review = report.funding_review.unwrap();
-            assert_eq!(review.pause.shortfall_cycles, funding);
+            assert_eq!(review.pause.shortfall_cycles(), funding);
             assert_eq!(
                 canic_host::fleet_ensure::ops::read_journal(&paths)
                     .unwrap()
@@ -11205,11 +11341,12 @@ exec '{}' "$@"
             let journal = canic_host::fleet_ensure::ops::read_journal(&paths)
                 .unwrap()
                 .unwrap();
-            let pending = journal.funding_reviews[0]
-                .pause
-                .pending_creation_operation_id
-                .as_ref()
-                .unwrap();
+            let canic_host::fleet_ensure::model::FundingPauseRecord::Estate(pause) =
+                &journal.funding_reviews[0].pause
+            else {
+                panic!("estate funding review");
+            };
+            let pending = pause.pending_creation_operation_id.as_ref().unwrap();
             assert!(
                 pool.entries
                     .iter()
@@ -11778,6 +11915,7 @@ esac
                 .expect("enable generator transport route");
         }
         let request = canic_host::fleet_ensure::FleetGenerateRequest {
+            catalog_progress: None,
             app_config: &config,
             environment: "local",
             fleet: "canic-121-literal-zero-estate",
@@ -18378,6 +18516,22 @@ cycles = "80T"
                 published_draining_root_autonomously_reaches_external_deletion_readiness,
             ),
             (
+                "initial child failure reaches Coordinator and recovers same claim",
+                child_reserve::initial_child_failure_reaches_coordinator_and_recovers_same_claim,
+            ),
+            (
+                "low native reserve retains child failure and recovers same claim",
+                child_reserve::low_native_reserve_retains_child_failure_and_recovers_same_claim,
+            ),
+            (
+                "child grant refreshes Root funding deadline without repeating credit",
+                funding_deadline::child_grant_refreshes_root_funding_deadline_without_repeating_credit,
+            ),
+            (
+                "live Fleet state cascade preserves partial outcomes and retry",
+                state_cascade::live_state_cascade_preserves_partial_outcomes_and_retry,
+            ),
+            (
                 "operator Component public CLI",
                 operator_component_public_cli_uses_real_icp_and_exports_terminal_binding,
             ),
@@ -18392,6 +18546,10 @@ cycles = "80T"
             (
                 "reinstall fixture release-cache identity",
                 reinstall_fixture_release_cache_binds_distinct_repeatable_identities,
+            ),
+            (
+                "synthetic growth catalog agreement",
+                crate::pic::fleet_registry::growth::synthetic_growth_catalog_meets_host_agreement_policy,
             ),
             (
                 "explicit Root reinstall preserves cycle control",
@@ -18540,6 +18698,10 @@ cycles = "80T"
     pub fn governed_fleet_journey_cases() -> Vec<crate::pic::GovernedTestCase> {
         vec![
             (
+                "source-bound activation reset recovers and replays",
+                activation_reset::source_bound_activation_reset_recovers_and_replays,
+            ),
+            (
                 "generated reinstall recovers and converges",
                 generated_reinstall_recovers_lost_install_and_reaches_working_fleet,
             ),
@@ -18554,6 +18716,14 @@ cycles = "80T"
             (
                 "funded estate recovers transfer and autonomous creation responses",
                 funded_estate_recovers_transfer_and_autonomous_creation_responses,
+            ),
+            (
+                "issued provisioning recovers native withdrawal and receipt observation",
+                native_funding::issued_provisioning_recovers_native_withdrawal_and_receipt_observation,
+            ),
+            (
+                "native withdrawal recovers the same initial child claim",
+                native_funding::native_withdrawal_recovers_the_same_initial_child_claim,
             ),
             (
                 "issued creation funding pause resumes reviewed transfer",

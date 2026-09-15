@@ -168,33 +168,11 @@ pub const fn state_snapshot_is_empty(snapshot: &StateSnapshot) -> bool {
     snapshot.fleet_state.is_none()
 }
 
-#[must_use]
-pub fn state_snapshot_debug(snapshot: &StateSnapshot) -> String {
-    const fn fmt(present: bool, code: &str) -> &str {
-        if present { code } else { ".." }
-    }
-
-    format!("[{}]", fmt(snapshot.fleet_state.is_some(), "fs"))
-}
-
 #[cfg(test)]
 mod tests {
-    use super::{StateSnapshot, TopologySnapshotBuilder};
+    use super::TopologySnapshotBuilder;
     use crate::cdk::types::Principal;
-    use crate::dto::state::{FleetMode, FleetStateInput};
     use crate::ids::CanisterRole;
-
-    #[test]
-    fn state_snapshot_debug_reports_current_slots() {
-        let snapshot = StateSnapshot {
-            fleet_state: Some(FleetStateInput {
-                mode: FleetMode::Enabled,
-                cycles_funding_enabled: true,
-            }),
-        };
-
-        assert_eq!(super::state_snapshot_debug(&snapshot), "[fs]");
-    }
 
     #[test]
     fn direct_leaf_topology_has_one_root_child_and_no_descendants() {

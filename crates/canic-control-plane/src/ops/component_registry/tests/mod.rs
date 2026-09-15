@@ -2,6 +2,8 @@
 //!
 //! Production operations remain in the parent and focused responsibility modules.
 
+mod child_failure;
+
 use super::*;
 use crate::{
     dto::template::WasmStoreStatusResponse,
@@ -4094,6 +4096,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
     )
     .expect("mark child membership synchronized");
     let terminal_snapshot = restart_component_registry();
+    child_failure::assert_terminal_origin_excluded(&terminal_snapshot);
     let terminal_again = ComponentRegistryOps::mark_child_membership_synchronized(
         component,
         [44; 32],

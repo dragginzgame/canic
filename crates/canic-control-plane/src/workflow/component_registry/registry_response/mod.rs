@@ -175,6 +175,9 @@ pub(super) fn child_allocation_response(
         ),
     };
     RootComponentChildAllocationResponse {
+        last_failure: allocation
+            .last_failure
+            .map(ComponentRegistryOps::child_failure_response),
         operation_id: allocation.operation_id,
         component: allocation.component,
         parent_canister_id: allocation.parent_canister_id,

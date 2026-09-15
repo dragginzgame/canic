@@ -1791,6 +1791,7 @@ impl<'a> From<&'a ComponentRegistryPartitionRecord> for ComponentPartitionSnapsh
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildAllocationRecord {
+    pub last_failure: Option<RootComponentChildAllocationFailureRecord>,
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
     pub parent_canister_id: Principal,
@@ -1805,6 +1806,15 @@ pub struct RootComponentChildAllocationRecord {
     pub reserved_against_registry: ComponentRegistryHead,
     pub release_set: FleetSubnetRootReleaseSet,
     pub progress: RootComponentChildAllocationProgressRecord,
+}
+
+/// Bounded diagnostic metadata, independent of the allocation's effect progress.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootComponentChildAllocationFailureRecord {
+    pub diagnostic_code: u16,
+    pub failed_at_ns: u64,
+    pub consecutive_failures: u32,
+    pub retry_at_ns: u64,
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -5740,7 +5750,16 @@ impl RootComponentRegistryStore {
     pub(crate) fn child_allocation_entry_bytes(record: &RootComponentChildAllocationRecord) -> u64 {
         let key =
             ComponentRegistryEntryKey::child_allocation(record.component, record.operation_id);
-        let value = ComponentRegistryEntryRecord::ChildAllocation(record.clone());
+        // Reserve the largest diagnostic slot at admission. Retrying must never
+        // consume unreviewed Registry capacity or change lifecycle byte counters.
+        let mut maximum = record.clone();
+        maximum.last_failure = Some(RootComponentChildAllocationFailureRecord {
+            diagnostic_code: u16::MAX,
+            failed_at_ns: u64::MAX,
+            consecutive_failures: u32::MAX,
+            retry_at_ns: u64::MAX,
+        });
+        let value = ComponentRegistryEntryRecord::ChildAllocation(maximum);
         (key.to_bytes().len() + value.to_bytes().len()) as u64
     }
 
