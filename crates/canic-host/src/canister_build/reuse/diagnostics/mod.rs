@@ -1,0 +1,173 @@
+//! Module: canister_build::reuse::diagnostics
+//!
+//! Responsibility: explain differences from the last successful reuse snapshot.
+//! Does not own: cache identity, hit admission or release authority.
+//! Boundary: bounded optional evidence contains no environment values or per-value hashes.
+
+#[cfg(test)]
+mod tests;
+
+use crate::{
+    canister_build::{
+        WorkspaceBuildContext,
+        reuse::{hash_field, snapshot::BuildInputSnapshot},
+    },
+    durable_io::{read_regular_bytes, write_bytes},
+};
+use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
+use std::{
+    collections::BTreeSet,
+    env,
+    ffi::OsString,
+    path::{Path, PathBuf},
+};
+
+const LIMIT: usize = 256 * 1024;
+
+///
+/// InputDiagnostics
+///
+/// Optional host comparison with a verified complete build, never cache authority.
+///
+
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(super) struct InputDiagnostics {
+    schema_version: u8,
+    environment: String,
+    environment_keys: BTreeSet<String>,
+    source: String,
+    configuration: String,
+}
+
+impl InputDiagnostics {
+    pub(super) fn capture(
+        context: &WorkspaceBuildContext,
+        tools: &[PathBuf],
+        inputs: &BuildInputSnapshot,
+    ) -> Self {
+        let mut source = Sha256::new();
+        let mut configuration = Sha256::new();
+        hash_field(
+            &mut configuration,
+            context.profile.target_dir_name().as_bytes(),
+        );
+        hash_field(
+            &mut configuration,
+            context.build_network.as_str().as_bytes(),
+        );
+        hash_field(
+            &mut configuration,
+            context.config_path.as_os_str().as_encoded_bytes(),
+        );
+        for (path, hash) in &inputs.files {
+            let path_ref = Path::new(path);
+            let is_configuration = path_ref == context.config_path
+                || tools.iter().any(|tool| tool == path_ref)
+                || path_ref
+                    .components()
+                    .any(|part| part.as_os_str() == "rustlib")
+                || matches!(
+                    path_ref.file_name().and_then(|name| name.to_str()),
+                    Some(
+                        "Cargo.toml"
+                            | "Cargo.lock"
+                            | "rust-toolchain"
+                            | "rust-toolchain.toml"
+                            | "config"
+                            | "config.toml"
+                    )
+                );
+            let digest = if is_configuration {
+                &mut configuration
+            } else {
+                &mut source
+            };
+            hash_field(digest, path.as_bytes());
+            hash_field(digest, hash.as_bytes());
+        }
+        let (environment, environment_keys) = environment_evidence(env::vars_os().collect());
+        Self {
+            schema_version: 1,
+            environment,
+            environment_keys,
+            source: format!("{:x}", source.finalize()),
+            configuration: format!("{:x}", configuration.finalize()),
+        }
+    }
+
+    pub(super) fn explain_miss(&self, directory: &Path) -> String {
+        let previous = read_regular_bytes(&directory.join("last-input-diagnostics.json"), LIMIT)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok())
+            .filter(|record| record.schema_version == 1);
+        previous.map_or_else(
+            || "no comparable prior input evidence".into(),
+            |previous| self.compare(&previous),
+        )
+    }
+
+    // Failure only loses diagnostic attribution; it cannot invalidate verified artifacts.
+    pub(super) fn retain(&self, directory: &Path) {
+        if let Ok(bytes) = serde_json::to_vec(self)
+            && bytes.len() <= LIMIT
+        {
+            let _ = write_bytes(&directory.join("last-input-diagnostics.json"), &bytes);
+        }
+    }
+
+    fn compare(&self, previous: &Self) -> String {
+        let mut reasons = Vec::new();
+        if self.source != previous.source {
+            reasons.push("source/dependency inputs changed".to_string());
+        }
+        if self.configuration != previous.configuration {
+            reasons.push("toolchain/configuration inputs changed".to_string());
+        }
+        if self.environment != previous.environment {
+            let keys = self
+                .environment_keys
+                .symmetric_difference(&previous.environment_keys)
+                .filter(|key| safe_key(key))
+                .take(8)
+                .cloned()
+                .collect::<Vec<_>>();
+            if keys.is_empty() {
+                reasons
+                    .push("environment changed (changed-value key attribution unavailable)".into());
+            } else {
+                reasons.push(format!("environment changed (added/removed keys, up to 8: {}; changed-value key attribution unavailable)", keys.join(", ")));
+            }
+        }
+        if reasons.is_empty() {
+            return "no retained exact-build evidence; comparison cannot attribute the miss".into();
+        }
+        format!(
+            "{} (compared with last recorded successful build)",
+            reasons.join("; ")
+        )
+    }
+}
+
+fn safe_key(key: &str) -> bool {
+    !key.is_empty()
+        && key.len() <= 80
+        && key
+            .bytes()
+            .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_')
+}
+
+fn environment_evidence(mut environment: Vec<(OsString, OsString)>) -> (String, BTreeSet<String>) {
+    environment.sort();
+    let mut digest = Sha256::new();
+    let mut keys = BTreeSet::new();
+    for (key, value) in environment {
+        hash_field(&mut digest, key.as_encoded_bytes());
+        hash_field(&mut digest, value.as_encoded_bytes());
+        if let Some(key) = key.to_str().filter(|key| safe_key(key)) {
+            keys.insert(key.to_string());
+        }
+    }
+    (format!("{:x}", digest.finalize()), keys)
+}

@@ -96,6 +96,23 @@ bytes remain under the existing `.canic/release-builds/<id>` owner. Cache hits d
 not compile, link, optimize or compress Wasm. Corrupt output evidence is rejected
 and a new build is selected.
 
+Complete-build misses distinguish unavailable comparison evidence, changed
+source/dependency inputs, environment or toolchain/configuration, and rejected
+output. The optional `last-input-diagnostics.json` compares against the last
+recorded successful build. It never supplies cache authority. Missing, corrupt
+or unwritable diagnostic evidence cannot invalidate an otherwise verified hit.
+The diagnostic record stores aggregate fingerprints and safe environment key
+names, without environment values or individual value fingerprints. Reports
+name up to eight added/removed keys; identifying which retained key changed its
+value is explicitly unavailable. Every environment entry still participates in
+the real cache identity, including differences between Make and direct launchers.
+
+The existing exclusive complete-build reuse lock remains held through lookup,
+compilation and finalization. Contention reports progress after one second and
+every five seconds thereafter. Stderr reports lock acquisition separately;
+input/output verification time excludes it. These are phase observations, not
+evidence that lock waiting caused an earlier slow build.
+
 Every runtime embeds the complete release identity. Changed inputs therefore
 still rebuild those runtimes for the new identity; this surface does not compose
 a new release from artifacts embedding different identities. Reuse never grants

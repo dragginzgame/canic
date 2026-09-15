@@ -16,6 +16,7 @@ Supporting implementation evidence does not belong here.
 - `demand-driven-canister-pool-maintenance/`
 - `estate-budget-replenishment/`
 - `immutable-test-checkout-lease/`
+- `inspect-message-admission/`
 - `operator-funding-conversion-authority/`
 - `role-specific-stable-initialization/`
 - `standalone-blob-service-extraction/`

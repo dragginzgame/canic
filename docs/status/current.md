@@ -19,6 +19,176 @@ open-draft statements describe that earlier development state.
 
 
 <!-- canic-status-summary:end -->
+## Selected .18 release preparation — 2026-09-15
+
+The maintainer selected **release completed fixes; preserve RF2 for the next
+batch** to unblock downstream dependency work. The selected tree contains
+CANIC-177's CDK/timer alignment, CANIC-176's cache/lock diagnostics, the cold CI
+crypto-closure correction, CANIC-014's changelog clarification and the existing
+parked inspect-message idea. It contains no RF2 payment API, journal-field change,
+receipt adapter or RF2-only direct dependency addition. Package versions remain
+0.110.17; the open root/detailed .18 notes describe the selected batch.
+
+RF2 is preserved in `.tmp/rf2-preserved-20260915T180303Z/`: `rf2.patch`, exact
+`files/`, context documents, a SHA-256 manifest and redundant `rf2-backup.tar.gz`.
+The patch passes `git apply --check` against the selected tree and an isolated
+apply reproduces all 33 saved files byte-for-byte. Patch SHA-256:
+`0c6d18fb977f4f3244672b3f5144d5c139004d1994b673ddbdfb270705ece50c`.
+The directory is ignored by Git and retained by governed release cleanup. Do not
+delete it or restore RF2 before .18 publication. Its README records restoration:
+check the build lock, check/apply the patch, resolve any release-version context
+without replacing current manifests/lockfiles wholesale, then rerun focused mint
+tests and host/CLI Clippy. The accepted design remains in the repository; earlier
+RF2 source/qualification descriptions below now refer to the preserved checkpoint.
+
+The complete selected .18 batch is **ready for the maintainer-directed release
+flow**. Its root/detailed changelog is ready; package/version mutation and the
+governed complete release gate remain part of that flow. Focused evidence passes:
+
+- 31 host/cache/funding regressions after RF2 separation, including lost funding
+  replies, exact repeat, source-drift/output rejection and lock contention:
+  `/tmp/canic-018-release-host-tests.log`.
+- 27 CLI build/report tests, including the ordinary funding consumer:
+  `/tmp/canic-018-release-cli-tests.log`.
+- Host/CLI all-target/all-feature Clippy with warnings denied:
+  `/tmp/canic-018-release-clippy.log`.
+- 22 dependency/macro/timer tests, scoped core Clippy and the all-feature Canic
+  library's locked Wasm check, detailed in the dependency checkpoint below.
+- Locked all-feature native compile of the standalone composed fixture:
+  `/tmp/canic-018-composed-native-check.log`.
+- Release-note preflight, layering, current-document semantics, changed-Rust
+  formatting, scoped shell syntax/ShellCheck, whitespace and built-in Gitleaks
+  scanning of selected changed files. The secret scan is a scoped candidate
+  check, not the full-history release gate.
+
+No broad validation, version change, commit, push or sibling mutation ran.
+The next .18 release is justified beyond the 12-release guideline by the published
+timer pin blocking downstream adoption and the completed operator/CI corrections.
+
+The maintained standalone `canisters/audit/icydb_composed` fixture had a stale
+CDK/timer lock and path-package versions. Its manifest/lock now align to the same
+CDK/macros 0.20.3, timer 0.7.1, ic0 1.2.0 and current Canic 0.110.17 sources.
+The scoped resolution updates only those four registry packages and three Canic
+path entries; IcyDB stays 0.257.15. Historical measurement artifacts are unchanged.
+Its direct Wasm check was rejected by the existing canonical-build marker guard
+(`/tmp/canic-018-composed-check.log`); no guard was bypassed. The successful
+native check qualifies locked resolution and generated participant compilation,
+not a new finalized Wasm measurement or deployed lifecycle test. The separate
+main Canic Wasm check passed. Both maintained lockfiles retain one aligned
+CDK/macros/ic0 set and one timer provider.
+
+## CDK dependency update — 2026-09-15
+
+Published ic-timers 0.7.1 resolves CANIC-177's former exact ic0 pin conflict.
+The requested update now resolves ic-cdk/macros 0.20.3, ic0 1.2.0 and the exact
+ic-timers 0.7.1 pin, retaining one ic-cdk-timers 1.0.0 provider. The timer
+inventory guard follows the maintained pin. Existing manifest/lockfile work
+is preserved and the open .18 changelog records the update. After waiting for
+the shared target owner, 22 focused timer-inventory, call-facade, endpoint-macro
+and feature-enabled blob-endpoint tests pass. All-feature Clippy for the changed
+core timer guard passes with warnings denied; the all-feature Canic library
+and its core/control-plane dependencies pass locked wasm32 compilation.
+Logs are `/tmp/canic-cdk-update-tests.log`,
+`/tmp/canic-cdk-update-blob-tests.log`, `/tmp/canic-cdk-update-clippy.log` and
+`/tmp/canic-cdk-update-wasm.log`. The timer release's Rust source matches 0.7.0
+byte-for-byte. This dependency batch is complete and its changelog is ready;
+RF2 is now preserved separately under the maintainer's selected release scope above.
+No PocketIC, broad gate, package-version or publication step ran.
+
+The downloaded release notes add `subnet_self_node_count` and
+`cost_http_request_v2`. Consider using the former
+for local placement-drift diagnostics without replacing cross-subnet catalog
+authority. The latter is relevant if Canic adds flexible HTTPS outcalls; it
+does not change current inter-canister call pricing. Existing RF2 completion,
+RF3 live recovery forecasts and B1 measurement retain their accepted sequence.
+
+## Preserved RF2 development checkpoint — 2026-09-15
+
+RF2 remains accepted after .18 and before RF3/B1. The saved patch contains exact
+ICP/CMC intent and typed replies, durable review/approval/notification records,
+funding fences, structural accounting, authenticated Cycles Ledger deposits and
+certified ICP transfer/archive reads. It binds operation, plan, review, network,
+operator, Ledgers, accounts, amounts, fees, memo and creation time. Only verification
+constructs its private receipt authority; CMC cached success never admits credit.
+
+Before preservation, all 61 selected mint tests and host all-target/all-feature
+Clippy passed. Logs: `/tmp/canic-rf2-icp-archive-tests.log` and
+`/tmp/canic-rf2-icp-archive-clippy.log`. The tests use native signed certificates,
+including archive canister-range rejection; they are not live Ledger/CMC or
+PocketIC qualification. The saved context preserves earlier detailed checkpoints.
+The [accepted implementation contract](../design/0.110-fleet-runtime-contraction/0.110-design.md#rf2-receipt-safe-operator-icp-conversion)
+retains protocol identities, reader budgets and the complete acceptance boundary.
+
+After .18 publication, restore the patch using the instructions above and finish
+bounded acquisition with durable request/retry ownership, once-only net credit,
+timestamp uniqueness, truthful CLI flow and PocketIC interruption/recovery proof.
+No payment or receipt read has been submitted. RF2 is incomplete; .18 readiness
+applies only to the separately selected completed dependency/operator corrections.
+
+## Toko feedback for selected .18 — 2026-09-15
+
+Toko feedback was checked first and again during RF2 qualification on 2026-09-15.
+The latest inspected SHA-256 is
+`3255a6953a9c09bfed783782eb8cc8b980ea7f9c76d16fc25d706bff4c99122f`.
+CANIC-177's latest feedback requires Canic to publish the compatible timer pin.
+The local dependency correction and qualification are recorded above; downstream
+adoption remains due after publication.
+New Confirmed CANIC-176 takes priority over further RF2 implementation: agreed,
+the old generic miss reason and combined wait/verification time prevent useful
+attribution. The correction retains the same cache identity and exclusive lock;
+optional bounded diagnostics compare source, toolchain/configuration and the
+whole environment with the last recorded successful build. Only safe added/
+removed key names are reported; individual value attribution is unavailable.
+No environment values or per-value hashes are persisted. Waiting reports progress,
+and lock acquisition is excluded from input/output verification time. All 18
+focused reuse/lock regressions pass, including isolated environment invocations,
+independent-process contention, unchanged finalized hits with missing/corrupt
+diagnostics, source drift and tampered artifact rejection. The final hit/tamper
+case uses the real release-directory layout with byte-admission fixture Wasm;
+it does not qualify IC execution. Its corrected rerun is
+`/tmp/canic-176-complete-final-test.log`; the other selected results are in
+`/tmp/canic-rf2-176-final-tests.log`. The latest RF2 qualification is recorded
+above. CANIC-176 is implemented and
+qualified locally; Toko launcher qualification follows publication/adoption.
+No new speed claim, cache whitelist, bypass flag or alternate identity was added.
+CANIC-172's added mint recovery cases are accepted into the existing RF2 contract.
+The final downstream update reports passing .17 CI, eight exact unchanged-build
+cache hits (137.62-second baseline, 5.27-second repeat) and successful application
+state propagation/partial-failure retry. These are Toko's reported measurements,
+not reruns here. The make-versus-direct comparison had different environments;
+cold dependency discovery and production Root/Store timer qualification remain
+separate acceptance. The passing application fixture retains a synthetic Root.
+The .17 adoption assessment marks CANIC-139, 158/159, 166, 171, 172, 173 and
+175 Adopted, with downstream acceptance distinctions retained. CANIC-156/174
+remain Confirmed for RF2/RF3. CANIC-170 still needs encrypted-key incident
+evidence; fake-CLI tests do not close it. Auth/E9 remains parked.
+
+CANIC-014 is reopened for contradictory .17 changelog readiness prose. Agreed:
+the generated validation receipt is present; this is not a demonstrated missing
+runtime gate. The maintained root/detailed notes now omit duplicated draft and
+pending-gate claims. Changelog governance assigns draft/date to the detailed
+heading, validation to the generated status receipt and publication to remote
+tags/registries. No prose guard or immutable tag rewrite was added. The .18
+draft records the correction; downstream release/adoption remains outstanding.
+Preserve concurrent cold-runner and parked inspect-message idea work. The 0.110
+closeout audit has not been requested.
+
+## Cold-runner CI correction — 2026-09-15
+
+The Wasm crypto-closure gate now fetches the locked Wasm dependency graph before
+its offline tree inspections. CI preflight previously assumed that the restored
+Cargo cache or helper-tool installation supplied workspace dependencies, failing
+on missing `candid` before inspecting any role. The focused gate passes all 12
+canonical roles, including nine zero-auth profiles; Bash syntax, scoped
+ShellCheck and whitespace checks pass. A cold-cache network run was not repeated.
+
+This bounded CI correction is complete and ready to push. Because `v0.110.17`
+is tagged, its release notes remain unchanged and the correction opens the
+`0.110.18` changelog draft. Package versions remain unchanged; publication still
+requires the maintainer-directed release flow. This necessary CI follow-up stays
+on the affected minor despite its release-count guideline. No broad validation,
+Git publication or deployment ran. Earlier recovery follow-ups remain deferred.
+
 # Current Canic handoff — 2026-09-15
 
 Packages and published base remain **0.110.16** at

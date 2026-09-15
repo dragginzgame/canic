@@ -12,6 +12,80 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
+#[cfg(unix)]
+#[test]
+fn durable_lock_reports_wait_for_another_process_and_retains_exclusion() {
+    use std::{
+        io::{BufRead, Write},
+        process::{Command, Stdio},
+        time::{Duration, Instant},
+    };
+    const CHILD_ROOT: &str = "CANIC_TEST_PROGRESS_LOCK_ROOT";
+    if let Some(root) = std::env::var_os(CHILD_ROOT) {
+        let _lock = lock_file(&PathBuf::from(root).join("complete-build-reuse.lock")).unwrap();
+        println!("LOCK_HELD");
+        io::stdout().flush().unwrap();
+        let mut line = String::new();
+        io::stdin().read_line(&mut line).unwrap();
+        return;
+    }
+    let root = temp_root("progress-lock");
+    let thread = std::thread::current();
+    let mut child = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", thread.name().unwrap(), "--nocapture"])
+        .env(CHILD_ROOT, &root)
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let mut stdout = io::BufReader::new(child.stdout.take().unwrap());
+    loop {
+        let mut line = String::new();
+        assert_ne!(
+            stdout.read_line(&mut line).unwrap(),
+            0,
+            "child must hold lock"
+        );
+        if line.contains("LOCK_HELD") {
+            break;
+        }
+    }
+    let path = root.join("complete-build-reuse.lock");
+    let started = Instant::now();
+    let mut progress = None;
+    let lock = lock_file_with_progress(&path, |elapsed| {
+        if progress.is_none() {
+            progress = Some(elapsed);
+            child
+                .stdin
+                .as_mut()
+                .unwrap()
+                .write_all(b"release\n")
+                .unwrap();
+        }
+    })
+    .unwrap();
+    assert!(child.wait().unwrap().success());
+    assert!(progress.unwrap() >= Duration::from_secs(1));
+    assert!(started.elapsed() >= progress.unwrap());
+    let contender = fs::File::open(&path).unwrap();
+    assert_eq!(
+        rustix::fs::flock(
+            &contender,
+            rustix::fs::FlockOperation::NonBlockingLockExclusive
+        ),
+        Err(rustix::io::Errno::WOULDBLOCK)
+    );
+    drop(lock);
+    rustix::fs::flock(
+        &contender,
+        rustix::fs::FlockOperation::NonBlockingLockExclusive,
+    )
+    .unwrap();
+    drop(contender);
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn durable_write_creates_parents_and_replaces_complete_contents() {
     let root = temp_root("replace");

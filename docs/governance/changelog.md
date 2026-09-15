@@ -56,6 +56,13 @@ shape changes, and operational nuance.
 - Within each minor-line section, patch entries must be ordered chronologically newest first (`x.y.9` before `x.y.8` before `x.y.7`).
 - Each root minor-line section must link to its detailed
   `docs/changelog/<major>.<minor>.md` file when that file exists.
+- Root patch summaries and detailed change narratives describe behavior, not
+  release readiness. Do not duplicate draft/published or pending-validation
+  claims there. The detailed patch heading owns the draft/date field updated by
+  the version transaction; the generated status receipt owns validated-source
+  evidence. Remote tags and package registries separately establish publication.
+  Development readiness belongs in the current handoff. This ownership rule is
+  editorial guidance, not authority for a phrase-based release guard.
 - A completed meaningful code or behavior batch must update the root changelog
   by default. Small incomplete slices may wait until they form a coherent
   batch, and governance-only, formatting-only, or routine test-only work is

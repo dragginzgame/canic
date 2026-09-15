@@ -8,13 +8,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-Development continues in the open `0.110.17` draft below.
+Development continues in the open `0.110.18` draft below.
 
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.17` (unreleased) improves Fleet funding, recovery and inspection with
+- `0.110.18` explains build-cache misses and lock waiting, fixes cold CI crypto
+  validation, updates CDK/timer dependencies and clarifies release-state ownership,
+  with a breaking host API change.
+- `0.110.17` improves Fleet funding, recovery and inspection with
   breaking report updates, integrates ICP CLI 1.5, updates IcyDB to 0.257.15 and ic-query,
   and improves catalog acquisition and unchanged-release build reuse.
 - `0.110.16` makes a breaking, reinstall-only stable-memory layout reduction,

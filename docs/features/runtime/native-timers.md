@@ -18,14 +18,14 @@ package identity:
 
 ```toml
 [dependencies]
-ic-timers = "=0.7.0"
+ic-timers = "=0.7.1"
 ```
 
 Check the composed graph, not only each direct manifest:
 
 ```text
 cargo tree -d
-cargo tree -i ic-timers@0.7.0
+cargo tree -i ic-timers@0.7.1
 ```
 
 Two resolved versions contain two independent sets of library statics and

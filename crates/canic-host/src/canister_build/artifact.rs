@@ -82,8 +82,9 @@ impl CanisterArtifactBuilder {
     pub fn prepare_complete_build_reuse(
         &self,
         context: &WorkspaceBuildContext,
+        progress: impl FnMut(super::BuildReuseProgress),
     ) -> Result<super::CompleteBuildReuse, super::BuildReuseError> {
-        super::CompleteBuildReuse::prepare(context, &self.toolchain)
+        super::CompleteBuildReuse::prepare(context, &self.toolchain, progress)
     }
 
     /// Build one configured role through this preflighted tool session.
