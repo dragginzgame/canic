@@ -1,3 +1,5 @@
+mod environment;
+
 use super::*;
 use crate::{
     durable_io::lock_file,
@@ -20,21 +22,8 @@ use flate2::{Compression, GzBuilder};
 fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
     run_with_private_cargo_target(|| {
         let (root, context) = infrastructure_build_fixture();
-        let inputs = input_snapshot(&context, &[]).unwrap();
         let directory = context.icp_root.join(".canic/build-reuse");
-        let reuse = CompleteBuildReuse {
-            diagnostics: diagnostics::InputDiagnostics::capture(&context, &[], &inputs),
-            record_path: directory.join(format!("{}.json", inputs.digest())),
-            inputs,
-            tool_paths: vec![],
-            _lock: lock_file(
-                &context
-                    .icp_root
-                    .join(".canic/locks/complete-build-reuse.lock"),
-            )
-            .unwrap(),
-            context: context.clone(),
-        };
+        let reuse = prepared_reuse(&context);
         assert!(reuse.load().unwrap().is_none());
         let release = finalize_fixture(&context);
         reuse
@@ -59,6 +48,125 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
         )
         .unwrap();
         assert!(matches!(reuse.load(), Err(BuildReuseError::Evidence(_))));
+        drop(reuse);
+        fs::remove_dir_all(root).unwrap();
+    });
+}
+
+fn prepared_reuse(context: &WorkspaceBuildContext) -> CompleteBuildReuse {
+    let inputs = input_snapshot(context, &[]).unwrap();
+    CompleteBuildReuse {
+        input_locations: diagnostics::InputLocations::capture(context),
+        diagnostics: diagnostics::InputDiagnostics::capture(context, &[], &inputs),
+        record_path: context
+            .icp_root
+            .join(".canic/build-reuse")
+            .join(format!("{}.json", inputs.digest())),
+        inputs,
+        tool_paths: vec![],
+        _lock: lock_file(
+            &context
+                .icp_root
+                .join(".canic/locks/complete-build-reuse.lock"),
+        )
+        .unwrap(),
+        context: context.clone(),
+    }
+}
+
+#[test]
+fn rejected_build_retains_path_fingerprints_without_becoming_reuse_authority() {
+    run_with_private_cargo_target(|| {
+        let (root, context) = infrastructure_build_fixture();
+        let reuse = prepared_reuse(&context);
+        let release = finalize_fixture(&context);
+        let source = context.workspace_root.join("src/lib.rs");
+        let original = fs::read(&source).unwrap();
+        let before_hash = file_hash(&source).unwrap();
+        fs::write(&source, b"pub const EDITED: bool = true;\n").unwrap();
+        let after_hash = file_hash(&source).unwrap();
+        assert!(matches!(reuse.record(release, vec![]),
+            Err(BuildReuseError::ChangedInput(path)) if path == source));
+        let evidence_path = context
+            .icp_root
+            .join(".canic/build-reuse")
+            .join(format!("rejected-{release}.json"));
+        let bytes = fs::read(&evidence_path).unwrap();
+        let evidence: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        assert_eq!(
+            evidence["release_build_id"],
+            serde_json::to_value(release).unwrap()
+        );
+        assert_eq!(evidence["kind"], "input_changed");
+        assert_eq!(evidence["affected_input"]["path"], source.to_str().unwrap());
+        assert_eq!(
+            evidence["affected_input"]["before_snapshot_value"],
+            before_hash
+        );
+        assert_eq!(
+            evidence["affected_input"]["after_snapshot_value"],
+            after_hash
+        );
+        assert_ne!(
+            evidence["before_inputs_sha256"],
+            evidence["after_inputs_sha256"]
+        );
+        assert!(
+            evidence["before_locations"]["output_roots"]["declarations"]["selected"].is_string()
+        );
+        assert!(!String::from_utf8_lossy(&bytes).contains("pub const EDITED"));
+        assert!(!reuse.record_path.exists());
+        assert!(reuse.load().unwrap().is_none());
+        fs::write(&source, original).unwrap();
+        reuse
+            .record(
+                release,
+                vec![
+                    "app".into(),
+                    "root".into(),
+                    "fleet_coordinator".into(),
+                    "wasm_store".into(),
+                ],
+            )
+            .unwrap();
+        assert_eq!(
+            fs::read(&evidence_path).unwrap(),
+            bytes,
+            "successful retry preserves rejection evidence"
+        );
+        fs::write(&evidence_path, b"invalid diagnostic").unwrap();
+        assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
+        drop(reuse);
+        fs::remove_dir_all(root).unwrap();
+    });
+}
+
+#[test]
+fn unavailable_rejection_diagnostics_preserve_the_typed_failure() {
+    run_with_private_cargo_target(|| {
+        let (root, context) = infrastructure_build_fixture();
+        let reuse = prepared_reuse(&context);
+        let release = finalize_fixture(&context);
+        let source = context.workspace_root.join("src/lib.rs");
+        fs::write(&source, b"pub const EDITED: bool = true;\n").unwrap();
+        let evidence_path = context
+            .icp_root
+            .join(".canic/build-reuse")
+            .join(format!("rejected-{release}.json"));
+        fs::create_dir_all(&evidence_path).unwrap();
+        assert!(matches!(reuse.record(release, vec![]),
+            Err(BuildReuseError::ChangedInput(path)) if path == source));
+        assert!(!reuse.record_path.exists());
+        fs::remove_dir(&evidence_path).unwrap();
+        #[cfg(unix)]
+        {
+            let destination = root.join("untouched.txt");
+            fs::write(&destination, b"untouched").unwrap();
+            std::os::unix::fs::symlink(&destination, &evidence_path).unwrap();
+            assert!(matches!(reuse.record(release, vec![]),
+                Err(BuildReuseError::ChangedInput(path)) if path == source));
+            assert_eq!(fs::read(&destination).unwrap(), b"untouched");
+        }
         drop(reuse);
         fs::remove_dir_all(root).unwrap();
     });

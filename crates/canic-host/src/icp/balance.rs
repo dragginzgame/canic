@@ -35,7 +35,7 @@ struct BalanceOutput {
 impl IcpCli {
     /// Observe the selected identity's default Cycles Ledger account.
     pub fn identity_cycles_balance(&self) -> Result<u128, IcpBalanceError> {
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.args(["cycles", "balance", "--json"]);
         self.add_target_args(&mut command);
         self.record_remote_call();
@@ -45,7 +45,7 @@ impl IcpCli {
 
     /// Observe the selected identity's default ICP Ledger account in e8s.
     pub fn identity_icp_balance_e8s(&self) -> Result<u64, IcpBalanceError> {
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.args(["token", "balance", "--json"]);
         self.add_target_args(&mut command);
         self.record_remote_call();

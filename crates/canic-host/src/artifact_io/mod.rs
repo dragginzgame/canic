@@ -17,7 +17,6 @@ use std::{
     fs,
     io::{Read, Write},
     path::{Path, PathBuf},
-    process::Command,
     sync::atomic::{AtomicU64, Ordering},
     time::Instant,
 };
@@ -309,7 +308,7 @@ fn shrink_wasm_artifact(
     wasm_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
     let shrunk_path = wasm_path.with_extension("wasm.shrunk");
-    let mut command = Command::new(tool.path());
+    let mut command = crate::build_environment::command(tool.path());
     command
         .arg(wasm_path)
         .arg("-o")
@@ -387,7 +386,7 @@ pub fn embed_candid_metadata(
     wasm_path: &Path,
     did_path: &Path,
 ) -> Result<ArtifactTransformOutput, Box<dyn std::error::Error>> {
-    let mut command = Command::new(tool.path());
+    let mut command = crate::build_environment::command(tool.path());
     command
         .arg(wasm_path)
         .args(["-o"])
@@ -522,7 +521,7 @@ fn run_binaryen_optimizer(
     optimized_path: &Path,
     features: &[String],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = Command::new(command_path);
+    let mut command = crate::build_environment::command(command_path);
     command
         .arg(wasm_path)
         .arg("-o")
@@ -606,7 +605,7 @@ fn derive_wasm_features(
     command_path: &Path,
     wasm_path: &Path,
 ) -> Result<Vec<String>, Box<dyn std::error::Error>> {
-    let mut command = Command::new(command_path);
+    let mut command = crate::build_environment::command(command_path);
     command.arg(wasm_path);
     for feature in IC_WASM_FEATURE_FLAGS {
         command.arg(feature);

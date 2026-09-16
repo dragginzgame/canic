@@ -21,7 +21,7 @@ impl IcpCli {
         if let Some(identity) = self.selected_identity.get() {
             return Ok(identity.clone());
         }
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.args(["identity", "default"]);
         let identity = run_output(&mut command, self)?;
         if identity.is_empty() {
@@ -50,7 +50,7 @@ impl IcpCli {
     }
 
     fn identity_principal_command(&self) -> std::process::Command {
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.args(["identity", "principal"]);
         self.add_selected_identity_arg(&mut command);
         command
@@ -60,7 +60,7 @@ impl IcpCli {
         &self,
         format: IcpIdentityAccountFormat,
     ) -> std::process::Command {
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.args(["identity", "account-id", "--format", format.label()]);
         self.add_selected_identity_arg(&mut command);
         command

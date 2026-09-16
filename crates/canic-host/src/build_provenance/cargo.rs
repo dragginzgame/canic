@@ -1,4 +1,4 @@
-use std::{env, fs, path::Path, process::Command};
+use std::{env, fs, path::Path};
 
 use toml::Value as TomlValue;
 
@@ -110,7 +110,7 @@ fn display_path(path: &Path, root: &Path) -> String {
 }
 
 fn command_version<const N: usize>(command: &str, args: [&str; N]) -> Option<String> {
-    let mut command = Command::new(command);
+    let mut command = crate::build_environment::command(command);
     if let Some(toolchain) = env::var_os("RUSTUP_TOOLCHAIN") {
         command.env("RUSTUP_TOOLCHAIN", toolchain);
     }

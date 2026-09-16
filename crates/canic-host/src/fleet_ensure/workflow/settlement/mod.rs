@@ -70,6 +70,7 @@ fn receipt_credit<E: std::error::Error + 'static>(
     }
     match action {
         EnsureAction::Start { .. }
+        | EnsureAction::Fund { .. }
         | EnsureAction::Install {
             mode: InstallMode::Reinstall,
             ..

@@ -1125,14 +1125,29 @@ mod tests {
         coordinator: Principal,
         operation_id: [u8; 32],
     ) -> FleetAdmissionMutationResponse {
+        await_fleet_admission_convergence_as(pic, coordinator, operation_id, Principal::anonymous())
+    }
+
+    #[cfg(test)]
+    fn await_fleet_admission_convergence_as(
+        pic: &PocketIc,
+        coordinator: Principal,
+        operation_id: [u8; 32],
+        caller: Principal,
+    ) -> FleetAdmissionMutationResponse {
         let mut last_phase = String::new();
         for _ in 0..128 {
-            let status = coordinator_status(
-                pic,
-                coordinator,
-                CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),
-            )
-            .expect("query Fleet admission operation");
+            let status: Result<CoordinatorOperationReadResponse, Error> = pic
+                .query_candid_as(
+                    coordinator,
+                    caller,
+                    canic::protocol::CANIC_COORDINATOR_OPERATION_STATUS,
+                    (CoordinatorOperationReadRequest::Operation(
+                        OperationStatusRequest { operation_id },
+                    ),),
+                )
+                .expect("query Fleet admission transport");
+            let status = status.expect("query Fleet admission operation");
             let CoordinatorOperationReadResponse::Operation(
                 CoordinatorOperationStatusResponse::Admission(operation),
             ) = status
@@ -1831,6 +1846,10 @@ case " $* " in
 esac
 case " $* " in
   *" canister call "*" withdraw "*)
+    if [ -f "$wrapper_root/fail-before-funding" ] && [ ! -e "$wrapper_root/failed-before-funding" ]; then
+      : > "$wrapper_root/failed-before-funding"
+      exit 80
+    fi
     if [ -f "$wrapper_root/lose-funding-response" ]; then
       icp "$@"
       printf '%s\n' withdrawal >> "$wrapper_root/funding-requests.log"
@@ -7430,6 +7449,100 @@ esac
     }
 
     #[cfg(test)]
+    fn assert_admission_cli_selected_release(
+        directory: &Path,
+        isolated_icp: &Path,
+        pic: &PocketIc,
+        desired: &DesiredFleet,
+        replica: &LocalReplicaTarget,
+    ) {
+        std::fs::write(directory.join("Cargo.toml"), "[workspace]\nmembers = []\n").unwrap();
+        std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
+        let app = directory.join("apps/admission");
+        std::fs::create_dir_all(&app).unwrap();
+        std::fs::copy(
+            directory.join(&desired.protocol.as_ref().unwrap().app_config),
+            app.join("canic.toml"),
+        )
+        .unwrap();
+        std::fs::write(directory.join("root-key.der"), pic.root_key().unwrap()).unwrap();
+        let wrapper = operator_cli_gateway_wrapper(directory, &replica.url, isolated_icp);
+        let added = Principal::self_authenticating([0xa8; 32]);
+        let added_text = added.to_text();
+        let plan_path = directory.join("admission-add.json");
+        run_environment_cli(
+            directory,
+            &wrapper,
+            &desired.environment,
+            &[
+                "admission",
+                "plan",
+                &desired.fleet,
+                "--add",
+                &added_text,
+                "--fleet",
+                "--out",
+                plan_path.to_str().unwrap(),
+            ],
+        )
+        .expect("plan admission using only immutable release sidecars");
+        let plan: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&plan_path).unwrap()).unwrap();
+        let request: FleetAdmissionMutationRequest =
+            serde_json::from_value(plan["request"].clone()).unwrap();
+        run_environment_cli(
+            directory,
+            &wrapper,
+            &desired.environment,
+            &[
+                "admission",
+                "apply",
+                &desired.fleet,
+                plan_path.to_str().unwrap(),
+            ],
+        )
+        .expect("apply reviewed admission through ordinary CLI");
+        let operator = Principal::from_text(&desired.operator).unwrap();
+        let coordinator = request.authority.coordinator;
+        let completed =
+            await_fleet_admission_convergence_as(pic, coordinator, request.operation_id, operator);
+        assert_eq!(completed.outcome, FleetAdmissionMutationOutcome::Converged);
+        run_environment_cli(
+            directory,
+            &wrapper,
+            &desired.environment,
+            &["admission", "status", &desired.fleet, "--json"],
+        )
+        .expect("inspect converged admission through ordinary CLI");
+        run_environment_cli(
+            directory,
+            &wrapper,
+            &desired.environment,
+            &[
+                "admission",
+                "apply",
+                &desired.fleet,
+                plan_path.to_str().unwrap(),
+            ],
+        )
+        .expect("replay exact completed admission");
+        let registry: Result<CoordinatorRegistryResponse, Error> = pic
+            .query_candid_as(
+                coordinator,
+                operator,
+                canic::protocol::CANIC_COORDINATOR_REGISTRY,
+                (CoordinatorRegistryRequest::Registry,),
+            )
+            .unwrap();
+        let CoordinatorRegistryResponse::Registry(registry) = registry.unwrap();
+        assert!(registry.admission.fleet_principals.contains(&added));
+        assert_eq!(
+            registry.admission.generation,
+            request.expected_generation + 1
+        );
+    }
+
+    #[cfg(test)]
     fn run_environment_cli(
         directory: &Path,
         wrapper: &Path,
@@ -8505,6 +8618,16 @@ esac
                     - total_requested
                     - u128::try_from(3 + pool_count).unwrap() * (ledger_fee + management_fee),
             });
+            if failed_reserve {
+                phase = phase.next("admission_cli_selected_release");
+                assert_admission_cli_selected_release(
+                    &adapter_root,
+                    &funding_icp,
+                    &pic,
+                    &desired,
+                    &local_replica,
+                );
+            }
             pic.stop_live();
             progress_elapsed(
                 "funded autonomous production-adapter journey complete",
@@ -9626,6 +9749,169 @@ esac
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
+        reason = "one pre-reset funding proof keeps durable intent, seal removal and lost payment response together"
+    )]
+    fn assert_sealed_reinstall_funding_retry(
+        input: &ReinstallJourney<'_>,
+        reset: &canic_host::fleet_ensure::model::FleetEnsurePlan,
+    ) -> u64 {
+        let root = input.adapter_root;
+        let desired = input.desired;
+        let operator = Principal::from_text(&desired.operator).unwrap();
+        let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
+        let credits = planned_actions(reset)
+            .into_iter()
+            .filter(|action| {
+                matches!(
+                    action,
+                    EnsureAction::Fund { .. } | EnsureAction::FundEstate { .. }
+                )
+            })
+            .collect::<Vec<_>>();
+        let [
+            EnsureAction::Fund {
+                principal, amount, ..
+            },
+        ] = credits.as_slice()
+        else {
+            panic!("exactly one reviewed native Root credit is required");
+        };
+        assert_eq!(principal, &input.root.to_text());
+        let credited = *amount;
+        let withdrawals = || {
+            input
+                .pic
+                .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                .unwrap()
+        };
+        let withdrawals_before = withdrawals();
+        let operator_before = ledger_account_balance(input.pic, ledger, operator);
+        #[expect(
+            clippy::result_large_err,
+            reason = "qualification asserts the public workflow error"
+        )]
+        let apply = || {
+            fleet_ensure_workflow::apply(
+                root,
+                desired,
+                &desired_sha256(desired),
+                &desired.fleet,
+                &reset.plan_sha256,
+                &mut literal_zero_journey_platform(
+                    desired,
+                    input.icp_wrapper,
+                    root,
+                    input.local_replica.clone(),
+                    true,
+                ),
+            )
+        };
+        std::fs::write(root.join("fail-before-funding"), []).unwrap();
+        assert!(matches!(apply(), Err(EnsureWorkflowError::Platform(_))));
+        assert!(root.join("failed-before-funding").is_file());
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            root,
+            &desired.environment,
+            &desired.fleet,
+        );
+        let retained = canic_host::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap();
+        assert_eq!(retained.effects.len(), 1);
+        assert_eq!(
+            retained.effects[0].state,
+            canic_host::fleet_ensure::model::EffectState::Intent
+        );
+        assert_eq!(
+            retained.effects[0].action_sha256,
+            canic_host::fleet_ensure::ops::action_sha256(credits[0])
+        );
+        let request = AuthoritySnapshotRequest {
+            operation_id: canic_core::cdk::utils::hash::decode_hex(&reset.operation_id)
+                .unwrap()
+                .try_into()
+                .unwrap(),
+        };
+        let RootCommandResponseFragment::ResumeAuthoritySnapshot(open) = root_command_as(
+            input.pic,
+            input.root,
+            operator,
+            RootCommandFragment::ResumeAuthoritySnapshot(request),
+        )
+        .unwrap() else {
+            panic!("exact resume response")
+        };
+        assert_eq!(open.phase, AuthorityRestoreFencePhase::Open);
+        assert!(matches!(
+            apply(),
+            Err(EnsureWorkflowError::DriftedBeforeApply)
+        ));
+        assert_eq!(withdrawals(), withdrawals_before);
+        assert_eq!(
+            ledger_account_balance(input.pic, ledger, operator),
+            operator_before
+        );
+        assert!(!root.join("reinstall-mutations.log").exists());
+        let RootCommandResponseFragment::PrepareAuthoritySnapshot(sealed) = root_command_as(
+            input.pic,
+            input.root,
+            operator,
+            RootCommandFragment::PrepareAuthoritySnapshot(request),
+        )
+        .unwrap() else {
+            panic!("exact seal response")
+        };
+        assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
+        assert_eq!(sealed.operation_id, Some(request.operation_id));
+        std::fs::write(root.join("lose-funding-response"), []).unwrap();
+        let lost = root.join("lost-funding-response");
+        if lost.exists() {
+            std::fs::remove_file(&lost).unwrap();
+        }
+        let root_before = input.pic.cycle_balance(input.root);
+        assert!(matches!(apply(), Err(EnsureWorkflowError::Platform(_))));
+        assert!(lost.is_file());
+        assert_eq!(withdrawals(), withdrawals_before + 1);
+        assert_eq!(
+            ledger_account_balance(input.pic, ledger, operator),
+            operator_before - Nat::from(reset.conservation.maximum_operator_debit_cycles)
+        );
+        assert!(
+            input.pic.cycle_balance(input.root) + reset.conservation.maximum_execution_burn_cycles
+                >= root_before + credited
+        );
+        let child = selected_fixture_targets_from_pool(
+            input.pic,
+            input.root,
+            &root_pool_status_as(input.pic, input.root, operator),
+        )
+        .into_iter()
+        .find(|(_, role)| role.as_str() == "user_hub")
+        .unwrap()
+        .0;
+        let child_before = input.pic.cycle_balance(child);
+        assert_eq!(
+            application_rejection(
+                root_command_as(
+                    input.pic,
+                    input.root,
+                    child,
+                    RootCommandFragment::RespondCapability(descendant_funding_request(
+                        input.pic, 0xba
+                    ))
+                ),
+                "funded sealed Root rejects child grants"
+            )
+            .code(),
+            canic_core::diagnostics::codes::AUTHORITY_INACTIVE.raw_code()
+        );
+        assert!(input.pic.cycle_balance(child) <= child_before);
+        withdrawals_before + 1
+    }
+
+    #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
         reason = "one recovery proof preserves applied installs across funding review, lost reply and terminal replay"
     )]
     fn complete_selected_reinstall(
@@ -9680,7 +9966,11 @@ esac
         };
         let first = apply(reset);
         if !underfunded {
-            return (first.expect("complete the funded repeat wipe"), 0, 0);
+            return (
+                first.expect("complete the funded repeat wipe"),
+                reset.conservation.maximum_operator_debit_cycles,
+                0,
+            );
         }
         assert!(
             matches!(first, Err(EnsureWorkflowError::SuccessorReviewRequired {
@@ -9697,7 +9987,7 @@ esac
             .unwrap()
             .unwrap();
         assert_eq!(retained.operation_id, reset.operation_id);
-        assert_eq!(retained.effects.len(), 3);
+        assert_eq!(retained.effects.len(), planned_actions(reset).len());
         assert!(
             retained
                 .effects
@@ -9812,7 +10102,11 @@ esac
                         ledger_account_balance(input.pic, ledger, operator),
                         balance - Nat::from(debit)
                     );
-                    return (complete, debit, burn);
+                    return (
+                        complete,
+                        reset.conservation.maximum_operator_debit_cycles + debit,
+                        burn,
+                    );
                 }
                 Err(EnsureWorkflowError::SuccessorReviewRequired {
                     review: Some(details),
@@ -9834,7 +10128,17 @@ esac
         let root = input.adapter_root;
         let source_desired = input.desired.clone();
         let replacement = selected_reinstall_artifacts(&input);
-        let selected = select_reinstall_build(input.desired, &replacement);
+        let mut selected = select_reinstall_build(input.desired, &replacement);
+        let root_policy = selected
+            .canisters
+            .iter_mut()
+            .find(|canister| canister.kind == DesiredCanisterKind::Root)
+            .unwrap();
+        root_policy.minimum_cycles =
+            (input.pic.cycle_balance(input.root) + 1_000_000_000_000).to_string();
+        root_policy
+            .initial_cycles
+            .clone_from(&root_policy.minimum_cycles);
         assert_ne!(
             selected.bootstrap.as_ref().unwrap().release_build_id,
             input.desired.bootstrap.as_ref().unwrap().release_build_id
@@ -10079,6 +10383,8 @@ esac
             assert_eq!(installs, 3, "reset exactly Coordinator, Store and Root");
             phase = phase.next("reset_interruptions_and_recovery");
             if wipe == 0 {
+                let protected_withdrawals =
+                    assert_sealed_reinstall_funding_retry(&input, &reset.plan);
                 std::fs::write(root.join("fail-before-install"), []).unwrap();
                 std::fs::write(root.join("fail-before-root-install"), input.root.to_text())
                     .unwrap();
@@ -10095,6 +10401,14 @@ esac
                     "interrupt before install: {interrupted:?}"
                 );
                 assert!(!root.join("reinstall-mutations.log").exists());
+                assert_eq!(
+                    input
+                        .pic
+                        .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                        .unwrap(),
+                    protected_withdrawals,
+                    "lost pre-reset credit response must not withdraw again"
+                );
                 std::fs::write(root.join("lose-install-response"), []).unwrap();
                 let interrupted = fleet_ensure_workflow::apply(
                     root,
@@ -10524,10 +10838,17 @@ exec '{}' "$@"
                 .all(|canister| canister.principal.is_some())
         );
         let mut desired = generated.desired;
-        // Exercise conservative continuation allowances; reviewed startup funding
-        // may cover either a prefix or the complete continuation ceiling.
         desired.maximum_observation_burn_cycles = "2T".into();
         desired.maximum_update_burn_cycles = "2T".into();
+        // The existing local audit endpoint changes only this disposable balance.
+        // Ordinary production recovery bounds remain unchanged throughout the journey.
+        let burned: u128 = pic.update_candid_as_or_panic(
+            input.root,
+            operator,
+            "audit_recovery_balance",
+            (8_000_000_000_000_u128,),
+        );
+        assert!(burned > 0);
         let digest = desired_sha256(&desired);
         let platform = || {
             literal_zero_journey_platform(
@@ -10554,6 +10875,30 @@ exec '{}' "$@"
             canic_host::fleet_ensure::model::FleetEnsurePlanScope::RootReinstallPrerequisite
         );
         assert_eq!(reviewed.plan.root_reinstall_bindings.len(), 1);
+        let funding = reviewed.plan.recovery_review.as_ref().unwrap();
+        let reset_funding = reviewed.plan.conservation.maximum_operator_debit_cycles;
+        assert!(reset_funding > 0);
+        assert!(matches!(
+            reviewed.plan.canisters[0].actions.as_slice(),
+            [
+                EnsureAction::Stop { .. },
+                EnsureAction::Fund { .. },
+                EnsureAction::Install { .. },
+                EnsureAction::Start { .. }
+            ]
+        ));
+        assert_eq!(funding.maximum_successor_actions, 0);
+        assert_eq!(funding.whole_continuation_ceiling_cycles, 0);
+        assert_eq!(funding.per_step_burn_cycles, 8_000_000_000_000);
+        let forecast = funding
+            .startup_funding
+            .iter()
+            .find(|forecast| forecast.root == reviewed.plan.root_reinstall_bindings[0].name)
+            .expect("startup forecast is visible before the destructive prerequisite");
+        assert!(forecast.maximum_continuation_steps > 0);
+        assert!(forecast.required_native_cycles >= forecast.startup_minimum_cycles);
+        assert!(forecast.unfunded_role.is_none());
+        assert!(!root.join("reinstall-mutations.log").exists());
         pic.set_controllers(
             input.root,
             Some(operator),
@@ -10610,6 +10955,98 @@ exec '{}' "$@"
             .canister_status(input.root, Some(operator))
             .unwrap()
             .version;
+        let withdrawals_before: u64 = pic.query_candid(ledger, "withdrawal_count", ()).unwrap();
+        std::fs::write(root.join("fail-before-funding"), b"once").unwrap();
+        let stopped = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut first_platform,
+        );
+        assert!(
+            matches!(stopped, Err(EnsureWorkflowError::Platform(_))),
+            "stop before payment: {stopped:?}"
+        );
+        assert!(root.join("failed-before-funding").is_file());
+        assert_eq!(
+            serde_json::to_value(
+                pic.canister_status(input.root, Some(operator))
+                    .unwrap()
+                    .status
+            )
+            .unwrap(),
+            serde_json::json!("stopped")
+        );
+        assert_eq!(
+            pic.query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                .unwrap(),
+            withdrawals_before
+        );
+        let journal = canic_host::fleet_ensure::ops::read_journal(&old_paths)
+            .unwrap()
+            .unwrap();
+        assert_eq!(
+            journal.effects[0].state,
+            canic_host::fleet_ensure::model::EffectState::Applied
+        );
+        assert_eq!(
+            journal.effects[1].state,
+            canic_host::fleet_ensure::model::EffectState::Intent
+        );
+        assert!(journal.effects[1].receipt.is_none());
+        pic.start_canister(input.root, Some(operator)).unwrap();
+        let restarted = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut platform(),
+        );
+        assert!(
+            matches!(restarted, Err(EnsureWorkflowError::DriftedBeforeApply)),
+            "restarted source rejects credit: {restarted:?}"
+        );
+        assert_eq!(
+            pic.query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                .unwrap(),
+            withdrawals_before
+        );
+        pic.stop_canister(input.root, Some(operator)).unwrap();
+        std::fs::write(root.join("lose-funding-response"), b"once").unwrap();
+        let lost_funding = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan.plan_sha256,
+            &mut platform(),
+        );
+        assert!(
+            matches!(lost_funding, Err(EnsureWorkflowError::Platform(_))),
+            "lose stopped Root credit reply: {lost_funding:?}"
+        );
+        assert!(root.join("lost-funding-response").is_file());
+        assert_eq!(
+            serde_json::to_value(
+                pic.canister_status(input.root, Some(operator))
+                    .unwrap()
+                    .status
+            )
+            .unwrap(),
+            serde_json::json!("stopped")
+        );
+        assert_eq!(
+            pic.query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                .unwrap(),
+            withdrawals_before + 1
+        );
+        assert_eq!(
+            ledger_account_balance(pic, ledger, operator),
+            operator_before.clone() - Nat::from(reset_funding)
+        );
         std::fs::write(root.join("lose-install-response"), b"once").unwrap();
         phase = phase.next("root_reinstall_lost_response_and_recovery");
         let lost = fleet_ensure_workflow::apply(
@@ -10665,6 +11102,11 @@ exec '{}' "$@"
         .expect("effect-free reset replay");
         assert_eq!(replay.effects_applied, 0);
         assert_eq!(
+            pic.query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                .unwrap(),
+            withdrawals_before + 1
+        );
+        assert_eq!(
             ledger_account_balance(pic, ledger, input.root),
             Nat::from(1_000_000_000_u128)
         );
@@ -10709,9 +11151,9 @@ exec '{}' "$@"
         assert!(details.actions.iter().any(|action| action.kind == "fund"));
         assert_eq!(
             ledger_account_balance(pic, ledger, operator),
-            operator_before.clone() - Nat::from(reviewed_startup_funding)
+            operator_before.clone() - Nat::from(reset_funding + reviewed_startup_funding)
         );
-        let mut total_funding = reviewed_startup_funding;
+        let mut total_funding = reset_funding + reviewed_startup_funding;
         let mut reviews_remaining = 8;
         let (ready, latest) = loop {
             assert!(reviews_remaining > 0, "bounded recovery reviews");
@@ -11184,6 +11626,7 @@ exec '{}' "$@"
                 input.adapter_root,
             )
             .with_local_replica(input.local_replica.clone())
+            .with_observation_handler(crate::pic::timing::observation)
         };
         assert_eq!(
             ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
@@ -11861,6 +12304,17 @@ exec '{}' "$@"
         assert_eq!(ready_domain.eligible_ready_pool_assets, 4);
         assert_eq!(ready_domain.required_creation_count, 0);
         assert_eq!(ready_domain.shortfall_cycles, 0);
+        let ready = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            desired,
+            source,
+            &desired.fleet,
+            &ready_plan.plan.plan_sha256,
+            &mut replay_platform,
+        )
+        .expect("complete effect-free Ready review before operator commands");
+        assert!(ready.terminal);
+        assert_eq!(ready.effects_applied, 0);
         assert_eq!(counts(), (4, 0, 7));
     }
 
@@ -15913,6 +16367,10 @@ cycles = "80T"
             panic!("Root returned a differently correlated authority response");
         };
         assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
+        let funding_request = descendant_funding_request(fixture.pic(), 0xb6);
+        assert_sealed_root_rejects_child_funding(fixture, funding_request.clone());
+        fixture.pic().add_cycles(fixture.root, 4_000_000_000_000);
+        assert_sealed_root_rejects_child_funding(fixture, funding_request.clone());
         assert_root_native_timer_state(
             fixture.pic(),
             fixture.root,
@@ -15931,6 +16389,28 @@ cycles = "80T"
             panic!("Root returned a differently correlated authority response");
         };
         assert_eq!(resumed.phase, AuthorityRestoreFencePhase::Open);
+        let child_before = fixture.pic().cycle_balance(fixture.issuer.canister_id);
+        assert_eq!(
+            request_descendant_funding(
+                fixture.pic(),
+                fixture.root,
+                fixture.issuer.canister_id,
+                funding_request.clone(),
+            ),
+            5_000_000_000_000,
+        );
+        let child_after = fixture.pic().cycle_balance(fixture.issuer.canister_id);
+        assert!(child_after > child_before + 4_000_000_000_000);
+        assert_eq!(
+            request_descendant_funding(
+                fixture.pic(),
+                fixture.root,
+                fixture.issuer.canister_id,
+                funding_request,
+            ),
+            5_000_000_000_000,
+        );
+        assert!(fixture.pic().cycle_balance(fixture.issuer.canister_id) <= child_after);
         assert_root_native_timer_state(
             fixture.pic(),
             fixture.root,
@@ -15946,6 +16426,29 @@ cycles = "80T"
                 },
             )
             .expect("root authority snapshot restore");
+    }
+
+    #[cfg(test)]
+    fn assert_sealed_root_rejects_child_funding(
+        fixture: &ActiveComponentRegistryFixture,
+        request: canic::dto::capability::RootCapabilityEnvelopeV1,
+    ) {
+        let child_before = fixture.pic().cycle_balance(fixture.issuer.canister_id);
+        let root_before = fixture.pic().cycle_balance(fixture.root);
+        let response = root_command_as(
+            fixture.pic(),
+            fixture.root,
+            fixture.issuer.canister_id,
+            RootCommandFragment::RespondCapability(request),
+        );
+        assert_eq!(
+            application_rejection(response, "sealed Root must reject child funding").code(),
+            canic_core::diagnostics::codes::AUTHORITY_INACTIVE.raw_code(),
+        );
+        assert!(fixture.pic().cycle_balance(fixture.issuer.canister_id) <= child_before);
+        assert!(
+            root_before.saturating_sub(fixture.pic().cycle_balance(fixture.root)) < 1_000_000_000
+        );
     }
 
     #[cfg(test)]

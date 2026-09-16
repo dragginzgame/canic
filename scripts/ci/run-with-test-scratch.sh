@@ -69,4 +69,10 @@ trap 'exit 143' TERM
 export CANIC_TEST_SCRATCH="$TEST_SCRATCH"
 export TMPDIR="$TEST_SCRATCH"
 
+# Direct targeted runs need the same persistent cache lifetime as Make runs.
+# Preserve explicit wrappers, including an empty value that disables caching.
+if [[ ! -v RUSTC_WRAPPER ]] && command -v sccache >/dev/null 2>&1; then
+    export RUSTC_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
+fi
+
 "$@"

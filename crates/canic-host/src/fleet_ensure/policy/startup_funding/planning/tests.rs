@@ -389,6 +389,22 @@ pub(in crate::fleet_ensure) fn qualify_creation(
     };
     let before = initial(&baseline);
     let after = initial(&planned);
+    let review = planned.recovery_review.as_ref().unwrap();
+    let forecast = review
+        .startup_funding
+        .iter()
+        .find(|entry| &entry.root == root)
+        .unwrap();
+    assert_eq!(
+        forecast.startup_minimum_cycles,
+        artifacts.startup_funding_by_root[root].minimum_native_cycles
+    );
+    assert_eq!(
+        forecast.continuation_allowance_cycles,
+        u128::from(forecast.maximum_continuation_steps) * review.per_step_burn_cycles
+    );
+    assert!(after >= forecast.required_native_cycles);
+    qualify_startup_forecast_inputs(&selected, &artifacts);
     assert!(after > before);
     assert!(after > artifacts.startup_funding_by_root[root].minimum_native_cycles);
     assert_eq!(
@@ -438,6 +454,67 @@ pub(in crate::fleet_ensure) fn qualify_creation(
         .initial_cycles = format!("{}T", after / T + 1);
     let prefunded = continuation_plan(&selected, &artifacts, &observation);
     assert_eq!(initial(&prefunded), (after / T + 1) * T);
+}
+
+fn qualify_startup_forecast_inputs(desired: &DesiredFleet, artifacts: &DesiredFleetArtifacts) {
+    use crate::fleet_ensure::{
+        model::StartupFundingReuseAssumption, policy::recovery::startup_forecasts,
+    };
+
+    let bounds = crate::fleet_ensure::policy::cycle_bounds(desired).unwrap();
+    let forecasts = startup_forecasts(desired, artifacts, bounds).unwrap();
+    assert!(!forecasts.is_empty());
+    for forecast in &forecasts {
+        assert_eq!(
+            forecast.reuse_assumption,
+            StartupFundingReuseAssumption::FreshChildrenAndFullPublication
+        );
+    }
+    let root = &forecasts[0].root;
+    let mut selected = desired.clone();
+    let configured_root = selected
+        .canisters
+        .iter_mut()
+        .find(|canister| &canister.name == root)
+        .unwrap();
+    configured_root.minimum_cycles = u128::MAX.to_string();
+    configured_root.initial_cycles = u128::MAX.to_string();
+    let configured = startup_forecasts(&selected, artifacts, bounds).unwrap();
+    assert_eq!(configured[0].required_native_cycles, u128::MAX);
+    assert_eq!(
+        configured[0].startup_minimum_cycles,
+        forecasts[0].startup_minimum_cycles
+    );
+
+    let mut unavailable = artifacts.clone();
+    unavailable
+        .startup_funding_by_root
+        .get_mut(root)
+        .unwrap()
+        .unfunded_role = Some(StartupRoleShortfall {
+        role: "app".into(),
+        cycles: 42,
+    });
+    let projected = startup_forecasts(desired, &unavailable, bounds).unwrap();
+    assert_eq!(projected[0].unfunded_role.as_ref().unwrap().cycles, 42);
+    let mut serialized = serde_json::to_value(&projected[0]).unwrap();
+    serialized.as_object_mut().unwrap().remove("unfunded_role");
+    assert!(
+        serde_json::from_value::<crate::fleet_ensure::model::RootStartupFundingForecast>(
+            serialized
+        )
+        .is_err()
+    );
+
+    unavailable
+        .startup_funding_by_root
+        .get_mut(root)
+        .unwrap()
+        .minimum_native_cycles = u128::MAX;
+    assert!(matches!(
+        startup_forecasts(desired, &unavailable, bounds),
+        Err(EnsurePolicyError::ArithmeticOverflow { .. })
+    ));
 }
 
 fn qualify_reinstall(

@@ -26,9 +26,10 @@ use crate::fleet_ensure::{
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
-        compact_inline_plan, lock_operation, read_plan, read_root_start_authority, read_state,
-        reserve_fixture_publication_attempt, resolve_desired_artifacts,
-        retain_configured_principal_bindings, write_journal, write_plan, write_state,
+        compact_inline_plan, effect_preparation::prepare_effect, lock_operation, read_plan,
+        read_root_start_authority, read_state, reserve_fixture_publication_attempt,
+        resolve_desired_artifacts, retain_configured_principal_bindings, write_journal, write_plan,
+        write_state,
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
@@ -41,6 +42,7 @@ use canic_core::cdk::types::Cycles;
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
+    time::Instant,
 };
 use thiserror::Error as ThisError;
 
@@ -1112,6 +1114,11 @@ where
                 platform,
                 &state,
             )?;
+            root_reinstall::verify_initial_funding(
+                &retained_plan,
+                observation.operator_cycles,
+                platform,
+            )?;
             let journal = FleetEnsureJournalRecord {
                 funding_reviews: Vec::new(),
                 successor_phases: Vec::new(),
@@ -1212,32 +1219,16 @@ where
                         )));
                     }
                 }
-                if journal.effects.len() <= index {
-                    let pre_cycles = platform
-                        .action_cycles(action, &state)
+                let mut initial_observation = if journal.effects.len() <= index {
+                    let prepared = prepare_effect(platform, &journal.operation_id, action, &state)
                         .map_err(EnsureWorkflowError::Platform)?;
-                    let destination_pre_cycles = platform
-                        .action_destination_cycles(action, &state)
-                        .map_err(EnsureWorkflowError::Platform)?;
-                    let pre_canister_version = platform
-                        .action_canister_version(action, &state)
-                        .map_err(EnsureWorkflowError::Platform)?;
-                    journal.effects.push(EffectRecord {
-                        publication_attempts: 0,
-                        maintenance_attempts: 0,
-                        action_sha256: action_hash.clone(),
-                        created_principal: None,
-                        destination_post_cycles: destination_pre_cycles,
-                        destination_pre_cycles,
-                        post_cycles: None,
-                        pre_cycles,
-                        pre_canister_version,
-                        progress_identity: None,
-                        receipt: None,
-                        state: EffectState::Intent,
-                    });
+                    journal.effects.push(prepared.record);
                     write_journal(&paths, &journal)?;
-                }
+                    prepared.observation
+                } else {
+                    None
+                };
+                let observation_started = Instant::now();
                 loop {
                     let record = journal
                         .effects
@@ -1271,9 +1262,12 @@ where
                         break;
                     }
 
-                    let observed = platform
-                        .observe_effect(&journal.operation_id, action, record, &state)
-                        .map_err(EnsureWorkflowError::Platform)?;
+                    let observed = match initial_observation.take() {
+                        Some(observed) => observed,
+                        None => platform
+                            .observe_effect(&journal.operation_id, action, record, &state)
+                            .map_err(EnsureWorkflowError::Platform)?,
+                    };
                     let source_cycles = if observed.post_cycles.is_some() {
                         observed.post_cycles
                     } else {
@@ -1495,6 +1489,7 @@ where
                             root_reinstall::verify_effect_authority(
                                 &retained_plan,
                                 action,
+                                record.pre_cycles,
                                 &state,
                                 platform,
                             )?;
@@ -1630,7 +1625,10 @@ where
                             &retained_plan,
                             &journal,
                             action_progress_phase(action),
-                            FleetEnsureProgressState::AwaitingProgress,
+                            FleetEnsureProgressState::AwaitingProgress {
+                                elapsed_seconds: observation_started.elapsed().as_secs(),
+                                provisioning: observed.provisioning_progress,
+                            },
                         );
                         platform.pace_effect_observation(action, journal.stalled_observations);
                     }
@@ -1745,6 +1743,7 @@ where
             .map_err(EnsureWorkflowError::Platform)?;
         {
             let artifacts = resolve_desired_artifacts(root, operation_desired)?;
+            let observation_started = Instant::now();
             let converged = loop {
                 let protocol_actions = platform
                     .protocol_actions(&retained_plan.operation_id, &terminal_state)
@@ -1791,7 +1790,10 @@ where
                             &retained_plan,
                             &journal,
                             FleetEnsurePhase::TerminalVerification,
-                            FleetEnsureProgressState::AwaitingProgress,
+                            FleetEnsureProgressState::AwaitingProgress {
+                                elapsed_seconds: observation_started.elapsed().as_secs(),
+                                provisioning: None,
+                            },
                         );
                         platform.pace_root_owned_observation(&name, journal.stalled_observations);
                         terminal_observation = platform

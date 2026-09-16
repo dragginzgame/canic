@@ -553,6 +553,71 @@ fn advancing_progress_refreshes_counts_in_text_and_json() {
 }
 
 #[test]
+fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
+    let mut progress = FleetEnsureProgress {
+        operation_id: "reviewed-operation".into(),
+        plan_sha256: "reviewed-plan".into(),
+        phase: FleetEnsurePhase::WorkloadProvisioning,
+        state: FleetEnsureProgressState::AwaitingProgress {
+            elapsed_seconds: 63,
+            provisioning: Some(canic_host::fleet_ensure::dto::FleetProvisioningProgress {
+                phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
+                root_batch_count: 1,
+                accepted_root_count: 1,
+                provisioned_root_count: 1,
+                directory_confirmed_root_count: 1,
+                directory_confirmation_root_count: 1,
+                runtime_activated_root_count: 0,
+                component_count: 3,
+            }),
+        },
+        applied_effects: 50,
+        reviewed_effects: 52,
+    };
+    let text = render_progress(&progress, false);
+    for detail in [
+        "50/52",
+        "63s this invocation",
+        "ActivatingRuntimes",
+        "accepted Roots 1/1",
+        "provisioned Roots 1/1",
+        "directory Roots 1/1",
+        "runtime Roots 0/1",
+        "Components 3",
+    ] {
+        assert!(text.contains(detail), "missing {detail} from {text}");
+    }
+    let value: serde_json::Value = serde_json::from_str(&render_progress(&progress, true)).unwrap();
+    assert_eq!(
+        value["progress"]["state"],
+        serde_json::json!({
+            "kind": "awaiting_progress",
+            "elapsed_seconds": 63,
+            "provisioning": {
+                "phase": "ActivatingRuntimes",
+                "root_batch_count": 1,
+                "accepted_root_count": 1,
+                "provisioned_root_count": 1,
+                "directory_confirmed_root_count": 1,
+                "directory_confirmation_root_count": 1,
+                "runtime_activated_root_count": 0,
+                "component_count": 3,
+            },
+        })
+    );
+    progress.state = FleetEnsureProgressState::AwaitingProgress {
+        elapsed_seconds: 0,
+        provisioning: None,
+    };
+    let value: serde_json::Value = serde_json::from_str(&render_progress(&progress, true)).unwrap();
+    assert_eq!(
+        value["progress"]["state"]["provisioning"],
+        serde_json::Value::Null
+    );
+    assert!(!render_progress(&progress, false).contains("runtime Roots"));
+}
+
+#[test]
 fn phase_progress_json_has_exact_operation_authority_and_numeric_counts() {
     let progress = FleetEnsureProgress {
         operation_id: "e1".repeat(32),
@@ -595,13 +660,27 @@ fn deliberate_reinstall_cannot_replace_a_reviewed_apply_digest() {
 fn recovery_review_is_visible_in_text_json_and_typed_progress() {
     use canic_host::fleet_ensure::model::{
         FleetEnsureSuccessorReviewReason, FleetRecoveryReview, FleetReviewAction,
-        FleetSuccessorReview, RecoveryDiscovery,
+        FleetSuccessorReview, RecoveryDiscovery, RootStartupFundingForecast,
+        StartupFundingReuseAssumption,
     };
     let mut report = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
     report.plan.recovery_review = Some(Box::new(FleetRecoveryReview {
         base_execution_burn_cycles: 40,
         continuation_reserve_cycles: 60,
         whole_continuation_ceiling_cycles: 120,
+        maximum_successor_actions: 8,
+        fixture_publication_retry_attempts: 2,
+        per_step_burn_cycles: 12,
+        startup_funding: vec![RootStartupFundingForecast {
+            root: "root".into(),
+            startup_minimum_cycles: 40,
+            maximum_continuation_steps: 4,
+            continuation_allowance_cycles: 48,
+            configured_minimum_cycles: 80,
+            required_native_cycles: 88,
+            reuse_assumption: StartupFundingReuseAssumption::FreshChildrenAndFullPublication,
+            unfunded_role: None,
+        }],
         known_pool_funding: Vec::new(),
         discovery: RecoveryDiscovery::PendingCurrentProtocol,
     }));
@@ -616,6 +695,25 @@ fn recovery_review_is_visible_in_text_json_and_typed_progress() {
     );
     assert!(render_text_report(&report).contains("base_execution_burn_cycles:"));
     assert!(render_text_report(&report).contains("continuation_reserve_cycles:"));
+    assert_eq!(
+        value["plan"]["recovery_review"]["per_step_burn_cycles"],
+        "12"
+    );
+    assert_eq!(
+        value["plan"]["recovery_review"]["maximum_successor_actions"],
+        8
+    );
+    let forecast = &value["plan"]["recovery_review"]["startup_funding"][0];
+    assert_eq!(forecast["required_native_cycles"], "88");
+    assert_eq!(
+        forecast["reuse_assumption"],
+        "fresh_children_and_full_publication"
+    );
+    assert!(forecast["unfunded_role"].is_null());
+    let rendered = render_text_report(&report);
+    assert!(rendered.contains("startup_forecast: Root root;"));
+    assert!(rendered.contains("4 steps at"));
+    assert!(rendered.contains("requires fresh funding review"));
     let progress = FleetEnsureProgress {
         operation_id: "operation".into(),
         plan_sha256: "plan".into(),

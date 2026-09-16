@@ -13,7 +13,9 @@ use std::{fs, io, path::Path};
 use thiserror::Error as ThisError;
 
 pub use observation::{FleetObservationStage, FleetObservationTiming};
-pub use progress::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState};
+pub use progress::{
+    FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState, FleetProvisioningProgress,
+};
 
 /// Parsed current desired state and its exact source identity.
 

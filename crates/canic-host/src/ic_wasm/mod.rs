@@ -15,7 +15,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read},
     path::{Path, PathBuf},
-    process::Command,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -401,7 +400,7 @@ fn admit_ic_wasm_executable(path: &Path) -> Result<IcWasmExecutable, IcWasmToolE
     if !is_executable(&path) {
         return Err(IcWasmToolError::NotExecutable { path });
     }
-    let mut command = Command::new(&path);
+    let mut command = crate::build_environment::command(&path);
     command.arg("--version");
     let output = output_with_executable_busy_retry(&mut command).map_err(|source| {
         IcWasmToolError::VersionProcess {
@@ -431,7 +430,7 @@ fn download_archive(
     authority: IcWasmAuthority,
     archive_path: &Path,
 ) -> Result<(), IcWasmToolError> {
-    let mut command = Command::new(DOWNLOAD_TOOL);
+    let mut command = crate::build_environment::command(DOWNLOAD_TOOL);
     command
         .args([
             "--proto",
@@ -477,7 +476,7 @@ fn extract_archive(
     destination: &Path,
 ) -> Result<(), IcWasmToolError> {
     let member = format!("{}/{IC_WASM_TOOL}", authority.package_name());
-    let mut command = Command::new(EXTRACT_TOOL);
+    let mut command = crate::build_environment::command(EXTRACT_TOOL);
     command
         .arg("-xJf")
         .arg(archive_path)

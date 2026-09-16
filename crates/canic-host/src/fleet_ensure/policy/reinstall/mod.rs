@@ -23,6 +23,70 @@ pub(in crate::fleet_ensure) struct PreparationInput<'a> {
     pub time: u64,
 }
 
+/// Select funding that must retain the completed source's authority fence.
+pub(in crate::fleet_ensure) fn funding_authority_kind(
+    intent: &FleetReinstallRecord,
+    action: &EnsureAction,
+    canisters: &[CanisterPlan],
+) -> Option<DesiredCanisterKind> {
+    let (EnsureAction::Fund { name, .. } | EnsureAction::FundEstate { name, .. }) = action else {
+        return None;
+    };
+    // Successor funding belongs to the replacement runtime after reset. Only
+    // credits ordered before this target's reviewed reinstall need its old seal.
+    let resets_target = canisters.iter().flat_map(|canister| &canister.actions).any(|action| {
+        matches!(action, EnsureAction::Install { name: target, mode: InstallMode::Reinstall, .. } if target == name)
+    });
+    if !resets_target {
+        return None;
+    }
+    intent
+        .source
+        .as_ref()?
+        .reviewed_desired
+        .desired()
+        .canisters
+        .iter()
+        .find(|canister| canister.name == *name)
+        .map(|canister| canister.kind)
+        .filter(|kind| {
+            matches!(
+                kind,
+                DesiredCanisterKind::Root | DesiredCanisterKind::Coordinator
+            )
+        })
+}
+
+/// Reserve fresh management observations and one seal query before each protected credit.
+pub(in crate::fleet_ensure) fn funding_observation_count(
+    desired: &DesiredFleet,
+    intent: Option<&FleetReinstallRecord>,
+    canisters: &[CanisterPlan],
+) -> Result<u128, EnsurePolicyError> {
+    let Some(intent) = intent else {
+        return Ok(0);
+    };
+    let credits = canisters
+        .iter()
+        .flat_map(|canister| &canister.actions)
+        .filter(|action| funding_authority_kind(intent, action, canisters).is_some())
+        .count() as u128;
+    // The management adapter reads Roots, then all infrastructure, and the
+    // operator balance. Two reads per infrastructure plus balance/seal is a bound.
+    let infrastructure = desired
+        .canisters
+        .iter()
+        .filter(|canister| canister.kind != DesiredCanisterKind::Pool)
+        .count() as u128;
+    infrastructure
+        .checked_mul(2)
+        .and_then(|n| n.checked_add(2))
+        .and_then(|n| n.checked_mul(credits))
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "reinstall funding observations",
+        })
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one pure boundary binds preparation actions, authority and their conservation budget"
@@ -39,6 +103,11 @@ pub(in crate::fleet_ensure) fn preparation(
         .as_ref()
         .ok_or_else(|| conflict("typed generated protocol"))?;
     let bounds = cycle_bounds(desired)?;
+    let authority_burn = bounds
+        .observation_burn
+        .checked_mul(8)
+        .and_then(|burn| burn.checked_add(bounds.update_burn))
+        .ok_or_else(|| conflict("seal budget"))?;
     let observation = FleetObservation {
         additional_controlled_cycles: BTreeMap::new(),
         canisters: input
@@ -105,6 +174,15 @@ pub(in crate::fleet_ensure) fn preparation(
             DesiredCanisterKind::Store => continue,
             _ => return Err(conflict("generated infrastructure")),
         };
+        if live.cycles < authority_burn {
+            return Err(EnsurePolicyError::AuthoritySealHeadroom {
+                name: configured.name.clone(),
+                principal: live.principal.clone(),
+                available: live.cycles,
+                required: authority_burn,
+                shortfall: authority_burn - live.cycles,
+            });
+        }
         cycles = checked_add(cycles, live.cycles, "seal cycles")?;
         canisters.push(CanisterPlan {
             actions: vec![EnsureAction::SealAuthority {
@@ -125,11 +203,8 @@ pub(in crate::fleet_ensure) fn preparation(
             principal: Some(live.principal.clone()),
         });
     }
-    let burn = bounds
-        .observation_burn
-        .checked_mul(8)
-        .and_then(|b| b.checked_add(bounds.update_burn))
-        .and_then(|b| b.checked_mul(canisters.len() as u128))
+    let burn = authority_burn
+        .checked_mul(canisters.len() as u128)
         .ok_or_else(|| conflict("seal budget"))?;
     let remaining = cycles
         .checked_sub(burn)

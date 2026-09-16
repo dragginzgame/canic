@@ -16,7 +16,7 @@ use crate::durable_io::{read_regular_bytes, write_bytes};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
-    env, io,
+    io,
     path::{Path, PathBuf},
 };
 
@@ -63,12 +63,13 @@ impl CandidExtractionCache {
         let extractor_sha256 = file_hash(&extractor)?;
         let mut identity = Sha256::new();
         identity.update(b"canic.candid-extraction.v1");
+        identity.update(include_bytes!("../../build_environment/mod.rs"));
         identity.update(extractor_sha256.as_bytes());
         // Bind the compiled extraction implementation without rehashing a large host binary.
         identity.update(env!("CARGO_PKG_VERSION").as_bytes());
         identity.update(include_bytes!("../candid.rs"));
         identity.update(include_bytes!("mod.rs"));
-        let mut environment = env::vars_os().collect::<Vec<_>>();
+        let mut environment = crate::build_environment::inputs();
         environment.sort();
         for pair in environment {
             for field in <[_; 2]>::from(pair) {

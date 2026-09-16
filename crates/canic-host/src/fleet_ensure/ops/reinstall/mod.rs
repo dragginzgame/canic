@@ -14,6 +14,27 @@ use crate::fleet_ensure::model::{
 };
 use std::{collections::BTreeMap, path::Path};
 
+/// Reconstruct the exact source seal to inspect before a reviewed authority credit.
+pub(in crate::fleet_ensure) fn funding_seal(
+    source: &FleetReinstallSourceRecord,
+    binding: &crate::fleet_ensure::model::RootManagementBinding,
+    kind: DesiredCanisterKind,
+) -> Option<crate::fleet_ensure::model::EnsureAction> {
+    let protocol = source.reviewed_desired.desired().protocol.as_ref()?;
+    let candid = match kind {
+        DesiredCanisterKind::Root => &protocol.root_candid,
+        DesiredCanisterKind::Coordinator => &protocol.coordinator_candid,
+        _ => return None,
+    };
+    Some(crate::fleet_ensure::model::EnsureAction::SealAuthority {
+        authority_kind: kind,
+        candid: candid.clone(),
+        candid_sha256: source.candid_sha256_by_path.get(candid)?.clone(),
+        name: binding.name.clone(),
+        principal: binding.principal.clone(),
+    })
+}
+
 /// Bind every resolved target artifact, including generated continuation contracts.
 pub(in crate::fleet_ensure) fn target_artifacts_sha256(
     root: &Path,

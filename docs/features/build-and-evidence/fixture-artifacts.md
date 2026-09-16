@@ -33,7 +33,9 @@ owns encoding, relationship order, import validation and receipt semantics.
 
 Fixture paths cannot contain parent traversal or absolute paths, and observed
 file/directory symlinks are refused. Fixture inputs must remain beneath the
-selected workspace root. Each chunk must be nonempty and fit the existing
+selected workspace root. A symlink rejection names the exact linked component,
+including a shared `.canic` parent; keep mutable state independent between
+checkouts. Each chunk must be nonempty and fit the existing
 1 MiB Store payload bound; the resulting descriptor must fit the existing Store
 command envelope. These are transport bounds, not application instruction
 budgets or production-load qualification.

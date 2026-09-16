@@ -56,6 +56,298 @@ placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
 
+#[cfg(unix)]
+struct StoreStagingFixture {
+    root: PathBuf,
+    icp: IcpCli,
+    actions: Vec<CurrentFleetProtocolAction>,
+    status: TemplateStagingStatusResponse,
+}
+
+#[cfg(unix)]
+impl StoreStagingFixture {
+    fn new() -> Self {
+        use std::os::unix::fs::PermissionsExt as _;
+        let root = crate::test_support::temp_dir("store-staging-observations");
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("store.did"), "service : {}").unwrap();
+        let executable = root.join("icp");
+        fs::write(
+            &executable,
+            r#"#!/bin/sh
+set -eu
+case " $* " in
+  *" --version "*) echo 'icp 1.5.0'; exit 0;;
+  *" canic_wasm_store_catalog "*" --query "*)
+    printf 'query\n' >> calls
+    if [ -e fail ]; then exit 1; fi
+    cat response.json;;
+  *) exit 2;;
+esac
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let (actions, status) = Self::subject();
+        let fixture = Self {
+            icp: IcpCli::new(executable.to_str().unwrap(), None).with_cwd(root.clone()),
+            root,
+            actions,
+            status,
+        };
+        fixture.respond();
+        fixture
+    }
+
+    fn subject() -> (
+        Vec<CurrentFleetProtocolAction>,
+        TemplateStagingStatusResponse,
+    ) {
+        let manifest = TemplateManifestInput {
+            template_id: TemplateId::new("test-template"),
+            version: TemplateVersion::new("test-release"),
+            role: CanisterRole::new("alpha"),
+            payload_hash: canic_core::cdk::utils::hash::wasm_hash(&[1, 2, 3]),
+            payload_size_bytes: 3,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(0),
+            created_at: 0,
+        };
+        let hashes = [1, 2, 3].map(|byte| canic_core::cdk::utils::hash::wasm_hash(&[byte]));
+        let status = TemplateStagingStatusResponse {
+            template_id: manifest.template_id.clone(),
+            version: manifest.version.clone(),
+            manifest: Some(manifest_response(&manifest)),
+            chunk_set_present: true,
+            expected_chunk_count: 3,
+            expected_chunk_hashes: hashes.to_vec(),
+            payload_hash: Some(manifest.payload_hash.clone()),
+            payload_size_bytes: Some(3),
+            stored_chunk_hashes: hashes.into_iter().map(Some).collect(),
+            stored_chunk_count: 3,
+            complete: true,
+        };
+        let mut actions =
+            vec![CurrentFleetProtocolAction::StageStoreManifest { request: manifest }];
+        actions.push(CurrentFleetProtocolAction::PrepareStoreChunkSet {
+            request: TemplateChunkSetPrepareInput {
+                template_id: status.template_id.clone(),
+                version: status.version.clone(),
+                payload_hash: status.payload_hash.clone().unwrap(),
+                payload_size_bytes: 3,
+                chunk_hashes: status.expected_chunk_hashes.clone(),
+            },
+        });
+        for (chunk_index, byte) in (0..3).zip([1, 2, 3]) {
+            actions.push(CurrentFleetProtocolAction::PublishStoreChunk {
+                request: TemplateChunkInput {
+                    template_id: status.template_id.clone(),
+                    version: status.version.clone(),
+                    chunk_index,
+                    bytes: vec![byte],
+                },
+            });
+        }
+        (actions, status)
+    }
+
+    fn respond(&self) {
+        let response = Ok::<_, canic_core::dto::error::Error>(StoreCatalogResponse::Template(
+            self.status.clone(),
+        ));
+        fs::write(self.root.join("response.json"), serde_json::json!({
+            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(candid::encode_one(response).unwrap()),
+        }).to_string()).unwrap();
+    }
+
+    fn pending(&self) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+        let desired = desired(Vec::new());
+        let steps = self
+            .actions
+            .iter()
+            .enumerate()
+            .map(|(index, action)| CompiledCurrentProtocolStep {
+                action: action.clone(),
+                name: format!("store-{index}"),
+                target: principal(21),
+            })
+            .collect();
+        bind_unapplied_actions(
+            &self.icp,
+            &self.root,
+            &desired,
+            &state(),
+            desired.protocol.as_ref().unwrap(),
+            steps,
+            0,
+        )
+    }
+
+    fn calls(&self) -> usize {
+        fs::read_to_string(self.root.join("calls"))
+            .unwrap()
+            .lines()
+            .count()
+    }
+}
+
+#[cfg(unix)]
+impl Drop for StoreStagingFixture {
+    fn drop(&mut self) {
+        fs::remove_dir_all(&self.root).unwrap();
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn store_staging_reads_once_per_plan_and_refreshes_changed_chunks() {
+    let mut fixture = StoreStagingFixture::new();
+    assert!(fixture.pending().unwrap().is_empty());
+    assert_eq!(fixture.calls(), 1);
+    fixture.status.stored_chunk_hashes[1] = None;
+    fixture.status.stored_chunk_count = 2;
+    fixture.status.complete = false;
+    fixture.respond();
+    let pending = fixture.pending().unwrap();
+    assert_eq!(fixture.calls(), 2);
+    assert_eq!(pending.len(), 1);
+    assert!(
+        matches!(&pending[0], EnsureAction::FleetProtocol { action, .. }
+        if matches!(action.as_ref(), CurrentFleetProtocolAction::PublishStoreChunk { request }
+            if request.chunk_index == 1))
+    );
+    fixture.status.stored_chunk_hashes[1] = Some(fixture.status.expected_chunk_hashes[1].clone());
+    fixture.respond();
+    // Execution-time observations must query afresh even for the same retained action.
+    assert!(
+        observe(&fixture.icp, &fixture.root, &pending[0])
+            .unwrap()
+            .applied
+    );
+    fixture.status.stored_chunk_hashes[1] = None;
+    fixture.respond();
+    assert!(
+        !observe(&fixture.icp, &fixture.root, &pending[0])
+            .unwrap()
+            .applied
+    );
+    assert_eq!(fixture.calls(), 4);
+}
+
+#[cfg(unix)]
+#[test]
+fn store_staging_failures_are_not_reused_and_candid_is_revalidated() {
+    let fixture = StoreStagingFixture::new();
+    let desired = desired(Vec::new());
+    let action = bind_action(
+        &fixture.root,
+        &desired,
+        &state(),
+        desired.protocol.as_ref().unwrap(),
+        fixture.actions[0].clone(),
+        principal(21),
+        "manifest".into(),
+        0,
+    )
+    .unwrap();
+    let mut observations = StoreStagingObservations::default();
+    fs::write(fixture.root.join("fail"), []).unwrap();
+    assert!(matches!(
+        observe_with_staging(&fixture.icp, &fixture.root, &action, &mut observations),
+        Err(CurrentProtocolError::Transport(_))
+    ));
+    fs::remove_file(fixture.root.join("fail")).unwrap();
+    assert!(
+        observe_with_staging(&fixture.icp, &fixture.root, &action, &mut observations)
+            .unwrap()
+            .applied
+    );
+    fs::write(
+        fixture.root.join("store.did"),
+        "service : { changed : () -> () }",
+    )
+    .unwrap();
+    assert!(matches!(
+        observe_with_staging(&fixture.icp, &fixture.root, &action, &mut observations),
+        Err(CurrentProtocolError::ResponseMismatch)
+    ));
+    assert_eq!(fixture.calls(), 2);
+}
+
+#[cfg(unix)]
+#[test]
+fn store_staging_observations_bind_each_query_identity() {
+    let fixture = StoreStagingFixture::new();
+    let mut observations = StoreStagingObservations::default();
+    let template = &fixture.status.template_id;
+    let version = &fixture.status.version;
+    for (index, target, path, digest, template, version) in [
+        (
+            1,
+            principal(21),
+            "store.did",
+            "first",
+            template.clone(),
+            version.clone(),
+        ),
+        (
+            2,
+            principal(11),
+            "store.did",
+            "first",
+            template.clone(),
+            version.clone(),
+        ),
+        (
+            3,
+            principal(21),
+            "other.did",
+            "first",
+            template.clone(),
+            version.clone(),
+        ),
+        (
+            4,
+            principal(21),
+            "store.did",
+            "changed",
+            template.clone(),
+            version.clone(),
+        ),
+        (
+            5,
+            principal(21),
+            "store.did",
+            "first",
+            TemplateId::new("other"),
+            version.clone(),
+        ),
+        (
+            6,
+            principal(21),
+            "store.did",
+            "first",
+            template.clone(),
+            TemplateVersion::new("other"),
+        ),
+    ] {
+        let resolved = ResolvedProtocolAction {
+            action: &fixture.actions[0],
+            target,
+            candid_path: fixture.root.join(path),
+            candid_sha256: digest,
+        };
+        for _ in 0..2 {
+            observations
+                .query(&fixture.icp, &resolved, &template, &version)
+                .unwrap();
+            assert_eq!(fixture.calls(), index);
+        }
+    }
+}
+
 #[test]
 fn activation_source_requires_exact_completed_prefix_and_issued_provisioning() {
     assert_activation_source_review(1, Some(0), false);
@@ -695,6 +987,7 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
         };
 
     assert_retry_timestamp_is_not_durable_progress(&status);
+    assert_provisioning_progress_is_bounded(&status);
 
     let sequence = compile_current_registry_sequence_with_status(
         &desired,
@@ -732,6 +1025,37 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
         require_component_status_matches(&drifted_status, &compiled.request, compiled.plan_hash),
         Err(CurrentProtocolError::RegistrySequenceConflict(_))
     ));
+}
+
+fn assert_provisioning_progress_is_bounded(
+    status: &canic_core::dto::component_provisioning::FleetComponentProvisioningStatusResponse,
+) {
+    let mut status = status.clone();
+    status.phase = FleetComponentProvisioningPhase::ActivatingRuntimes;
+    status.root_batch_count = 2;
+    status.accepted_root_count = 2;
+    status.provisioned_root_count = 1;
+    status.directory_confirmed_root_count = 3;
+    status.directory_confirmation_root_count = 4;
+    status.runtime_activated_root_count = 0;
+    status.component_count = 7;
+    let observed = component_provisioning_observation(false, &status).unwrap();
+    assert!(!observed.applied);
+    assert_eq!(observed.retry, EffectRetry::None);
+    assert_eq!(
+        observed.provisioning_progress,
+        Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
+            phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
+            root_batch_count: 2,
+            accepted_root_count: 2,
+            provisioned_root_count: 1,
+            directory_confirmed_root_count: 3,
+            directory_confirmation_root_count: 4,
+            runtime_activated_root_count: 0,
+            component_count: 7,
+        })
+    );
+    assert_eq!(unavailable_observation().provisioning_progress, None);
 }
 
 fn assert_retry_timestamp_is_not_durable_progress(

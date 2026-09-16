@@ -1,5 +1,7 @@
 use std::{
-    env, io,
+    env,
+    ffi::OsStr,
+    io,
     os::fd::BorrowedFd,
     path::{Path, PathBuf},
     process::Command,
@@ -21,6 +23,8 @@ use super::{
 
 /// Optional absolute path relayed to every ICP CLI subprocess for an encrypted identity.
 pub const CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV: &str = "CANIC_ICP_IDENTITY_PASSWORD_FILE";
+
+const REQUEST_RUNTIME_WORKERS_ENV: &str = "TOKIO_WORKER_THREADS";
 
 impl IcpCli {
     /// Build an ICP CLI command context from an executable path and optional ICP environment.
@@ -116,8 +120,18 @@ impl IcpCli {
     /// Build an `icp canister ...` command with optional environment selection applied.
     #[must_use]
     pub fn canister_command(&self) -> Command {
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.arg("canister");
+        command
+    }
+
+    /// Bound startup work for a short-lived request without changing replica commands.
+    pub(super) fn request_command(&self) -> Command {
+        let mut command = self.command();
+        configure_request_runtime(
+            &mut command,
+            env::var_os(REQUEST_RUNTIME_WORKERS_ENV).as_deref(),
+        );
         command
     }
 
@@ -130,6 +144,18 @@ impl IcpCli {
         if let Some(identity) = self.selected_identity.get() {
             command.arg("--identity").arg(identity);
         }
+    }
+}
+
+fn configure_request_runtime(command: &mut Command, inherited: Option<&OsStr>) {
+    if inherited.is_none()
+        && !command
+            .get_envs()
+            .any(|(key, _)| key == REQUEST_RUNTIME_WORKERS_ENV)
+    {
+        // One request needs I/O progress, not one worker per host CPU. Keep a second
+        // worker for background tasks; explicit operator/command settings take precedence.
+        command.env(REQUEST_RUNTIME_WORKERS_ENV, "2");
     }
 }
 
@@ -180,6 +206,54 @@ mod tests {
     use crate::test_support::temp_dir;
     use rustix::fs::{FlockOperation, flock};
     use std::{fs, time::Duration};
+
+    #[test]
+    fn request_runtime_default_preserves_explicit_settings_and_replica_context() {
+        let mut command = Command::new("icp");
+        configure_request_runtime(&mut command, None);
+        assert_eq!(
+            command
+                .get_envs()
+                .find(|(key, _)| *key == REQUEST_RUNTIME_WORKERS_ENV)
+                .map(|(_, value)| value),
+            Some(Some(OsStr::new("2")))
+        );
+        for value in [Some(OsStr::new("7")), Some(OsStr::new(""))] {
+            let mut inherited = Command::new("icp");
+            configure_request_runtime(&mut inherited, value);
+            assert!(
+                !inherited
+                    .get_envs()
+                    .any(|(key, _)| key == REQUEST_RUNTIME_WORKERS_ENV)
+            );
+        }
+        command.env(REQUEST_RUNTIME_WORKERS_ENV, "3");
+        configure_request_runtime(&mut command, None);
+        assert_eq!(
+            command
+                .get_envs()
+                .find(|(key, _)| *key == REQUEST_RUNTIME_WORKERS_ENV)
+                .map(|(_, value)| value),
+            Some(Some(OsStr::new("3")))
+        );
+        command.env_remove(REQUEST_RUNTIME_WORKERS_ENV);
+        configure_request_runtime(&mut command, None);
+        assert_eq!(
+            command
+                .get_envs()
+                .find(|(key, _)| *key == REQUEST_RUNTIME_WORKERS_ENV)
+                .map(|(_, value)| value),
+            Some(None)
+        );
+        let cli = IcpCli::new("icp", None);
+        for generic in [cli.command(), cli.command_in(Path::new("/tmp"))] {
+            assert!(
+                !generic
+                    .get_envs()
+                    .any(|(key, _)| key == REQUEST_RUNTIME_WORKERS_ENV)
+            );
+        }
+    }
 
     #[test]
     fn configured_descriptor_lives_through_command_descendants_only() {

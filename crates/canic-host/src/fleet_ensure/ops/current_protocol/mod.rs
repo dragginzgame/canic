@@ -548,6 +548,7 @@ fn bind_unapplied_actions(
     per_action_burn_cycles: u128,
 ) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
     let mut provisioning_pending = false;
+    let mut staging = StoreStagingObservations::default();
     compiled
         .into_iter()
         .map(|step| {
@@ -572,7 +573,7 @@ fn bind_unapplied_actions(
             if provisioning_pending && is_pool_readiness_action(&action) {
                 return Some(Ok(action));
             }
-            match observe(icp, root, &action) {
+            match observe_with_staging(icp, root, &action, &mut staging) {
                 Ok(observed) if observed.applied => None,
                 Ok(_) => {
                     provisioning_pending |= matches!(&action, EnsureAction::FleetProtocol { action, .. }
@@ -1006,14 +1007,23 @@ fn bind_action(
 }
 
 /// Observe exact terminal status for one retained typed protocol action.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one exhaustive observer keeps every closed action beside its terminal predicate"
-)]
 pub(super) fn observe(
     icp: &IcpCli,
     root: &Path,
     action: &EnsureAction,
+) -> Result<EffectObservation, CurrentProtocolError> {
+    observe_with_staging(icp, root, action, &mut StoreStagingObservations::default())
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one exhaustive observer keeps every closed action beside its terminal predicate"
+)]
+fn observe_with_staging(
+    icp: &IcpCli,
+    root: &Path,
+    action: &EnsureAction,
+    staging: &mut StoreStagingObservations,
 ) -> Result<EffectObservation, CurrentProtocolError> {
     let resolved = ResolvedProtocolAction::from_action(root, action)?;
     match resolved.action {
@@ -1132,8 +1142,7 @@ pub(super) fn observe(
             ..
         } => fixture::observe_upload(icp, &resolved, expected, *source_bytes),
         CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
-            let status =
-                query_store_staging(icp, &resolved, &request.template_id, &request.version)?;
+            let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
             let applied = status.chunk_set_present
                 && status.expected_chunk_hashes == request.chunk_hashes
                 && status.payload_hash.as_deref() == Some(request.payload_hash.as_slice())
@@ -1180,8 +1189,7 @@ pub(super) fn observe(
             component_provisioning_observation(applied, &status)
         }
         CurrentFleetProtocolAction::PublishStoreChunk { request } => {
-            let status =
-                query_store_staging(icp, &resolved, &request.template_id, &request.version)?;
+            let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
             let expected = canic_core::cdk::utils::hash::wasm_hash(&request.bytes);
             let applied = status
                 .stored_chunk_hashes
@@ -1190,8 +1198,7 @@ pub(super) fn observe(
             observation(applied, &status)
         }
         CurrentFleetProtocolAction::StageStoreManifest { request } => {
-            let status =
-                query_store_staging(icp, &resolved, &request.template_id, &request.version)?;
+            let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
             observation(
                 status.manifest.as_ref() == Some(&manifest_response(request)),
                 &status,
@@ -1246,6 +1253,16 @@ fn component_provisioning_observation(
     let mut durable_progress = status.clone();
     durable_progress.pending_root_failure = None;
     let mut observation = observation(applied, &durable_progress)?;
+    observation.provisioning_progress = Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
+        phase: status.phase,
+        root_batch_count: status.root_batch_count,
+        accepted_root_count: status.accepted_root_count,
+        provisioned_root_count: status.provisioned_root_count,
+        directory_confirmed_root_count: status.directory_confirmed_root_count,
+        directory_confirmation_root_count: status.directory_confirmation_root_count,
+        runtime_activated_root_count: status.runtime_activated_root_count,
+        component_count: status.component_count,
+    });
     observation.provisioning_failure = status.pending_root_failure;
     observation
         .estate_funding_required
@@ -1469,6 +1486,7 @@ pub(super) fn apply(
 struct ResolvedProtocolAction<'a> {
     action: &'a CurrentFleetProtocolAction,
     candid_path: PathBuf,
+    candid_sha256: &'a str,
     target: Principal,
 }
 
@@ -1493,6 +1511,7 @@ impl<'a> ResolvedProtocolAction<'a> {
         Ok(Self {
             action,
             candid_path,
+            candid_sha256,
             target,
         })
     }
@@ -1613,6 +1632,7 @@ fn observation<T: CandidType>(
     let bytes = candid::encode_one(value)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     Ok(EffectObservation {
+        provisioning_progress: None,
         provisioning_failure: None,
         applied,
         estate_funding_required: None,
@@ -1624,6 +1644,7 @@ fn observation<T: CandidType>(
 
 fn unavailable_observation() -> EffectObservation {
     EffectObservation {
+        provisioning_progress: None,
         provisioning_failure: None,
         applied: false,
         estate_funding_required: None,
@@ -1684,6 +1705,46 @@ fn manifest_response(request: &TemplateManifestInput) -> TemplateManifestRespons
         manifest_state: request.manifest_state,
         approved_at: request.approved_at,
         created_at: request.created_at,
+    }
+}
+
+/// Exact query identity within one read-only protocol compilation.
+#[derive(Eq, Ord, PartialEq, PartialOrd)]
+struct StoreStagingAuthority {
+    candid_path: PathBuf,
+    candid_sha256: String,
+    target: Principal,
+    template_id: TemplateId,
+    version: TemplateVersion,
+}
+
+/// Reuse successful template observations only while binding one action sequence.
+#[derive(Default)]
+struct StoreStagingObservations {
+    templates: BTreeMap<StoreStagingAuthority, TemplateStagingStatusResponse>,
+}
+
+impl StoreStagingObservations {
+    fn query(
+        &mut self,
+        icp: &IcpCli,
+        resolved: &ResolvedProtocolAction<'_>,
+        template_id: &TemplateId,
+        version: &TemplateVersion,
+    ) -> Result<TemplateStagingStatusResponse, CurrentProtocolError> {
+        let authority = StoreStagingAuthority {
+            candid_path: resolved.candid_path.clone(),
+            candid_sha256: resolved.candid_sha256.to_string(),
+            target: resolved.target,
+            template_id: template_id.clone(),
+            version: version.clone(),
+        };
+        if let Some(status) = self.templates.get(&authority) {
+            return Ok(status.clone());
+        }
+        let status = query_store_staging(icp, resolved, template_id, version)?;
+        self.templates.insert(authority, status.clone());
+        Ok(status)
     }
 }
 

@@ -4,8 +4,14 @@
 //! Does not own: Fleet discovery, artifact production, or live Overview negotiation.
 //! Boundary: immutable release/Directory evidence must reproduce the local Candid profile.
 
+mod release;
+#[cfg(test)]
+mod tests;
+
 use crate::{
-    icp::existing_local_canister_candid_path, registry::RegistryEntry,
+    durable_io::{RegularFileReadError, read_optional_regular_bytes},
+    icp::existing_local_canister_candid_path,
+    registry::RegistryEntry,
     release_set::CanicInfrastructureArtifactEntry,
 };
 use canic_core::{
@@ -13,8 +19,10 @@ use canic_core::{
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey, derive_protocol_profile_hashes},
 };
 use serde::{Deserialize, Serialize};
-use std::{collections::BTreeSet, fs, io, path::PathBuf};
+use std::{collections::BTreeSet, io, path::PathBuf};
 use thiserror::Error as ThisError;
+
+pub use release::{ReleaseProtocolBindingError, resolve_release_registry_protocol_binding};
 
 /// Complete immutable protocol identity selected before one role call.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -51,6 +59,9 @@ impl ResolvedProtocolBinding {
 /// Failure to select an exact protocol profile before transport.
 #[derive(Debug, ThisError)]
 pub enum ProtocolBindingError {
+    #[error("exact Candid sidecar is not a regular no-follow file: {}", path.display())]
+    UnsafeCandid { path: PathBuf },
+
     #[error("Canister {canister} has no exact protocol binding in protected registry metadata")]
     MissingBinding { canister: String },
 
@@ -174,16 +185,22 @@ fn resolve_protocol_binding(
             canister: target.to_string(),
         });
     }
-    if !candid_path.is_file() {
-        return Err(ProtocolBindingError::MissingCandid {
-            canister: target.to_string(),
-            role: binding.role.to_string(),
-        });
-    }
-    let candid = fs::read(&candid_path).map_err(|source| ProtocolBindingError::ReadCandid {
-        path: candid_path.clone(),
-        source,
-    })?;
+    let candid = match read_optional_regular_bytes(&candid_path) {
+        Ok(Some(bytes)) => bytes,
+        Ok(None) => {
+            return Err(ProtocolBindingError::MissingCandid {
+                canister: target.to_string(),
+                role: binding.role.to_string(),
+            });
+        }
+        Err(RegularFileReadError::Io(source)) => {
+            return Err(ProtocolBindingError::ReadCandid {
+                path: candid_path,
+                source,
+            });
+        }
+        Err(_) => return Err(ProtocolBindingError::UnsafeCandid { path: candid_path }),
+    };
     let observed = derive_protocol_profile_hashes(
         &binding.release_identity,
         &binding.role,
@@ -205,6 +222,3 @@ fn resolve_protocol_binding(
         candid_path,
     })
 }
-
-#[cfg(test)]
-mod tests;

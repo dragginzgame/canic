@@ -888,6 +888,21 @@ FAKE_SCCACHE_RECORD="$release_cleanup_fixture/sccache-record" \
 [ -f "$release_cleanup_fixture/.tmp/sccache-runtime/tmp/server-owned-temp" ] ||
     fail "test cleanup deleted the persistent sccache runtime"
 
+env -u RUSTC_WRAPPER PATH="$release_cleanup_bin:$PATH" \
+    FAKE_SCCACHE_RECORD="$release_cleanup_fixture/sccache-record" \
+    CANIC_SCCACHE_BIN="$release_cleanup_bin/sccache" \
+    bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
+    bash -c 'exec "$RUSTC_WRAPPER" --show-stats'
+[ "$(cat "$release_cleanup_fixture/sccache-record.tmpdir")" = \
+    "$release_cleanup_fixture/.tmp/sccache-runtime/tmp" ] ||
+    fail "direct targeted runner did not select the persistent cache wrapper"
+for selected_wrapper in "" /explicit/compiler-wrapper; do
+    RUSTC_WRAPPER="$selected_wrapper" \
+        bash "$release_cleanup_fixture/scripts/ci/run-with-test-scratch.sh" \
+        bash -c '[[ -v RUSTC_WRAPPER && "$RUSTC_WRAPPER" == "$1" ]]' _ "$selected_wrapper" ||
+        fail "targeted runner replaced an explicit compiler wrapper"
+done
+
 rm -f "$release_cleanup_fixture/cargo-clean-attempts"
 mkdir -p "$release_cleanup_fixture/target"
 FAKE_CARGO_FAILURES=1 PATH="$release_cleanup_bin:$PATH" \

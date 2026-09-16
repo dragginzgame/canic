@@ -10,6 +10,7 @@ mod canic_init;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
+pub(super) mod effect_preparation;
 pub(super) mod funding;
 mod install_history;
 mod plan_content;
@@ -46,12 +47,13 @@ use thiserror::Error as ThisError;
 
 #[cfg(feature = "local-fleet")]
 pub(crate) use canic_init::{CanicInitRequest, compile_arguments, compile_root_authorities};
-pub(crate) use platform::{EstateFundingObservation, estate_funding_applied};
-pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
 #[cfg(test)]
+pub(crate) use platform::install_effect_applied;
 pub(crate) use platform::{
-    NativeFundingObservation, install_effect_applied, native_funding_applied,
+    EstateFundingObservation, NativeFundingObservation, estate_funding_applied,
+    native_funding_applied,
 };
+pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
 
 /// Decode the reviewed bounds for Create execution and its first live observation.
 pub(crate) fn maximum_creation_observation_burn(desired: &DesiredFleet) -> Option<u128> {
@@ -101,6 +103,8 @@ pub struct EffectOutcome {
 /// One exact live observation of whether an issued effect reached its terminal state.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct EffectObservation {
+    /// Informational progress only; never used for completion or retry authority.
+    pub provisioning_progress: Option<crate::fleet_ensure::dto::FleetProvisioningProgress>,
     /// Latest protected failure, excluded from work-progress identity.
     pub provisioning_failure:
         Option<canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
@@ -257,6 +261,13 @@ pub trait EnsurePlatform {
         Ok(None)
     }
 
+    /// Read the operator's Cycles Ledger account and current fee without runtime queries.
+    fn observe_operator_funding(
+        &mut self,
+    ) -> Result<Option<crate::fleet_ensure::view::OperatorFundingObservation>, Self::Error> {
+        Ok(None)
+    }
+
     /// Inspect one configured Root and the operator Ledger without runtime queries.
     fn observe_native_funding(
         &mut self,
@@ -302,6 +313,9 @@ pub trait EnsurePlatform {
         Ok(TerminalFleetInventory::default())
     }
 
+    /// Observe completion and its exact live balance. Native funding must return
+    /// its protected balance in `post_cycles`, including before the first intent;
+    /// a record without a receipt cannot establish paid completion.
     fn observe_effect(
         &mut self,
         operation_id: &str,

@@ -1789,9 +1789,17 @@ impl IcpEnsurePlatform {
         &self,
         principal: &str,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
-        let Some(mut live) = self.status_optional(principal)? else {
+        let Some(live) = self.status_optional(principal)? else {
             return Ok(None);
         };
+        self.complete_install_status(principal, live).map(Some)
+    }
+
+    fn complete_install_status(
+        &self,
+        principal: &str,
+        mut live: LiveCanister,
+    ) -> Result<LiveCanister, IcpEnsurePlatformError> {
         let exact = exact_install_canister_status(
             &self.icp,
             principal,
@@ -1800,7 +1808,7 @@ impl IcpEnsurePlatform {
         )?;
         live.canister_version = Some(exact.canister_version);
         live.module_sha256 = exact.module_sha256;
-        Ok(Some(live))
+        Ok(live)
     }
 
     fn observe_configured_canister(
@@ -2005,6 +2013,53 @@ impl IcpEnsurePlatform {
         let inspection = self.prepare_pool_balance_inspection(name, root, principal, module)?;
         let response = self.read_pool_inspection(inspection.authority)?;
         self.complete_pool_inspection(inspection, response)
+    }
+
+    fn refresh_pool_balances(
+        &self,
+        root: &str,
+        assets: &mut [EstatePoolAssetObservation],
+    ) -> Result<(), IcpEnsurePlatformError> {
+        let indices = assets
+            .iter()
+            .enumerate()
+            .filter_map(|(index, asset)| {
+                matches!(
+                    asset.lifecycle,
+                    EstatePoolAssetLifecycle::PendingReset | EstatePoolAssetLifecycle::Failed
+                )
+                .then_some(index)
+            })
+            .collect::<Vec<_>>();
+        for batch in indices.chunks(super::bounded_observations::MAX_IN_FLIGHT) {
+            let prepared = batch
+                .iter()
+                .map(|index| {
+                    let target = &assets[*index].principal;
+                    self.prepare_pool_balance_inspection(target, root, target, InspectedModule::Any)
+                })
+                .collect::<Vec<_>>();
+            let authorities = prepared
+                .iter()
+                .filter_map(|result| result.as_ref().ok().map(|inspection| inspection.authority))
+                .collect::<Vec<_>>();
+            let mut responses = self.read_pool_inspection_batch(&authorities)?;
+            // Drain issued reads, then validate in inventory order before publishing
+            // this batch's balances. A failed batch never starts the next group.
+            let balances = prepared
+                .into_iter()
+                .map(|inspection| {
+                    let inspection = inspection?;
+                    let response =
+                        self.pool_inspection_batch_response(&mut responses, inspection.authority)?;
+                    self.complete_pool_inspection(inspection, response)
+                })
+                .collect::<Result<Vec<_>, IcpEnsurePlatformError>>()?;
+            for (index, cycles) in batch.iter().zip(balances) {
+                assets[*index].cycles = cycles;
+            }
+        }
+        Ok(())
     }
 
     fn prepare_pool_balance_inspection<'a>(
@@ -2623,18 +2678,13 @@ impl IcpEnsurePlatform {
         self.timed_observation(FleetObservationStage::PoolBalances, |platform| {
             for domain in estate_funding_domains.values_mut() {
                 if let (Some(root), Some(pool)) = (&domain.root_principal, &mut domain.pool) {
+                    platform.refresh_pool_balances(root, &mut pool.assets)?;
                     for asset in &mut pool.assets {
                         if matches!(
                             asset.lifecycle,
                             EstatePoolAssetLifecycle::PendingReset
                                 | EstatePoolAssetLifecycle::Failed
                         ) {
-                            asset.cycles = platform.inspect_pool_balance(
-                                &asset.principal,
-                                root,
-                                &asset.principal,
-                                InspectedModule::Any,
-                            )?;
                             for live in canisters.values_mut().filter_map(Option::as_mut) {
                                 if live.principal == asset.principal {
                                     live.cycles = asset.cycles;
@@ -3208,9 +3258,14 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 .ok_or_else(|| {
                     IcpEnsurePlatformError::UnresolvedCreated(configured.name.clone())
                 })?;
-            let live = self.install_status_optional(principal)?.ok_or_else(|| {
-                IcpEnsurePlatformError::RootManagement("missing infrastructure".to_string())
-            })?;
+            // Reuse only this pass's Root observation; a subsequent guard starts fresh.
+            let live = if let Some(root) = roots.roots.get(&configured.name) {
+                self.complete_install_status(principal, root.live.clone())?
+            } else {
+                self.install_status_optional(principal)?.ok_or_else(|| {
+                    IcpEnsurePlatformError::RootManagement("missing infrastructure".to_string())
+                })?
+            };
             let subnet = if let Some(root) = roots.roots.get(&configured.name) {
                 root.subnet.clone()
             } else if let Some(catalog) = &catalog {
@@ -3598,6 +3653,25 @@ impl EnsurePlatform for IcpEnsurePlatform {
         })
     }
 
+    fn observe_operator_funding(
+        &mut self,
+    ) -> Result<Option<crate::fleet_ensure::view::OperatorFundingObservation>, Self::Error> {
+        self.require_operator()?;
+        let ledger_fee_cycles = ledger_fee_cycles(self.icp.canister_query_candid(
+            &self.desired.cycles_ledger,
+            "icrc1_fee",
+            &(),
+            None,
+        )?)?;
+        Ok(Some(
+            crate::fleet_ensure::view::OperatorFundingObservation {
+                cycles_ledger: self.desired.cycles_ledger.clone(),
+                ledger_fee_cycles,
+                operator_cycles: self.cycles_ledger_balance(&self.desired.operator)?,
+            },
+        ))
+    }
+
     fn observe_native_funding(
         &mut self,
         root: &str,
@@ -3949,6 +4023,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         ) && recoverable_current_protocol_error(&error) =>
                     {
                         EffectObservation {
+                            provisioning_progress: None,
                             provisioning_failure: None,
                             applied: false,
                             estate_funding_required: None,
@@ -4110,6 +4185,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             }
         };
         Ok(EffectObservation {
+            provisioning_progress: None,
             provisioning_failure: None,
             applied,
             estate_funding_required: None,
@@ -5302,6 +5378,7 @@ echo effect >> effects
             )
             .unwrap();
             let mut observed = EffectObservation {
+                provisioning_progress: None,
                 provisioning_failure: None,
                 applied: false,
                 estate_funding_required: Some(pause.clone()),
@@ -5332,6 +5409,7 @@ echo effect >> effects
             changed.root = root;
             changed.cycles_ledger = ledger;
             let mut observed = EffectObservation {
+                provisioning_progress: None,
                 provisioning_failure: None,
                 applied: false,
                 estate_funding_required: Some(changed),
@@ -6115,6 +6193,145 @@ printf 'finish\n' >> events
         );
         assert_eq!(platform.icp.remote_call_count(), 3);
         std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_balances_overlap_only_pending_and_failed_assets_within_the_bound() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let count = bound * 2 + 1;
+        let mut fixture = PoolInspectionFixture::fresh(u32::try_from(count + 1).unwrap());
+        let path = &fixture.owners.root;
+        fixture.inspection_hook(&format!(
+            r#"
+cd '{}'
+printf 'start\n' >> events
+started=$(grep -c '^start$' events)
+goal=$(( (started + {bound} - 1) / {bound} * {bound} ))
+[ "$goal" -le {count} ] || goal={count}
+attempts=0
+while [ "$(grep -c '^start$' events)" -lt "$goal" ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 500 ] || exit 1
+    sleep 0.01
+done
+printf 'finish\n' >> events
+"#,
+            path.display()
+        ));
+        let mut observed = fixture.retained_observation();
+        let assets = &mut observed
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .pool
+            .as_mut()
+            .unwrap()
+            .assets;
+        for (index, asset) in assets.iter_mut().take(count).enumerate() {
+            asset.lifecycle = if index % 2 == 0 {
+                EstatePoolAssetLifecycle::Failed
+            } else {
+                EstatePoolAssetLifecycle::PendingReset
+            };
+        }
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.refresh_pool_balances(&fixture.root_id.to_text(), assets)
+            })
+            .unwrap();
+        assert!(assets[..count].iter().all(|asset| asset.cycles == 1_000));
+        assert_eq!(assets[count].cycles, 500);
+        let mut active = 0;
+        let mut maximum = 0;
+        for event in std::fs::read_to_string(path.join("events"))
+            .unwrap()
+            .lines()
+        {
+            match event {
+                "start" => {
+                    active += 1;
+                    maximum = maximum.max(active);
+                }
+                "finish" => {
+                    assert!(active > 0);
+                    active -= 1;
+                }
+                _ => panic!("unknown inspection event"),
+            }
+            assert!(active <= bound);
+        }
+        assert_eq!((active, maximum), (0, bound));
+        assert_eq!(
+            fixture.owners.platform.icp.remote_call_count(),
+            2 * u64::try_from(count).unwrap() + 1
+        );
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_balances_drain_failed_batch_preserve_inventory_and_retry_fresh() {
+        let mut fixture = PoolInspectionFixture::fresh(5);
+        let path = &fixture.owners.root;
+        PoolInspectionFixture::fresh_response(path, vec![Principal::from_slice(&[99])], None, 900);
+        std::fs::copy(path.join("inspection.json"), path.join("pool-000.response")).unwrap();
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 1_000);
+        std::fs::write(path.join("pool-001.fail"), []).unwrap();
+        fixture.route_inspection_targets();
+        let mut observed = fixture.retained_observation();
+        let assets = &mut observed
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .pool
+            .as_mut()
+            .unwrap()
+            .assets;
+        for asset in assets.iter_mut() {
+            asset.lifecycle = EstatePoolAssetLifecycle::Failed;
+        }
+        let unchanged = assets.clone();
+        let failed = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.refresh_pool_balances(&fixture.root_id.to_text(), assets)
+            });
+        assert!(
+            matches!(failed, Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { canister, field: "Root-only controllers" }) if canister == unchanged[0].principal)
+        );
+        assert_eq!(*assets, unchanged);
+        let events = std::fs::read_to_string(path.join("events")).unwrap();
+        for index in 0..4 {
+            assert!(events.contains(&format!("finish:pool-{index:03}")));
+        }
+        assert!(!events.contains("pool-004"));
+        assert!(events.find("finish:pool-001").unwrap() < events.find("finish:pool-000").unwrap());
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 9);
+        std::fs::remove_file(path.join("pool-000.response")).unwrap();
+        std::fs::remove_file(path.join("pool-001.fail")).unwrap();
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 2_000);
+        fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.refresh_pool_balances(&fixture.root_id.to_text(), assets)
+            })
+            .unwrap();
+        assert!(assets.iter().all(|asset| asset.cycles == 2_000));
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 20);
+        assert!(
+            fixture
+                .owners
+                .platform
+                .observation_snapshot
+                .borrow()
+                .is_none()
+        );
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[cfg(unix)]
@@ -6930,6 +7147,78 @@ printf 'finish\n' >> events
         );
         assert_eq!(fixture.platform.icp.remote_call_count(), 6);
         fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_authority_pass_reads_statuses_and_refreshes_after_failure() {
+        let mut fixture = ProtocolOwnersFixture::new();
+        let path = &fixture.root;
+        std::fs::write(path.join("icp"), r#"#!/bin/sh
+if [ "$1" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi
+while [ "$#" -gt 0 ] && [ "$1" != canister ] && [ "$1" != identity ] && [ "$1" != cycles ]; do shift; done
+case "$1" in
+identity) echo operator;;
+cycles) echo '{"balance":"1000000000000 cycles"}';;
+canister) shift; [ "$1" = status ] || exit 1; shift; printf '%s\n' "$1" >> calls; cat "$1.json";;
+*) exit 1;;
+esac
+"#).unwrap();
+        for name in ["root", "coordinator", "store"] {
+            let file = path.join(format!("{name}.json"));
+            let mut status: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+            status["version"] = serde_json::json!(7);
+            std::fs::write(file, serde_json::to_vec(&status).unwrap()).unwrap();
+        }
+        let first = fixture
+            .platform
+            .reinstall_authorities(&fixture.state)
+            .unwrap()
+            .unwrap();
+        assert_eq!(first.len(), 3);
+        assert!(
+            first
+                .values()
+                .all(|value| value.live.canister_version == Some(7))
+        );
+        let calls = std::fs::read_to_string(path.join("calls")).unwrap();
+        eprintln!(
+            "reinstall authority status calls: {calls:?}; remote calls: {}",
+            fixture.platform.icp.remote_call_count()
+        );
+        assert_eq!(calls, "root\ncoordinator\nstore\n");
+        assert_eq!(fixture.platform.icp.remote_call_count(), 4);
+        let file = path.join("root.json");
+        let mut status: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+        status["version"] = serde_json::json!(8);
+        status["status"] = serde_json::json!("Stopped");
+        status["module_hash"] = serde_json::json!("ab".repeat(32));
+        status["settings"]["controllers"] = serde_json::json!(["changed-controller"]);
+        std::fs::write(&file, serde_json::to_vec(&status).unwrap()).unwrap();
+        std::fs::rename(path.join("store.json"), path.join("store.saved")).unwrap();
+        assert!(
+            fixture
+                .platform
+                .reinstall_authorities(&fixture.state)
+                .is_err()
+        );
+        std::fs::rename(path.join("store.saved"), path.join("store.json")).unwrap();
+        let after = fixture
+            .platform
+            .reinstall_authorities(&fixture.state)
+            .unwrap()
+            .unwrap();
+        let root = &after["root"].live;
+        assert_eq!(root.canister_version, Some(8));
+        assert_eq!(root.status, CanisterRuntimeStatus::Stopped);
+        assert_eq!(
+            root.module_sha256.as_deref(),
+            Some("ab".repeat(32).as_str())
+        );
+        assert_eq!(root.controllers, vec!["changed-controller"]);
+        std::fs::remove_dir_all(path).unwrap();
     }
 
     #[cfg(unix)]

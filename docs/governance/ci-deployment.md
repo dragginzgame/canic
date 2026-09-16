@@ -88,6 +88,11 @@ Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values
 remain authoritative. Canic artifact builds keep incremental compilation
 disabled for deterministic Wasm output and independently discover `sccache`
 for `canic build` when no wrapper was supplied.
+Direct `scripts/ci/run-with-test-scratch.sh` invocations also select the stable
+repository cache wrapper when sccache is available and `RUSTC_WRAPPER` is unset.
+They preserve explicit wrappers, including an empty value, and leave the selected
+incremental-compilation setting intact. The cache server must outlive disposable
+test scratch without retaining that scratch as its temporary directory.
 Do not run a second Canic Cargo/check/test process against the same repository
 `target/` during validation. Cargo will serialize parts of those graphs on its
 build-directory lock while both processes still compete for CPU and memory;

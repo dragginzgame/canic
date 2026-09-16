@@ -90,7 +90,7 @@ fn command_env(command: &Command, name: &str) -> Option<OsString> {
 }
 
 fn probe_command(cargo: &Command, program: &OsStr) -> Command {
-    let mut probe = Command::new(program);
+    let mut probe = crate::build_environment::command(program);
     if let Some(directory) = cargo.get_current_dir() {
         probe.current_dir(directory);
     }
@@ -101,6 +101,7 @@ fn probe_command(cargo: &Command, program: &OsStr) -> Command {
             probe.env_remove(name);
         }
     }
+    crate::build_environment::apply(&mut probe);
     probe
 }
 

@@ -183,7 +183,7 @@ pub(super) fn read_workspace_file(
     for component in Path::new(relative).components() {
         parent.push(component);
         if fs::symlink_metadata(&parent).is_ok_and(|metadata| metadata.file_type().is_symlink()) {
-            return Err(FixtureArtifactError::Path(parent));
+            return Err(FixtureArtifactError::Symlink(parent));
         }
     }
     match read_optional_regular_bytes_bounded(&path, limit) {

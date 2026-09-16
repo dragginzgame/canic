@@ -123,6 +123,10 @@ pub enum FixtureArtifactError {
     Finalized,
     #[error("fixture source path is not a regular workspace-relative file: {0}")]
     Path(PathBuf),
+    #[error(
+        "fixture artifact path contains a symlink at {0}; use real workspace-local files and directories, and keep .canic state independent between checkouts"
+    )]
+    Symlink(PathBuf),
     #[error("fixture role is duplicate, unordered or outside the application topology: {0}")]
     Role(CanisterRole),
     #[error("fixture descriptor or payload is invalid: {0:?}")]

@@ -244,3 +244,22 @@ fn receipt(action: &EnsureAction, before: u128, after: u128) -> EffectRecord {
         state: EffectState::Applied,
     }
 }
+
+#[test]
+fn native_funding_is_not_counted_again_as_stop_settlement_credit() {
+    let action = EnsureAction::Fund {
+        name: "root".into(),
+        principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".into(),
+        ledger: "um5iw-rqaaa-aaaaq-qaaba-cai".into(),
+        created_at_time: 1,
+        amount: 100,
+        expected_post_cycles: 200,
+        funding_deficit_cycles: 90,
+        funding_margin_cycles: 10,
+        pool_funding: None,
+    };
+    assert_eq!(
+        receipt_credit::<std::io::Error>(&action, &receipt(&action, 100, 200), 10).unwrap(),
+        0
+    );
+}

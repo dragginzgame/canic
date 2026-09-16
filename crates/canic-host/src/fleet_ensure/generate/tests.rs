@@ -3689,6 +3689,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
             _ => return Err(io::Error::other("unexpected retained journey effect")),
         };
         Ok(EffectObservation {
+            provisioning_progress: None,
             provisioning_failure: None,
             applied,
             estate_funding_required: None,

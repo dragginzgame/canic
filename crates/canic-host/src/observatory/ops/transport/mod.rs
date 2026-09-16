@@ -120,7 +120,7 @@ impl IcpObservatoryTransport<'_> {
             Principal::from_text(&entry.pid).map_err(|_| ObservationFailure::InvalidResponse)?;
         let argument =
             candid::encode_one(request).map_err(|_| ObservationFailure::InvalidResponse)?;
-        let argument = crate::canister_protocol::write_argument_file(&argument)
+        let argument = crate::icp::write_candid_argument_file(&argument)
             .map_err(|_| ObservationFailure::TransportUnavailable)?;
         let mut command = self.icp.bounded_query_command(
             &canister.to_text(),
