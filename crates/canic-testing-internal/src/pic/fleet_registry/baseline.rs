@@ -2629,7 +2629,7 @@ exec icp "$@"
         ];
         let cargo_build = WasmBuildSpec::new(
             workspace_root,
-            &literal_zero_canister_build_target(workspace_root),
+            &canic_host::canister_build::canister_build_target_root(workspace_root),
             &packages,
             CanisterBuildProfile::Fast.target_dir_name(),
         )
@@ -2653,6 +2653,11 @@ exec icp "$@"
             config_relative,
         ])
         .with_environment(environment)
+        .with_input(
+            "release-build-helper",
+            &workspace_root
+                .join("crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs"),
+        )
         .with_input("build-config", config_path)
         .with_input("icp-config", &workspace_root.join("icp.yaml"))
         .with_prune_policy_at_most_every(
@@ -2662,7 +2667,7 @@ exec icp "$@"
         cache = with_canonical_root_cargo_inputs(
             cache,
             config_path,
-            &literal_zero_canister_build_target(workspace_root),
+            &canic_host::canister_build::canister_build_target_root(workspace_root),
             CanicWasmBuildProfile::Fast,
             &environment,
         );
@@ -2688,21 +2693,6 @@ exec icp "$@"
             cache = cache.with_output(name, path);
         }
         cache
-    }
-
-    #[cfg(test)]
-    fn literal_zero_canister_build_target(workspace_root: &Path) -> PathBuf {
-        std::env::var_os("CARGO_TARGET_DIR").map_or_else(
-            || workspace_root.join("target/canic-wasm"),
-            |configured| {
-                let configured = PathBuf::from(configured);
-                if configured.is_absolute() {
-                    configured
-                } else {
-                    workspace_root.join(configured)
-                }
-            },
-        )
     }
 
     #[cfg(test)]
@@ -2922,22 +2912,15 @@ exec icp "$@"
         };
         let builder = CanisterArtifactBuilder::for_profile(context.profile)
             .expect("preflight literal-zero artifact toolchain");
-        let mut phase = Span::start("coordinator_build");
-        let coordinator = builder
-            .build_workspace_canister_artifact(
-                &context.with_role(CanicInfrastructureRole::FleetCoordinator.as_str()),
-            )
-            .expect("build literal-zero Coordinator artifact");
-        phase = phase.next("store_build");
-        let store = builder
-            .build_workspace_canister_artifact(
-                &context.with_role(CanicInfrastructureRole::WasmStore.as_str()),
-            )
-            .expect("build literal-zero Store artifact");
-        phase = phase.next("configured_roles_build");
-        let configured = builder
-            .build_workspace_configured_canister_artifacts(&context, configured_roles)
-            .expect("build literal-zero Root and Component artifacts");
+        // Match the production App path: Cargo stays serial while captured
+        // infrastructure outputs finalize alongside later compilation.
+        let mut phase = Span::start("app_artifacts_build");
+        let app = builder
+            .build_workspace_app_artifacts(&context, configured_roles)
+            .expect("build literal-zero App artifacts");
+        let coordinator = app.coordinator.output;
+        let store = app.store.output;
+        let configured = app.configured;
         let mut root = configured
             .iter()
             .find(|output| output.role == "root")
@@ -3061,6 +3044,97 @@ exec icp "$@"
             .expect("validate fixture release-build authority before building artifacts");
         assert_eq!(planned.build_network, build_network);
         release_build_id
+    }
+
+    #[test]
+    #[ignore = "focused build qualification requires installed Wasm and artifact tools"]
+    fn pipelined_release_artifacts_match_serial_builds() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let adapter_root = literal_zero_adapter_root(&workspace);
+        std::fs::create_dir_all(&adapter_root).unwrap();
+        let _cleanup = TestDirectoryCleanup(adapter_root.clone());
+        let release = persist_internal_test_release_build_plan(
+            &adapter_root,
+            BuildNetwork::Local,
+            INTERNAL_TEST_RELEASE_BUILD_NONCE,
+        );
+        let context = WorkspaceBuildContext {
+            role: "root".to_string(),
+            profile: CanisterBuildProfile::Fast,
+            environment: "local".to_string(),
+            build_network: BuildNetwork::Local,
+            workspace_root: workspace.clone(),
+            icp_root: adapter_root,
+            config_path: workspace.join("apps/test/test-configs/literal-zero-initial-shard.toml"),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: Some(release),
+        };
+        let roles = AppConfigSnapshot::load(&context.config_path)
+            .unwrap()
+            .model()
+            .roles
+            .keys()
+            .map(ToString::to_string)
+            .collect::<Vec<_>>();
+        let builder = CanisterArtifactBuilder::for_profile(context.profile).unwrap();
+        let mut expected = BTreeMap::new();
+        for role in ["fleet_coordinator", "wasm_store"] {
+            let output = builder
+                .build_workspace_canister_artifact(&context.with_role(role))
+                .unwrap();
+            expected.insert(role.to_string(), artifact_parity_snapshot(&output));
+        }
+        for output in builder
+            .build_workspace_configured_canister_artifacts(&context, &roles)
+            .unwrap()
+        {
+            expected.insert(output.role, artifact_parity_snapshot(&output.output));
+        }
+        let app = builder
+            .build_workspace_app_artifacts(&context, &roles)
+            .unwrap();
+        let mut actual = BTreeMap::from([
+            (
+                "fleet_coordinator".to_string(),
+                artifact_parity_snapshot(&app.coordinator.output),
+            ),
+            (
+                "wasm_store".to_string(),
+                artifact_parity_snapshot(&app.store.output),
+            ),
+        ]);
+        for output in app.configured {
+            actual.insert(output.role, artifact_parity_snapshot(&output.output));
+        }
+        // Avoid dumping binary artifacts if this assertion fails.
+        assert!(
+            expected == actual,
+            "pipelined artifact bytes or identities differ"
+        );
+    }
+
+    #[cfg(test)]
+    fn artifact_parity_snapshot(output: &CanisterArtifactBuildOutput) -> (String, [Vec<u8>; 3]) {
+        let bytes = [&output.wasm_path, &output.wasm_gz_path, &output.did_path]
+            .map(|path| std::fs::read(path).unwrap());
+        let identity = format!(
+            "{}:{}:{}:{}:{:?}:{:?}:{:?}",
+            output.package_name,
+            output.package_version,
+            output.protocol_release_identity,
+            output.protocol_role,
+            output.protocol_capabilities,
+            output.candid_sha256,
+            output.protocol_profile_digest,
+        );
+        eprintln!(
+            "App artifact parity: identity={identity} wasm_bytes={} wasm_sha256={}",
+            bytes[0].len(),
+            canic_core::cdk::utils::hash::sha256_hex(&bytes[0]),
+        );
+        (identity, bytes)
     }
 
     #[test]

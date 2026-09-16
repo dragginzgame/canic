@@ -94,6 +94,7 @@ pub fn declaration_target_root(workspace_root: &Path) -> PathBuf {
     canister_build_target_root(workspace_root).join("declarations")
 }
 
+/// Resolve the Cargo artifact target used by host builds, including an explicit override.
 #[must_use]
 pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
     resolve_canister_build_target_root(

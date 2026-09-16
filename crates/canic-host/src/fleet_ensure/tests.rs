@@ -117,6 +117,7 @@ pub(super) struct MockPlatform {
     operator_cycles: u128,
     paced_observations: Vec<u32>,
     progress: Vec<FleetEnsureProgress>,
+    progress_journal: Option<PathBuf>,
     paced_root_owned_observations: Vec<(String, u32)>,
     protocol_command_only: bool,
     protocol_action: Option<EnsureAction>,
@@ -167,6 +168,7 @@ impl MockPlatform {
             operator_cycles: 100_000,
             paced_observations: Vec::new(),
             progress: Vec::new(),
+            progress_journal: None,
             paced_root_owned_observations: Vec::new(),
             protocol_command_only: false,
             protocol_action: None,
@@ -756,6 +758,27 @@ impl EnsurePlatform for MockPlatform {
     type Error = MockError;
 
     fn report_progress(&mut self, progress: FleetEnsureProgress) {
+        if let Some(path) = &self.progress_journal {
+            let journal: FleetEnsureJournalRecord =
+                serde_json::from_slice(&fs::read(path).expect("durable progress journal")).unwrap();
+            assert_eq!(progress.operation_id, journal.operation_id);
+            assert_eq!(progress.plan_sha256, journal.plan_sha256);
+            assert_eq!(
+                progress.applied_effects as usize,
+                journal
+                    .effects
+                    .iter()
+                    .chain(
+                        journal
+                            .funding_reviews
+                            .iter()
+                            .filter_map(|review| review.effect.as_ref())
+                    )
+                    .filter(|effect| effect.state == EffectState::Applied)
+                    .count(),
+                "progress must describe already persisted receipts"
+            );
+        }
         self.progress.push(progress);
     }
 
@@ -1091,6 +1114,9 @@ impl EnsurePlatform for MockPlatform {
 #[test]
 fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
     let mut fixture = fixture();
+    fixture.platform.progress_journal = Some(
+        crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet").journal,
+    );
     let desired_sha256 = "e1".repeat(32);
     let planned = workflow::plan(
         &fixture.root,
@@ -1115,13 +1141,11 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
         interrupted,
         Err(workflow::EnsureWorkflowError::Platform(_))
     ));
-    assert!(!fixture.platform.progress.is_empty());
-    assert!(
-        fixture
-            .platform
-            .progress
-            .iter()
-            .all(|event| event.phase != FleetEnsurePhase::Complete)
+    assert_eq!(fixture.platform.progress.len(), 1);
+    assert_eq!(fixture.platform.progress[0].applied_effects, 0);
+    assert_eq!(
+        fixture.platform.progress[0].phase,
+        FleetEnsurePhase::Infrastructure
     );
     fixture.platform.progress.clear();
     let completed = workflow::apply(
@@ -1135,7 +1159,17 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
     .expect("recover the effect before publishing completion progress");
     assert!(completed.terminal);
     let progress = &fixture.platform.progress;
-    assert!(progress.len() <= actions.len() + 2);
+    // One event per durable effect, plus initial phase and terminal boundaries.
+    assert!(progress.len() <= actions.len() + 3);
+    let advancing = progress
+        .iter()
+        .filter(|event| event.phase == FleetEnsurePhase::Infrastructure)
+        .map(|event| event.applied_effects)
+        .collect::<Vec<_>>();
+    assert_eq!(
+        advancing,
+        (0..=completed.effects_applied).collect::<Vec<_>>()
+    );
     assert!(progress.iter().all(|event| {
         event.operation_id == planned.plan.operation_id
             && event.plan_sha256 == planned.plan.plan_sha256
@@ -1155,6 +1189,23 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
         progress.last().expect("terminal event").applied_effects,
         completed.effects_applied
     );
+    let mutations = fixture.platform.mutations.clone();
+    fixture.platform.progress.clear();
+    let replay = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .expect("terminal replay");
+    assert!(replay.terminal);
+    assert_eq!(fixture.platform.mutations, mutations);
+    assert!(fixture.platform.progress.iter().all(|event| {
+        event.applied_effects == completed.effects_applied
+            && event.phase != FleetEnsurePhase::Infrastructure
+    }));
     fs::remove_dir_all(fixture.root).expect("remove progress fixture");
 }
 

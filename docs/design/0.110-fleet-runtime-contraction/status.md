@@ -1,5 +1,68 @@
 # Canic 0.110 Implementation Status
 
+## Release-test throughput follow-up — 2026-09-16
+
+Retained-asset inspection during activation reset now uses the existing four-wide
+observation runner with fresh reserve/controller/module/cycle checks, drained
+failures and deterministic input ordering. Four native regressions and scoped
+host Clippy pass; the existing source-bound reset recovery/replay case passes
+with serial and bounded scheduling. One two-asset live pair improves the phase
+excluding nested artifact resolution from 84.28s to 78.89s (6.4%); nine native
+fixture assets prove the full concurrency bound. This is qualified in .19, not a
+full-release speed claim. The concurrent IcyDB update occurred after measurement
+and is preserved without delaying this slice for repeat qualification. Exact
+inputs and limitations are in the throughput report; the broader batch stays open.
+
+The latest Toko recheck has no new feedback beyond the locally corrected
+CANIC-150/014 below. Complete Fleet journeys now use the existing production
+App build pipeline, keeping Cargo serial while captured infrastructure artifacts
+finalize. Five-role artifact parity, the focused four-shard activation/replay
+case, both release-cache regressions and scoped internal-fixture Clippy pass.
+The cache binds its fixture producer source; sealing and exact release authority
+are unchanged. This slice is qualified and included in .19. Its 61.17s live case
+uses warm Cargo, so it is not a before/after speedup claim. The broader speed
+outcome still needs the remaining compiler/link and live-journey work.
+
+The latest maintainer instruction prioritizes fresh Toko feedback first.
+CANIC-150's phase-only progress gap is reproduced and corrected: emit once
+after each durable applied transition, preserving receipt order, exact counts,
+lost-response recovery and terminal replay. Host/CLI regressions and scoped
+Clippy pass. CANIC-014's duplicate root draft claim is removed; detailed headings
+remain the version-transaction owner. Publication/downstream live acceptance
+remain separate. RF2 stays preserved.
+
+The subsequent speed correction preserves unchanged generated-source timestamps
+and narrows Cargo watches to exact config/manifest inputs. Real-Cargo tests
+reproduce both prior invalidations and pass settled reuse, source/metadata
+invalidation and generated-output repair. Build-support tests and scoped Canic
+Clippy pass. The current handoff and throughput report retain exact logs and
+the possible one-time output-watch settling rerun. No whole-gate timing claim
+or required recovery-coverage reduction is introduced.
+
+The published .18 run still spends 94 minutes in tests, including 78 minutes in
+the internal ordered PocketIC stage. The maintainer prioritizes throughput ahead
+of restoring RF2 or continuing B1. Start by removing repeated Cargo catalog
+resolution within role reports and terminal inventories; preserve isolated role
+feature checks and reacquire evidence on every subsequent operation. This
+reduction is implemented, including internal test-Wasm preflight. Sixty-six
+focused regressions and scoped warning-denied Clippy pass. Role resolution takes
+5.950s / 2.541s and eight-role preflight 8.32s / 3.43s. Qualification and measured
+limits belong in the current handoff and the existing
+[throughput report](../../audits/working/0.110-validation-throughput/report.md).
+No concurrent PocketIC lanes or coverage reductions are introduced. The broader
+throughput outcome remains open; this is not a new minor or a release command.
+
+The shared Coordinator and Store fixture now calls the linked production builder
+instead of compiling a second native host executable. Artifact parity (raw/gzip/
+Candid), Coordinator cache reuse, four helper tests, two release/cache-authority
+regressions, scoped host/internal Clippy and the focused Fleet restore pass.
+The observed removable native compilation is 69s; no complete-gate speedup is
+claimed. The current handoff/report records differing warm-cache conditions and
+the final 68s focused runner. Continue attribution of remaining compiler/link
+and complete-journey costs after the macro correction above, retaining features,
+config and release identity. The qualified changes remain in the open .19 batch, whose
+larger throughput outcome is not yet push-ready.
+
 ## Selected .18 dependency and build correction batch — 2026-09-15
 
 The maintainer selected the completed dependency/cache/CI fixes for release and

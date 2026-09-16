@@ -89,7 +89,7 @@ ic-signature-verification = "0.3.0"
 ic-testkit = "0.9.0"
 ic-timers = "=0.7.1"
 ic0 = "1.2.0"
-icydb = { version = "=0.257.15", default-features = false }
+icydb = { version = "=0.257.18", default-features = false }
 k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 quote = "1.0"
@@ -99,7 +99,9 @@ reqwest = { version = "0.13.5", default-features = false, features = [
 ] }
 rustix = { version = "1.1.4", features = ["fs"] }
 serde = { version = "1.0", default-features = false }
-serde-saphyr = { version = "1.2.0", default-features = false, features = ["deserialize"] }
+serde-saphyr = { version = "1.2.0", default-features = false, features = [
+    "deserialize",
+] }
 serde_bytes = "0.11"
 serde_json = "1.0"
 serde_path_to_error = "0.1.20"

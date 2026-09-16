@@ -19,6 +19,143 @@ open-draft statements describe that earlier development state.
 
 
 <!-- canic-status-summary:end -->
+
+## Bounded reset inspections — 2026-09-16
+
+Activation reset review now inspects retained assets in groups of at most four,
+using fresh reserve/controller/module/cycle evidence. Issued reads drain before
+failure; inventory order selects the error, failed groups publish no partial
+observations, and retries reacquire evidence. Four focused host regressions and
+host all-target/all-feature Clippy pass. The existing source-bound activation
+reset recovery/replay case passes with both serial and bounded scheduling.
+
+One matched pair reduces the live phase excluding nested artifact resolution
+from 84.28s to 78.89s (6.4%). The live case has two retained assets; the native
+fixture proves the four-wide bound across nine. This is not a full-release
+speedup claim. The [throughput report](../audits/working/0.110-validation-throughput/report.md)
+records exact inputs, logs and limitations. IcyDB changed from .257.15 to .257.18
+after this qualification; the maintainer requested no delay for that concurrent
+update, so the optional new-lock recheck was stopped. Its changes are preserved.
+
+The .19 changelog includes this completed slice; package versions remain .18.
+The broader throughput batch remains open for compiler/link and live-journey
+costs. No broad validation, version bump, commit, push or deployment ran.
+
+## Toko recheck and complete-journey build pipeline — 2026-09-16
+
+Toko's upstream feedback is unchanged at SHA-256
+`5e6b42624ce254bcdeffc0c8b3bd4e6f6f659930e833787c1c0c983d54807d53`.
+CANIC-150/014 remain fixed locally, awaiting publication/downstream acceptance;
+there is no newer blocker in that feedback source. RF2 remains preserved.
+
+The complete Fleet journey fixture now uses the existing production App builder,
+overlapping captured infrastructure finalization with later serial Cargo work.
+Its cache also binds the fixture producer source. Exact profile/config/release
+binding, audit-Root substitution, sealing and recovery assertions are retained.
+All five roles have byte-identical serial/pipelined raw Wasm, gzip and Candid
+outputs. The four-initial-shard activation/replay test, both release-cache
+regressions and internal-package all-target/all-feature Clippy pass. The live
+case takes 61.17s (64s runner), including 14.47s to build/seal from warm Cargo;
+this is not a controlled speedup against the historical cold build.
+
+Logs: `/tmp/canic-throughput-app-{parity,activation,cache,clippy}.log`.
+The [throughput report](../audits/working/0.110-validation-throughput/report.md)
+records artifact identities and limitations. The .19 changelog is current;
+package versions remain .18. This slice is qualified, but the complete speed
+batch remains open for compiler/link and live-journey cost reduction. No full
+release-time saving is claimed, and no broad gate, version bump or publication ran.
+
+## Toko feedback first, then build invalidation — 2026-09-16
+
+Read-only Toko feedback now reopens CANIC-150: its successful .18 local reset
+showed `0/34` for 130.101s while journal samples reached 16 and 28 applied effects.
+The source diagnosis is correct. Canic now emits an existing progress event
+after each newly durable applied effect. A native regression reproduced `[0]`
+before the fix and now observes every count through a fourteen-effect phase,
+checking the on-disk journal at callback time, lost-response reconciliation and
+effect-free terminal replay. Existing text/JSON renderers require no schema
+change or extra remote polling. Thirteen selected host/CLI progress tests pass;
+the final exact regression and all-target/all-feature Clippy also pass.
+Logs: `/tmp/canic-150-progress-before.log`, `/tmp/canic-150-progress-after.log`,
+`/tmp/canic-150-progress-final.log`, `/tmp/canic-150-clippy.log`.
+
+CANIC-014 is also corrected in the maintained tree: the root changelog no longer
+names an open draft that survives publication. Detailed patch headings remain
+the release-date owner. Existing changelog governance and draft preflight pass;
+no new prose guard or historical-tag rewrite is needed. Toko's feedback source
+SHA-256 is `5e6b42624ce254bcdeffc0c8b3bd4e6f6f659930e833787c1c0c983d54807d53`;
+its `local-reset-feedback-2026-09-16.json` receipt is
+`40c7c81641569d55189b1598f33aa095cf7e18f66285b9436f1f6208b1de9f4d`.
+The sibling was not edited; these corrections still need publication and
+downstream live acceptance. CANIC-176 has positive downstream acceptance and
+177 is verified there. Larger funding follow-ups remain preserved/sequenced,
+not silently restored into this batch.
+
+Speed work then reproduced two build-script invalidations with real Cargo:
+rewriting watched generated output on every run, and watching all neighboring
+config-directory files. Unchanged source writes now preserve timestamps;
+exact config/manifest watches replace the directory watch. Generated-source
+repair remains supported, including one possible settling rerun after changed
+output. The focused Cargo regression proves settled reuse, neighboring-artifact
+isolation, config invalidation, missing/tampered output repair, and rejection of
+missing explicit config or mismatched package metadata. Thirteen build-support
+tests, both build-cfg tests and scoped all-feature Canic Clippy pass. The
+[throughput report](../audits/working/0.110-validation-throughput/report.md)
+records reproduction, logs and limitations. No full-release speedup is yet measured.
+
+The open .19 changelog includes all three changes. These corrections are qualified;
+the complete throughput batch remains open for remaining compiler/link and
+complete-journey costs. Package versions remain .18; the lockfile and RF2 backup
+are unchanged. No broad gate, version bump, commit, push or deployment ran.
+
+## Release-test throughput follow-up — 2026-09-16
+
+The maintainer prioritizes shortening the roughly 90-minute release flow after
+published .18. HEAD at the start of this batch is `eb2bfbeba`. RF2 remains
+preserved under `.tmp/rf2-preserved-20260915T180303Z/`; do not restore it while
+this throughput batch is active. RF2/RF3/B1 remain accepted follow-up work.
+
+The complete .18 run retained in
+`target/validation-runs/20260915T182140Z-31559.KC6uLs/0.log` spent 5,668 seconds
+in tests, including 4,682 seconds in the internal ordered PocketIC stage.
+Ten artifact-build-and-seal spans account for 1,083 seconds within that stage;
+these are nested timings, not additional time on top. No whole-release speedup
+has yet been measured for this new candidate.
+
+The first implementation shares Cargo catalog evidence inside one role
+capability report or terminal inventory, retaining individual feature-tree
+resolution and fresh evidence between operations. The same reuse now covers
+internal test-Wasm preflight. All 66 focused host regressions pass. Paired role
+resolution takes 5.950s / 2.541s, and eight-role Wasm preflight 8.32s / 3.43s;
+metadata commands fall from 17 to 3 with all eight role-tree commands retained.
+Host all-target/all-feature Clippy passes with warnings denied. The
+[throughput report](../audits/working/0.110-validation-throughput/report.md) records
+controls and limitations. This local change is qualified and its
+changelog is ready; the complete release-throughput batch is not yet declared
+push-ready. The next work is attribution and reduction of the remaining
+artifact-build and complete-journey costs. No full-gate improvement is claimed.
+
+The second qualified change removes the redundant native host executable build
+from shared PocketIC Coordinator and Store acquisition. Both call the existing
+linked production builder and use its target resolver; cache recipes bind their
+fixture producer source. Controlled artifact comparisons produce identical raw
+Wasm, gzip and Candid. Four helper tests, two release/cache-authority regressions,
+host/internal all-target/all-feature Clippy and the single governed Fleet restore
+case pass. Its runner takes 68s, including a Store rebuild; different cache states
+prevent treating that as a matched speedup against earlier runs. A separate
+control observed 69s of now-unnecessary native compilation. The report records
+the exact qualification boundaries and logs. No runtime semantics or recovery
+coverage changed. The later checkpoint above qualifies the build-script
+invalidation correction; remaining compiler/link and complete-journey costs
+still need work before a complete throughput-batch push-readiness handoff.
+
+The open .19 changelog records both changes; package versions remain .18. Staying on .110 beyond the release-count guideline
+is justified by the existing release/operator latency regression. No new minor,
+full validation, version mutation or publication is authorized by this work.
+
+The older handoffs below describe earlier checkpoints.
+
+
 ## Selected .18 release preparation — 2026-09-15
 
 The maintainer selected **release completed fixes; preserve RF2 for the next

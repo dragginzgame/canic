@@ -115,13 +115,19 @@ impl AppConfigSnapshot {
     pub fn role_capabilities(&self) -> Result<BTreeMap<String, Vec<String>>, AppConfigError> {
         let mut projected = BTreeMap::new();
 
-        for role in self.config.deployable_roles() {
-            let contract = match crate::role_contract::resolve_declared_role_contract(
-                &self.path,
-                &self.config,
-                &role,
-                crate::role_contract::PackageValidationMode::Passive,
-            ) {
+        let roles = self
+            .config
+            .deployable_roles()
+            .into_iter()
+            .collect::<Vec<_>>();
+        let contracts = crate::role_contract::resolve_declared_role_contracts(
+            &self.path,
+            &self.config,
+            &roles,
+            crate::role_contract::PackageValidationMode::Passive,
+        );
+        for (role, resolution) in roles.iter().zip(contracts) {
+            let contract = match resolution {
                 canic_core::role_contract::RoleContractResolution::Resolved { contract } => {
                     contract
                 }

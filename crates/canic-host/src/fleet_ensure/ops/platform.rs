@@ -533,6 +533,13 @@ struct RootInspectionStatus {
     cycles: Nat,
 }
 
+/// Fresh management evidence validated for one retained reset asset.
+struct ReinstallAssetStatus {
+    response: RootInspectionStatus,
+    controllers: Vec<String>,
+    cycles: u128,
+}
+
 #[derive(CandidType)]
 enum ManagedCanisterStatusRequest {
     CycleBalance,
@@ -1266,133 +1273,157 @@ impl IcpEnsurePlatform {
             let root_authority = authorities.get(root_name).ok_or_else(|| {
                 IcpEnsurePlatformError::RootManagement("missing Root binding".to_string())
             })?;
-            for asset in &pool.assets {
-                if !seen.insert(asset.principal.clone())
-                    || !(matches!(
-                        asset.lifecycle,
-                        EstatePoolAssetLifecycle::Ready | EstatePoolAssetLifecycle::Workload
-                    ) || (allow_pending_reset
-                        && matches!(
-                            asset.lifecycle,
-                            EstatePoolAssetLifecycle::PendingReset
-                                | EstatePoolAssetLifecycle::Failed
-                        )))
-                {
-                    return Err(IcpEnsurePlatformError::RootManagement(
-                        "pool asset is duplicated or not terminal".to_string(),
-                    ));
-                }
-                let target = parse_principal("reset pool asset", &asset.principal)?;
-                let root_pid = parse_principal("reset Root", root)?;
-                let candid = candid_by_root.get(root_name).ok_or_else(|| {
-                    pool_configuration_error("missing reset read contract".to_string())
-                })?;
-                crate::canister_protocol::inspection::preflight_inspection(
-                    &self.icp, candid, root_pid, target,
-                )
-                .map_err(current_protocol::CurrentProtocolError::from)?;
-                let response: RootInspectionResponse = call_with_candid(
-                    &self.icp,
-                    candid,
-                    root_pid,
-                    canic_protocol::CANIC_ROOT_COMMAND,
-                    &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                        canister_id: target,
-                    }),
-                )
-                .map_err(current_protocol::CurrentProtocolError::from)?;
-                let response = response
-                    .into_status(root_pid, target)
-                    .map_err(current_protocol::CurrentProtocolError::from)?;
-                if !response
-                    .settings
-                    .controllers
+            for batch in pool
+                .assets
+                .chunks(super::bounded_observations::MAX_IN_FLIGHT)
+            {
+                // Record uniqueness in inventory order, then drain each issued batch
+                // before mutating the observation or scheduling another inspection.
+                let requests = batch
                     .iter()
-                    .any(|controller| controller.to_text() == root)
-                {
-                    return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
-                        canister: asset.principal.clone(),
-                        field: "Root controller",
-                    });
-                }
-                let cycles = validate_inspected_cycles(
-                    &asset.principal,
-                    InspectedModule::Any,
-                    response.module_hash.as_deref(),
-                    &response.cycles,
-                )?;
-                let mut controllers = response
-                    .settings
-                    .controllers
-                    .iter()
-                    .map(Principal::to_text)
+                    .map(|asset| (asset, seen.insert(asset.principal.clone())))
                     .collect::<Vec<_>>();
-                controllers.sort();
-                if controllers != [root.to_string()] {
-                    return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
-                        canister: asset.principal.clone(),
-                        field: "exact Root controllers",
+                let icp = &self.icp;
+                let responses =
+                    super::bounded_observations::collect(&requests, |(asset, unique)| {
+                        Self::inspect_reinstall_asset(
+                            icp,
+                            candid_by_root.get(root_name).map(PathBuf::as_path),
+                            root,
+                            asset,
+                            *unique,
+                            allow_pending_reset,
+                        )
+                    })?;
+                for (asset, inspected) in batch.iter().zip(responses) {
+                    let ReinstallAssetStatus {
+                        response,
+                        controllers,
+                        cycles,
+                    } = inspected;
+
+                    let module_sha256 = response
+                        .module_hash
+                        .as_ref()
+                        .map(canic_core::cdk::utils::hash::hex_bytes);
+                    let configured_name = self
+                        .desired
+                        .canisters
+                        .iter()
+                        .find(|c| {
+                            c.principal.as_deref() == Some(&asset.principal)
+                                || self.current_principal(state, &c.name) == Some(&asset.principal)
+                        })
+                        .map(|c| c.name.clone());
+                    let name = configured_name
+                        .unwrap_or_else(|| format!("reinstall-pool-{}", asset.principal));
+                    observation.canisters.insert(
+                        name,
+                        Some(LiveCanister {
+                            canister_version: None,
+                            controllers: controllers.clone(),
+                            cycles,
+                            module_sha256: module_sha256.clone(),
+                            principal: asset.principal.clone(),
+                            reinstall_required: false,
+                            root_owned_lifecycle: Some(match asset.lifecycle {
+                                EstatePoolAssetLifecycle::Ready => RootOwnedCanisterLifecycle::Idle,
+                                EstatePoolAssetLifecycle::Workload => {
+                                    RootOwnedCanisterLifecycle::Workload
+                                }
+                                _ => RootOwnedCanisterLifecycle::Retained,
+                            }),
+                            status: match response.status {
+                                canic_core::dto::canister::CanisterStatusType::Running => {
+                                    CanisterRuntimeStatus::Running
+                                }
+                                canic_core::dto::canister::CanisterStatusType::Stopped => {
+                                    CanisterRuntimeStatus::Stopped
+                                }
+                                canic_core::dto::canister::CanisterStatusType::Stopping => {
+                                    CanisterRuntimeStatus::Stopping
+                                }
+                            },
+                        }),
+                    );
+                    observation
+                        .additional_controlled_cycles
+                        .remove(&asset.principal);
+                    assets.push(crate::fleet_ensure::model::FleetReinstallAssetRecord {
+                        controllers,
+                        module_sha256,
+                        principal: asset.principal.clone(),
+                        root: root_name.clone(),
+                        subnet: root_authority.subnet.clone(),
                     });
                 }
-
-                let module_sha256 = response
-                    .module_hash
-                    .as_ref()
-                    .map(canic_core::cdk::utils::hash::hex_bytes);
-                let configured_name = self
-                    .desired
-                    .canisters
-                    .iter()
-                    .find(|c| {
-                        c.principal.as_deref() == Some(&asset.principal)
-                            || self.current_principal(state, &c.name) == Some(&asset.principal)
-                    })
-                    .map(|c| c.name.clone());
-                let name = configured_name
-                    .unwrap_or_else(|| format!("reinstall-pool-{}", asset.principal));
-                observation.canisters.insert(
-                    name,
-                    Some(LiveCanister {
-                        canister_version: None,
-                        controllers: controllers.clone(),
-                        cycles,
-                        module_sha256: module_sha256.clone(),
-                        principal: asset.principal.clone(),
-                        reinstall_required: false,
-                        root_owned_lifecycle: Some(match asset.lifecycle {
-                            EstatePoolAssetLifecycle::Ready => RootOwnedCanisterLifecycle::Idle,
-                            EstatePoolAssetLifecycle::Workload => {
-                                RootOwnedCanisterLifecycle::Workload
-                            }
-                            _ => RootOwnedCanisterLifecycle::Retained,
-                        }),
-                        status: match response.status {
-                            canic_core::dto::canister::CanisterStatusType::Running => {
-                                CanisterRuntimeStatus::Running
-                            }
-                            canic_core::dto::canister::CanisterStatusType::Stopped => {
-                                CanisterRuntimeStatus::Stopped
-                            }
-                            canic_core::dto::canister::CanisterStatusType::Stopping => {
-                                CanisterRuntimeStatus::Stopping
-                            }
-                        },
-                    }),
-                );
-                observation
-                    .additional_controlled_cycles
-                    .remove(&asset.principal);
-                assets.push(crate::fleet_ensure::model::FleetReinstallAssetRecord {
-                    controllers,
-                    module_sha256,
-                    principal: asset.principal.clone(),
-                    root: root_name.clone(),
-                    subnet: root_authority.subnet.clone(),
-                });
             }
         }
         assets.sort_by(|a, b| a.principal.cmp(&b.principal));
         Ok(assets)
+    }
+
+    fn inspect_reinstall_asset(
+        icp: &IcpCli,
+        candid: Option<&Path>,
+        root: &str,
+        asset: &EstatePoolAssetObservation,
+        unique: bool,
+        allow_pending_reset: bool,
+    ) -> Result<ReinstallAssetStatus, IcpEnsurePlatformError> {
+        let terminal = matches!(
+            asset.lifecycle,
+            EstatePoolAssetLifecycle::Ready | EstatePoolAssetLifecycle::Workload
+        );
+        let recoverable = allow_pending_reset
+            && matches!(
+                asset.lifecycle,
+                EstatePoolAssetLifecycle::PendingReset | EstatePoolAssetLifecycle::Failed
+            );
+        if !unique || !(terminal || recoverable) {
+            return Err(IcpEnsurePlatformError::RootManagement(
+                "pool asset is duplicated or not terminal".to_string(),
+            ));
+        }
+        let authority = PoolInspectionAuthority {
+            target: parse_principal("reset pool asset", &asset.principal)?,
+            root: parse_principal("reset Root", root)?,
+        };
+        let candid = candid
+            .ok_or_else(|| pool_configuration_error("missing reset read contract".to_string()))?;
+        // Reset review always fetches fresh evidence; it does not consume the
+        // earlier observation's balance or inspection cache.
+        let response = Self::fetch_pool_inspection(icp, candid, authority)?;
+        let mut controllers = response
+            .settings
+            .controllers
+            .iter()
+            .map(Principal::to_text)
+            .collect::<Vec<_>>();
+        if !controllers.iter().any(|controller| controller == root) {
+            return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                canister: asset.principal.clone(),
+                field: "Root controller",
+            });
+        }
+        let cycles = validate_inspected_cycles(
+            &asset.principal,
+            InspectedModule::Any,
+            response.module_hash.as_deref(),
+            &response.cycles,
+        )?;
+        controllers.sort();
+        if controllers != [root.to_string()] {
+            return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                canister: asset.principal.clone(),
+                field: "exact Root controllers",
+            });
+        }
+        Ok(ReinstallAssetStatus {
+            response,
+            controllers,
+            cycles,
+        })
     }
 
     fn resolved_controllers(
@@ -5710,6 +5741,86 @@ if"#,
 
     #[cfg(unix)]
     impl PoolInspectionFixture {
+        fn retained_observation(&self) -> FleetObservation {
+            let assets = self
+                .owners
+                .state
+                .pending_principals
+                .values()
+                .map(|principal| EstatePoolAssetObservation {
+                    creation_receipt: None,
+                    cycles: 500,
+                    lifecycle: EstatePoolAssetLifecycle::Workload,
+                    origin: EstatePoolAssetOrigin::Created,
+                    principal: principal.clone(),
+                })
+                .collect::<Vec<_>>();
+            FleetObservation {
+                additional_controlled_cycles: assets
+                    .iter()
+                    .map(|asset| (asset.principal.clone(), asset.cycles))
+                    .collect(),
+                canisters: BTreeMap::new(),
+                estate_funding_domains: BTreeMap::from([(
+                    "root".into(),
+                    EstateFundingDomainObservation {
+                        balance_cycles: Some(0),
+                        cycles_ledger: self.owners.platform.desired.cycles_ledger.clone(),
+                        pool: Some(EstatePoolInventoryObservation {
+                            assets,
+                            maximum_size: 128,
+                            minimum_size: 1,
+                            pending_creation: None,
+                            readiness_floor_cycles: 1_000,
+                            creation_execution_margin_cycles: 100,
+                        }),
+                        root_principal: Some(self.root_id.to_text()),
+                    },
+                )]),
+                ledger_fee_cycles: 100,
+                operator_cycles: 1_000,
+                protocol_ready: BTreeMap::new(),
+            }
+        }
+
+        fn inspect_retained(
+            &self,
+            observation: &mut FleetObservation,
+            allow_pending: bool,
+        ) -> Result<
+            Vec<crate::fleet_ensure::model::FleetReinstallAssetRecord>,
+            IcpEnsurePlatformError,
+        > {
+            let authorities = BTreeMap::from([(
+                "root".into(),
+                RootManagementCanisterObservation {
+                    live: LiveCanister {
+                        canister_version: None,
+                        controllers: vec![self.owners.platform.desired.operator.clone()],
+                        cycles: 10_000,
+                        module_sha256: Some("01".repeat(32)),
+                        principal: self.root_id.to_text(),
+                        reinstall_required: false,
+                        root_owned_lifecycle: None,
+                        status: CanisterRuntimeStatus::Running,
+                    },
+                    name: "root".into(),
+                    subnet: "subnet".into(),
+                },
+            )]);
+            let candid = BTreeMap::from([(
+                "root".into(),
+                self.owners.platform.root_protocol_candid().unwrap(),
+            )]);
+            self.owners.platform.inspect_reinstall_assets(
+                &self.owners.state,
+                &authorities,
+                observation,
+                &candid,
+                allow_pending,
+            )
+        }
+
         fn inspection_hook(&self, hook: &str) {
             let path = &self.owners.root;
             let script = std::fs::read_to_string(path.join("icp")).unwrap();
@@ -5775,6 +5886,235 @@ printf 'finish:%s\n' "$request_name" >> events
                 path.display()
             ));
         }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_inspections_overlap_and_retain_exact_inventory() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let count = bound * 2 + 1;
+        let fixture = PoolInspectionFixture::fresh(u32::try_from(count).unwrap());
+        let path = &fixture.owners.root;
+        fixture.inspection_hook(&format!(
+            r#"
+cd '{}'
+printf 'start\n' >> events
+started=$(grep -c '^start$' events)
+goal=$(( (started + {bound} - 1) / {bound} * {bound} ))
+[ "$goal" -le {count} ] || goal={count}
+attempts=0
+while [ "$(grep -c '^start$' events)" -lt "$goal" ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 500 ] || exit 1
+    sleep 0.01
+done
+printf 'finish\n' >> events
+"#,
+            path.display()
+        ));
+        let mut observation = fixture.retained_observation();
+        let assets = fixture.inspect_retained(&mut observation, false).unwrap();
+        assert_eq!(assets.len(), count);
+        assert!(
+            assets
+                .windows(2)
+                .all(|pair| pair[0].principal < pair[1].principal)
+        );
+        assert!(
+            assets
+                .iter()
+                .all(|asset| asset.controllers == [fixture.root_id.to_text()]
+                    && asset.module_sha256.is_none())
+        );
+        assert_eq!(observation.canisters.len(), count);
+        assert!(observation.additional_controlled_cycles.is_empty());
+        assert!(
+            observation
+                .canisters
+                .values()
+                .all(|live| live.as_ref().unwrap().cycles == 1_000)
+        );
+        let (mut active, mut maximum) = (0, 0);
+        for event in std::fs::read_to_string(path.join("events"))
+            .unwrap()
+            .lines()
+        {
+            match event {
+                "start" => {
+                    active += 1;
+                    maximum = maximum.max(active);
+                }
+                "finish" => {
+                    assert!(active > 0);
+                    active -= 1;
+                }
+                _ => panic!("unknown inspection event"),
+            }
+            assert!(active <= bound);
+        }
+        assert_eq!((active, maximum), (0, bound));
+        assert_eq!(
+            fixture.owners.platform.icp.remote_call_count(),
+            2 * u64::try_from(count).unwrap()
+        );
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_inspections_drain_failure_in_order_and_retry_fresh() {
+        let fixture = PoolInspectionFixture::fresh(5);
+        let path = &fixture.owners.root;
+        PoolInspectionFixture::fresh_response(
+            path,
+            vec![fixture.root_id, Principal::anonymous()],
+            None,
+            1_000,
+        );
+        std::fs::copy(path.join("inspection.json"), path.join("pool-000.response")).unwrap();
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 2_000);
+        std::fs::write(path.join("pool-001.fail"), []).unwrap();
+        fixture.route_inspection_targets();
+        let mut observation = fixture.retained_observation();
+        let before = observation.clone();
+        assert!(
+            matches!(fixture.inspect_retained(&mut observation, false), Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { field: "exact Root controllers", canister }) if canister == fixture.target.to_text())
+        );
+        assert_eq!(observation, before);
+        let events = std::fs::read_to_string(path.join("events")).unwrap();
+        for index in 0..4 {
+            assert!(events.contains(&format!("finish:pool-{index:03}")));
+        }
+        assert!(!events.contains("pool-004"));
+        assert!(events.find("finish:pool-001").unwrap() < events.find("finish:pool-000").unwrap());
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 8);
+        std::fs::remove_file(path.join("pool-000.response")).unwrap();
+        std::fs::remove_file(path.join("pool-001.fail")).unwrap();
+        for cycles in [2_000, 3_000] {
+            PoolInspectionFixture::fresh_response(
+                path,
+                vec![fixture.root_id],
+                Some(vec![1; 32]),
+                cycles,
+            );
+            let assets = fixture.inspect_retained(&mut observation, false).unwrap();
+            assert_eq!(assets.len(), 5);
+            assert!(
+                assets
+                    .iter()
+                    .all(|asset| asset.module_sha256.as_deref() == Some(&"01".repeat(32)))
+            );
+            assert!(
+                observation
+                    .canisters
+                    .values()
+                    .all(|live| live.as_ref().unwrap().cycles == cycles)
+            );
+        }
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 28);
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_inspections_reject_duplicates_and_preserve_lifecycle_admission() {
+        let fixture = PoolInspectionFixture::fresh(5);
+        let mut observation = fixture.retained_observation();
+        let pool = observation
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .pool
+            .as_mut()
+            .unwrap();
+        pool.assets[4].principal = pool.assets[0].principal.clone();
+        assert!(matches!(
+            fixture.inspect_retained(&mut observation, false),
+            Err(IcpEnsurePlatformError::RootManagement(_))
+        ));
+        assert_eq!(fixture.owners.platform.icp.remote_call_count(), 8);
+        for lifecycle in [
+            EstatePoolAssetLifecycle::PendingReset,
+            EstatePoolAssetLifecycle::Failed,
+            EstatePoolAssetLifecycle::Claimed,
+        ] {
+            let mut observation = fixture.retained_observation();
+            let pool = observation
+                .estate_funding_domains
+                .get_mut("root")
+                .unwrap()
+                .pool
+                .as_mut()
+                .unwrap();
+            pool.assets.truncate(1);
+            pool.assets[0].lifecycle = lifecycle;
+            let before = fixture.owners.platform.icp.remote_call_count();
+            assert!(matches!(
+                fixture.inspect_retained(&mut observation, false),
+                Err(IcpEnsurePlatformError::RootManagement(_))
+            ));
+            assert_eq!(fixture.owners.platform.icp.remote_call_count(), before);
+            let result = fixture.inspect_retained(&mut observation, true);
+            if lifecycle == EstatePoolAssetLifecycle::Claimed {
+                assert!(matches!(
+                    result,
+                    Err(IcpEnsurePlatformError::RootManagement(_))
+                ));
+                assert_eq!(fixture.owners.platform.icp.remote_call_count(), before);
+            } else {
+                assert_eq!(result.unwrap().len(), 1);
+                assert_eq!(fixture.owners.platform.icp.remote_call_count(), before + 2);
+            }
+        }
+        std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_inspections_require_fresh_reserve_even_with_cached_evidence() {
+        let fixture = PoolInspectionFixture::fresh(1);
+        let platform = &fixture.owners.platform;
+        *platform.observation_snapshot.borrow_mut() = Some(FleetObservationSnapshot::default());
+        platform.retain_pool_inspection(
+            PoolInspectionAuthority {
+                root: fixture.root_id,
+                target: fixture.target,
+            },
+            RootInspectionStatus {
+                status: canic_core::dto::canister::CanisterStatusType::Running,
+                settings: ManagementCanisterObservationSettings {
+                    controllers: vec![fixture.root_id],
+                },
+                module_hash: None,
+                cycles: Nat::from(9_999_u64),
+            },
+        );
+        let mut observation = fixture.retained_observation();
+        PoolInspectionFixture::reserve_response(
+            &fixture.owners.root,
+            fixture.root_id,
+            fixture.target,
+            0,
+        );
+        assert!(matches!(fixture.inspect_retained(&mut observation, false),
+            Err(IcpEnsurePlatformError::CurrentProtocol(current_protocol::CurrentProtocolError::Transport(
+                CanisterProtocolError::InspectionPreflightReserve(evidence)
+            ))) if evidence.canister_id == fixture.target && evidence.caller == fixture.root_id
+        ));
+        assert_eq!(platform.icp.remote_call_count(), 1);
+        PoolInspectionFixture::reserve_response(
+            &fixture.owners.root,
+            fixture.root_id,
+            fixture.target,
+            1_000,
+        );
+        fixture.inspect_retained(&mut observation, false).unwrap();
+        assert_eq!(
+            observation.canisters["pool-000"].as_ref().unwrap().cycles,
+            1_000
+        );
+        assert_eq!(platform.icp.remote_call_count(), 3);
+        std::fs::remove_dir_all(&fixture.owners.root).unwrap();
     }
 
     #[cfg(unix)]

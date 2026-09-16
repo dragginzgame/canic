@@ -10,14 +10,13 @@ use ic_testkit::pocket_ic::common::rest::{IcpFeatures, IcpFeaturesConfig};
 #[cfg(test)]
 use std::time::SystemTime;
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
-    process::Command,
     sync::{Mutex, Once},
 };
 
 use super::super::artifacts::{
-    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID,
+    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, build_generated_fleet_wasm,
     build_internal_test_wasm_canisters_with_env, internal_test_artifact_build_target,
     internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
     report_artifact_cache_maintenance,
@@ -339,7 +338,7 @@ fn build_canisters_once(workspace_root: &Path) {
             config_path.to_str().expect("config path UTF-8"),
         );
         progress("building bootstrap wasm_store artifact");
-        build_bootstrap_wasm_store(workspace_root, &target_dir, &config_path);
+        build_bootstrap_wasm_store(workspace_root, &config_path);
         progress("building PIC root wasm artifact");
         build_internal_test_wasm_canisters_with_env(
             workspace_root,
@@ -353,7 +352,8 @@ fn build_canisters_once(workspace_root: &Path) {
 }
 
 // Build the sibling wasm_store independently before the fixture installs both Canisters.
-fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_path: &Path) {
+fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) {
+    let target_dir = canic_host::canister_build::canister_build_target_root(workspace_root);
     let artifact_path = workspace_root
         .join(".canic/release-builds")
         .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
@@ -365,7 +365,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
         .expect("bootstrap Store config path UTF-8");
     let cargo_build = WasmBuildSpec::new(
         workspace_root,
-        target_dir,
+        &target_dir,
         &["canic", "canic-host"],
         CanicWasmBuildProfile::Fast.target_dir_name(),
     )
@@ -384,7 +384,7 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     )
     .with_coordination_scope("canic-external-artifact-builds")
     .with_arguments([
-        "cargo run -p canic-host --example build_artifact",
+        "canic-host::build_workspace_canister_artifact",
         "wasm_store",
         "fast",
         config_relative,
@@ -395,6 +395,14 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
         INTERNAL_TEST_RELEASE_BUILD_ID,
     ])
     .with_input("build-config", config_path)
+    .with_input(
+        "fixture-builder",
+        &workspace_root.join("crates/canic-testing-internal/src/pic/artifacts.rs"),
+    )
+    .with_input(
+        "store-fixture-builder",
+        &workspace_root.join("crates/canic-testing-internal/src/pic/fleet_registry/build.rs"),
+    )
     .with_input("icp-config", &workspace_root.join("icp.yaml"))
     .with_cargo_build_inputs("bootstrap-store-cargo", &cargo_build, &cargo_inputs)
     .with_output("wasm_store", &artifact_path)
@@ -406,7 +414,12 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     let outcome = match prepare_artifact_cache(&cache).expect("prepare bootstrap Store cache") {
         ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
         ArtifactCachePreparation::Build(transaction) => {
-            run_bootstrap_wasm_store_build(workspace_root, target_dir, config_path);
+            build_generated_fleet_wasm(
+                workspace_root,
+                config_path,
+                "wasm_store",
+                CanicWasmBuildProfile::Fast,
+            );
             transaction
                 .import_output("wasm_store", &artifact_path)
                 .expect("import bootstrap Store artifact");
@@ -427,46 +440,6 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, target_dir: &Path, config_p
     );
     test_progress::detail("WASM", &format!("bootstrap Store cache: {outcome}"));
     report_artifact_cache_maintenance("bootstrap-wasm-store", outcome.record().maintenance());
-}
-
-fn run_bootstrap_wasm_store_build(workspace_root: &Path, target_dir: &Path, config_path: &Path) {
-    let cargo = env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let output = Command::new(cargo)
-        .current_dir(workspace_root)
-        .env("CARGO_INCREMENTAL", "0")
-        .env("CARGO_TARGET_DIR", target_dir)
-        .env("ICP_ENVIRONMENT", "local")
-        .env(
-            INTERNAL_TEST_RELEASE_BUILD_ID.0,
-            INTERNAL_TEST_RELEASE_BUILD_ID.1,
-        )
-        .args([
-            "run",
-            "-q",
-            "--profile",
-            "fast",
-            "-p",
-            "canic-host",
-            "--example",
-            "build_artifact",
-            "--locked",
-            "--",
-            "wasm_store",
-            "fast",
-            workspace_root.to_str().expect("workspace root UTF-8"),
-            workspace_root.to_str().expect("ICP root UTF-8"),
-            config_path.to_str().expect("config path UTF-8"),
-            "--release-build-id",
-            INTERNAL_TEST_RELEASE_BUILD_ID.1,
-        ])
-        .output()
-        .expect("run bootstrap wasm_store artifact builder");
-
-    assert!(
-        output.status.success(),
-        "bootstrap wasm_store artifact build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 // Resolve the one canonical Fleet config used by every managed fixture wasm.
