@@ -2570,9 +2570,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.257.15"
+version = "0.257.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6accb7c6737df85ec54e1ed407d52ec530b2b8b06495a2a1925f7e4be557dfa0"
+checksum = "237f37ebc8dc983f3664b3e634028f60098c08211f638e66b09d7a2abe3a127d"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2588,9 +2588,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.257.15"
+version = "0.257.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "83ab580054eca9b8d79b0d73b343f87a71cae816d5ea77f1ab294c903c60ffdd"
+checksum = "815273f1bac5b2fdd7537f2b1de8a56b2c55f90e00674edbcbe8d28714551b97"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2613,18 +2613,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.257.15"
+version = "0.257.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6e005b13824b92c6f5421d4af08718b4106a6bab6a6c9b2a1dae80de7a1d1566"
+checksum = "1c517c93db5bba9247be6dff969781237b6bc9aa912330624850952f2040437f"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.257.15"
+version = "0.257.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d59508767589a9b93759f3656888f2669a997f4b3ee7ccd8c2b7b402f90f3db"
+checksum = "495471b2d8c8f47d04c61abb65fe80ad815289178d5bdf40c248171f0c60fb99"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2644,9 +2644,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.257.15"
+version = "0.257.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "52728c4d9fe9ea1e36a016edb1f80e1b2f167513f7c6d4f833fc347e84460ea6"
+checksum = "4ff5dc8448c4a3e621c716fbd2fe0fd8f426819737d594f2b69b9fc88729cb15"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2661,9 +2661,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.257.15"
+version = "0.257.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85449c01ba62879c1dd80a1f1afa41f2e61d5d6f302d8b1cb6f2a5a229c4d065"
+checksum = "3cad0d00c909fa66d872b9900bdb45fab96d50231203c2e2c55cf2240709fdc7"
 dependencies = [
  "candid",
  "derive_more",
@@ -4572,13 +4572,13 @@ dependencies = [
 
 [[package]]
 name = "synstructure"
-version = "0.13.2"
+version = "0.14.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "728a70f3dbaf5bab7f0c4b1ac8d7ae5ea60a4b5549c8a5914361c99147a709d2"
+checksum = "901704edd0dfe137f1987838ee4f259e4e063c31371bdb423f7ae38ec6f77f02"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.5",
 ]
 
 [[package]]
@@ -5492,13 +5492,13 @@ dependencies = [
 
 [[package]]
 name = "yoke-derive"
-version = "0.8.2"
+version = "0.8.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "de844c262c8848816172cef550288e7dc6c7b7814b4ee56b3e1553f275f1858e"
+checksum = "33811428bee40dbceb6d545e95754741d17a6aef9a4849f0fd62e2ba4f412a78"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.5",
  "synstructure",
 ]
 
@@ -5533,13 +5533,13 @@ dependencies = [
 
 [[package]]
 name = "zerofrom-derive"
-version = "0.1.7"
+version = "0.1.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11532158c46691caf0f2593ea8358fed6bbf68a0315e80aae9bd41fbade684a1"
+checksum = "f75b4683f6c7f45248d4d64056a24298c6281e0993356d7d1b4a1a962ef10d4a"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn 2.0.119",
+ "syn 3.0.5",
  "synstructure",
 ]
 

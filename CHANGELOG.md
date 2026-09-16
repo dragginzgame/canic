@@ -8,12 +8,15 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-Development continues in the open `0.110.18` draft below.
+Detailed patch headings identify unreleased entries; this ledger summarizes changes.
 
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.19` restores intermediate Fleet progress, clarifies changelog state ownership,
+  reduces repeated build work, shares the production artifact pipeline with Fleet tests,
+  and overlaps retained-asset inspection during reset review.
 - `0.110.18` explains build-cache misses and lock waiting, fixes cold CI crypto
   validation, updates CDK/timer dependencies and clarifies release-state ownership,
   with a breaking host API change.

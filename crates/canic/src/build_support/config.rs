@@ -1,4 +1,4 @@
-use std::{error::Error, fmt, fs, path::Path};
+use std::{error::Error, fmt, fs, io, path::Path};
 
 use canic_core::{
     bootstrap::{
@@ -67,6 +67,18 @@ pub fn compile_role_build_sources(
         role_runtime_authority,
         root,
     })
+}
+
+/// Preserve unchanged generated source timestamps so output repair watches settle.
+/// Missing or different source is recreated from the current configuration.
+pub fn write_build_source_if_changed(path: &Path, source: &str) -> io::Result<()> {
+    match fs::read(path) {
+        Ok(existing) if existing == source.as_bytes() => return Ok(()),
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    fs::write(path, source)
 }
 
 /// Reject authoritative wasm builds that bypass host role-contract validation.

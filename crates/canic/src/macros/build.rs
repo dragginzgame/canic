@@ -42,6 +42,10 @@ macro_rules! __canic_build_internal {
 
         let manifest_dir =
             std::env::var("CARGO_MANIFEST_DIR").expect("CARGO_MANIFEST_DIR must be set");
+        println!(
+            "cargo:rerun-if-changed={}",
+            std::path::Path::new(&manifest_dir).join("Cargo.toml").display()
+        );
         let __canic_package_metadata =
             $crate::__build::required_package_metadata(std::path::Path::new(&manifest_dir));
         let __canic_app_name = __canic_package_metadata.app;
@@ -95,16 +99,12 @@ macro_rules! __canic_build_internal {
 
         let __canic_default_role = (__canic_role_name != "root").then(|| __canic_role_name.clone());
 
-        let ($cfg_str, generated_default_config) =
+        let ($cfg_str, _) =
             $crate::__build::read_config_source_or_default(
                 &$cfg_path,
                 env_cfg.is_some(),
                 __canic_default_role.as_deref(),
             );
-
-        if !generated_default_config && let Some(parent) = $cfg_path.parent() {
-            println!("cargo:rerun-if-changed={}", parent.display());
-        }
 
         // Validate once on the host, then emit a precompiled runtime model.
         let $cfg = ::std::sync::Arc::new(
@@ -269,9 +269,9 @@ macro_rules! __canic_build_internal {
         let out_dir =
             std::path::PathBuf::from(std::env::var("OUT_DIR").expect("OUT_DIR must be set"));
         let role_runtime_authority_path = out_dir.join("canic.role-runtime-authority.rs");
-        std::fs::write(
+        $crate::__build::write_build_source_if_changed(
             &role_runtime_authority_path,
-            __canic_build_sources.role_runtime_authority,
+            &__canic_build_sources.role_runtime_authority,
         )
         .expect("write compiled role runtime authority");
 
@@ -292,9 +292,9 @@ macro_rules! __canic_build_internal {
         if let Some(root_sources) = __canic_build_sources.root {
             let compact_cfg_path = out_dir.join("canic.compact.toml");
             let compiled_cfg_path = out_dir.join("canic.compiled.rs");
-            std::fs::write(&compact_cfg_path, root_sources.compact_config)
+            $crate::__build::write_build_source_if_changed(&compact_cfg_path, &root_sources.compact_config)
                 .expect("write compact Root config");
-            std::fs::write(&compiled_cfg_path, root_sources.config_model)
+            $crate::__build::write_build_source_if_changed(&compiled_cfg_path, &root_sources.config_model)
                 .expect("write compiled Root config");
 
             let compact_abs = compact_cfg_path

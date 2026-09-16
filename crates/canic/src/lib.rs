@@ -78,6 +78,7 @@ pub mod __build {
         config_contains_role, config_declares_role, configured_role_metrics_tier_mask,
         declared_package_metadata, declared_package_role, metrics_profile_tier_mask,
         read_config_source_or_default, required_package_metadata, required_package_role,
+        write_build_source_if_changed,
     };
 }
 

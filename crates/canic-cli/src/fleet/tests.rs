@@ -528,6 +528,31 @@ fn text_report_formats_pending_funding_and_unobserved_balances() {
 }
 
 #[test]
+fn advancing_progress_refreshes_counts_in_text_and_json() {
+    for applied_effects in [0, 1, 16, 28, 34] {
+        let progress = FleetEnsureProgress {
+            operation_id: "e1".repeat(32),
+            plan_sha256: "e2".repeat(32),
+            phase: FleetEnsurePhase::Infrastructure,
+            state: FleetEnsureProgressState::Advancing,
+            applied_effects,
+            reviewed_effects: 34,
+        };
+        assert!(
+            render_progress(&progress, false)
+                .contains(&format!("({applied_effects}/34 reviewed effects applied)"))
+        );
+        let json: serde_json::Value =
+            serde_json::from_str(&render_progress(&progress, true)).unwrap();
+        assert_eq!(json["progress"]["applied_effects"], applied_effects);
+        assert_eq!(json["progress"]["reviewed_effects"], 34);
+        assert_eq!(json["progress"]["state"]["kind"], "advancing");
+        assert_eq!(json["progress"]["operation_id"], progress.operation_id);
+        assert_eq!(json["progress"]["plan_sha256"], progress.plan_sha256);
+    }
+}
+
+#[test]
 fn phase_progress_json_has_exact_operation_authority_and_numeric_counts() {
     let progress = FleetEnsureProgress {
         operation_id: "e1".repeat(32),

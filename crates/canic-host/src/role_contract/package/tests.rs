@@ -81,6 +81,31 @@ fn isolated_supported_role_workspace_is_accepted() {
 }
 
 #[test]
+fn batched_contracts_refresh_manifest_evidence_between_operations() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    let path = fixture.root.join("canic.toml");
+    let config = parse_config_model(&fs::read_to_string(&path).unwrap()).unwrap();
+    let roles = [CanisterRole::owned("app".to_string())];
+    let resolve = || {
+        crate::role_contract::resolve_declared_role_contracts(
+            &path,
+            &config,
+            &roles,
+            PackageValidationMode::Build,
+        )
+    };
+    assert!(matches!(
+        resolve().as_slice(),
+        [canic_core::role_contract::RoleContractResolution::Resolved { .. }]
+    ));
+    fixture.rewrite("role/Cargo.toml", "role = \"app\"", "role = \"different\"");
+    let changed = resolve();
+    assert!(matches!(changed.as_slice(), [
+        canic_core::role_contract::RoleContractResolution::Rejected { errors }
+    ] if matches!(errors.as_slice(), [RoleContractFinding::PackageMetadataMismatch { .. }])));
+}
+
+#[test]
 fn isolated_renamed_canic_workspace_is_rejected() {
     let fixture = FixtureWorkspace::materialize("renamed_canic");
     let validation = validate_test_role_package(

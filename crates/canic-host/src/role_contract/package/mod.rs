@@ -266,6 +266,7 @@ pub fn validate_internal_test_wasm_packages(
 ) -> Result<(), RoleContractFinding> {
     let metadata = cargo_metadata(workspace_root, false)
         .map_err(|_| unsupported_finding("unable to inspect internal test package metadata"))?;
+    let mut cache = PackageValidationCache::default();
 
     for package_name in package_names {
         let matches = metadata
@@ -299,19 +300,21 @@ pub fn validate_internal_test_wasm_packages(
                     "Root fixtures must be internal canisters",
                 ));
             }
-            validate_package_manifest(
+            validate_package_manifest_with_cache(
                 &package.manifest_path,
                 &app,
                 &role,
                 PackageValidationMode::LockedBuild,
                 None,
+                &mut cache,
             )
         } else {
-            validate_declared_role_package(
+            validate_declared_role_package_with_cache(
                 &config_path,
                 &config,
                 &role,
                 PackageValidationMode::LockedBuild,
+                &mut cache,
             )
         };
         let evidence = match validation {

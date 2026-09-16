@@ -6,6 +6,8 @@
 
 mod descriptor;
 mod package;
+#[cfg(test)]
+mod tests;
 
 pub use descriptor::{
     StateDescriptorRegistry, materialize_state_manifest, validate_state_descriptor_registry,
@@ -29,24 +31,41 @@ use canic_core::{
 };
 use std::{collections::BTreeSet, path::Path};
 
+/// Resolve one role inventory using fresh workspace evidence and isolated role trees.
 #[must_use]
-pub(crate) fn resolve_declared_role_contract(
+pub(crate) fn resolve_declared_role_contracts(
     config_path: &Path,
     config: &ConfigModel,
-    role: &canic_core::ids::CanisterRole,
+    roles: &[canic_core::ids::CanisterRole],
     mode: PackageValidationMode,
-) -> RoleContractResolution {
-    if role.is_root() {
-        return resolve_canonical_root_contract(config);
-    }
-    match validate_declared_role_package(config_path, config, role, mode) {
-        RolePackageValidation::Supported(evidence) => {
-            resolve_declared_role_package_contract(config, &evidence)
-        }
-        RolePackageValidation::Unsupported(finding) => RoleContractResolution::Rejected {
-            errors: vec![finding],
-        },
-    }
+) -> Vec<RoleContractResolution> {
+    // Canonical Root projection must not require a generated Cargo package.
+    let package_roles = roles
+        .iter()
+        .filter(|role| !role.is_root())
+        .cloned()
+        .collect::<Vec<_>>();
+    let mut packages =
+        validate_declared_role_packages(config_path, config, &package_roles, mode).into_iter();
+    roles
+        .iter()
+        .map(|role| {
+            if role.is_root() {
+                return resolve_canonical_root_contract(config);
+            }
+            match packages
+                .next()
+                .expect("one validation per package-backed role")
+            {
+                RolePackageValidation::Supported(evidence) => {
+                    resolve_declared_role_package_contract(config, &evidence)
+                }
+                RolePackageValidation::Unsupported(finding) => RoleContractResolution::Rejected {
+                    errors: vec![finding],
+                },
+            }
+        })
+        .collect()
 }
 
 /// Project the configured canonical Root contract without requiring build artifacts.

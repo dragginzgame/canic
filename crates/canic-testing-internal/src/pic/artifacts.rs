@@ -93,7 +93,7 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
     static WASM: OnceLock<Vec<u8>> = OnceLock::new();
     WASM.get_or_init(|| {
         let config_path = workspace_root.join("apps/test/canic.toml");
-        let target_dir = internal_test_artifact_build_target(workspace_root);
+        let target_dir = canic_host::canister_build::canister_build_target_root(workspace_root);
         let artifact_path = workspace_root
             .join(".canic/release-builds")
             .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
@@ -109,7 +109,12 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
         {
             ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
             ArtifactCachePreparation::Build(transaction) => {
-                run_canonical_fleet_coordinator_build(workspace_root, &target_dir, &config_path);
+                build_generated_fleet_wasm(
+                    workspace_root,
+                    &config_path,
+                    "fleet_coordinator",
+                    CanicWasmBuildProfile::Fast,
+                );
                 transaction
                     .import_output("fleet_coordinator", &artifact_path)
                     .expect("import canonical Fleet Coordinator artifact");
@@ -143,21 +148,26 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
     .clone()
 }
 
-/// Build a generated Fleet artifact through the production host owner.
+/// Build a generated Fleet artifact through the already-linked production host owner.
+/// Fixture acquisition must not compile a second native host executable.
 pub(super) fn build_generated_fleet_wasm(
     workspace: &Path,
     config: &Path,
     role: &str,
     profile: CanicWasmBuildProfile,
 ) -> Vec<u8> {
+    let workspace = workspace
+        .canonicalize()
+        .expect("canonical fixture workspace");
+    let config = config.canonicalize().expect("canonical fixture config");
     let context = canic_host::canister_build::WorkspaceBuildContext {
         role: role.to_string(),
         profile: profile.target_dir_name().parse().expect("build profile"),
         environment: "local".to_string(),
         build_network: BuildNetwork::Local,
-        workspace_root: workspace.to_path_buf(),
-        icp_root: workspace.to_path_buf(),
-        config_path: config.to_path_buf(),
+        workspace_root: workspace.clone(),
+        icp_root: workspace,
+        config_path: config,
         local_replica: None,
         refresh_canonical_infrastructure_did: false,
         release_build_id: Some(
@@ -172,7 +182,7 @@ pub(super) fn build_generated_fleet_wasm(
     fs::read(output.wasm_path).expect("read generated Fleet Wasm")
 }
 
-/// Reusable Cargo target for host-driven test artifact builds.
+/// Output directory for the internal cached test-Wasm fixtures.
 #[must_use]
 #[cfg(any(test, feature = "pocketic-fixtures"))]
 pub(super) fn internal_test_artifact_build_target(workspace_root: &Path) -> PathBuf {
@@ -223,13 +233,17 @@ fn canonical_fleet_coordinator_cache_spec(
     )
     .with_coordination_scope("canic-external-artifact-builds")
     .with_arguments([
-        "cargo run -p canic-host --example build_artifact",
+        "canic-host::build_workspace_canister_artifact",
         "fleet_coordinator",
         "fast",
         config_relative,
     ])
     .with_environment(environment)
     .with_input("build-config", config_path)
+    .with_input(
+        "fixture-builder",
+        &workspace_root.join("crates/canic-testing-internal/src/pic/artifacts.rs"),
+    )
     .with_input("icp-config", &workspace_root.join("icp.yaml"))
     .with_input(
         "canonical-candid",
@@ -241,53 +255,6 @@ fn canonical_fleet_coordinator_cache_spec(
         internal_test_artifact_prune_policy(),
         internal_test_artifact_maintenance_interval(),
     )
-}
-
-#[cfg(all(
-    feature = "pocketic-fixtures",
-    any(not(test), feature = "governed-pocketic-tests")
-))]
-fn run_canonical_fleet_coordinator_build(
-    workspace_root: &Path,
-    target_dir: &Path,
-    config_path: &Path,
-) {
-    let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let output = Command::new(cargo)
-        .current_dir(workspace_root)
-        .env("CARGO_INCREMENTAL", "0")
-        .env("CARGO_TARGET_DIR", target_dir)
-        .env("ICP_ENVIRONMENT", "local")
-        .env(
-            INTERNAL_TEST_RELEASE_BUILD_ID.0,
-            INTERNAL_TEST_RELEASE_BUILD_ID.1,
-        )
-        .args([
-            "run",
-            "-q",
-            "--profile",
-            "fast",
-            "-p",
-            "canic-host",
-            "--example",
-            "build_artifact",
-            "--locked",
-            "--",
-            "fleet_coordinator",
-            "fast",
-            workspace_root.to_str().expect("workspace root UTF-8"),
-            workspace_root.to_str().expect("ICP root UTF-8"),
-            config_path.to_str().expect("config path UTF-8"),
-            "--release-build-id",
-            INTERNAL_TEST_RELEASE_BUILD_ID.1,
-        ])
-        .output()
-        .expect("run canonical Fleet Coordinator artifact builder");
-    assert!(
-        output.status.success(),
-        "canonical Fleet Coordinator artifact build failed: {}",
-        String::from_utf8_lossy(&output.stderr)
-    );
 }
 
 ///
@@ -681,6 +648,132 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "governed-pocketic-tests")]
+    #[test]
+    #[ignore = "focused build qualification requires installed Wasm and artifact tools"]
+    fn infrastructure_direct_builds_match_examples_and_cached_coordinator() {
+        let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
+        let workspace = Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../..")
+            .canonicalize()
+            .unwrap();
+        for (role, config) in [
+            ("fleet_coordinator", "apps/test/canic.toml"),
+            (
+                "wasm_store",
+                "canisters/test/delegation_root_stub/canic.toml",
+            ),
+        ] {
+            let config = workspace.join(config);
+            let expected = compare_generated_artifact_with_example(&workspace, &config, role);
+            if role == "fleet_coordinator" {
+                assert!(
+                    build_canonical_fleet_coordinator_wasm(&workspace) == expected,
+                    "cached Coordinator Wasm bytes differ"
+                );
+                let artifact = workspace
+                    .join(".canic/release-builds")
+                    .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
+                    .join("artifacts/fleet_coordinator/fleet_coordinator.wasm");
+                let cache = canonical_fleet_coordinator_cache_spec(
+                    &workspace,
+                    &canic_host::canister_build::canister_build_target_root(&workspace),
+                    &config,
+                    &artifact,
+                );
+                assert!(matches!(
+                    prepare_artifact_cache(&cache).unwrap(),
+                    ArtifactCachePreparation::Reused(_)
+                ));
+                assert!(
+                    fs::read(artifact).unwrap() == expected,
+                    "restored Coordinator Wasm bytes differ"
+                );
+            }
+        }
+    }
+
+    #[cfg(feature = "governed-pocketic-tests")]
+    fn compare_generated_artifact_with_example(
+        workspace: &Path,
+        config: &Path,
+        role: &str,
+    ) -> Vec<u8> {
+        let target = canic_host::canister_build::canister_build_target_root(workspace);
+        let artifacts = workspace
+            .join(".canic/release-builds")
+            .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
+            .join("artifacts")
+            .join(role);
+        let read_outputs = || {
+            ["wasm", "wasm.gz", "did"]
+                .map(|extension| fs::read(artifacts.join(format!("{role}.{extension}"))).unwrap())
+        };
+        let started = std::time::Instant::now();
+        let example = Command::new(std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
+            .current_dir(workspace)
+            .env("CARGO_INCREMENTAL", "0")
+            .env("CARGO_TARGET_DIR", &target)
+            .env("ICP_ENVIRONMENT", "local")
+            .env(
+                INTERNAL_TEST_RELEASE_BUILD_ID.0,
+                INTERNAL_TEST_RELEASE_BUILD_ID.1,
+            )
+            .args([
+                "run",
+                "--locked",
+                "--profile",
+                "fast",
+                "-p",
+                "canic-host",
+                "--example",
+                "build_artifact",
+                "--message-format=json-render-diagnostics",
+                "--",
+                role,
+                "fast",
+            ])
+            .arg(workspace)
+            .arg(workspace)
+            .arg(config)
+            .args(["--release-build-id", INTERNAL_TEST_RELEASE_BUILD_ID.1])
+            .output()
+            .unwrap();
+        assert!(
+            example.status.success(),
+            "{}",
+            String::from_utf8_lossy(&example.stderr)
+        );
+        let example_elapsed = started.elapsed();
+        eprintln!("{}", String::from_utf8_lossy(&example.stderr));
+        let native_fresh = String::from_utf8_lossy(&example.stdout)
+            .lines()
+            .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
+            .find(|message| message["target"]["name"] == "build_artifact")
+            .and_then(|message| message["fresh"].as_bool())
+            .expect("Cargo reports whether the native example was rebuilt");
+        let expected = read_outputs();
+        let started = std::time::Instant::now();
+        let direct =
+            build_generated_fleet_wasm(workspace, config, role, CanicWasmBuildProfile::Fast);
+        let direct_elapsed = started.elapsed();
+        assert!(
+            read_outputs() == expected,
+            "direct artifact bytes differ for {role}"
+        );
+        assert!(
+            direct == expected[0],
+            "returned Wasm bytes differ for {role}"
+        );
+        eprintln!(
+            "Infrastructure qualification: role={role} example={example_elapsed:?} native_fresh={native_fresh} \
+             direct={direct_elapsed:?} wasm_bytes={} wasm_sha256={}",
+            expected[0].len(),
+            canic_core::cdk::utils::hash::sha256_hex(&expected[0]),
+        );
+        direct
+    }
+
     #[test]
     fn shared_wasm_target_uses_effective_network() {
         let workspace_root = Path::new("/workspace");
@@ -697,7 +790,7 @@ mod tests {
     }
 
     #[test]
-    fn host_driven_artifacts_share_the_pocketic_cargo_target() {
+    fn internal_test_wasms_share_the_pocketic_output_directory() {
         let workspace_root = Path::new("/workspace");
 
         assert_eq!(

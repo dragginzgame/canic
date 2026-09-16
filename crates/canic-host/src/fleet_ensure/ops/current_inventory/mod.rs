@@ -29,7 +29,7 @@ use crate::{
         load_persisted_canic_infrastructure_artifact_manifest,
         validate_release_artifact_relative_path,
     },
-    role_contract::{PackageValidationMode, resolve_declared_role_contract},
+    role_contract::{PackageValidationMode, resolve_declared_role_contracts},
 };
 use candid::{CandidType, Principal};
 use canic_core::{
@@ -294,13 +294,20 @@ impl ProtocolCatalog {
             store_candid,
         )?;
         let mut by_role = BTreeMap::from([(store.binding.role.clone(), store)]);
-        for artifact in application.union.entries {
-            let contract = match resolve_declared_role_contract(
-                config_path,
-                config.model(),
-                &artifact.role,
-                PackageValidationMode::Passive,
-            ) {
+        let roles = application
+            .union
+            .entries
+            .iter()
+            .map(|artifact| artifact.role.clone())
+            .collect::<Vec<_>>();
+        let contracts = resolve_declared_role_contracts(
+            config_path,
+            config.model(),
+            &roles,
+            PackageValidationMode::Passive,
+        );
+        for (artifact, resolution) in application.union.entries.into_iter().zip(contracts) {
+            let contract = match resolution {
                 RoleContractResolution::Resolved { contract } => contract,
                 RoleContractResolution::Rejected { errors } => {
                     return Err(inventory_error(format!(

@@ -1393,6 +1393,13 @@ where
                         if retained_create || retained_funding {
                             write_state(&paths, &state)?;
                         }
+                        // Emit once per durable transition, including a reconciled lost reply.
+                        report_progress(
+                            platform,
+                            &retained_plan,
+                            &journal,
+                            action_progress_phase(action),
+                        );
                         break;
                     }
 
