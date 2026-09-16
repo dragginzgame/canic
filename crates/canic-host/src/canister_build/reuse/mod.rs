@@ -32,7 +32,6 @@ use std::{
     fs,
     io::{self, Read},
     path::{Path, PathBuf},
-    process::Command,
     time::{Duration, Instant},
 };
 use thiserror::Error;
@@ -53,6 +52,7 @@ pub struct CompleteBuildReuse {
     inputs: BuildInputSnapshot,
     record_path: PathBuf,
     diagnostics: diagnostics::InputDiagnostics,
+    input_locations: diagnostics::InputLocations,
     _lock: fs::File,
 }
 
@@ -176,6 +176,7 @@ impl CompleteBuildReuse {
         }
         let inputs = input_snapshot(context, &tool_paths)?;
         let diagnostics = diagnostics::InputDiagnostics::capture(context, &tool_paths, &inputs);
+        let input_locations = diagnostics::InputLocations::capture(context);
         let record_path = context
             .icp_root
             .join(".canic/build-reuse")
@@ -186,6 +187,7 @@ impl CompleteBuildReuse {
             inputs,
             record_path,
             diagnostics,
+            input_locations,
             _lock: lock,
         })
     }
@@ -253,7 +255,18 @@ impl CompleteBuildReuse {
     ) -> Result<(), BuildReuseError> {
         verify_release(&self.context, release_build_id)?;
         let after = input_snapshot(&self.context, &self.tool_paths)?;
-        self.inputs.validate_after(&after)?;
+        self.inputs.validate_after(&after).inspect_err(|error| {
+            if let Some(path) = diagnostics::retain_rejection(
+                &self.context,
+                release_build_id,
+                &self.input_locations,
+                &self.inputs,
+                &after,
+                error,
+            ) {
+                eprintln!("Build input rejection evidence: {}", path.display());
+            }
+        })?;
         let inputs = after.digest();
         let record_path = self.record_path.with_file_name(format!("{inputs}.json"));
         let record = CompleteBuildReuseRecord {
@@ -428,13 +441,17 @@ fn append_fixture_inputs(
 fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseError> {
     let mut digest = Sha256::new();
     hash_field(&mut digest, b"canic.complete-build-inputs.v1");
+    hash_field(
+        &mut digest,
+        include_bytes!("../../build_environment/mod.rs"),
+    );
     hash_field(&mut digest, context.profile.target_dir_name().as_bytes());
     hash_field(&mut digest, context.build_network.as_str().as_bytes());
     hash_field(
         &mut digest,
         context.config_path.as_os_str().as_encoded_bytes(),
     );
-    let mut environment = env::vars_os().collect::<Vec<_>>();
+    let mut environment = crate::build_environment::inputs();
     environment.sort();
     for (key, value) in environment {
         hash_field(&mut digest, key.as_encoded_bytes());
@@ -442,7 +459,7 @@ fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseE
     }
     for (tool, args) in [("rustc", &["-vV"][..]), ("cargo", &["-V"][..])] {
         let selected = env::var_os(tool.to_uppercase()).unwrap_or_else(|| tool.into());
-        let output = Command::new(selected)
+        let output = crate::build_environment::command(selected)
             .args(args)
             .current_dir(&context.workspace_root)
             .output()?;
@@ -469,7 +486,7 @@ fn append_rust_toolchain_inputs(
     files: &mut BTreeMap<String, String>,
 ) -> Result<(), BuildReuseError> {
     let rustc = env::var_os("RUSTC").unwrap_or_else(|| "rustc".into());
-    let sysroot = Command::new(&rustc)
+    let sysroot = crate::build_environment::command(&rustc)
         .args(["--print", "sysroot"])
         .current_dir(&context.workspace_root)
         .output()?;
@@ -490,7 +507,7 @@ fn append_rust_toolchain_inputs(
             add_file(&path, files)?;
         }
     }
-    let host = Command::new(&rustc)
+    let host = crate::build_environment::command(&rustc)
         .args(["--print", "host-tuple"])
         .current_dir(&context.workspace_root)
         .output()?;

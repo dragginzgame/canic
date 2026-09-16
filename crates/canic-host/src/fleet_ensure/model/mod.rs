@@ -399,9 +399,11 @@ pub struct StartupFundingRequirement {
 }
 
 /// A role whose fresh lifetime allowance or disabled top-up cannot supply initial demand.
-#[derive(Clone, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct StartupRoleShortfall {
     pub role: canic_core::ids::CanisterRole,
+    #[serde(with = "u128_text")]
     pub cycles: u128,
 }
 
@@ -1663,9 +1665,42 @@ pub struct FleetRecoveryReview {
     pub continuation_reserve_cycles: u128,
     #[serde(with = "u128_text")]
     pub whole_continuation_ceiling_cycles: u128,
+    pub maximum_successor_actions: u32,
+    pub fixture_publication_retry_attempts: u32,
+    #[serde(with = "u128_text")]
+    pub per_step_burn_cycles: u128,
+    pub startup_funding: Vec<RootStartupFundingForecast>,
     pub known_pool_funding: Vec<PoolRecoveryFunding>,
     /// Current protocol installation and fresh inventory may reveal more work or debit.
     pub discovery: RecoveryDiscovery,
+}
+
+/// Configuration-bound native demand, excluding installation margins and dependent pool funding.
+///
+/// This projection grants no funding authority and credits no observed reuse.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootStartupFundingForecast {
+    pub root: String,
+    #[serde(with = "u128_text")]
+    pub startup_minimum_cycles: u128,
+    pub maximum_continuation_steps: u32,
+    #[serde(with = "u128_text")]
+    pub continuation_allowance_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub configured_minimum_cycles: u128,
+    #[serde(with = "u128_text")]
+    pub required_native_cycles: u128,
+    pub reuse_assumption: StartupFundingReuseAssumption,
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub unfunded_role: Option<StartupRoleShortfall>,
+}
+
+/// Conservative scenario used before current installation and pool reuse are established.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum StartupFundingReuseAssumption {
+    FreshChildrenAndFullPublication,
 }
 
 /// Availability of authoritative dependent-work observations at review time.

@@ -56,6 +56,7 @@ fn output_with_implicit_cache(
     command: &mut Command,
     implicit: Option<&Path>,
 ) -> Result<Output, CompilerCacheError> {
+    crate::build_environment::apply(command);
     if let Some(wrapper) = implicit
         && command
             .get_envs()
@@ -440,13 +441,16 @@ mod tests {
         let (root, wrapper, mut cargo) =
             cache_probe_fixture("printf 'cache service unavailable' >&2; exit 47", "exit 0");
         let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
-        assert!(matches!(
-            &error,
-            CompilerCacheError::ImplicitCache {
-                source: super::super::compiler_cache::ProbeError::Exit { status, stderr, .. },
-                ..
-            } if status.code() == Some(47) && stderr == "cache service unavailable"
-        ));
+        assert!(
+            matches!(
+                &error,
+                CompilerCacheError::ImplicitCache {
+                    source: super::super::compiler_cache::ProbeError::Exit { status, stderr, .. },
+                    ..
+                } if status.code() == Some(47) && stderr == "cache service unavailable"
+            ),
+            "unexpected compiler-cache probe result: {error:?}"
+        );
         assert!(error.to_string().contains("RUSTC_WRAPPER="));
         assert!(!root.join("cargo-ran").exists());
         fs::remove_dir_all(root).unwrap();

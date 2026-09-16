@@ -44,4 +44,18 @@ for typed calls. A new context or changed working directory checks again; failur
 are not cached. Standalone command runners retain their checks. No network status,
 controller set or cycle balance is cached by this optimization.
 
+Short-lived canister, identity, balance and network-status request processes
+default to `TOKIO_WORKER_THREADS=2` when that variable is unset. This avoids
+creating a worker per available CPU for each small request on large hosts.
+Explicit inherited or command-specific settings remain authoritative. The base
+command contexts used to start replicas receive no new worker setting. Two is
+a request-process default, not a Fleet capacity or canister execution limit.
+
+Typed calls, Fleet initialization and Observatory transport share one private
+temporary-argument writer. It completes the write and closes the file before
+launching the child, retaining exclusive creation and Unix `0600` permissions.
+These invocation files do not require a durable disk flush; callers remove them
+after use and recreate them for another invocation. Fleet argument limits and
+the separate durable intent/journal writes remain in force.
+
 See [frontend handoff](frontend-handoff.md) for read-only post-sync verification.

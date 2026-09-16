@@ -6,7 +6,7 @@
 
 use super::{
     CycleBounds, DesiredFleet, DesiredFleetArtifacts, EnsureAction, EnsurePolicyError,
-    FleetObservation, PlanAccumulator, canister_cycle_policy, checked_add, fund_root, requirement,
+    FleetObservation, PlanAccumulator, canister_cycle_policy, checked_add, fund_root,
 };
 
 pub(in crate::fleet_ensure::policy) fn prepay_continuation(
@@ -17,41 +17,17 @@ pub(in crate::fleet_ensure::policy) fn prepay_continuation(
     created_at_time: u64,
     accumulator: &mut PlanAccumulator,
 ) -> Result<(), EnsurePolicyError> {
-    let (Some(bootstrap), Some(protocol)) = (&desired.bootstrap, &desired.protocol) else {
-        return Ok(());
-    };
-    for root in &bootstrap.roots {
-        if !protocol
-            .component_group_placements
-            .iter()
-            .any(|placement| placement.root == root.root)
-        {
-            continue;
-        }
-        let demand = requirement(artifacts, &root.root)?;
-        if demand.maximum_continuation_steps == 0 {
-            return Err(EnsurePolicyError::MissingArtifactIdentity {
-                kind: "startup continuation steps",
-                name: root.root.clone(),
+    for root in
+        crate::fleet_ensure::policy::recovery::startup_forecasts(desired, artifacts, bounds)?
+    {
+        if let Some(shortfall) = root.unfunded_role {
+            return Err(EnsurePolicyError::StartupRoleFundingUnavailable {
+                root: root.root,
+                role: shortfall.role.to_string(),
+                shortfall_cycles: shortfall.cycles,
             });
         }
-        let per_step = bounds
-            .observation_burn
-            .checked_mul(3)
-            .and_then(|observations| observations.checked_add(bounds.update_burn))
-            .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                field: "startup continuation step burn",
-            })?;
-        let reserve = per_step
-            .checked_mul(u128::from(demand.maximum_continuation_steps))
-            .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                field: "startup continuation reserve",
-            })?;
-        let minimum = checked_add(
-            demand.minimum_native_cycles,
-            reserve,
-            "startup continuation minimum",
-        )?;
+        let minimum = root.required_native_cycles;
         if let Some(live) = observation
             .canisters
             .get(&root.root)

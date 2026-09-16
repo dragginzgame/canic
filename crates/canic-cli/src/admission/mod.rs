@@ -22,7 +22,6 @@ use crate::{
 use candid::{CandidType, Principal};
 use canic_core::{
     dto::{
-        error::Error,
         fleet_admission::{
             FleetAdmissionMutationAction, FleetAdmissionMutationOutcome,
             FleetAdmissionMutationRequest, FleetAdmissionMutationResponse,
@@ -59,7 +58,10 @@ use canic_host::{
     fleet_ensure::{CurrentFleetInventoryError, CurrentFleetResolution, resolve_current_fleet},
     icp::IcpCli,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    protocol_binding::{ResolvedProtocolBinding, resolve_registry_protocol_binding},
+    protocol_binding::{
+        ReleaseProtocolBindingError, ResolvedProtocolBinding,
+        resolve_release_registry_protocol_binding,
+    },
     query_canister_with_arg,
 };
 use clap::{ArgGroup, Command as ClapCommand};
@@ -98,6 +100,9 @@ pub enum AdmissionCommandError {
     #[error(transparent)]
     Protocol(#[from] CanisterProtocolError),
 
+    #[error(transparent)]
+    ProtocolBinding(#[from] ReleaseProtocolBindingError),
+
     #[error("invalid admission Principal {value:?}: {reason}")]
     InvalidPrincipal { value: String, reason: String },
 
@@ -109,9 +114,6 @@ pub enum AdmissionCommandError {
 
     #[error("current Fleet-admission authority is invalid: {0}")]
     Authority(String),
-
-    #[error("Fleet-admission request rejected: {0}")]
-    Rejected(String),
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
@@ -316,17 +318,14 @@ fn run_apply(options: AdmissionApplyOptions) -> Result<(), AdmissionCommandError
     validate_plan_file(&options, &plan)?;
     let connection = connect(&options.fleet, &options.target)?;
     validate_live_plan(&connection, &plan)?;
-    let response: Result<RemoteCoordinatorCommandResponse, Error> = call_canister_with_arg(
+    let response: RemoteCoordinatorCommandResponse = call_canister_with_arg(
         &connection.icp,
         &connection.coordinator_binding,
         connection.coordinator,
         canic_core::protocol::CANIC_COORDINATOR_COMMAND,
         &RemoteCoordinatorCommand::MutateAdmission(plan.request.clone()),
     )?;
-    let response = match response {
-        Ok(RemoteCoordinatorCommandResponse::MutateAdmission(response)) => response,
-        Err(error) => return Err(rejected(error)),
-    };
+    let RemoteCoordinatorCommandResponse::MutateAdmission(response) = response;
     if response.operation_id != plan.request.operation_id
         || response.generation != plan.successor_policy.generation
         || response.policy_digest != plan.successor_policy.policy_digest
@@ -459,8 +458,7 @@ fn connect(
     let current = resolve_current_fleet(&root, &target.environment, fleet)?;
     let initial_registry = current.initial_active_registry(fleet)?.clone();
     let coordinator = initial_registry.authority.binding.coordinator;
-    let coordinator_binding =
-        current_binding(&current, &root, &target.environment, &coordinator, fleet)?;
+    let coordinator_binding = current_binding(&current, &root, &coordinator, fleet)?;
     let mut root_bindings = BTreeMap::new();
     for fleet_subnet_root in &current.topology.fleet_subnet_root_canister_ids {
         let fleet_subnet_root = fleet_subnet_root
@@ -468,13 +466,7 @@ fn connect(
             .map_err(|error| authority_error(error.to_string()))?;
         root_bindings.insert(
             fleet_subnet_root,
-            current_binding(
-                &current,
-                &root,
-                &target.environment,
-                &fleet_subnet_root,
-                fleet,
-            )?,
+            current_binding(&current, &root, &fleet_subnet_root, fleet)?,
         );
     }
     let icp = target.icp_cli(&root);
@@ -497,7 +489,6 @@ fn connect(
 fn current_binding(
     current: &CurrentFleetResolution,
     root: &std::path::Path,
-    environment: &str,
     principal: &Principal,
     fleet: &str,
 ) -> Result<ResolvedProtocolBinding, AdmissionCommandError> {
@@ -512,8 +503,18 @@ fn current_binding(
                 "Fleet {fleet} omits current participant {principal}"
             ))
         })?;
-    resolve_registry_protocol_binding(root, environment, entry)
-        .map_err(|error| authority_error(error.to_string()))
+    let release_build_id = current
+        .plan
+        .reviewed_desired
+        .as_ref()
+        .and_then(|reviewed| reviewed.desired().bootstrap.as_ref())
+        .map(|bootstrap| bootstrap.release_build_id)
+        .ok_or_else(|| authority_error("terminal Fleet plan has no selected release"))?;
+    Ok(resolve_release_registry_protocol_binding(
+        root,
+        release_build_id,
+        entry,
+    )?)
 }
 
 fn build_plan(
@@ -772,7 +773,7 @@ fn query_coordinator_registry(
     binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<FleetRegistry, AdmissionCommandError> {
-    let response: Result<RemoteCoordinatorStatusResponse, Error> = query_canister_with_arg(
+    let response: RemoteCoordinatorStatusResponse = query_canister_with_arg(
         icp,
         binding,
         coordinator,
@@ -780,11 +781,10 @@ fn query_coordinator_registry(
         &RemoteCoordinatorStatusRequest::Registry,
     )?;
     match response {
-        Ok(RemoteCoordinatorStatusResponse::Registry(registry)) => Ok(registry),
-        Ok(_) => Err(authority_error(
+        RemoteCoordinatorStatusResponse::Registry(registry) => Ok(registry),
+        _ => Err(authority_error(
             "Coordinator returned the wrong Registry status variant",
         )),
-        Err(error) => Err(rejected(error)),
     }
 }
 
@@ -793,7 +793,7 @@ fn query_coordinator_registry_version(
     binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<FleetRegistryVersion, AdmissionCommandError> {
-    let response: Result<RemoteCoordinatorStatusResponse, Error> = query_canister_with_arg(
+    let response: RemoteCoordinatorStatusResponse = query_canister_with_arg(
         icp,
         binding,
         coordinator,
@@ -801,11 +801,10 @@ fn query_coordinator_registry_version(
         &RemoteCoordinatorStatusRequest::RegistryVersion,
     )?;
     match response {
-        Ok(RemoteCoordinatorStatusResponse::RegistryVersion(version)) => Ok(version),
-        Ok(_) => Err(authority_error(
+        RemoteCoordinatorStatusResponse::RegistryVersion(version) => Ok(version),
+        _ => Err(authority_error(
             "Coordinator returned the wrong Registry-version variant",
         )),
-        Err(error) => Err(rejected(error)),
     }
 }
 
@@ -814,7 +813,7 @@ fn query_coordinator_admission(
     binding: &ResolvedProtocolBinding,
     coordinator: Principal,
 ) -> Result<FleetAdmissionStatusResponse, AdmissionCommandError> {
-    let response: Result<RemoteCoordinatorStatusResponse, Error> = query_canister_with_arg(
+    let response: RemoteCoordinatorStatusResponse = query_canister_with_arg(
         icp,
         binding,
         coordinator,
@@ -828,11 +827,10 @@ fn query_coordinator_admission(
         }),
     )?;
     match response {
-        Ok(RemoteCoordinatorStatusResponse::Admission(status)) => Ok(status),
-        Ok(_) => Err(authority_error(
+        RemoteCoordinatorStatusResponse::Admission(status) => Ok(status),
+        _ => Err(authority_error(
             "Coordinator returned the wrong admission status variant",
         )),
-        Err(error) => Err(rejected(error)),
     }
 }
 
@@ -862,7 +860,7 @@ fn query_root_status(
             .root_bindings
             .get(&root)
             .ok_or_else(|| authority_error("Root is absent from current ensure authority"))?;
-        let response: Result<RemoteRootStatusResponse, Error> = query_canister_with_arg(
+        let response: RemoteRootStatusResponse = query_canister_with_arg(
             &connection.icp,
             binding,
             root,
@@ -872,10 +870,7 @@ fn query_root_status(
                 offset,
             }),
         )?;
-        let page = match response {
-            Ok(RemoteRootStatusResponse::Admission(status)) => status,
-            Err(error) => return Err(rejected(error)),
-        };
+        let RemoteRootStatusResponse::Admission(page) = response;
         if let Some(first) = retained.as_ref()
             && !same_root_status_head(first, &page)
         {
@@ -1300,10 +1295,6 @@ fn render_status(report: &AdmissionStatusReport) -> String {
         ));
     }
     lines.join("\n")
-}
-
-fn rejected(error: Error) -> AdmissionCommandError {
-    AdmissionCommandError::Rejected(canic_host::diagnostics::render_diagnostic(error.code()))
 }
 
 fn authority_error(message: impl Into<String>) -> AdmissionCommandError {

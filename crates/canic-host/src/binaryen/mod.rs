@@ -15,7 +15,6 @@ use std::{
     fs::{self, File, OpenOptions},
     io::{self, Read},
     path::{Path, PathBuf},
-    process::Command,
     sync::atomic::{AtomicU64, Ordering},
 };
 
@@ -367,7 +366,7 @@ fn admit_binaryen_executable(
         });
     }
 
-    let mut command = Command::new(&path);
+    let mut command = crate::build_environment::command(&path);
     command.arg("--version");
     let output = output_with_executable_busy_retry(&mut command).map_err(|source| {
         BinaryenToolError::VersionProcess {
@@ -399,7 +398,7 @@ fn download_archive(
     authority: BinaryenAuthority,
     archive_path: &Path,
 ) -> Result<(), BinaryenToolError> {
-    let mut command = Command::new(DOWNLOAD_TOOL);
+    let mut command = crate::build_environment::command(DOWNLOAD_TOOL);
     command
         .args([
             "--proto",
@@ -445,7 +444,7 @@ fn verify_archive(
 
 fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), BinaryenToolError> {
     let member = format!("binaryen-version_{BINARYEN_VERSION}/bin/wasm-opt");
-    let mut command = Command::new(EXTRACT_TOOL);
+    let mut command = crate::build_environment::command(EXTRACT_TOOL);
     command
         .arg("-xzf")
         .arg(archive_path)

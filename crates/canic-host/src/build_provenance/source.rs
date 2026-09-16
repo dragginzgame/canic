@@ -81,7 +81,7 @@ fn git_output_text<const N: usize>(workspace_root: &Path, args: [&str; N]) -> Op
 }
 
 fn git_output_bytes<const N: usize>(workspace_root: &Path, args: [&str; N]) -> Option<Vec<u8>> {
-    let mut command = Command::new("git");
+    let mut command = crate::build_environment::command("git");
     command.current_dir(workspace_root);
     clear_git_environment(&mut command);
 

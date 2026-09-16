@@ -21,6 +21,10 @@ fn recovery_preview_tolerates_bounded_balance_movement_but_preserves_authority()
         base_execution_burn_cycles: 10,
         continuation_reserve_cycles: 90,
         whole_continuation_ceiling_cycles: 100,
+        maximum_successor_actions: 10,
+        fixture_publication_retry_attempts: 0,
+        per_step_burn_cycles: 10,
+        startup_funding: Vec::new(),
         discovery: RecoveryDiscovery::PendingCurrentProtocol,
         known_pool_funding: vec![PoolRecoveryFunding {
             principal: "pool".into(),
@@ -64,6 +68,20 @@ fn recovery_preview_tolerates_bounded_balance_movement_but_preserves_authority()
         .known_pool_funding[0]
         .ledger_fee_cycles += 1;
     assert!(!compatible(&changed_fee));
+    let mut changed_bound = current.clone();
+    changed_bound
+        .recovery_review
+        .as_mut()
+        .unwrap()
+        .per_step_burn_cycles += 1;
+    assert!(!compatible(&changed_bound));
+    let mut changed_steps = current.clone();
+    changed_steps
+        .recovery_review
+        .as_mut()
+        .unwrap()
+        .maximum_successor_actions += 1;
+    assert!(!compatible(&changed_steps));
     current.canisters[0].observed_cycles -= 1;
     assert!(!compatible(&current));
 }

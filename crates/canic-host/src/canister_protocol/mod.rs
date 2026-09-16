@@ -8,25 +8,19 @@
 pub mod inspection;
 
 use crate::{
-    icp::{IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response},
+    icp::{
+        IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response,
+        write_candid_argument_file,
+    },
     protocol_binding::ResolvedProtocolBinding,
 };
 use candid::{CandidType, Principal};
 use canic_core::diagnostics::RegisteredDiagnosticCode;
 use serde::de::DeserializeOwned;
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
-use std::{
-    fs::{self, OpenOptions},
-    io::{self, Write},
-    path::PathBuf,
-    sync::atomic::{AtomicU64, Ordering},
-};
+use std::{fs, io};
 use thiserror::Error as ThisError;
 
 const ICP_JSON_OUTPUT: &str = "json";
-const MAX_ARGUMENT_FILE_ATTEMPTS: usize = 32;
-static NEXT_ARGUMENT_FILE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Clone, Copy)]
 enum ProtocolCallMode {
@@ -237,12 +231,13 @@ where
             method,
             source,
         })?;
-    let args_path =
-        write_argument_file(&bytes).map_err(|source| CanisterProtocolError::ArgumentFile {
+    let args_path = write_candid_argument_file(&bytes).map_err(|source| {
+        CanisterProtocolError::ArgumentFile {
             canister,
             method,
             source,
-        })?;
+        }
+    })?;
     let canister_text = canister.to_text();
     let output = match mode {
         ProtocolCallMode::Query => icp.canister_query_binary_args_output_with_candid(
@@ -272,40 +267,6 @@ where
         source,
     })?;
     Ok(output)
-}
-
-pub fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
-    let directory = std::env::temp_dir();
-    for _ in 0..MAX_ARGUMENT_FILE_ATTEMPTS {
-        let sequence = NEXT_ARGUMENT_FILE.fetch_add(1, Ordering::Relaxed);
-        let path = directory.join(format!(
-            "canic-candid-args-{}-{sequence}.bin",
-            std::process::id()
-        ));
-        match create_argument_file(&path, bytes) {
-            Ok(()) => return Ok(path),
-            Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(source) => return Err(source),
-        }
-    }
-    Err(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a unique Candid argument file",
-    ))
-}
-
-fn create_argument_file(path: &std::path::Path, bytes: &[u8]) -> io::Result<()> {
-    let mut options = OpenOptions::new();
-    options.write(true).create_new(true);
-    #[cfg(unix)]
-    options.mode(0o600);
-    let mut file = options.open(path)?;
-    if let Err(source) = file.write_all(bytes).and_then(|()| file.sync_all()) {
-        drop(file);
-        let _ = fs::remove_file(path);
-        return Err(source);
-    }
-    Ok(())
 }
 
 fn decode_response<O>(
@@ -385,8 +346,9 @@ mod tests {
     #[test]
     fn typed_arguments_are_written_to_private_binary_files() {
         let argument = EmptyVectorArgument { values: Vec::new() };
-        let path = write_argument_file(&candid::encode_one(&argument).expect("encode argument"))
-            .expect("write argument file");
+        let path =
+            write_candid_argument_file(&candid::encode_one(&argument).expect("encode argument"))
+                .expect("write argument file");
 
         let decoded: EmptyVectorArgument =
             candid::decode_one(&fs::read(&path).expect("read argument file"))

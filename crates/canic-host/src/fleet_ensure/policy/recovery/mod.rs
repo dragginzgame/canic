@@ -4,6 +4,8 @@
 //! Does not own: funding authority, persistence, or platform observations.
 //! Boundary: estimates never authorize effects outside the sealed plan.
 
+mod startup;
+
 use super::{
     CycleBounds, EnsurePolicyError, checked_add, expected_plan_sha256, successor_phase_burn,
 };
@@ -13,6 +15,8 @@ use crate::fleet_ensure::model::{
     PoolRecoveryFunding, RecoveryDiscovery,
 };
 
+pub(super) use startup::startup_forecasts;
+
 pub(super) fn review(
     observation: &FleetObservation,
     bounds: CycleBounds,
@@ -21,13 +25,7 @@ pub(super) fn review(
     base: u128,
     available: u128,
 ) -> Result<FleetRecoveryReview, EnsurePolicyError> {
-    let per_step = bounds
-        .observation_burn
-        .checked_mul(3)
-        .and_then(|value| value.checked_add(bounds.update_burn))
-        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-            field: "successor burn bound",
-        })?;
+    let per_step = continuation_step_burn(bounds)?;
     let ceiling = per_step
         .checked_mul(
             u128::from(maximum_successor_actions) + u128::from(fixture_publication_retry_attempts),
@@ -54,9 +52,23 @@ pub(super) fn review(
         base_execution_burn_cycles: base,
         continuation_reserve_cycles: ceiling.min(available.saturating_sub(base)),
         whole_continuation_ceiling_cycles: ceiling,
+        maximum_successor_actions,
+        fixture_publication_retry_attempts,
+        per_step_burn_cycles: per_step,
+        startup_funding: Vec::new(),
         known_pool_funding,
         discovery: RecoveryDiscovery::PendingCurrentProtocol,
     })
+}
+
+pub(super) fn continuation_step_burn(bounds: CycleBounds) -> Result<u128, EnsurePolicyError> {
+    bounds
+        .observation_burn
+        .checked_mul(3)
+        .and_then(|value| value.checked_add(bounds.update_burn))
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "successor burn bound",
+        })
 }
 
 pub(super) fn pool_funding(

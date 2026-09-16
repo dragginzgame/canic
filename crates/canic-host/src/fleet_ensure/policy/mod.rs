@@ -91,6 +91,29 @@ pub enum EnsurePolicyError {
         shortfall: u128,
     },
 
+    #[error(
+        "Root reinstall prerequisite for {name} ({principal}) has insufficient native headroom for its unfunded management effects: available {available} cycles, required conservative maximum burn {required}, shortfall {shortfall}, effects {action_count}; headroom is not expected expenditure or a complete rollout quote; no plan or effect was authorized"
+    )]
+    RootReinstallHeadroom {
+        name: String,
+        principal: String,
+        action_count: usize,
+        available: u128,
+        required: u128,
+        shortfall: u128,
+    },
+
+    #[error(
+        "authority seal for {name} ({principal}) has insufficient cycle headroom: available {available} cycles, required conservative maximum burn {required}, shortfall {shortfall}; this review transfers no funding and another authority's balance cannot cover the shortfall; no plan or effect was authorized"
+    )]
+    AuthoritySealHeadroom {
+        name: String,
+        principal: String,
+        available: u128,
+        required: u128,
+        shortfall: u128,
+    },
+
     #[error("controlled canister {name} has duplicate name or principal authority")]
     DuplicateAuthority { name: String },
 
@@ -655,6 +678,11 @@ pub fn compile_plan(
         &protocol_actions,
         observation.additional_controlled_cycles.len(),
     )?;
+    let observation_count = checked_add(
+        observation_count,
+        reinstall::funding_observation_count(desired, reinstall, &accumulator.canisters)?,
+        "reinstall funding observations",
+    )?;
     accumulator.add_burn(
         bounds
             .observation_burn
@@ -711,14 +739,16 @@ pub fn compile_plan(
     let recovery_review = continuation
         .as_ref()
         .map(|authority| {
-            recovery::review(
+            let mut review = recovery::review(
                 observation,
                 bounds,
                 authority.maximum_successor_actions,
                 authority.fixture_publication_retry_attempts,
                 accumulator.execution_burn,
                 available_after_estate_fees,
-            )
+            )?;
+            review.startup_funding = recovery::startup_forecasts(desired, artifacts, bounds)?;
+            Ok::<_, EnsurePolicyError>(review)
         })
         .transpose()?
         .map(Box::new);
@@ -3696,6 +3726,9 @@ mod tests {
         assert_eq!(review.base_execution_burn_cycles, 41);
         assert_eq!(review.whole_continuation_ceiling_cycles, 448);
         assert_eq!(review.continuation_reserve_cycles, 328);
+        assert_eq!(review.maximum_successor_actions, 32);
+        assert_eq!(review.fixture_publication_retry_attempts, 0);
+        assert_eq!(review.per_step_burn_cycles, 14);
         assert!(review.known_pool_funding.is_empty());
         assert_eq!(
             review.discovery,
@@ -3706,6 +3739,8 @@ mod tests {
         let fixtures = super::recovery::review(&observation, bounds, 32, 6, 41, 1_000).unwrap();
         assert_eq!(fixtures.whole_continuation_ceiling_cycles, 532);
         assert_eq!(fixtures.continuation_reserve_cycles, 532);
+        assert_eq!(fixtures.fixture_publication_retry_attempts, 6);
+        assert_eq!(fixtures.per_step_burn_cycles, 14);
         assert_eq!(
             fixtures.base_execution_burn_cycles,
             review.base_execution_burn_cycles

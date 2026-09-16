@@ -4,6 +4,7 @@
 //! Does not own: cache identity, hit admission or release authority.
 //! Boundary: bounded optional evidence contains no environment values or per-value hashes.
 
+mod rejection;
 #[cfg(test)]
 mod tests;
 
@@ -18,10 +19,11 @@ use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeSet,
-    env,
     ffi::OsString,
     path::{Path, PathBuf},
 };
+
+pub(super) use rejection::{InputLocations, retain_rejection};
 
 const LIMIT: usize = 256 * 1024;
 
@@ -87,7 +89,8 @@ impl InputDiagnostics {
             hash_field(digest, path.as_bytes());
             hash_field(digest, hash.as_bytes());
         }
-        let (environment, environment_keys) = environment_evidence(env::vars_os().collect());
+        let (environment, environment_keys) =
+            environment_evidence(crate::build_environment::inputs());
         Self {
             schema_version: 1,
             environment,

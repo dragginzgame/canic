@@ -5,6 +5,14 @@ convergence workflow. It reads one current desired-state document, observes the
 configured controlled estate, and either writes a reviewed plan or applies the
 exact retained plan digest.
 
+After convergence, `canic admission plan`, `apply` and `status` use the selected
+release retained in the terminal Fleet plan to locate Coordinator and Root Candid
+sidecars. Keep that release's finalized manifests and artifact files available.
+Each command verifies manifest hashes and the retained role/module/protocol
+binding before transport. Missing or changed artifacts reject; these commands
+neither rebuild interfaces nor require environment-local sidecar copies. A newer
+unapplied Fleet review must first complete its own plan/journal handoff.
+
 Human-readable reports describe a **planning budget**: maximum operator debit,
 unavoidable fees, Root-funded creation fees and execution burn are allowances,
 not measured expenditure. The conservation equation names each term; measured
@@ -28,6 +36,31 @@ transport packets or handshake traffic. Independent infrastructure reads may
 overlap up to four at a time. Pool reads and error precedence retain configured
 order; every issued batch drains before an error returns. The existing snapshot
 expires after the observation, including failed observations, before effects.
+The counter covers remote attempts issued inside the named stage, not the cost
+of evidence it reuses from an earlier stage. A non-zero PoolBalances duration
+with zero attempts can include local preparation, validation and use of an
+already observed response within that same read-only snapshot. It does not mean
+zero work or authorize reusing the balance in a later review or after mutation.
+
+Within one read-only protocol planning pass, manifest and chunk checks share a
+successful template-status read for the exact Store, Candid path/digest, template
+and version. Each action still verifies its Candid binding. Later plans, retries
+and execution-time checks query afresh; no template observation crosses an effect.
+
+The later pool-balance stage refreshes PendingReset and Failed assets in groups
+of at most four. Each required inspection retains its target-specific reserve
+preflight and Root/controller checks. Issued reads drain before a failure is
+returned in inventory order; a failed group publishes no balance changes and
+does not start the next group. Other lifecycle states retain their existing
+observation path. Balances are not retained across reviews, effects or retries.
+
+For a fresh native top-up, the executor uses one protected funding observation
+both for its initial balance and its first completion check. It persists the
+exact intent before the withdrawal, and consumes that observation once. The
+Root, pool membership, lifecycle, module, controller and reserve checks still
+run. An interrupted intent is observed afresh; post-payment completion requires
+the exact receipt and a new balance observation. This does not share evidence
+between payments or permit concurrent withdrawals.
 
 Protected provisioning status retains one latest failure with stage, target,
 operation, diagnostic, retry category and the originating timestamp. Transient
@@ -157,6 +190,47 @@ that plan to stop the Root, reinstall its sealed current initializer and start
 it again. The same journal records intent and the pre-install canister version;
 a lost response resumes observation instead of repeating an already completed
 reset.
+
+Each Root must hold its own conservative stop-and-observation allowance. If it
+cannot cover that first effect, the typed headroom error names the Root,
+Principal, available balance, required allowance, shortfall and effect count.
+Another Root's balance cannot cover that deficit without a transfer.
+
+When a Root can stop but lacks the complete reset allowance, its reviewed action
+sequence is Stop → Fund → Reinstall → Start. The Fund action includes the deficit
+and an additional effect margin; the plan discloses its exact amount, recipient,
+Ledger, withdrawal timestamp, fee and maximum operator debit. Apply verifies the
+operator account and fee before stopping any Root. Payment requires exact source
+module, controllers, Principal and subnet with the Root observed Stopped. A
+restarted source, changed fee or exhausted margin blocks payment. Same-operation
+retries keep the original withdrawal identity and recover its Ledger receipt;
+they do not start the old runtime to fund it. Fully funded Roots retain the
+three-effect sequence. Review arithmetic and the retained pre-payment balance
+must permit receipt reconciliation before withdrawal; unexpected credit cannot
+silently enlarge the approved payment. A separately reviewed source-bound
+activation reset retains its own funding and fee budgets. Its preceding
+preparation remains unfunded and requires its existing native headroom.
+
+These allowances are neither predicted burn nor complete successor deployment
+quotes. Planning does not pause the runtime; the applied Stop protects the
+reviewed credit from old-runtime child grants. External top-ups are outside this
+journal. Terminal verification retains the completed funding evidence and checks
+conservation after the new runtime starts.
+
+Recovery review also reports configuration-bound startup funding for each Root
+before a reinstall prerequisite. The required native balance is the greater of
+the configured minimum and startup minimum plus continuation allowance. The
+allowance uses the Root's bounded continuation steps multiplied by one update
+burn bound plus three observation burn bounds. Ordinary startup prepayment uses
+the same calculation. The review exposes the Fleet successor and fixture-retry
+counts separately; Root allowances overlap that ceiling and must not be added
+to it again.
+
+The forecast assumes fresh children and full publication, with no runtime reuse
+credit. It identifies any role lacking cycle policy. It does not include all
+install/funding margins, fees or dependent top-ups, freeze balances, pause child
+grants, or authorize successor funding. Prerequisite funding covers only the
+reviewed reset effects; subsequent funding requires its own fresh review.
 
 Root prerequisite activation authority remains bound to its desired input until
 the dependent Fleet finishes. A changed input after that prerequisite is refused
@@ -331,6 +405,26 @@ insufficient remaining burn budget returns a typed new-review requirement.
 Review the resulting current plan before authorizing that additional work.
 Progress events distinguish advancing, awaiting progress, prerequisite
 completion, funding required, new review required and complete convergence.
+Waiting events report elapsed seconds for the current effect or terminal check
+within this invocation, measured with a monotonic clock. The timer includes
+issuing and observing that effect, continues across provisioning stages, and
+starts anew when an invocation resumes it; it is not the operation's durable age.
+When the existing Coordinator observation is available, provisioning detail names
+the phase and accepted/provisioned, directory and runtime Root counts, plus the
+Component count. For example, `ActivatingRuntimes` with `runtime Roots 0/1`
+identifies the pending activation while the reviewed effect count stays unchanged.
+JSON carries `state.elapsed_seconds` and nullable `state.provisioning` on
+`awaiting_progress` events; provisioning phases retain Coordinator enum names.
+These bounded informational fields add no polls, do not publish the internal
+progress identity, and cannot replace fresh funding or completion evidence.
+For both text and JSON, the CLI emits meaningful phase, effect-count, authority
+and provisioning changes immediately. It suppresses identical waiting events
+until the first observation at least 30 seconds after the last emitted wait.
+That heartbeat includes the current elapsed wait and pending phase. Elapsed time
+alone does not count as progress. Advancing, funding, review, prerequisite and
+completion events always print; errors and observation timing remain unchanged.
+This is output control only: polling, reconciliation and execution do not slow
+down, and a blocked remote call does not gain an independent heartbeat timer.
 JSON progress remains on stderr; the final report is on stdout. Dated
 [reinstall evidence](../../audits/reports/2026-09/2026-09-05/fleet-reinstall-journey.md)
 and the [combined paid-growth proof](../../audits/reports/2026-09/2026-09-07/canic-140-retained-creation-fee.md)
@@ -855,6 +949,39 @@ verify its lost response. Other modules or changed controllers are rejected.
 Keep both source and selected build artifacts until the operation completes.
 The current durable reinstall record changes through a pre-1.0 hard cut; this
 extension does not import unfinished plans from another Canic schema.
+
+Preparation reviews each Root and Coordinator against its own conservative
+`update + 8 × observation` burn allowance. Another authority's cycles cannot
+cover a shortfall: preparation has no funding transfer. A rejection reports the
+exact authority, available cycles, required allowance and shortfall. This is a
+maximum execution bound, not predicted spend or a cheaper substitute for reset
+headroom.
+
+Reviewing a preparation plan does not pause grants. Applying and confirming its
+seal fences ordinary child funding and suspends the Root maintenance timers,
+including after a subsequent native-cycle top-up. Explicit live resume opens
+that authority again; restoring a snapshot keeps it fenced. This protection is
+the current-source, exact-authority preparation contract. It is not automatic
+pre-top-up protection for the management-only recovery prerequisite, and does
+not authorize calling a predecessor release's protected protocol.
+
+Before each reviewed native or estate credit to a Root or Coordinator that is
+about to be reinstalled, the host rechecks its source module, controllers,
+Principal, subnet and Running status, then queries the seal for the exact reset
+operation. A changed or removed seal rejects before withdrawal, including on
+an interrupted retry. The review reserves the additional observation allowance.
+Later successor funding after replacement uses the current runtime's ordinary
+funding checks; it never queries the replaced source's seal. This does not pause
+an unverified installed runtime or protect externally issued top-ups.
+
+The disposable five-Workload/one-Ready PocketIC journey exercises this boundary
+with an actual Root native credit: a retained payment intent refuses to proceed
+after explicit seal removal; resealing the same operation permits one withdrawal,
+whose lost reply is reconciled without another payment. Child grants remain
+fenced, and interrupted reset recovery reaches full readiness and effect-free
+replay. This does not qualify Coordinator or estate credits on a live network.
+Management-only reset funding uses the separately described Stopped-state guard,
+without querying the old runtime's seal.
 
 Completion requires full Fleet readiness and conservation of the complete
 physical estate. Application stable data is discarded; authored installation

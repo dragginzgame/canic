@@ -1,6 +1,56 @@
 use super::*;
 use crate::test_support::temp_dir;
-use std::{collections::BTreeMap, fs, io::Write as _, process::Command};
+use std::{collections::BTreeMap, env, fs, io::Write as _, process::Command};
+
+#[test]
+fn credential_changes_preserve_extraction_reuse_and_other_inputs_invalidate() {
+    const CHILD_ROOT: &str = "CANIC_TEST_EXTRACTION_ENVIRONMENT_ROOT";
+    const BUILD_INPUT: &str = "CANIC_TEST_EXTRACTION_INPUT";
+    const CREDENTIAL: &str = crate::icp::CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV;
+    if let Some(root) = env::var_os(CHILD_ROOT) {
+        let root = PathBuf::from(root);
+        let cache = CandidExtractionCache::with_extractor(
+            root.join("cache"),
+            root.join("extractor_fixture"),
+        )
+        .unwrap();
+        let wasm = root.join("role.wasm");
+        let fresh = extract_candid_with_tool(&wasm, &cache.extractor).unwrap();
+        let (candid, reused) = cache.extract(&wasm).unwrap();
+        assert_eq!(candid, fresh);
+        fs::write(root.join("reused"), [u8::from(reused)]).unwrap();
+        return;
+    }
+    let root = temp_dir("candid-cache-environment");
+    fs::create_dir_all(&root).unwrap();
+    cache_fixture(&root);
+    fs::write(root.join("role.wasm"), declaration_module("service : {};")).unwrap();
+    let thread = std::thread::current();
+    let invoke = |credential: Option<&str>, input: &str| {
+        let mut command = Command::new(env::current_exe().unwrap());
+        command
+            .args(["--exact", thread.name().unwrap()])
+            .env(CHILD_ROOT, &root)
+            .env(BUILD_INPUT, input)
+            .env_remove(CREDENTIAL);
+        if let Some(value) = credential {
+            command.env(CREDENTIAL, value);
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        fs::read(root.join("reused")).unwrap()
+    };
+    assert_eq!(invoke(Some("fixture-credential-a"), "alpha"), [0]);
+    assert_eq!(invoke(Some("fixture-credential-b"), "alpha"), [1]);
+    assert_eq!(invoke(None, "alpha"), [1]);
+    assert_eq!(invoke(Some("fixture-credential-a"), "beta"), [0]);
+    fs::remove_dir_all(root).unwrap();
+}
 
 #[test]
 #[ignore = "requires installed candid-extractor; ordinary CI uses a native extractor fixture"]
@@ -205,6 +255,7 @@ fn cache_fixture(root: &Path) -> CandidExtractionCache {
         &source,
         r#"
 fn main() {
+    assert!(std::env::var_os("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
     let bytes = std::fs::read(std::env::args_os().nth(1).unwrap()).unwrap();
     if !bytes.starts_with(b"\0asm") { std::process::exit(1); }
     let marker = b"service : {";

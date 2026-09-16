@@ -296,13 +296,13 @@ fn source_and_retained_links_are_refused() {
     source.chunk_paths = vec!["linked.bin".into()];
     assert!(matches!(
         compile_entry(&root, &source),
-        Err(FixtureArtifactError::Path(_))
+        Err(FixtureArtifactError::Symlink(path)) if path == root.join("linked.bin")
     ));
     symlink(root.join("data"), root.join("linked-dir")).unwrap();
     source.chunk_paths = vec!["linked-dir/parents.bin".into()];
     assert!(matches!(
         compile_entry(&root, &source),
-        Err(FixtureArtifactError::Path(_))
+        Err(FixtureArtifactError::Symlink(path)) if path == root.join("linked-dir")
     ));
     source.chunk_paths = vec!["data/parents.bin".into()];
     let release = plan_release_build(&root).unwrap().record.release_build_id;
@@ -311,11 +311,20 @@ fn source_and_retained_links_are_refused() {
             .unwrap();
     let chunk = retained_chunk(&root, &retained, 0);
     fs::remove_file(&chunk).unwrap();
-    symlink(root.join("data/parents.bin"), chunk).unwrap();
+    symlink(root.join("data/parents.bin"), &chunk).unwrap();
     assert!(matches!(
         verify_fixture_artifacts(&root, &topology(), release, retained.digest),
-        Err(FixtureArtifactError::Path(_))
+        Err(FixtureArtifactError::Symlink(path)) if path == chunk
     ));
+    let canic_state = root.join(".canic");
+    let retained_state = root.join("retained-state");
+    fs::rename(&canic_state, &retained_state).unwrap();
+    symlink(&retained_state, &canic_state).unwrap();
+    assert!(matches!(
+        verify_fixture_artifacts(&root, &topology(), release, retained.digest),
+        Err(FixtureArtifactError::Symlink(path)) if path == canic_state
+    ));
+    assert!(retained_state.is_dir());
     fs::remove_dir_all(root).unwrap();
 }
 

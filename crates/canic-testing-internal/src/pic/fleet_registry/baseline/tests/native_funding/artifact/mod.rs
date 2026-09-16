@@ -6,6 +6,7 @@ use crate::pic::artifacts::build_internal_test_wasm_canisters_with_features;
 
 pub fn uses_audit_root(config: &Path) -> bool {
     config.ends_with("canisters/audit/root_probe/native-child-recovery.toml")
+        || config.ends_with("canisters/audit/root_probe/retained-estate.toml")
 }
 
 pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArtifactBuildOutput) {

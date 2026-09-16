@@ -155,7 +155,7 @@ impl IcpCli {
                 root_key: target.root_key.clone(),
             });
         }
-        let mut command = self.command();
+        let mut command = self.request_command();
         command.args(["network", "status", "--environment", environment, "--json"]);
         run_json(&mut command, self).map_err(Into::into)
     }
@@ -163,7 +163,7 @@ impl IcpCli {
     fn exported_active_identity(&self) -> Result<Arc<dyn Identity>, IcpManagementCallError> {
         let identity_name = self.selected_identity_name()?;
 
-        let mut export_command = self.command();
+        let mut export_command = self.request_command();
         export_command.args(["identity", "export", &identity_name]);
         if let Some(password_file) = self.identity_password_file.as_deref() {
             export_command.arg("--password-file").arg(password_file);

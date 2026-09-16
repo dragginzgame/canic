@@ -25,7 +25,11 @@ pub enum FleetEnsurePhase {
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum FleetEnsureProgressState {
     Advancing,
-    AwaitingProgress,
+    AwaitingProgress {
+        /// Time spent awaiting this effect or terminal check in this invocation.
+        elapsed_seconds: u64,
+        provisioning: Option<FleetProvisioningProgress>,
+    },
     PrerequisiteComplete,
     FundingRequired,
     ReviewRequired {
@@ -33,6 +37,20 @@ pub enum FleetEnsureProgressState {
         review: Option<Box<crate::fleet_ensure::model::FleetSuccessorReview>>,
     },
     Complete,
+}
+
+/// Bounded informational projection of the existing Coordinator observation.
+/// Counts describe Roots, not individual Component activation or funding authority.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct FleetProvisioningProgress {
+    pub phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase,
+    pub root_batch_count: u32,
+    pub accepted_root_count: u32,
+    pub provisioned_root_count: u32,
+    pub directory_confirmed_root_count: u32,
+    pub directory_confirmation_root_count: u32,
+    pub runtime_activated_root_count: u32,
+    pub component_count: u32,
 }
 
 /// Bounded progress event bound to the exact reviewed operation.

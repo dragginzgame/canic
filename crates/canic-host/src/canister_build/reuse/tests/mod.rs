@@ -2,7 +2,7 @@ mod complete;
 
 use super::*;
 use crate::test_support::temp_dir;
-use std::io::Write as _;
+use std::{io::Write as _, process::Command};
 
 const REUSE_CONFIG: &str = r#"[app]
 name = "reuse"
@@ -108,7 +108,12 @@ canic-control-plane = { path = "../canic-control-plane", optional = true }
         "{}",
         String::from_utf8_lossy(&lock.stderr)
     );
-    let context = WorkspaceBuildContext {
+    let context = infrastructure_build_context(app);
+    (root, context)
+}
+
+fn infrastructure_build_context(app: PathBuf) -> WorkspaceBuildContext {
+    WorkspaceBuildContext {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
         environment: "local".into(),
@@ -119,8 +124,7 @@ canic-control-plane = { path = "../canic-control-plane", optional = true }
         local_replica: None,
         refresh_canonical_infrastructure_did: false,
         release_build_id: None,
-    };
-    (root, context)
+    }
 }
 
 fn compile_infrastructure_fixture(context: &WorkspaceBuildContext) {
@@ -143,6 +147,7 @@ fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &P
             "canic/fleet",
         ])
         .env("CARGO_TARGET_DIR", target)
+        .env_remove("CARGO_BUILD_BUILD_DIR")
         .env("RUSTC_WRAPPER", "")
         .output()
         .unwrap();
@@ -151,6 +156,252 @@ fn compile_infrastructure_fixture_at(context: &WorkspaceBuildContext, target: &P
         "{}",
         String::from_utf8_lossy(&output.stderr)
     );
+}
+
+#[test]
+fn repeated_cargo_inputs_preserve_one_snapshot_and_refresh_the_next() {
+    run_with_private_cargo_target(repeated_cargo_inputs);
+}
+
+fn repeated_cargo_inputs() {
+    let (root, context) = infrastructure_build_fixture();
+    let input = context.workspace_root.join("src/lib.rs");
+    let mut files = BTreeMap::new();
+    add_file(&input, &mut files).unwrap();
+    let before = BuildInputSnapshot {
+        identity: "same build context".into(),
+        files: files.clone(),
+    };
+    let target = crate::canister_build::cache::canister_build_target_root(&context.workspace_root)
+        .join("wasm32-unknown-unknown/fast");
+    fs::create_dir_all(&target).unwrap();
+    for role in ["root", "app"] {
+        fs::write(
+            target.join(format!("{role}.d")),
+            format!("{role}.wasm: {} {}\n", input.display(), input.display()),
+        )
+        .unwrap();
+    }
+    fs::write(&input, "pub fn changed() {}\n").unwrap();
+    dependencies::append_observed_cargo_inputs(&context, &mut files).unwrap();
+    assert_eq!(files, before.files);
+    let mut fresh = BTreeMap::new();
+    dependencies::append_observed_cargo_inputs(&context, &mut fresh).unwrap();
+    assert!(matches!(
+        before.validate_after(&BuildInputSnapshot {
+            identity: before.identity.clone(),
+            files: fresh,
+        }),
+        Err(BuildReuseError::ChangedInput(path)) if path == input
+    ));
+    fs::remove_file(&input).unwrap();
+    let mut missing = BTreeMap::new();
+    dependencies::append_observed_cargo_inputs(&context, &mut missing).unwrap();
+    assert_eq!(missing[input.to_str().unwrap()], "absent");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn first_build_generated_config_is_output_in_both_target_trees() {
+    run_with_private_cargo_target(first_generated_config_build);
+}
+
+#[test]
+fn retained_generated_exports_are_observed_before_dependency_discovery() {
+    run_with_private_cargo_target(retained_generated_exports);
+}
+
+fn retained_generated_exports() {
+    let (root, context) = infrastructure_build_fixture();
+    let foreign = root.join("other checkout/target");
+    fs::create_dir_all(&foreign).unwrap();
+    let config = foreign.join("canic.compact.toml");
+    let model = foreign.join("canic.compiled.rs");
+    let authority = foreign.join("canic.role-runtime-authority.rs");
+    fs::write(&config, "observed = true\n").unwrap();
+    fs::write(&model, "pub const MODEL: u8 = 3;\n").unwrap();
+    fs::write(&authority, "pub const AUTHORITY: u8 = 4;\n").unwrap();
+    fs::write(
+        context.workspace_root.join("build.rs"),
+        format!(
+            r#"
+fn main() {{
+    println!("cargo:rustc-env=CANIC_CONFIG_SOURCE_PATH={{}}", {config:?});
+    println!("cargo::rustc-env=CANIC_CONFIG_MODEL_PATH={{}}", {model:?});
+    println!("cargo:rustc-env=CANIC_ROLE_RUNTIME_AUTHORITY_PATH={{}}", {authority:?});
+    println!("cargo:rerun-if-changed=build.rs");
+}}
+"#
+        ),
+    )
+    .unwrap();
+    let source = r#"
+pub const CONFIG: &str = include_str!(env!("CANIC_CONFIG_SOURCE_PATH"));
+include!(env!("CANIC_CONFIG_MODEL_PATH"));
+include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"));
+pub fn value() -> u8 { canic::value() + MODEL + AUTHORITY }
+"#;
+    fs::write(context.workspace_root.join("src/lib.rs"), source).unwrap();
+    let cold = input_snapshot(&context, &[]).unwrap();
+    let targets = [
+        crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
+        crate::canister_build::cache::declaration_target_root(&context.workspace_root),
+    ];
+    for target in &targets {
+        compile_infrastructure_fixture_at(&context, target);
+        fs::remove_file(target.join("wasm32-unknown-unknown/fast/reuse_app.d")).unwrap();
+    }
+    let exported = input_snapshot(&context, &[]).unwrap();
+    for path in [&config, &model, &authority] {
+        assert!(exported.files.contains_key(path.to_str().unwrap()));
+        assert!(!cold.files.contains_key(path.to_str().unwrap()));
+    }
+    assert!(matches!(
+        cold.validate_after(&exported),
+        Err(BuildReuseError::UnobservedInput(_))
+    ));
+
+    // Force Rust recompilation while preserving build-script output, as in an
+    // incomplete copied target. The new .d files add no unobserved source bytes.
+    fs::write(
+        context.workspace_root.join("src/lib.rs"),
+        format!("{source}\n// recompile consumer\n"),
+    )
+    .unwrap();
+    let before = input_snapshot(&context, &[]).unwrap();
+    for target in &targets {
+        compile_infrastructure_fixture_at(&context, target);
+        assert!(
+            target
+                .join("wasm32-unknown-unknown/fast/reuse_app.d")
+                .is_file()
+        );
+    }
+    before
+        .validate_after(&input_snapshot(&context, &[]).unwrap())
+        .unwrap();
+    fs::write(&config, "observed = false\n").unwrap();
+    assert!(
+        matches!(before.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        Err(BuildReuseError::ChangedInput(path)) if path == config)
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[expect(
+    clippy::too_many_lines,
+    reason = "one Cargo fixture qualifies cold and warm generation, source drift and foreign-input discovery"
+)]
+fn first_generated_config_build() {
+    let (root, context) = infrastructure_build_fixture();
+    let producer = context.workspace_root.join("build.rs");
+    let catalogue = context.workspace_root.join("src/translations.json");
+    fs::write(&catalogue, "{ \"revision\": 1 }\n").unwrap();
+    fs::write(
+        &producer,
+        r#"
+fn main() {
+    let config = std::fs::read("canic.toml").unwrap();
+    let output = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+    std::fs::write(output.join("canic.compact.toml"), config).unwrap();
+    let catalogue = std::fs::read_to_string("src/translations.json").unwrap();
+    let compact: String = catalogue.chars().filter(|c| !c.is_ascii_whitespace()).collect();
+    std::fs::write(output.join("translations.json"), compact).unwrap();
+    println!("cargo::rustc-env=FIXTURE_CONFIG_PATH={}", output.join("canic.compact.toml").canonicalize().unwrap().display());
+    println!("cargo::rerun-if-changed=canic.toml");
+    println!("cargo::rerun-if-changed=src/translations.json");
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        context.workspace_root.join("src/lib.rs"),
+        r#"
+pub const CONFIG: &str = include_str!(env!("FIXTURE_CONFIG_PATH"));
+pub const CATALOGUE: &str = include_str!(concat!(env!("OUT_DIR"), "/translations.json"));
+pub fn value() -> u8 { canic::value() }
+"#,
+    )
+    .unwrap();
+    let before = input_snapshot(&context, &[]).unwrap();
+    assert!(before.files.contains_key(producer.to_str().unwrap()));
+    for target in [
+        crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
+        crate::canister_build::cache::declaration_target_root(&context.workspace_root),
+    ] {
+        compile_infrastructure_fixture_at(&context, &target);
+        let record = target.join("wasm32-unknown-unknown/fast/reuse_app.d");
+        let dependencies = fs::read_to_string(record).unwrap();
+        assert!(dependencies.contains("canic.compact.toml"));
+        assert!(
+            dependencies.contains(
+                target
+                    .join("wasm32-unknown-unknown/fast/build")
+                    .to_str()
+                    .unwrap()
+            )
+        );
+    }
+    let after = input_snapshot(&context, &[]).unwrap();
+    before.validate_after(&after).unwrap();
+    assert_eq!(before.digest(), after.digest());
+    // A warm build regenerates both declaration and runtime outputs after an
+    // authored catalogue edit made before the build. Only its source is frozen.
+    fs::write(&catalogue, "{ \"revision\": 2 }\n").unwrap();
+    let edited = input_snapshot(&context, &[]).unwrap();
+    assert_ne!(edited.digest(), after.digest());
+    for target in [
+        crate::canister_build::cache::canister_build_target_root(&context.workspace_root),
+        crate::canister_build::cache::declaration_target_root(&context.workspace_root),
+    ] {
+        let outputs = fs::read_dir(target.join("wasm32-unknown-unknown/fast/build"))
+            .unwrap()
+            .map(|entry| entry.unwrap().path().join("out/translations.json"))
+            .filter(|path| path.is_file())
+            .collect::<Vec<_>>();
+        assert!(!outputs.is_empty());
+        for output in &outputs {
+            assert_eq!(fs::read_to_string(output).unwrap(), "{\"revision\":1}");
+            assert!(!edited.files.contains_key(output.to_str().unwrap()));
+        }
+        compile_infrastructure_fixture_at(&context, &target);
+        for output in outputs {
+            assert_eq!(fs::read_to_string(output).unwrap(), "{\"revision\":2}");
+        }
+    }
+    edited
+        .validate_after(&input_snapshot(&context, &[]).unwrap())
+        .unwrap();
+    fs::write(&catalogue, "{ \"revision\": 3 }\n").unwrap();
+    assert!(
+        matches!(edited.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        Err(BuildReuseError::ChangedInput(path)) if path == catalogue)
+    );
+    fs::write(&catalogue, "{ \"revision\": 2 }\n").unwrap();
+    fs::write(&producer, "fn main() {}\n").unwrap();
+    assert!(
+        matches!(edited.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        Err(BuildReuseError::ChangedInput(path)) if path == producer)
+    );
+
+    // A copied Cargo output can still name generated input in another checkout.
+    // Its generated filename does not make that external input prevalidated.
+    let foreign = root.join("other-checkout/target/canic.compact.toml");
+    fs::create_dir_all(foreign.parent().unwrap()).unwrap();
+    fs::write(&foreign, "foreign = true\n").unwrap();
+    fs::write(
+        context.workspace_root.join("src/lib.rs"),
+        format!("pub const CONFIG: &str = include_str!({foreign:?});\n"),
+    )
+    .unwrap();
+    let before_foreign = input_snapshot(&context, &[]).unwrap();
+    assert!(!before_foreign.files.contains_key(foreign.to_str().unwrap()));
+    compile_infrastructure_fixture(&context);
+    assert!(
+        matches!(before_foreign.validate_after(&input_snapshot(&context, &[]).unwrap()),
+        Err(BuildReuseError::UnobservedInput(path)) if path == foreign)
+    );
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]

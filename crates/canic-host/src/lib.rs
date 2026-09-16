@@ -15,6 +15,7 @@ pub mod binaryen;
 mod bootstrap_candid;
 mod bootstrap_coordinator;
 mod bootstrap_store;
+mod build_environment;
 mod build_profile;
 pub mod build_provenance;
 pub mod build_toolchain;
@@ -65,7 +66,7 @@ mod workspace_discovery;
 
 pub(crate) fn cargo_command() -> Command {
     let cargo = std::env::var_os("CARGO").unwrap_or_else(|| "cargo".into());
-    let mut command = Command::new(cargo);
+    let mut command = build_environment::command(cargo);
 
     if let Some(toolchain) = std::env::var_os("RUSTUP_TOOLCHAIN") {
         command.env("RUSTUP_TOOLCHAIN", toolchain);

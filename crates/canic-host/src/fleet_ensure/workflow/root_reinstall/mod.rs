@@ -4,19 +4,26 @@
 //! Does not own: effect dispatch, initialization, or a second recovery journal.
 //! Boundary: installed module and controller authority must match the reviewed reset exactly.
 
+#[cfg(test)]
+mod tests;
+
 use super::{
     EnsureWorkflowError, compatible_root_start_prerequisite, ordered_actions,
     root_management_fleet_observation, verify_terminal_conservation,
 };
 use crate::fleet_ensure::{
     model::{
-        ActualCycleConservation, CanisterRuntimeStatus, DesiredFleet, EffectState, EnsureAction,
-        FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureStateRecord,
-        FleetObservation, InstallMode,
+        ActualCycleConservation, CanisterPlan, CanisterRuntimeStatus, DesiredFleet, EffectState,
+        EnsureAction, FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope,
+        FleetEnsureStateRecord, FleetObservation, InstallMode, RootManagementBinding,
     },
-    ops::{EnsurePlatform, action_sha256, resolve_desired_artifacts},
+    ops::{
+        EnsurePlatform, NativeFundingObservation, action_sha256, native_funding_applied,
+        resolve_desired_artifacts,
+    },
     policy::{RootStartPlanInput, root_reinstall},
 };
+use canic_core::cdk::types::Cycles;
 use std::{collections::BTreeSet, path::Path};
 
 pub(super) fn verify_before_apply<P: EnsurePlatform>(
@@ -44,7 +51,18 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         &resolve_desired_artifacts(root, desired)?,
     )?
     .ok_or(EnsureWorkflowError::DriftedBeforeApply)?;
-    if !compatible_root_start_prerequisite(plan, &current, desired) {
+    let funded_balance_increased =
+        plan.canisters
+            .iter()
+            .zip(&current.canisters)
+            .any(|(reviewed, observed)| {
+                reviewed
+                    .actions
+                    .iter()
+                    .any(|action| matches!(action, EnsureAction::Fund { .. }))
+                    && observed.observed_cycles > reviewed.observed_cycles
+            });
+    if funded_balance_increased || !compatible_root_start_prerequisite(plan, &current, desired) {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     let observation = root_management_fleet_observation(&management, &targets)?;
@@ -65,13 +83,34 @@ pub(super) fn complete<P: EnsurePlatform>(
     for (action, effect) in actions.iter().zip(&journal.effects) {
         if effect.state != EffectState::Applied
             || effect.action_sha256 != action_sha256(action)
-            || (!matches!(action, EnsureAction::Stop { .. })
-                && !platform
-                    .observe_effect(&plan.operation_id, action, effect, state)
-                    .map_err(EnsureWorkflowError::Platform)?
-                    .applied)
+            || (!matches!(
+                action,
+                EnsureAction::Stop { .. } | EnsureAction::Fund { .. }
+            ) && !platform
+                .observe_effect(&plan.operation_id, action, effect, state)
+                .map_err(EnsureWorkflowError::Platform)?
+                .applied)
         {
             return Err(EnsureWorkflowError::ConvergenceDrift);
+        }
+        if let EnsureAction::Fund {
+            amount,
+            expected_post_cycles,
+            funding_deficit_cycles,
+            funding_margin_cycles,
+            ..
+        } = action
+            && (effect.receipt.is_none()
+                || !native_funding_applied(NativeFundingObservation {
+                    amount: *amount,
+                    expected_post_cycles: *expected_post_cycles,
+                    funding_deficit_cycles: *funding_deficit_cycles,
+                    funding_margin_cycles: *funding_margin_cycles,
+                    pre_cycles: effect.pre_cycles,
+                    live_cycles: effect.post_cycles,
+                }))
+        {
+            return Err(EnsureWorkflowError::JournalIntegrity);
         }
     }
     let management = platform
@@ -118,6 +157,8 @@ fn targets<E: std::error::Error + 'static>(
         return Err(EnsureWorkflowError::PlanIntegrity);
     }
     let mut targets = BTreeSet::new();
+    let mut funding = 0_u128;
+    let mut fees = 0_u128;
     for binding in &plan.root_reinstall_bindings {
         let Some(canister) = plan
             .canisters
@@ -126,11 +167,31 @@ fn targets<E: std::error::Error + 'static>(
         else {
             return Err(EnsureWorkflowError::PlanIntegrity);
         };
+        let (stop, remaining) = canister
+            .actions
+            .split_first()
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+        let EnsureAction::Stop {
+            name: stop,
+            principal: stop_id,
+        } = stop
+        else {
+            return Err(EnsureWorkflowError::PlanIntegrity);
+        };
+        let remaining =
+            if let [action @ EnsureAction::Fund { amount, .. }, remaining @ ..] = remaining {
+                let fee = verify_payment_plan(plan, canister, binding, action)?;
+                funding = funding
+                    .checked_add(*amount)
+                    .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+                fees = fees
+                    .checked_add(fee)
+                    .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+                remaining
+            } else {
+                remaining
+            };
         let [
-            EnsureAction::Stop {
-                name: stop,
-                principal: stop_id,
-            },
             EnsureAction::Install {
                 name,
                 principal,
@@ -141,7 +202,7 @@ fn targets<E: std::error::Error + 'static>(
                 name: start,
                 principal: start_id,
             },
-        ] = canister.actions.as_slice()
+        ] = remaining
         else {
             return Err(EnsureWorkflowError::PlanIntegrity);
         };
@@ -154,13 +215,66 @@ fn targets<E: std::error::Error + 'static>(
             return Err(EnsureWorkflowError::PlanIntegrity);
         }
     }
+    if plan.conservation.maximum_new_funding_cycles != funding
+        || plan.conservation.maximum_unavoidable_fee_cycles != fees
+        || funding.checked_add(fees) != Some(plan.conservation.maximum_operator_debit_cycles)
+    {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    }
     Ok(targets)
+}
+
+/// Check payment identity and budget independently of current live balances.
+fn verify_payment_plan<E: std::error::Error + 'static>(
+    plan: &FleetEnsurePlan,
+    canister: &CanisterPlan,
+    binding: &RootManagementBinding,
+    action: &EnsureAction,
+) -> Result<u128, EnsureWorkflowError<E>> {
+    let EnsureAction::Fund {
+        name,
+        principal,
+        ledger,
+        created_at_time,
+        pool_funding: None,
+        amount,
+        expected_post_cycles,
+        funding_deficit_cycles,
+        funding_margin_cycles,
+    } = action
+    else {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    };
+    let desired = plan
+        .reviewed_desired
+        .as_ref()
+        .ok_or(EnsureWorkflowError::PlanIntegrity)?
+        .desired();
+    let exact_payment = (name, principal, ledger, *created_at_time)
+        == (
+            &binding.name,
+            &binding.principal,
+            &desired.cycles_ledger,
+            plan.planned_at_time,
+        );
+    let exact_amount = *funding_deficit_cycles > 0
+        && funding_deficit_cycles.checked_add(*funding_margin_cycles) == Some(*amount)
+        && expected_post_cycles.checked_sub(*amount) == Some(canister.observed_cycles);
+    if !exact_payment || !exact_amount {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    }
+    desired
+        .ledger_fee_cycles
+        .parse::<Cycles>()
+        .map(|fee| fee.to_u128())
+        .map_err(|_| EnsureWorkflowError::PlanIntegrity)
 }
 
 /// Recheck controller and module authority immediately before a reset effect.
 pub(super) fn verify_effect_authority<P: EnsurePlatform>(
     plan: &FleetEnsurePlan,
     action: &EnsureAction,
+    pre_cycles: Option<u128>,
     state: &FleetEnsureStateRecord,
     platform: &mut P,
 ) -> Result<(), EnsureWorkflowError<P::Error>> {
@@ -207,5 +321,92 @@ pub(super) fn verify_effect_authority<P: EnsurePlatform>(
     if actual != expected {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
+    if matches!(
+        action,
+        EnsureAction::Fund { .. } | EnsureAction::Install { .. }
+    ) && live.live.status != CanisterRuntimeStatus::Stopped
+    {
+        return Err(EnsureWorkflowError::DriftedBeforeApply);
+    }
+    if let EnsureAction::Fund {
+        amount,
+        expected_post_cycles,
+        funding_margin_cycles,
+        ..
+    } = action
+    {
+        let reviewed_pre = expected_post_cycles
+            .checked_sub(*amount)
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+        let retained_pre = pre_cycles.ok_or(EnsureWorkflowError::JournalIntegrity)?;
+        if retained_pre > reviewed_pre {
+            return Err(EnsureWorkflowError::DriftedBeforeApply);
+        }
+        let minimum = expected_post_cycles
+            .checked_sub(*funding_margin_cycles)
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+        if live
+            .live
+            .cycles
+            .checked_add(*amount)
+            .is_none_or(|funded| funded < minimum)
+        {
+            return Err(EnsureWorkflowError::DriftedBeforeApply);
+        }
+        // A retained intent retries the exact Ledger identity, even after a lost reply.
+        // Do not require the pre-payment balance again: the first withdrawal may have paid.
+        operator_funding(plan, platform)?;
+    }
     Ok(())
+}
+
+/// Verify the whole reviewed debit before stopping any old runtime.
+pub(super) fn verify_initial_funding<P: EnsurePlatform>(
+    plan: &FleetEnsurePlan,
+    initial_operator_cycles: u128,
+    platform: &mut P,
+) -> Result<(), EnsureWorkflowError<P::Error>> {
+    if plan.scope != FleetEnsurePlanScope::RootReinstallPrerequisite {
+        return Ok(());
+    }
+    targets::<P::Error>(plan)?;
+    if plan.conservation.maximum_new_funding_cycles == 0 {
+        return Ok(());
+    }
+    let observed = operator_funding(plan, platform)?;
+    if observed.operator_cycles != initial_operator_cycles {
+        return Err(EnsureWorkflowError::DriftedBeforeApply);
+    }
+    let required = plan.conservation.maximum_operator_debit_cycles;
+    if observed.operator_cycles < required {
+        return Err(EnsureWorkflowError::InsufficientOperatorCycles {
+            actual: observed.operator_cycles,
+            required,
+        });
+    }
+    Ok(())
+}
+
+fn operator_funding<P: EnsurePlatform>(
+    plan: &FleetEnsurePlan,
+    platform: &mut P,
+) -> Result<crate::fleet_ensure::view::OperatorFundingObservation, EnsureWorkflowError<P::Error>> {
+    let desired = plan
+        .reviewed_desired
+        .as_ref()
+        .ok_or(EnsureWorkflowError::PlanIntegrity)?
+        .desired();
+    let fee = desired
+        .ledger_fee_cycles
+        .parse::<Cycles>()
+        .map_err(|_| EnsureWorkflowError::PlanIntegrity)?
+        .to_u128();
+    let observed = platform
+        .observe_operator_funding()
+        .map_err(EnsureWorkflowError::Platform)?
+        .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+    if observed.cycles_ledger != desired.cycles_ledger || observed.ledger_fee_cycles != fee {
+        return Err(EnsureWorkflowError::DriftedBeforeApply);
+    }
+    Ok(observed)
 }

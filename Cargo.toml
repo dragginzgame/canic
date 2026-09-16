@@ -89,7 +89,7 @@ ic-signature-verification = "0.3.0"
 ic-testkit = "0.9.0"
 ic-timers = "=0.7.1"
 ic0 = "1.2.0"
-icydb = { version = "=0.257.18", default-features = false }
+icydb = { version = "=0.257.19", default-features = false }
 k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 quote = "1.0"

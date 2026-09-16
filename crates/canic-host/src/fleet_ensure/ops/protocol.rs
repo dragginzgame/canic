@@ -12,22 +12,16 @@ use candid_parser::{
     parse_idl_args,
     utils::{CandidSource, instantiate_candid},
 };
-#[cfg(unix)]
-use std::os::unix::fs::OpenOptionsExt;
 use std::{
     collections::BTreeMap,
     fmt::Write as _,
-    fs::{self, OpenOptions},
-    io::{self, Write},
+    fs, io,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 use thiserror::Error as ThisError;
 
 const MAX_PROTOCOL_ARTIFACT_BYTES: u64 = 1_048_576;
 const MAX_PROTOCOL_ARGUMENT_BYTES: usize = 16 * 1_024;
-const MAX_TEMP_ATTEMPTS: usize = 32;
-static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
 #[derive(Debug, ThisError)]
 pub enum ProtocolEffectError {
@@ -428,31 +422,7 @@ const fn require_argument_bound(bytes: &[u8]) -> Result<(), ProtocolEffectError>
 
 pub(super) fn write_argument_file(bytes: &[u8]) -> Result<PathBuf, ProtocolEffectError> {
     require_argument_bound(bytes)?;
-    for _ in 0..MAX_TEMP_ATTEMPTS {
-        let sequence = NEXT_TEMP_FILE.fetch_add(1, Ordering::Relaxed);
-        let path = std::env::temp_dir().join(format!(
-            "canic-fleet-ensure-protocol-{}-{sequence}.bin",
-            std::process::id()
-        ));
-        let mut options = OpenOptions::new();
-        options.write(true).create_new(true);
-        #[cfg(unix)]
-        options.mode(0o600);
-        match options.open(&path) {
-            Ok(mut file) => {
-                file.write_all(bytes)
-                    .and_then(|()| file.sync_all())
-                    .map_err(ProtocolEffectError::ArgumentFile)?;
-                return Ok(path);
-            }
-            Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-            Err(source) => return Err(ProtocolEffectError::ArgumentFile(source)),
-        }
-    }
-    Err(ProtocolEffectError::ArgumentFile(io::Error::new(
-        io::ErrorKind::AlreadyExists,
-        "could not allocate a unique protocol argument file",
-    )))
+    crate::icp::write_candid_argument_file(bytes).map_err(ProtocolEffectError::ArgumentFile)
 }
 
 #[cfg(test)]
@@ -462,6 +432,20 @@ mod tests {
     use canic_core::cdk::utils::hash::sha256_hex;
     use std::collections::BTreeMap;
     use std::fs;
+
+    #[test]
+    fn shared_transport_preserves_the_protocol_argument_bound() {
+        let maximum = super::MAX_PROTOCOL_ARGUMENT_BYTES;
+        let bytes = vec![0x5a; maximum];
+        let path = super::write_argument_file(&bytes).unwrap();
+        assert_eq!(fs::read(&path).unwrap(), bytes);
+        fs::remove_file(path).unwrap();
+        assert!(matches!(
+            super::write_argument_file(&vec![0; maximum + 1]),
+            Err(super::ProtocolEffectError::ArgumentTooLarge { actual, maximum: bound })
+                if actual == maximum + 1 && bound == maximum
+        ));
+    }
 
     #[test]
     fn template_binding_is_exact_and_rejects_unknown_authority() {

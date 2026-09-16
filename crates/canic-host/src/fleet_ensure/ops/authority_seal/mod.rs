@@ -140,6 +140,7 @@ pub(super) fn observe(
         return Err(CurrentProtocolError::ResponseMismatch);
     }
     Ok(EffectObservation {
+        provisioning_progress: None,
         provisioning_failure: None,
         applied: sealed(&authority, &status),
         estate_funding_required: None,

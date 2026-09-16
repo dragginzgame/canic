@@ -4,6 +4,7 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod progress;
 mod startup_funding;
 mod subnet_catalog;
 #[cfg(test)]
@@ -46,7 +47,7 @@ use std::{
     ffi::OsString,
     fs, io,
     path::PathBuf,
-    time::{SystemTime, UNIX_EPOCH},
+    time::{Instant, SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -409,6 +410,7 @@ where
         quote_review_argument(&options.icp)
     );
     let progress_review = next_review.clone();
+    let mut progress_output = progress::ProgressOutput::default();
     let platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
         .with_progress_handler(move |mut progress| {
             if let FleetEnsureProgressState::ReviewRequired {
@@ -418,7 +420,9 @@ where
             {
                 review.next_review_command.clone_from(&progress_review);
             }
-            eprintln!("{}", render_progress(&progress, json_progress));
+            if progress_output.should_emit(&progress, Instant::now()) {
+                eprintln!("{}", render_progress(&progress, json_progress));
+            }
         });
     let mut platform = platform.with_observation_handler(move |timing| {
         eprintln!("{}", render_observation_timing(&timing, json_progress));
@@ -646,13 +650,35 @@ fn render_progress(progress: &FleetEnsureProgress, json: bool) -> String {
     };
     let state = match &progress.state {
         FleetEnsureProgressState::Advancing => "advancing",
-        FleetEnsureProgressState::AwaitingProgress => "awaiting progress",
+        FleetEnsureProgressState::AwaitingProgress { .. } => "awaiting progress",
         FleetEnsureProgressState::PrerequisiteComplete => "prerequisite complete",
         FleetEnsureProgressState::FundingRequired => "funding required",
         FleetEnsureProgressState::ReviewRequired { .. } => "new review required",
         FleetEnsureProgressState::Complete => "complete",
     };
     let details = match &progress.state {
+        FleetEnsureProgressState::AwaitingProgress {
+            elapsed_seconds,
+            provisioning,
+        } => {
+            if let Some(provisioning) = provisioning {
+                format!(
+                    "; elapsed {elapsed_seconds}s this invocation; {:?}; accepted Roots {}/{}; provisioned Roots {}/{}; directory Roots {}/{}; runtime Roots {}/{}; Components {}",
+                    provisioning.phase,
+                    provisioning.accepted_root_count,
+                    provisioning.root_batch_count,
+                    provisioning.provisioned_root_count,
+                    provisioning.root_batch_count,
+                    provisioning.directory_confirmed_root_count,
+                    provisioning.directory_confirmation_root_count,
+                    provisioning.runtime_activated_root_count,
+                    provisioning.root_batch_count,
+                    provisioning.component_count,
+                )
+            } else {
+                format!("; elapsed {elapsed_seconds}s this invocation")
+            }
+        }
         FleetEnsureProgressState::ReviewRequired {
             review: Some(review),
             ..
@@ -791,8 +817,23 @@ fn append_recovery_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
             format!("base_execution_burn_cycles: {}", format_cycles(review.base_execution_burn_cycles)),
             format!("continuation_reserve_cycles: {}", format_cycles(review.continuation_reserve_cycles)),
             format!("whole_continuation_ceiling_cycles: {}", format_cycles(review.whole_continuation_ceiling_cycles)),
+            format!("continuation_budget: {} successor steps + {} fixture retry attempts; {} cycles per step (one update + three observations)", review.maximum_successor_actions, review.fixture_publication_retry_attempts, review.per_step_burn_cycles),
             "recovery_discovery: pending current protocol; this phase is not a complete deployment funding quote".into(),
         ]);
+        for forecast in &review.startup_funding {
+            lines.push(format!("startup_forecast: Root {}; startup minimum {}; continuation allowance {} ({} steps at {} each); configured minimum {}; required native minimum {}",
+                forecast.root, format_cycles(forecast.startup_minimum_cycles), format_cycles(forecast.continuation_allowance_cycles), forecast.maximum_continuation_steps,
+                format_cycles(review.per_step_burn_cycles),
+                format_cycles(forecast.configured_minimum_cycles), format_cycles(forecast.required_native_cycles)));
+            lines.push("startup_assumptions: fresh children and full publication; no reuse credit; overlaps the Fleet continuation ceiling; excludes install/funding margins, ledger fees and dependent pool top-ups; requires fresh funding review".into());
+            if let Some(shortfall) = &forecast.unfunded_role {
+                lines.push(format!(
+                    "startup_unfunded_role: {} requires {} cycles beyond configured funding policy",
+                    shortfall.role,
+                    format_cycles(shortfall.cycles)
+                ));
+            }
+        }
         for funding in &review.known_pool_funding {
             lines.push(format!("dependent_native_topup: {} via Root {}; {} cycles plus {} ledger fee; requires fresh review", funding.principal, funding.root, funding.amount_cycles, funding.ledger_fee_cycles));
         }

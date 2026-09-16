@@ -1,6 +1,298 @@
 # Canic 0.110 Implementation Status
 
+## Management-only funding protection complete locally — 2026-09-16
+
+The open .20 batch now includes Stop → optional Fund → Reinstall → Start,
+with initial operator/fee coverage, per-attempt Stopped/source-authority checks,
+immutable payment identity and retained-receipt conservation. Source-bound
+activation resets preserve funding budgets; preparation remains unfunded.
+A reset inspection also removes one duplicate Root status read (five → four
+remote calls in the matched native fixture), without reuse across passes.
+
+Twenty-three focused host tests, scoped warning-denied Clippy and the final
+nineteen-Workload/five-Ready disposable PocketIC journey pass. The latter covers
+lost funding/install replies, restart/controller rejection, one withdrawal,
+full recovery and effect-free replay. It uses a local audit Root, not a production
+Root artifact or mainnet. See the [qualification report](../../audits/working/0.110-validation-throughput/report.md#stopped-root-recovery-funding-and-reset-authority-reads--2026-09-16)
+for logs and the retained earlier high-bound continuation rejection.
+
+Toko feedback advanced to `5fb157bf1dd1c6fa34bbd42341af541c44894b0174fe9c828e0829561d4c17ce`.
+Complete live recovery forecasts and representative deployment-speed evidence
+remain open. RF2 remains preserved and sequenced before RF3. Persisted Registry
+prefixes need the existing upstream collector's API; Canic must not duplicate
+that authority owner. The complete batch is not yet push-ready; the .20 draft
+is updated and packages remain .19. No broad gate or publication ran.
+
+## CANIC-139 deployment credential exclusion — 2026-09-16
+
+Toko feedback is unchanged at SHA-256
+`62e20bfa84b2586971051f279b51221edef50414c42c06487190568722065f92`.
+Build subprocesses now remove inherited `CANIC_ICP_IDENTITY_PASSWORD_FILE`;
+complete-build and Candid-extraction identities and diagnostics exclude the same
+key. Cargo, compiler/cache probes, Wasm tools, provenance and tool acquisition
+share the boundary. Every other inherited environment key remains bound.
+Deployment identity unlocking, exact release/output checks and source-drift
+rejection are unchanged. This is an environment contract, not a build sandbox.
+
+Isolated child invocations qualify changing, removing and restoring the credential:
+real build.rs/rustc and a native extractor see no inherited credential; compiler
+Wasm stays identical; the same synthetic sealed release is found before Cargo.
+A genuine build-script input, dependency source and configuration each invalidate
+reuse. This uses a minimal synthetic dependency workspace and release manifests;
+it does not measure production Fleet or Toko build time. The affected build/tool/
+provenance/identity selection passes 115 tests, with one existing real-extractor
+qualification ignored. One cache-probe assertion failed in the initial selection;
+its diagnostic now preserves the actual typed error, and the same selection
+passes on rerun. The initial cause remains unconfirmed. Host all-target/all-feature
+Clippy with warnings denied passes after private-module visibility cleanup.
+Logs: `/tmp/canic139-build-environment-regression-retry.log` and
+`/tmp/canic139-build-environment-clippy-retry.log`; the initial failure is retained
+in `/tmp/canic139-build-environment-regression.log`.
+
+The .20 changelog and build documentation are updated; packages remain .19.
+The accepted batch remains open for management-only funding protection, complete
+recovery forecasts and measured remote-call reductions. RF2 remains preserved;
+downstream adoption and complete deployment-speed qualification remain separate.
+No broad validation, version bump, commit, push, deployment or sibling mutation ran.
+
+## CANIC-156 funding fence and CANIC-160 wait output — 2026-09-16
+
+Fresh read-only Toko feedback advanced to SHA-256
+`62e20bfa84b2586971051f279b51221edef50414c42c06487190568722065f92`.
+The new request is unchanged provisioning-output suppression; admission remains
+fixed locally as recorded below.
+
+Before issuing a native or estate credit to a Root/Coordinator that has a reviewed
+reinstall ahead of it, the host now verifies source management authority and the
+exact operation's existing seal. A changed module, controller set, recipient,
+subnet, status or seal rejects before credit. The plan includes the additional
+management/status observation allowance. Successor funding after replacement
+skips the old seal; this guard does not add protocol authority to management-only
+recovery, pause an unverified installed runtime or protect external top-ups.
+
+The CLI now emits meaningful progress changes immediately and unchanged waits
+only on the first observation at least 30 seconds after the previous output.
+Elapsed time alone is excluded from change detection. Text and JSON preserve
+current elapsed/pending phase details; funding, review, terminal and error output
+remain immediate. No host polling or recovery behavior changed, and this is not
+a deployment-duration improvement.
+
+Five new funding-boundary tests, 17 existing reinstall regressions and 26 Fleet
+CLI tests pass. The existing five-Workload/one-Ready PocketIC journey now also
+proves a durable pre-payment intent, zero credit after explicit Root seal removal,
+resealing the same operation, one native withdrawal after losing its successful
+response, and rejection of child grants while sealed. It then completes the
+existing interrupted installs, separately reviewed descendant funding, two
+deliberate wipes, row reset, conservation and effect-free replays. The fixture
+counts the pre-reset credit in the operation's full operator debit. An initial
+run correctly rejected an invalid fixture minimum above its initial allocation;
+the corrected configured pair passes. This is one current-protocol Root native
+credit, not live Coordinator/estate-credit coverage, management-only protection,
+mainnet qualification or a deployment-speed measurement.
+
+Host/CLI and internal-testing all-target/all-feature Clippy with warnings denied
+pass. Logs: `/tmp/canic156-funding-seal-unit.log`,
+`/tmp/canic156-reinstall-regression.log`, `/tmp/canic160-progress-cli.log`,
+`/tmp/canic156-160-clippy.log`, `/tmp/canic156-sealed-funding-pocketic-retry.log`
+and `/tmp/canic156-sealed-funding-clippy.log`. The exact selected PocketIC case
+passed in 637.07 seconds (656 seconds for its runner, including setup/builds).
+Targeted runs disabled the compiler wrapper after the local sccache socket
+returned `Operation not permitted`.
+
+The .20 draft includes both fixes; packages remain .19. The full accepted batch
+remains open: complete live forecasts, management-only funding protection,
+controlled build subprocess environment and measured remote-call reductions
+remain. RF2 stays separately preserved. No broad validation, version bump,
+commit, push, live deployment or sibling mutation ran.
+
+## CANIC-108 admission interface and response correction — 2026-09-16
+
+New Toko feedback SHA-256
+`5ac3702fdf5fd18efc2b19cc2ed5b9f5780518d6c02985a91ba6a0521e9beac6`
+reproduced admission's mutable-sidecar lookup on released .19. The shared
+admission connection now uses the terminal selected release, with finalized
+manifest and participant module/role/profile verification. A real CLI probe
+then exposed redundant `Result` decoding in five admission calls; those now
+consume the shared transport's already-unwrapped response.
+
+Ten binding regressions, six admission/Medic tests, scoped Clippy and the existing
+four-Workload/four-Failed PocketIC recovery case pass. That case additionally
+proves ordinary admission plan/apply/status/replay, one generation advance and
+the added Principal, with no environment-local Candid copies. Its admission
+catalogue has one Root and zero managed participants, so application ingress,
+multi-Root and downstream release acceptance remain separate. The .20 draft
+includes the fix; packages stay .19 and the full batch remains open.
+
+Continue with current-source recovery headroom protection through the existing
+seal owner, then the accepted build-environment and remote-call speed candidates.
+Retain management-only authority boundaries for an unreadable installed module;
+do not add predecessor-protocol negotiation. RF2 remains preserved.
+
+## Native top-up observation contraction — 2026-09-16
+
+CANIC-160's duplicate pre-withdrawal read is removed through the existing effect
+executor. Ops captures a new intent and its first native-funding observation;
+workflow persists intent before payment and consumes that observation once.
+No balance cache crosses an effect or restart. All 58 selected native workflow
+tests pass. The matched four-Workload/four-Failed PocketIC case preserves exact
+withdrawal counts, lost-response recovery, conservation and replay with identical
+Wasms. Funding reads fall 13 to 9 (52 to 36 remote calls); measured read time is
+10.69s / 7.14s, and the live journey excluding artifacts is 78.19s / 75.86s.
+One local pair does not establish mainnet or whole-release improvement.
+
+The baseline also exposed direct targeted runs bypassing the stable cache wrapper.
+The scratch runner now selects it when no wrapper is explicit; its existing
+executable contract tests cover selection and explicit/empty overrides. The .20
+draft remains open for the previously recorded recovery and throughput scope;
+RF2 is preserved and package versions remain .19.
+
+The final downstream scan changed to SHA-256
+`af360d5009c2be2693edac2fd0e35c594f4a3c09dfc58ef655e1dcfa6adf5406`,
+Toko commit `3e2d16c8cf77b30407ce7893a401a24f2eeef753`. Its staging
+latency receipt adds reasonable CANIC-139/160 candidates, not proven removable
+time. Sequence the next bounded assessment around a controlled build environment:
+deployment credentials may leave the fingerprint only when they also leave every
+relevant build subprocess, with unchanged-repeat and real-input invalidation
+proof. Investigate Registry restart reuse at the existing `ic_query` source
+boundary, with corrupt-prefix and disagreeing-head rejection; no sibling mutation
+is authorized and no duplicate Canic collector should be introduced. Attribute
+per-effect issue/await/receipt costs before considering mutation batches. Preserve
+dependency order, current authority, individual receipts and interruption recovery.
+Typed terminal projection remains Canic-owned evidence with downstream alias
+application; do not create a second executor. These larger candidates remain
+separate from the completed native top-up slice.
+
+## Rejection diagnostics and authority funding admission — 2026-09-16
+
+CANIC-139 now retains optional bounded post-build rejection evidence under the
+existing build-reuse owner. Three complete-build tests qualify path/fingerprint
+evidence, successful-retry retention, invalid diagnostic isolation and original
+typed-error preservation when persistence is unavailable. This does not prove
+the historical Toko Translation cause.
+
+CANIC-156's seal review now requires each Root and Coordinator to cover its own
+unchanged conservative allowance. Native cases reject either deficient authority
+despite aggregate surplus and admit exact individual headroom. The existing Root
+restore PocketIC case proves ordinary grants are fenced before/after a top-up,
+explicit live resume permits funding, repeated requests do not credit twice and
+snapshot restoration preserves the fence. Automatic management-only recovery
+protection and complete live successor forecasts remain open. Reuse the existing
+authority owner for current-source preparation; do not add predecessor-protocol
+fallbacks or assume a read-only review pauses funding.
+
+Scoped host/internal-testing all-target/all-feature Clippy passes. The .20
+changelog is updated; versions remain .19, RF2 is preserved, and the accepted
+throughput/recovery batch is not yet complete. No broad gate or publication ran.
+
+## Startup forecast and build-input continuation — 2026-09-16
+
+CANIC-156 now reports configuration-bound startup minimum, continuation steps and
+allowance, configured minimum and explicit reuse assumptions before Root reinstall.
+The same helper feeds prepayment. This completes the requested attributable
+forecast slice; protection from concurrent child grants and a complete live quote
+remain separate accepted work. The existing nineteen-Workload/five-Ready PocketIC
+reinstall journey passes with added pre-mutation forecast checks and unchanged
+authority rejection, lost-response recovery, conservation and terminal replay.
+
+CANIC-139 observes retained generated-source exports before compilation and
+classifies existing paths against resolved output roots. Twenty-one reuse tests
+cover cold/warm generated catalogue changes, missing dependency records, foreign
+inputs and parent traversal. Latest Toko feedback SHA-256 is
+`e314310837501adce7d84925504e217c0c80540f73891325b1082e323a3401ef`;
+its new Translation rejection is not reproduced by current source/input evidence.
+Do not claim the historical first-build cause is established or weaken drift checks.
+
+The same live journey attributes configured inspection latency: six 52-call local
+observations take 4.06–4.61s, with median protected-update latency 401ms versus
+78ms reserve preflight across 163 pairs. Temporary probes were removed. Further
+speed work should investigate the protected-call path while preserving its safety
+bounds; these timings are neither mainnet qualification nor a matched speedup.
+The .20 draft remains the current batch; RF2 stays preserved and versions stay .19.
+
 ## Release-test throughput follow-up — 2026-09-16
+
+The next bounded transport change consolidates three temporary argument writers
+under ICP and removes per-call disk flushes from disposable invocation files.
+Private creation, complete child reads, cleanup, Fleet argument bounds and
+durable journal writes remain qualified. Fifty-six selected native tests,
+host all-target/all-feature Clippy and the matched four-Workload/four-Failed
+PocketIC journey pass. Wasms and all 224 observation calls match; the small
+21.522s / 21.202s observation difference does not establish a deployment speedup.
+The isolated file probe shows the intended I/O reduction. Configured inspection
+already runs four-wide; larger gains need further cost attribution, without
+skipping per-target reserve checks. The throughput batch and .20 draft stay open.
+
+Fresh Toko feedback at SHA-256
+`79d5292f7ca93d0f79de8d77ce399dc2feb04e2ab4a27e067ae34e8b397eb233`
+adds CANIC-175 mainnet restoration acceptance: ten successful targets, none
+omitted/unconfirmed and no reconciliation failures. This is released-.19
+evidence, not a new defect or injected partial-failure qualification.
+
+Fresh CANIC-160 mainnet evidence prioritizes retained pool observation cost.
+PendingReset/Failed balances now use the existing four-wide collector while
+retaining every reserve/authority check and fresh observation scope. The same
+four-Workload/four-Failed PocketIC recovery journey passes before/after with
+identical Wasms and call counts. Pool-balance time falls 8.112s to 2.579s; the
+live journey excluding artifacts falls 84.337s to 79.303s (6.0%, one pair).
+Configured-canister mainnet latency and total release duration remain separate
+acceptance. The two new native cases cover bounded execution, failed-batch
+drainage, error ordering, unchanged failed inventory and fresh retry balances.
+
+CANIC-139's controlled linked-output probe reproduces foreign-path emission and
+overwriting another copy's generated file. Generation now rejects that link
+early, and fixture persistence names the exact linked path, including `.canic`.
+This does not establish the historical downstream copy sequence. Normal output
+repair/reuse remains qualified. Dependency records also reuse a file's first
+observation only within the current snapshot; a collector-only comparison keeps
+all 780 paths/hashes and lowers median time 348ms to 163ms. Nine fixture tests,
+13 build-support tests, two build-macro integration tests and 19 reuse tests pass.
+The .20 draft includes these bounded changes; RF2 stays preserved and the larger
+throughput objective remains open. No new patch version or publication occurred.
+
+The .20 request-process continuation is qualified: two default Tokio workers
+reduce measured observation time from 17.654s to 15.432s across the same 169
+calls in the existing four-Component/four-Ready recovery journey. Explicit
+settings and replica-start contexts are preserved. Wasms, recovery, conservation
+and replay match; full live-journey time is essentially unchanged. A preceding
+concurrent partition-read experiment was discarded after no measured gain.
+Forty ICP tests, 242 Fleet native tests, focused PocketIC and host/internal
+all-target/all-feature Clippy pass. The throughput report retains exact inputs.
+
+Fresh CANIC-156 feedback also exposed misleading Root-reinstall headroom
+diagnostics and cross-Root aggregation. Per-Root admission and typed diagnostics
+now retain the original conservative bound and actual effect count. Recovery
+funding protection, startup/continuation breakdowns and complete forecasts remain
+separate accepted follow-ups; RF2 is preserved. CANIC-139's new isolated-build
+report names generated inputs in the original checkout. Normal first-build
+runtime/declaration output is qualified, foreign inputs remain checked, and
+cache-isolation guidance is documented. The precise foreign-path producer still
+needs controlled reproduction. These completed slices extend the .20 draft;
+the full throughput batch remains open. No full-gate speedup is claimed.
+
+CANIC-160's activation progress request is now implemented in the same .20 batch.
+The existing typed observation supplies phase and bounded Root/Component counts;
+existing waiting events include monotonic elapsed seconds for the current effect
+or terminal check in this invocation. No additional polling, durable authority
+or completion/retry semantics changed. The 242-test Fleet host selection,
+18-test Fleet CLI selection, eight post-cleanup provisioning regressions and
+host/CLI all-target/all-feature Clippy pass. The changelog documents the current
+Rust/JSON progress-shape change. Downstream live acceptance and matched latency
+evidence remain separate. This slice is complete; the full throughput batch stays
+open for terminal-inventory and representative subprocess-cost investigation.
+
+The .20 continuation removes repeated Store template-status queries within one
+protocol compilation, retaining exact query identity, per-action Candid checking
+and fresh evidence across plans, retries and execution. Nineteen native protocol
+tests, scoped host Clippy and the existing mixed-topology PocketIC case pass.
+Both selected build sets retain all sixteen raw Wasm hashes. In one matched pair,
+the same 27 planning observations use 430 calls instead of 690, taking 42.305s
+instead of 61.232s. Other observation counts and calls remain identical; the live
+journey excluding artifacts is 4.7% shorter. The throughput report records cold
+build differences and CPU-accounting limitations. The slice and .20 changelog
+are complete, while the broader speed batch remains open. Toko's later live
+reinstall verifies CANIC-150 as well as CANIC-014. Its CANIC-160 activation detail
+is addressed above. Matched downstream latency evidence remains separate;
+no new release blocker was found.
 
 Retained-asset inspection during activation reset now uses the existing four-wide
 observation runner with fresh reserve/controller/module/cycle checks, drained

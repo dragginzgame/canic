@@ -70,8 +70,24 @@ pub fn compile_role_build_sources(
 }
 
 /// Preserve unchanged generated source timestamps so output repair watches settle.
+///
 /// Missing or different source is recreated from the current configuration.
+/// Linked output files reject before reading or writing another checkout's source.
 pub fn write_build_source_if_changed(path: &Path, source: &str) -> io::Result<()> {
+    match fs::symlink_metadata(path) {
+        Ok(metadata) if metadata.file_type().is_symlink() => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!(
+                    "generated build source is a symlink: {}; use an independent Cargo target/build directory",
+                    path.display()
+                ),
+            ));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
     match fs::read(path) {
         Ok(existing) if existing == source.as_bytes() => return Ok(()),
         Ok(_) => {}
@@ -243,6 +259,47 @@ enabled = false
 component_role = "app"
 maximum_instances = 1
 "#;
+
+    #[cfg(unix)]
+    #[test]
+    fn generated_source_links_never_reuse_or_overwrite_their_target() {
+        let root = std::env::temp_dir().join(format!(
+            "canic-generated-source-links-{}",
+            std::process::id()
+        ));
+        fs::create_dir_all(&root).unwrap();
+        let original = root.join("original.rs");
+        let generated = root.join("generated.rs");
+        fs::write(&original, "original").unwrap();
+        std::os::unix::fs::symlink(&original, &generated).unwrap();
+        for candidate in ["original", "changed"] {
+            assert_eq!(
+                write_build_source_if_changed(&generated, candidate)
+                    .unwrap_err()
+                    .kind(),
+                io::ErrorKind::InvalidInput
+            );
+            assert_eq!(fs::read_to_string(&original).unwrap(), "original");
+            assert!(fs::symlink_metadata(&generated).unwrap().is_symlink());
+        }
+        fs::remove_file(&original).unwrap();
+        assert_eq!(
+            write_build_source_if_changed(&generated, "new")
+                .unwrap_err()
+                .kind(),
+            io::ErrorKind::InvalidInput
+        );
+        assert!(!original.exists());
+        fs::remove_file(&generated).unwrap();
+        write_build_source_if_changed(&generated, "local").unwrap();
+        let modified = fs::metadata(&generated).unwrap().modified().unwrap();
+        write_build_source_if_changed(&generated, "local").unwrap();
+        assert_eq!(
+            fs::metadata(&generated).unwrap().modified().unwrap(),
+            modified
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[test]
     fn canonical_role_contract_marker_is_required_only_for_wasm_builds() {

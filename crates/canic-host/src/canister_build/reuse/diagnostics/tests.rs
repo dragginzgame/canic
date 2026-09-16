@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
-use std::{collections::BTreeMap, fs};
+use std::{collections::BTreeMap, env, fs};
 
 #[test]
 fn isolated_invocations_report_a_synthetic_environment_change_and_repeat_exactly() {
@@ -8,7 +8,8 @@ fn isolated_invocations_report_a_synthetic_environment_change_and_repeat_exactly
     const INPUT_KEY: &str = "CANIC_TEST_SYNTHETIC_BUILD_INPUT";
     if let Some(root) = env::var_os(CHILD_ROOT) {
         let root = PathBuf::from(root);
-        let (environment, environment_keys) = environment_evidence(env::vars_os().collect());
+        let (environment, environment_keys) =
+            environment_evidence(crate::build_environment::inputs());
         InputDiagnostics {
             schema_version: 1,
             environment,

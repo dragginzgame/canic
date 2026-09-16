@@ -1,5 +1,792 @@
 # Release-test throughput qualification
 
+## Stopped-Root recovery funding and reset authority reads — 2026-09-16
+
+Canic base: `45db483d08213ad0286dc17726b2ee788cd3ec1e`, packages .19,
+open .20 draft. Qualification includes existing dirty work and IcyDB 0.257.19;
+it is not an immutable release receipt. The read-only Toko feedback digest is
+`5fb157bf1dd1c6fa34bbd42341af541c44894b0174fe9c828e0829561d4c17ce`.
+
+### Behavior and accounting
+
+The existing Root prerequisite compiler inserts one native Fund between Stop
+and Reinstall only when required. With `p = observation_bound + update_bound`,
+the Root must already cover `p` to stop. A three-effect reset needs `3p`;
+when native balance `b < 3p`, its reviewed credit is `(3p - b) + p`, its
+expected balance is `4p`, and its total burn allowance is `4p`. Each payment
+adds the selected Ledger fee to the operator debit. Another Root's balance
+does not pay this Root's initial stop requirement. These are conservative
+allowances, not predicted consumption or a complete successor quote.
+
+Before initial Stop, apply validates all payment arithmetic, the exact Ledger
+fee, the unchanged observed operator account and coverage of the full debit.
+Before Fund, it checks the installed Principal/module/controllers/subnet,
+Stopped status, retained pre-payment balance and remaining reviewed margin.
+A restarted Root, missing/inconsistent pre-payment evidence, changed fee or
+excessive new burn cannot receive the credit. Retry keeps the exact withdrawal
+identity and does not demand the already-spent operator balance again. After
+install/start, terminal verification checks the historical funding receipt
+and retained balances, followed by whole-operation conservation. It does not
+mistake new-runtime consumption for an uncompleted old payment.
+
+The source-bound activation compiler now retains the reset's funding and fee
+budgets and adds its extra paid-effect burn allowance. Its preceding preparation
+still transfers no funds and retains its former unfunded headroom requirement.
+Native policy regressions qualify this branch; the PocketIC case below qualifies
+the management-only reset branch. No new executor, journal schema, protected
+predecessor protocol, production canister behavior or reduced burn bound was added.
+
+### Focused evidence
+
+- Final host selection: 23 passing tests in
+  `/tmp/canic156-160-final-host-refactor.log`. Includes per-effect authority,
+  initial account/fee coverage, inconsistent plan and retained prebalance
+  rejection, lost-response retry admission, activation accounting, settlement,
+  current-source seal guards and install evidence.
+- Host/internal-testing all-target/all-feature Clippy with warnings denied:
+  `/tmp/canic156-160-final-clippy-pass.log` passes.
+- The existing `generated_reinstall_recovers_lost_install_and_reaches_working_fleet`
+  case uses its local audit Root to reduce native balance to 8T while retaining
+  ordinary 2T observation/update bounds. It proves zero withdrawals after
+  controller or restarted-Root drift, durable Stop/Fund intent, one successful
+  withdrawal despite a lost reply, interrupted reinstall recovery, prerequisite
+  replay, full nineteen-Workload/five-Ready convergence, six depleted assets,
+  exact operator debit accounting and terminal effect-free replay.
+  Final result: PASS, 423.08 seconds for the case and 477 seconds for its runner.
+  Final log: `/tmp/canic156-stopped-root-pocketic-final-retry.log`.
+  This is local fixture evidence with a mocked Ledger and an instrumented audit
+  Root; it is not a mainnet deployment or exact production Root artifact.
+
+An earlier version forced funding by inflating burn bounds to a fraction of
+Root balance. Its new stop/payment assertions passed, but a later successor
+review rejected `InsufficientCycleConservation` (available 13344913560359310,
+required 14617230696448900, shortfall 1272317136089590). Retain
+`/tmp/canic156-stopped-root-pocketic.log` as that limit's evidence; the passing
+ordinary-bound fixture does not establish acceptance of this high-bound case.
+The first final launch failed before any test because the sandbox could not bind
+PocketIC's localhost socket; the final retry used the required local-server access.
+
+### Call-count qualification and remaining work
+
+`reinstall_authorities` now completes version evidence from the Root management
+status already read in that inspection. Missing versions retain the management
+fallback. A matched fake-ICP transport fixture observes:
+
+| Inspection | Remote attempts | Status target sequence |
+| --- | ---: | --- |
+| Before | 5 | Root, Coordinator, Root, Store |
+| After | 4 | Root, Coordinator, Store |
+
+Both include the same operator-balance observation. The next pass changes Root
+module/version/status/controllers, forces Store-read failure, then retries and
+sees fresh values. Baseline log: `/tmp/canic160-authority-pass-baseline.log`;
+final candidate log: `/tmp/canic156-160-final-host-refactor.log`.
+No cache crosses a pass or mutation. This removes one call per inspection,
+not a measured percentage of whole-deployment latency.
+
+RF3 remains incomplete: the current startup scenario and known top-ups do not
+collect budgeted descendant live usage/reservations or establish complete recovery
+demand. Preserve RF2's accepted sequence before RF3. Toko's representative
+24-pool/nine-workload comparison and further paid-effect timing remain open.
+Its persisted Registry-prefix candidate also needs an upstream-owned API:
+Canic's `MainnetCatalogClient` wraps ic-query 0.43.1's `LiveSubnetCatalogSource`,
+whose acquisition/prefix state is private and memory-only. Fresh-head/agreement,
+restart, corrupt-prefix and endpoint-disagreement qualification must accompany
+that extension; a second Registry collector in Canic is not proposed.
+
+The .20 draft and operator docs are updated. The complete recovery/throughput
+batch is not yet push-ready. No broad suite, version transaction, commit,
+publication, live deployment or sibling mutation ran.
+
+## CANIC-139 deployment credential exclusion — 2026-09-16
+
+Toko feedback is unchanged at SHA-256
+`62e20bfa84b2586971051f279b51221edef50414c42c06487190568722065f92`.
+Build subprocesses now remove inherited `CANIC_ICP_IDENTITY_PASSWORD_FILE`;
+complete-build and Candid-extraction identities and diagnostics exclude the same
+key. Cargo, compiler/cache probes, Wasm tools, provenance and tool acquisition
+share the boundary. Every other inherited environment key remains bound.
+Deployment identity unlocking, exact release/output checks and source-drift
+rejection are unchanged. This is an environment contract, not a build sandbox.
+
+Isolated child invocations qualify changing, removing and restoring the credential:
+real build.rs/rustc and a native extractor see no inherited credential; compiler
+Wasm stays identical; the same synthetic sealed release is found before Cargo.
+A genuine build-script input, dependency source and configuration each invalidate
+reuse. This uses a minimal synthetic dependency workspace and release manifests;
+it does not measure production Fleet or Toko build time. The affected build/tool/
+provenance/identity selection passes 115 tests, with one existing real-extractor
+qualification ignored. One cache-probe assertion failed in the initial selection;
+its diagnostic now preserves the actual typed error, and the same selection
+passes on rerun. The initial cause remains unconfirmed. Host all-target/all-feature
+Clippy with warnings denied passes after private-module visibility cleanup.
+Logs: `/tmp/canic139-build-environment-regression-retry.log` and
+`/tmp/canic139-build-environment-clippy-retry.log`; the initial failure is retained
+in `/tmp/canic139-build-environment-regression.log`.
+
+The .20 changelog and build documentation are updated; packages remain .19.
+The accepted batch remains open for management-only funding protection, complete
+recovery forecasts and measured remote-call reductions. RF2 remains preserved;
+downstream adoption and complete deployment-speed qualification remain separate.
+No broad validation, version bump, commit, push, deployment or sibling mutation ran.
+
+## Native funding preparation contraction — 2026-09-16
+
+Base remains `45db483d08213ad0286dc17726b2ee788cd3ec1e`, packages .19,
+with the dirty .20 batch preserved. CANIC-160 requested sharing duplicate
+pre-withdrawal observations within one fresh effect boundary. The executor now
+gets a new native-funding intent's starting balance from its first protected
+effect observation. Ops constructs the record; workflow persists intent before
+withdrawal and consumes the observation once. A retained intent has no in-memory
+observation to reuse. Post-payment checks remain fresh and receipt-bound. No paid
+effect is parallelized and no funding or burn bound changes.
+
+The first baseline failed during artifact construction because an implicitly
+selected sccache server retained `.tmp/test-runtime.tyouds`, already removed by
+the preceding test. Log: `/tmp/canic-160-funding-before.log`. The direct scratch
+runner now selects the existing repository wrapper when none is explicit,
+preserving explicit wrappers and explicit disabling. Both successful comparison
+runs use that corrected launcher and its stable socket/temp directory. The
+existing executable release-integrity contract covers selection, empty/custom
+overrides and persistent cache lifetime; `/tmp/canic-160-scratch-guard.log` passes.
+This is a targeted launcher correction, not a fix for arbitrary external cache
+server environments. Native test incremental settings remain unchanged.
+
+Matched exact PocketIC case:
+`pic::fleet_registry::baseline::tests::four_workloads_and_four_failed_assets_repair_without_new_creation`.
+Logs are `/tmp/canic-160-funding-before-stable.log` and
+`/tmp/canic-160-funding-after.log`; both pass. The case retains four withdrawals,
+zero transfers, no new creation during repair, lost funding/reset responses,
+reconstructed adapters, eight retained assets, cycle conservation and effect-free
+replay. The four raw Wasms are byte-identical, under fixture release identity
+`a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae`.
+Fast profile, Rust 1.98.1, ICP CLI 1.5.0 and PocketIC 16.0.0 are unchanged.
+
+| Scope | Baseline | Candidate |
+| --- | --- | --- |
+| Funding inspections across four top-ups and recovery | 13 | 9 |
+| Remote attempts inside those inspections | 52 | 36 |
+| Sum of funding inspection time | 10.689458s | 7.135785s |
+| Median individual inspection | 849.319ms | 752.499ms |
+| Individual inspection range | 755.022–917.948ms | 734.339–859.465ms |
+| Live journey excluding initial artifacts | 78.187370s | 75.863417s |
+| Initial artifacts | 54.936221s | 31.093670s |
+
+Four fresh intents remove one four-call inspection each. These inspection counts
+are separate from the unchanged 80 observation-stage records and their 224
+remote attempts; they are not whole-journey call totals. Initial build/cache and
+compilation costs differ, so runner totals are not a controlled speed measure.
+The live journey is about 3.0% lower in this one pair; do not extrapolate to
+mainnet, 24-asset estates or full release duration. Temporary timing probes were
+removed. Summary: `/tmp/canic-160-funding-summary.json`; inventories:
+`/tmp/canic-160-funding-{before,after}-wasms.json`, equal SHA-256
+`1c49b2bacd5dcbd34c080682c36ab93e6d754f4110f1ec82378df90f2ee782bd`.
+
+All 58 selected native Fleet workflow tests pass (two governed PocketIC cases
+remain ignored in that native selection), including durable intent before payment,
+fresh retry after a lost receipt and observation failure before any funding intent
+or payment. Log: `/tmp/canic-160-funding-native.log`. Final host all-target/all-feature
+Clippy passes in `/tmp/canic-160-funding-clippy.log`, as do scoped formatting,
+layering, shell lint, whitespace and .20 release-notes preflight. Final source
+SHA-256: effect preparation
+`02abdb0c86d986a5503ce23ef89baae2de465c7325e80f8142dd4fb80e335d67`,
+workflow `7017e7eb333ee56ca8b807af2f3b66134a0612f11d46f9147e10b405e7988ad1`,
+scratch runner `f38d095517b67e927659d1d8bcbf9b5c0a3710a6386fadca233f39431901072d`.
+
+During closeout Toko added staging latency feedback at commit
+`3e2d16c8cf77b30407ce7893a401a24f2eeef753`, feedback SHA-256
+`af360d5009c2be2693edac2fd0e35c594f4a3c09dfc58ef655e1dcfa6adf5406`.
+Receipt: `../toko-miner/docs/upstream/artifacts/staging-0.2.10-latency-review-2026-09-16.json`.
+Its credential-environment separation, incremental Registry refresh, effect
+attribution and narrower observation requests remain candidates. Their reported
+category sums are not removable wall time. Operator docs now explain non-zero
+phase time with zero newly issued remote calls. The design tracker records the
+remaining boundaries; no sibling or mainnet changes were made.
+
+## Rejection evidence and sealed funding — 2026-09-16
+
+Base remains `45db483d08213ad0286dc17726b2ee788cd3ec1e` (0.110.19), with
+the existing dirty .20 work preserved. Read-only Toko feedback remains at
+`e314310837501adce7d84925504e217c0c80540f73891325b1082e323a3401ef`.
+
+CANIC-139 post-build comparison failures now attempt to retain a maximum 256 KiB
+record under `.canic/build-reuse/rejected-<release-build-id>.json`. Evidence
+contains snapshot fingerprints/counts, the failing path's available snapshot
+values and before/after invocation/output-root locations. It contains no source
+contents or environment values. Null input values mean not in that inventory;
+fresh rechecks of dropped paths are not represented as final-inventory entries.
+Diagnostics are optional and cannot supply cache authority. A successful retry
+preserves the failed comparison. Three complete-build tests pass, covering
+changed-source evidence, no successful record on rejection, missing/unwritable
+diagnostics, final symlink refusal and verified-hit independence from corruption:
+`/tmp/canic-139-rejection-evidence.log` (5.55s execution).
+
+CANIC-156 seal preparation previously pooled Root and Coordinator balances while
+authorizing no transfer. It now rejects each authority below its individual
+`update + 8 × observation` allowance. The conservative bound is unchanged. Two
+native preparation regressions pass in `/tmp/canic-156-seal-headroom.log`,
+including surplus on either other authority and exact per-authority headroom.
+The first new fixture omitted the Root's topology parent; correcting that fixture
+made the test reach the intended funding boundary, with no topology relaxation.
+
+The exact existing PocketIC case
+`pic::fleet_registry::baseline::tests::restored_root_preserves_its_inventory_but_cannot_allocate`
+passes in `/tmp/canic-156-sealed-funding.log` (133.83s test execution; 199s runner
+wall time including compilation/fixture preparation). It rejects registered-child
+funding with typed `AUTHORITY_INACTIVE` before and after a 4T Root top-up, observes
+no child credit and less than 1B Root debit per rejection, resumes the live fence
+explicitly, permits the same 5T request and observes no second credit on replay.
+The restored snapshot retains the original physical inventory, suspended timers
+and sealed authority, rejects resume and rejects allocation. Top-up uses PocketIC
+native cycle injection: this is fence qualification, not Ledger receipt proof,
+automatic host protection, mainnet cost qualification or a speed comparison.
+
+Host and internal-testing all-target/all-feature Clippy with warnings denied
+passes in `/tmp/canic-139-156-clippy.log`. No production runtime behavior changes
+were needed for the live fence proof. Automatic pre-top-up protection for the
+management-only prerequisite, complete live forecasts and protected-call cost
+remain open; no predecessor protocol call or compatibility lane was introduced.
+
+## Build discovery and startup review — 2026-09-16
+
+Base is `45db483d08213ad0286dc17726b2ee788cd3ec1e` (0.110.19), with the
+existing dirty .20 work preserved. Toko feedback SHA-256
+`e314310837501adce7d84925504e217c0c80540f73891325b1082e323a3401ef`
+adds a 126-second release-build rejection for declaration `OUT_DIR/translations.json`.
+The read-only receipt is
+`../toko-miner/docs/upstream/artifacts/release-0.2.10-2026-09-16.json`, with log
+`/tmp/toko-0210-release-patch-retry.log`. Its rejected build is
+`46fec436bed3e8079a32cfa08d93e4615c46db51338339d5a072a53795f3a555`.
+
+The current Canic snapshot of that checkout names only the authored catalogue,
+not either generated copy (`/tmp/canic-139-translation-diagnosis.log`). The
+temporary read-only probe was removed. The retained Cargo regression now edits
+an authored catalogue before a warm build, verifies both generated copies really
+change, admits that build, and rejects later catalogue or generator edits.
+All 20 reuse cases pass (`/tmp/canic-139-final-reuse.log`). This does not reproduce
+or close Toko's latest historical failure: the pre-failure dependency inventory
+is not retained. Do not weaken source-drift admission or claim a retry proves cause.
+
+Separately, Canic now observes its three known path exports in retained Cargo
+build-script output before compilation. A real-Cargo fixture removes role `.d`
+records while retaining exports into another private checkout copy, verifies
+pre-build observation and successful unchanged regeneration, and still rejects
+newly discovered or subsequently edited foreign inputs. This handles that
+controlled discovery boundary, not arbitrary copied Cargo state. Source and
+generator bytes remain bound, and generated outputs are excluded only beneath
+the invocation's selected output roots.
+
+Inspection also found a concrete path-classification defect: the output-prefix
+check preceded canonicalization. It could misclassify an alias into an output
+tree as source, or skip an authored input reached through `target/../...`.
+Classification now resolves existing inputs and output roots first. A focused
+regression covers both directions, fresh authored-byte observations, unresolved
+missing parent traversal, and foreign generated files. This is an independently
+demonstrated boundary defect, not evidence that Toko's lost inventory used aliases.
+All 21 reuse tests pass after this correction
+(`/tmp/canic-139-resolved-reuse.log`).
+
+CANIC-156's review uses the same configuration-bound calculation as startup
+prepayment: `max(configured minimum, startup minimum + steps × (update + 3 ×
+observation))`. It exposes those parts before Root reinstall, with explicit
+fresh-child/full-publication assumptions and no reuse credit. Root allowances
+overlap the Fleet continuation ceiling. The projection grants no new funding,
+does not pause child grants or reserve balances, and excludes complete live
+successor funding/fees. Native forecast/prepayment, overflow, required-JSON and
+continuation-authority regressions pass, as do 18 Fleet CLI tests. Logs are
+`/tmp/canic-156-forecast-regressions.log`,
+`/tmp/canic-feedback-139-156-tests.log` and `/tmp/canic-156-forecast-cli.log`.
+
+The existing nineteen-Workload/five-Ready production-adapter PocketIC case
+`generated_reinstall_recovers_lost_install_and_reaches_working_fleet` passes
+(`/tmp/canic-156-160-live.log`, 496.79s test execution). Added assertions prove a
+nonempty Root startup forecast before any reset mutation, zero prerequisite
+funding/continuation authority, and the configured per-step burn. Existing
+controller-drift rejection, lost-install-response recovery, successor convergence,
+cycle conservation and effect-free replay all remain in that same journey.
+
+Temporary timing probes, removed after the run, attribute 163 successful
+inspection pairs: median reserve-preflight path 78.253ms, median protected-update
+path 401.031ms, and median complete pair 473.169ms. These include host transport,
+process and replica costs; they are not IC instruction measurements or isolated
+CPU timings. The 53 nontrivial preparation batches (over 1ms) have median 82.738ms.
+Six full configured-estate observations each make 52 remote attempts and take
+4.059–4.611s. Per-call durations overlap inside four-wide batches and must not be
+summed as wall time. Summary: `/tmp/canic-160-inspection-summary.json`.
+
+This is one local attribution run, without a matched baseline or mainnet candidate
+measurement. It supports investigating the protected-call path before more local
+preparation tuning, not removing reserve/authority checks or increasing concurrency
+without qualification. It does not explain Toko's 43–52s mainnet observations or
+establish a whole-release speedup. The probe-bearing platform/test diff SHA-256 was
+`f500d329517b9b4350b393cdd3008d54c5d6c87b7e5c692c008f210bdaabbfb3`.
+No permanent measurement framework or canister runtime change was introduced.
+
+After probe removal and path-boundary cleanup, scoped host/CLI/internal-testing
+all-target/all-feature Clippy passes with warnings denied
+(`/tmp/canic-feedback-final-clippy.log`). Formatting, layering, diff whitespace
+and the .20 release-notes preflight pass. Package versions remain .19; no broad
+gate, publication, deployment or sibling mutation ran. The remaining accepted
+work is recovery-funding protection, downstream first-build acceptance and
+further protected-inspection cost reduction, not an unrun broad gate alone.
+
+## Disposable Candid argument I/O — 2026-09-16
+
+Configured pool inspection already issues at most four target-specific
+preflight/inspection pairs concurrently. Source inspection found no basis for
+removing their live authority/reserve checks. This continuation instead removes
+an unnecessary host disk flush from temporary arguments: the three writers in
+typed Canic calls, raw ICP calls and Fleet initialization now share the ICP
+writer. Observatory uses that same owner. Each file is exclusively created,
+written completely and closed before the child opens it. Unix permissions stay
+`0600`, Fleet's 16KiB bound remains, and callers retain cleanup. Failed writes
+remove incomplete scratch. Durable intent, journal and artifact writers are
+unchanged. No protocol, IC call, timer or retry semantics change.
+
+The isolated probe extracts the two existing transport writer bodies and
+compares them with only `sync_all` removed. Each round creates, reads back,
+compares and removes 100 files; three rounds run per size on repository ext4
+scratch, with Rust 1.98.1 and `rustc -O`. Median per-file costs:
+
+| Writer / bytes | With disk flush | Without disk flush |
+| --- | ---: | ---: |
+| Typed Canic / 64 | 1.742ms | 0.051ms |
+| Typed Canic / 4KiB | 1.734ms | 0.051ms |
+| Typed Canic / 1MiB | 3.864ms | 1.088ms |
+| Raw ICP / 64 | 1.942ms | 0.055ms |
+| Raw ICP / 4KiB | 1.676ms | 0.055ms |
+| Raw ICP / 1MiB | 3.917ms | 1.061ms |
+
+This measures file I/O, excluding child startup and the network. The disposable
+probe is `.tmp/canic-argument-io-probe/probe.pl`, SHA-256
+`f11ef3101c29bdfd9de3b00a2c9bb616d514adcbde9de7fddc0d8ae947b621a1`.
+Raw logs are `/tmp/canic-argument-io-{protocol,raw}-{0,1}.log`; no benchmark
+framework or timing threshold was added to maintained tests.
+
+The exact existing PocketIC case
+`pic::fleet_registry::baseline::tests::four_workloads_and_four_failed_assets_repair_without_new_creation`
+passes before and after, including recovery, no-new-creation repair, conservation
+and effect-free replay. Both retain the same four raw Wasms and 80 observations /
+224 attempts, with every stage's call count unchanged. Observation totals are
+21.522s / 21.202s; the live journey excluding initial artifacts is
+79.537408s / 78.319863s. These small single-pair differences do not establish a
+reliable whole-journey gain. Initial artifacts differ (36.326525s / 14.411679s),
+and native compilation differs; runner totals 128s / 143s are not an attributable
+speed comparison. Keep the simpler shared writer and directly measured I/O
+reduction; mainnet and full-release improvements remain unmeasured.
+
+Both use base `45db483d08213ad0286dc17726b2ee788cd3ec1e` plus the preceding
+dirty .20 fixes, package .19, the same lock/config/release identity, Rust/Cargo
+1.98.1, ICP 1.5.0, PocketIC 16.0.0 and local/Fast Wasms. `Cargo.lock` remains
+`03de13af98c25e09813e1d5147ce8cd2983e1fd7e8328eeb679a08c913feda51`;
+`baseline.rs` remains
+`6212632868b6c6089b5aa0417d62d29ac9daa98abfab332977879787ca209b5e`.
+
+| Changed writer source | Before SHA-256 | Measured candidate SHA-256 |
+| --- | --- | --- |
+| Typed Canic | `4e4392d4abd7f7b54d2fb2d6f85d76d2271d1d6ab36dcfbc3579baab7dfce635` | `9d4b73f09455f7cec88c89800f6f70db8a7353b74fc66942d5938c121bbb42c7` |
+| ICP | `9a7cd8af7b38698e2703c05d621399d6d9d0926ce3b05c51b28532b120ae69c6` | `f2ede05f72b6317746e0a933c9a0aa60b11a39851c15354ccf48932d6bf128a7` |
+| Fleet | `87e88265a9a1617823477a92a4b6e8a49f658b0ae09ac2b3603d0455012837b2` | `d51073213acbc8944254eb920126ea8b535c5f6afbd9a5e4e226013c49e5f0cc` |
+
+All changed source identities are in `/tmp/canic-argument-{before,after}-identities.txt`.
+Live logs are `/tmp/canic-argument-live-{before,after}.log`; extracted phase and
+observation records are `/tmp/canic-argument-{before,after}-{phases,observations}.jsonl`.
+Wasm inventories are scoped to `test-runtime.sVqTyW` / `test-runtime.ORPjJu`,
+with equal normalized inventory SHA-256
+`bb7d54c5ee5251fa65c3ca44b3c91c953416aabab77b2d09ceab4c83c4f8020d`.
+The final lint-only visibility correction inside the private ICP module keeps
+the helper's crate-only re-export and behavior; final ICP source SHA-256 is
+`a3617d0d36c8192c3a23191f620b5b319377f15247ab0d532c27a87d32639535`.
+
+All 56 selected native tests and host all-target/all-feature Clippy pass. New
+coverage proves a child reads complete 1MiB Candid arguments, fresh paths for
+both call modes, cleanup after success/command failure/invalid response, and
+the exact Fleet size boundary. Existing private-file checks remain. Logs:
+`/tmp/canic-argument-{native,observatory,clippy}.log`.
+
+The final read-only Toko check advances to SHA-256
+`79d5292f7ca93d0f79de8d77ce399dc2feb04e2ab4a27e067ae34e8b397eb233`.
+Its new CANIC-175 entry confirms mainnet funding restoration across ten targets,
+none omitted/unconfirmed and no reconciliation failures. It adds released-.19
+acceptance, not a new blocker or injected mainnet partial-failure proof. Existing
+CANIC-139/156/160 boundaries remain. No sibling changes or mainnet actions ran.
+
+## CANIC-160 retained pool balance concurrency — 2026-09-16
+
+New Toko feedback records 24 retained canisters on released .19: configured
+observations take 43–52s with 52 remote attempts, and pool balances another
+11–13s. Source SHA-256 is
+`ddeb320f5df4b07b0ac2c0c2fcee9ff2973b80b46bab74409bb6142586ba7789`.
+This is mainnet baseline evidence, not a candidate deployment result. The
+pool-balance stage still inspected PendingReset/Failed assets sequentially.
+
+The candidate uses the existing four-wide inspection collector. It retains
+per-target reserve preflight, operator/Root/controller authority, the existing
+observation scope and exact cycle projection. It drains issued reads, validates
+in inventory order and publishes each batch's balances only after validation;
+a failure does not start the next group. Other lifecycle states are skipped.
+No calls are removed or shared across reviews, effects or retries.
+
+The existing exact PocketIC case
+`pic::fleet_registry::baseline::tests::four_workloads_and_four_failed_assets_repair_without_new_creation`
+passes before and after, including funding/recovery, repair without creation,
+conservation and effect-free replay. All four raw Wasms match. Both runs retain
+80 timed observations and 224 remote attempts, with identical counts per stage.
+
+| Scope | Baseline | Candidate |
+| --- | --- | --- |
+| Pool balances: 11 observations, 30 attempts | 8.112s | 2.579s |
+| All timed observations | 26.607s | 21.310s |
+| Live journey excluding initial artifacts | 84.337432s | 79.303343s |
+
+The pool stage is 68.2% lower; the live journey is 6.0% lower in this one pair.
+Initial artifacts take 41.611382s / 14.132044s, so total runner times (181s/147s)
+are not a controlled speedup measure. Keep this scheduling change. Mainnet
+candidate acceptance, the larger configured-canister cost and a full release
+duration remain unmeasured. Host timing does not measure IC instructions/cycles.
+
+| Input | SHA-256 |
+| --- | --- |
+| Baseline `ops/platform.rs` | `fe37d5c2d19a2446d69743912701b15a2f853706fc55b94fbf492296909c34be` |
+| Candidate `ops/platform.rs` | `61e42d48055693d18a1a1023252b62f6409ee38c7b932c2b817f624b0575d547` |
+| Shared `Cargo.lock` | `03de13af98c25e09813e1d5147ce8cd2983e1fd7e8328eeb679a08c913feda51` |
+| Shared `baseline.rs` | `6212632868b6c6089b5aa0417d62d29ac9daa98abfab332977879787ca209b5e` |
+| Shared normalized four-Wasm inventory | `938ecd4bbb3e99d745e26dc20ff499df60d52c3fca315ed6951a7861adef862e` |
+
+Both use the same local/Fast four-Workload configuration, .19 package versions,
+Rust/Cargo 1.98.1, ICP 1.5.0 and PocketIC 16.0.0. Configuration, release identity
+and individual Wasm hashes match the request-runtime experiment below. The
+baseline already includes the preceding .20 fixes and two-worker request default;
+only the host pool-balance scheduling and its native tests differ. Logs and
+extracted measurements are `/tmp/canic-pool-balances-{before,after}.log`,
+`/tmp/canic-pool-balances-{before,after}-{observations,phases}.json`,
+`/tmp/canic-pool-balances-{before,after}-identities.txt` and
+`/tmp/canic-pool-balances-{before,after}-wasms.normalized`. Artifact inventories
+are scoped to `test-runtime.s6y85o` / `test-runtime.KL4bG5`, respectively.
+
+Both new native tests pass. They prove nine selected assets across full/partial
+batches, skipped Workload state, drained failures, no failed-batch publication,
+inventory-order error selection and fresh retry balances. Log:
+`/tmp/canic-pool-balances-tests.log`. No broad gate or mainnet action ran.
+
+After qualification, all 244 selected Fleet native tests pass (two governed
+cases remain ignored), and Canic/host all-target/all-feature Clippy passes with
+warnings denied. The only lint correction was a paragraph break in the generated
+writer's API documentation; measured runtime/host behavior is unchanged. Logs:
+`/tmp/canic-speed-followup-fleet-tests.log` and
+`/tmp/canic-speed-followup-clippy.log`. Formatting, layering and release-note
+preflight pass; package versions remain .19 and the .20 draft is current.
+
+## CANIC-139 linked outputs and repeated dependency reads — 2026-09-16
+
+A controlled Cargo probe uses the exact generated-source writer body extracted
+from Canic, with the same absolute config environment watch, `OUT_DIR` output,
+canonicalization and exported include path. A regular copied target reruns the
+producer with a local path. Replacing only the generated output with a symlink
+emits the original checkout's path; changing the new checkout's config then
+overwrites that original output. The corrected writer rejects the link before
+reading or writing through it, including equal bytes and a dangling target.
+The original output remains unchanged. This is a reproduced hazard, not proof
+that Toko's retained state was created through this exact sequence. Existing
+Cargo metadata is not repaired or declared portable.
+
+The disposable probe stays inside Canic `.tmp/`, with no sibling writes.
+Its script is `.tmp/canic-139-relocation-probe/run.sh`, SHA-256
+`5fdead96e09b8f1a9135896ecfedb3cedd05737bec77b11e05906b1405071d87`.
+Baseline/candidate extracted writer units are
+`0b3caa45cbd54bd925d78beed75aca8a32a2bed5a6567a0e824887da8a75bf5a` /
+`286097ae62a089ae1263afc73614a15d3d38333f5e60a0de80e753debde41036`.
+Matched source directories end in `canic-139-relocation.jwmnby` and
+`canic-139-relocation.LbNgJo`. Logs:
+`/tmp/canic-139-relocation-{before,after}.log`; the candidate's expected Cargo
+exit 101 is the early linked-output rejection. This is a native Cargo producer
+probe, not composed-Wasm or downstream deployment qualification.
+
+Fixture persistence also distinguishes `FixtureArtifactError::Symlink` and
+names the offending component, including a `.canic` parent. Nine fixture tests,
+13 build-support tests and both real build-macro integration tests pass. The
+existing missing/tampered output repair and unchanged-timestamp checks remain.
+Logs: `/tmp/canic-139-{symlink-tests,source-tests,build-macro}.log`.
+
+The next change removes repeated hashing of a path while consuming Cargo
+dependency records. It uses only evidence already acquired in that same input
+snapshot, including complete earlier package scans. Each new snapshot starts
+empty and rechecks bytes. It neither admits unobserved external inputs nor
+retains source evidence between build invocations.
+
+Using the 16 retained top-level Fast dependency records in Canic's current
+target tree, three collector-only passes take 362/348/343ms before and
+162/163/169ms after. Median time falls 53.2%, saving 185ms for this step.
+All 780 paths and content hashes remain byte-identical. This is a small local
+verification improvement, not an end-to-end build or release comparison. The
+probe starts with an empty input map; additional reuse of package-scan evidence
+is not measured. A whole-workspace probe refused a `node_modules/.bin` symlink
+inside the frontend consumer example; that boundary was not bypassed. No broad
+validation or compiler benchmark ran. Temporary timing instrumentation was
+removed after the comparison; the regression retains only behavior checks.
+
+| Identity | SHA-256 |
+| --- | --- |
+| Collector before | `2ddfffe3ede630e709f7c5767530b1c2a728d21b7d172c43563e963867896e7f` |
+| Collector after | `21b2ef16d70afb65150574fbc9afac2e407357b92105ad40d3de6789ad5c4308` |
+| Shared dependency-record inventory | `190639372e8c61f638b8d1105535d2bb4e83b3538007d25f5e9bfe20b3538252` |
+| Both collected file maps | `aca3d1cf40def8fde3f3ac9019b1e40b8569b791878055886c3ce057c4f56c9a` |
+
+Logs/maps: `/tmp/canic-input-collection-{before,after}.log`,
+`/tmp/canic-input-collection-{before,after}-files.json`,
+`/tmp/canic-input-collection-{before,after}-records.sha256`.
+All 19 build-reuse regressions pass, including preservation of the first
+observation and fresh detection of later edits/deletion:
+`/tmp/canic-139-reuse-final.log`. Keep the optimization with its limited timing
+claim. Package versions and release identity policy are unchanged.
+
+## Request runtime and terminal inventory — 2026-09-16
+
+The existing exact live case
+`pic::fleet_registry::baseline::tests::four_workloads_refill_four_ready_with_lost_funding_and_creation_responses`
+qualifies both experiments below. It retains four top-level Components, four
+Ready assets, lost funding/creation responses, conservation and effect-free
+replay. Its nested funding adapter now uses the existing observation timing
+callback, also present in the measured baseline. No new measurement framework
+or recovery behavior was introduced.
+
+First, partition-status reads were moved into the existing four-wide runner,
+before the existing inventory inspections. Both live runs passed with identical
+Wasms and call counts, but the two terminal observations increased from 4.674s
+to 5.192s. The experiment was discarded. Final `current_inventory/mod.rs` is
+byte-identical to baseline, SHA-256
+`26eabd86477abcf2850e47bf2574f59010381c8cbd2450c53c62cdb58fffb0a8`.
+Logs: `/tmp/canic-inventory-{before,after}.log`; normalized Wasm inventories:
+`/tmp/canic-inventory-{before,after}-wasms.normalized`.
+
+Second, short-lived ICP request processes default to two Tokio workers when the
+operator has not set `TOKIO_WORKER_THREADS`. The measurement host exposes 64
+CPUs; the inherited setting was absent. Tokio's default otherwise follows
+available CPUs. A second worker leaves room for background I/O without creating
+a worker per CPU for each request. This is an overrideable request default,
+not a claim that two is globally optimal. Generic commands and replica startup
+retain their previous environment. The original serial partition path was
+restored before qualifying this candidate.
+
+| Observation scope | Baseline | Request candidate | Remote calls in each |
+| --- | --- | --- | --- |
+| All 65 timed observations | 17.654s | 15.432s | 169 |
+| Terminal inventory, two observations | 4.674s | 4.148s | 36 |
+| Protocol planning, six observations | 7.657s | 6.559s | 73 |
+
+Observation time is 12.6% lower in this one pair. Every stage retains its
+observation/call count. The live journey excluding its initial artifact phase
+is 125.393248s / 125.767792s: essentially unchanged. Cold/warm compilation
+differences invalidate total runner comparisons. There is no measured reduction
+of the complete 90-minute release gate. Keep the bounded request startup change
+for the observed request-overhead reduction; do not extrapolate it to the whole
+release or interpret host time as IC instruction/cycle measurements.
+
+Both use source base `45db483d08213ad0286dc17726b2ee788cd3ec1e`, current dirty
+Fleet fixes, Rust/Cargo 1.98.1, ICP 1.5.0, PocketIC 16.0.0 and local Fast Wasms.
+The measured source difference is confined to the four ICP adapter files.
+
+| Shared input | SHA-256 |
+| --- | --- |
+| `Cargo.lock` | `03de13af98c25e09813e1d5147ce8cd2983e1fd7e8328eeb679a08c913feda51` |
+| Timing-enabled `baseline.rs` | `6212632868b6c6089b5aa0417d62d29ac9daa98abfab332977879787ca209b5e` |
+| `four-workloads.toml` | `dc4740791789028dda0d219adb05390006baef34cd8e7b99e0cb1066c6a885cc` |
+| Normalized four-Wasm inventory | `938ecd4bbb3e99d745e26dc20ff499df60d52c3fca315ed6951a7861adef862e` |
+
+Release identity is
+`a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae`.
+All four raw Wasms match: application
+`6947231adb54d0f42475d2f0b79c84824ad59fb6eb5326fa54b4f8a941de8b22`, Coordinator
+`01f2b0161bb03e28d02ee81da04fe1f034e356c82a12bcff5a2ad007235a05fd`, Root
+`9521914e601807658ec792a2a1e97e3aea7edf06bb235b8626aa566764b962ff`, Store
+`e16d0d581bc394de5654b7ad1e1e4239e01805383a3a33f56cdd41f963b38175`.
+
+| ICP source | Before SHA-256 | After SHA-256 |
+| --- | --- | --- |
+| `command.rs` | `ef41d649c3ac922640b1f5b359575b8c66d6f38b2216657ca10cd097e4084813` | `e46060df2fca984d0fa71ba0cbe21128f73b11135465d1408aa0e5bf87236aa7` |
+| `identity.rs` | `0e99e0283ceda43c7773c3f000e238a79219800ff26d1a9f6d372978be8c259e` | `b4ca800b965d17ee8f0039e4961514f172ad4f9d6c9887cdd1f3056f40ae86c8` |
+| `balance.rs` | `7a688acbe0e5e413d7a1a63034e29df05a6f7a70d6e6a13bdfef8fcb22c92505` | `9512b7d3a84d55653581e44fa7b3fe98316a2cdd2f578b61013927872a1f6b74` |
+| `management.rs` | `e2fd1096296bb801aaca09fd0b5f0e622ef687986ff0e2fb31c5be128ebe179d` | `25fed8a9b86e40144b047941f92a4d948d7be820028e5d814a7e2630c86ca2f1` |
+
+Evidence: `/tmp/canic-inventory-before.log`,
+`/tmp/canic-icp-runtime-after.log`,
+`/tmp/canic-icp-runtime-{before,after}-identities.txt`,
+`/tmp/canic-icp-runtime-after-{observations,phases}.json` and
+`/tmp/canic-icp-runtime-after-wasms.normalized`. The matched baseline inventory
+uses scratch `test-runtime.PuL0b5`, candidate `test-runtime.XStEQj`; unfiltered
+raw scratch inventories also contain older unrelated runs and are not parity
+evidence. Forty ICP tests, 242 Fleet native tests (two governed cases ignored),
+and host/internal all-target/all-feature warning-denied Clippy pass. Logs:
+`/tmp/canic-icp-runtime-tests.log`, `/tmp/canic-speed-fleet-final.log`,
+`/tmp/canic-speed-clippy.log`. No broad gate ran.
+
+## CANIC-139 isolated-checkout diagnosis — 2026-09-16
+
+Toko's reported first-build rejection names an absolute path under
+`/home/adam/projects/toko-miner/target/canic-wasm/declarations/`, while the build
+ran under `/tmp/toko-miner-staging-0.2.9-20260916/toko-miner/`. Its retained Root
+build-script `output` also exports `CANIC_CONFIG_SOURCE_PATH`,
+`CANIC_CONFIG_MODEL_PATH` and `CANIC_ROLE_RUNTIME_AUTHORITY_PATH` under the
+original checkout. Its declaration `.d` names both original and current compact
+config files. The rejection is therefore of an external input, not a failure
+to exclude this invocation's own generated output. Evidence is read-only:
+`/tmp/toko-029-staging-isolated-regular-ci.log` and the generated Root's
+`target/canic-wasm/declarations/wasm32-unknown-unknown/fast/build/canic-fleet-root-1e0c3f1b6f73ea4c/output`.
+The retained evidence does not identify exactly how those foreign paths entered
+the build output; a controlled relocation/cache reproduction remains open.
+
+A real Cargo regression builds the same generated-config fixture into runtime
+and declaration targets, verifies unchanged input authority on the first build,
+then rejects a modified producer and a first-discovered external generated
+file. No production input exclusion was widened. Build documentation now
+recommends independent `.canic` and Cargo directories with compiler-cache
+sharing, rather than transplanted Cargo records or symlinked mutable state.
+This does not claim the downstream 106.20-second retry is fixed.
+
+All 18 focused build-reuse tests pass, including the real-Cargo regression and
+the existing external-input, symlink and corrupt-output checks. The fixture
+clears the inherited intermediate-directory override so its generated files
+actually reside under each selected target tree. Log:
+`/tmp/canic-139-generated-inputs.log`. Final changed-host Clippy is retained at
+`/tmp/canic-speed-host-final-clippy.log`.
+
+## CANIC-160 activation visibility — 2026-09-16
+
+Toko's .19 acceptance reports 23 identical waiting messages across 63.185s at
+`50/52`, despite existing Coordinator evidence identifying `ActivatingRuntimes`,
+directory Roots `1/1`, runtime Roots `0/1` and three Components. The feedback
+source remains SHA-256
+`1bf36355cbed0cdd9343f894e8e61646730a362db2d40c1a16965a26d2bbdebc`.
+
+The existing current-protocol observer now projects a fixed-size informational
+summary directly from the typed status. The existing workflow wait event carries
+that summary and monotonic elapsed seconds, and the existing CLI renderer shows
+both in text/JSON. Elapsed time starts when processing the current effect (or
+terminal check) in this invocation, includes issuing/observing the effect, and
+resets on resume. It does not become stall or retry authority. No internal
+progress identity is parsed or exposed, no additional event or remote poll is
+introduced, and funding/completion observations remain unchanged.
+
+Qualification: 242 focused Fleet host tests and 18 Fleet CLI tests pass.
+Host/CLI all-target/all-feature Clippy passes with warnings denied; eight
+selected provisioning regressions pass after lint cleanup. Projection tests
+retain separate directory and runtime denominators and absent-status handling.
+The bounded ten-wait fixture checks operation/plan bindings, stage/counts,
+monotonic elapsed values, existing pacing, one issuance and effect-free replay.
+CLI tests reproduce the reported `50/52` presentation in text and typed JSON.
+Logs: `/tmp/canic-160-{host-tests,cli-tests,clippy,regressions}.log`.
+
+This is a diagnostic improvement, not a timing measurement or an activation
+speedup. No new PocketIC, downstream deployment or broad gate ran. Toko live
+acceptance and its matched latency comparison remain open. The Store-planning
+measurements below predate this projection and retain their own exact source
+identities. The .20 draft includes both changes; package versions remain .19.
+
+## Store template observations within planning — 2026-09-16
+
+The .19 mixed-topology case took 861.774s in the retained complete release run,
+including 136.508s initial artifacts and 530.210s selected-build reinstall. Its
+27 protocol-planning observations made 690 calls. Source inspection confirms
+that manifest, chunk-set and individual chunk predicates repeatedly query the
+same Store template status without an intervening host effect.
+
+`current_protocol::bind_unapplied_actions` now owns a temporary map of successful
+template observations, keyed by exact Store Principal, Candid path/digest,
+template ID and version. Only that read-only compilation shares responses.
+Every action revalidates its Candid bytes and applies its original predicate;
+ordering and provisioning/readiness dependency handling are unchanged. Errors
+abort the pass without retaining failed evidence. The ordinary execution-time
+observer creates a fresh scope for every action. No state, response or failure
+survives into another plan, effect, retry or terminal-inventory observation.
+
+All 19 focused `fleet_ensure::ops::current_protocol::` native tests pass,
+including three new transport regressions for reuse/freshness, failed reads and
+Candid drift, and isolation across each query-identity field. Host
+all-target/all-feature Clippy passes with warnings denied. Logs:
+`/tmp/canic-store-staging-tests.log`, `/tmp/canic-store-staging-clippy.log`.
+
+The existing exact PocketIC case
+`pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation`
+passes before and after. It retains initial convergence, source-selected
+replacement, interruptions/lost replies, funding recovery, two deliberate
+wipes with distinct operations, cycle conservation and effect-free replay.
+The fixture and its assertions are unchanged. Both runs use the final workspace
+IcyDB 0.257.18 lock, .19 package versions, Fast/local artifacts, Rust/Cargo
+1.98.1, native ICP 1.5.0, PocketIC 16.0.0 and repository `target/`.
+
+| Input | SHA-256 |
+| --- | --- |
+| Baseline host `current_protocol/mod.rs` | `9655552e38a9efe1c91800af51bffecd6b7b6b7b88360875d7748de12d0d722c` |
+| Candidate host `current_protocol/mod.rs` | `a8ea46c2edb87703d2af2ea892cea8c24dc37536812684ef6fd33cf66aadb2ea` |
+| Candidate `current_protocol/tests.rs` | `199b66b2b22ae7016b876af82c7646f93e15201e7ff1d7524262670e584085c9` |
+| Shared `Cargo.lock` | `03de13af98c25e09813e1d5147ce8cd2983e1fd7e8328eeb679a08c913feda51` |
+| Shared fixture `baseline.rs` | `92f1abf598fb85a7db9555e1e9a29d1702e5dc91df28e3c8260877828463b790` |
+| `apps/test/test-configs/generated-mixed-topology.toml` | `420311d1a4872bb4380976c66174840117e18e6bec725fc04604f08d1baa0f4f` |
+
+The source base is release commit `45db483d08213ad0286dc17726b2ee788cd3ec1e`.
+The prior standalone IcyDB audit-fixture pin alignment is present in both runs;
+that fixture is not this test's subject. Initial release ID is
+`a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae`, replacement
+ID `33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a`.
+All sixteen raw Wasms match byte-for-byte between runs, comparing each release
+separately. Normalized hash inventories are retained in
+`/tmp/canic-mixed-topology-{before,after}-wasms.normalized` and share SHA-256
+`89ab8e191145d70a734d8ae697cfa272ab83bca1c7ff7b7eb74efa5462f72953`.
+
+| Scope | Baseline | Candidate |
+| --- | ---: | ---: |
+| Protocol-planning observations | 27 | 27 |
+| Protocol-planning calls | 690 | 430 |
+| Protocol-planning time, seconds | 61.232 | 42.305 |
+| Initial convergence, seconds | 154.279 | 143.194 |
+| Initial terminal replay, seconds | 36.804 | 32.155 |
+| First deliberate wipe, seconds | 229.969 | 221.403 |
+| Second deliberate wipe, seconds | 193.760 | 189.638 |
+| Derived live journey excluding both artifact phases, seconds | 624.822 | 595.615 |
+| Initial artifacts, seconds | 475.405 | 53.150 |
+| Replacement artifact resolution, seconds | 56.569 | 46.886 |
+| Complete journey, seconds | 1156.795 | 695.652 |
+| Runner including native compilation, seconds | 1289 | 759 |
+
+Planning removes 260 calls (37.7%); its observed time drops 18.927s (30.9%).
+Every other observation stage retains its observation count and call count,
+including all twenty terminal inventories and their 460 calls. The derived live
+phase subtracts initial artifacts and nested replacement artifact resolution
+from the complete journey; its 29.207s reduction (4.7%) is one pair, subject to
+machine and simulator variation, not all attributable to this change. Nested
+planning timings must not be added to parent phases. The cold baseline compiles
+declarations for 153.69s versus 1.06s on the warmed candidate; overall runner
+ratios are not evidence of this optimization or a whole-release speedup.
+
+Logs are `/tmp/canic-mixed-topology-{before,after}.log`; derived observation and
+phase records use the same prefix with `-observations.json` and `-phases.json`.
+Both exact-case commands run through the existing governed targeted PocketIC
+runner and `/usr/bin/time -v`, without a new measurement framework. Native and
+Wasm compilation remain serial with respect to other Canic build commands.
+
+CPU attribution is limited but useful: the baseline command accounts for
+1,609.70 CPU-seconds over 1,288.64 elapsed seconds, about 1.25 cores on average,
+including compilation. Within a separate 77-second initial-convergence window,
+`/proc` reports 5.32 native-host CPU-seconds and 33.50 CPU-seconds in its completed
+children; the top-level PocketIC server adds 8.80 CPU-seconds. This excludes its
+unmeasured sandbox descendants and is not a complete machine utilization trace.
+Raw ticks (100/second) are in `/tmp/canic-mixed-topology-cpu-sample.tsv`.
+Twenty read-only `icp --version` launches take 0.36s elapsed / 1.08s system CPU
+with the inherited environment, versus 0.14s / 0.13s with
+`TOKIO_WORKER_THREADS=2`. That small probe is a lead for representative transport
+qualification, not a recommendation to change production thread settings.
+No thread settings, simulator pacing or test coverage changed in this slice.
+
+The .20 changelog includes this qualified change. The broader throughput batch
+remains open. The final Toko recheck records successful .19 local reinstall and
+CANIC-150 verification. CANIC-160 now reproduces 63.185s at `50/52` with 23
+identical awaiting-progress messages despite available `ActivatingRuntimes`,
+directory `1/1` and runtime `0/1` evidence. A bounded typed stage/count/elapsed-wait
+projection through existing progress was the next priority and is now recorded
+above, without extra polls or exposing the internal progress-identity string. Terminal-inventory,
+process-startup and remaining journey costs follow;
+no full validation, version bump, commit, push or deployment was performed.
+
 ## Bounded retained-asset inspections — 2026-09-16
 
 Activation reset inventory formerly inspected each retained asset serially.

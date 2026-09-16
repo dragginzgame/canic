@@ -123,26 +123,64 @@ pub(in crate::fleet_ensure) fn compile(
     if canisters.is_empty() {
         return Ok(None);
     }
-    let burn = bounds
-        .observation_burn
-        .checked_mul(3)
-        .and_then(|burn| {
-            bounds
-                .update_burn
-                .checked_mul(3)
-                .and_then(|updates| burn.checked_add(updates))
-        })
-        .and_then(|burn| burn.checked_mul(canisters.len() as u128))
-        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-            field: "Root reinstall burn",
-        })?;
-    let expected_post_operation_cycles = observed_cycles.checked_sub(burn).ok_or_else(|| {
-        EnsurePolicyError::InsufficientCycleConservation {
-            action_count: canisters.len(),
-            available: observed_cycles,
-            required: burn,
-            shortfall: burn.saturating_sub(observed_cycles),
+    let mut burn = 0;
+    let mut new_funding = 0;
+    let mut fees = 0;
+    for (canister, binding) in canisters.iter_mut().zip(&bindings) {
+        let per_effect = bounds
+            .observation_burn
+            .checked_add(bounds.update_burn)
+            .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                field: "Root reinstall burn",
+            })?;
+        let mut required = per_effect
+            .checked_mul(canister.actions.len() as u128)
+            .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                field: "Root reinstall burn",
+            })?;
+        // The current runtime must settle before it receives any reviewed credit.
+        // Another Root's balance cannot cover the stop without a transfer.
+        if canister.observed_cycles < per_effect {
+            return Err(EnsurePolicyError::RootReinstallHeadroom {
+                name: binding.name.clone(),
+                principal: binding.principal.clone(),
+                action_count: 1,
+                available: canister.observed_cycles,
+                required: per_effect,
+                shortfall: per_effect - canister.observed_cycles,
+            });
         }
+        if canister.observed_cycles < required {
+            let deficit = required - canister.observed_cycles;
+            let amount = checked_add(deficit, per_effect, "stopped Root funding")?;
+            required = checked_add(required, per_effect, "Root funding burn")?;
+            canister.actions.insert(
+                1,
+                EnsureAction::Fund {
+                    name: binding.name.clone(),
+                    principal: binding.principal.clone(),
+                    ledger: desired.cycles_ledger.clone(),
+                    created_at_time,
+                    amount,
+                    expected_post_cycles: required,
+                    funding_deficit_cycles: deficit,
+                    funding_margin_cycles: per_effect,
+                    pool_funding: None,
+                },
+            );
+            new_funding = checked_add(new_funding, amount, "Root reinstall funding")?;
+            fees = checked_add(fees, bounds.ledger_fee, "Root reinstall funding fees")?;
+        }
+        burn = checked_add(burn, required, "Root reinstall burn")?;
+    }
+    let expected_post_operation_cycles = checked_add(
+        observed_cycles,
+        new_funding,
+        "Root reinstall available cycles",
+    )?
+    .checked_sub(burn)
+    .ok_or(EnsurePolicyError::ArithmeticOverflow {
+        field: "Root reinstall remaining cycles",
     })?;
     let mut plan = FleetEnsurePlan {
         canisters,
@@ -151,9 +189,9 @@ pub(in crate::fleet_ensure) fn compile(
             estate_funding_domains: Vec::new(),
             expected_post_operation_cycles,
             maximum_execution_burn_cycles: burn,
-            maximum_new_funding_cycles: 0,
-            maximum_operator_debit_cycles: 0,
-            maximum_unavoidable_fee_cycles: 0,
+            maximum_new_funding_cycles: new_funding,
+            maximum_operator_debit_cycles: checked_add(new_funding, fees, "Root reinstall debit")?,
+            maximum_unavoidable_fee_cycles: fees,
             observed_controlled_cycles: observed_cycles,
             retained_in_reused_canisters_cycles: observed_cycles,
             scheduled_transfer_cycles: 0,
@@ -169,6 +207,10 @@ pub(in crate::fleet_ensure) fn compile(
             base_execution_burn_cycles: burn,
             continuation_reserve_cycles: 0,
             whole_continuation_ceiling_cycles: 0,
+            maximum_successor_actions: 0,
+            fixture_publication_retry_attempts: 0,
+            per_step_burn_cycles: recovery::continuation_step_burn(bounds)?,
+            startup_funding: recovery::startup_forecasts(desired, artifacts, bounds)?,
             known_pool_funding: Vec::new(),
             discovery: crate::fleet_ensure::model::RecoveryDiscovery::PendingCurrentProtocol,
         })),

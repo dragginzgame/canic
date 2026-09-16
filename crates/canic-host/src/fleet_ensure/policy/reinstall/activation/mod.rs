@@ -61,6 +61,28 @@ pub(in crate::fleet_ensure) fn preparation(
     // The next review must have a real replacement module and complete reviewed imports.
     let mut plan = root_reinstall::compile(input.root, input.artifacts)?
         .ok_or_else(|| conflict("corrected-release Root modules"))?;
+    // Preparation has no payment action; preserve its unfunded native headroom.
+    for canister in &plan.canisters {
+        if let Some(deficit) = canister.actions.iter().find_map(|action| match action {
+            EnsureAction::Fund {
+                funding_deficit_cycles,
+                ..
+            } => Some(*funding_deficit_cycles),
+            _ => None,
+        }) {
+            return Err(EnsurePolicyError::RootReinstallHeadroom {
+                name: canister.name.clone(),
+                principal: canister
+                    .principal
+                    .clone()
+                    .ok_or_else(|| conflict("Root principal"))?,
+                action_count: 3,
+                available: canister.observed_cycles,
+                required: checked_add(canister.observed_cycles, deficit, "preparation headroom")?,
+                shortfall: deficit,
+            });
+        }
+    }
     if plan.root_reinstall_bindings.len() != input.roots.len()
         || plan.operation_id == input.source.operation_id
     {
@@ -334,18 +356,37 @@ pub(in crate::fleet_ensure) fn reset(
         .update_burn
         .checked_mul(plan.root_reinstall_bindings.len() as u128)
         .ok_or_else(|| conflict("reset update budget"))?;
+    let funding_effects = plan
+        .canisters
+        .iter()
+        .flat_map(|canister| &canister.actions)
+        .filter(|action| matches!(action, EnsureAction::Fund { .. }))
+        .count() as u128;
+    let funding_burn = checked_add(
+        bounds.observation_burn,
+        bounds.update_burn,
+        "reset funding burn",
+    )?
+    .checked_mul(funding_effects)
+    .ok_or_else(|| conflict("reset funding budget"))?;
     let burn = checked_add(
         prepared.conservation.maximum_execution_burn_cycles,
-        extra,
+        checked_add(extra, funding_burn, "reset additional burn")?,
         "reset burn budget",
     )?;
-    plan.conservation = prepared.conservation.clone();
+    plan.conservation
+        .estate_funding_domains
+        .clone_from(&prepared.conservation.estate_funding_domains);
     plan.conservation.maximum_execution_burn_cycles = burn;
     plan.conservation.observed_controlled_cycles = total;
     plan.conservation.retained_in_reused_canisters_cycles = total;
-    plan.conservation.expected_post_operation_cycles = total
-        .checked_sub(burn)
-        .ok_or_else(|| conflict("reset cycle budget"))?;
+    plan.conservation.expected_post_operation_cycles = checked_add(
+        total,
+        plan.conservation.maximum_new_funding_cycles,
+        "reset available cycles",
+    )?
+    .checked_sub(burn)
+    .ok_or_else(|| conflict("reset cycle budget"))?;
     if let Some(review) = &mut plan.recovery_review {
         review.base_execution_burn_cycles = burn;
     }

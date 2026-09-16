@@ -1,6 +1,9 @@
 use crate::{
     fleet_ensure::{
-        dto::{FleetEnsurePhase, FleetEnsureProgress},
+        dto::{
+            FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState,
+            FleetProvisioningProgress,
+        },
         model::{
             CanisterDisposition, CanisterRuntimeStatus, CurrentFleetProtocolAction,
             CycleConservation, DesiredCanister, DesiredCanisterInit, DesiredCanisterKind,
@@ -99,7 +102,19 @@ enum MockRootOwnedTopologyPolicy {
     Exact,
 }
 
+#[derive(Debug, Eq, PartialEq)]
+enum MockFundingRead {
+    Balance,
+    Effect(EffectState),
+}
+
 pub(super) struct MockPlatform {
+    pub(super) root_management: Option<crate::fleet_ensure::model::RootManagementObservation>,
+    pub(super) operator_funding: Option<crate::fleet_ensure::view::OperatorFundingObservation>,
+    pub(super) reinstall_authority:
+        Option<BTreeMap<String, crate::fleet_ensure::model::RootManagementCanisterObservation>>,
+    pub(super) seal_identity: Option<(String, String)>,
+    pub(super) seal_reads: Vec<(String, EnsureAction)>,
     pub(super) retained_activation_checks: Vec<(String, String)>,
     pub(super) rejected_activation_root: Option<String>,
     completed: BTreeMap<String, EffectOutcome>,
@@ -126,6 +141,7 @@ pub(super) struct MockPlatform {
     publication_attempts_on_issue: Vec<u32>,
     fresh_protocol_actions: Vec<EnsureAction>,
     protocol_pending_waits: u32,
+    provisioning_progress: Option<FleetProvisioningProgress>,
     protocol_ready: BTreeSet<String>,
     protocol_retry: EffectRetry,
     root_owned_topology_policy: MockRootOwnedTopologyPolicy,
@@ -138,6 +154,9 @@ pub(super) struct MockPlatform {
     terminal_inventory_expected_operation_id: Option<String>,
     terminal_inventory_operation_ids: Vec<String>,
     version_observation_failures: u8,
+    funding_reads: BTreeMap<String, Vec<MockFundingRead>>,
+    funding_observation_failures: u8,
+    funding_journal: Option<PathBuf>,
 }
 
 impl MockPlatform {
@@ -148,6 +167,11 @@ impl MockPlatform {
             .map(|cycles| cycles.to_u128())
             .expect("fixture ledger fee");
         Self {
+            reinstall_authority: None,
+            root_management: None,
+            operator_funding: None,
+            seal_identity: None,
+            seal_reads: Vec::new(),
             retained_activation_checks: Vec::new(),
             rejected_activation_root: None,
             completed: BTreeMap::new(),
@@ -177,6 +201,7 @@ impl MockPlatform {
             publication_attempts_on_issue: Vec::new(),
             fresh_protocol_actions: Vec::new(),
             protocol_pending_waits: 0,
+            provisioning_progress: None,
             protocol_ready: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
             root_owned_topology_policy: MockRootOwnedTopologyPolicy::Direct,
@@ -189,6 +214,9 @@ impl MockPlatform {
             terminal_inventory_expected_operation_id: None,
             terminal_inventory_operation_ids: Vec::new(),
             version_observation_failures: 0,
+            funding_reads: BTreeMap::new(),
+            funding_observation_failures: 0,
+            funding_journal: None,
         }
     }
 
@@ -377,6 +405,7 @@ impl MockPlatform {
                 .is_none_or(|live| live.module_sha256.is_none())
         {
             return Some(EffectObservation {
+                provisioning_progress: None,
                 provisioning_failure: None,
                 applied: false,
                 estate_funding_required: None,
@@ -399,6 +428,7 @@ impl MockPlatform {
             maximum_observation_burn_cycles,
         );
         Some(EffectObservation {
+            provisioning_progress: None,
             provisioning_failure: None,
             applied,
             estate_funding_required: None,
@@ -428,6 +458,7 @@ impl MockPlatform {
         };
         let destination_after = self.estate_funding_balance_cycles.unwrap_or_default();
         Some(EffectObservation {
+            provisioning_progress: None,
             provisioning_failure: None,
             applied: record.receipt.is_some()
                 && crate::fleet_ensure::ops::estate_funding_applied(
@@ -757,6 +788,39 @@ impl MockPlatform {
 impl EnsurePlatform for MockPlatform {
     type Error = MockError;
 
+    fn observe_root_management(
+        &mut self,
+        _state: &FleetEnsureStateRecord,
+        _targets: &BTreeSet<String>,
+    ) -> Result<Option<crate::fleet_ensure::model::RootManagementObservation>, Self::Error> {
+        Ok(self.root_management.clone())
+    }
+
+    fn observe_operator_funding(
+        &mut self,
+    ) -> Result<Option<crate::fleet_ensure::view::OperatorFundingObservation>, Self::Error> {
+        Ok(self.operator_funding.clone())
+    }
+
+    fn reinstall_authorities(
+        &mut self,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<
+        Option<BTreeMap<String, crate::fleet_ensure::model::RootManagementCanisterObservation>>,
+        Self::Error,
+    > {
+        Ok(self.reinstall_authority.clone())
+    }
+
+    fn authority_sealed(
+        &mut self,
+        operation: &str,
+        action: &EnsureAction,
+    ) -> Result<bool, Self::Error> {
+        self.seal_reads.push((operation.to_owned(), action.clone()));
+        Ok(self.seal_identity.as_ref() == Some(&(operation.to_owned(), action_sha256(action))))
+    }
+
     fn report_progress(&mut self, progress: FleetEnsureProgress) {
         if let Some(path) = &self.progress_journal {
             let journal: FleetEnsureJournalRecord =
@@ -992,7 +1056,16 @@ impl EnsurePlatform for MockPlatform {
             return Ok(observation);
         }
         if matches!(action, EnsureAction::Fund { .. }) {
+            self.funding_reads
+                .entry(action_sha256(action))
+                .or_default()
+                .push(MockFundingRead::Effect(record.state.clone()));
+            if self.funding_observation_failures > 0 {
+                self.funding_observation_failures -= 1;
+                return Err(MockError);
+            }
             return Ok(EffectObservation {
+                provisioning_progress: None,
                 provisioning_failure: None,
                 applied: record.receipt.is_some(),
                 estate_funding_required: None,
@@ -1008,6 +1081,11 @@ impl EnsurePlatform for MockPlatform {
         }
         let applied = self.effect_is_applied(action, record, state);
         Ok(EffectObservation {
+            provisioning_progress: if matches!(action, EnsureAction::FleetProtocol { .. }) {
+                self.provisioning_progress.clone()
+            } else {
+                None
+            },
             provisioning_failure: None,
             applied,
             estate_funding_required: None,
@@ -1022,6 +1100,12 @@ impl EnsurePlatform for MockPlatform {
         action: &EnsureAction,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
+        if matches!(action, EnsureAction::Fund { .. }) {
+            self.funding_reads
+                .entry(action_sha256(action))
+                .or_default()
+                .push(MockFundingRead::Balance);
+        }
         if !self.root_owned_action_authority_is_exact(action, state) {
             return Err(MockError);
         }
@@ -1070,6 +1154,22 @@ impl EnsurePlatform for MockPlatform {
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
         let hash = crate::fleet_ensure::ops::action_sha256(action);
+        if matches!(action, EnsureAction::Fund { .. })
+            && let Some(path) = &self.funding_journal
+        {
+            let journal: FleetEnsureJournalRecord = serde_json::from_slice(
+                &fs::read(path).expect("funding intent is durable before withdrawal"),
+            )
+            .unwrap();
+            let retained = journal
+                .effects
+                .iter()
+                .find(|effect| effect.action_sha256 == hash)
+                .expect("exact funding intent exists before withdrawal");
+            assert_eq!(retained.state, EffectState::Intent);
+            assert_eq!(retained.pre_cycles, record.pre_cycles);
+            assert!(retained.pre_cycles.is_some());
+        }
         if action.fixture_publication_attempt_limit().is_some()
             && let Some(path) = &self.publication_journal
         {
@@ -2718,6 +2818,9 @@ fn ledger_withdraw_completion_includes_burn_between_review_and_intent() {
 #[test]
 fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
     let mut fixture = fixture();
+    fixture.platform.funding_journal = Some(
+        crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet").journal,
+    );
     let desired_sha256 = "116".repeat(21) + "1";
     let planned = workflow::plan(
         &fixture.root,
@@ -2745,16 +2848,13 @@ fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
     assert!(*funding_margin_cycles > 1);
     fixture.platform.fail_once.insert(funding_hash.clone());
 
-    let first = workflow::apply(
-        &fixture.root,
-        &fixture.desired,
-        &desired_sha256,
-        "test-fleet",
-        &planned.plan.plan_sha256,
-        &mut fixture.platform,
-    )
-    .expect_err("lose the first Ledger response after its exact effect");
+    let first = apply_fixture_plan(&mut fixture, &desired_sha256, &planned.plan)
+        .expect_err("lose the first Ledger response after its exact effect");
     assert!(matches!(first, workflow::EnsureWorkflowError::Platform(_)));
+    assert_eq!(
+        fixture.platform.funding_reads[&funding_hash],
+        [MockFundingRead::Effect(EffectState::Intent)]
+    );
     let live = fixture
         .platform
         .live
@@ -2762,17 +2862,18 @@ fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
         .expect("funded App remains controlled");
     live.cycles = expected_post_cycles - 1;
 
-    let resumed = workflow::apply(
-        &fixture.root,
-        &fixture.desired,
-        &desired_sha256,
-        "test-fleet",
-        &planned.plan.plan_sha256,
-        &mut fixture.platform,
-    )
-    .expect("adopt exact duplicate receipt and burn-aware live balance");
+    let resumed = apply_fixture_plan(&mut fixture, &desired_sha256, &planned.plan)
+        .expect("adopt exact duplicate receipt and burn-aware live balance");
     assert!(resumed.terminal);
     assert_eq!(fixture.platform.mutations.get(&funding_hash), Some(&1));
+    assert_eq!(
+        fixture.platform.funding_reads[&funding_hash],
+        [
+            MockFundingRead::Effect(EffectState::Intent),
+            MockFundingRead::Effect(EffectState::Intent),
+            MockFundingRead::Effect(EffectState::Issued),
+        ]
+    );
 
     let paths = crate::fleet_ensure::ops::EnsurePaths::under(
         &fixture.root,
@@ -2808,19 +2909,65 @@ fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
     )
     .expect("plan effect-free funding replay");
     assert!(workflow::ordered_actions(&replay_plan.plan).is_empty());
-    let replay = workflow::apply(
-        &fixture.root,
-        &fixture.desired,
-        &desired_sha256,
-        "test-fleet",
-        &replay_plan.plan.plan_sha256,
-        &mut fixture.platform,
-    )
-    .expect("terminal funding replay");
+    let replay = apply_fixture_plan(&mut fixture, &desired_sha256, &replay_plan.plan)
+        .expect("terminal funding replay");
     assert!(replay.terminal);
     assert_eq!(fixture.platform.mutations, mutations);
 
     fs::remove_dir_all(fixture.root).expect("remove test directory");
+}
+
+#[test]
+fn failed_initial_funding_observation_never_persists_or_pays_that_intent() {
+    let mut fixture = fixture();
+    let source = "f4".repeat(32);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let funding = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Fund { .. }))
+        .unwrap();
+    let funding_hash = action_sha256(funding);
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    fixture.platform.funding_observation_failures = 1;
+    fixture.platform.funding_journal = Some(paths.journal.clone());
+    assert!(matches!(
+        apply_fixture_plan(&mut fixture, &source, &planned.plan),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    assert!(
+        !journal
+            .effects
+            .iter()
+            .any(|effect| effect.action_sha256 == funding_hash)
+    );
+    assert_eq!(fixture.platform.mutation_count(&funding_hash), 0);
+    assert_eq!(
+        fixture.platform.funding_reads[&funding_hash],
+        [MockFundingRead::Effect(EffectState::Intent)]
+    );
+    let resumed = apply_fixture_plan(&mut fixture, &source, &planned.plan).unwrap();
+    assert!(resumed.terminal);
+    assert_eq!(fixture.platform.mutation_count(&funding_hash), 1);
+    assert_eq!(
+        fixture.platform.funding_reads[&funding_hash],
+        [
+            MockFundingRead::Effect(EffectState::Intent),
+            MockFundingRead::Effect(EffectState::Intent),
+            MockFundingRead::Effect(EffectState::Issued),
+        ]
+    );
+    fs::remove_dir_all(fixture.root).unwrap();
 }
 
 #[test]
@@ -4300,6 +4447,17 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     fixture.platform.desired = fixture.desired.clone();
     fixture.platform.protocol_command_only = true;
     fixture.platform.protocol_pending_waits = 10;
+    let summary = FleetProvisioningProgress {
+        phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
+        root_batch_count: 1,
+        accepted_root_count: 1,
+        provisioned_root_count: 1,
+        directory_confirmed_root_count: 1,
+        directory_confirmation_root_count: 1,
+        runtime_activated_root_count: 0,
+        component_count: 3,
+    };
+    fixture.platform.provisioning_progress = Some(summary.clone());
     fixture.platform.typed_protocol = true;
     let source = "b".repeat(64);
     let mut platform = fixture.platform;
@@ -4332,6 +4490,7 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     assert!(terminal.terminal);
     assert_eq!(platform.paced_observations, (1..=10).collect::<Vec<_>>());
     assert_eq!(platform.mutations.get(&action_hash), Some(&1));
+    assert_provisioning_wait_progress(&platform, &planned.plan, &summary);
 
     let mutation_count = platform.mutations.values().sum::<u32>();
     let successor = workflow::plan(
@@ -4356,6 +4515,39 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     assert_eq!(platform.paced_observations, (1..=10).collect::<Vec<_>>());
     assert_eq!(platform.mutations.get(&action_hash), Some(&1));
     assert_eq!(platform.mutations.values().sum::<u32>(), mutation_count);
+}
+
+fn assert_provisioning_wait_progress(
+    platform: &MockPlatform,
+    plan: &FleetEnsurePlan,
+    summary: &FleetProvisioningProgress,
+) {
+    let waits = platform
+        .progress
+        .iter()
+        .filter_map(|event| {
+            if let FleetEnsureProgressState::AwaitingProgress {
+                elapsed_seconds,
+                provisioning,
+            } = &event.state
+            {
+                assert_eq!(event.phase, FleetEnsurePhase::WorkloadProvisioning);
+                assert_eq!(event.operation_id, plan.operation_id);
+                assert_eq!(event.plan_sha256, plan.plan_sha256);
+                assert_eq!(provisioning.as_ref(), Some(summary));
+                assert!(event.applied_effects < u32::try_from(event.reviewed_effects).unwrap());
+                Some(*elapsed_seconds)
+            } else {
+                None
+            }
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(waits.len(), platform.paced_observations.len());
+    assert!(waits.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert!(matches!(
+        platform.progress.last().unwrap().state,
+        FleetEnsureProgressState::Complete
+    ));
 }
 
 #[test]
@@ -5098,6 +5290,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     maximum_observation_burn_cycles,
                 );
                 return Ok(EffectObservation {
+                    provisioning_progress: None,
                     provisioning_failure: None,
                     applied,
                     estate_funding_required: None,
@@ -5112,6 +5305,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
             }
             if matches!(action, EnsureAction::Fund { .. }) {
                 return Ok(EffectObservation {
+                    provisioning_progress: None,
                     provisioning_failure: None,
                     applied: record.receipt.is_some(),
                     estate_funding_required: None,
@@ -5173,6 +5367,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::Transfer { .. } => false,
             };
             Ok(EffectObservation {
+                provisioning_progress: None,
                 provisioning_failure: None,
                 applied,
                 estate_funding_required: None,
@@ -5574,10 +5769,10 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
     assert_eq!(restarted.mutations, mutations_before_replay);
 }
 
-struct Fixture {
-    desired: DesiredFleet,
-    platform: MockPlatform,
-    root: PathBuf,
+pub(super) struct Fixture {
+    pub(super) desired: DesiredFleet,
+    pub(super) platform: MockPlatform,
+    pub(super) root: PathBuf,
 }
 
 #[test]
@@ -5799,7 +5994,7 @@ fn first_unaffordable_protocol_action_rejects_with_exact_cycle_guidance() {
     fs::remove_dir_all(fixture.root).expect("remove test directory");
 }
 
-fn protocol_tranche_fixture(burns: Vec<u128>) -> Fixture {
+pub(super) fn protocol_tranche_fixture(burns: Vec<u128>) -> Fixture {
     let mut fixture = fixture();
     fixture
         .desired
@@ -6381,6 +6576,97 @@ fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
             Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
         ));
     }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn reinstall_preparation_requires_each_authority_to_cover_its_own_seal() {
+    use crate::fleet_ensure::{
+        model::{
+            FleetReinstallSourceRecord, ReviewedDesiredFleetRecord,
+            RootManagementCanisterObservation, RootManagementObservation,
+        },
+        policy::{
+            EnsurePolicyError,
+            reinstall::{PreparationInput, preparation},
+        },
+    };
+    let mut fixture = protocol_tranche_fixture(Vec::new());
+    fixture.desired.maximum_observation_burn_cycles = "2".into();
+    fixture.desired.maximum_update_burn_cycles = "3".into();
+    let mut root = fixture.desired.canisters[0].clone();
+    root.name = "root".into();
+    root.kind = DesiredCanisterKind::Root;
+    root.parent = Some("treasury".into());
+    root.principal = Some(OLD_APP.into());
+    fixture.desired.canisters.push(root);
+    let hash = sha256_hex(b"current-wasm");
+    let source = FleetReinstallSourceRecord {
+        reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
+        wasm_sha256_by_canister: BTreeMap::from([
+            ("treasury".into(), hash.clone()),
+            ("root".into(), hash.clone()),
+        ]),
+        candid_sha256_by_path: BTreeMap::from([
+            ("coordinator.did".into(), "11".repeat(32)),
+            ("root.did".into(), "22".repeat(32)),
+        ]),
+    };
+    let plan = |treasury_cycles, root_cycles| {
+        let roots = [
+            ("treasury", TREASURY, treasury_cycles),
+            ("root", OLD_APP, root_cycles),
+        ]
+        .into_iter()
+        .map(|(name, principal, cycles)| {
+            (
+                name.into(),
+                RootManagementCanisterObservation {
+                    live: live(principal, cycles, Some(&hash), true, &[CONTROLLER]),
+                    name: name.into(),
+                    subnet: SUBNET.into(),
+                },
+            )
+        })
+        .collect();
+        preparation(PreparationInput {
+            desired: &fixture.desired,
+            source: &source,
+            target_artifacts_sha256: &"42".repeat(32),
+            observation: &RootManagementObservation {
+                operator_cycles: 0,
+                roots,
+            },
+            source_operation_id: &"21".repeat(32),
+            desired_sha256: &"22".repeat(32),
+            operation_id: &"23".repeat(32),
+            time: 100,
+        })
+    };
+    for (treasury_cycles, root_cycles, name, principal) in [
+        (1000, 18, "root", OLD_APP),
+        (18, 1000, "treasury", TREASURY),
+    ] {
+        assert_eq!(
+            plan(treasury_cycles, root_cycles),
+            Err(EnsurePolicyError::AuthoritySealHeadroom {
+                name: name.into(),
+                principal: principal.into(),
+                available: 18,
+                required: 19,
+                shortfall: 1,
+            })
+        );
+    }
+    let accepted = plan(19, 19).expect("each authority covers its own bound");
+    assert_eq!(accepted.conservation.maximum_execution_burn_cycles, 38);
+    assert_eq!(accepted.conservation.expected_post_operation_cycles, 0);
+    assert_eq!(accepted.conservation.maximum_new_funding_cycles, 0);
+    assert_eq!(accepted.conservation.maximum_operator_debit_cycles, 0);
+    assert!(accepted.canisters.iter().all(|canister| matches!(
+        canister.actions.as_slice(),
+        [EnsureAction::SealAuthority { .. }]
+    )));
     fs::remove_dir_all(fixture.root).unwrap();
 }
 

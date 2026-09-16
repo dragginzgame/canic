@@ -5,10 +5,14 @@
 //! Boundary: completed Fleets and source-bound partial activations use distinct preparation reviews.
 
 pub(super) mod activation;
+#[cfg(test)]
+mod tests;
 
 use super::*;
 use crate::fleet_ensure::{
-    model::{DesiredFleet, FleetReinstallRecord, FleetReinstallSourceRecord},
+    model::{
+        CanisterRuntimeStatus, DesiredFleet, FleetReinstallRecord, FleetReinstallSourceRecord,
+    },
     ops::reinstall as capture,
     policy::reinstall as policy,
 };
@@ -412,10 +416,12 @@ pub(super) fn verify_effect_authority<P: EnsurePlatform>(
     if intent.activation_reset.is_some() && plan.scope != FleetEnsurePlanScope::Full {
         return activation::verify_effect_authority(plan, action, state, platform);
     }
+    let funding_kind = policy::funding_authority_kind(intent, action, &plan.canisters);
     if !matches!(
         action,
         EnsureAction::SealAuthority { .. } | EnsureAction::Install { .. }
-    ) {
+    ) && funding_kind.is_none()
+    {
         return Ok(());
     }
     let authorities = platform
@@ -434,6 +440,25 @@ pub(super) fn verify_effect_authority<P: EnsurePlatform>(
         capture::authority_binding(observed).ok_or(EnsureWorkflowError::ConvergenceDrift)?;
     if current != *binding {
         return Err(EnsureWorkflowError::ConvergenceDrift);
+    }
+    if let Some(kind) = funding_kind {
+        let (EnsureAction::Fund { principal, .. } | EnsureAction::FundEstate { principal, .. }) =
+            action
+        else {
+            return Err(EnsureWorkflowError::PlanIntegrity);
+        };
+        if principal != &binding.principal || observed.live.status != CanisterRuntimeStatus::Running
+        {
+            return Err(EnsureWorkflowError::ConvergenceDrift);
+        }
+        let seal = capture::funding_seal(source_authority(intent)?, binding, kind)
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+        if !platform
+            .authority_sealed(&plan.operation_id, &seal)
+            .map_err(EnsureWorkflowError::Platform)?
+        {
+            return Err(EnsureWorkflowError::DriftedBeforeApply);
+        }
     }
     if matches!(
         action,

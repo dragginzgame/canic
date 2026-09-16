@@ -82,6 +82,24 @@ from the App's ordinary Cargo graph. Build scripts must declare external inputs
 to Cargo. Input collection is conservative across the complete Cargo catalog,
 rather than a minimal per-role dependency cache.
 
+Repeated Cargo dependency records reuse the first observation of a path within
+that snapshot, including paths already captured by package scans. The next
+snapshot reads the bytes again. No input observation is cached across the
+pre-build/post-build boundary or between build invocations.
+
+Before compilation, retained Cargo build-script output also contributes the paths
+exported as `CANIC_CONFIG_SOURCE_PATH`, `CANIC_CONFIG_MODEL_PATH` and
+`CANIC_ROLE_RUNTIME_AUTHORITY_PATH`. This discovers already-named external bytes
+even when a role's `.d` file is missing. It does not approve an external path first
+emitted during the build. Runtime, declaration and explicitly selected intermediate
+output roots remain generated outputs; their authored sources and generators stay
+in the source snapshot. A catalogue edited before invocation may therefore
+regenerate an `OUT_DIR` include without being mistaken for an in-flight source edit.
+Existing paths and selected output roots are resolved before classification. An
+alias into the selected output tree remains generated, while `target/../source`
+does not hide an authored file. Missing paths containing unresolved parent
+traversal are tracked rather than granted an output exemption.
+
 The invocation retains file-level source evidence as well as configuration,
 environment and tool identity. Replaced Cargo records may stop naming unchanged
 inputs; those files and directories are rechecked before accepting the refreshed
@@ -91,6 +109,21 @@ file types still refuse recording. An external input first observed after
 compilation also refuses recording: its earlier bytes cannot be proved. Typed
 diagnostics distinguish a changed input from an unobserved input and include
 the affected path.
+
+When this post-build comparison rejects, Canic attempts to retain
+`.canic/build-reuse/rejected-<release-build-id>.json` and prints the path on stderr.
+This optional record is limited to 256 KiB. It contains the release identity,
+rejection kind, before/after snapshot fingerprints and input counts, invocation
+paths, selected/resolved output roots and the affected input's available snapshot
+values. Values are hashes or the `directory`/`absent` markers. A null input value
+means that inventory did not name the path, not that the file was missing; a
+dropped path may have been freshly rechecked outside the final inventory. A null
+resolved root means canonicalization was unavailable. Source contents and
+environment values are omitted. This is failure evidence, never cache authority:
+an unavailable destination cannot replace the original error, and corrupt
+diagnostics cannot invalidate a verified hit. Successful retries preserve the
+record; another rejection for the same release identity replaces it.
+
 Cache metadata lives under `.canic/build-reuse`; release manifests and artifact
 bytes remain under the existing `.canic/release-builds/<id>` owner. Cache hits do
 not compile, link, optimize or compress Wasm. Corrupt output evidence is rejected
@@ -104,8 +137,23 @@ or unwritable diagnostic evidence cannot invalidate an otherwise verified hit.
 The diagnostic record stores aggregate fingerprints and safe environment key
 names, without environment values or individual value fingerprints. Reports
 name up to eight added/removed keys; identifying which retained key changed its
-value is explicitly unavailable. Every environment entry still participates in
-the real cache identity, including differences between Make and direct launchers.
+value is explicitly unavailable. Every inherited build-environment entry still
+participates in the real cache identity, including differences between Make and
+direct launchers, with the deployment-only exclusion below.
+
+Build commands remove `CANIC_ICP_IDENTITY_PASSWORD_FILE` from their inherited
+environment. Cargo (including metadata and build scripts), compiler/cache probes,
+Candid extraction, Wasm transformations, provenance commands and build-tool
+acquisition share this boundary. Complete-build and Candid-extraction identities
+and reuse diagnostics exclude that same key and bind the compiled exclusion
+policy. Changing or removing this deployment credential therefore does not by
+itself invalidate reuse. Other environment inputs remain bound; deployment
+commands retain their existing identity-unlocking behavior.
+
+This separates an inherited deployment setting from compilation; it is not a
+hermetic filesystem or process sandbox. Explicit Cargo configuration and authored
+build scripts remain build inputs. Exact selected-release and output verification,
+post-build source checks and rejection of unobserved dependencies remain required.
 
 The existing exclusive complete-build reuse lock remains held through lookup,
 compilation and finalization. Contention reports progress after one second and
@@ -117,6 +165,29 @@ Every runtime embeds the complete release identity. Changed inputs therefore
 still rebuild those runtimes for the new identity; this surface does not compose
 a new release from artifacts embedding different identities. Reuse never grants
 authority to resume or change a Fleet operation.
+
+For isolated release checkouts, keep real, independent `.canic` directories and
+Cargo target/build directories. Do not symlink `.canic`, share mutable operation
+receipts, or transplant Cargo output as if its recorded absolute paths were
+portable. Copied build-script output can still name generated files in the
+original checkout. Those files are external inputs to the new checkout and
+retain the before/after verification boundary. A normal first build excludes
+outputs under its own resolved target roots; a generated filename alone does
+not qualify an external path for that exclusion.
+
+Canic's generated-source writer rejects a symlink at the output file before
+reading matching bytes or writing changed bytes. The diagnostic names that
+file and recommends an independent target/build directory. This does not
+rewrite existing Cargo metadata or certify copied targets as portable; ordinary
+regular-file output repair and unchanged timestamps remain supported.
+
+Share the compiler cache through the existing `sccache` wrapper instead. Explicit
+`RUSTC_WRAPPER` selection remains authoritative. This does not share Fleet state,
+transfer finalized artifacts between release identities, or guarantee a cache
+hit across different absolute source paths. If an unobserved-input diagnostic
+names another checkout, inspect copied Cargo records and build-script output
+before repeating the entire build; do not bypass source verification. Parent
+symlinks remain rejected by the existing regular-path persistence boundary.
 
 Configured declarations use the selected profile with optimization level zero,
 LTO explicitly off and 16 codegen units in a separate `declarations` Cargo
@@ -130,7 +201,7 @@ declaration builds. Production runtime LTO remains the existing release policy.
 After Cargo validates declaration dependencies, unchanged declaration Wasm can
 reuse its normalized Candid extraction across new complete release identities.
 The host keys this optional result by exact Wasm bytes, native extractor bytes,
-the compiled extraction implementation and environment. The result's byte hash
+the compiled extraction implementation and build environment described above. The result's byte hash
 and input bindings are checked on every hit. A changed role misses when its
 compiled declaration changes; an unaffected role may hit. Shared inputs remain
 Cargo dependencies and changed compiled outputs miss independently.

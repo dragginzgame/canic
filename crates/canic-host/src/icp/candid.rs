@@ -81,7 +81,7 @@ impl IcpCli {
         O: CandidType + DeserializeOwned,
     {
         let bytes = candid::encode_one(input).map_err(IcpCandidCallError::Encode)?;
-        let path = write_argument_file(&bytes).map_err(IcpCandidCallError::File)?;
+        let path = write_candid_argument_file(&bytes).map_err(IcpCandidCallError::File)?;
         let output = if query {
             self.canister_query_binary_args_output_with_candid(
                 canister,
@@ -106,7 +106,11 @@ impl IcpCli {
     }
 }
 
-fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
+/// Write private invocation scratch, closing it before the child opens it.
+///
+/// Completed writes provide process visibility without a durable disk flush.
+/// Recovery recreates these arguments from caller-owned durable intent.
+pub fn write_candid_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
     for _ in 0..MAX_ARGUMENT_FILE_ATTEMPTS {
         let sequence = NEXT_ARGUMENT_FILE.fetch_add(1, Ordering::Relaxed);
         let path = std::env::temp_dir().join(format!(
@@ -119,7 +123,7 @@ fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
         options.mode(0o600);
         match options.open(&path) {
             Ok(mut file) => {
-                if let Err(source) = file.write_all(bytes).and_then(|()| file.sync_all()) {
+                if let Err(source) = file.write_all(bytes) {
                     drop(file);
                     let _ = fs::remove_file(&path);
                     return Err(source);
@@ -134,4 +138,84 @@ fn write_argument_file(bytes: &[u8]) -> io::Result<PathBuf> {
         io::ErrorKind::AlreadyExists,
         "could not allocate a unique Candid argument file",
     ))
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(all(test, unix))]
+mod tests {
+    use super::*;
+    use canic_core::cdk::utils::hash::hex_bytes;
+    use std::{collections::BTreeSet, os::unix::fs::PermissionsExt};
+
+    #[test]
+    fn child_reads_complete_arguments_and_transport_always_removes_scratch() {
+        let root = crate::test_support::temp_dir("candid-child-arguments");
+        fs::create_dir_all(&root).unwrap();
+        let executable = root.join("icp");
+        fs::write(
+            &executable,
+            r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp 1.5.0'; exit 0; fi
+query=false
+while [ "$#" -gt 0 ]; do
+  case "$1" in
+    --args-file) shift; argument=$1 ;;
+    --query) query=true ;;
+  esac
+  shift
+done
+printf '%s\n' "$argument" > argument-path
+printf '%s\n' "$query" > query-mode
+cp "$argument" received || exit 91
+cat response
+exit "$(cat exit-code)"
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
+        let payload = vec![0xa5_u8; 1024 * 1024];
+        let encoded = candid::encode_one(&payload).unwrap();
+        let response = serde_json::json!({
+            "response_bytes": hex_bytes(candid::encode_one(42_u64).unwrap()),
+        });
+        let mut paths = BTreeSet::new();
+        for query in [false, true] {
+            for outcome in 0..3 {
+                fs::write(root.join("exit-code"), if outcome == 1 { "1" } else { "0" }).unwrap();
+                fs::write(
+                    root.join("response"),
+                    if outcome == 2 {
+                        "{}".to_string()
+                    } else {
+                        response.to_string()
+                    },
+                )
+                .unwrap();
+                let result =
+                    icp.canister_candid::<_, u64>("aaaaa-aa", "probe", &payload, None, query);
+                match outcome {
+                    0 => assert_eq!(result.unwrap(), 42),
+                    1 => assert!(matches!(result, Err(IcpCandidCallError::Icp(_)))),
+                    _ => assert!(matches!(result, Err(IcpCandidCallError::Response(_)))),
+                }
+                assert_eq!(fs::read(root.join("received")).unwrap(), encoded);
+                assert_eq!(
+                    fs::read_to_string(root.join("query-mode")).unwrap().trim(),
+                    query.to_string()
+                );
+                let path = PathBuf::from(
+                    fs::read_to_string(root.join("argument-path"))
+                        .unwrap()
+                        .trim(),
+                );
+                assert!(!path.exists());
+                assert!(paths.insert(path));
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
+    }
 }
