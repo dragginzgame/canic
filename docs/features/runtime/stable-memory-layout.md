@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses published ic-memory 0.13.3 and a single MemoryManager per canister.
+Canic uses published ic-memory 0.14.1 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
@@ -43,6 +43,19 @@ The 1 MiB default balances the many small framework stores against manager
 capacity. It is not claimed to be globally optimal for every application's data
 or workload. Application-owned stores and IcyDB share the same manager geometry;
 Canic does not change their schemas, IDs or ownership.
+
+Consumers composed into the same canister must use the same ic-memory package
+identity. IcyDB is a test-only dependency of this repository; its separate
+version in the workspace lockfile does not enter deployed Canic roles. Its
+composed integration is qualified explicitly once dependencies align, using
+`make test-pocketic-case CASE=icydb_lifecycle_composition`. Canic's production
+Wasm dependency guard continues to require a single memory runtime.
+
+The 0.14 update retains fixed-ID declarations and bucket selection. It adds
+upstream limits to ledger recovery (including 16 MiB logical payloads, depth 32
+and bounded histories); out-of-contract state rejects. Canic does not enable
+key-only placement, automatic migration or the optional historical-admission
+hook. Release transitions retain Canic's reinstall-only policy.
 
 ## Representation and consolidation
 

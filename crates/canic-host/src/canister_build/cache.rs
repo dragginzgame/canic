@@ -14,6 +14,7 @@ use std::{
     fs, io,
     path::{Path, PathBuf},
     process::{Command, Output},
+    time::{Duration, Instant},
 };
 
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
@@ -31,8 +32,80 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
     );
 }
 
+///
+/// CargoBuildProgress
+///
+/// Explicit role and batch identity with a clock shared by the whole build phase.
+///
+pub struct CargoBuildProgress {
+    roles: String,
+    batch: usize,
+    batches: usize,
+    phase_started: Instant,
+}
+
+impl CargoBuildProgress {
+    pub fn single(role: &str) -> Self {
+        Self::batch([role], 1, 1, Instant::now())
+    }
+
+    pub fn batch<'a>(
+        roles: impl IntoIterator<Item = &'a str>,
+        batch: usize,
+        batches: usize,
+        phase_started: Instant,
+    ) -> Self {
+        let mut roles = roles.into_iter();
+        let mut names = roles
+            .by_ref()
+            .take(8)
+            .map(|role| {
+                let name: String = role
+                    .chars()
+                    .take(80)
+                    .map(|ch| {
+                        if ch.is_ascii_alphanumeric() || matches!(ch, '_' | '-' | '.') {
+                            ch
+                        } else {
+                            '?'
+                        }
+                    })
+                    .collect();
+                if role.chars().nth(80).is_some() {
+                    format!("{name}...")
+                } else {
+                    name
+                }
+            })
+            .collect::<Vec<_>>();
+        if roles.next().is_some() {
+            names.push("...".into());
+        }
+        Self {
+            roles: names.join(","),
+            batch,
+            batches,
+            phase_started,
+        }
+    }
+
+    fn message(&self, phase: &str, child_elapsed: Duration, phase_elapsed: Duration) -> String {
+        format!(
+            "Build phase {phase} Cargo/link: batch {}/{} roles [{}]; child {:.0}s, phase {:.0}s (Cargo may be compiling, linking or waiting for its own lock)",
+            self.batch,
+            self.batches,
+            self.roles,
+            child_elapsed.as_secs_f64(),
+            phase_elapsed.as_secs_f64()
+        )
+    }
+}
+
 /// Check an automatically selected cache before launching the actual build once.
-pub fn output_canister_cargo_command(command: &mut Command) -> Result<Output, CompilerCacheError> {
+pub fn output_canister_cargo_command(
+    command: &mut Command,
+    progress: CargoBuildProgress,
+) -> Result<Output, CompilerCacheError> {
     let explicit = env::var_os("RUSTC_WRAPPER");
     let search_path = env::var_os("PATH");
     // Keep the command's selected path even if the executable disappeared since
@@ -49,12 +122,13 @@ pub fn output_canister_cargo_command(command: &mut Command) -> Result<Output, Co
                         .any(|directory| directory.join(sccache_executable_name()) == *selected)
                 })
         });
-    output_with_implicit_cache(command, implicit.as_deref())
+    output_with_implicit_cache(command, implicit.as_deref(), progress)
 }
 
 fn output_with_implicit_cache(
     command: &mut Command,
     implicit: Option<&Path>,
+    progress: CargoBuildProgress,
 ) -> Result<Output, CompilerCacheError> {
     crate::build_environment::apply(command);
     if let Some(wrapper) = implicit
@@ -78,11 +152,12 @@ fn output_with_implicit_cache(
         std::time::Duration::from_secs(30),
         move |elapsed| {
             eprintln!(
-                "Build phase {phase} Cargo/link: still running after {:.0}s (Cargo may be compiling, linking or waiting for its own lock)",
-                elapsed.as_secs_f64()
+                "{}",
+                progress.message(phase, elapsed, progress.phase_started.elapsed())
             );
         },
-    ).map_err(CompilerCacheError::CargoLaunch)
+    )
+    .map_err(CompilerCacheError::CargoLaunch)
 }
 
 /// Declaration passes retain runtime cfg/profile semantics without paying for LTO.
@@ -222,6 +297,37 @@ mod tests {
     use super::*;
     use crate::test_support::temp_dir;
     use std::{ffi::OsString, sync::mpsc, thread, time::Duration};
+
+    #[test]
+    fn heartbeat_distinguishes_sequential_batches_and_bounds_role_labels() {
+        let phase_started = Instant::now();
+        let first = CargoBuildProgress::batch(["hub"], 1, 3, phase_started);
+        let second = CargoBuildProgress::batch(["shard"], 2, 3, phase_started);
+        assert_eq!(first.phase_started, second.phase_started);
+        let first_message = first.message(
+            "declaration",
+            Duration::from_secs(30),
+            Duration::from_secs(30),
+        );
+        let second_message = second.message(
+            "declaration",
+            Duration::from_secs(30),
+            Duration::from_secs(90),
+        );
+        assert!(first_message.contains("batch 1/3 roles [hub]; child 30s, phase 30s"));
+        assert!(second_message.contains("batch 2/3 roles [shard]; child 30s, phase 90s"));
+        let unsafe_role = format!("role\n{}", "x".repeat(1000));
+        let bounded = CargoBuildProgress::batch(
+            std::iter::repeat_n(unsafe_role.as_str(), 100),
+            1,
+            100,
+            phase_started,
+        );
+        let message = bounded.message("runtime", Duration::ZERO, Duration::ZERO);
+        assert!(!message.contains('\n'));
+        assert!(message.len() < 1000);
+        assert!(message.contains("..."));
+    }
 
     #[test]
     fn release_declarations_disable_lto_without_changing_runtime_profile() {
@@ -458,7 +564,12 @@ mod tests {
     fn implicit_cache_failure_stops_before_cargo_with_actionable_original_evidence() {
         let (root, wrapper, mut cargo) =
             cache_probe_fixture("printf 'cache service unavailable' >&2; exit 47", "exit 0");
-        let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
+        let error = output_with_implicit_cache(
+            &mut cargo,
+            Some(&wrapper),
+            CargoBuildProgress::single("fixture"),
+        )
+        .unwrap_err();
         assert!(
             matches!(
                 &error,
@@ -481,7 +592,12 @@ mod tests {
             "touch cache-ran; exit 0",
             "printf 'compiler unavailable' >&2; exit 51",
         );
-        let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
+        let error = output_with_implicit_cache(
+            &mut cargo,
+            Some(&wrapper),
+            CargoBuildProgress::single("fixture"),
+        )
+        .unwrap_err();
         assert!(matches!(
             error,
             CompilerCacheError::Compiler {
@@ -504,7 +620,12 @@ mod tests {
         let path = env::join_paths([&root]).unwrap();
         let selected = resolve_implicit_sccache_wrapper(None, Some(&path));
         assert_eq!(selected.as_deref(), Some(wrapper.as_path()));
-        let output = output_with_implicit_cache(&mut cargo, selected.as_deref()).unwrap();
+        let output = output_with_implicit_cache(
+            &mut cargo,
+            selected.as_deref(),
+            CargoBuildProgress::single("fixture"),
+        )
+        .unwrap();
         assert_eq!(output.status.code(), Some(7));
         assert_eq!(output.stderr, b"compiler build error");
         assert!(root.join("cargo-ran").exists());
@@ -522,7 +643,12 @@ mod tests {
                 resolve_implicit_sccache_wrapper(Some(OsStr::new(explicit)), Some(&path)).is_none()
             );
             // Even a stale discovery result cannot replace a command's explicit choice.
-            let output = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap();
+            let output = output_with_implicit_cache(
+                &mut cargo,
+                Some(&wrapper),
+                CargoBuildProgress::single("fixture"),
+            )
+            .unwrap();
             assert_eq!(output.status.code(), Some(7));
             assert!(root.join("cargo-ran").exists());
             fs::remove_dir_all(root).unwrap();
@@ -534,7 +660,12 @@ mod tests {
     fn disappeared_implicit_cache_reports_launch_failure_before_cargo() {
         let (root, wrapper, mut cargo) = cache_probe_fixture("exit 0", "exit 0");
         fs::remove_file(&wrapper).unwrap();
-        let error = output_with_implicit_cache(&mut cargo, Some(&wrapper)).unwrap_err();
+        let error = output_with_implicit_cache(
+            &mut cargo,
+            Some(&wrapper),
+            CargoBuildProgress::single("fixture"),
+        )
+        .unwrap_err();
         assert!(matches!(
             error,
             CompilerCacheError::ImplicitCache {

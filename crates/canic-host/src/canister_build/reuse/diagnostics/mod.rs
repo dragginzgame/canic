@@ -2,8 +2,9 @@
 //!
 //! Responsibility: explain differences from the last successful reuse snapshot.
 //! Does not own: cache identity, hit admission or release authority.
-//! Boundary: bounded optional evidence contains no environment values or per-value hashes.
+//! Boundary: bounded optional evidence contains no plaintext values or unkeyed per-value hashes.
 
+mod environment;
 mod rejection;
 #[cfg(test)]
 mod tests;
@@ -39,11 +40,16 @@ pub(super) struct InputDiagnostics {
     schema_version: u8,
     environment: String,
     environment_keys: BTreeSet<String>,
+    value_comparison: Option<environment::EnvironmentComparison>,
     source: String,
     configuration: String,
 }
 
 impl InputDiagnostics {
+    pub(super) fn prepare(root: &Path) {
+        environment::prepare_key(root);
+    }
+
     pub(super) fn capture(
         context: &WorkspaceBuildContext,
         tools: &[PathBuf],
@@ -89,12 +95,15 @@ impl InputDiagnostics {
             hash_field(digest, path.as_bytes());
             hash_field(digest, hash.as_bytes());
         }
-        let (environment, environment_keys) =
-            environment_evidence(crate::build_environment::inputs());
+        let values = crate::build_environment::inputs();
+        let value_comparison =
+            environment::EnvironmentComparison::capture(&context.icp_root, &values);
+        let (environment, environment_keys) = environment_evidence(values);
         Self {
             schema_version: 1,
             environment,
             environment_keys,
+            value_comparison,
             source: format!("{:x}", source.finalize()),
             configuration: format!("{:x}", configuration.finalize()),
         }
@@ -136,12 +145,23 @@ impl InputDiagnostics {
                 .take(8)
                 .cloned()
                 .collect::<Vec<_>>();
-            if keys.is_empty() {
-                reasons
-                    .push("environment changed (changed-value key attribution unavailable)".into());
-            } else {
-                reasons.push(format!("environment changed (added/removed keys, up to 8: {}; changed-value key attribution unavailable)", keys.join(", ")));
+            let changed = self
+                .value_comparison
+                .as_ref()
+                .zip(previous.value_comparison.as_ref())
+                .and_then(|(current, previous)| current.changed_keys(previous));
+            let mut detail = Vec::new();
+            if !keys.is_empty() {
+                detail.push(format!("added/removed keys, up to 8: {}", keys.join(", ")));
             }
+            match changed {
+                Some(keys) if !keys.is_empty() => {
+                    detail.push(format!("changed-value keys, up to 8: {}", keys.join(", ")));
+                }
+                Some(_) => detail.push("no changed values among comparable safe keys".into()),
+                None => detail.push("changed-value key attribution unavailable".into()),
+            }
+            reasons.push(format!("environment changed ({})", detail.join("; ")));
         }
         if reasons.is_empty() {
             return "no retained exact-build evidence; comparison cannot attribute the miss".into();

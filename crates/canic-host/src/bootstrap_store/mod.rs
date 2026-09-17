@@ -9,7 +9,7 @@ use crate::{
     canister_build::{
         CanisterArtifactBuildOutput, WorkspaceBuildContext,
         cache::{
-            canister_build_target_root, configure_canister_cargo_command,
+            CargoBuildProgress, canister_build_target_root, configure_canister_cargo_command,
             configure_declaration_command, declaration_target_root, output_canister_cargo_command,
         },
         compiled::CompiledCanisterArtifact,
@@ -147,7 +147,10 @@ fn run_wasm_store_cargo_build(
     }
 
     let started = Instant::now();
-    let output = output_canister_cargo_command(&mut command)?;
+    let output = output_canister_cargo_command(
+        &mut command,
+        CargoBuildProgress::batch(["bootstrap_store"], 1, 1, started),
+    )?;
     eprintln!(
         "Build phase {} bootstrap_store: {:.2}s",
         if force_candid_export {

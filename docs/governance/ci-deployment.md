@@ -127,9 +127,17 @@ unrelated unstaged content remains byte-for-byte unchanged. `make fmt-check`
 remains in validation and CI so hook bypass does not weaken the release
 boundary.
 
-`make test` executes every top-level integration test recorded in the guarded
+`make test` executes the release-lane integration tests recorded in the guarded
 workspace test inventory. New integration targets must declare their release
-lane, execution class and suite before the gate accepts them. Ordinary tests
+lane, execution class and suite before the gate accepts them. External consumer
+composition uses the explicit `integration` lane and is reported as unselected
+by normal release/PocketIC runs. Run the IcyDB composition qualification with
+`make test-pocketic-case CASE=icydb_lifecycle_composition` when its published
+dependencies share Canic's memory runtime. This includes the IcyDB-backed
+provisioning journeys within that target. It is a test consumer, not a deployed
+Canic dependency; its separate dependency schedule does not block Canic releases.
+The production Wasm dependency graph still requires exactly one memory runtime.
+Ordinary tests
 retain libtest's default parallelism; PocketIC suites remain explicitly
 single-threaded and ordered until a measured narrower concurrency policy is
 proven stable. After every serial suite the runner reports the shared server's

@@ -439,7 +439,10 @@ pub enum EnsureStateError {
 
     #[error("Fleet ensure continuation authority is invalid: {reason}")]
     ContinuationAuthority { reason: String },
-    #[error("Fleet ensure document is invalid at {}: {source}", path.display())]
+    #[error(
+        "Fleet ensure document is invalid at {}: {source}; operation completion cannot be established from this document; preserve the Fleet directory, referenced objects, artifacts and paid-effect receipts; do not add missing fields or delete the plan/journal; only an explicitly disposable local simulator may be replaced through its owning session's reset procedure, then a fresh environment and Fleet plan; unresolved real effects require recovery under their exact authority; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan",
+        path.display()
+    )]
     Decode {
         path: PathBuf,
         #[source]

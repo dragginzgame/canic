@@ -134,12 +134,25 @@ source/dependency inputs, environment or toolchain/configuration, and rejected
 output. The optional `last-input-diagnostics.json` compares against the last
 recorded successful build. It never supplies cache authority. Missing, corrupt
 or unwritable diagnostic evidence cannot invalidate an otherwise verified hit.
-The diagnostic record stores aggregate fingerprints and safe environment key
-names, without environment values or individual value fingerprints. Reports
-name up to eight added/removed keys; identifying which retained key changed its
-value is explicitly unavailable. Every inherited build-environment entry still
-participates in the real cache identity, including differences between Make and
-direct launchers, with the deployment-only exclusion below.
+The diagnostic record stores aggregate fingerprints, safe environment key names
+and optional HMAC-SHA256 equality tags. Reports show up to eight added/removed
+names and eight changed-value names; they never show values or tags. No raw values
+or unkeyed individual value hashes are persisted. A random 32-byte comparison key
+lives separately at `.canic/local-secrets/build-environment.key`, atomically created
+with owner-only permissions under the existing build lock. Keep this key private
+and out of exported evidence: possession of both key and tags permits guessing
+values. These tags are diagnostic metadata, not credentials or cache authority.
+
+Value attribution covers at most 256 environment entries and safe names of at
+most 80 ASCII alphanumeric/underscore characters. Above that bound, or when the
+key is missing, corrupt, linked, not owner-only, changed between builds or the
+platform cannot safely store it, value attribution is unavailable. Builds and
+verified cache hits remain usable; an existing unsafe key is never overwritten.
+Removing the key loses comparison continuity. Every inherited build-environment
+entry still participates in the real cache identity, including differences
+between Make and direct launchers, with the deployment-only exclusion below.
+An attributed launcher key is evidence to investigate at its owner, not permission
+to exclude it from build identity.
 
 Build commands remove `CANIC_ICP_IDENTITY_PASSWORD_FILE` from their inherited
 environment. Cargo (including metadata and build scripts), compiler/cache probes,
@@ -229,7 +242,13 @@ total build wall time.
 
 Stderr reports each role's cache decision and the observed compilation and
 finalization phases. Runtime Cargo/link time includes linking; it is not a
-separately measured LLVM LTO duration. Known npm `ic-wasm` distribution launchers
+separately measured LLVM LTO duration. Long Cargo children report a heartbeat every
+30 seconds with the declaration/runtime phase, batch index/total, bounded role
+names, child elapsed time and elapsed time across that phase's compatible batches.
+The phase clock continues across successive children; bootstrap and standalone
+builds identify their single batch. Captured child output and exit status remain
+unchanged. A heartbeat proves a pending child, not CPU activity or progress past
+Cargo's internal lock. It includes no raw command or environment values. Known npm `ic-wasm` distribution launchers
 resolve to their native executable before admission and hashing. An unrecognized
 scripted tool cannot establish a cache hit; ordinary compilation remains usable.
 

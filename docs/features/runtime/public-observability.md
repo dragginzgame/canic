@@ -72,10 +72,12 @@ and a current stable-key/owner binding, the ic-memory ledger binding, or an
 explicit unknown binding. Range claims describe allocation policy; they do not
 establish an unknown allocation's owner. Zero-page entries remain visible.
 
-Collection uses ic-memory 0.13.3's owned runtime report. It reads 34,848 bytes of
-validated manager metadata and bounded current declarations without decoding
+Collection uses ic-memory's owned runtime report. The 0.13.3 qualification read
+34,848 bytes of validated manager metadata and bounded current declarations without decoding
 history, constructing stores, growing memory, writing, or advancing the ledger
 generation. Canic requires an already bootstrapped runtime.
+The 0.14.1 adoption preserves this reporting path and passes its native accounting
+regressions; it does not supply a new IC instruction/cycle measurement.
 `MemoryQuery::ledger()` remains the separate full historical diagnostic API.
 
 `physical_extent.bytes` measures allocated IC stable memory in canister

@@ -476,3 +476,28 @@ fn temp_root(label: &str) -> PathBuf {
         std::process::id()
     ))
 }
+
+#[test]
+#[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+fn private_publication_is_owner_only_before_writing_and_never_replaces() {
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = temp_root("private-publication");
+    let path = root.join("private/key");
+    commit_with_hook(
+        &path,
+        &[7; 32],
+        FileCommitMode::CreatePrivateWithParents,
+        |step, observed| {
+            if step == FileCommitStep::TemporaryFileWrite {
+                assert_eq!(fs::metadata(observed)?.permissions().mode() & 0o777, 0o600);
+            }
+            Ok(())
+        },
+    )
+    .unwrap();
+    assert_eq!(read_private_bytes::<32>(&path), Some([7; 32]));
+    let error = create_private_bytes_with_parents(&path, &[8; 32]).unwrap_err();
+    assert_eq!(error.kind(), std::io::ErrorKind::AlreadyExists);
+    assert_eq!(read_private_bytes::<32>(&path), Some([7; 32]));
+    fs::remove_dir_all(root).unwrap();
+}

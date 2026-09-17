@@ -80,6 +80,16 @@ pub extern "C" fn fixture_value() -> u8 {
     assert_eq!(changed["reused"], false);
     assert_ne!(changed["inputs"], baseline["inputs"]);
     assert_ne!(changed["wasm"], baseline["wasm"]);
+    assert!(
+        changed["miss_reason"]
+            .as_str()
+            .unwrap()
+            .contains("changed-value keys, up to 8: CANIC_TEST_BUILD_INPUT")
+    );
+    let repeat = invoke(Some("fixture-credential-b"), "beta");
+    assert_eq!(repeat["reused"], true);
+    assert_eq!(repeat["inputs"], changed["inputs"]);
+    assert_eq!(repeat["release"], changed["release"]);
     let dependency = root.join("upstream/canic/src/lib.rs");
     let source = fs::read_to_string(&dependency).unwrap();
     fs::write(&dependency, source.replace("{ 1 }", "{ 2 }")).unwrap();
@@ -112,6 +122,7 @@ fn observe_build_environment(root: &Path) {
     let hit = reuse.load().unwrap();
     assert_eq!(before, hit.as_ref().map(|hit| hit.release_build_id));
     let reused = hit.is_some();
+    let miss_reason = reuse.miss_reason();
     let release = hit.map_or_else(
         || {
             let release = finalize_fixture(&context);
@@ -143,6 +154,7 @@ fn observe_build_environment(root: &Path) {
             "inputs": reuse.inputs.digest(),
             "release": release,
             "reused": reused,
+            "miss_reason": miss_reason,
             "wasm": file_hash(&root.join("target/wasm32-unknown-unknown/fast/reuse_app.wasm")).unwrap(),
         }))
         .unwrap(),

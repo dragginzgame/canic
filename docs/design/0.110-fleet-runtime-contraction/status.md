@@ -1,5 +1,26 @@
 # Canic 0.110 Implementation Status
 
+## Post-.21 selected diagnostic/dependency batch — 2026-09-17
+
+The published base is .21. The open .22 batch includes complete CI dependency
+prefetch, CANIC-179 retained-plan guidance, ic-memory .14.1, test IcyDB .257.22
+and the maintainer-accepted CANIC-160/176 build diagnostics. It stays on the
+existing .110 line as downstream operator/dependency follow-up; RF2 and broader
+recovery forecasts remain separate. Test-only IcyDB alignment does not block
+Canic's production graph or release.
+
+Heartbeats identify roles/batches and distinguish child time from phase time.
+Optional private keyed comparisons name changed environment inputs without
+retaining raw values or weakening cache identity. The build guide records
+comparison limits and key privacy. Sixty-eight build and seventeen durable-file
+tests pass, along with scoped warning-denied Clippy and the changed-file secret
+scan. The complete selected .22 batch and both changelog surfaces are ready for
+the maintainer's release flow; versions remain .21. No broad gate or publication
+ran. See the [current handoff](../../status/current.md) for logs, downstream
+limits and the earlier dependency qualification. Toko still needs new comparison
+evidence to identify its actual environment-only miss; no whole-deployment
+speedup is claimed.
+
 ## Post-.20 selected correction batch — 2026-09-17
 
 The maintainer requests CANIC-178 first, then new Toko feedback and speed work.
