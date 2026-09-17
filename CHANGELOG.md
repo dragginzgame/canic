@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.20` reduces avoidable rebuilds and Fleet deployment overhead, restores admission
   commands, protects reviewed reset funding, preserves child-failure diagnostics,
-  reduces repeated authority reads and progress output, and updates IcyDB to 0.257.19.
+  reduces repeated authority reads and progress output, stabilizes recovery tests,
+  and updates IcyDB to 0.257.19.
 - `0.110.19` restores intermediate Fleet progress, clarifies changelog state ownership,
   reduces repeated build work, shares the production artifact pipeline with Fleet tests,
   and overlaps retained-asset inspection during reset review.

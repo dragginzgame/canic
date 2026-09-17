@@ -109,8 +109,16 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     retain_issued_underfunded_fixture(input, &mut planned.plan, &state, &mut initial);
     let issued = read_journal(&paths).unwrap().unwrap();
     assert_eq!(issued.effects.last().unwrap().state, EffectState::Issued);
-    let child = (input.native_pause == Some(Scenario::ChildClaim))
-        .then(|| block_initial_child(input, &planned.plan, &issued));
+    let child = (input.native_pause == Some(Scenario::ChildClaim)).then(|| {
+        // advance_time is a read followed by a write; the live gateway's automatic
+        // clock must not advance between them while this fixture drives bootstrap.
+        assert!(input.pic.auto_progress_enabled());
+        input.pic.stop_progress();
+        let claim = block_initial_child(input, &planned.plan, &issued);
+        input.pic.auto_progress();
+        assert!(input.pic.auto_progress_enabled());
+        claim
+    });
     let review = fleet_ensure_workflow::plan(
         input.adapter_root,
         &desired,
@@ -335,6 +343,7 @@ fn block_initial_child(
     plan: &FleetEnsurePlan,
     journal: &canic_host::fleet_ensure::model::FleetEnsureJournalRecord,
 ) -> ([u8; 32], Principal) {
+    assert!(!input.pic.auto_progress_enabled());
     let action = planned_actions(plan)
         .into_iter()
         .find(|action| action_sha256(action) == journal.effects.last().unwrap().action_sha256)
