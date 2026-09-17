@@ -265,6 +265,14 @@ print_summary() {
 finish_test_run() {
     report_compiler_cache_observation
     print_summary
+    if [[ "$MODE" = "full" || "$MODE" = "pocketic" ]]; then
+        local package target lane execution suite
+        while IFS=$'\t' read -r package target lane execution suite; do
+            if [[ "$lane" = "integration" ]]; then
+                echo "==> external integration not selected: $package/$target; run make test-pocketic-case CASE=$target"
+            fi
+        done < <(tail -n +2 "$INVENTORY")
+    fi
     if [[ "$PLAN_ONLY" -eq 1 ]]; then
         echo "WORKSPACE TEST PLAN RESOLVED: all requested suites were classified."
         return
@@ -409,6 +417,7 @@ run_inventory_tests() {
         [ "$row_package" = "$package" ] || continue
         [ "$row_execution" = "$execution" ] || continue
         [ "$row_suite" = "$suite" ] || continue
+        [[ "$release_lane" != "integration" ]] || continue
         if [ "$MODE" = "fast" ] && [ "$release_lane" != "fast" ]; then
             continue
         fi
@@ -442,6 +451,7 @@ run_combined_inventory_tests() {
     while IFS=$'\t' read -r row_package row_target release_lane row_execution row_suite; do
         [[ -n "${selected_packages[$row_package]:-}" ]] || continue
         [[ "$row_execution" = "$execution" && "$row_suite" = "$suite" ]] || continue
+        [[ "$release_lane" != "integration" ]] || continue
         if [[ "$MODE" = "fast" && "$release_lane" != "fast" ]]; then
             continue
         fi

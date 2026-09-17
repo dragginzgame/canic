@@ -8,12 +8,15 @@ fn isolated_invocations_report_a_synthetic_environment_change_and_repeat_exactly
     const INPUT_KEY: &str = "CANIC_TEST_SYNTHETIC_BUILD_INPUT";
     if let Some(root) = env::var_os(CHILD_ROOT) {
         let root = PathBuf::from(root);
-        let (environment, environment_keys) =
-            environment_evidence(crate::build_environment::inputs());
+        InputDiagnostics::prepare(&root);
+        let values = crate::build_environment::inputs();
+        let value_comparison = environment::EnvironmentComparison::capture(&root, &values);
+        let (environment, environment_keys) = environment_evidence(values);
         InputDiagnostics {
             schema_version: 1,
             environment,
             environment_keys,
+            value_comparison,
             source: "fixed-source".into(),
             configuration: "fixed-configuration".into(),
         }
@@ -50,7 +53,7 @@ fn isolated_invocations_report_a_synthetic_environment_change_and_repeat_exactly
     assert!(
         changed_value
             .compare(&candidate)
-            .contains("key attribution unavailable")
+            .contains("changed-value keys, up to 8: CANIC_TEST_SYNTHETIC_BUILD_INPUT")
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -66,6 +69,7 @@ fn evidence(environment: &[(&str, &str)]) -> InputDiagnostics {
         schema_version: 1,
         environment,
         environment_keys,
+        value_comparison: None,
         source: "source".into(),
         configuration: "configuration".into(),
     }

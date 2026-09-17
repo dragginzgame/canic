@@ -38,6 +38,13 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
             )
             .unwrap();
         assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
+        let key = context
+            .icp_root
+            .join(".canic/local-secrets/build-environment.key");
+        fs::write(&key, b"invalid optional key").unwrap();
+        assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
+        fs::remove_file(&key).unwrap();
+        assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
         fs::remove_file(directory.join("last-input-diagnostics.json")).unwrap();
         assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
         fs::write(directory.join("last-input-diagnostics.json"), b"invalid").unwrap();
@@ -54,6 +61,13 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
 }
 
 fn prepared_reuse(context: &WorkspaceBuildContext) -> CompleteBuildReuse {
+    let lock = lock_file(
+        &context
+            .icp_root
+            .join(".canic/locks/complete-build-reuse.lock"),
+    )
+    .unwrap();
+    diagnostics::InputDiagnostics::prepare(&context.icp_root);
     let inputs = input_snapshot(context, &[]).unwrap();
     CompleteBuildReuse {
         input_locations: diagnostics::InputLocations::capture(context),
@@ -64,12 +78,7 @@ fn prepared_reuse(context: &WorkspaceBuildContext) -> CompleteBuildReuse {
             .join(format!("{}.json", inputs.digest())),
         inputs,
         tool_paths: vec![],
-        _lock: lock_file(
-            &context
-                .icp_root
-                .join(".canic/locks/complete-build-reuse.lock"),
-        )
-        .unwrap(),
+        _lock: lock,
         context: context.clone(),
     }
 }

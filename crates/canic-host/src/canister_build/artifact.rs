@@ -29,7 +29,7 @@ use super::{
     AppCanisterArtifactBuildOutput, CanisterBuildProfile, TimedCanisterArtifactBuildOutput,
     WorkspaceBuildContext,
     cache::{
-        canister_build_target_root, configure_canister_cargo_command,
+        CargoBuildProgress, canister_build_target_root, configure_canister_cargo_command,
         configure_declaration_command, declaration_target_root, lock_canister_build_target,
         output_canister_cargo_command,
     },
@@ -65,6 +65,17 @@ pub struct CanisterArtifactBuilder {
 struct CanisterBuildGroup<'a> {
     workspace_root: PathBuf,
     specs: Vec<&'a CanisterArtifactBuildSpec>,
+}
+
+impl CanisterBuildGroup<'_> {
+    fn progress(&self, batch: usize, batches: usize, started: Instant) -> CargoBuildProgress {
+        CargoBuildProgress::batch(
+            self.specs.iter().map(|spec| spec.role.as_str()),
+            batch,
+            batches,
+            started,
+        )
+    }
 }
 
 impl CanisterArtifactBuilder {
@@ -341,12 +352,11 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
         workspace_groups.len()
     );
     let started = Instant::now();
-    for group in &workspace_groups {
+    for (index, group) in workspace_groups.iter().enumerate() {
         run_canister_build_batch(
             context,
-            &group.workspace_root,
-            &group.specs,
-            context.profile,
+            group,
+            group.progress(index + 1, workspace_groups.len(), started),
         )?;
     }
     eprintln!(
@@ -372,7 +382,7 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
         started.elapsed().as_secs_f64()
     );
     let started = Instant::now();
-    for group in &workspace_groups {
+    for (index, group) in workspace_groups.iter().enumerate() {
         let entries = group
             .specs
             .iter()
@@ -386,7 +396,12 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
             .collect();
         let batch =
             canic_core::role_contract::build_context::encode_protocol_build_context(entries)?;
-        run_canister_runtime_batch(context, group, batch)?;
+        run_canister_runtime_batch(
+            context,
+            group,
+            batch,
+            group.progress(index + 1, workspace_groups.len(), started),
+        )?;
     }
     eprintln!(
         "Build phase runtime Cargo/link: {:.2}s",
@@ -483,6 +498,7 @@ fn run_canister_runtime_batch(
     context: &WorkspaceBuildContext,
     group: &CanisterBuildGroup<'_>,
     batch: String,
+    progress: CargoBuildProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
     let mut command = canister_cargo_build_command(
         context,
@@ -496,7 +512,7 @@ fn run_canister_runtime_batch(
     for spec in &group.specs {
         command.arg("--package").arg(&spec.package_name);
     }
-    let output = output_canister_cargo_command(&mut command)?;
+    let output = output_canister_cargo_command(&mut command, progress)?;
     if !output.status.success() {
         return Err(format!(
             "configured runtime batch failed: {}",
@@ -735,7 +751,8 @@ fn run_canister_build(
         );
     }
 
-    let output = output_canister_cargo_command(&mut command)?;
+    let output =
+        output_canister_cargo_command(&mut command, CargoBuildProgress::single(&context.role))?;
     if !output.status.success() {
         return Err(format!(
             "cargo build failed for {}: {}",
@@ -760,7 +777,8 @@ fn run_canister_profile_candid_build(
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut command =
         canister_profile_candid_command(context, manifest_path, context.profile, options);
-    let output = output_canister_cargo_command(&mut command)?;
+    let output =
+        output_canister_cargo_command(&mut command, CargoBuildProgress::single(&context.role))?;
     if !output.status.success() {
         return Err(format!(
             "profile Candid build failed for {}: {}",
@@ -816,17 +834,22 @@ fn apply_cargo_feature_selection(command: &mut Command, options: &CanisterArtifa
 
 fn run_canister_build_batch(
     context: &WorkspaceBuildContext,
-    cargo_workspace_root: &Path,
-    specs: &[&CanisterArtifactBuildSpec],
-    profile: CanisterBuildProfile,
+    group: &CanisterBuildGroup<'_>,
+    progress: CargoBuildProgress,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let mut command = canister_cargo_batch_command(context, cargo_workspace_root, specs, profile);
+    let mut command = canister_cargo_batch_command(
+        context,
+        &group.workspace_root,
+        &group.specs,
+        context.profile,
+    );
 
-    let output = output_canister_cargo_command(&mut command)?;
+    let output = output_canister_cargo_command(&mut command, progress)?;
     if output.status.success() {
         return Ok(());
     }
-    let roles = specs
+    let roles = group
+        .specs
         .iter()
         .map(|spec| spec.role.as_str())
         .collect::<Vec<_>>()

@@ -876,6 +876,26 @@ receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
 
+This boundary also applies to read-only commands such as `canic info env`.
+A working frontend does not prove that the retained operation completed, and
+an unreadable plan does not authorize reconstructing role bindings from stale
+state. Decode errors retain the document path and underlying cause and point
+here, including missing continuation bounds such as `maximum_successor_actions`.
+
+For an explicitly disposable **local simulator**, first retain the evidence
+above and confirm that discarding its simulated data and balances is authorized.
+Stop its owning session, then use that owner's exact-session reset procedure.
+For Canic's `LocalFleetSession`, follow
+[persistence, recovery and reset](local-development-fleet.md#persistence-recovery-and-reset):
+reset the recorded session only after its owner exits, start a fresh session,
+use its newly returned environment, and generate/review a new Fleet plan from
+the current local release. Reset preserves historical Ensure records and shared
+artifacts; deleting just `plan.json` is not this procedure. A downstream-owned
+simulator must use its own documented reset owner; the Canic session command
+cannot reset arbitrary local infrastructure. A name containing `local` does not
+prove disposability. This procedure cannot resolve or discard outstanding live
+payments, controlled real cycles or an unresolved real operation.
+
 Ordinary Ensure diagnoses failures in either document and reports
 `RetainedActivationReviewRequired` only when the
 existing local source inspector finds an exact Applied protocol prefix ending

@@ -5,9 +5,9 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
-# Prime the locked Wasm graph before offline inspection, including on cold CI
-# runners whose tool-installation cache does not contain workspace dependencies.
-cargo fetch --locked --target wasm32-unknown-unknown
+# Offline tree resolution needs packages beyond the displayed Wasm graph.
+# Prime the complete locked graph so cold CI caches include those packages too.
+cargo fetch --locked
 
 CANONICAL_PACKAGE_PROFILES=(
     canic/fleet-coordinator-canister:none

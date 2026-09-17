@@ -20,6 +20,133 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Post-.21 Toko build diagnostics — 2026-09-17
+
+The maintainer accepted CANIC-160's heartbeat refinement and CANIC-176's
+changed-environment-value attribution for the same open .22 batch. Latest
+read-only Toko feedback remains at SHA-256
+`e9c5086465168de13405a8ef95661d0bb1ed81ec816b03270b2553f1dc9e7874`;
+no issue newer than CANIC-179 was present. Its latest notes acknowledge the
+unpublished CANIC-179 correction. Toko and IcyDB checkouts were not modified.
+
+Cargo heartbeats now identify bounded role labels and batch index/total, with
+separate child and continuing phase elapsed times. Configured declaration/runtime
+batches share their phase clock; standalone/bootstrap commands name their one
+batch. Captured streams, exit status, launch errors and build arguments remain
+unchanged. Pending-child liveness still does not distinguish compilation,
+linking or Cargo's internal locks.
+
+Changed-value diagnostics use bounded HMAC-SHA256 equality tags with a random
+workspace-local key at `.canic/local-secrets/build-environment.key`. Atomic
+publication creates owner-only bytes before writing; reads reject links,
+multiple hard links, invalid size and non-private permissions. Existing unsafe
+keys are not replaced. Reports emit safe key names only; raw values and unkeyed
+per-value hashes are never retained. The key must remain private and separate
+from exported diagnostic evidence. Missing/unusable/rotated keys or more than
+256 environment entries lose attribution only, without changing cache admission.
+All existing build inputs remain bound; no speculative launcher exclusion was
+added. The [build guide](../architecture/build-artifacts.md) records these limits.
+
+Focused qualification passes 68 build tests (one existing real-extractor case
+ignored) and 17 durable-I/O tests. The real build-script fixture attributes a
+changed key, misses on its changed value and reuses the sealed release on an
+unchanged repeat. Missing/corrupt diagnostic material cannot admit tampered
+artifacts or invalidate verified hits. Private creation, non-replacement,
+bounds, key rotation and unsafe key paths are covered. Host library/test
+all-feature Clippy passes with warnings denied. Changed-file redacted secret
+scan, formatting and whitespace checks pass. Logs:
+`/tmp/canic-160-176-host-tests-retry.log`, `/tmp/canic-176-durable-tests.log` and
+`/tmp/canic-160-176-clippy.log`. The initial test selection hit sandbox restrictions
+on sccache and registry access; its log remains at
+`/tmp/canic-160-176-host-tests.log`. The successful retry used the local sccache
+service and forced all Cargo subprocesses offline.
+
+The complete selected .22 dependency, CI and operator-diagnostic batch is ready
+for the maintainer's release flow, with both changelog surfaces updated. Package
+versions remain .21. No full validation, version bump, commit or push ran here.
+Actual Toko changed-key attribution needs a new comparable successful build;
+its .21 report cannot establish the differing variable, and this work claims no
+measured deployment speedup. External IcyDB composition remains separately
+qualified and does not block Canic. RF2, wider forecasts and matched deployment
+speed work remain the already-separated follow-ups.
+
+## Post-.21 dependencies and CANIC-179 — 2026-09-17
+
+The maintainer confirms .21 is pushed (`0f67eba1d`). The existing .22 CI correction
+batch now includes published IcyDB 0.257.22, ic-memory 0.14.1 and CANIC-179.
+Package versions remain .21; the concurrent crypto-prefetch correction is
+preserved. These are operator/dependency follow-ups on the existing .110 line,
+not a next-minor or closeout decision.
+
+Both lockfiles align all six IcyDB packages at .257.22 and resolve Canic's memory
+runtime to .14.1. The standalone lockfile also refreshes local Canic identities
+to their existing .21 version. Fixed allocation IDs, host policy and bucket
+configuration remain unchanged. Canic uses the upstream bounded ledger recovery
+and default admission behavior; it does not enable key-only placement or an
+application-specific historical-admission callback.
+
+The maintainer explicitly clarified that test-only IcyDB must not block Canic's
+production upgrade. IcyDB .257.22 retains its separate ic-memory .13.3 dependency.
+The memory-identity guard now inspects Canic's normal Wasm dependency graph,
+which contains one .14.1 runtime, rather than all workspace test dependencies.
+The IcyDB composition target (including its IcyDB-backed provisioning journeys)
+is classified as explicit external integration. Release/PocketIC summaries report
+it as unselected; use `make test-pocketic-case CASE=icydb_lifecycle_composition`
+when its dependencies align. Its assertions are unchanged. This does not claim
+that two memory runtimes can share a canister: downstream applications composing
+Canic and IcyDB still require one compatible allocator identity.
+
+Focused qualification passes: 23 core memory tests (including bootstrap-backed
+diagnostics, accounting and nondefault buckets), four production ABI guards,
+and the execution-plan regression proving ordinary Canic lifecycle/funding
+coverage remains selected while external composition requires an explicit target.
+Both the lifecycle probe all-target check and standalone composed participant
+check also pass with the final dual-version graph; compilation is not composed
+runtime qualification. Warning-denied Clippy passes for both changed Rust guard
+targets. Scoped ShellCheck, syntax, inventory, formatting and whitespace checks
+pass. Logs: `/tmp/canic-ic-memory-0141-tests.log`,
+`/tmp/canic-ic-memory-0141-guard.log`, `/tmp/canic-external-composition-plan.log`,
+`/tmp/canic-0141-guards-clippy.log`, `/tmp/canic-0141-icydb-fixture-check.log` and
+`/tmp/canic-0141-composed-check.log`. No new IC instruction/cycle or Wasm-size
+measurement is claimed.
+
+Latest Toko feedback adds CANIC-179 and confirms .21 adoption for CANIC-178;
+live threshold recovery remains downstream qualification. CANIC-179 is addressed
+at the shared document-decode error, including read-only inventory consumers:
+preserve the typed path/cause and unresolved evidence, and explain exact-session
+replacement only for authorized disposable simulators. The guide requires a
+fresh environment/plan and preserves historical Ensure records. No default,
+predecessor decoder, automatic reset or downstream mutation was added. The
+retained-plan regression passes, preserving bytes and refusing effects; log:
+`/tmp/canic-179-retained-plan-test.log`.
+Feedback snapshot: `a59678f652ff49bcd7aeba318afafdc348c75f9f3563245c5bdfecdc7eb80241`.
+
+The selected .22 dependency/diagnostic/CI batch is prepared for the maintainer's
+release flow, with matching changelog surfaces. External IcyDB composition
+qualification is pending alignment separately, not a Canic production release
+blocker. CANIC-176 changed-value attribution, broader deployment speed work and
+preserved RF2 remain follow-ups. No broad gate, version bump, commit, push or
+deployment ran here; the execution-plan regression prints plans only.
+
+## CI correction: complete crypto-gate dependency prefetch — 2026-09-17
+
+The .21 CI preflight failed because Wasm-targeted dependency prefetch left
+`ar_archive_writer` unavailable to subsequent offline Cargo tree resolution.
+The crypto gate now fetches the complete locked graph, matching the workspace
+test runner. Its offline Wasm target, normal-edge selection and crypto profiles
+remain unchanged; no dependency or package version changes are needed.
+
+The exact crypto gate passes for all 12 canonical roles, including the nine
+zero-auth roles, using the local Cargo cache. Bash syntax, scoped ShellCheck and
+whitespace checks pass. Gate output is `/tmp/canic-crypto-closure.log`.
+This did not reproduce a cold GitHub runner or rerun complete CI.
+
+The bounded CI correction batch is ready to push through the maintainer-selected
+release flow, with matching .22 changelog draft surfaces. The .21 tag already
+exists; package versions remain .21. No broad gate, version transaction, commit
+or push ran. This is a necessary CI correction on the existing .110 line, not a
+new minor or a closeout decision.
+
 ## Release-test investigation: PocketIC tick timeout — 2026-09-17
 
 The subsequent release validation stalled in `insufficient real ICP denial`.

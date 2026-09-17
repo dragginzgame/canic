@@ -79,6 +79,7 @@ enum FileCommitMode {
     Replace,
     CreateNew,
     CreateNewWithParents,
+    CreatePrivateWithParents,
 }
 
 /// Durably replace one file through atomic publication of complete bytes.
@@ -101,6 +102,25 @@ pub fn create_new_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
 /// an existing destination.
 pub fn create_new_bytes_with_parents(path: &Path, bytes: &[u8]) -> io::Result<()> {
     commit_bytes(path, bytes, FileCommitMode::CreateNewWithParents)
+}
+
+/// Create owner-only bytes atomically, without replacing an existing destination.
+pub(crate) fn create_private_bytes_with_parents(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    commit_bytes(path, bytes, FileCommitMode::CreatePrivateWithParents)
+}
+
+/// Read a fixed-size private file through a no-follow regular descriptor.
+/// Permissions and size are checked on the opened descriptor before reading.
+pub(crate) fn read_private_bytes<const N: usize>(path: &Path) -> Option<[u8; N]> {
+    #[cfg(any(target_os = "linux", target_os = "android", target_vendor = "apple"))]
+    {
+        supported::read_private_bytes(path)
+    }
+    #[cfg(not(any(target_os = "linux", target_os = "android", target_vendor = "apple")))]
+    {
+        let _ = path;
+        None
+    }
 }
 
 /// Read a bounded regular file without following a final symlink.
@@ -253,6 +273,22 @@ mod supported {
     const TEMP_ATTEMPTS: usize = 64;
     static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
+    pub(super) fn read_private_bytes<const N: usize>(path: &Path) -> Option<[u8; N]> {
+        use std::os::unix::fs::MetadataExt as _;
+        let (mut file, size) = open_optional_regular_file(path).ok()??;
+        let metadata = file.metadata().ok()?;
+        if size != N as u64 || metadata.mode() & 0o777 != 0o600 || metadata.nlink() != 1 {
+            return None;
+        }
+        let mut bytes = [0; N];
+        file.read_exact(&mut bytes).ok()?;
+        let mut extra = [0];
+        if file.read(&mut extra).ok()? != 0 {
+            return None;
+        }
+        Some(bytes)
+    }
+
     pub(super) fn read_optional_regular_bytes(
         path: &Path,
     ) -> Result<Option<Vec<u8>>, RegularFileReadError> {
@@ -382,13 +418,20 @@ mod supported {
         let (parent, file_name) = split_target(path)?;
         if matches!(
             mode,
-            FileCommitMode::Replace | FileCommitMode::CreateNewWithParents
+            FileCommitMode::Replace
+                | FileCommitMode::CreateNewWithParents
+                | FileCommitMode::CreatePrivateWithParents
         ) {
             create_parent_hierarchy(parent, &mut before)?;
         }
         let parent_fd = open_directory(parent)?;
+        let permissions = if mode == FileCommitMode::CreatePrivateWithParents {
+            0o600
+        } else {
+            0o666
+        };
         let (temp_name, temp_path, mut temp_file) =
-            create_sibling_temp(&parent_fd, parent, file_name, &mut before)?;
+            create_sibling_temp(&parent_fd, parent, file_name, permissions, &mut before)?;
 
         let staged = (|| {
             before(FileCommitStep::TemporaryFileWrite, &temp_path)?;
@@ -410,7 +453,9 @@ mod supported {
             FileCommitMode::Replace => {
                 unix_fs::renameat(&parent_fd, &temp_name, &parent_fd, file_name)
             }
-            FileCommitMode::CreateNew | FileCommitMode::CreateNewWithParents => {
+            FileCommitMode::CreateNew
+            | FileCommitMode::CreateNewWithParents
+            | FileCommitMode::CreatePrivateWithParents => {
                 publish_create_new(&parent_fd, &temp_name, file_name)
             }
         };
@@ -548,6 +593,7 @@ mod supported {
         parent_fd: &impl AsFd,
         parent: &Path,
         file_name: &OsStr,
+        permissions: u32,
         before: &mut impl FnMut(FileCommitStep, &Path) -> io::Result<()>,
     ) -> io::Result<(OsString, PathBuf, fs::File)> {
         for _ in 0..TEMP_ATTEMPTS {
@@ -561,7 +607,7 @@ mod supported {
                 parent_fd,
                 &temp_name,
                 OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::CLOEXEC,
-                Mode::from_raw_mode(0o666),
+                Mode::from_raw_mode(permissions),
             ) {
                 Ok(file) => return Ok((temp_name, temp_path, fs::File::from(file))),
                 Err(error) if error == rustix::io::Errno::EXIST => {}

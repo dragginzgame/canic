@@ -718,3 +718,39 @@ fn published_package_feature_docs_match_manifests() {
         }
     }
 }
+
+#[test]
+fn external_composition_qualification_is_explicit() {
+    let plan = |mode: &str, target: Option<&str>| {
+        let mut command = std::process::Command::new("bash");
+        command
+            .current_dir(workspace_root())
+            .env("CANIC_TEST_PLAN_ONLY", "1")
+            .arg("scripts/ci/run-workspace-tests.sh")
+            .arg(mode);
+        if let Some(target) = target {
+            command.arg(target);
+        }
+        let output = command.output().expect("resolve test execution plan");
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        String::from_utf8(output.stdout)
+            .expect("test plan is UTF-8")
+            .lines()
+            .filter(|line| line.starts_with("==> plan: cargo test "))
+            .collect::<Vec<_>>()
+            .join("\n")
+    };
+    for mode in ["full", "pocketic"] {
+        let release = plan(mode, None);
+        assert!(release.contains("--test lifecycle_boundary"));
+        assert!(release.contains("--test pic_root_funding_recovery"));
+        assert!(!release.contains("--test icydb_lifecycle_composition"));
+    }
+    let integration = plan("targeted-pocketic", Some("icydb_lifecycle_composition"));
+    assert!(integration.contains("--test icydb_lifecycle_composition"));
+    assert!(!integration.contains("--test pic_root_funding_recovery"));
+}

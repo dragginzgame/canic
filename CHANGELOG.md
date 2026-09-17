@@ -14,6 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.22` fixes cold CI dependency prefetching, explains unreadable Fleet-plan
+  recovery boundaries, updates ic-memory to 0.14.1 and test IcyDB to 0.257.22,
+  separates external composition qualification from Canic release tests, and
+  improves Cargo heartbeat and environment cache-miss attribution.
 - `0.110.21` separates sibling automatic-funding receipts, retains protected terminal
   top-up failures, overlaps terminal inventory reads and Candid extraction, reports
   long Cargo build phases and updates IcyDB to 0.257.21.

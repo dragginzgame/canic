@@ -145,6 +145,7 @@ impl CompleteBuildReuse {
         );
         progress(BuildReuseProgress::LockFinished(lock_started.elapsed()));
         let lock = lock?;
+        diagnostics::InputDiagnostics::prepare(&context.icp_root);
         let mut tool_paths = vec![
             env::current_exe()?,
             tools.ic_wasm().path().to_path_buf(),

@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.110.20"
+version = "0.110.21"
 dependencies = [
  "candid",
  "canic-core",
@@ -165,13 +165,13 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.110.20"
+version = "0.110.21"
 dependencies = [
  "async-trait",
  "candid",
  "ciborium",
  "ic-cdk",
- "ic-memory",
+ "ic-memory 0.14.1",
  "ic-timers",
  "proc-macro2",
  "quote",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.110.20"
+version = "0.110.21"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -588,6 +588,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-memory"
+version = "0.14.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c3cc43e525bf57cd31fc54b98351df174f4c67c0ad054933f1db802815be913b"
+dependencies = [
+ "ciborium",
+ "ctor",
+ "ic-stable-structures",
+ "serde",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ic-stable-structures"
 version = "0.7.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -662,13 +675,13 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.257.21"
+version = "0.257.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "93caaeb43f7d41b63458844189e733950e2604ce495354d427180bac70b2fa70"
+checksum = "c87df0840e3ee94b3ad1926af65c67df710cfffe72b01bc95a7e2893f70de8fa"
 dependencies = [
  "candid",
  "ic-cdk",
- "ic-memory",
+ "ic-memory 0.13.3",
  "ic-timers",
  "icydb-core",
  "icydb-diagnostic-code",
@@ -680,15 +693,15 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.257.21"
+version = "0.257.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7e0bc859da2cf52c5611b65c17d4f93e1790c861cbe754252317b36b50cfcfd1"
+checksum = "484a85684f8b498f31fb20ad97041d2cb308871beac04608d43bbc0805d86d13"
 dependencies = [
  "base64",
  "candid",
  "getrandom",
  "ic-cdk",
- "ic-memory",
+ "ic-memory 0.13.3",
  "icydb-diagnostic-code",
  "icydb-schema",
  "num-bigint",
@@ -705,18 +718,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.257.21"
+version = "0.257.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a8cf194dbc49175bb066e33b4375a3bc0a9c4fed70e9b8415444cf71f8e6d3b9"
+checksum = "f6f6c35e59fc3d6796f51fc67af39c7e6754f3ed06a03c8cc95ad37e38521ded"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.257.21"
+version = "0.257.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ec9a4e79d9033485734754716dcdd4b98df963cd1274a8ec69de72c04c54f15f"
+checksum = "2ea959d0ca6d30860ad93d2588fa34b7972db2cb766390878e460872a710bb06"
 dependencies = [
  "candid",
  "convert_case",
@@ -736,9 +749,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.257.21"
+version = "0.257.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "37bd88d1120d2f6c0dd89d6f3231016531dcc6db98ad30f7f4de7b158c41fcf0"
+checksum = "865975877aca56bea3af059df3beb977cf806f031ee42e8c5f9f1147c51340d6"
 dependencies = [
  "convert_case",
  "darling 0.24.1",
@@ -753,9 +766,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.257.21"
+version = "0.257.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d45495175bf30540e2cfd1763edff257000cca9517979358e9a3afea78d47d9d"
+checksum = "d329e33e1ee476e4e4c92e027cbb043d440410b1072f0420f8fc4d70f0074ce0"
 dependencies = [
  "candid",
  "derive_more",

@@ -32,6 +32,7 @@ canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }
 flate2 = { workspace = true }
 getrandom = { workspace = true }
+hmac = { workspace = true }
 ic-agent = { workspace = true }
 ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
