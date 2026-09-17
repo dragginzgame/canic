@@ -64,7 +64,25 @@ fn output_with_implicit_cache(
     {
         check_implicit_cache(command, wrapper)?;
     }
-    command.output().map_err(CompilerCacheError::CargoLaunch)
+    let declaration = command.get_envs().any(|(key, value)| {
+        key == canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV
+            && value == Some(OsStr::new("1"))
+    });
+    let phase = if declaration {
+        "declaration"
+    } else {
+        "runtime"
+    };
+    crate::canister_build::process::output_with_progress(
+        command,
+        std::time::Duration::from_secs(30),
+        move |elapsed| {
+            eprintln!(
+                "Build phase {phase} Cargo/link: still running after {:.0}s (Cargo may be compiling, linking or waiting for its own lock)",
+                elapsed.as_secs_f64()
+            );
+        },
+    ).map_err(CompilerCacheError::CargoLaunch)
 }
 
 /// Declaration passes retain runtime cfg/profile semantics without paying for LTO.

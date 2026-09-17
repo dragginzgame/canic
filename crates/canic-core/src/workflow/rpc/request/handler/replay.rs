@@ -182,6 +182,7 @@ fn map_existing_replay_decision(
             Err(RpcWorkflowError::ReplayDuplicateSame(replay_input.descriptor.name).into())
         }
         ReplayDecision::DuplicateConflict => {
+            log_replay_conflict(ctx, &replay_input);
             crate::perf!("duplicate_conflict");
             ReplayMetrics::record(
                 ReplayMetricOperation::Check,
@@ -570,4 +571,15 @@ mod replay {
             purge_scan_limit: REPLAY_PURGE_SCAN_LIMIT,
         })
     }
+}
+
+fn log_replay_conflict(ctx: &RootContext, input: &RootReplayInput) {
+    crate::log!(
+        crate::log::Topic::Rpc,
+        Warn,
+        "replay conflict caller={} command={} operation_id={}",
+        ctx.caller,
+        input.descriptor.name,
+        OperationId::from_bytes(input.metadata.request_id)
+    );
 }

@@ -1,5 +1,7 @@
 pub mod install;
 pub mod root_funding;
+#[cfg(feature = "internal-test-fixtures")]
+pub mod topup_fixture;
 
 use crate::{
     InternalError,

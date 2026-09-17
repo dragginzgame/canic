@@ -1,5 +1,49 @@
 # Canic 0.110 Implementation Status
 
+## Post-.20 selected correction batch — 2026-09-17
+
+The maintainer requests CANIC-178 first, then new Toko feedback and speed work.
+The open .21 batch contains caller-scoped automatic funding identities, retained
+protected failure evidence, a real two-Shard qualification, bounded terminal
+partition reads and Cargo-phase heartbeats. The .20 release is published; package
+versions remain .20; this draft has completed its focused qualification. This is a correctness and
+operator follow-up on the affected .110 line, within the release-count exception.
+No new minor, closeout audit, full validation or publication is authorized.
+
+The requested IcyDB follow-up aligns both maintained fixtures and their lockfiles
+on published 0.257.21. Locked offline lifecycle-probe and composed-participant
+checks pass; the .21 draft includes this dependency update. Historical Wasm
+measurements retain their original source identities.
+
+The next requested speed round extends four-wide terminal reads to each parent's
+independent child allocation receipts, with validation before management inspection.
+Twenty focused host tests, scoped warning-denied Clippy and the existing exact
+mixed-topology recovery case pass, including both deliberate reinstalls and
+effect-free replay. The transport test proves sibling overlap and failed-batch
+draining; the live fixture proves integration with one child per parent. This
+does not establish a whole-deployment speedup. Fresh Toko working-tree review
+finds no additional Canic funding defect; publication/adoption remains pending.
+See the [throughput report](../../audits/working/0.110-validation-throughput/report.md)
+for evidence and limits. This continuation stays in the same .21 draft.
+
+The subsequent requested speed slice bounds independent Candid extraction to
+four workers. It preserves exact cache binding, drains failures and derives no
+partial runtime profiles. Ten focused tests and scoped warning-denied Clippy
+pass. The same six retained Wasms yield a controlled median extraction reduction
+from 5.245s to 2.732s with identical interfaces. This bounded build-phase gain
+joins the existing .21 batch; broader compile/deployment latency remains open.
+
+The identity fix preserves the parent actor boundary and same-release durable
+retry. Existing cycle telemetry owns the diagnostic; existing bounded observation
+and process owners own the speed/progress changes. RF2 and complete recovery
+forecasts remain separate. Dedicated downstream acceptance, environment changed-
+value attribution and matched deployment measurements remain open. See the
+[current handoff](../../status/current.md) for the passing 27 core, 21 host and
+one CLI regressions, the two-Shard PocketIC case and scoped lint. The selected
+correction/progress batch is ready for the maintainer-directed release flow;
+publication and live Toko recovery remain separate.
+
+
 ## Selected .20 release-test correction — 2026-09-16
 
 The maintainer selected the completed fixes for release; RF2, complete live

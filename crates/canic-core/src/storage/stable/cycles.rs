@@ -7,6 +7,7 @@
 use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
+    domain::cycles::CycleTopupFailureDisposition,
     eager_static,
     role_contract::allocation::memory::cycles::{
         CYCLES_FUNDING_LEDGER_ID, CYCLES_TOPUP_EVENTS_ID, CYCLES_TRACKER_ID,
@@ -297,6 +298,16 @@ pub struct CycleTopupEventRecord {
     pub transferred_cycles: Option<Cycles>,
     pub status: CycleTopupEventStatusRecord,
     pub error: Option<String>,
+    pub parent_failure: Option<CycleTopupFailureRecord>,
+}
+
+/// Bounded diagnostic for a completed automatic parent funding failure.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct CycleTopupFailureRecord {
+    pub parent: Principal,
+    pub operation_id: [u8; 32],
+    pub public_error_code: u16,
+    pub disposition: CycleTopupFailureDisposition,
 }
 
 impl CycleTopupEventRecord {
@@ -366,6 +377,7 @@ impl CycleTopupEvents {
         transferred_cycles: Option<Cycles>,
         status: CycleTopupEventStatusRecord,
         error: Option<String>,
+        parent_failure: Option<CycleTopupFailureRecord>,
     ) {
         CYCLE_TOPUP_EVENTS.with_borrow_mut(|events| {
             let sequence = events.next_sequence(timestamp_secs);
@@ -376,6 +388,7 @@ impl CycleTopupEvents {
                     transferred_cycles,
                     status,
                     error,
+                    parent_failure,
                 },
             );
         });
@@ -420,12 +433,20 @@ impl CycleTopupEvents {
     }
 
     fn purge_inner(&mut self, cutoff: u64, limit: usize) -> usize {
+        // Preserve a stopped owner's last failure even after history retention expires.
+        // A later outcome supersedes it; no extra allocation or unbounded pin set is needed.
+        let retained = self.map.last_key_value().and_then(|(key, record)| {
+            record
+                .parent_failure
+                .filter(|failure| failure.disposition == CycleTopupFailureDisposition::Terminal)
+                .map(|_| key)
+        });
         let mut purged = 0;
 
         while purged < limit
             && let Some((first_key, _)) = self.map.first_key_value()
         {
-            if first_key.timestamp_secs < cutoff {
+            if first_key.timestamp_secs < cutoff && Some(first_key) != retained {
                 self.map.remove(&first_key);
                 purged += 1;
             } else {
@@ -547,6 +568,7 @@ mod tests {
             Cycles::new(20),
             Some(Cycles::new(19)),
             CycleTopupEventStatusRecord::RequestOk,
+            None,
             None,
         );
         CyclesFundingLedger::record_child_grant(child, Cycles::new(30), 40);

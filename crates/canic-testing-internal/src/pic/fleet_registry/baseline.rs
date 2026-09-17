@@ -32,6 +32,8 @@ mod tests {
     #[cfg(test)]
     mod native_funding;
     #[cfg(test)]
+    mod sibling_funding;
+    #[cfg(test)]
     mod state_cascade;
 
     use super::*;
@@ -19116,6 +19118,10 @@ cycles = "80T"
             (
                 "low native reserve retains child failure and recovers same claim",
                 child_reserve::low_native_reserve_retains_child_failure_and_recovers_same_claim,
+            ),
+            (
+                "sibling topups retain distinct receipts after both replies are lost",
+                sibling_funding::sibling_topups_retain_distinct_receipts_after_both_replies_are_lost,
             ),
             (
                 "child grant refreshes Root funding deadline without repeating credit",

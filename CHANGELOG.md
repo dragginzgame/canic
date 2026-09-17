@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.21` separates sibling automatic-funding receipts, retains protected terminal
+  top-up failures, overlaps terminal inventory reads and Candid extraction, reports
+  long Cargo build phases and updates IcyDB to 0.257.21.
 - `0.110.20` reduces avoidable rebuilds and Fleet deployment overhead, restores admission
   commands, protects reviewed reset funding, preserves child-failure diagnostics,
   reduces repeated authority reads and progress output, stabilizes recovery tests,

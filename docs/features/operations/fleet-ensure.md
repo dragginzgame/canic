@@ -42,6 +42,13 @@ with zero attempts can include local preparation, validation and use of an
 already observed response within that same read-only snapshot. It does not mean
 zero work or authorize reusing the balance in a later review or after mutation.
 
+Terminal inventory also overlaps independent Component partition reads and,
+within each parent's child set, Root allocation-receipt reads up to four at a
+time. Each set must validate before its management inspections begin. Receipt
+failures drain the issued batch, stop later batches and prevent partial inventory
+publication. Pagination, parent traversal and fresh authority checks retain their
+existing boundaries; these observations are not cached across terminal passes.
+
 Within one read-only protocol planning pass, manifest and chunk checks share a
 successful template-status read for the exact Store, Candid path/digest, template
 and version. Each action still verifies its Candid binding. Later plans, retries

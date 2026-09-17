@@ -34,7 +34,10 @@ use super::{
         output_canister_cargo_command,
     },
     candid::remove_stale_icp_candid_sidecars,
-    candid_cache::{CandidExtractionCache, extract_configured_candid},
+    candid_cache::{
+        CandidExtractionCache, CandidExtractionInput, extract_configured_candid,
+        extract_configured_candids,
+    },
     model::{
         CanisterArtifactBuildOptions, CanisterArtifactBuildOutput, CanisterArtifactBuildSpec,
         CanisterArtifactSource, ConfiguredCanisterArtifactBuildOutput, FLEET_COORDINATOR_ROLE,
@@ -353,12 +356,9 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
     let started = Instant::now();
     let mut profiles = BTreeMap::new();
     let cache = CandidExtractionCache::prepare(context);
-    for spec in specs {
-        let declaration_wasm = declaration_target_root(&context.workspace_root)
-            .join(WASM_TARGET)
-            .join(context.profile.target_dir_name())
-            .join(format!("{}.wasm", spec.package_name.replace('-', "_")));
-        let candid = extract_configured_candid(cache.as_ref(), &spec.role, &declaration_wasm)?;
+    let declarations = declaration_inputs(context, specs);
+    let candids = extract_configured_candids(cache.as_ref(), &declarations)?;
+    for (spec, candid) in specs.iter().zip(candids) {
         let profile = canic_core::role_contract::derive_protocol_profile_hashes(
             &spec.canic_version,
             &canic_core::ids::CanisterRole::owned(spec.role.clone()),
@@ -422,6 +422,22 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
             })
             .collect()
     })
+}
+
+fn declaration_inputs<'a>(
+    context: &WorkspaceBuildContext,
+    specs: &'a [CanisterArtifactBuildSpec],
+) -> Vec<CandidExtractionInput<'a>> {
+    specs
+        .iter()
+        .map(|spec| CandidExtractionInput {
+            role: &spec.role,
+            wasm: declaration_target_root(&context.workspace_root)
+                .join(WASM_TARGET)
+                .join(context.profile.target_dir_name())
+                .join(format!("{}.wasm", spec.package_name.replace('-', "_"))),
+        })
+        .collect::<Vec<_>>()
 }
 
 fn group_build_specs_by_workspace(

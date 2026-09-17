@@ -4,6 +4,8 @@
 //! Does not own: funding policy, stable telemetry schemas, or timer arbitration.
 //! Boundary: lifecycle and funding events record history; one timer owns top-up safety.
 
+#[cfg(feature = "internal-test-fixtures")]
+pub mod fixture;
 pub mod query;
 
 use crate::{
@@ -12,6 +14,7 @@ use crate::{
     config::schema::TopupPolicy,
     diagnostics::codes,
     domain::{
+        cycles::CycleTopupFailureDisposition,
         icp_refill::{IcpRefillStatus, IcpRefillTrigger, icp_refill_outcome_is_resumable},
         policy::pure as policy,
     },
@@ -220,7 +223,7 @@ impl CycleWorkflow {
     async fn run_attempt(
         attempt: crate::ops::storage::async_job_recovery::AsyncJobAttempt,
     ) -> TimerRunResult {
-        let Some(operation_id) = attempt.operation_id() else {
+        let Some(operation_id) = attempt.operation_id(IcOps::canister_self()) else {
             return TimerRunResult::new(
                 TimerCompletion::invariant_failure(0),
                 TimerDirective::Stop,
@@ -260,7 +263,7 @@ impl CycleWorkflow {
                     ));
                 }
                 Ok(None) => {}
-                Err(err) => return Self::finish_funding_failure(err),
+                Err(err) => return Self::finish_funding_failure(&err),
             }
         }
         let current_request = match Self::current_root_request(Some(&config)) {
@@ -321,6 +324,9 @@ impl CycleWorkflow {
         let after = Self::read_sample();
         Self::record_observation(&after);
 
+        if let (AutomaticTopupTarget::Parent { amount }, Err(failure)) = (&config.target, &result) {
+            return Self::finish_parent_funding_failure(amount, operation_id, failure);
+        }
         Self::finish_topup(&config, &sample, &after, result)
     }
 
@@ -383,7 +389,7 @@ impl CycleWorkflow {
             Ok(ParentFundingOutcome::RootNoGrant(receipt)) => {
                 Self::finish_root_no_grant(config, receipt.reason)
             }
-            Err(failure) => Self::finish_funding_failure(failure),
+            Err(failure) => Self::finish_funding_failure(&failure),
         }
     }
 
@@ -449,7 +455,7 @@ impl CycleWorkflow {
             let streak = Self::consecutive_expected_failures();
             return retryable_topup_after(retry_delay(streak));
         }
-        Self::finish_funding_failure(failure)
+        Self::finish_funding_failure(&failure)
     }
 
     fn finish_transferred_topup(
@@ -547,8 +553,34 @@ impl CycleWorkflow {
         }
     }
 
-    fn finish_funding_failure(failure: InternalError) -> TimerRunResult {
-        if is_retryable_funding_error(&failure) {
+    fn finish_parent_funding_failure(
+        amount: &Cycles,
+        operation_id: OperationId,
+        failure: &InternalError,
+    ) -> TimerRunResult {
+        let outcome = Self::finish_funding_failure(failure);
+        if let Ok(parent) = EnvOps::parent_pid() {
+            let disposition = if matches!(outcome.directive(), TimerDirective::Stop) {
+                CycleTopupFailureDisposition::Terminal
+            } else {
+                CycleTopupFailureDisposition::Retry
+            };
+            CycleTopupEventOps::record_parent_failure(
+                IcOps::now_secs(),
+                amount.clone(),
+                parent,
+                operation_id,
+                failure,
+                disposition,
+            );
+        } else {
+            CycleTopupEventOps::record_err(IcOps::now_secs(), amount.clone(), failure.to_string());
+        }
+        outcome
+    }
+
+    fn finish_funding_failure(failure: &InternalError) -> TimerRunResult {
+        if is_retryable_funding_error(failure) {
             log!(
                 Topic::Cycles,
                 Warn,
@@ -558,7 +590,7 @@ impl CycleWorkflow {
             let streak = Self::consecutive_expected_failures();
             return retryable_topup_after(retry_delay(streak));
         }
-        if claim_resource_exhaustion_recovery(&failure) {
+        if claim_resource_exhaustion_recovery(failure) {
             log!(
                 Topic::Cycles,
                 Warn,
@@ -610,7 +642,6 @@ impl CycleWorkflow {
             }
             Err(err) => {
                 CyclesTopupMetrics::record_request_err();
-                CycleTopupEventOps::record_err(IcOps::now_secs(), amount.clone(), err.to_string());
                 Err(err)
             }
         }

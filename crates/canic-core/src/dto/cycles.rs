@@ -1,7 +1,7 @@
 use crate::dto::prelude::*;
 
 pub use crate::cdk::types::{BC, Cycles, CyclesConversionError, CyclesParseError, KC, MC, QC, TC};
-pub use crate::domain::cycles::CycleTopupEventStatus;
+pub use crate::domain::cycles::{CycleTopupEventStatus, CycleTopupFailureDisposition};
 
 //
 // CycleTrackerEntry
@@ -25,6 +25,16 @@ pub struct CycleTopupEvent {
     pub transferred_cycles: Option<Cycles>,
     pub status: CycleTopupEventStatus,
     pub error: Option<String>,
+    pub parent_failure: Option<CycleTopupFailure>,
+}
+
+/// Exact parent funding failure; its containing event supplies the failure time.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct CycleTopupFailure {
+    pub parent: Principal,
+    pub operation_id: [u8; 32],
+    pub public_error_code: u16,
+    pub disposition: CycleTopupFailureDisposition,
 }
 
 #[cfg(test)]
@@ -40,6 +50,7 @@ mod tests {
             transferred_cycles: Some(Cycles::new(999_000)),
             status: crate::domain::cycles::CycleTopupEventStatus::RequestOk,
             error: None,
+            parent_failure: None,
         };
 
         let bytes = candid::encode_one(&event).expect("encode cycle top-up event");

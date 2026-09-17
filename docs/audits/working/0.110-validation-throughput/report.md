@@ -1,5 +1,117 @@
 # Release-test throughput qualification
 
+## Bounded Candid extraction — 2026-09-17
+
+After declaration Cargo completes, the configured-role build now extracts Candid
+in groups of at most four. Runtime profile derivation waits for the complete
+successful result vector. Each extraction retains its existing exact extractor
+and Wasm checks, environment binding, optional cache validation and atomic cache
+writes. Every started worker is joined before returning the first input-order
+failure or scheduling another group. No Cargo invocation, feature grouping,
+release binding or runtime compilation runs concurrently as part of this change.
+
+The existing real-extractor qualification compares sequential and bounded
+extraction through the same production entrypoints, using separate empty caches
+and alternating order across three rounds. The six retained Fast declaration
+Wasms are `canister_app`, `canister_scale_hub`, `canister_scale`,
+`canister_user_hub`, `canister_user_shard` and `canic_fleet_root` under
+`target/canic-wasm/declarations/wasm32-unknown-unknown/fast/`. The final log records
+every Wasm hash, extracted Candid hash and the native extractor hash. All outputs
+equal independently extracted Candid bytes.
+
+| Extraction with empty application cache | Run 1 | Run 2 | Run 3 | Median |
+| --- | ---: | ---: | ---: | ---: |
+| Sequential | 5245ms | 5240ms | 5441ms | 5245ms |
+| Up to four workers | 2732ms | 2711ms | 2781ms | 2732ms |
+
+Keep: the median reduction is 2513ms, approximately 48% of this phase. Operating
+system caches are warm; this does not measure cold-machine builds, Cargo time,
+finalization, peak memory or whole-deployment speed. Up to four extractor
+processes may now consume resources together. Existing verified cache hits still
+skip extraction. The source is the current .20 checkout plus open .21 changes;
+these measurements are not an immutable release-validation receipt.
+
+All ten focused extraction/normalization tests pass, including the explicitly
+selected real-extractor case, duplicate cache entries, ordered results,
+failed-batch draining, no later batch, and existing cache/tool/input rejection.
+Host all-target/all-feature Clippy with warnings denied, layering and whitespace
+pass. Logs: `/tmp/canic160-candid-batch-final.log`,
+`/tmp/canic160-candid-batch-clippy.log` and
+`/tmp/canic160-candid-batch-layering.log`. The earlier exploratory comparison also
+improved from median 5186ms to 2682ms; final-source results above own the claim.
+This completes the next bounded speed slice in the same .21 draft.
+
+## Terminal descendant receipt reads — 2026-09-17
+
+The first requested speed continuation after CANIC-178 overlaps the independent
+Root allocation-receipt queries for each parent's children. Previously each
+query completed before the next began; the existing collector now issues at
+most four at once. Every receipt must validate before that child set's existing
+management inspections begin. Pagination and parent traversal remain ordered;
+all exact allocation, release, role, parent and pool bindings remain checked.
+No request is removed, no evidence survives a terminal pass and no mutation
+concurrency is introduced.
+
+The new host transport regression requires groups of four requests to overlap.
+It injects distinct invalid receipts in the second group and proves input-order
+error selection, completion of all eight issued reads, no ninth request and no
+management inspection. This exercises actual host request encoding/decoding
+through a synthetic ICP executable; it is not IC-execution or latency evidence.
+All 20 inventory/collector tests pass, as do host all-target/all-feature Clippy
+with warnings denied, layering and whitespace checks.
+
+The existing exact PocketIC case
+`pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation`
+passes in 910.92 seconds, with 978 seconds for the focused runner. It retains
+initial convergence, interruption recovery, two deliberately distinct reinstalls,
+conservation and effect-free replay. Initial artifact preparation takes 326.14
+seconds; selected-build reinstall takes 411.44 seconds. These are candidate-run
+costs, not measured savings. The fixture has one child per parent, so it qualifies
+the integration path while the transport regression proves sibling concurrency.
+No matched baseline or representative Toko deployment comparison was run.
+
+Source context is published Canic .20 (`cf51d9dbd`) plus the open .21 worktree,
+IcyDB 0.257.21, the unchanged mixed-topology fixture and existing Fast/local
+artifact tools. Logs: `/tmp/canic160-descendant-reads-tests.log`,
+`/tmp/canic160-descendant-reads-clippy.log`,
+`/tmp/canic160-descendant-reads-pocketic.log` and
+`/tmp/canic160-descendant-reads-layering.log`. Toko's refreshed read-only review
+finds no new Canic funding defect and keeps publication/live adoption separate.
+This completes the selected bounded continuation in .21; broader serial-effect,
+Registry acquisition and end-to-end throughput work remain follow-ups.
+
+## Terminal partition reads and build-phase visibility — 2026-09-17
+
+The post-.20 batch follows CANIC-178's funding correction with the current
+CANIC-160 speed/progress requests. Terminal inventory previously queried each
+Component's active partition sequentially before its existing bounded management
+inspection phase. These independent queries now use that same four-read collector.
+All partition responses must validate before any management inspection begins;
+input order still selects failures, issued reads drain and a failed batch cannot
+publish partial inventory. There is no additional request, retained observation
+cache, new executor or mutation concurrency.
+
+For N independent partitions this changes the scheduling shape from N serial
+query waits to at most four concurrent reads per batch. It does not establish a
+wall-time improvement: no matched end-to-end deployment comparison was performed.
+The focused host selection passes 21 tests, including exact partition authority,
+receipt/current-head rejection, concurrency bounds, ordered failure and draining.
+
+Toko's new .20 adoption feedback separately reports a silent runtime Cargo/link
+phase despite active compiler work. The existing child-output boundary now emits
+a declaration/runtime heartbeat every 30 seconds. It preserves child arguments,
+build identity, captured output, exit status and launch failures, and explicitly
+includes possible Cargo-internal lock waits rather than claiming CPU progress.
+The heartbeat's output-preservation and immediate launch-error tests pass. Both
+phase labels were also observed while building the focused CANIC-178 IC fixture.
+This is progress visibility, not a compilation-speed claim.
+
+Evidence: `/tmp/canic-178-speed-tests.log`, `/tmp/canic-178-cli-heartbeat.log`,
+`/tmp/canic-178-pocketic.log` and `/tmp/canic-178-clippy-final.log`. Packages stay
+at .20 with an open .21 draft. The complete release gate, representative remote
+latency comparison and downstream acceptance were not run for this slice.
+
+
 ## Stopped-Root recovery funding and reset authority reads — 2026-09-16
 
 Canic base: `45db483d08213ad0286dc17726b2ee788cd3ec1e`, packages .19,

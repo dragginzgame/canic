@@ -3,6 +3,81 @@ use crate::test_support::temp_dir;
 use std::{collections::BTreeMap, env, fs, io::Write as _, process::Command};
 
 #[test]
+fn batch_extraction_preserves_order_and_duplicate_cache_entries() {
+    let root = temp_dir("candid-batch-order");
+    fs::create_dir_all(&root).unwrap();
+    let cache = cache_fixture(&root);
+    let inputs = (0..=(MAX_EXTRACTORS * 2))
+        .map(|index| {
+            let wasm = root.join(format!("{index}.wasm"));
+            // Distinct paths deliberately share some content-addressed cache entries.
+            fs::write(
+                &wasm,
+                declaration_module(&format!("service : {{ method_{} : () -> (); }}", index % 3)),
+            )
+            .unwrap();
+            CandidExtractionInput {
+                role: "fixture",
+                wasm,
+            }
+        })
+        .collect::<Vec<_>>();
+    let expected = inputs
+        .iter()
+        .map(|input| extract_candid_with_tool(&input.wasm, &cache.extractor).unwrap())
+        .collect::<Vec<_>>();
+    assert!(
+        extract_configured_candids(Some(&cache), &[])
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        extract_configured_candids(Some(&cache), &inputs).unwrap(),
+        expected
+    );
+    assert_eq!(
+        extract_configured_candids(Some(&cache), &inputs).unwrap(),
+        expected
+    );
+    for (input, expected) in inputs.iter().zip(expected) {
+        assert_eq!(cache.extract(&input.wasm).unwrap(), (expected, true));
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn batch_extraction_drains_successes_before_first_error_and_stops_scheduling() {
+    let root = temp_dir("candid-batch-failure");
+    fs::create_dir_all(&root).unwrap();
+    let cache = cache_fixture(&root);
+    let inputs = (0..=MAX_EXTRACTORS)
+        .map(|index| {
+            let wasm = root.join(format!("{index}.wasm"));
+            fs::write(
+                &wasm,
+                declaration_module(&format!("service : {{ method_{index} : () -> (); }}")),
+            )
+            .unwrap();
+            CandidExtractionInput {
+                role: if index == 0 { "first" } else { "later" },
+                wasm,
+            }
+        })
+        .collect::<Vec<_>>();
+    fs::remove_file(&inputs[0].wasm).unwrap();
+    fs::remove_file(&inputs[1].wasm).unwrap();
+    assert!(
+        matches!(extract_configured_candids(Some(&cache), &inputs), Err(CandidBatchError::Extraction { role, .. }) if role == "first")
+    );
+    for input in &inputs[2..MAX_EXTRACTORS] {
+        assert!(cache.extract(&input.wasm).unwrap().1);
+    }
+    let unissued = file_hash(&inputs[MAX_EXTRACTORS].wasm).unwrap();
+    assert!(!cache.record_path(&unissued).exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn credential_changes_preserve_extraction_reuse_and_other_inputs_invalidate() {
     const CHILD_ROOT: &str = "CANIC_TEST_EXTRACTION_ENVIRONMENT_ROOT";
     const BUILD_INPUT: &str = "CANIC_TEST_EXTRACTION_INPUT";
@@ -92,6 +167,45 @@ fn real_extractor_reuse_matches_fresh_declarations() {
         );
     }
     let fresh_millis = started.elapsed().as_millis();
+    let batch = inputs
+        .iter()
+        .map(|wasm| CandidExtractionInput {
+            role: "qualification",
+            wasm: wasm.clone(),
+        })
+        .collect::<Vec<_>>();
+    let mut sequential_millis = Vec::new();
+    let mut parallel_millis = Vec::new();
+    // Alternate order with separate empty caches; every result must match fresh extraction.
+    for round in 0..3 {
+        for parallel in if round % 2 == 0 {
+            [false, true]
+        } else {
+            [true, false]
+        } {
+            let selected =
+                CandidExtractionCache::new(root.join(format!("cohort-{round}-{parallel}")))
+                    .unwrap();
+            let started = std::time::Instant::now();
+            let observed = if parallel {
+                extract_configured_candids(Some(&selected), &batch).unwrap()
+            } else {
+                inputs
+                    .iter()
+                    .map(|path| {
+                        extract_configured_candid(Some(&selected), "qualification", path).unwrap()
+                    })
+                    .collect()
+            };
+            let elapsed = started.elapsed().as_millis();
+            assert_eq!(observed, outputs);
+            if parallel {
+                parallel_millis.push(elapsed);
+            } else {
+                sequential_millis.push(elapsed);
+            }
+        }
+    }
     println!(
         "{}",
         serde_json::json!({
@@ -100,6 +214,9 @@ fn real_extractor_reuse_matches_fresh_declarations() {
             "cold_cache_millis": first_millis,
             "reused_millis": reused_millis,
             "fresh_extraction_millis": fresh_millis,
+            "sequential_cold_cache_millis": sequential_millis,
+            "four_wide_cold_cache_millis": parallel_millis,
+            "wasm_sha256": inputs.iter().map(|path| file_hash(path).unwrap()).collect::<Vec<_>>(),
             "extractor_sha256": cache.extractor_sha256,
         })
     );
