@@ -149,8 +149,8 @@ key is missing, corrupt, linked, not owner-only, changed between builds or the
 platform cannot safely store it, value attribution is unavailable. Builds and
 verified cache hits remain usable; an existing unsafe key is never overwritten.
 Removing the key loses comparison continuity. Every inherited build-environment
-entry still participates in the real cache identity, including differences
-between Make and direct launchers, with the deployment-only exclusion below.
+entry still participates in the real cache identity after the explicit build
+environment normalization below.
 An attributed launcher key is evidence to investigate at its owner, not permission
 to exclude it from build identity.
 
@@ -158,10 +158,15 @@ Build commands remove `CANIC_ICP_IDENTITY_PASSWORD_FILE` from their inherited
 environment. Cargo (including metadata and build scripts), compiler/cache probes,
 Candid extraction, Wasm transformations, provenance commands and build-tool
 acquisition share this boundary. Complete-build and Candid-extraction identities
-and reuse diagnostics exclude that same key and bind the compiled exclusion
+and reuse diagnostics exclude that same key and bind the compiled environment
 policy. Changing or removing this deployment credential therefore does not by
-itself invalidate reuse. Other environment inputs remain bound; deployment
-commands retain their existing identity-unlocking behavior.
+itself invalidate reuse. Canic also sets `SHLVL=0` on every build/tool child and
+fingerprints that same value, so shell nesting cannot select another release.
+Child shells may increment their own depth normally; custom build scripts must
+not use the launcher's shell nesting as an artifact input. This normalization
+covers commands as well as cache keys. All other environment values remain bound,
+including Make's variables. Deployment commands retain their existing
+identity-unlocking behavior.
 
 This separates an inherited deployment setting from compilation; it is not a
 hermetic filesystem or process sandbox. Explicit Cargo configuration and authored

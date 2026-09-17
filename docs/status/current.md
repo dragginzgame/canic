@@ -20,6 +20,72 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Further .22 speed work: native debug information — 2026-09-17
+
+The maintainer requested another speed attempt before pushing. The accepted
+extension switches native development/test debug information to line tables.
+One matched host-harness recompilation improves from 68.415s to 54.320s (20.6%);
+applying the profile through dependencies reduces the qualified harness from
+834,493,736 to 296,419,976 bytes. The test inventory is identical. This targets
+Canic's native build/validation overhead; it does not change downstream Cargo
+profiles or establish a new total deployment duration.
+
+All 68 focused build/cache tests and six reinstall guards pass under the final
+profile. A temporary probe confirms file/line backtraces, debug assertions,
+overflow checks and full-debug overrides. Variable/type debugger detail now
+requires the documented Cargo override. Fast/Release Wasm profiles, runtime
+source and test membership are unchanged. The initial focused test was stopped
+on the editor's build lock; qualification succeeded after that check exited.
+See the [throughput report](../audits/working/0.110-validation-throughput/report.md)
+for exact commands, timings, limitations and logs.
+
+The extended selected .22 batch and both changelog surfaces are ready for the
+maintainer's release flow. Packages remain .21; no broad gate, version bump,
+commit, push or deployment ran. Toko feedback is still unchanged at CANIC-179.
+Previous dirty work is preserved. Full release duration remains unmeasured;
+external IcyDB composition and RF2 remain separately scoped follow-ups.
+
+## Open .22 speed continuation — 2026-09-17
+
+The maintainer kept .22 open for the two accepted speed investigations after the
+earlier readiness handoff below. Both are now implemented and qualified within
+that same batch; package versions remain .21 and the existing .22 changelog is
+extended. Toko feedback remains unchanged at CANIC-179, SHA-256
+`e9c5086465168de13405a8ef95661d0bb1ed81ec816b03270b2553f1dc9e7874`.
+Sibling repositories were read only.
+
+A controlled reproduction using copies of Toko's actual generation and
+qualification launchers found only `SHLVL` differing. Canic now supplies
+`SHLVL=0` to build/tool children and fingerprints that same value. Other inputs
+remain bound. Real Cargo/build-script and extraction regressions prove unchanged
+reuse across shell-depth changes while genuine environment/source/configuration
+changes invalidate it. This reproduces one concrete cause; the historical .21
+log cannot establish whether it was the only differing input.
+
+Before-reset and terminal retained-asset verification now share the existing
+four-read collector. Exact Root/Candid binding, fresh reserve/controller/module
+checks, first-input rejection and complete issued-batch drainage remain intact.
+No later batch starts after rejection. The exploratory shared Cargo intermediate
+directory showed no compiled-unit reduction and was discarded.
+
+All 68 selected build tests (one existing real-extractor benchmark ignored),
+six reinstall host tests and host library/test all-feature warning-denied Clippy
+pass. Scoped formatting, whitespace and changed-file built-in secret scanning
+also pass. The exact mixed-topology PocketIC case passes both deliberate reinstalls,
+interruption recovery, conservation and effect-free replay. It takes 1072.47s
+(1265s runner); initial artifacts take 484.47s and selected-build reinstall
+407.24s, including only 50.00s for replacement artifact resolution. This is not a
+matched speed comparison: source/dependencies changed and sibling builds shared
+the machine. It does not demonstrate a substantial overall deployment reduction.
+See the [throughput report](../audits/working/0.110-validation-throughput/report.md)
+for source identities, detailed evidence, limits and retained logs.
+
+The expanded selected .22 batch is ready for the maintainer's release flow and
+both changelog surfaces are prepared. No broad gate, version bump, commit, push
+or deployment ran. Representative downstream timing remains open; external
+IcyDB composition and RF2 remain separate follow-ups, not blockers for this
+selected batch.
+
 ## Post-.21 Toko build diagnostics — 2026-09-17
 
 The maintainer accepted CANIC-160's heartbeat refinement and CANIC-176's

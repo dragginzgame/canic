@@ -1,5 +1,207 @@
 # Release-test throughput qualification
 
+## Native debug-information reduction — 2026-09-17
+
+The maintainer requested another speed attempt before publishing .22. Retained
+native test executables exceeded 800 MB, with some internal harnesses above
+900 MB. The development profile requested full debug information; the test
+profile inherits it. The accepted change uses `debug = "line-tables-only"` in
+`profile.dev`. Every other manifest value is unchanged, including native
+optimization, debug assertions, overflow checks and Fast/Release Wasm settings.
+
+This preserves filename/line-number backtraces but removes variable/type debugger
+detail. Full debugging remains opt-in with `CARGO_PROFILE_DEV_DEBUG=2` or
+`CARGO_PROFILE_TEST_DEBUG=2`, respectively. Cargo documents the debug modes,
+overrides and test inheritance in its [profile reference](https://doc.rust-lang.org/cargo/reference/profiles.html#debug).
+The setting applies to this workspace; consuming Canic as a dependency does not
+change a downstream workspace's profile. Switching profiles incurs a one-time
+native rebuild. No test, recovery assertion or Wasm optimization is removed.
+
+### Controlled harness comparison
+
+At source `9393893e31cc9ff75b65c54e00c961e119b62228` plus the existing .22
+changes, the experiment used Rust/Cargo 1.98.1, unchanged source/lock/features,
+nonincremental compilation and the same already-compiled dependencies. Each
+command selected only the `canic-host` library test harness:
+
+```text
+CARGO_NET_OFFLINE=true CARGO_INCREMENTAL=0 cargo rustc --locked --offline \
+  -p canic-host --profile test --lib --message-format=json -- \
+  -C debuginfo=<2|line-tables-only> --cfg canic_native_debug_measurement
+```
+
+The identical unused cfg ensures both measurements recompile their harness
+instead of reusing previously retained outputs. Cargo artifact records confirm
+that `canic_host` is the only compiled unit in both measured runs. An earlier
+143.48-second warm-up compiled dependencies and is excluded; subsequent cached
+repeats are also excluded.
+
+| Harness debug mode, dependencies unchanged | Compile/link command | Executable bytes |
+| --- | ---: | ---: |
+| Full | 68.415s | 834,493,736 |
+| Line tables | 54.320s | 694,189,024 |
+
+The candidate reduces this measured compile/link step by 14.095s (20.6%) and
+its executable by 140,304,712 bytes (16.8%). This is one matched pair, not a
+statistical benchmark or a complete-gate measurement; sibling builds were active
+on the same machine. Both inventories hash to
+`66b264d7239db929939ad1c06164d1bf70e5e56efa459792ce0a2fd3f69f0f86`, and all six
+selected reinstall guards pass in each executable. Reports/logs:
+`/tmp/canic-debug-forced-pair-report.json`,
+`/tmp/canic-debug-full-3.log`, `/tmp/canic-debug-lines-3.log` and corresponding
+`-test.log` files. The excluded attempts remain in
+`/tmp/canic-debug-pair-report.json`.
+
+### Adopted profile qualification
+
+With line tables applied through the native dependency graph, the host harness
+is 296,419,976 bytes (64.5% below the full-debug baseline) and has the same test
+inventory hash. This larger footprint reduction includes dependencies; no
+matched whole-graph compile-time reduction is claimed. The actual native build
+takes 2m19s, then 68 build/cache tests pass in 19.38s (one pre-existing extractor
+benchmark ignored). All six reinstall guard tests also pass. A temporary probe
+using the exact development profile confirms file/line backtraces, active debug
+assertions, overflow rejection and the full-debug override. It adds no retained
+test framework or runtime behavior.
+
+Logs: `/tmp/canic-22-native-profile-tests-retry.log`,
+`/tmp/canic-22-native-profile-guards.log`,
+`/tmp/canic-22-debug-proof-lines.log`,
+`/tmp/canic-22-debug-proof-full-override.log`. Result metadata is retained at
+`/tmp/canic-22-native-profile-result.json`. The initial invocation was stopped
+while waiting for an editor-started workspace check; no competing test was left
+running. Its log remains `/tmp/canic-22-native-profile-tests.log`.
+
+Final Cargo.toml SHA-256 is
+`cc764930daf50776d67ae35715f7030095c52d09b4fd6ee9057e0df99f67fd15`; Cargo.lock
+remains `b8eb9b563a218b95ce9a9637fcb8ec33c9fa432fe3f8c312108a93ddf3cb55d9`.
+Keep: reduced native compile/debug-data cost with explicit debugger tradeoffs.
+No broad validation, new IC execution claim, whole-release duration, version bump
+or publication is claimed. The preceding live recovery qualification remains
+that earlier source checkpoint; no runtime/host Rust was changed in this slice.
+
+## Shell-depth normalization and reinstall verification — 2026-09-17
+
+The maintainer extended the existing .22 batch to investigate Toko's
+`candid-generate`/`qualification` cache miss and repeated artifact/reinstall cost.
+Source context is `9393893e31cc9ff75b65c54e00c961e119b62228` plus the scoped
+Canic changes recorded below; packages remain .21. Rust is 1.98.1, PocketIC
+16.0.0 and ICP CLI 1.5.0. The lockfile SHA-256 is
+`b8eb9b563a218b95ce9a9637fcb8ec33c9fa432fe3f8c312108a93ddf3cb55d9`.
+No sibling source, version, release binding or publication was changed.
+
+### Controlled launcher reproduction
+
+Copies of Toko's actual generation, qualification, toolchain and managed-output
+scripts ran through the same recursive-Make launcher shape in a temporary
+workspace. A controlled environment and stub Canic command stopped before any
+real build or deployment. Environments were compared in memory; only key names
+and source hashes were retained. The two launchers added/removed no keys and
+differed only in `SHLVL`. The generation script uses command substitution and
+the qualification script pipes Canic output through `tee`.
+
+Canic now sets `SHLVL=0` for build/tool child processes and includes that same
+value in complete-build and extraction fingerprints. This changes execution and
+identity together. Other variables, including Make's variables, remain bound;
+there is no blanket launcher exclusion. Child shells may increment their own
+nesting normally. The existing deployment-credential exclusion is unchanged.
+
+The real Cargo/build-script fixture proves normalized compiler/build-script
+inputs, identical release/Wasm reuse across changed, absent and malformed shell
+depths, and rejection after a genuine environment, source or configuration
+change. Extraction reuse has the corresponding regression. All 68 selected
+build tests pass (one existing real-extractor benchmark remains ignored).
+
+This reproduces one concrete launcher difference, not the exact historical .21
+failure: that log retained no changed-key evidence, and the synthetic launch does
+not compile Toko. A new representative downstream pair is still needed to
+establish whether other inputs differ and to measure deployment savings.
+Read-only Toko feedback remains SHA-256
+`e9c5086465168de13405a8ef95661d0bb1ed81ec816b03270b2553f1dc9e7874`.
+
+Reproduction report: `/tmp/canic-launcher-pair-report.json`. Exact copied inputs:
+
+| Script | SHA-256 |
+| --- | --- |
+| generate-candid-bindings.sh | `973ae50cda7dff68d809837cd5085e782484799e40e38980862eaf1b18b6c3bd` |
+| qualify-canic-adoption.sh | `04a2a44e3124d8c2591e6c265f6d2809d2932c7891e32e2fd645c8a27874b19b` |
+| canic-toolchain.sh | `83bc7a1b660431fd7046a9f00e4d5a50e4666fee69ad5d03398c3121a659c505` |
+| didc-toolchain.sh | `2a64eaa7e9d44fa72e11b64e99d3790ed1a8be3dcb3e626648999b92ae535b9b` |
+| managed-output.sh | `e1197e13a039d3a1cc52961016c1d060b5df88afb36a0134d7130f3a82d0c8ed` |
+
+### Artifact cost and rejected intermediate-cache experiment
+
+The earlier mixed-topology log's 411.44-second selected-build reinstall span
+includes two deliberate wipes and their recovery. It is not 411 seconds of
+compilation. Within it, replacement artifact resolution took 50.73 seconds
+(application build 41.96 seconds), first wipe 193.92 seconds and second wipe
+166.75 seconds. Initial artifact preparation was a separate 326.14 seconds.
+The earlier terminal-descendant section retains its original run totals.
+
+A small controlled Cargo pair tested a shared `CARGO_BUILD_BUILD_DIR` with
+separate declaration/runtime final output directories. Both Release and Fast
+preserved distinct outputs but compiled the same number of units: three for
+the first declaration, three for the first runtime, then zero for each unchanged
+repeat. The host build helper was not reusable between the different profile
+inputs in either layout. Discard: no production directory/cache change is
+justified by this experiment. These are native synthetic unit counts, not
+Canic/Toko Wasm or end-to-end speed evidence. Reports:
+`/tmp/canic-intermediate-pair-report.json` and
+`/tmp/canic-intermediate-fast-report.json`.
+
+### Bounded reinstall authority verification
+
+Review-time asset inspection was already bounded. The subsequent before-reset
+and terminal verification loops still read each retained asset serially. They
+now share the existing collector with at most four assets in flight. Each asset
+still gets fresh reserve evidence and a protected management inspection through
+the exact Root/Candid binding. Before reset checks exact controllers and module;
+terminal verification retains its existing controller contract. IC-side paid
+call admission remains authoritative.
+
+Each issued group drains before the first input-order mismatch or transport
+error is returned; no later group starts after rejection. This may complete up
+to the rest of the current group's reads after a mismatch. There is no added
+successful-path request, observation reuse, concurrent destructive effect or
+change to reset/recovery authority. Source-bound contract validation remains
+outside and before the group.
+
+Six focused host tests pass. They prove nine-asset bounded overlap, drainage,
+first-input mismatch before a later transport error, no later group after
+rejection, and fresh controller/module/reserve observations on retry. Scoped
+host library/test all-feature Clippy passes with warnings denied. Scoped
+formatting, whitespace and changed-file built-in secret scanning also pass. Logs:
+`/tmp/canic-22-shell-depth-tests.log`,
+`/tmp/canic-22-reinstall-guards-tests.log` and
+`/tmp/canic-22-speed-clippy.log`.
+
+The exact mixed-topology PocketIC case passes, including initial convergence,
+both distinct deliberate reinstalls, interruption recovery, state/conservation
+checks and effect-free terminal replay. The case takes 1072.47 seconds and the
+focused runner 1265 seconds, including native harness compilation. Candidate
+initial artifacts take 484.47 seconds; replacement artifact resolution takes
+50.00 seconds and selected-build reinstall 407.24 seconds (first wipe 193.61,
+second wipe 163.59). Log:
+`/tmp/canic-22-reinstall-verification-pocketic.log`.
+
+This is correctness qualification, not a controlled latency improvement. The
+older run used different source/dependencies; this run rebuilt artifacts and
+shared machine resources with sibling builds. The recorded selected-reinstall
+cost is close to the earlier 411.44 seconds, so this fixture does not demonstrate
+a substantial end-to-end gain. The native regression proves bounded overlap;
+a representative matched Toko run remains necessary to measure its benefit.
+
+Changed production source SHA-256:
+
+| Source | SHA-256 |
+| --- | --- |
+| build_environment/mod.rs | `cfcefaff7ce5cf82b44578bba57e7a8c0b542514507636c52e4e2df275937182` |
+| fleet_ensure/ops/platform.rs | `138ffce5b70d28c230981d398c192da11a98f7c52790d248e3b5119e627aeb57` |
+
+Keep the execution/fingerprint normalization and bounded verification. Discard
+the unhelpful shared-intermediate-directory experiment. Both changes extend the
+same .22 draft; no whole-suite or live Toko deployment result is claimed.
+
 ## Bounded Candid extraction — 2026-09-17
 
 After declaration Cargo completes, the configured-role build now extracts Candid

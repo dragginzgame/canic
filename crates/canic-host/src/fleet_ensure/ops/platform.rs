@@ -533,6 +533,12 @@ struct RootInspectionStatus {
     cycles: Nat,
 }
 
+/// First input-ordered mismatch or read failure from a drained reset verification batch.
+enum ReinstallAssetVerificationError {
+    Mismatch,
+    Read(Box<IcpEnsurePlatformError>),
+}
+
 /// Fresh management evidence validated for one retained reset asset.
 struct ReinstallAssetStatus {
     response: RootInspectionStatus,
@@ -1241,6 +1247,68 @@ impl IcpEnsurePlatform {
             snapshot.pool_pages.insert(key, (*page).clone());
         }
         Ok(*page)
+    }
+
+    fn reinstall_assets_match_bound(
+        icp: &IcpCli,
+        candid: &Path,
+        principal: Principal,
+        assets: &[&crate::fleet_ensure::model::FleetReinstallAssetRecord],
+        check: super::ReinstallAssetCheck,
+    ) -> Result<bool, IcpEnsurePlatformError> {
+        let result =
+            super::bounded_observations::collect(
+                assets,
+                |asset| match Self::reinstall_asset_matches(icp, candid, principal, asset, check) {
+                    Ok(true) => Ok(()),
+                    Ok(false) => Err(ReinstallAssetVerificationError::Mismatch),
+                    Err(error) => Err(ReinstallAssetVerificationError::Read(Box::new(error))),
+                },
+            );
+        match result {
+            Ok(_) => Ok(true),
+            Err(ReinstallAssetVerificationError::Mismatch) => Ok(false),
+            Err(ReinstallAssetVerificationError::Read(error)) => Err(*error),
+        }
+    }
+
+    fn reinstall_asset_matches(
+        icp: &IcpCli,
+        candid: &Path,
+        principal: Principal,
+        asset: &crate::fleet_ensure::model::FleetReinstallAssetRecord,
+        check: super::ReinstallAssetCheck,
+    ) -> Result<bool, IcpEnsurePlatformError> {
+        let target = parse_principal("reset asset", &asset.principal)?;
+        crate::canister_protocol::inspection::preflight_inspection(icp, candid, principal, target)
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+        let response: RootInspectionResponse = call_with_candid(
+            icp,
+            candid,
+            principal,
+            canic_protocol::CANIC_ROOT_COMMAND,
+            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                canister_id: target,
+            }),
+        )
+        .map_err(current_protocol::CurrentProtocolError::from)?;
+        let status = response
+            .into_status(principal, target)
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+        let mut controllers = status
+            .settings
+            .controllers
+            .iter()
+            .map(Principal::to_text)
+            .collect::<Vec<_>>();
+        controllers.sort();
+        let module = status
+            .module_hash
+            .as_ref()
+            .map(canic_core::cdk::utils::hash::hex_bytes);
+        let module_matches =
+            check == super::ReinstallAssetCheck::Terminal || module == asset.module_sha256;
+        Ok(controllers == asset.controllers && module_matches)
     }
 
     #[expect(
@@ -3174,43 +3242,12 @@ impl EnsurePlatform for IcpEnsurePlatform {
         } else {
             self.root_protocol_candid()?
         };
-        for asset in intent.assets.iter().filter(|asset| asset.root == root_name) {
-            let target = parse_principal("reset asset", &asset.principal)?;
-            crate::canister_protocol::inspection::preflight_inspection(
-                &self.icp, &candid, principal, target,
-            )
-            .map_err(current_protocol::CurrentProtocolError::from)?;
-            let response: RootInspectionResponse = call_with_candid(
-                &self.icp,
-                &candid,
-                principal,
-                canic_protocol::CANIC_ROOT_COMMAND,
-                &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                    canister_id: target,
-                }),
-            )
-            .map_err(current_protocol::CurrentProtocolError::from)?;
-            let status = response
-                .into_status(principal, target)
-                .map_err(current_protocol::CurrentProtocolError::from)?;
-            let mut controllers = status
-                .settings
-                .controllers
-                .iter()
-                .map(Principal::to_text)
-                .collect::<Vec<_>>();
-            controllers.sort();
-            let module = status
-                .module_hash
-                .as_ref()
-                .map(canic_core::cdk::utils::hash::hex_bytes);
-            let module_matches =
-                check == super::ReinstallAssetCheck::Terminal || module == asset.module_sha256;
-            if controllers != asset.controllers || !module_matches {
-                return Ok(false);
-            }
-        }
-        Ok(true)
+        let assets = intent
+            .assets
+            .iter()
+            .filter(|asset| asset.root == root_name)
+            .collect::<Vec<_>>();
+        Self::reinstall_assets_match_bound(&self.icp, &candid, principal, &assets, check)
     }
 
     fn reinstall_authorities(
@@ -5899,6 +5936,20 @@ if"#,
             )
         }
 
+        fn verify_retained(
+            &self,
+            assets: &[crate::fleet_ensure::model::FleetReinstallAssetRecord],
+            check: super::super::ReinstallAssetCheck,
+        ) -> Result<bool, IcpEnsurePlatformError> {
+            IcpEnsurePlatform::reinstall_assets_match_bound(
+                &self.owners.platform.icp,
+                &self.owners.platform.root_protocol_candid().unwrap(),
+                self.root_id,
+                &assets.iter().collect::<Vec<_>>(),
+                check,
+            )
+        }
+
         fn inspection_hook(&self, hook: &str) {
             let path = &self.owners.root;
             let script = std::fs::read_to_string(path.join("icp")).unwrap();
@@ -6012,6 +6063,12 @@ printf 'finish\n' >> events
                 .values()
                 .all(|live| live.as_ref().unwrap().cycles == 1_000)
         );
+        std::fs::write(path.join("events"), []).unwrap();
+        assert!(
+            fixture
+                .verify_retained(&assets, super::super::ReinstallAssetCheck::BeforeReset)
+                .unwrap()
+        );
         let (mut active, mut maximum) = (0, 0);
         for event in std::fs::read_to_string(path.join("events"))
             .unwrap()
@@ -6033,8 +6090,71 @@ printf 'finish\n' >> events
         assert_eq!((active, maximum), (0, bound));
         assert_eq!(
             fixture.owners.platform.icp.remote_call_count(),
-            2 * u64::try_from(count).unwrap()
+            4 * u64::try_from(count).unwrap()
         );
+        std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_verification_drains_mismatch_before_later_error_and_reads_fresh() {
+        use super::super::ReinstallAssetCheck::{BeforeReset, Terminal};
+        let fixture = PoolInspectionFixture::fresh(5);
+        let path = &fixture.owners.root;
+        let assets = fixture
+            .owners
+            .state
+            .pending_principals
+            .values()
+            .map(
+                |principal| crate::fleet_ensure::model::FleetReinstallAssetRecord {
+                    controllers: vec![fixture.root_id.to_text()],
+                    module_sha256: None,
+                    principal: principal.clone(),
+                    root: "root".into(),
+                    subnet: "subnet".into(),
+                },
+            )
+            .collect::<Vec<_>>();
+        PoolInspectionFixture::fresh_response(path, vec![Principal::anonymous()], None, 1000);
+        std::fs::copy(path.join("inspection.json"), path.join("pool-000.response")).unwrap();
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 1000);
+        std::fs::write(path.join("pool-001.fail"), []).unwrap();
+        fixture.route_inspection_targets();
+        assert!(!fixture.verify_retained(&assets, BeforeReset).unwrap());
+        let events = std::fs::read_to_string(path.join("events")).unwrap();
+        for index in 0..4 {
+            assert!(events.contains(&format!("finish:pool-{index:03}")));
+        }
+        assert!(!events.contains("pool-004"));
+        assert!(events.find("finish:pool-001").unwrap() < events.find("finish:pool-000").unwrap());
+        std::fs::remove_file(path.join("pool-000.response")).unwrap();
+        assert!(matches!(
+            fixture.verify_retained(&assets, BeforeReset),
+            Err(IcpEnsurePlatformError::CurrentProtocol(_))
+        ));
+        std::fs::remove_file(path.join("pool-001.fail")).unwrap();
+        assert!(fixture.verify_retained(&assets, BeforeReset).unwrap());
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], Some(vec![1; 32]), 1000);
+        assert!(!fixture.verify_retained(&assets, BeforeReset).unwrap());
+        assert!(fixture.verify_retained(&assets, Terminal).unwrap());
+        PoolInspectionFixture::fresh_response(
+            path,
+            vec![Principal::anonymous()],
+            Some(vec![1; 32]),
+            1000,
+        );
+        assert!(!fixture.verify_retained(&assets, Terminal).unwrap());
+        PoolInspectionFixture::fresh_response(path, vec![fixture.root_id], None, 1000);
+        PoolInspectionFixture::reserve_response(path, fixture.root_id, fixture.target, 0);
+        assert!(matches!(
+            fixture.verify_retained(&assets, BeforeReset),
+            Err(IcpEnsurePlatformError::CurrentProtocol(
+                current_protocol::CurrentProtocolError::Transport(
+                    CanisterProtocolError::InspectionPreflightReserve(_)
+                )
+            ))
+        ));
         std::fs::remove_dir_all(path).unwrap();
     }
 
