@@ -61,7 +61,7 @@ use canic_core::{
         fleet_subnet_root::FleetSubnetRootAuthority,
         role::{OperationReceipt, OperationStatusRequest},
     },
-    ids::ManagedCanisterBinding,
+    ids::{ComponentInstanceId, ManagedCanisterBinding},
     log::Topic,
     protocol,
 };
@@ -559,12 +559,7 @@ async fn activate_component_step(
         ))
         .await
         .map_err(|error| {
-            let error =
-                match ComponentRegistryOps::initial_child_failure(allocation.component, &error) {
-                    Ok(Some(origin)) => error.with_observed_provisioning_failure(origin),
-                    Ok(None) => error,
-                    Err(observation_error) => observation_error,
-                };
+            let error = initial_child_activation_error(allocation.component, error);
             activation_member_failure(ProvisioningFailureStage::ComponentRuntime, &member, error)
         })?;
     }
@@ -578,6 +573,7 @@ async fn activate_component_step(
     ))
     .await
     .map_err(|error| {
+        let error = initial_child_activation_error(allocation.component, error);
         activation_member_failure(
             ProvisioningFailureStage::ComponentMembership,
             &member,
@@ -589,6 +585,19 @@ async fn activate_component_step(
             activation_member_failure(ProvisioningFailureStage::ComponentCommit, &member, error)
         })
         .map(crate::ops::component_provisioning::status_response)
+}
+
+// Runtime acknowledgement can precede bootstrap readiness. Both activation stages
+// must preserve a retained initial-child failure while membership is still Prepared.
+fn initial_child_activation_error(
+    component: ComponentInstanceId,
+    error: InternalError,
+) -> InternalError {
+    match ComponentRegistryOps::initial_child_failure(component, &error) {
+        Ok(Some(origin)) => error.with_observed_provisioning_failure(origin),
+        Ok(None) => error,
+        Err(observation_error) => observation_error,
+    }
 }
 
 fn activation_member_failure(

@@ -84,6 +84,10 @@ pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim(
     let claim = root_pool_status(&pic, root).entries.into_iter().find(|entry| {
         matches!(&entry.status, CanisterPoolAssetStatus::Claimed { claim } if claim.operation_id == origin.operation_id)
     }).expect("the same failed initial claim remains reserved");
+    // Let the accepted parent runtime retry membership while its initial child
+    // remains blocked. The host must still report the exact child failure.
+    pic.advance_time(Duration::from_secs(30));
+    pic.tick();
     assert_host_origin(&mut pic, coordinator, &plan, &origin);
     pic.add_cycles(root, 5_000_000_000_000);
     let mut complete = false;
