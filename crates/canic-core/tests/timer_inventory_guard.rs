@@ -718,7 +718,7 @@ fn recovery_takeovers_recheck_each_owners_authoritative_domain_demand() {
                 "Self::automatic_topup_config()",
                 "AsyncJobWorkflow::claim_expired(owner, now_ns)",
                 "Self::run_attempt(attempt).await",
-                "attempt.operation_id()",
+                "attempt.operation_id(IcOps::canister_self())",
             ],
         ),
         (
