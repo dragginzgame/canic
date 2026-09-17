@@ -20,6 +20,21 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release-test correction: caller-bound timer identity guard — 2026-09-17
+
+The release run from `3a93e454f` passed workspace unit tests, then failed only
+`recovery_takeovers_recheck_each_owners_authoritative_domain_demand` in
+`timer_inventory_guard`. Its source expectation still required the old zero-
+argument `attempt.operation_id()` call. CANIC-178 correctly passes
+`IcOps::canister_self()` to namespace sibling funding identities.
+
+The guard now requires that exact caller binding. Runtime code is unchanged.
+All 15 timer-inventory tests and targeted warning-denied Clippy pass; whitespace
+checks pass. Logs: `/tmp/canic-timer-inventory-178-test.log` and
+`/tmp/canic-timer-inventory-178-clippy.log`. The .21 draft includes the correction;
+the selected batch is ready for the normal release retry. Package versions remain
+.20. No broad gate, version bump, commit or push ran for this correction.
+
 ## Post-.20 CANIC-178 and deployment follow-up — 2026-09-17
 
 The maintainer confirms .20 is pushed (`cf51d9dbd`). The selected .21 batch fixes
