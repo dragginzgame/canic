@@ -78,7 +78,7 @@ fn batch_extraction_drains_successes_before_first_error_and_stops_scheduling() {
 }
 
 #[test]
-fn credential_changes_preserve_extraction_reuse_and_other_inputs_invalidate() {
+fn shell_depth_and_credentials_preserve_extraction_reuse_and_other_inputs_invalidate() {
     const CHILD_ROOT: &str = "CANIC_TEST_EXTRACTION_ENVIRONMENT_ROOT";
     const BUILD_INPUT: &str = "CANIC_TEST_EXTRACTION_INPUT";
     const CREDENTIAL: &str = crate::icp::CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV;
@@ -101,12 +101,13 @@ fn credential_changes_preserve_extraction_reuse_and_other_inputs_invalidate() {
     cache_fixture(&root);
     fs::write(root.join("role.wasm"), declaration_module("service : {};")).unwrap();
     let thread = std::thread::current();
-    let invoke = |credential: Option<&str>, input: &str| {
+    let invoke = |credential: Option<&str>, input: &str, depth: &str| {
         let mut command = Command::new(env::current_exe().unwrap());
         command
             .args(["--exact", thread.name().unwrap()])
             .env(CHILD_ROOT, &root)
             .env(BUILD_INPUT, input)
+            .env("SHLVL", depth)
             .env_remove(CREDENTIAL);
         if let Some(value) = credential {
             command.env(CREDENTIAL, value);
@@ -120,10 +121,10 @@ fn credential_changes_preserve_extraction_reuse_and_other_inputs_invalidate() {
         );
         fs::read(root.join("reused")).unwrap()
     };
-    assert_eq!(invoke(Some("fixture-credential-a"), "alpha"), [0]);
-    assert_eq!(invoke(Some("fixture-credential-b"), "alpha"), [1]);
-    assert_eq!(invoke(None, "alpha"), [1]);
-    assert_eq!(invoke(Some("fixture-credential-a"), "beta"), [0]);
+    assert_eq!(invoke(Some("fixture-credential-a"), "alpha", "1"), [0]);
+    assert_eq!(invoke(Some("fixture-credential-b"), "alpha", "2"), [1]);
+    assert_eq!(invoke(None, "alpha", "7"), [1]);
+    assert_eq!(invoke(Some("fixture-credential-a"), "beta", "1"), [0]);
     fs::remove_dir_all(root).unwrap();
 }
 

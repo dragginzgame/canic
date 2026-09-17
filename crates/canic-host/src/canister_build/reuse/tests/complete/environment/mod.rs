@@ -1,4 +1,4 @@
-//! Qualify credential-independent reuse with real Cargo inputs and synthetic release manifests.
+//! Qualify build-environment normalization with real Cargo inputs and synthetic release manifests.
 
 use super::*;
 use crate::icp::CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV;
@@ -7,39 +7,15 @@ const CHILD_ROOT: &str = "CANIC_TEST_BUILD_ENVIRONMENT_ROOT";
 const BUILD_INPUT: &str = "CANIC_TEST_BUILD_INPUT";
 
 #[test]
-fn deployment_credentials_preserve_reuse_while_build_inputs_invalidate() {
+fn launcher_shell_depth_and_credentials_preserve_reuse_while_build_inputs_invalidate() {
     if let Some(root) = env::var_os(CHILD_ROOT) {
         observe_build_environment(Path::new(&root));
         return;
     }
     let (root, context) = infrastructure_build_fixture();
-    fs::write(
-        context.workspace_root.join("build.rs"),
-        r#"
-fn main() {
-    assert!(std::env::var_os("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
-    let input = std::env::var("CANIC_TEST_BUILD_INPUT").unwrap();
-    println!("cargo:rustc-env=CANIC_TEST_COMPILED_INPUT={input}");
-    println!("cargo:rerun-if-env-changed=CANIC_TEST_BUILD_INPUT");
-    println!("cargo:rerun-if-env-changed=CANIC_ICP_IDENTITY_PASSWORD_FILE");
-    println!("cargo:rerun-if-changed=build.rs");
-}
-"#,
-    )
-    .unwrap();
-    fs::write(
-        context.workspace_root.join("src/lib.rs"),
-        r#"
-const _: () = assert!(option_env!("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
-#[unsafe(no_mangle)]
-pub extern "C" fn fixture_value() -> u8 {
-    env!("CANIC_TEST_COMPILED_INPUT").as_bytes()[0] + canic::value()
-}
-"#,
-    )
-    .unwrap();
+    write_environment_probe(&context);
     let thread = std::thread::current();
-    let invoke = |credential: Option<&str>, input: &str| {
+    let invoke = |credential: Option<&str>, input: &str, shell_depth: Option<&str>| {
         let mut command = Command::new(env::current_exe().unwrap());
         command
             .args(["--exact", thread.name().unwrap()])
@@ -47,7 +23,11 @@ pub extern "C" fn fixture_value() -> u8 {
             .env(BUILD_INPUT, input)
             .env("CARGO_TARGET_DIR", root.join("target"))
             .env_remove("CARGO_BUILD_BUILD_DIR")
-            .env_remove(CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV);
+            .env_remove(CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV)
+            .env_remove("SHLVL");
+        if let Some(depth) = shell_depth {
+            command.env("SHLVL", depth);
+        }
         if let Some(value) = credential {
             command.env(CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV, value);
         }
@@ -63,20 +43,27 @@ pub extern "C" fn fixture_value() -> u8 {
         )
         .unwrap()
     };
-    let baseline = invoke(Some("fixture-credential-a"), "alpha");
+    let baseline = invoke(Some("fixture-credential-a"), "alpha", Some("1"));
     assert_eq!(baseline["reused"], false);
     for credential in [
         Some("fixture-credential-b"),
         None,
         Some("fixture-credential-a"),
     ] {
-        let repeat = invoke(credential, "alpha");
+        let repeat = invoke(credential, "alpha", Some("2"));
         assert_eq!(repeat["reused"], true);
         for key in ["inputs", "release", "wasm"] {
             assert_eq!(repeat[key], baseline[key], "unchanged {key}");
         }
     }
-    let changed = invoke(Some("fixture-credential-a"), "beta");
+    for depth in [None, Some("0"), Some("7"), Some("invalid")] {
+        let repeat = invoke(None, "alpha", depth);
+        assert_eq!(repeat["reused"], true);
+        for key in ["inputs", "release", "wasm"] {
+            assert_eq!(repeat[key], baseline[key], "unchanged {key}");
+        }
+    }
+    let changed = invoke(Some("fixture-credential-a"), "beta", Some("1"));
     assert_eq!(changed["reused"], false);
     assert_ne!(changed["inputs"], baseline["inputs"]);
     assert_ne!(changed["wasm"], baseline["wasm"]);
@@ -86,14 +73,14 @@ pub extern "C" fn fixture_value() -> u8 {
             .unwrap()
             .contains("changed-value keys, up to 8: CANIC_TEST_BUILD_INPUT")
     );
-    let repeat = invoke(Some("fixture-credential-b"), "beta");
+    let repeat = invoke(Some("fixture-credential-b"), "beta", None);
     assert_eq!(repeat["reused"], true);
     assert_eq!(repeat["inputs"], changed["inputs"]);
     assert_eq!(repeat["release"], changed["release"]);
     let dependency = root.join("upstream/canic/src/lib.rs");
     let source = fs::read_to_string(&dependency).unwrap();
     fs::write(&dependency, source.replace("{ 1 }", "{ 2 }")).unwrap();
-    let changed_source = invoke(Some("fixture-credential-a"), "beta");
+    let changed_source = invoke(Some("fixture-credential-a"), "beta", Some("1"));
     assert_eq!(changed_source["reused"], false);
     assert_ne!(changed_source["inputs"], changed["inputs"]);
     assert_ne!(changed_source["wasm"], changed["wasm"]);
@@ -103,10 +90,40 @@ pub extern "C" fn fixture_value() -> u8 {
         config.replace("maximum_instances = 1", "maximum_instances = 2"),
     )
     .unwrap();
-    let changed_config = invoke(Some("fixture-credential-a"), "beta");
+    let changed_config = invoke(Some("fixture-credential-a"), "beta", Some("1"));
     assert_eq!(changed_config["reused"], false);
     assert_ne!(changed_config["inputs"], changed_source["inputs"]);
     fs::remove_dir_all(root).unwrap();
+}
+
+fn write_environment_probe(context: &WorkspaceBuildContext) {
+    fs::write(
+        context.workspace_root.join("build.rs"),
+        r#"
+fn main() {
+    assert!(std::env::var_os("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
+    assert_eq!(std::env::var("SHLVL").as_deref(), Ok("0"));
+    let input = std::env::var("CANIC_TEST_BUILD_INPUT").unwrap();
+    println!("cargo:rustc-env=CANIC_TEST_COMPILED_INPUT={input}");
+    println!("cargo:rerun-if-env-changed=CANIC_TEST_BUILD_INPUT");
+    println!("cargo:rerun-if-env-changed=CANIC_ICP_IDENTITY_PASSWORD_FILE");
+    println!("cargo:rerun-if-changed=build.rs");
+}
+"#,
+    )
+    .unwrap();
+    fs::write(
+        context.workspace_root.join("src/lib.rs"),
+        r#"
+const _: () = assert!(option_env!("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
+const _: () = assert!(env!("SHLVL").as_bytes()[0] == b'0');
+#[unsafe(no_mangle)]
+pub extern "C" fn fixture_value() -> u8 {
+    env!("CANIC_TEST_COMPILED_INPUT").as_bytes()[0] + canic::value()
+}
+"#,
+    )
+    .unwrap();
 }
 
 fn observe_build_environment(root: &Path) {

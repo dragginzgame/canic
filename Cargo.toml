@@ -165,7 +165,8 @@ opt-level = 1
 lto = false
 codegen-units = 16
 strip = "none"
-debug = true
+# Keep file/line backtraces without full type and variable debug records.
+debug = "line-tables-only"
 overflow-checks = true
 
 [profile.release]

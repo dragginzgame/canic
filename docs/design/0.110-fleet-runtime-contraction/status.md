@@ -1,5 +1,41 @@
 # Canic 0.110 Implementation Status
 
+## Additional .22 native build reduction — 2026-09-17
+
+The next accepted speed attempt reduces native debug records to line tables.
+The matched host-harness compile/link pair improves 68.415s → 54.320s; the final
+native graph yields a 296 MB harness versus 834 MB with full debug information.
+This retains file/line backtraces and all test membership, with full debugger
+variables/types available through Cargo overrides. Fast/Release Wasm settings
+and runtime behavior are unchanged.
+
+Sixty-eight build/cache tests, six reinstall guards and a focused debug/overflow
+probe pass. The selected extended .22 batch and changelog are ready; package
+versions remain .21 and publication is not performed. The result is a scoped
+native-build improvement, not a measured 90-minute release reduction. See the
+[current handoff](../../status/current.md) and
+[throughput report](../../audits/working/0.110-validation-throughput/report.md).
+
+## Extended .22 speed batch — 2026-09-17
+
+The maintainer kept .22 open for Toko launcher-cache diagnosis and repeated
+artifact/reinstall cost. The completed extension normalizes shell depth in both
+build execution and cache identity, and overlaps retained-asset verification in
+existing four-read batches. Fresh exact authority, deterministic rejection and
+interrupted-operation safety remain required. The shared Cargo intermediate
+experiment showed no benefit and was discarded.
+
+Sixty-eight build tests, six reinstall host tests, scoped warning-denied Clippy
+and the exact mixed-topology PocketIC recovery case pass. Both deliberate resets,
+conservation and effect-free replays are qualified. The selected expanded batch
+and changelog are ready for the maintainer's release flow; versions remain .21.
+No broad gate or publication ran. The candidate selected-build reinstall takes
+407.24s versus the earlier unmatched 411.44s; this does not establish a meaningful
+whole-deployment gain. Downstream matched measurements remain open. See the
+[current handoff](../../status/current.md) and
+[throughput report](../../audits/working/0.110-validation-throughput/report.md)
+for the controlled launcher result, timings, identities and limitations.
+
 ## Post-.21 selected diagnostic/dependency batch — 2026-09-17
 
 The published base is .21. The open .22 batch includes complete CI dependency

@@ -100,6 +100,15 @@ changing source or `Cargo.lock` underneath the validating process can also turn
 an otherwise quick immutability assertion into a late failure. Read-only plan
 inspection remains safe while the owned validation finishes.
 
+Native development builds and their inherited test profile use line-table debug
+information. This preserves file/line backtraces while avoiding full type and
+variable records in large native executables. Optimization, debug assertions and
+overflow checks retain their existing settings. For debugger sessions requiring
+local variables and parameters, set `CARGO_PROFILE_DEV_DEBUG=2` for development
+builds or `CARGO_PROFILE_TEST_DEBUG=2` for tests. Changing debug mode rebuilds the
+affected native artifacts. Fast and Release Wasm profiles remain unchanged;
+downstream workspaces own their own Cargo profiles.
+
 CI uses the same runner for its preflight, security and Rust-check jobs. Tool
 installation and version verification remain immediate prerequisites, after
 which each job reports every independent policy, security or compile-check
