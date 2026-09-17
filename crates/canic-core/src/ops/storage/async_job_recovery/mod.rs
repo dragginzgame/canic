@@ -11,6 +11,7 @@ mod tests;
 use crate::storage::stable::async_job_recovery::AsyncJobRecoveryData;
 use crate::{
     InternalError,
+    cdk::types::Principal,
     domain::provisioning_failure::{ProvisioningRetryCategory, retry_delay_seconds},
     model::replay::OperationId,
     storage::stable::async_job_recovery::{
@@ -43,12 +44,14 @@ pub struct AsyncJobAttempt {
 }
 
 impl AsyncJobAttempt {
-    /// Return the deterministic cycle-funding operation identity, when owned.
+    /// Bind the durable cycle-funding generation to the requesting canister.
     #[must_use]
-    pub fn operation_id(self) -> Option<OperationId> {
+    pub fn operation_id(self, caller: Principal) -> Option<OperationId> {
         self.operation_generation.map(|operation_generation| {
             let mut hasher = Sha256::new();
             hasher.update(ASYNC_JOB_RECOVERY_OPERATION_ID_DOMAIN);
+            hasher.update((caller.as_slice().len() as u64).to_be_bytes());
+            hasher.update(caller.as_slice());
             hasher.update(operation_generation.to_be_bytes());
             OperationId::from_bytes(hasher.finalize().into())
         })

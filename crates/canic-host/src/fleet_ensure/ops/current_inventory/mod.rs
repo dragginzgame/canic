@@ -591,29 +591,19 @@ fn query_entries(
                 root: parent.root,
                 workload,
             };
-            validate_terminal_descendant_allocation(icp, &protocols.root.candid_path, &descendant)?;
             insert_terminal_workload(
                 &mut component_workloads,
                 child.pid,
                 workload.clone(),
                 "terminal Component has more than one Root allocation authority",
             )?;
-            pending.push((child, protocol));
+            pending.push(descendant);
         }
-        let observations = bounded_observations::collect::<_, _, CurrentProtocolError>(
-            &pending,
-            |(child, protocol)| {
-                let observed = inspect_root_controlled_canister(
-                    icp,
-                    &protocols.root.candid_path,
-                    parent.root,
-                    child.pid,
-                )?;
-                require_terminal_component_authority(parent.root, child.pid, &observed, protocol)?;
-                Ok(observed)
-            },
-        )?;
-        for ((child, protocol), observed) in pending.into_iter().zip(observations) {
+        let observations =
+            observe_terminal_descendants(icp, &protocols.root.candid_path, &pending)?;
+        for (descendant, observed) in pending.into_iter().zip(observations) {
+            let child = descendant.child;
+            let protocol = descendant.protocol;
             let entry = registry_entry(child, protocol, observed.module_hash.as_deref())?;
             insert_controlled_cycles(
                 &mut controlled_cycles_by_principal,
@@ -784,15 +774,7 @@ fn append_root_components(
                 operation_id: status.operation_id,
                 plan_hash: status.plan_hash,
             };
-            validate_component_partition(
-                icp,
-                &protocols.root.candid_path,
-                authority.root.fleet_subnet_root,
-                &partition_authority,
-                member,
-                protocol,
-            )?;
-            pending.push((binding, protocol));
+            pending.push((member, protocol, partition_authority));
         }
     }
     if component_ids.len() != usize::try_from(expected_count).unwrap_or(usize::MAX) {
@@ -800,9 +782,25 @@ fn append_root_components(
             "Root Component result contains duplicate member identities",
         ));
     }
+    // Independent partition queries share the existing read bound. Every partition
+    // must pass before any management inspection or terminal projection begins.
+    bounded_observations::collect::<_, _, CurrentProtocolError>(
+        &pending,
+        |(member, protocol, partition_authority)| {
+            validate_component_partition(
+                icp,
+                &protocols.root.candid_path,
+                authority.root.fleet_subnet_root,
+                partition_authority,
+                member,
+                protocol,
+            )
+        },
+    )?;
     let observations = bounded_observations::collect::<_, _, CurrentProtocolError>(
         &pending,
-        |(binding, protocol)| {
+        |(member, protocol, _)| {
+            let binding = &member.binding;
             let observed = inspect_root_controlled_canister(
                 icp,
                 &protocols.root.candid_path,
@@ -818,7 +816,8 @@ fn append_root_components(
             Ok(observed)
         },
     )?;
-    for ((binding, protocol), observed) in pending.into_iter().zip(observations) {
+    for ((member, protocol, _), observed) in pending.into_iter().zip(observations) {
+        let binding = &member.binding;
         entries.push(RegistryEntry {
             pid: binding.canister_id.to_text(),
             role: Some(binding.role.to_string()),
@@ -1264,6 +1263,32 @@ fn validate_component_partition_authority(
         &partition.release_set,
     )?;
     terminal_field_exact(fields.status, &expected_status, &partition.status)
+}
+
+fn observe_terminal_descendants(
+    icp: &IcpCli,
+    root_candid_path: &Path,
+    descendants: &[TerminalDescendantAuthority<'_>],
+) -> Result<Vec<CanisterStatusResponse>, CurrentProtocolError> {
+    // Validate all independent receipts before issuing any management inspection.
+    bounded_observations::collect(descendants, |descendant| {
+        validate_terminal_descendant_allocation(icp, root_candid_path, descendant)
+    })?;
+    bounded_observations::collect(descendants, |descendant| {
+        let observed = inspect_root_controlled_canister(
+            icp,
+            root_candid_path,
+            descendant.root,
+            descendant.child.pid,
+        )?;
+        require_terminal_component_authority(
+            descendant.root,
+            descendant.child.pid,
+            &observed,
+            descendant.protocol,
+        )?;
+        Ok(observed)
+    })
 }
 
 fn validate_terminal_descendant_allocation(
@@ -2014,8 +2039,13 @@ fn inventory_error(reason: impl Into<String>) -> CurrentProtocolError {
     CurrentProtocolError::Configuration(format!("terminal inventory: {}", reason.into()))
 }
 
+// Tests
+
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    mod descendant_reads;
+
     use super::*;
     use canic_core::{
         cdk::types::Cycles,

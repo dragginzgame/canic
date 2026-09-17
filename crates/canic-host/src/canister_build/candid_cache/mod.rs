@@ -22,6 +22,62 @@ use std::{
 
 // This bounds optional cache I/O, not accepted Candid size. Larger results are extracted normally.
 const CACHE_RECORD_LIMIT: usize = 4 * 1024 * 1024;
+const MAX_EXTRACTORS: usize = 4;
+
+/// One role's completed declaration, ready for independent extraction.
+pub(super) struct CandidExtractionInput<'a> {
+    pub role: &'a str,
+    pub wasm: PathBuf,
+}
+
+/// Failure of a drained extraction batch; no partial profiles are published.
+#[derive(Debug, thiserror::Error)]
+pub(super) enum CandidBatchError {
+    #[error("Candid extraction for {role} failed: {detail}")]
+    Extraction { role: String, detail: String },
+
+    #[error("Candid extraction worker for {role} panicked")]
+    WorkerPanicked { role: String },
+}
+
+/// Extract completed declarations with bounded workers and input-order results.
+pub(super) fn extract_configured_candids(
+    cache: Option<&CandidExtractionCache>,
+    inputs: &[CandidExtractionInput<'_>],
+) -> Result<Vec<Vec<u8>>, CandidBatchError> {
+    let mut outputs = Vec::with_capacity(inputs.len());
+    for batch in inputs.chunks(MAX_EXTRACTORS) {
+        let results = std::thread::scope(|scope| {
+            let mut workers = Vec::with_capacity(batch.len());
+            for input in batch {
+                workers.push(scope.spawn(move || {
+                    extract_configured_candid(cache, input.role, &input.wasm).map_err(|error| {
+                        CandidBatchError::Extraction {
+                            role: input.role.to_string(),
+                            detail: error.to_string(),
+                        }
+                    })
+                }));
+            }
+            // Join every issued worker before selecting the first error or starting more.
+            workers
+                .into_iter()
+                .zip(batch)
+                .map(|(worker, input)| {
+                    worker.join().unwrap_or_else(|_| {
+                        Err(CandidBatchError::WorkerPanicked {
+                            role: input.role.to_string(),
+                        })
+                    })
+                })
+                .collect::<Vec<_>>()
+        });
+        for result in results {
+            outputs.push(result?);
+        }
+    }
+    Ok(outputs)
+}
 
 /// Invocation-owned extractor identity; declaration Wasm supplies the role's compiled inputs.
 pub(super) struct CandidExtractionCache {

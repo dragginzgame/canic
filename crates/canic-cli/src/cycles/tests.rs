@@ -172,6 +172,7 @@ fn parses_typed_topup_event_page() {
                     transferred_cycles: Some(Cycles::new(4_000_000_000_000)),
                     status: CycleTopupEventStatus::RequestOk,
                     error: None,
+                    parent_failure: None,
                 },
                 CycleTopupEvent {
                     timestamp_secs: 20,
@@ -180,6 +181,7 @@ fn parses_typed_topup_event_page() {
                     transferred_cycles: None,
                     status: CycleTopupEventStatus::RequestErr,
                     error: Some("no cycles".to_string()),
+                    parent_failure: None,
                 },
             ],
             total: 2,

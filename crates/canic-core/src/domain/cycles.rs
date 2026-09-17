@@ -21,3 +21,10 @@ pub enum CycleTopupEventStatus {
     RequestOk,
     RequestScheduled,
 }
+
+/// Scheduling decision after a failed automatic parent funding request.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub enum CycleTopupFailureDisposition {
+    Retry,
+    Terminal,
+}

@@ -20,6 +20,109 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Post-.20 CANIC-178 and deployment follow-up — 2026-09-17
+
+The maintainer confirms .20 is pushed (`cf51d9dbd`). The selected .21 batch fixes
+CANIC-178's caller namespace and retained protected failure diagnostics, then
+addresses current Toko build-progress feedback and terminal-inventory read
+concurrency. Package versions remain .20. This necessary funding correction stays
+on the affected .110 line despite its release-count guideline; no next minor or
+closeout audit is being started.
+
+The requested dependency follow-up pins published IcyDB 0.257.21 (from 0.257.19)
+in the workspace and standalone composed-Wasm fixture/schema. Both lockfiles
+align all six IcyDB packages; other registry dependencies are unchanged. The
+standalone lockfile also refreshes local Canic identities to their existing .20
+version. Locked offline checks pass for the lifecycle probe with all targets and
+the composed fixture with `participant` enabled. Logs:
+`/tmp/canic-icydb-25721-check.log` and
+`/tmp/canic-icydb-25721-composed-check.log`. This is compile qualification, not
+new PocketIC lifecycle or Wasm-size evidence; historical measurements are unchanged.
+
+Caller Principal plus durable generation now determines automatic funding IDs.
+Actor validation and exact lost-response retry remain intact. Protected cycle
+history gains parent/operation/public-code/disposition fields, retains its latest
+terminal event beyond ordinary history retention and keeps the existing 512-byte
+allocation bound. The new internal-only fixture uses real parent RPCs, production
+timers and actual cycle depletion; no management call or transfer is mocked.
+
+Fresh Toko notes adopt .20's admission, cache, recovery and progress changes but
+leave dedicated downstream acceptance open. They confirm a real concurrent
+source edit was correctly rejected by the drift guard. A newly reported silent
+Cargo/link phase is addressed with a 30-second bounded heartbeat. CANIC-176's
+changed-value key attribution remains unavailable: no raw environment values or
+per-value hashes are retained to explain it. No newer issue number than 178 was
+present in the latest read-only scan.
+
+Terminal Component partition queries now share the existing four-read collector;
+every partition validates before management inspection. This reduces sequential
+read waits, not request count; no matched deployment-duration claim is made.
+The final focused selections pass 27 core tests, 21 host tests and the CLI top-up
+parser test. The heartbeat's two tests also pass after tightening their failure
+wait bound. All changed packages pass all-target/all-feature Clippy with warnings
+denied; layering and whitespace checks pass. The single PocketIC case passes in
+34.79 seconds (50 seconds for the runner with reusable artifacts): independent
+receipts, both discarded replies, typed cross-actor rejection, per-child metrics,
+both real production timers and retained exact diagnostics after an update is
+rejected with IC0207. The fixture waits for completed grant events and no pending
+transfers, because parent accounting intentionally precedes transfer completion.
+
+Logs: `/tmp/canic-178-core-final.log`, `/tmp/canic-178-speed-tests.log`,
+`/tmp/canic-178-cli-heartbeat.log`, `/tmp/canic-178-pocketic.log`,
+`/tmp/canic-178-clippy-final.log` and `/tmp/canic-178-layering.log`.
+The latest read-only Toko feedback snapshot has SHA-256
+`670ed7d63b7e51bd66d0b721c8d117af965de3c0224d39bc3a5485e14d5a758b`.
+Its .20 adoption gates pass; dedicated workload/recovery and reuse acceptance
+remain separate. No issue newer than 178 was present.
+
+The subsequent Toko review advances that snapshot to
+`45d95ce9a4d4ea1511efef95efdfab238474f593ddc7a2246f5350a510724eb6`.
+It confirms the unpublished funding fix and heartbeat scope, with no new Canic
+funding defect. Exact-release adoption and live recovery remain outstanding.
+
+The requested first speed continuation now overlaps sibling child allocation
+receipt queries in terminal inventory using the same four-read collector. All
+receipts validate before management inspection; failed batches drain, select
+the first input-order read error and publish no partial inventory. A transport
+barrier proves overlap, failure ordering, draining, no later batch and no
+inspection after a conflicting receipt. All 20 focused inventory/collector
+tests and host all-target/all-feature warning-denied Clippy pass. The exact
+mixed-topology PocketIC case passes initial convergence, interrupted recovery,
+two distinct deliberate reinstalls, conservation and effect-free replay in
+910.92 seconds (978 seconds for the runner). Initial artifact preparation costs
+326.14 seconds. This qualifies correctness, not a matched deployment speedup;
+the live fixture has one child per parent, while the transport regression proves
+the overlapping sibling path. Layering and whitespace checks pass. Logs:
+`/tmp/canic160-descendant-reads-{tests,clippy,pocketic,layering}.log`.
+
+The selected correction/progress batch is ready for the maintainer-directed
+release flow. The .21 changelog draft is complete; packages remain .20 until that
+flow performs its version transaction. Broader speed qualification, RF2 and
+complete recovery forecasts remain follow-ups, not claims of this correction.
+No version bump, commit, push, broad gate, live funding, deployment or sibling
+mutation has been performed. Downstream publication/adoption and the three live
+Game Shards' recovery remain separate from disposable Canic qualification.
+
+The next requested speed change also completes in this .21 draft: Candid
+extraction now runs in batches of at most four after declaration Cargo finishes.
+Runtime profiles are derived only after all extraction succeeds. Existing exact
+Wasm/tool checks and optional cache semantics remain; errors drain issued work,
+select the first input-order failure and stop further batches. Ten focused tests
+pass, including the real extractor, duplicate content-addressed cache writes,
+ordered outputs, failed-batch draining and input/tool/cache rejection regressions.
+Host all-target/all-feature warning-denied Clippy, layering and whitespace pass.
+
+Three alternating, fresh-cache comparisons on the same six retained declaration
+Wasms give sequential 5245/5240/5441ms and four-wide 2732/2711/2781ms: median
+5.245s to 2.732s, about 48% less extraction time (2.513s saved). All Candid bytes
+match. This is an extraction-phase result on this host, not whole-build or
+deployment qualification; no Cargo compilation, finalization or IC behavior was
+changed by this continuation. Logs: `/tmp/canic160-candid-batch-final.log`,
+`/tmp/canic160-candid-batch-clippy.log` and
+`/tmp/canic160-candid-batch-layering.log`. Toko feedback remains at the latest
+snapshot above. No version bump, commit, push or broad gate ran.
+
+
 ## Release-test correction: native-funding fixture clock ownership — 2026-09-17
 
 The next maintainer release run from `af5a3203e` passed the earlier child-origin
