@@ -20,6 +20,31 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release-test correction: native-funding fixture clock ownership — 2026-09-17
+
+The next maintainer release run from `af5a3203e` passed the earlier child-origin
+case (37.90 seconds). Its sole internal failure was instead
+`native_withdrawal_recovers_the_same_initial_child_claim`: PocketIC rejected
+`SettingTimeIntoPast` while preparing the intentionally underfunded child.
+The live HTTP fixture had automatic progress enabled while its manual bootstrap
+loop used `advance_time`, a separate read-time/set-time pair. Automatic progress
+could overtake that target under load. The malformed-Candid diagnostics in the
+highlighted log belong to passing negative tests, not this failure.
+
+The fixture now stops automatic progress for the manual bootstrap scope and
+restores it before host funding recovery. Assertions verify both clock ownership
+states. The existing child identity, one withdrawal, lost response/receipt,
+conservation and effect-free replay checks remain. No production source changed.
+The exact failing case passes in 154.64 seconds (174 seconds for the runner),
+and internal-testing all-target/all-feature Clippy with warnings denied passes.
+Logs: `/tmp/canic-native-child-clock-pocketic.log` and
+`/tmp/canic-native-child-clock-clippy.log`.
+
+The .20 changelog and selected release correction are ready for the maintainer's
+release retry. Packages remain .19; no full gate, version transaction, commit,
+push, live deployment or sibling mutation ran. RF2, complete live forecasts and
+broader deployment-speed evidence retain their separate follow-up scope.
+
 ## Release-test correction: child failure through membership retries — 2026-09-16
 
 The maintainer selected the completed .20 fixes for release from
