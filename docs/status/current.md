@@ -20,6 +20,33 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release-test investigation: PocketIC tick timeout — 2026-09-17
+
+The subsequent release validation stalled in `insufficient real ICP denial`.
+Its shared PocketIC 16.0.0 server remained responsive, but instance 29 reported
+`Busy` on `tick`. The last server output showed installation of the second
+Component during fixture setup. The client panicked after its 300-second
+request deadline; the test process then remained alive. PocketIC's synchronous
+destructor waits for an HTTP instance deletion through a client with no request
+timeout, consistent with the observed blocked cleanup. The original tick's
+cause remains unconfirmed; this is not evidence that the funding assertions fail.
+
+The maintainer stopped the run after authorizing interruption. Original logs
+were preserved at `/tmp/canic-pocketic-timeout-20260917-50736/`. At source
+`1eed616cd282fdd818dc5075d2301551b86c6f20`, the exact case
+`pic::fleet_registry::baseline::tests::insufficient_real_icp_spends_nothing_and_creates_no_refill`
+passed twice on fresh owned servers with `RUST_BACKTRACE=1`: 43.42 seconds
+including fixture builds, then 20.21 seconds using cached artifacts. Both retain
+the real Ledger/CMC, unchanged-balance, zero-refill and cycle assertions. Logs:
+`/tmp/canic-insufficient-icp-reproduction.log` and
+`/tmp/canic-insufficient-icp-reproduction-repeat.log`.
+
+No runtime, fixture, dependency or timeout change was justified by this
+reproduction. Fresh-server passes do not qualify accumulated shared-server state
+or explain the original hang. The selected .21 implementation and changelog
+remain prepared for the maintainer-directed release retry, whose complete gate
+has not passed. No broad suite, version bump, commit or push ran here.
+
 ## Release-test correction: caller-bound timer identity guard — 2026-09-17
 
 The release run from `3a93e454f` passed workspace unit tests, then failed only
