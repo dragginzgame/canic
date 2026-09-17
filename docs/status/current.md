@@ -20,6 +20,33 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release-test correction: child failure through membership retries — 2026-09-16
+
+The maintainer selected the completed .20 fixes for release from
+`40e0e9a03`; packages remain .19 until the version transaction succeeds.
+The broad release run failed only the internal case
+`initial_child_failure_reaches_coordinator_and_recovers_same_claim`.
+Its host observed `ComponentMembership` instead of the retained
+`ComponentChildAllocation` origin. Runtime activation already enriched generic
+parent failures with the initial child's retained diagnostic, but subsequent
+membership retries omitted that lookup after runtime acknowledgement.
+
+Both stages now use the same existing diagnostic lookup. Authority/readiness
+checks, child state, funding and retry pacing are unchanged. The IC regression
+retains its exact-origin assertions and advances simulated time before the host
+read to exercise subsequent retries; it still proves recovery of the same claim.
+Five focused control-plane child-failure tests and scoped control-plane/internal-
+testing all-target/all-feature Clippy pass. The exact failing PocketIC case passes
+in 113.76 seconds (158 seconds for the runner, including builds). Logs:
+`/tmp/canic-child-membership-unit.log`, `/tmp/canic-child-membership-clippy.log`
+and `/tmp/canic-child-membership-pocketic.log`.
+
+The .20 changelog includes the fix. The selected release correction is ready for
+the maintainer's release retry; the full gate was not rerun by the agent. RF2,
+complete live forecasts and broader speed qualification remain follow-up work
+outside the maintainer-selected completed-fixes release. No version bump,
+commit, push, live deployment or sibling mutation ran.
+
 ## CANIC-156 stopped-Root funding and CANIC-160 authority reads — 2026-09-16
 
 Toko feedback now has SHA-256

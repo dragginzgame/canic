@@ -69,32 +69,40 @@ fn initial_child_origin_survives_outer_failure_context_without_changing_state() 
     )
     .unwrap();
     let before = restart_component_registry();
-    let parent_error = InternalError::unavailable();
-    let origin = ComponentRegistryOps::initial_child_failure(fixture.component, &parent_error)
-        .unwrap()
-        .unwrap();
-    assert_eq!(origin.recorded_at_ns, Some(failure.failed_at_ns));
-    assert_eq!(
-        origin.stage,
-        ProvisioningFailureStage::ComponentChildAllocation
-    );
-    assert_eq!(origin.target, root_binding().fleet_subnet_root);
-    assert_eq!(origin.operation_id, allocation.operation_id);
-    assert_eq!(origin.diagnostic_code, failure.diagnostic_code);
-    assert_eq!(origin.retry_category, ProvisioningRetryCategory::Backoff);
-    let error = parent_error
-        .with_observed_provisioning_failure(origin)
-        .with_provisioning_failure(
+    for (parent_error, stage) in [
+        (
+            InternalError::public(codes::STATE_INVALID),
             ProvisioningFailureStage::ComponentRuntime,
-            fixture.partition.binding.canister_id,
-            [92; 32],
-            ProvisioningRetryCategory::Backoff,
+        ),
+        (
+            InternalError::unavailable(),
+            ProvisioningFailureStage::ComponentMembership,
+        ),
+    ] {
+        let parent_code = parent_error.public_error().code();
+        let origin = ComponentRegistryOps::initial_child_failure(fixture.component, &parent_error)
+            .unwrap()
+            .unwrap();
+        assert_eq!(origin.recorded_at_ns, Some(failure.failed_at_ns));
+        assert_eq!(
+            origin.stage,
+            ProvisioningFailureStage::ComponentChildAllocation
         );
-    assert_eq!(error.provisioning_failure(), Some(origin));
-    assert_eq!(
-        error.public_error().code(),
-        codes::STATE_UNAVAILABLE.raw_code()
-    );
+        assert_eq!(origin.target, root_binding().fleet_subnet_root);
+        assert_eq!(origin.operation_id, allocation.operation_id);
+        assert_eq!(origin.diagnostic_code, failure.diagnostic_code);
+        assert_eq!(origin.retry_category, ProvisioningRetryCategory::Backoff);
+        let error = parent_error
+            .with_observed_provisioning_failure(origin)
+            .with_provisioning_failure(
+                stage,
+                fixture.partition.binding.canister_id,
+                [92; 32],
+                ProvisioningRetryCategory::Backoff,
+            );
+        assert_eq!(error.provisioning_failure(), Some(origin));
+        assert_eq!(error.public_error().code(), parent_code);
+    }
     assert_eq!(RootComponentRegistryStore::export(), before);
 }
 

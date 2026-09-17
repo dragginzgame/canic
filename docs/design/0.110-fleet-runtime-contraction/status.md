@@ -1,5 +1,18 @@
 # Canic 0.110 Implementation Status
 
+## Selected .20 release-test correction — 2026-09-16
+
+The maintainer selected the completed fixes for release; RF2, complete live
+forecasts and broader speed qualification remain follow-up work. The full release
+run exposed loss of the retained initial-child failure after parent runtime
+acknowledgement. Membership retries now use the same diagnostic lookup as runtime
+activation, preserving the exact child failure through Coordinator and host.
+Five focused unit cases, scoped warning-denied Clippy and the exact failed IC
+case pass. The selected correction and .20 changelog are ready for the release
+retry; the agent did not repeat the full gate or perform publication. See the
+[current handoff](../../status/current.md#release-test-correction-child-failure-through-membership-retries--2026-09-16)
+for exact evidence and limits.
+
 ## Management-only funding protection complete locally — 2026-09-16
 
 The open .20 batch now includes Stop → optional Fund → Reinstall → Start,
