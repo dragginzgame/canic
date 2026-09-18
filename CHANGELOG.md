@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.25` restores retained funding recovery with immutable retirement evidence
+  and shortens Fleet planning and PocketIC preparation; adds observed child
+  shortfall diagnostics bound to Component authority.
 - `0.110.24` reduces rebuild and observation overhead, explains build-lock waits,
   adds pre-build Fleet readiness and receipt-bound ICP funding recovery, accepts
   native donations with breaking net-accounting report fields, and updates

@@ -91,7 +91,7 @@ fn project(
     response: RootOperationStatusResponse,
 ) -> Result<StartupChildFundingBinding, StartupUsageUnavailable> {
     let invalid = StartupUsageUnavailable::AuthorityMismatch;
-    let (actual, component, parent, role, release_set) = match response {
+    let (actual, component, parent, parent_role, role, release_set) = match response {
         RootOperationStatusResponse::ProvisionComponent(status) => {
             let allocation = status.allocation;
             let install = allocation.installation.ok_or(invalid)?;
@@ -120,7 +120,14 @@ fn project(
                 child: install.binding.canister_id,
             };
             let role = install.binding.role.clone();
-            (actual, install.binding, root, role, allocation.release_set)
+            (
+                actual,
+                install.binding,
+                root,
+                None,
+                role,
+                allocation.release_set,
+            )
         }
         RootOperationStatusResponse::ProvisionChild(status) => {
             let allocation = status.allocation;
@@ -151,6 +158,7 @@ fn project(
                 actual,
                 install.binding.component,
                 install.binding.parent_canister_id,
+                Some(allocation.parent_role),
                 install.binding.role,
                 allocation.release_set,
             )
@@ -167,12 +175,13 @@ fn project(
     {
         return Err(invalid);
     }
-    finish(component, parent, child, role, release_set)
+    finish(component, parent, parent_role, child, role, release_set)
 }
 
 fn finish(
     component: ComponentBinding,
     parent: Principal,
+    parent_role: Option<CanisterRole>,
     child: Principal,
     role: CanisterRole,
     release_set: FleetSubnetRootReleaseSet,
@@ -185,9 +194,10 @@ fn finish(
     }
     Ok(StartupChildFundingBinding {
         release_set,
-        spec_hash: component.spec_hash,
-        parent: parent.to_text(),
+        component,
+        canister_id: child,
+        parent,
+        parent_role,
         role,
-        component_spec: component.component_spec,
     })
 }

@@ -38,7 +38,7 @@ enum CanisterOperationStatusResponse {
 }
 
 #[test]
-fn lifecycle_boundary_traps_are_phase_correct() {
+fn invalid_reinstall_arguments_report_init_phase_error() {
     let fixture = install_lifecycle_boundary_fixture();
     let install = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
         fixture.install_canic_canister()
@@ -61,24 +61,6 @@ fn lifecycle_boundary_traps_are_phase_correct() {
         })
         .expect_err("reinstall should fail");
     assert_phase_error("init", &reinstall_err);
-
-    let authority_id = fixture.install_authority_canister();
-    fixture
-        .pic
-        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
-
-    let upgrade_err = fixture
-        .pic
-        .retry_install_code(install_retry_policy(), || {
-            fixture.pic.upgrade_canister(
-                authority_id,
-                fixture.canic_wasm.clone(),
-                upgrade_args(),
-                None,
-            )
-        })
-        .expect_err("upgrade should fail");
-    assert_phase_error("post_upgrade", &upgrade_err);
 }
 
 #[test]

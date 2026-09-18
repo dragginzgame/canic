@@ -11,7 +11,7 @@ use canic_host::fleet_ensure::{
     ops::{EnsurePaths, read_journal},
 };
 
-pub(super) use artifact::{bind_audit_root, uses_audit_root};
+pub(super) use artifact::{build_audit_root, uses_audit_root};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum Scenario {

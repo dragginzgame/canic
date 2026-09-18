@@ -35,10 +35,16 @@ fn unknown_funding_is_not_claimed_sufficient_and_estimates_never_grant_authority
 
 #[test]
 fn retained_work_is_reported_without_rewriting_evidence_or_opening_a_lock() {
-    let root = temp_dir("readiness-retained");
+    let mut fixture = crate::fleet_ensure::tests::protocol_tranche_fixture(Vec::new());
+    fixture.desired.fleet = "fleet".into();
+    let root = fixture.root;
     let request = request(&root);
     let paths = EnsurePaths::under(&root, "local", "fleet");
-    let plan = super::super::tests::estate_funding_plan();
+    let mut plan = super::super::tests::estate_funding_plan();
+    plan.reviewed_desired = Some(Box::new(
+        crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(&fixture.desired),
+    ));
+    crate::fleet_ensure::tests::retain_recorded_retirement(&mut plan, Vec::new());
     let (_, mut journal) = super::super::tests::retained_evidence();
     journal.plan_sha256.clone_from(&plan.plan_sha256);
     journal.operation_id.clone_from(&plan.operation_id);

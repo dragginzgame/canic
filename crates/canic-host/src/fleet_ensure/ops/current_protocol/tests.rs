@@ -28,6 +28,8 @@ use canic_core::{
     },
 };
 use flate2::{Compression, GzBuilder};
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt as _;
 use std::{fs, io::Write};
 
 const CONFIG: &str = r#"
@@ -55,6 +57,230 @@ maximum_placements = 4
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
+
+#[cfg(unix)]
+struct AuthorityReadsFixture {
+    root: PathBuf,
+    icp: IcpCli,
+    desired: DesiredFleet,
+    authorities: Vec<FleetSubnetRootAuthority>,
+}
+
+#[cfg(unix)]
+impl AuthorityReadsFixture {
+    fn new(count: u8, overlap_gate: bool) -> Self {
+        let root = crate::test_support::temp_dir("root-authority-reads");
+        fs::create_dir_all(&root).unwrap();
+        let executable = root.join("icp");
+        fs::write(
+            &executable,
+            r#"#!/bin/sh
+set -eu
+case " $* " in
+  *" --version "*) echo 'icp 1.5.0'; exit 0;;
+  *" --query "*) ;;
+  *) exit 2;;
+esac
+while [ "$1" != canister ]; do shift; done
+shift
+[ "$1" = call ] || exit 3
+id="$2"
+method="$3"
+printf '%s\n' "$id" >> calls
+if [ -f latency ]; then sleep 0.02; fi
+case "$method" in
+  canic_root_status)
+    touch "$id.started"
+    if [ -f "$id.gated" ]; then
+      for peer in $(cat gate); do
+        attempts=0
+        until [ -f "$peer.started" ]; do
+          attempts=$((attempts + 1))
+          [ "$attempts" -lt 1000 ] || exit 4
+          sleep 0.01
+        done
+      done
+    elif [ -f gate ]; then
+      for peer in $(cat gate); do [ -f "$peer.done" ] || exit 5; done
+    fi;;
+  canic_wasm_store_status) touch "$(cat "$id.owner").done";;
+  *) exit 6;;
+esac
+cat "$id.json"
+"#,
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let template =
+            root_authorities(&active_registry(&parse_config_model(CONFIG).unwrap())).remove(0);
+        let mut desired = desired(Vec::new());
+        desired.canisters.clear();
+        let mut authorities = Vec::new();
+        let mut gate = Vec::new();
+        for index in 0..count {
+            let mut authority = template.clone();
+            let root_id = principal(60 + index);
+            let store_id = principal(80 + index);
+            authority.binding.fleet_subnet_root = root_id;
+            authority.wasm_store_authority.fleet_subnet_root = root_id;
+            authority.wasm_store_authority.wasm_store = store_id;
+            desired.canisters.push(canister(
+                &format!("root-{index}"),
+                DesiredCanisterKind::Root,
+                root_id,
+                None,
+                subnet(6),
+            ));
+            Self::respond(
+                &root,
+                root_id,
+                RootStatusResponseFragment::FleetAuthority(authority.clone()),
+            );
+            Self::respond(
+                &root,
+                store_id,
+                StoreStatusResponse::Authority(authority.wasm_store_authority.clone()),
+            );
+            fs::write(root.join(format!("{store_id}.owner")), root_id.to_text()).unwrap();
+            if overlap_gate
+                && usize::from(index) < super::super::bounded_observations::MAX_IN_FLIGHT
+            {
+                gate.push(root_id.to_text());
+                fs::write(root.join(format!("{root_id}.gated")), "").unwrap();
+            }
+            authorities.push(authority);
+        }
+        if overlap_gate {
+            fs::write(root.join("gate"), gate.join("\n")).unwrap();
+        }
+        Self {
+            icp: IcpCli::new(executable.to_str().unwrap(), None).with_cwd(root.clone()),
+            root,
+            desired,
+            authorities,
+        }
+    }
+
+    fn respond(root: &Path, id: Principal, response: impl CandidType) {
+        let response = Ok::<_, canic_core::dto::error::Error>(response);
+        fs::write(root.join(format!("{id}.json")), serde_json::json!({
+            "response_bytes": canic_core::cdk::utils::hash::hex_bytes(candid::encode_one(response).unwrap()),
+        }).to_string()).unwrap();
+    }
+
+    fn read(&self) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
+        query_current_root_authorities(
+            &self.icp,
+            &self.desired,
+            &state(),
+            &self.root.join("root.did"),
+            &self.root.join("store.did"),
+        )
+    }
+}
+
+#[cfg(unix)]
+impl Drop for AuthorityReadsFixture {
+    fn drop(&mut self) {
+        let _ = fs::remove_dir_all(&self.root);
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn root_authority_reads_overlap_pairs_keep_order_and_drain_before_next_batch() {
+    for count in [0, 1, 4, 5] {
+        let fixture = AuthorityReadsFixture::new(count, true);
+        assert_eq!(fixture.read().unwrap(), fixture.authorities);
+        assert_eq!(fixture.icp.remote_call_count(), 2 * u64::from(count));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn root_authority_reads_fail_closed_drain_and_retry_fresh() {
+    let mut fixture = AuthorityReadsFixture::new(5, false);
+    let first = fixture.desired.canisters[0].principal.take();
+    let authority = &fixture.authorities[1];
+    let mut conflicting = authority.wasm_store_authority.clone();
+    conflicting.wasm_module_hash[0] ^= 1;
+    AuthorityReadsFixture::respond(
+        &fixture.root,
+        conflicting.wasm_store,
+        StoreStatusResponse::Authority(conflicting),
+    );
+    assert!(
+        matches!(fixture.read(), Err(CurrentProtocolError::RegistryPrincipalMissing { name, .. }) if name == "root-0")
+    );
+    assert_eq!(fixture.icp.remote_call_count(), 6);
+    assert!(
+        !fixture
+            .root
+            .join(format!(
+                "{}.started",
+                fixture.authorities[4].binding.fleet_subnet_root
+            ))
+            .exists()
+    );
+    fixture.desired.canisters[0].principal = first;
+    assert!(matches!(
+        fixture.read(),
+        Err(CurrentProtocolError::RegistrySequenceConflict(_))
+    ));
+    assert_eq!(fixture.icp.remote_call_count(), 14);
+    let authority = &fixture.authorities[1].wasm_store_authority;
+    AuthorityReadsFixture::respond(
+        &fixture.root,
+        authority.wasm_store,
+        StoreStatusResponse::Authority(authority.clone()),
+    );
+    assert_eq!(fixture.read().unwrap(), fixture.authorities);
+    assert_eq!(fixture.icp.remote_call_count(), 24);
+}
+
+#[cfg(unix)]
+#[test]
+#[ignore = "manual matched Root/Store query scheduling measurement"]
+fn root_authority_reads_matched_latency_measurement() {
+    for count in [1, 4, 9] {
+        let fixture = AuthorityReadsFixture::new(count, false);
+        fs::write(fixture.root.join("latency"), "").unwrap();
+        for round in 0..5 {
+            for concurrent in [round % 2 == 0, round % 2 != 0] {
+                let calls_before = fixture.icp.remote_call_count();
+                let started = std::time::Instant::now();
+                let observed = if concurrent {
+                    fixture.read().unwrap()
+                } else {
+                    fixture
+                        .desired
+                        .canisters
+                        .iter()
+                        .flat_map(|root| {
+                            let mut desired = fixture.desired.clone();
+                            desired.canisters = vec![root.clone()];
+                            query_current_root_authorities(
+                                &fixture.icp,
+                                &desired,
+                                &state(),
+                                &fixture.root.join("root.did"),
+                                &fixture.root.join("store.did"),
+                            )
+                            .unwrap()
+                        })
+                        .collect()
+                };
+                let elapsed_us = started.elapsed().as_micros();
+                let calls = fixture.icp.remote_call_count() - calls_before;
+                assert_eq!(observed, fixture.authorities);
+                assert_eq!(calls, 2 * u64::from(count));
+                println!(
+                    "root_authority_reads roots={count} round={round} concurrent={concurrent} elapsed_us={elapsed_us} calls={calls} latency_ms=20"
+                );
+            }
+        }
+    }
+}
 
 #[cfg(unix)]
 struct StoreStagingFixture {

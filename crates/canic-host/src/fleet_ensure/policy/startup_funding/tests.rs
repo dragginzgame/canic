@@ -3,6 +3,49 @@ use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
 
 const T: u128 = 1_000_000_000_000;
 
+pub(super) fn funding_binding(
+    spec: &ComponentSpec,
+) -> crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
+    use candid::Principal;
+    use canic_core::ids::*;
+    let principal = |byte| Principal::from_slice(&[byte]);
+    crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
+        release_set: FleetSubnetRootReleaseSet {
+            release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                [1; 32],
+            )),
+            manifest_digest: ReleaseSetDigest::from_bytes([2; 32]),
+        },
+        component: ComponentBinding {
+            authority: FleetRegistryAuthority {
+                binding: FleetCoordinatorBinding {
+                    fleet: FleetBinding {
+                        fleet: FleetKey {
+                            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                            fleet_id: FleetId::from_generated_bytes([3; 32]),
+                        },
+                        app: AppId::from("startup"),
+                    },
+                    coordinator_subnet: SubnetId::from_principal(principal(1)),
+                    coordinator: principal(2),
+                },
+                epoch: 1,
+            },
+            component: ComponentInstanceId::from_generated_bytes([4; 32]),
+            component_spec: spec.component_spec.clone(),
+            spec_hash: spec.spec_hash,
+            role: spec.component_role.clone(),
+            placement_subnet: SubnetId::from_principal(principal(1)),
+            fleet_subnet_root: principal(5),
+            canister_id: principal(6),
+        },
+        canister_id: principal(6),
+        parent: principal(5),
+        parent_role: None,
+        role: spec.component_role.clone(),
+    }
+}
+
 #[test]
 fn startup_preserves_deployment_reserve_below_the_automatic_funding_threshold() {
     use canic_core::control_plane_support::policy::deployment::MINIMUM_DEPLOYMENT_RESERVE_CYCLES as RESERVE;

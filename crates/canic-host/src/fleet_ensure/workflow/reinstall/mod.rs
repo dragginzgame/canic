@@ -67,6 +67,13 @@ pub fn plan_reinstall<P: EnsurePlatform>(
         }
         Err(error) => return Err(error.into()),
     };
+    if journal.completion == FleetEnsureCompletion::InProgress {
+        verify_journal_integrity(&journal, &prior, requested_fleet, &state)?;
+        return Err(EnsureWorkflowError::RetainedOperationRecoveryRequired {
+            operation_id: prior.operation_id,
+            plan_sha256: prior.plan_sha256,
+        });
+    }
     if prior.scope != FleetEnsurePlanScope::Full
         || journal.completion != FleetEnsureCompletion::Converged
         || journal.plan_sha256 != prior.plan_sha256

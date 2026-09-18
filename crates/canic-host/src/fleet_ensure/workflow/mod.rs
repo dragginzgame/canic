@@ -198,6 +198,14 @@ where
     )]
     ReinstallConflict,
 
+    #[error(
+        "retained Fleet operation {operation_id} must recover before a new reinstall; preserve original plan {plan_sha256}, journal, source seals and receipts; run ensure without --reinstall to review retained funding, use --operator-mint if conversion is required, and resume the original reviewed operation before requesting a selected-release reinstall"
+    )]
+    RetainedOperationRecoveryRequired {
+        operation_id: String,
+        plan_sha256: String,
+    },
+
     #[error("reviewed Fleet plan digest changed before its first effect")]
     DriftedBeforeApply,
 

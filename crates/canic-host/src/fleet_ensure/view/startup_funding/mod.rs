@@ -5,7 +5,7 @@
 //! Boundary: live Coordinator usage does not turn fresh-child demand into a funding quotation.
 
 use canic_core::ids::{
-    CanisterRole, ComponentSpecId, CyclesFundingBudget, FleetSubnetRootReleaseSet,
+    CanisterRole, ComponentBinding, ComponentSpecId, CyclesFundingBudget, FleetSubnetRootReleaseSet,
 };
 
 /// Native balance evidence used for the startup scenario.
@@ -47,6 +47,7 @@ pub enum StartupCoordinatorUsage {
 pub enum StartupUsageUnavailable {
     NotWorkload,
     ParentRelayRequired,
+    ParentNotObserved,
     NotObserved,
     SelectedBuildNotInstalled,
     ObservationFailed,
@@ -90,20 +91,42 @@ pub struct StartupRootFunding {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StartupChildFundingUsage {
     pub allowance: Result<StartupChildFundingAllowance, StartupUsageUnavailable>,
+    pub observed_balance_cycles: Option<u128>,
+    pub local_demand: Result<StartupChildLocalDemand, StartupDemandUnavailable>,
     pub binding: Option<StartupChildFundingBinding>,
     pub name: String,
     pub child: String,
     pub usage: Result<StartupChildAccounting, StartupUsageUnavailable>,
 }
 
-/// Allocation-qualified funding parent; physical custody alone does not imply this relationship.
+/// A child's own threshold deficit; excludes descendants, execution and parent liquidity.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StartupChildLocalDemand {
+    pub observed_balance_cycles: u128,
+    pub threshold_cycles: Option<u128>,
+    pub shortfall_cycles: u128,
+    pub shortfall_beyond_lifetime_allowance_cycles: u128,
+    pub next_request_policy_cycles: u128,
+}
+
+/// Missing or unresolved evidence must never become a zero funding requirement.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum StartupDemandUnavailable {
+    Usage(StartupUsageUnavailable),
+    BalanceNotObserved,
+    PendingGrant,
+    ArithmeticOverflow,
+}
+
+/// Complete allocation identity and its funding edge, independent of physical pool custody.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StartupChildFundingBinding {
     pub release_set: FleetSubnetRootReleaseSet,
-    pub spec_hash: [u8; 32],
-    pub parent: String,
+    pub component: ComponentBinding,
+    pub canister_id: candid::Principal,
+    pub parent: candid::Principal,
+    pub parent_role: Option<CanisterRole>,
     pub role: CanisterRole,
-    pub component_spec: ComponentSpecId,
 }
 
 /// Runtime policy headroom after observed charges; this is neither demand nor spending authority.

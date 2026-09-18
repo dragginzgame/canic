@@ -939,7 +939,31 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(startup_root.child_grants_cycles, 0);
     assert_eq!(startup_root.shortfall_cycles, 0);
     assert_eq!(startup_root.components.len(), 1);
+    for (principal, reason) in [
+        (
+            &pool_one,
+            crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::ObservationFailed,
+        ),
+        (
+            &pool_two,
+            crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::NotWorkload,
+        ),
+    ] {
+        let child = startup_root
+            .child_usage
+            .iter()
+            .find(|child| &child.child == principal)
+            .unwrap();
+        assert!(child.observed_balance_cycles.is_some());
+        assert_eq!(
+            child.local_demand,
+            Err(
+                crate::fleet_ensure::view::startup_funding::StartupDemandUnavailable::Usage(reason)
+            ),
+        );
+    }
     let desired = generated.desired;
+    crate::fleet_ensure::policy::startup_funding::live_binding::qualify_selected(&desired);
     assert_eq!(
         desired
             .bootstrap

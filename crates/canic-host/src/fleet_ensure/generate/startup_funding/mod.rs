@@ -8,8 +8,8 @@ use super::{DesiredFleet, FleetGenerateError, ObservedCanister};
 use crate::fleet_ensure::{
     policy::startup_funding::{add, minimum_root_cycles, root_components},
     view::startup_funding::{
-        StartupCoordinatorUsage, StartupFundingForecast, StartupNativeBalance, StartupRootFunding,
-        StartupUsageUnavailable,
+        StartupCoordinatorUsage, StartupDemandUnavailable, StartupFundingForecast,
+        StartupNativeBalance, StartupRootFunding, StartupUsageUnavailable,
     },
 };
 use canic_core::bootstrap::compiled::ConfigModel;
@@ -75,8 +75,14 @@ pub(super) fn observe_children(
                 } else {
                     Err(StartupUsageUnavailable::AuthorityMismatch)
                 };
+            let binding = binding.and_then(|binding| {
+                crate::fleet_ensure::policy::startup_funding::live_binding::selected(
+                    desired, &root.root, &binding,
+                )?;
+                Ok(binding)
+            });
             let usage = match &binding {
-                Ok(binding) if binding.parent == parent.to_text() => {
+                Ok(binding) if binding.parent == parent => {
                     crate::fleet_ensure::ops::startup_funding::observation::observe_child(
                         &icp,
                         &request.root.join(&protocol.root_candid),
@@ -91,6 +97,10 @@ pub(super) fn observe_children(
             };
             root.child_usage.push(StartupChildFundingUsage {
                 allowance: Err(StartupUsageUnavailable::NotObserved),
+                observed_balance_cycles: observed.get(child).map(|value| value.cycles),
+                local_demand: Err(StartupDemandUnavailable::Usage(
+                    StartupUsageUnavailable::NotObserved,
+                )),
                 binding: binding.ok(),
                 name: canister.name.clone(),
                 child: child.into(),
@@ -110,7 +120,23 @@ pub(super) fn apply_allowances(
         return;
     };
     for root in &mut forecast.roots {
+        let bindings = crate::fleet_ensure::policy::startup_funding::live_binding::graph(
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+            bootstrap.release_build_id,
+            root.child_usage
+                .iter()
+                .filter_map(|child| child.binding.as_ref()),
+        );
         for child in &mut root.child_usage {
+            if let Some(binding) = &child.binding
+                && let Some(Err(reason)) = bindings.get(&binding.canister_id)
+            {
+                child.allowance = Err(*reason);
+                child.local_demand = Err(StartupDemandUnavailable::Usage(*reason));
+                continue;
+            }
             child.allowance = match (&child.binding, &child.usage) {
                 (Some(binding), Ok(usage)) => {
                     crate::fleet_ensure::policy::startup_funding::allowance::project(
@@ -125,6 +151,24 @@ pub(super) fn apply_allowances(
                 }
                 (_, Err(reason)) => Err(*reason),
                 (None, Ok(_)) => Err(StartupUsageUnavailable::AuthorityMismatch),
+            };
+            child.local_demand = match (&child.binding, &child.usage) {
+                (Some(binding), Ok(usage)) => {
+                    crate::fleet_ensure::policy::startup_funding::local_demand::project(
+                        config,
+                        &bootstrap
+                            .component_deployment_configuration
+                            .component_topology,
+                        bootstrap.release_build_id,
+                        binding,
+                        usage,
+                        child.observed_balance_cycles,
+                    )
+                }
+                (_, Err(reason)) => Err(StartupDemandUnavailable::Usage(*reason)),
+                (None, Ok(_)) => Err(StartupDemandUnavailable::Usage(
+                    StartupUsageUnavailable::AuthorityMismatch,
+                )),
             };
         }
     }

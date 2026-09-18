@@ -890,10 +890,17 @@ pub(super) fn query_current_root_authorities(
     root_candid: &Path,
     store_candid: &Path,
 ) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
-    let mut authorities = Vec::new();
-    for configured in desired.canisters.iter().filter(|canister| {
-        canister.presence == DesiredPresence::Present && canister.kind == DesiredCanisterKind::Root
-    }) {
+    let roots = desired
+        .canisters
+        .iter()
+        .filter(|canister| {
+            canister.presence == DesiredPresence::Present
+                && canister.kind == DesiredCanisterKind::Root
+        })
+        .collect::<Vec<_>>();
+    // Each Store read depends on its Root response; independent pairs may overlap.
+    // Drain the issued batch before returning its first configured-order failure.
+    super::bounded_observations::collect(&roots, |configured| {
         let principal = retained_principal(desired, state, &configured.name)
             .and_then(|principal| Principal::from_text(principal).ok())
             .ok_or_else(|| CurrentProtocolError::RegistryPrincipalMissing {
@@ -926,9 +933,8 @@ pub(super) fn query_current_root_authorities(
                 configured.name
             )));
         }
-        authorities.push(authority);
-    }
-    Ok(authorities)
+        Ok(authority)
+    })
 }
 
 #[expect(

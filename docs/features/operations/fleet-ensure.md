@@ -568,6 +568,25 @@ and unavailable or over-budget receipt history remain unresolved. Do not reset
 the journal, change timestamps, or independently mint into a retained operation.
 An Intent without a receipt is not proof that its original withdrawal did not pay.
 
+Completed retirement accounting embedded at
+`reinstall.source.terminal_retirement.conservation` is immutable evidence. Its
+recorded field names and canonical encoding remain part of the original plan
+digest, including recorded execution/settlement observations. They are not
+converted into current net debit/credit observations or used to admit a new
+payment. Active plans, actions, journals and fresh conservation still require
+their complete current contracts.
+
+For CANIC-166/172's retained withdrawal, resume ordinary Ensure without
+`--reinstall` to obtain its funding review, then follow the conversion and
+original-plan apply sequence above. The original desired input and source seals
+remain bound throughout recovery. A request for a new reinstall while that
+operation is in progress returns `RetainedOperationRecoveryRequired`, naming
+the original operation and plan digest. After original convergence and
+effect-free replay, request a separate `--reinstall` review selecting the new
+release. This does not establish that a live withdrawal is unpaid, that its
+Ledger retry window remains open, or that live source authority still matches;
+the existing receipt, retry, seal and conservation checks retain those decisions.
+
 Every autonomous pool creation retains its exact Ledger block, operation,
 amount, Ledger fee, management creation fee, readiness floor, execution margin
 and first observed native balance. Terminal conservation sums those receipts,

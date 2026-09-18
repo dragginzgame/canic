@@ -16,7 +16,7 @@ pub use crate::{artifact_io::validate_wasm_candid_endpoints, build_profile::Cani
 pub use artifact::{
     CanisterArtifactBuilder, build_workspace_canister_artifact,
     build_workspace_canister_artifact_with_options, build_workspace_configured_canister_artifacts,
-    copy_icp_wasm_output,
+    copy_icp_wasm_output, prepare_workspace_infrastructure_packages,
 };
 pub use cache::canister_build_target_root;
 pub(crate) use candid::extract_candid_bytes;

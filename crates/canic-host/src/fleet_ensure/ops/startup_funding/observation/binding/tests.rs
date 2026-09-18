@@ -116,8 +116,12 @@ fn funding_parent_comes_from_exact_allocation_instead_of_pool_custody() {
         RootOperationStatusResponse::ProvisionComponent(top),
     )
     .unwrap();
-    assert_eq!(result.parent, p(5).to_text());
+    assert_eq!(result.parent, p(5));
     assert_eq!(result.role, CanisterRole::from("hub"));
+    assert_eq!(result.component, component());
+    assert_eq!(result.canister_id, p(6));
+    assert_eq!(result.parent_role, None);
+    assert_eq!(result.release_set, release());
     let child = descendant();
     let claim = CanisterPoolClaim {
         component: child.allocation.component,
@@ -130,8 +134,12 @@ fn funding_parent_comes_from_exact_allocation_instead_of_pool_custody() {
         RootOperationStatusResponse::ProvisionChild(child.clone()),
     )
     .unwrap();
-    assert_eq!(result.parent, p(6).to_text());
+    assert_eq!(result.parent, p(6));
     assert_eq!(result.role, CanisterRole::from("shard"));
+    assert_eq!(result.component, component());
+    assert_eq!(result.canister_id, p(14));
+    assert_eq!(result.parent_role, Some(CanisterRole::from("hub")));
+    assert_eq!(result.release_set, release());
     // A deeper child's exact immediate parent is retained without a guessed Root edge.
     let mut deeper = child;
     deeper.allocation.parent_canister_id = p(15);
@@ -151,7 +159,7 @@ fn funding_parent_comes_from_exact_allocation_instead_of_pool_custody() {
         )
         .unwrap()
         .parent,
-        p(15).to_text()
+        p(15)
     );
 }
 
@@ -250,7 +258,7 @@ fn allocation_observation_is_query_only_and_skips_non_workloads() {
     .unwrap();
     assert_eq!(
         observe(&icp, &candid, p(5), p(14), &status).unwrap().parent,
-        p(6).to_text()
+        p(6)
     );
     std::fs::write(&response_file, "invalid response").unwrap();
     assert_eq!(

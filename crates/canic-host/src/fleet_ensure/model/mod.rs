@@ -5,10 +5,13 @@
 //! Boundary: workflow persists these records before and after every effect.
 
 pub mod operator_mint;
+mod retirement;
 mod serialization;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
+
+pub use retirement::FleetRetirementConservationRecord;
 
 pub const FLEET_ENSURE_SCHEMA_VERSION: u16 = 1;
 pub const MAX_FLEET_ENSURE_CANISTERS: usize = 4_096;
@@ -890,6 +893,7 @@ pub struct EstateFundingRequiredRecord {
 
 /// Terminal net balance accounting for the exact applied operation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
 pub struct ActualCycleConservation {
     #[serde(with = "u128_text")]
     pub estate_funding_cycles: u128,
@@ -1107,7 +1111,7 @@ pub struct FleetTerminalSourceRecord {
 #[serde(deny_unknown_fields)]
 pub struct FleetTerminalRetirementRecord {
     pub source: FleetTerminalSourceRecord,
-    pub conservation: ActualCycleConservation,
+    pub conservation: FleetRetirementConservationRecord,
 }
 
 /// Exact retained source bytes and issued protocol effects inspected for activation recovery.

@@ -5,6 +5,8 @@
 //! Boundary: assumes pool-readiness balances, fresh grant ledgers and no execution burn.
 
 pub(in crate::fleet_ensure) mod allowance;
+pub(in crate::fleet_ensure) mod live_binding;
+pub(in crate::fleet_ensure) mod local_demand;
 pub(super) mod planning;
 #[cfg(test)]
 mod tests;
