@@ -20,7 +20,7 @@ fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
         .get_subcommands()
         .map(clap::Command::get_name)
         .collect::<Vec<_>>();
-    assert_eq!(names, ["ensure", "generate"]);
+    assert_eq!(names, ["ensure", "generate", "readiness"]);
 }
 
 #[test]
@@ -363,9 +363,9 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
             exact_estate_creation_fee_cycles: 500_000_000_000,
             exact_unavoidable_fee_cycles: 3_500_700_000_000,
             final_controlled_cycles: 1_001_498_000_000_000,
-            measured_execution_burn_cycles: 2_000_000_000,
+            observed_net_cycle_debit_cycles: 2_000_000_000,
             observed_starting_cycles: 1_000_000_000_000_000,
-            observed_settlement_credit_cycles: 0,
+            observed_net_cycle_credit_cycles: 0,
             operator_debit_cycles: 1_500_000_000_000,
             received_new_funding_cycles: 1_500_000_000_000,
         }),
@@ -475,7 +475,7 @@ fn text_report_formats_every_cycle_quantity_with_three_decimal_units() {
              \n  native_topup app: cycles_ledger_withdraw=1.000Q ledger=ledger target={principal} deficit=2.000B margin=0.500B expected_native_post=1.002T\
              \nconservation_equation: 0.000B observed controlled + 179.101T maximum operator debit - 3.501T maximum unavoidable fees - 1.000T maximum Root-funded creation fees - 82.000T maximum execution burn = 101.600T expected remaining\
              \nmeasured_estate_funding_cycles: 10.000T\
-             \nmeasured_conservation: 1.000Q observed starting + 1.500T received funding + 0.000B observed settlement credit - 500.000B exact Root-funded creation fees - 2.000B measured execution burn = 1.001Q final controlled"
+             \nobserved_conservation: 1.000Q observed starting + 1.500T received funding + 0.000B observed net surplus - 500.000B exact Root-funded creation fees - 2.000B observed net deficit = 1.001Q final controlled"
         )
     );
 }
@@ -528,7 +528,7 @@ fn text_report_distinguishes_host_creates_and_ordered_reinstall_actions() {
     assert!(text.contains("host_create_actions: 1"));
     assert!(text.contains("root_funded_creations=0"));
     assert!(text.contains("actions=[create, stop, reinstall, set_controllers, start]"));
-    assert!(!text.contains("measured_conservation:"));
+    assert!(!text.contains("observed_conservation:"));
     let json = report_json_value(&report).expect("structured report");
     assert_eq!(
         json["plan"]["canisters"][0]["actions"][0]["requested_initial_cycles"],
@@ -859,4 +859,15 @@ fn native_funding_review_reports_destination_amount_and_approval() {
         "5"
     );
     assert!(json["funding_review"]["effect"].is_null());
+}
+
+#[test]
+fn readiness_requires_explicit_operator_and_has_no_apply_surface() {
+    let command = readiness::command();
+    assert!(parse_matches(command.clone(), ["staging"].map(OsString::from)).is_err());
+    let args = ["staging", "--operator", "rrkah-fqaaa-aaaaa-aaaaq-cai"];
+    assert!(parse_matches(command.clone(), args.map(OsString::from)).is_ok());
+    let mut apply = args.map(OsString::from).to_vec();
+    apply.extend([OsString::from("--apply"), OsString::from("11".repeat(32))]);
+    assert!(parse_matches(command, apply).is_err());
 }

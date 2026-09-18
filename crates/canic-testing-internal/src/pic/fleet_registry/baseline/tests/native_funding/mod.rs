@@ -255,9 +255,9 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     assert_eq!(
         actual.observed_starting_cycles
             + actual.operator_debit_cycles
-            + actual.observed_settlement_credit_cycles,
+            + actual.observed_net_cycle_credit_cycles,
         actual.final_controlled_cycles
-            + actual.measured_execution_burn_cycles
+            + actual.observed_net_cycle_debit_cycles
             + actual.exact_unavoidable_fee_cycles
             + actual.exact_estate_creation_fee_cycles,
     );

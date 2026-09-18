@@ -1,5 +1,50 @@
 # Canic 0.110 Implementation Status
 
+## Accepted Toko feedback follow-up — 2026-09-18
+
+The additional CANIC-176, CANIC-172 and CANIC-160 work is complete in the same
+open .24 batch. Lock-owner diagnostics remain advisory; pre-build readiness is
+effect-free and keeps caller estimates separate from spending approval. A real
+Ledger mint now joins original native withdrawal, lost-reply recovery, terminal
+accounting and replay in one focused host proof. This extends the monetary
+qualification below but does not claim the full managed Fleet or live staging.
+
+The synthetic readiness comparison reduces median status-read time by about
+66% for three and nine owners, preserving exact reads and call counts. It does
+not measure total downstream deployment or compilation. Thirty native tests,
+two CLI help checks, both exact Ledger cases, the isolated comparison, scoped
+warning-denied Clippy and format/layering/script checks pass.
+
+The complete selected batch is ready for the maintainer-selected release flow.
+[Evidence and limits](../../audits/reports/2026-09/2026-09-18/toko-feedback-follow-up.md)
+record the source identities and remaining downstream adoption, readiness-wrapper
+integration, actual retained staging recovery and complete timing qualification.
+Packages remain .23; .24 changelog surfaces are ready. No publication or live
+effect occurred.
+
+## Native donation tolerance — 2026-09-18
+
+The maintainer requests correction of native canister balance increases that
+currently reject recovery. This extends the selected .24 correction batch.
+Creation, funding, duplicate idle observations and terminal accounting must
+accept native donations without creating new payment authority. Net accounting
+replaces the narrow Stop-credit inference described in older entries below.
+Original balances, receipts, action budgets and deletion residual limits remain
+binding; the retained successor net-debit watermark cannot decrease. Deposits
+can mask simultaneous execution consumption, so net balance evidence does not
+prove a gross-burn ceiling. Ledger-account credits remain a separate contract.
+
+| Field | Donation follow-up |
+| --- | --- |
+| Owner | Host Fleet observation/funding/conservation; runtime pool first observation; CLI reports |
+| Evidence | Native success, excessive loss, authority/receipt rejection, retry, terminal replay and retained successor allowance; focused real-canister creation/recovery proof |
+| Validation | Focused native tests, exact host PocketIC case, affected-package warning-denied Clippy and formatting |
+| Status | Complete; 359 selected native tests, exact host PocketIC recovery/replay proof, scoped warning-denied Clippy, formatting and layering pass; .24 batch ready for the maintainer-selected release flow |
+
+Current qualification and remaining limits are recorded in the
+[current handoff](../../status/current.md). No change to deletion safeguards or
+Root/operator Ledger credit authority is included.
+
 ## CANIC-172 operator admission and retained recovery — 2026-09-18
 
 Published .23 accepted a full reinstall with 693,932,575,589 operator cycles

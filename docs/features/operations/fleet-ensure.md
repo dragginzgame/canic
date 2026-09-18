@@ -5,6 +5,28 @@ convergence workflow. It reads one current desired-state document, observes the
 configured controlled estate, and either writes a reviewed plan or applies the
 exact retained plan digest.
 
+Before compiling a release, run `canic --environment staging fleet readiness
+staging --operator <principal>` from the workspace. This read-only command checks
+the selected signer against the explicit operator, verifies the enrolled network
+trust identity, reads that operator's Cycles Ledger balance and reports retained
+Fleet work. Use `--cycles-ledger <principal>` to select a different Ledger and
+`--json` for structured output. It neither opens the operation lock nor creates
+or changes a plan, journal or payment intent.
+
+An optional `--estimated-cycles 90T` reports an estimated shortfall and exits
+unsuccessfully if it is positive. This is a caller estimate, not a selected plan's
+spending authority. Without an estimate the requirement remains unknown;
+success only means the available early checks passed. Non-converged retained
+work blocks starting a new operation: preserve its plan, journal and selected
+build and use the existing recovery flow. Unreadable or inconsistent retained
+evidence fails closed. All facts can change after this snapshot; exact plan and
+funding admission still run immediately before effects.
+
+Downstream deployment orchestration should call readiness before `canic build`.
+Offline artifact-only builds do not acquire a Fleet identity or make Ledger
+queries automatically. Readiness does not predict complete managed lifecycle
+convergence, validate application hooks, authorize payment or approve reset scope.
+
 After convergence, `canic admission plan`, `apply` and `status` use the selected
 release retained in the terminal Fleet plan to locate Coordinator and Root Candid
 sidecars. Keep that release's finalized manifests and artifact files available.
@@ -15,10 +37,33 @@ unapplied Fleet review must first complete its own plan/journal handoff.
 
 Human-readable reports describe a **planning budget**: maximum operator debit,
 unavoidable fees, Root-funded creation fees and execution burn are allowances,
-not measured expenditure. The conservation equation names each term; measured
+not measured expenditure. The conservation equation names each term; observed
 conservation appears separately when terminal evidence is available. Cycle
 amounts use compact `B`, `T` and `Q` units rounded to three decimals; use JSON for
 exact integer amounts.
+
+Native canister balances accept outside donations. A higher observed native
+balance does not invalidate a creation receipt, completed funding withdrawal,
+retained operation or terminal replay. The original starting balance and exact
+payment identity remain unchanged. An outside donation does not authenticate a
+Ledger payment, authorize another withdrawal, or increase a reviewed paid-effect
+limit. Successor phases retain the highest previously recorded net-debit
+watermark; a later surplus cannot replenish that recorded allowance.
+
+Terminal JSON reports `observed_net_cycle_debit_cycles` and
+`observed_net_cycle_credit_cycles`. These are mutually exclusive net differences
+between final controlled balances and starting balances plus recognized funding,
+less exact estate creation fees. They do **not** measure gross execution costs or
+total donations: a deposit and consumption between observations can offset one
+another. The reviewed execution allowance bounds the observed net deficit;
+receipts and independent action/payment bounds remain necessary. Human output
+calls this `observed_conservation`.
+
+This treatment covers native canister donations. Operator and Root Cycles Ledger
+accounts retain their receipt-bound accounting. Unexpected Ledger credits are
+not silently classified as authorized funding. Destructive drain/delete steps
+still require their reviewed residual limits: a late donation may require another
+drain or review so the additional cycles are not discarded.
 
 Each canister row lists its action kinds in plan order. `host_create_actions`
 counts direct initial or replacement creation actions in that plan. Funding
@@ -220,9 +265,10 @@ preparation remains unfunded and requires its existing native headroom.
 
 These allowances are neither predicted burn nor complete successor deployment
 quotes. Planning does not pause the runtime; the applied Stop protects the
-reviewed credit from old-runtime child grants. External top-ups are outside this
-journal. Terminal verification retains the completed funding evidence and checks
-conservation after the new runtime starts.
+reviewed credit from old-runtime child grants. Outside native top-ups are accepted
+as balance observations, without an invented payment receipt or larger allowance.
+Terminal verification retains the completed funding evidence and checks net
+accounting after the new runtime starts.
 
 Recovery review also reports configuration-bound startup funding for each Root
 before a reinstall prerequisite. The required native balance is the greater of
@@ -711,12 +757,12 @@ for interruption recovery.
 
 Before the first effect, changed desired bytes, artifacts, authority-bearing
 live state, funding sufficiency or the live Cycles Ledger fee stop apply and
-require a new plan. Live controlled balances may move up through refunds or
-down through execution burn only within the reviewed per-canister observation
-bound and only while the normalized action graph and funding authority remain
-identical. The accepted apply-time balances become the journal's truthful
-initial conservation evidence; movement outside the bound rejects before any
-effect. Once the journal is in progress,
+require a new plan. Live native balances may increase through donations or refunds; decreases
+must stay within the reviewed per-canister observation bound. The normalized
+action graph and funding authority must remain identical. If a donation changes
+the required action set, obtain a fresh review before starting. The accepted
+apply-time balances become the journal's truthful initial conservation evidence;
+a decrease outside the bound rejects before any effect. Once the journal is in progress,
 the plan's digest-bound reviewed desired input is authoritative: newer working
 bytes cannot alter or supersede it, and an explicit environment lets the CLI
 resume even if the working TOML is missing. After terminal closure, rerun the

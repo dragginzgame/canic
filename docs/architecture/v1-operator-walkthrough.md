@@ -88,7 +88,8 @@ record first. If a response is lost, rerun the same command; Canic observes the
 live result or repeats the same idempotent Ledger/drain identity before moving
 forward. It never opens a second operation over an incomplete journal.
 
-When terminal, the report records measured conservation. Run the plan command
+When terminal, the report records observed net cycle accounting, including any
+surplus. Concurrent donations can mask consumption; this is not gross burn. Run the plan command
 again immediately. A converged Fleet reports no mutation actions, and applying
 that empty plan performs no creation, funding, transfer, install, controller,
 start, stop, or delete effect.

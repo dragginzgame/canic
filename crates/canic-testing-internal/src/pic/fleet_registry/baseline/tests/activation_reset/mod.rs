@@ -315,7 +315,18 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     .expect("source-bound preparation conserves cycles");
     assert!(prepared.terminal);
     let conservation = prepared.actual_conservation.as_ref().unwrap();
-    assert!(conservation.observed_settlement_credit_cycles > 0);
+    assert!(
+        conservation.observed_net_cycle_debit_cycles == 0
+            || conservation.observed_net_cycle_credit_cycles == 0
+    );
+    assert_eq!(
+        conservation.observed_starting_cycles
+            + conservation.received_new_funding_cycles
+            + conservation.observed_net_cycle_credit_cycles,
+        conservation.final_controlled_cycles
+            + conservation.exact_estate_creation_fee_cycles
+            + conservation.observed_net_cycle_debit_cycles
+    );
     assert_eq!(conservation.operator_debit_cycles, 0);
     assert_eq!(conservation.received_new_funding_cycles, 0);
     let completed = read_journal(&paths).unwrap().unwrap();
@@ -357,9 +368,17 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     .unwrap();
     assert_eq!(replay.effects_applied, 0);
     let replay_conservation = replay.actual_conservation.as_ref().unwrap();
+    assert!(
+        replay_conservation.observed_net_cycle_debit_cycles == 0
+            || replay_conservation.observed_net_cycle_credit_cycles == 0
+    );
     assert_eq!(
-        replay_conservation.observed_settlement_credit_cycles,
-        conservation.observed_settlement_credit_cycles
+        replay_conservation.observed_starting_cycles
+            + replay_conservation.received_new_funding_cycles
+            + replay_conservation.observed_net_cycle_credit_cycles,
+        replay_conservation.final_controlled_cycles
+            + replay_conservation.exact_estate_creation_fee_cycles
+            + replay_conservation.observed_net_cycle_debit_cycles
     );
     assert_eq!(
         replay_conservation.observed_starting_cycles,

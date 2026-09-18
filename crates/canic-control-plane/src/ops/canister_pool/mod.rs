@@ -1561,14 +1561,11 @@ fn retain_first_creation_observation(
     if receipt.first_observed_cycles.is_some() {
         return Ok(());
     }
-    let funded_native_cycles = receipt
+    receipt
         .ledger_amount
         .to_u128()
         .checked_sub(receipt.management_creation_fee.to_u128())
         .ok_or_else(InternalError::conflict)?;
-    if observed.to_u128() > funded_native_cycles {
-        return Err(InternalError::conflict());
-    }
     receipt.first_observed_cycles = Some(observed.clone());
     Ok(())
 }
@@ -1949,8 +1946,7 @@ mod tests {
             })
         );
         let mut observed_asset = asset;
-        assert!(retain_first_creation_observation(&mut observed_asset, &Cycles::new(501)).is_err());
-        retain_first_creation_observation(&mut observed_asset, &Cycles::new(450))
+        retain_first_creation_observation(&mut observed_asset, &Cycles::new(501))
             .expect("retain first exact native balance");
         retain_first_creation_observation(&mut observed_asset, &Cycles::new(600))
             .expect("later top-up does not rewrite first observation");
@@ -1959,7 +1955,7 @@ mod tests {
                 .creation_receipt
                 .expect("created receipt")
                 .first_observed_cycles,
-            Some(Cycles::new(450))
+            Some(Cycles::new(501))
         );
 
         let next_operation_id = [8; 32];

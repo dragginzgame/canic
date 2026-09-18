@@ -42,6 +42,9 @@ budgets or production-load qualification.
 
 ## Build and reuse
 
+For lock contention diagnostics and exact reuse guarantees, see
+[build artifacts](../../architecture/build-artifacts.md#complete-build-reuse-and-compilation-phases).
+
 A complete App build records the selected configuration, attached package
 manifests, source documents and chunk hashes before compilation. This includes
 explicitly declared inputs under directories such as `.canic` that ordinary

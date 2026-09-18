@@ -1553,7 +1553,7 @@ fn create_balance_terminal_predicate_is_exact_and_bounded() {
     assert!(create_balance_is_terminal(Some(1_000), 1_000, 0));
     assert!(create_balance_is_terminal(Some(999), 1_000, 1));
     assert!(!create_balance_is_terminal(Some(998), 1_000, 1));
-    assert!(!create_balance_is_terminal(Some(1_001), 1_000, 1));
+    assert!(create_balance_is_terminal(Some(1_001), 1_000, 1));
     assert!(!create_balance_is_terminal(None, 1_000, 1));
 }
 
@@ -2232,7 +2232,7 @@ fn interruption_at_every_effect_converges_once_and_second_run_has_zero_effects()
         .expect("terminal conservation proof");
     assert_eq!(
         conservation.observed_starting_cycles + conservation.received_new_funding_cycles
-            - conservation.measured_execution_burn_cycles,
+            - conservation.observed_net_cycle_debit_cycles,
         conservation.final_controlled_cycles
     );
     assert!(platform.mutations.values().all(|count| *count == 1));
@@ -2802,19 +2802,17 @@ fn ledger_withdraw_completion_includes_burn_between_review_and_intent() {
         pre_cycles: Some(4_499_995_491_646),
     };
     assert!(native_funding_applied(observation));
-    for live_cycles in [6_000_000_000_000, 7_999_999_749_904] {
+    for live_cycles in [6_000_000_000_000, 7_999_999_749_904, 9_000_000_000_000] {
         assert!(native_funding_applied(NativeFundingObservation {
             live_cycles: Some(live_cycles),
             ..observation
         }));
     }
-    for live_cycles in [5_999_999_999_999, 7_999_999_749_905] {
-        assert!(!native_funding_applied(NativeFundingObservation {
-            live_cycles: Some(live_cycles),
-            ..observation
-        }));
-    }
     assert!(!native_funding_applied(NativeFundingObservation {
+        live_cycles: Some(5_999_999_999_999),
+        ..observation
+    }));
+    assert!(native_funding_applied(NativeFundingObservation {
         pre_cycles: Some(4_499_995_741_743),
         ..observation
     }));
@@ -3504,7 +3502,7 @@ fn reviewed_plan_accepts_bounded_bidirectional_balance_movement_with_truthful_st
 }
 
 #[test]
-fn reviewed_plan_rejects_balance_movement_beyond_its_bound_before_effects() {
+fn reviewed_plan_rejects_balance_loss_beyond_its_bound_before_effects() {
     let mut fixture = fixture();
     let desired_sha256 = "77".repeat(32);
     let initial = workflow::plan(
@@ -3542,7 +3540,7 @@ fn reviewed_plan_rejects_balance_movement_beyond_its_bound_before_effects() {
         .live
         .get_mut(TREASURY)
         .expect("retained Coordinator")
-        .cycles += 11;
+        .cycles -= 11;
 
     let error = workflow::apply(
         &fixture.root,
@@ -5961,6 +5959,12 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
     assert_eq!(interrupted.completion, FleetEnsureCompletion::InProgress);
     assert_eq!(platform.mutations.get(&first_create), Some(&1));
 
+    // An outside top-up arrives after creation paid but before its lost reply is
+    // reconciled. It must not invalidate the exact retained creation identity.
+    let donated_to: Principal = platform.known.iter().next().unwrap().parse().unwrap();
+    let donation = 5_000_000_000_000;
+    platform.pic.add_cycles(donated_to, donation);
+
     // Reconstruct the host adapter around the same live PocketIC estate. The
     // reviewed plan, journal and state are reopened from disk; only remote
     // idempotency evidence crosses this simulated process boundary.
@@ -5995,9 +5999,29 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
     )
     .expect("resume and converge literal zero PocketIC estate");
     assert!(applied.terminal);
-    assert!(applied.actual_conservation.is_some());
+    let actual = applied.actual_conservation.as_ref().unwrap();
+    assert!(actual.observed_net_cycle_credit_cycles > 0);
+    assert_eq!(actual.observed_net_cycle_debit_cycles, 0);
+    assert_eq!(
+        actual.observed_starting_cycles,
+        interrupted.initial_controlled_cycles
+    );
     assert_eq!(restarted.mutations.get(&first_create), Some(&1));
     assert_eq!(restarted.known.len(), desired.canisters.len());
+
+    let paid_before_replay = restarted.mutations.clone();
+    restarted.pic.add_cycles(donated_to, donation);
+    let replay = workflow::apply(
+        &root,
+        &desired,
+        &source,
+        "synthetic",
+        &planned.plan.plan_sha256,
+        &mut restarted,
+    )
+    .expect("original operation replay accepts another outside donation");
+    assert!(replay.terminal);
+    assert_eq!(restarted.mutations, paid_before_replay);
 
     let second = workflow::plan(
         &root,
@@ -7334,7 +7358,7 @@ fn terminal_retirement_requires_exact_paid_debit_and_bounded_live_conservation()
         protocol_ready: BTreeMap::new(),
     };
     let actual = conservation(&source, &observation, 600).unwrap();
-    assert_eq!(actual.measured_execution_burn_cycles, 10);
+    assert_eq!(actual.observed_net_cycle_debit_cycles, 10);
     assert_eq!(actual.received_new_funding_cycles, 110);
     assert_eq!(actual.operator_debit_cycles, 120);
     for balance in [879, 881, 1001] {
@@ -7342,9 +7366,10 @@ fn terminal_retirement_requires_exact_paid_debit_and_bounded_live_conservation()
         changed.operator_cycles = balance;
         assert!(conservation(&source, &changed, 600).is_none());
     }
-    for controlled in [409, 611] {
-        assert!(conservation(&source, &observation, controlled).is_none());
-    }
+    assert!(conservation(&source, &observation, 409).is_none());
+    let donated = conservation(&source, &observation, 611).unwrap();
+    assert_eq!(donated.observed_net_cycle_credit_cycles, 1);
+    assert_eq!(donated.observed_net_cycle_debit_cycles, 0);
     let mut changed = source;
     changed.conservation.scheduled_transfer_cycles = 1;
     assert!(conservation(&changed, &observation, 600).is_none());
@@ -7378,9 +7403,9 @@ fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
                     exact_estate_creation_fee_cycles: 0,
                     exact_unavoidable_fee_cycles: 10,
                     final_controlled_cycles: 600,
-                    measured_execution_burn_cycles: 10,
+                    observed_net_cycle_debit_cycles: 10,
                     observed_starting_cycles: 500,
-                    observed_settlement_credit_cycles: 0,
+                    observed_net_cycle_credit_cycles: 0,
                     operator_debit_cycles: 120,
                     received_new_funding_cycles: 110,
                 },

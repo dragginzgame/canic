@@ -365,11 +365,8 @@ fn prepare_build_reuse(
 ) -> (Option<CompleteBuildReuse>, Duration) {
     let mut lock_elapsed = Duration::ZERO;
     let reuse = match builder.prepare_complete_build_reuse(context, |progress| match progress {
-        BuildReuseProgress::WaitingForLock(elapsed) => {
-            eprintln!(
-                "Waiting for complete-build reuse lock: {:.2}s",
-                elapsed.as_secs_f64()
-            );
+        BuildReuseProgress::WaitingForLock(wait) => {
+            eprintln!("{}", build_lock_wait_message(&wait));
         }
         BuildReuseProgress::LockFinished(elapsed) => {
             lock_elapsed = elapsed;
@@ -1081,11 +1078,54 @@ fn resolve_build_network(
 // -----------------------------------------------------------------------------
 // Tests
 
+#[expect(
+    clippy::unnecessary_debug_formatting,
+    reason = "quote and escape diagnostic paths so workspace names cannot inject terminal lines"
+)]
+fn build_lock_wait_message(wait: &canic_host::canister_build::BuildLockWait) -> String {
+    let owner = wait.recorded_owner.as_ref().map_or_else(
+        || "recorded owner unavailable".to_string(),
+        |owner| format!(
+            "recorded owner (advisory): pid={} workspace={:?} profile={} started_at_unix_seconds={}",
+            owner.pid, owner.workspace, owner.profile, owner.started_at_unix_seconds
+        ),
+    );
+    format!(
+        "Waiting for complete-build reuse lock: {:.2}s; lock={:?}; {owner}",
+        wait.elapsed.as_secs_f64(),
+        wait.lock_path
+    )
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::temp_dir;
+    use canic_host::canister_build::{BuildLockOwner, BuildLockWait};
     use std::fs;
+
+    #[test]
+    fn lock_wait_rendering_distinguishes_advisory_metadata_and_escapes_paths() {
+        let mut wait = BuildLockWait {
+            elapsed: std::time::Duration::from_secs(3),
+            lock_path: "/tmp/lock\nname".into(),
+            recorded_owner: None,
+        };
+        assert!(super::build_lock_wait_message(&wait).contains("owner unavailable"));
+        wait.recorded_owner = Some(BuildLockOwner {
+            pid: 42,
+            profile: "release".into(),
+            started_at_unix_seconds: 123,
+            workspace: "/tmp/work\nspace".into(),
+        });
+        let message = super::build_lock_wait_message(&wait);
+        assert!(message.contains("advisory"));
+        assert!(message.contains("pid=42"));
+        assert!(message.contains("profile=release"));
+        assert!(message.contains("started_at_unix_seconds=123"));
+        assert!(!message.contains('\n'));
+        assert!(message.contains(r"work\nspace"));
+    }
 
     #[test]
     fn build_parses_app_and_optional_role() {

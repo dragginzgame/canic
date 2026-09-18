@@ -39,4 +39,7 @@ use process::parse_parent_process_id;
 #[cfg(test)]
 mod tests;
 
-pub use reuse::{BuildReuseError, BuildReuseProgress, CompleteBuildReuse, ReusedCompleteBuild};
+pub use reuse::{
+    BuildLockOwner, BuildLockWait, BuildReuseError, BuildReuseProgress, CompleteBuildReuse,
+    ReusedCompleteBuild,
+};

@@ -51,18 +51,7 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         &resolve_desired_artifacts(root, desired)?,
     )?
     .ok_or(EnsureWorkflowError::DriftedBeforeApply)?;
-    let funded_balance_increased =
-        plan.canisters
-            .iter()
-            .zip(&current.canisters)
-            .any(|(reviewed, observed)| {
-                reviewed
-                    .actions
-                    .iter()
-                    .any(|action| matches!(action, EnsureAction::Fund { .. }))
-                    && observed.observed_cycles > reviewed.observed_cycles
-            });
-    if funded_balance_increased || !compatible_root_start_prerequisite(plan, &current, desired) {
+    if !compatible_root_start_prerequisite(plan, &current, desired) {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     let observation = root_management_fleet_observation(&management, &targets)?;
@@ -339,7 +328,7 @@ pub(super) fn verify_effect_authority<P: EnsurePlatform>(
             .checked_sub(*amount)
             .ok_or(EnsureWorkflowError::PlanIntegrity)?;
         let retained_pre = pre_cycles.ok_or(EnsureWorkflowError::JournalIntegrity)?;
-        if retained_pre > reviewed_pre {
+        if reviewed_pre.saturating_sub(retained_pre) > *funding_margin_cycles {
             return Err(EnsureWorkflowError::DriftedBeforeApply);
         }
         let minimum = expected_post_cycles

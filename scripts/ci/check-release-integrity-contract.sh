@@ -469,6 +469,8 @@ test_is_ignored() {
     ' "$source_file"
 }
 governed_host_pocketic_tests=(
+    'fleet_ensure::workflow::funding_tests::operator_mint_tests::governed_pocketic_operator_mint_recovers_receipts'
+    'fleet_ensure::workflow::funding_tests::real_mint_funding::governed_pocketic_mint_credit_resumes_original_native_withdrawal'
     'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects'
 )
 test_is_ignored \

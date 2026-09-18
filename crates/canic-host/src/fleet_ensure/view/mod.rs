@@ -5,6 +5,7 @@
 //! Boundary: projections describe assumptions and never authorize spending.
 
 pub mod operator_mint;
+pub mod readiness;
 pub mod startup_funding;
 pub(in crate::fleet_ensure) mod terminal_source;
 

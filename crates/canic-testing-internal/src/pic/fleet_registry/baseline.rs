@@ -9207,11 +9207,11 @@ esac
         // Include the reviewed Root startup prepayment in creation accounting,
         // just as the Ledger debit and precreated result do above.
         let requested_controlled_cycles = total_requested + repair_funding;
-        let measured_execution_burn_cycles = requested_controlled_cycles
+        let observed_net_cycle_debit_cycles = requested_controlled_cycles
             .checked_sub(final_controlled_cycles)
             .expect("fresh estate cannot gain unreviewed controlled cycles");
         assert_eq!(
-            final_controlled_cycles + measured_execution_burn_cycles,
+            final_controlled_cycles + observed_net_cycle_debit_cycles,
             requested_controlled_cycles
         );
 
@@ -11888,9 +11888,11 @@ exec '{}' "$@"
             creation_count * (MAINNET_REFILL_MANAGEMENT_CREATION_FEE + MAINNET_REFILL_LEDGER_FEE)
         );
         assert_eq!(
-            actual.observed_starting_cycles + actual.operator_debit_cycles,
+            actual.observed_starting_cycles
+                + actual.operator_debit_cycles
+                + actual.observed_net_cycle_credit_cycles,
             actual.final_controlled_cycles
-                + actual.measured_execution_burn_cycles
+                + actual.observed_net_cycle_debit_cycles
                 + actual.exact_unavoidable_fee_cycles
                 + actual.exact_estate_creation_fee_cycles
         );
@@ -12265,9 +12267,11 @@ exec '{}' "$@"
         assert_eq!(actual.estate_funding_cycles, 0);
         assert_eq!(actual.exact_estate_creation_fee_cycles, 0);
         assert_eq!(
-            actual.observed_starting_cycles + actual.operator_debit_cycles,
+            actual.observed_starting_cycles
+                + actual.operator_debit_cycles
+                + actual.observed_net_cycle_credit_cycles,
             actual.final_controlled_cycles
-                + actual.measured_execution_burn_cycles
+                + actual.observed_net_cycle_debit_cycles
                 + actual.exact_unavoidable_fee_cycles
                 + actual.exact_estate_creation_fee_cycles
         );

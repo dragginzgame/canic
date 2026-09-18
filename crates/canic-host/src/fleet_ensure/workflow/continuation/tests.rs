@@ -502,3 +502,69 @@ fn fixture_retry_allowance_changes_the_reviewed_plan_digest() {
         .fixture_publication_retry_attempts = 1;
     assert_ne!(expected_plan_sha256(&plan), original);
 }
+
+#[test]
+fn donation_does_not_replenish_the_retained_successor_budget() {
+    let (desired, original, phase, mut journal) = fixture();
+    let root = crate::test_support::temp_dir("continuation-donation-watermark");
+    let paths = EnsurePaths::under(&root, "local", "fleet");
+    let mut state = read_state(&paths, "fleet").unwrap();
+    state.principals.insert("root".into(), ROOT.into());
+    let mut platform = MockPlatform::new(desired.clone(), []);
+    platform.set_fresh_protocol_actions(phase.protocol_actions.clone());
+    append(
+        &paths,
+        &desired,
+        &original,
+        &mut journal,
+        &state,
+        &observation(),
+        phase.clone(),
+        &mut platform,
+    )
+    .unwrap();
+    let before = journal.successor_phases[0].execution_burn_before_phase;
+    assert_eq!(before, 50);
+    let mut next = phase;
+    let EnsureAction::FleetProtocol { action, .. } = &mut next.protocol_actions[0] else {
+        unreachable!()
+    };
+    **action = CurrentFleetProtocolAction::ObservePoolReadiness {
+        minimum_ready: 2,
+        readiness_floor: Cycles::new(5),
+    };
+    next.plan_sha256 = expected_plan_sha256(&next);
+    platform.set_fresh_protocol_actions(
+        journal.successor_phases[0]
+            .plan
+            .as_ref()
+            .unwrap()
+            .protocol_actions
+            .iter()
+            .chain(&next.protocol_actions)
+            .cloned()
+            .collect(),
+    );
+    let mut donated = observation();
+    donated
+        .additional_controlled_cycles
+        .insert(ROOT.into(), 10_000);
+    append(
+        &paths,
+        &desired,
+        &original,
+        &mut journal,
+        &state,
+        &donated,
+        next,
+        &mut platform,
+    )
+    .unwrap();
+    assert_eq!(
+        journal.successor_phases[1].execution_burn_before_phase,
+        before
+    );
+    verify_records::<MockError>(&original, &journal).unwrap();
+    assert_eq!(journal.initial_controlled_cycles, 1_000);
+    std::fs::remove_dir_all(root).unwrap();
+}

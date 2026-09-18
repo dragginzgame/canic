@@ -4698,7 +4698,7 @@ pub const fn native_funding_applied(observation: NativeFundingObservation) -> bo
     let Some(live_cycles) = observation.live_cycles else {
         return false;
     };
-    let Some(maximum_live_cycles) = pre_cycles.checked_add(observation.amount) else {
+    let Some(_) = pre_cycles.checked_add(observation.amount) else {
         return false;
     };
     let Some(reviewed_pre_cycles) = observation
@@ -4720,9 +4720,9 @@ pub const fn native_funding_applied(observation: NativeFundingObservation) -> bo
     };
     let reviewed_amount_matches =
         observation.funding_deficit_cycles > 0 && minimum_live_cycles == minimum_from_deficit;
-    let observation_is_bounded = pre_cycles <= reviewed_pre_cycles
-        && live_cycles >= minimum_live_cycles
-        && live_cycles <= maximum_live_cycles;
+    // A donation cannot stand in for the separate Ledger receipt, but it may
+    // increase either native balance observation without invalidating that receipt.
+    let observation_is_bounded = live_cycles >= minimum_live_cycles;
     reviewed_amount_matches && observation_is_bounded
 }
 
@@ -5526,6 +5526,20 @@ echo effect >> effects
             )
             .unwrap()
         );
+    }
+
+    #[test]
+    fn donation_does_not_substitute_for_a_withdrawal_receipt() {
+        let observation = NativeFundingObservation {
+            amount: 350,
+            expected_post_cycles: 800,
+            funding_deficit_cycles: 150,
+            funding_margin_cycles: 200,
+            live_cycles: Some(10_000),
+            pre_cycles: Some(9_000),
+        };
+        assert!(!native_funding_completion(observation, false).unwrap());
+        assert!(native_funding_completion(observation, true).unwrap());
     }
 
     #[cfg(unix)]
@@ -7418,6 +7432,67 @@ esac
         );
         assert_eq!(root.controllers, vec!["changed-controller"]);
         std::fs::remove_dir_all(path).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "manual matched host-readiness latency measurement"]
+    fn protocol_owner_readiness_matched_latency_measurement() {
+        for count in [3_u64, 9] {
+            let mut fixture = ProtocolOwnersFixture::new();
+            for index in 3..count {
+                let mut owner = fixture.platform.desired.canisters[1].clone();
+                owner.name = format!("owner-{index}");
+                owner.principal = Some(owner.name.clone());
+                fixture.status(&owner.name, "Running", true);
+                fixture.platform.desired.canisters.push(owner);
+            }
+            let executable = fixture.root.join("icp");
+            let script = std::fs::read_to_string(&executable)
+                .unwrap()
+                .replace("\ncat ", "\nsleep 0.02\ncat ");
+            std::fs::write(&executable, script).unwrap();
+            for round in 0..3 {
+                // Alternate order to avoid assigning warm-up only to one candidate.
+                for concurrent in if round % 2 == 0 {
+                    [false, true]
+                } else {
+                    [true, false]
+                } {
+                    let calls = fixture.platform.icp.remote_call_count();
+                    let started = std::time::Instant::now();
+                    let ready = if concurrent {
+                        fixture
+                            .platform
+                            .current_protocol_owners_are_ready(&fixture.state)
+                            .unwrap()
+                    } else {
+                        let mut ready = true;
+                        for configured in &fixture.platform.desired.canisters {
+                            let live = fixture
+                                .platform
+                                .status_optional(configured.principal.as_deref().unwrap())
+                                .unwrap()
+                                .unwrap();
+                            ready &= live.status == CanisterRuntimeStatus::Running
+                                && live.module_sha256
+                                    == Some(
+                                        artifact_hash(&fixture.root.join("owner.wasm")).unwrap(),
+                                    );
+                        }
+                        ready
+                    };
+                    let elapsed_us = started.elapsed().as_micros();
+                    let calls = fixture.platform.icp.remote_call_count() - calls;
+                    assert!(ready);
+                    assert_eq!(calls, count);
+                    println!(
+                        "protocol_owner_readiness owners={count} round={round} concurrent={concurrent} elapsed_us={elapsed_us} calls={calls} latency_ms=20"
+                    );
+                }
+            }
+            std::fs::remove_dir_all(fixture.root).unwrap();
+        }
     }
 
     #[cfg(unix)]

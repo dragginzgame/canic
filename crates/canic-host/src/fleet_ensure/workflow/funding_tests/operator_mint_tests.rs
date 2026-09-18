@@ -56,51 +56,10 @@ struct MintTestTransfer {
     reason = "one governed production-Ledger journey keeps the three interruption boundaries, conserved credit and terminal replay together"
 )]
 fn governed_pocketic_operator_mint_recovers_receipts() {
-    let config = Some(IcpFeaturesConfig::DefaultConfig);
-    let mut pic = start_pocket_ic(
-        PocketIcBuilder::new()
-            .with_application_subnet()
-            .with_icp_features(IcpFeatures {
-                icp_token: config.clone(),
-                cycles_minting: config.clone(),
-                cycles_token: config,
-                ..IcpFeatures::default()
-            }),
-    );
-    pic.set_time(SystemTime::now().into());
+    let (_pic, transport) = funded_operator();
     let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
     let cycles_ledger = Principal::from_text("um5iw-rqaaa-aaaaq-qaaba-cai").unwrap();
-    let mut key = [0; 32];
-    getrandom::fill(&mut key).unwrap();
-    let identity = BasicIdentity::from_raw_key(&key);
-    let url = pic.make_live(None);
-    let agent = Agent::builder()
-        .with_url(url)
-        .with_identity(identity)
-        .with_max_response_body_size(4 * 1024 * 1024)
-        .build()
-        .unwrap();
-    agent.set_root_key(pic.root_key().unwrap());
-    let operator = agent.get_principal().unwrap();
-    let result: Result<Nat, icrc_ledger_types::icrc1::transfer::TransferError> = pic
-        .update_candid(
-            ledger,
-            "icrc1_transfer",
-            (MintTestTransfer {
-                from_subaccount: None,
-                to: MintTestAccount {
-                    owner: operator,
-                    subaccount: None,
-                },
-                amount: Nat::from(10_000_000_000u64),
-                fee: None,
-                memo: None,
-                created_at_time: None,
-            },),
-        )
-        .unwrap();
-    result.unwrap();
-    let transport = OperatorMintTransport::from_test_agent(agent);
+    let operator = transport.operator().unwrap();
     let quote = transport
         .quote_blocking(
             ledger,
@@ -490,4 +449,52 @@ fn operator_mint_journal_requires_explicit_review_and_approval_fields() {
         .unwrap()
         .remove("transfer_argument");
     assert!(serde_json::from_value::<FleetEnsureJournalRecord>(journal).is_err());
+}
+
+pub(super) fn funded_operator() -> (ic_testkit::pocket_ic::PocketIc, OperatorMintTransport) {
+    let config = Some(IcpFeaturesConfig::DefaultConfig);
+    let mut pic = start_pocket_ic(
+        PocketIcBuilder::new()
+            .with_application_subnet()
+            .with_icp_features(IcpFeatures {
+                icp_token: config.clone(),
+                cycles_minting: config.clone(),
+                cycles_token: config,
+                ..IcpFeatures::default()
+            }),
+    );
+    pic.set_time(SystemTime::now().into());
+    let ledger = Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap();
+    let mut key = [0; 32];
+    getrandom::fill(&mut key).unwrap();
+    let identity = BasicIdentity::from_raw_key(&key);
+    let url = pic.make_live(None);
+    let agent = Agent::builder()
+        .with_url(url)
+        .with_identity(identity)
+        .with_max_response_body_size(4 * 1024 * 1024)
+        .build()
+        .unwrap();
+    agent.set_root_key(pic.root_key().unwrap());
+    let operator = agent.get_principal().unwrap();
+    let result: Result<Nat, icrc_ledger_types::icrc1::transfer::TransferError> = pic
+        .update_candid(
+            ledger,
+            "icrc1_transfer",
+            (MintTestTransfer {
+                from_subaccount: None,
+                to: MintTestAccount {
+                    owner: operator,
+                    subaccount: None,
+                },
+                amount: Nat::from(10_000_000_000u64),
+                fee: None,
+                memo: None,
+                created_at_time: None,
+            },),
+        )
+        .unwrap();
+    result.unwrap();
+    let transport = OperatorMintTransport::from_test_agent(agent);
+    (pic, transport)
 }

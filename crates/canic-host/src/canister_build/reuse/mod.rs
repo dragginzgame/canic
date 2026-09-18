@@ -6,6 +6,7 @@
 
 mod dependencies;
 mod diagnostics;
+mod lock;
 mod snapshot;
 #[cfg(test)]
 mod tests;
@@ -14,7 +15,7 @@ use crate::{
     build_toolchain::BuildToolchain,
     canister_build::WorkspaceBuildContext,
     cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
-    durable_io::{lock_file_with_progress, read_regular_bytes, write_bytes},
+    durable_io::{read_regular_bytes, write_bytes},
     release_build::validate_finalized_release_build_manifest,
     release_set::{
         AppConfigSnapshot, load_persisted_application_artifact_union,
@@ -32,9 +33,11 @@ use std::{
     fs,
     io::{self, Read},
     path::{Path, PathBuf},
-    time::{Duration, Instant},
+    time::Duration,
 };
 use thiserror::Error;
+
+pub use lock::{BuildLockOwner, BuildLockWait};
 
 use snapshot::BuildInputSnapshot;
 
@@ -53,7 +56,7 @@ pub struct CompleteBuildReuse {
     record_path: PathBuf,
     diagnostics: diagnostics::InputDiagnostics,
     input_locations: diagnostics::InputLocations,
-    _lock: fs::File,
+    _lock: lock::BuildLock,
 }
 
 ///
@@ -63,7 +66,7 @@ pub struct CompleteBuildReuse {
 ///
 
 pub enum BuildReuseProgress {
-    WaitingForLock(Duration),
+    WaitingForLock(BuildLockWait),
     LockFinished(Duration),
 }
 
@@ -136,15 +139,7 @@ impl CompleteBuildReuse {
         tools: &BuildToolchain,
         mut progress: impl FnMut(BuildReuseProgress),
     ) -> Result<Self, BuildReuseError> {
-        let lock_started = Instant::now();
-        let lock = lock_file_with_progress(
-            &context
-                .icp_root
-                .join(".canic/locks/complete-build-reuse.lock"),
-            |elapsed| progress(BuildReuseProgress::WaitingForLock(elapsed)),
-        );
-        progress(BuildReuseProgress::LockFinished(lock_started.elapsed()));
-        let lock = lock?;
+        let lock = lock::BuildLock::acquire(context, &mut progress)?;
         diagnostics::InputDiagnostics::prepare(&context.icp_root);
         let mut tool_paths = vec![
             env::current_exe()?,

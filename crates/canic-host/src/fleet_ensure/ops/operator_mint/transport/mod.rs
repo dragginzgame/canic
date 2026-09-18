@@ -189,6 +189,14 @@ impl OperatorMintTransport {
         receipts::network_identity_sha256(&self.agent.read_root_key())
     }
 
+    /// Canonical identity of the same trust anchor used by this transport.
+    pub fn canonical_network_id(
+        &self,
+    ) -> Result<canic_core::ids::CanonicalNetworkId, OperatorMintTransportError> {
+        canic_core::ids::CanonicalNetworkId::from_der_root_trust_anchor(&self.agent.read_root_key())
+            .map_err(|_| OperatorMintTransportError::ReaderMismatch)
+    }
+
     /// Selected signer, checked against the desired operator before reviewing.
     pub fn operator(&self) -> Result<Principal, OperatorMintTransportError> {
         self.agent

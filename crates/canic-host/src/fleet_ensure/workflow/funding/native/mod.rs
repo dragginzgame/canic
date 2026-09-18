@@ -174,8 +174,7 @@ fn verify_receipt<E: std::error::Error + 'static>(
     if let Some(effect) = &review.effect {
         if effect.action_sha256 != action_sha256(&review.action)
             || effect.destination_pre_cycles.is_none_or(|before| {
-                before > pause.available_cycles
-                    || pause.available_cycles - before > pause.funding_margin_cycles
+                pause.available_cycles.saturating_sub(before) > pause.funding_margin_cycles
             })
             || effect.pre_cycles.is_none()
             || effect.created_principal.is_some()
@@ -413,8 +412,10 @@ fn validate_observation<E: std::error::Error + 'static>(
     let prior_debit = crate::fleet_ensure::policy::operator_mint::operator_source(journal)
         .ok_or(EnsureWorkflowError::JournalIntegrity)?
         .checked_sub(observation.operator_cycles);
-    let balance_is_bounded = observation.live.cycles <= pause.available_cycles
-        && pause.available_cycles - observation.live.cycles <= pause.funding_margin_cycles;
+    let balance_is_bounded = pause
+        .available_cycles
+        .saturating_sub(observation.live.cycles)
+        <= pause.funding_margin_cycles;
     if observation.cycles_ledger != pause.cycles_ledger
         || observation.ledger_fee_cycles != pause.ledger_fee_cycles
         || prior_debit.is_none_or(|spent| spent > maximum)
