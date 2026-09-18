@@ -469,9 +469,13 @@ fn first_infrastructure_build_and_replaced_cargo_records_preserve_source_authori
 fn first_infrastructure_build_fixture_preserves_source_authority() {
     let (root, context) = infrastructure_build_fixture();
     let control_source = root.join("upstream/canic-control-plane/src/lib.rs");
-    let metadata =
-        cargo_metadata_catalog_for_manifest(&context.workspace_root.join("Cargo.toml"), true, true)
-            .unwrap();
+    let metadata = cargo_metadata_catalog_for_manifest(
+        &context.workspace_root.join("Cargo.toml"),
+        true,
+        true,
+        &CargoFeatureSelection::default(),
+    )
+    .unwrap();
     assert!(
         !metadata
             .packages

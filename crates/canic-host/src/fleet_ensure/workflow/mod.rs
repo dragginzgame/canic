@@ -146,7 +146,17 @@ where
     },
 
     #[error(
-        "retained Fleet operation is unreadable: {source}; preserve plan, journal, state, artifacts and paid-effect receipts; local evidence does not establish the supported partial-activation review path; resolve issued effects under their exact authority before a release transition; do not edit fields, replace digests or discard the operation; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
+        "completed retained Fleet operation {operation_id} requires a separate retirement review (source document {source_document_sha256}): {source}; preserve plan, journal, state, phases and paid receipts; request --reinstall without --apply; fresh inventory, authority and conservation checks must pass before any reset; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
+    )]
+    RetainedTerminalReviewRequired {
+        operation_id: String,
+        source_document_sha256: String,
+        #[source]
+        source: Box<EnsureStateError>,
+    },
+
+    #[error(
+        "retained Fleet operation is unreadable: {source}; preserve plan, journal, state, artifacts and paid-effect receipts; local evidence does not establish a supported separate recovery review; resolve issued effects under their exact authority before a release transition; do not edit fields, replace digests or discard the operation; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
     )]
     RetainedPlanUnreadable {
         #[source]
@@ -3691,33 +3701,12 @@ where
     let actions = continuation::actions(plan, journal);
     let effect_count_matches = journal.effects.len() <= actions.len();
     let action_hashes_match = journal.effects.iter().zip(actions).all(|(effect, action)| {
-        effect.action_sha256 == action_sha256(action)
-            && maintenance_attempts_are_exact(effect, action)
-            && publication_attempts_are_exact(effect, action)
+        effect.action_sha256 == action_sha256(action) && effect.attempts_match(action)
     });
     if !(effect_count_matches && action_hashes_match) {
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
     Ok(())
-}
-
-fn publication_attempts_are_exact(effect: &EffectRecord, action: &EnsureAction) -> bool {
-    match action.fixture_publication_attempt_limit() {
-        Some(maximum) => maximum > 0 && effect.publication_attempts <= maximum,
-        None => effect.publication_attempts == 0,
-    }
-}
-
-fn maintenance_attempts_are_exact(effect: &EffectRecord, action: &EnsureAction) -> bool {
-    if let EnsureAction::FleetProtocol { action, .. } = action
-        && let CurrentFleetProtocolAction::MaintainPoolReadiness {
-            maximum_updates, ..
-        } = action.as_ref()
-    {
-        effect.maintenance_attempts <= *maximum_updates
-    } else {
-        effect.maintenance_attempts == 0
-    }
 }
 
 fn initial_estate_funding_is_exact(

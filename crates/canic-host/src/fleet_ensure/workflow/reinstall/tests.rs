@@ -52,6 +52,7 @@ fn fixture(
         })
         .collect::<BTreeMap<_, _>>();
     let source = FleetReinstallSourceRecord {
+        terminal_retirement: None,
         reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
         wasm_sha256_by_canister: authorities
             .keys()

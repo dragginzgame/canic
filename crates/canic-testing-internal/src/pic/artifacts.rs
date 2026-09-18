@@ -1,11 +1,13 @@
 use canic_core::ids::BuildNetwork;
-use canic_host::role_contract::{PackageValidationMode, RolePackageValidation};
+use canic_host::role_contract::{
+    CargoFeatureSelection, PackageValidationMode, RolePackageValidation,
+};
 use ic_testkit::artifacts::{
     ArtifactCacheMaintenance, ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
     SharedIncrementalTargetPrunePolicy, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
     WasmBuildBatchReport, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase,
-    WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
+    WasmBuildRecord, WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
     resolve_cargo_build_inputs,
 };
 #[cfg(all(
@@ -52,6 +54,7 @@ pub(super) fn with_canonical_root_cargo_inputs(
         config.model(),
         &canic_core::ids::CanisterRole::ROOT,
         PackageValidationMode::Build,
+        &CargoFeatureSelection::default(),
     );
     let RolePackageValidation::Supported(evidence) = validation else {
         panic!("canonical Root cache package must resolve: {validation:?}");
@@ -138,7 +141,8 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
             "canonical-fleet-coordinator",
             outcome.record().maintenance(),
         );
-        fs::read(&artifact_path).unwrap_or_else(|error| {
+        let artifact_path = retained_artifact_path(outcome.record(), "fleet_coordinator");
+        fs::read(artifact_path).unwrap_or_else(|error| {
             panic!(
                 "read canonical Fleet Coordinator artifact {}: {error}",
                 artifact_path.display()
@@ -146,6 +150,19 @@ pub(super) fn build_canonical_fleet_coordinator_wasm(workspace_root: &Path) -> V
         })
     })
     .clone()
+}
+
+/// Borrow one named immutable cache artifact while its record owns retention.
+pub(super) fn retained_artifact_path<'a>(
+    record: &'a ic_testkit::artifacts::ArtifactCacheRecord,
+    name: &str,
+) -> &'a Path {
+    record
+        .artifacts()
+        .iter()
+        .find(|artifact| artifact.name() == name)
+        .expect("required retained artifact")
+        .path()
 }
 
 /// Build a generated Fleet artifact through the already-linked production host owner.
@@ -293,13 +310,54 @@ impl CanicWasmBuildProfile {
     }
 }
 
+/// Exact cached test Wasms and the leases retaining them until consumption finishes.
+#[derive(Debug)]
+#[must_use = "retain the build records while consuming their exact artifacts"]
+pub struct InternalTestWasms {
+    records: std::collections::BTreeMap<String, WasmBuildRecord>,
+}
+
+impl InternalTestWasms {
+    /// Read a package's immutable artifact while its build record remains retained.
+    ///
+    /// # Panics
+    /// Panics if the package was not built, its output is ambiguous, or reading fails.
+    #[must_use]
+    pub fn wasm(&self, package: &str) -> Vec<u8> {
+        fs::read(self.path(package)).expect("read retained test Wasm")
+    }
+
+    /// Borrow the exact cache path for read-only extraction or post-link input.
+    ///
+    /// # Panics
+    /// Panics if the package was not built or it did not produce exactly one Wasm.
+    #[must_use]
+    pub fn path(&self, package: &str) -> &Path {
+        let record = self.records.get(package).expect("built test package");
+        let [path] = record.artifacts() else {
+            panic!("one-package build must yield exactly one Wasm");
+        };
+        path
+    }
+
+    pub(super) fn extend(&mut self, other: Self) {
+        for (package, record) in other.records {
+            assert!(
+                self.records.insert(package, record).is_none(),
+                "duplicate test package"
+            );
+        }
+    }
+}
+
+/// Build and retain the exact requested internal test artifacts.
 pub fn build_internal_test_wasm_canisters(
     workspace_root: &Path,
     target_dir: &Path,
     packages: &[&str],
     profile: CanicWasmBuildProfile,
-) {
-    build_internal_test_wasm_canisters_with_env(workspace_root, target_dir, packages, profile, &[]);
+) -> InternalTestWasms {
+    build_internal_test_wasm_canisters_with_env(workspace_root, target_dir, packages, profile, &[])
 }
 
 pub(super) fn build_internal_test_wasm_canisters_with_env(
@@ -308,7 +366,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
     packages: &[&str],
     profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
-) {
+) -> InternalTestWasms {
     build_internal_test_wasm_canisters_with_features(
         workspace_root,
         target_dir,
@@ -316,7 +374,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_env(
         profile,
         extra_env,
         &[],
-    );
+    )
 }
 
 /// Build an audit participant with its explicitly derived role features.
@@ -327,7 +385,7 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
     profile: CanicWasmBuildProfile,
     extra_env: &[(&str, &str)],
     features: &[String],
-) {
+) -> InternalTestWasms {
     assert!(
         !packages.is_empty(),
         "internal PocketIC Wasm build requires at least one package"
@@ -415,6 +473,12 @@ pub(super) fn build_internal_test_wasm_canisters_with_features(
         "internal test Wasm builds failed:\n{}",
         failures.join("\n")
     );
+    InternalTestWasms {
+        records: batch
+            .outcomes()
+            .map(|entry| (entry.label().to_owned(), entry.outcome().record().clone()))
+            .collect(),
+    }
 }
 
 fn report_wasm_batch(batch: &WasmBuildBatchReport) {
@@ -648,6 +712,68 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
 mod tests {
     use super::*;
 
+    #[test]
+    fn retained_artifact_handoff_survives_replacement_and_pruning() {
+        use ic_testkit::artifacts::{
+            ArtifactCacheOutcome, ArtifactCachePreparation, prepare_artifact_cache,
+            prune_artifact_cache,
+        };
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "canic-retained-artifacts-{}-{nonce}",
+            std::process::id()
+        ));
+        let cache_root = root.join("cache");
+        let output = root.join("output.wasm");
+        let acquire = |identity: &str| {
+            let spec = ArtifactCacheSpec::new(&cache_root, "handoff", "canic/test-handoff/v1")
+                .with_arguments([identity])
+                .with_output("probe", &output);
+            match prepare_artifact_cache(&spec).unwrap() {
+                ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
+                ArtifactCachePreparation::Build(transaction) => {
+                    fs::write(transaction.output_path("probe").unwrap(), identity).unwrap();
+                    transaction.commit().unwrap()
+                }
+            }
+        };
+        let original = acquire("first");
+        assert!(!original.is_reused());
+        let retained = original.record().clone();
+        drop(original);
+        let replacement = acquire("second");
+        assert!(!replacement.is_reused());
+        fs::remove_file(&output).unwrap();
+        let policy = ArtifactCachePrunePolicy::new().with_max_size_bytes(0);
+        prune_artifact_cache(&cache_root, "handoff", policy).unwrap();
+        let original_path = retained_artifact_path(&retained, "probe").to_path_buf();
+        assert_ne!(original_path, output);
+        assert_eq!(fs::read(&original_path).unwrap(), b"first");
+        assert_eq!(
+            fs::read(retained_artifact_path(replacement.record(), "probe")).unwrap(),
+            b"second"
+        );
+        let replay = acquire("first");
+        assert!(replay.is_reused());
+        assert_eq!(
+            retained_artifact_path(replay.record(), "probe"),
+            original_path
+        );
+        drop(replay);
+        drop(retained);
+        prune_artifact_cache(&cache_root, "handoff", policy).unwrap();
+        assert!(!original_path.exists());
+        assert_eq!(
+            fs::read(retained_artifact_path(replacement.record(), "probe")).unwrap(),
+            b"second"
+        );
+        drop(replacement);
+        fs::remove_dir_all(root).unwrap();
+    }
+
     #[cfg(feature = "governed-pocketic-tests")]
     #[test]
     #[ignore = "focused build qualification requires installed Wasm and artifact tools"]
@@ -681,12 +807,14 @@ mod tests {
                     &config,
                     &artifact,
                 );
-                assert!(matches!(
-                    prepare_artifact_cache(&cache).unwrap(),
-                    ArtifactCachePreparation::Reused(_)
-                ));
+                let ArtifactCachePreparation::Reused(record) =
+                    prepare_artifact_cache(&cache).unwrap()
+                else {
+                    panic!("expected cached Coordinator");
+                };
                 assert!(
-                    fs::read(artifact).unwrap() == expected,
+                    fs::read(retained_artifact_path(&record, "fleet_coordinator")).unwrap()
+                        == expected,
                     "restored Coordinator Wasm bytes differ"
                 );
             }

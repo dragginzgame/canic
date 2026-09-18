@@ -5,6 +5,7 @@
 //! Boundary: projections describe assumptions and never authorize spending.
 
 pub mod startup_funding;
+pub(in crate::fleet_ensure) mod terminal_source;
 
 /// Live operator account and fee at the configured Cycles Ledger.
 ///

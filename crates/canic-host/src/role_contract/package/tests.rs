@@ -8,6 +8,7 @@ static FIXTURE_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 #[test]
 fn package_validation_cache_reuses_workspace_evidence_for_member_manifests() {
     let cache = PackageValidationCache {
+        features: CargoFeatureSelection::default(),
         workspaces: vec![CachedCargoWorkspace {
             mode: PackageValidationMode::Build,
             metadata: CargoMetadata {
@@ -62,7 +63,13 @@ fn validate_test_role_package(
     let Ok(config) = parse_config_model(&source) else {
         return unsupported_shape("invalid role configuration".to_string());
     };
-    validate_declared_role_package(config_path, &config, role, mode)
+    validate_declared_role_package(
+        config_path,
+        &config,
+        role,
+        mode,
+        &CargoFeatureSelection::default(),
+    )
 }
 
 #[test]
@@ -418,6 +425,7 @@ fn repository_canic_runtime_closure_matches_the_protected_catalog() {
         &workspace.join("crates/canic/Cargo.toml"),
         true,
         true,
+        &CargoFeatureSelection::default(),
     )
     .expect("workspace Cargo catalog");
     let canic = metadata
@@ -765,6 +773,196 @@ fn multiple_runtime_canic_packages_are_rejected() {
 }
 
 #[test]
+fn memory_runtime_identity_rejects_distinct_versions_and_sources() {
+    let mut graph = composed_memory_graph();
+    let first = graph.packages.get_mut("memory@1").unwrap();
+    first.version = "0.14.3".to_string();
+    first.source = Some("registry+https://example.invalid/index".to_string());
+    let second = graph.packages.get_mut("memory@2").unwrap();
+    second.version = "0.13.3".to_string();
+    second.source = Some("git+https://example.invalid/memory".to_string());
+    for version in ["0.13.3", "0.14.3"] {
+        graph.packages.get_mut("memory@2").unwrap().version = version.to_string();
+        let Err(RoleContractFinding::MultipleMemoryRuntimes { packages }) =
+            validate_memory_runtime_identity(&graph)
+        else {
+            panic!("distinct runtime package identities must reject");
+        };
+        assert_eq!(packages.len(), 2);
+        assert!(packages.iter().all(|package| !package.contains("https://")));
+    }
+}
+
+#[test]
+fn memory_runtime_identity_accepts_shared_aliases_and_ignores_unreachable_packages() {
+    let mut graph = composed_memory_graph();
+    graph.edges.get_mut("domain@1").unwrap()[0].package_id = "memory@1".to_string();
+    // A second package remains in the catalog, but is not in this role's runtime.
+    validate_memory_runtime_identity(&graph).unwrap();
+    graph
+        .edges
+        .get_mut("domain@1")
+        .unwrap()
+        .push(CargoGraphEdge {
+            alias: "cycle".to_string(),
+            package_id: "role@1".to_string(),
+        });
+    validate_memory_runtime_identity(&graph).unwrap();
+}
+
+#[test]
+fn memory_runtime_identity_excludes_proc_macro_subtrees_but_keeps_runtime_paths() {
+    let mut graph = composed_memory_graph();
+    graph.packages.get_mut("domain@1").unwrap().is_proc_macro = true;
+    validate_memory_runtime_identity(&graph).unwrap();
+    graph.edges.get_mut("role@1").unwrap().push(CargoGraphEdge {
+        alias: "runtime_memory".to_string(),
+        package_id: "memory@2".to_string(),
+    });
+    assert!(matches!(
+        validate_memory_runtime_identity(&graph),
+        Err(RoleContractFinding::MultipleMemoryRuntimes { .. })
+    ));
+}
+
+fn composed_memory_graph() -> CargoGraphEvidence {
+    let packages = [
+        package("role", "role@1", "/tmp/role/Cargo.toml"),
+        package("canic", "canic@1", "/tmp/canic/Cargo.toml"),
+        package("domain", "domain@1", "/tmp/domain/Cargo.toml"),
+        package("ic-memory", "memory@1", "/tmp/memory-a/Cargo.toml"),
+        package("ic-memory", "memory@2", "/tmp/memory-b/Cargo.toml"),
+    ];
+    runtime_graph(
+        &packages,
+        &[
+            node(
+                "role@1",
+                vec![
+                    normal_edge("canic", "canic@1"),
+                    normal_edge("domain", "domain@1"),
+                ],
+            ),
+            node("canic@1", vec![normal_edge("ic_memory", "memory@1")]),
+            node("domain@1", vec![normal_edge("renamed_memory", "memory@2")]),
+        ],
+    )
+}
+
+#[test]
+fn isolated_memory_runtime_check_uses_selected_wasm_graph_before_compilation() {
+    let fixture = memory_runtime_fixture();
+    let role_manifest = fixture.root.join("role/Cargo.toml");
+    let original = fs::read_to_string(&role_manifest).unwrap();
+    let dependency = "secondary_memory = { package = \"ic-memory\", path = \"../other-memory\" }\n";
+    let optional = "secondary_memory = { package = \"ic-memory\", path = \"../other-memory\", optional = true }\n";
+    for (name, declaration, reject) in [
+        (
+            "build",
+            format!("[build-dependencies]\n{dependency}"),
+            false,
+        ),
+        ("dev", format!("[dev-dependencies]\n{dependency}"), false),
+        (
+            "native",
+            format!("[target.'cfg(not(target_arch = \"wasm32\"))'.dependencies]\n{dependency}"),
+            false,
+        ),
+        ("optional", format!("[dependencies]\n{optional}"), false),
+        ("explicit", format!("[dependencies]\n{optional}"), true),
+        (
+            "disabled-default",
+            format!("[features]\ndefault = [\"dep:secondary_memory\"]\n[dependencies]\n{optional}"),
+            false,
+        ),
+        (
+            "macro",
+            "[dependencies]\nhost-macro = { path = \"../host-macro\" }\n".to_string(),
+            false,
+        ),
+        ("runtime", format!("[dependencies]\n{dependency}"), true),
+        (
+            "enabled",
+            format!("[features]\ndefault = [\"dep:secondary_memory\"]\n[dependencies]\n{optional}"),
+            true,
+        ),
+    ] {
+        let mut document = original.parse::<toml::Table>().unwrap();
+        let extra = declaration.parse::<toml::Table>().unwrap();
+        for (key, value) in extra {
+            if let Some(existing) = document.get_mut(&key) {
+                existing
+                    .as_table_mut()
+                    .unwrap()
+                    .extend(value.as_table().unwrap().clone());
+            } else {
+                document.insert(key, value);
+            }
+        }
+        fs::write(&role_manifest, toml::to_string(&document).unwrap()).unwrap();
+        let features = CargoFeatureSelection {
+            features: if name == "explicit" {
+                BTreeSet::from(["secondary_memory".to_string()])
+            } else {
+                BTreeSet::new()
+            },
+            default_features: name != "disabled-default",
+        };
+        let config =
+            parse_config_model(&fs::read_to_string(fixture.root.join("canic.toml")).unwrap())
+                .unwrap();
+        let validation = validate_declared_role_package(
+            &fixture.root.join("canic.toml"),
+            &config,
+            &CanisterRole::owned("app".to_string()),
+            PackageValidationMode::Build,
+            &features,
+        );
+        if reject {
+            assert!(
+                matches!(validation, RolePackageValidation::Unsupported(
+                RoleContractFinding::MultipleMemoryRuntimes { ref packages }) if packages.len() == 2),
+                "{name}: {validation:?}"
+            );
+        } else {
+            assert!(
+                matches!(validation, RolePackageValidation::Supported(_)),
+                "{name}: {validation:?}"
+            );
+        }
+    }
+}
+
+fn memory_runtime_fixture() -> FixtureWorkspace {
+    let fixture = FixtureWorkspace::materialize("supported");
+    fixture.rewrite(
+        "Cargo.toml",
+        "members = [\"domain\", \"role\"]",
+        "members = [\"domain\", \"role\", \"other-memory\", \"host-macro\"]",
+    );
+    for (directory, manifest) in [
+        (
+            "other-memory",
+            "[package]\nname = \"ic-memory\"\nversion = \"9.0.0\"\nedition = \"2024\"\n[lib]\npath = \"lib.rs\"\n",
+        ),
+        (
+            "host-macro",
+            "[package]\nname = \"host-macro\"\nversion = \"0.0.0\"\nedition = \"2024\"\n[lib]\nproc-macro = true\npath = \"lib.rs\"\n[dependencies]\nic-memory = { path = \"../other-memory\" }\n",
+        ),
+    ] {
+        let root = fixture.root.join(directory);
+        fs::create_dir_all(&root).unwrap();
+        fs::write(root.join("Cargo.toml"), manifest).unwrap();
+        fs::write(
+            root.join("lib.rs"),
+            "compile_error!(\"metadata qualification must not compile\");",
+        )
+        .unwrap();
+    }
+    fixture
+}
+
+#[test]
 fn build_only_canic_path_does_not_enter_the_runtime_graph() {
     let packages = [
         package("role", "role@1", "/tmp/role/Cargo.toml"),
@@ -832,8 +1030,13 @@ fn qualification_harness_packages_are_test_only_leaves() {
         .join("../..")
         .canonicalize()
         .expect("canonical workspace root");
-    let metadata = cargo_metadata_catalog_for_manifest(&workspace.join("Cargo.toml"), true, false)
-        .expect("read locked workspace metadata");
+    let metadata = cargo_metadata_catalog_for_manifest(
+        &workspace.join("Cargo.toml"),
+        true,
+        false,
+        &CargoFeatureSelection::default(),
+    )
+    .expect("read locked workspace metadata");
     for package_name in HARNESS_PACKAGES {
         assert_unpublished_package_under(
             &metadata,
@@ -882,8 +1085,13 @@ fn icydb_dependency_graph_is_confined_to_the_test_fixture() {
         .canonicalize()
         .expect("canonical workspace root");
     let fixture_root = workspace.join("canisters/test/canic_icydb_lifecycle_probe");
-    let metadata = cargo_metadata_catalog_for_manifest(&workspace.join("Cargo.toml"), true, false)
-        .expect("read locked workspace metadata");
+    let metadata = cargo_metadata_catalog_for_manifest(
+        &workspace.join("Cargo.toml"),
+        true,
+        false,
+        &CargoFeatureSelection::default(),
+    )
+    .expect("read locked workspace metadata");
 
     for package_name in FIXTURE_PACKAGES {
         assert_unpublished_package_under(&metadata, package_name, &fixture_root);
@@ -1085,6 +1293,10 @@ fn runtime_graph(
                         version: package.version.clone(),
                         source: package.source.clone(),
                         manifest_path: package.manifest_path.clone(),
+                        is_proc_macro: package
+                            .targets
+                            .iter()
+                            .any(|target| target.kind.iter().any(|kind| kind == "proc-macro")),
                         enabled_features: BTreeSet::new(),
                     },
                 )

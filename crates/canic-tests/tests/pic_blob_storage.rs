@@ -18,9 +18,8 @@ use canic::{
 };
 use canic_testing_internal::pic::{
     CanicPicExt, CanicWasmBuildProfile, install_standalone_canister,
-    install_standalone_canister_on_pic, start_pocket_ic, upgrade_args,
+    install_standalone_canister_on_pic, standalone_canister_wasm, start_pocket_ic, upgrade_args,
 };
-use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
 use ic_testkit::pic::{
     CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder, RetryPolicy,
     StandaloneCanisterFixture,
@@ -1642,14 +1641,7 @@ fn install_retry_policy() -> RetryPolicy {
 
 // Read the standalone probe wasm built by `install_standalone_canister`.
 fn probe_wasm() -> Vec<u8> {
-    let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-    let target_dir = test_target_dir(&workspace_root, &format!("standalone-{PROBE_CRATE}"));
-
-    read_wasm(
-        &target_dir,
-        PROBE_CRATE,
-        CanicWasmBuildProfile::Fast.target_dir_name(),
-    )
+    standalone_canister_wasm(PROBE_CRATE, CanicWasmBuildProfile::Fast)
 }
 
 // Build a deterministic non-anonymous test principal from one repeated byte.

@@ -216,6 +216,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
             activation_reset: None,
             source: Some(Box::new(
                 canic_host::fleet_ensure::model::FleetReinstallSourceRecord {
+                    terminal_retirement: None,
                     reviewed_desired: *plan.reviewed_desired.clone().unwrap(),
                     wasm_sha256_by_canister: BTreeMap::new(),
                     candid_sha256_by_path: BTreeMap::new(),

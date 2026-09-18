@@ -193,6 +193,16 @@ retain the before/after verification boundary. A normal first build excludes
 outputs under its own resolved target roots; a generated filename alone does
 not qualify an external path for that exclusion.
 
+Build context diagnostics show selected and physically resolved Cargo/runtime
+and declaration output roots before compilation. Resolution includes existing
+symlinked parents when output subdirectories have not yet been created. A path
+inside another Cargo workspace's `target` emits an advisory explaining that
+independent workspace locks do not protect shared mutable output. Explicit
+`CARGO_TARGET_DIR` settings remain supported; a dedicated external directory
+is not treated as shared without evidence. This bounded check cannot discover
+arbitrary external directories shared by unrelated processes, and does not
+prove which input caused an earlier cache rejection.
+
 Canic's generated-source writer rejects a symlink at the output file before
 reading matching bytes or writing changed bytes. The diagnostic names that
 file and recommends an independent target/build directory. This does not

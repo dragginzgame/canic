@@ -2,6 +2,7 @@
 // This test qualifies exact published-IcyDB lifecycle composition in PocketIC.
 
 mod fixture_provisioning;
+mod icydb_memory_admission;
 
 use candid::{CandidType, Deserialize, Principal};
 use canic::{

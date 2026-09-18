@@ -6,6 +6,7 @@
 
 pub(in crate::fleet_ensure) mod adoption;
 pub(in crate::fleet_ensure) mod source;
+pub(in crate::fleet_ensure) mod terminal;
 
 use super::{EnsureStateError, FleetReinstallObservation};
 use crate::fleet_ensure::model::{
@@ -91,10 +92,23 @@ pub(in crate::fleet_ensure) fn capture_source(
         }
     }
     Ok(FleetReinstallSourceRecord {
+        terminal_retirement: None,
         reviewed_desired: ReviewedDesiredFleetRecord::capture(desired),
         wasm_sha256_by_canister,
         candid_sha256_by_path: candid_hashes(root, desired)?,
     })
+}
+
+/// Refresh artifact bindings without turning completed source evidence into a desired plan.
+pub(in crate::fleet_ensure) fn refresh_source(
+    root: &Path,
+    source: &FleetReinstallSourceRecord,
+) -> Result<FleetReinstallSourceRecord, EnsureStateError> {
+    let mut refreshed = capture_source(root, source.reviewed_desired.desired())?;
+    refreshed
+        .terminal_retirement
+        .clone_from(&source.terminal_retirement);
+    Ok(refreshed)
 }
 
 pub(in crate::fleet_ensure) fn candid_hashes(

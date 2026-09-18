@@ -2,15 +2,15 @@
 
 use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
-    CanicWasmBuildProfile, build_internal_test_wasm_canisters, start_pocket_ic,
+    CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
 use ic_testkit::{
-    artifacts::{read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{test_target_dir, workspace_root_for},
     pic::{CandidCallExt, InstallSpec, PocketIc, PocketIcBuilder, prelude::*},
 };
 use std::{
     path::{Path, PathBuf},
-    sync::Once,
+    sync::OnceLock,
 };
 
 const CANISTERS: [&str; 1] = ["root_funding_probe"];
@@ -21,7 +21,7 @@ const GRANT_CYCLES: u128 = 1_000_000_000_000;
 const ROOT_REQUEST_RECOVERY_FLOOR_CYCLES: u128 = 42_200_000_000;
 const ROOT_ICP_REFILL_RECOVERY_FLOOR_CYCLES: u128 = 42_200_000_000;
 const OPERATION_ID: [u8; 32] = [0x17; 32];
-static BUILD_ONCE: Once = Once::new();
+static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 
 struct BalanceObservation {
     coordinator_before_fresh: u128,
@@ -230,13 +230,8 @@ const fn retained_operation(sequence: u64, byte: u8) -> RetainedOperation {
 #[test]
 fn root_request_and_retry_measure_the_normal_threshold_floor() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
-    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
-    let wasm = read_wasm(
-        &target_dir,
-        "root_funding_probe",
-        CanicWasmBuildProfile::Fast.target_dir_name(),
-    );
+    let wasms = build_canisters(&workspace_root);
+    let wasm = wasms.wasm("root_funding_probe");
     let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let coordinator = install_probe(
         &pic,
@@ -289,13 +284,8 @@ fn root_request_and_retry_measure_the_normal_threshold_floor() {
 #[test]
 fn emergency_refill_recovery_floor_covers_transfer_and_notify_response_loss() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
-    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
-    let wasm = read_wasm(
-        &target_dir,
-        "root_funding_probe",
-        CanicWasmBuildProfile::Fast.target_dir_name(),
-    );
+    let wasms = build_canisters(&workspace_root);
+    let wasm = wasms.wasm("root_funding_probe");
     let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
     let ledger = install_probe(
         &pic,
@@ -372,13 +362,8 @@ fn round_up_to_100m(value: u128) -> u128 {
 #[test]
 fn attached_cycles_recover_across_intent_call_and_receipt_boundaries() {
     let workspace_root = workspace_root();
-    build_canisters(&workspace_root);
-    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
-    let wasm = read_wasm(
-        &target_dir,
-        "root_funding_probe",
-        CanicWasmBuildProfile::Fast.target_dir_name(),
-    );
+    let wasms = build_canisters(&workspace_root);
+    let wasm = wasms.wasm("root_funding_probe");
     let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
 
     let coordinator = install_probe(
@@ -609,16 +594,16 @@ fn emergency_operation(pic: &PocketIc, root: Principal) -> Option<EmergencyRefil
     pic.query_candid_or_panic(root, "root_funding_probe_emergency_operation", ())
 }
 
-fn build_canisters(workspace_root: &Path) {
-    BUILD_ONCE.call_once(|| {
+fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
+    BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
             &CANISTERS,
             CanicWasmBuildProfile::Fast,
-        );
-    });
+        )
+    })
 }
 
 fn workspace_root() -> PathBuf {

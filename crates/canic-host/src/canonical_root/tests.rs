@@ -54,6 +54,7 @@ fn standalone_consumer_build_resolves_root_without_an_existing_lockfile() {
         &config,
         &CanisterRole::ROOT,
         PackageValidationMode::Build,
+        &CargoFeatureSelection::default(),
     );
     assert!(
         matches!(validation, RolePackageValidation::Supported(_)),
@@ -84,6 +85,7 @@ fn canonical_root_build_selects_exact_configuration_capabilities() {
             &config,
             &CanisterRole::ROOT,
             PackageValidationMode::Build,
+            &CargoFeatureSelection::default(),
         );
         let RolePackageValidation::Supported(evidence) = validation else {
             panic!("canonical Root package must resolve: {validation:?}");

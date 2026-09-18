@@ -69,11 +69,13 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
     }
 
     fn build(&self) -> Result<CachedPocketIcBaseline<Self::Metadata>, Self::Error> {
-        super::ensure_root_release_artifacts_built(&self.spec);
-        let root_wasm = super::load_root_wasm(&self.spec).ok_or_else(|| {
+        let artifacts = super::ensure_root_release_artifacts_built(&self.spec);
+        let root_wasm = super::load_root_wasm(&self.spec, &artifacts).ok_or_else(|| {
             RootBaselineRecipeError::MissingRootWasm(self.spec.root_wasm_path.clone())
         })?;
-        Ok(build_root_cached_baseline(&self.spec, root_wasm))
+        Ok(build_root_cached_baseline(
+            &self.spec, &artifacts, root_wasm,
+        ))
     }
 
     fn restore_canisters(
@@ -192,9 +194,10 @@ impl StdError for RootBaselineRecipeError {
 #[must_use]
 pub fn build_root_cached_baseline(
     spec: &RootBaselineSpec<'_>,
+    artifacts: &ic_testkit::artifacts::ArtifactCacheRecord,
     root_wasm: Vec<u8>,
 ) -> CachedPocketIcBaseline<RootBaselineMetadata> {
-    let initialized = super::topology::setup_root_topology(spec, root_wasm);
+    let initialized = super::topology::setup_root_topology(spec, artifacts, root_wasm);
     capture_cached_root_baseline(spec, initialized)
 }
 

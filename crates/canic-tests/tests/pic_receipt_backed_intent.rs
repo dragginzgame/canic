@@ -2,15 +2,15 @@
 
 use candid::{CandidType, Deserialize, Principal, encode_one};
 use canic_testing_internal::pic::{
-    CanicWasmBuildProfile, build_internal_test_wasm_canisters, start_pocket_ic,
+    CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters, start_pocket_ic,
 };
 use ic_testkit::{
-    artifacts::{read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{test_target_dir, workspace_root_for},
     pic::{InstallSpec, PocketIc, PocketIcBuilder, RetryPolicy, prelude::*},
 };
 use std::{
     path::{Path, PathBuf},
-    sync::Once,
+    sync::OnceLock,
     time::Duration,
 };
 
@@ -20,7 +20,7 @@ const INSTALL_CODE_RETRY_LIMIT: usize = 3;
 const NANOS_PER_HOUR: u64 = 60 * 60 * 1_000_000_000;
 const MAX_REPLAY_WINDOW_NS: u64 = NANOS_PER_HOUR;
 const CANISTERS: [&str; 1] = ["intent_authority"];
-static BUILD_ONCE: Once = Once::new();
+static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 enum ReceiptStateView {
@@ -98,15 +98,13 @@ enum ReceiptDecisionView {
 #[test]
 fn receipt_backed_intent_conformance() {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
     println!(
         "receipt_backed_intent: workspace_root={}",
         workspace_root.display()
     );
-    build_canisters(&workspace_root);
+    let wasms = build_canisters(&workspace_root);
 
-    let profile_dir = CanicWasmBuildProfile::Fast.target_dir_name();
-    let authority_wasm = read_wasm(&target_dir, "intent_authority", profile_dir);
+    let authority_wasm = wasms.wasm("intent_authority");
     println!(
         "receipt_backed_intent: wasm size authority={}",
         authority_wasm.len()
@@ -607,16 +605,16 @@ fn install_retry_policy() -> RetryPolicy {
         .expect("install retry policy")
 }
 
-fn build_canisters(workspace_root: &Path) {
-    BUILD_ONCE.call_once(|| {
+fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
+    BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
             &CANISTERS,
             CanicWasmBuildProfile::Fast,
-        );
-    });
+        )
+    })
 }
 
 fn workspace_root() -> PathBuf {

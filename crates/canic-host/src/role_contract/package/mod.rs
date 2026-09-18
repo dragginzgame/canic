@@ -10,9 +10,9 @@ mod tests;
 
 use self::graph::{CargoGraphEdge, CargoGraphEvidence, TREE_FORMAT, correlate_package_tree};
 use crate::cargo_metadata::{
-    CargoMetadata, CargoMetadataDependency, CargoMetadataNode, CargoMetadataNodeDependency,
-    CargoMetadataPackage, cargo_metadata, cargo_metadata_catalog_for_manifest,
-    cargo_metadata_for_manifest, cargo_tree_for_package,
+    CargoFeatureSelection, CargoMetadata, CargoMetadataDependency, CargoMetadataNode,
+    CargoMetadataNodeDependency, CargoMetadataPackage, cargo_metadata,
+    cargo_metadata_catalog_for_manifest, cargo_metadata_for_manifest, cargo_tree_for_package,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -156,8 +156,12 @@ pub fn validate_declared_role_package(
     config: &canic_core::bootstrap::compiled::ConfigModel,
     role: &CanisterRole,
     mode: PackageValidationMode,
+    features: &CargoFeatureSelection,
 ) -> RolePackageValidation {
-    let mut cache = PackageValidationCache::default();
+    let mut cache = PackageValidationCache {
+        features: features.clone(),
+        ..Default::default()
+    };
     validate_declared_role_package_with_cache(config_path, config, role, mode, &mut cache)
 }
 
@@ -433,6 +437,7 @@ fn validate_package_manifest_with_cache(
     built_in: Option<BuiltInRoleKind>,
     cache: &mut PackageValidationCache,
 ) -> RolePackageValidation {
+    let features = cache.features.clone();
     let (metadata, catalog) = match cache.evidence_for_manifest(manifest_path, mode) {
         Ok(evidence) => evidence,
         Err(error) => return RolePackageValidation::Unsupported(error.into_finding()),
@@ -466,6 +471,7 @@ fn validate_package_manifest_with_cache(
         WASM_TARGET,
         mode.locked(),
         mode.offline(),
+        &features,
         TREE_FORMAT,
     ) {
         Ok(tree) => tree,
@@ -493,6 +499,7 @@ fn validate_package_manifest_with_cache(
 
 #[derive(Default)]
 struct PackageValidationCache {
+    features: CargoFeatureSelection,
     workspaces: Vec<CachedCargoWorkspace>,
 }
 
@@ -565,24 +572,33 @@ impl PackageValidationCache {
             return Ok((&workspace.metadata, &workspace.catalog));
         }
 
-        let metadata =
-            cargo_metadata_for_manifest(manifest_path, WASM_TARGET, mode.locked(), mode.offline())
-                .map_err(|source| {
-                    CargoEvidenceFailure::new(
-                        CargoEvidencePhase::WasmFilteredMetadata,
-                        manifest_path,
-                        source.as_ref(),
-                    )
-                })?;
-        let catalog =
-            cargo_metadata_catalog_for_manifest(manifest_path, mode.locked(), mode.offline())
-                .map_err(|source| {
-                    CargoEvidenceFailure::new(
-                        CargoEvidencePhase::CompleteCatalog,
-                        manifest_path,
-                        source.as_ref(),
-                    )
-                })?;
+        let metadata = cargo_metadata_for_manifest(
+            manifest_path,
+            WASM_TARGET,
+            mode.locked(),
+            mode.offline(),
+            &self.features,
+        )
+        .map_err(|source| {
+            CargoEvidenceFailure::new(
+                CargoEvidencePhase::WasmFilteredMetadata,
+                manifest_path,
+                source.as_ref(),
+            )
+        })?;
+        let catalog = cargo_metadata_catalog_for_manifest(
+            manifest_path,
+            mode.locked(),
+            mode.offline(),
+            &self.features,
+        )
+        .map_err(|source| {
+            CargoEvidenceFailure::new(
+                CargoEvidencePhase::CompleteCatalog,
+                manifest_path,
+                source.as_ref(),
+            )
+        })?;
         self.workspaces.push(CachedCargoWorkspace {
             mode,
             metadata,
@@ -1367,6 +1383,45 @@ fn validate_runtime_graph(
         return Err(unsupported_finding(render_protected_path(graph, path)));
     }
 
+    validate_memory_runtime_identity(graph)
+}
+
+// Only normal Wasm runtime edges count; proc-macro subtrees execute on the host.
+fn validate_memory_runtime_identity(graph: &CargoGraphEvidence) -> Result<(), RoleContractFinding> {
+    let mut pending = vec![graph.selected_package_id.as_str()];
+    let mut visited = BTreeSet::new();
+    let mut memories = BTreeSet::new();
+    while let Some(id) = pending.pop() {
+        if !visited.insert(id) {
+            continue;
+        }
+        let package = graph
+            .packages
+            .get(id)
+            .ok_or_else(|| unsupported_finding("runtime package evidence is missing"))?;
+        if package.is_proc_macro {
+            continue;
+        }
+        if package.name == "ic-memory" {
+            memories.insert(id);
+        }
+        pending.extend(
+            graph
+                .edges
+                .get(id)
+                .into_iter()
+                .flatten()
+                .map(|edge| edge.package_id.as_str()),
+        );
+    }
+    if memories.len() > 1 {
+        let mut packages = memories
+            .into_iter()
+            .map(|id| normalized_package_description(graph, &graph.packages[id]))
+            .collect::<Vec<_>>();
+        packages.sort();
+        return Err(RoleContractFinding::MultipleMemoryRuntimes { packages });
+    }
     Ok(())
 }
 

@@ -14,6 +14,21 @@
 )]
 
 #[cfg(feature = "participant")]
+canic::memory::ic_memory_range!(
+    authority = "icydb.canic_composed_audit",
+    start = 100,
+    end = 106,
+    mode = Allowed
+);
+
+#[cfg(feature = "participant")]
+canic::memory::memory_bootstrap_admission!(
+    identity = canic::memory::admission::PolicyIdentity::new("icydb.logical-memory-admission", 1)
+        .expect("valid IcyDB admission identity"),
+    prepare = icydb::db::prepare_memory_bootstrap,
+);
+
+#[cfg(feature = "participant")]
 icydb::start!(participant);
 
 #[cfg(feature = "participant")]

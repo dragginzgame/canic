@@ -1,7 +1,7 @@
 use crate::canister::{APP, SCALE_HUB};
 use candid::Principal;
 use ic_testkit::{
-    artifacts::{read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{test_target_dir, workspace_root_for},
     pic::{PocketIc, PocketIcBuilder, StandaloneCanisterFixture},
 };
 use std::path::{Path, PathBuf};
@@ -43,9 +43,7 @@ pub fn install_audit_scaling_probe(profile: CanicWasmBuildProfile) -> Standalone
 pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProbeFixture {
     let workspace_root = workspace_root();
     let target_dir = test_target_dir(&workspace_root, "standalone-root-probe");
-    ensure_probe_wasm_ready(&workspace_root, &target_dir, "root_probe", profile);
-
-    let root_wasm = read_wasm(&target_dir, "root_probe", profile.target_dir_name());
+    let root_wasm = build_probe_wasm(&workspace_root, &target_dir, "root_probe", profile);
     let wasm_store_wasm = build_generated_fleet_wasm(
         &workspace_root,
         &workspace_root.join("canisters/audit/root_probe/canic.toml"),
@@ -64,12 +62,12 @@ pub fn install_audit_root_probe(profile: CanicWasmBuildProfile) -> RootAuditProb
     RootAuditProbeFixture { pic, canister_id }
 }
 
-fn ensure_probe_wasm_ready(
+fn build_probe_wasm(
     workspace_root: &Path,
     target_dir: &Path,
     crate_name: &str,
     profile: CanicWasmBuildProfile,
-) {
+) -> Vec<u8> {
     let config_path = workspace_root.join("canisters/audit/root_probe/canic.toml");
     let config_path = config_path.to_str().expect("audit root config UTF-8");
     let build_env = [
@@ -86,7 +84,8 @@ fn ensure_probe_wasm_ready(
         &[crate_name],
         profile,
         &build_env,
-    );
+    )
+    .wasm(crate_name)
 }
 
 fn workspace_root() -> PathBuf {

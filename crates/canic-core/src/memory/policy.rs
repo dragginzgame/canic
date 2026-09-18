@@ -7,7 +7,7 @@
 use crate::{
     memory::{
         CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, CANIC_CORE_MEMORY_AUTHORITY,
-        registry::MemoryRegistryError,
+        admission::MemoryBootstrapAdmission, registry::MemoryRegistryError,
     },
     role_contract::allocation::{
         CANIC_CONTROL_PLANE_MAX_ID, CANIC_CONTROL_PLANE_MIN_ID, CANIC_CORE_AUTH_MAX_ID,
@@ -25,6 +25,8 @@ use ic_memory::{
     RuntimeBootstrapPolicy, StableKey,
 };
 
+use sha2::{Digest as _, Sha256};
+
 pub const CANIC_CORE_AUTHORITY_PURPOSE: &str = "Canic core allocation authority";
 pub const CANIC_CONTROL_PLANE_AUTHORITY_PURPOSE: &str = "Canic control-plane allocation authority";
 const CANIC_MEMORY_BOOTSTRAP_POLICY_NAME: &str = "canic.memory-bootstrap-policy";
@@ -38,13 +40,23 @@ const CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION: u32 = 1;
 /// Owned by memory policy and supplied to memory-manager bootstrap.
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub(super) struct CanicMemoryManagerPolicy;
+#[derive(Clone, Debug, Default)]
+pub struct CanicMemoryManagerPolicy {
+    admission: Option<MemoryBootstrapAdmission>,
+}
 
 impl CanicMemoryManagerPolicy {
+    /// Use Canic's fixed namespace and range policy without a consumer callback.
     #[must_use]
-    pub(super) const fn new() -> Self {
-        Self
+    pub const fn new() -> Self {
+        Self { admission: None }
+    }
+
+    /// Compose consumer admission while retaining all Canic namespace/range checks.
+    #[must_use]
+    pub fn with_admission(mut self, admission: MemoryBootstrapAdmission) -> Self {
+        self.admission = Some(admission);
+        self
     }
 }
 
@@ -87,11 +99,36 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
 }
 
 impl RuntimeBootstrapPolicy for CanicMemoryManagerPolicy {
+    fn prepare_bootstrap(
+        &self,
+        admission: &mut ic_memory::BootstrapAdmission<'_>,
+    ) -> Result<(), Self::Error> {
+        match &self.admission {
+            Some(participant) => (participant.prepare)(admission),
+            None => Ok(()),
+        }
+    }
+
     fn runtime_bootstrap_identity(&self) -> Result<PolicyIdentity, PolicyIdentityError> {
-        PolicyIdentity::new(
+        let identity = PolicyIdentity::new(
             CANIC_MEMORY_BOOTSTRAP_POLICY_NAME,
             CANIC_MEMORY_BOOTSTRAP_POLICY_VERSION,
-        )
+        )?;
+        let Some(participant) = &self.admission else {
+            return Ok(identity);
+        };
+        let mut hash = Sha256::new();
+        hash.update(b"canic:memory-admission:v1");
+        hash.update((participant.identity.name().len() as u64).to_be_bytes());
+        hash.update(participant.identity.name().as_bytes());
+        hash.update(participant.identity.version().to_be_bytes());
+        if let Some(configuration) = participant.identity.configuration_digest() {
+            hash.update([1]);
+            hash.update(configuration);
+        } else {
+            hash.update([0]);
+        }
+        Ok(identity.with_configuration_digest(hash.finalize().into()))
     }
 }
 

@@ -2,7 +2,7 @@
 
 use ic_testkit::artifacts::{
     ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
-    prepare_artifact_cache, read_wasm, resolve_cargo_build_inputs,
+    prepare_artifact_cache, resolve_cargo_build_inputs,
 };
 use ic_testkit::pic::{PocketIc, PocketIcBuilder};
 #[cfg(test)]
@@ -12,14 +12,14 @@ use std::time::SystemTime;
 use std::{
     fs,
     path::{Path, PathBuf},
-    sync::{Mutex, Once},
+    sync::{Mutex, OnceLock},
 };
 
 use super::super::artifacts::{
-    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, build_generated_fleet_wasm,
-    build_internal_test_wasm_canisters_with_env, internal_test_artifact_build_target,
-    internal_test_artifact_maintenance_interval, internal_test_artifact_prune_policy,
-    report_artifact_cache_maintenance,
+    CanicWasmBuildProfile, INTERNAL_TEST_RELEASE_BUILD_ID, InternalTestWasms,
+    build_generated_fleet_wasm, build_internal_test_wasm_canisters_with_env,
+    internal_test_artifact_build_target, internal_test_artifact_maintenance_interval,
+    internal_test_artifact_prune_policy, report_artifact_cache_maintenance, retained_artifact_path,
 };
 use super::super::progress::{self as test_progress, ProgressStatus};
 use super::super::startup::start_pocket_ic;
@@ -30,28 +30,27 @@ const ROOT_CANISTER_PACKAGE: &str = "delegation_root_stub";
 const CYCLES_LEDGER_STUB_PACKAGE: &str = "cycles_ledger_stub";
 #[cfg(test)]
 const ICP_REFILL_STUB_PACKAGE: &str = "icp_refill_stub";
-static BUILD_ONCE: Once = Once::new();
+static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(test)]
-static MAINNET_REFILL_BUILD_ONCE: Once = Once::new();
+static MAINNET_REFILL_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(test)]
-static MAINNET_FIVE_COMPONENT_REFILL_BUILD_ONCE: Once = Once::new();
+static MAINNET_FIVE_COMPONENT_REFILL_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(test)]
-static FIVE_COMPONENT_BUILD_ONCE: Once = Once::new();
+static FIVE_COMPONENT_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(test)]
 static INITIAL_SHARD_WASM: std::sync::OnceLock<Vec<u8>> = std::sync::OnceLock::new();
 #[cfg(test)]
-static FIVE_TRILLION_COMPONENT_BUILD_ONCE: Once = Once::new();
+static FIVE_TRILLION_COMPONENT_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(test)]
-static JOURNEY_LEDGER_BUILD_ONCE: Once = Once::new();
+static JOURNEY_LEDGER_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(test)]
-static ICP_REFILL_STUB_BUILD_ONCE: Once = Once::new();
+static ICP_REFILL_STUB_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 static CANISTER_BUILD_SERIAL: Mutex<()> = Mutex::new(());
 
 // Build the test root wasm.
 pub(super) fn build_test_root_wasm() -> Vec<u8> {
     let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    read_built_wasm(&test_target_dir(&workspace_root), "delegation_root_stub")
+    build_canisters_once(&workspace_root).wasm("delegation_root_stub")
 }
 
 // Build a mainnet-qualified root and exact Cycles Ledger boundary stub.
@@ -62,7 +61,7 @@ pub(super) fn build_mainnet_refill_wasms() -> (Vec<u8>, Vec<u8>) {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("mainnet-refill");
-    MAINNET_REFILL_BUILD_ONCE.call_once_force(|_| {
+    let wasms = MAINNET_REFILL_BUILD_ONCE.get_or_init(|| {
         let config_path = root_canister_config_path(&workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
@@ -74,11 +73,11 @@ pub(super) fn build_mainnet_refill_wasms() -> (Vec<u8>, Vec<u8>) {
             &[ROOT_CANISTER_PACKAGE, CYCLES_LEDGER_STUB_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env, ("ICP_ENVIRONMENT", "ic")],
-        );
+        )
     });
     (
-        read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE),
-        read_built_wasm(&target_dir, CYCLES_LEDGER_STUB_PACKAGE),
+        wasms.wasm(ROOT_CANISTER_PACKAGE),
+        wasms.wasm(CYCLES_LEDGER_STUB_PACKAGE),
     )
 }
 
@@ -90,7 +89,7 @@ pub(super) fn build_mainnet_five_component_refill_wasms() -> (Vec<u8>, Vec<u8>) 
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("mainnet-five-component-refill");
-    MAINNET_FIVE_COMPONENT_REFILL_BUILD_ONCE.call_once_force(|_| {
+    let wasms = MAINNET_FIVE_COMPONENT_REFILL_BUILD_ONCE.get_or_init(|| {
         let config_path = five_component_root_canister_config_path(&workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
@@ -102,11 +101,11 @@ pub(super) fn build_mainnet_five_component_refill_wasms() -> (Vec<u8>, Vec<u8>) 
             &[ROOT_CANISTER_PACKAGE, CYCLES_LEDGER_STUB_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env, ("ICP_ENVIRONMENT", "ic")],
-        );
+        )
     });
     (
-        read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE),
-        read_built_wasm(&target_dir, CYCLES_LEDGER_STUB_PACKAGE),
+        wasms.wasm(ROOT_CANISTER_PACKAGE),
+        wasms.wasm(CYCLES_LEDGER_STUB_PACKAGE),
     )
 }
 
@@ -118,7 +117,7 @@ pub(super) fn build_five_component_root_wasm() -> Vec<u8> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("five-component");
-    FIVE_COMPONENT_BUILD_ONCE.call_once_force(|_| {
+    let wasms = FIVE_COMPONENT_BUILD_ONCE.get_or_init(|| {
         let config_path = five_component_root_canister_config_path(&workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
@@ -130,9 +129,9 @@ pub(super) fn build_five_component_root_wasm() -> Vec<u8> {
             &[ROOT_CANISTER_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env],
-        );
+        )
     });
-    read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
+    wasms.wasm(ROOT_CANISTER_PACKAGE)
 }
 
 /// Build the existing audit Root with the managed-child fixture's exact config.
@@ -144,7 +143,7 @@ pub(super) fn build_child_reserve_root_wasm() -> Vec<u8> {
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("child-reserve");
     let config_path = initial_shard_root_canister_config_path(&workspace_root);
-    build_internal_test_wasm_canisters_with_env(
+    let wasms = build_internal_test_wasm_canisters_with_env(
         &workspace_root,
         &target_dir,
         &["root_probe"],
@@ -154,7 +153,7 @@ pub(super) fn build_child_reserve_root_wasm() -> Vec<u8> {
             config_path.to_str().expect("config path UTF-8"),
         )],
     );
-    read_built_wasm(&target_dir, "root_probe")
+    wasms.wasm("root_probe")
 }
 
 /// Build the exact local Root whose only top-level Hub requires one initial Shard.
@@ -184,7 +183,7 @@ pub(super) fn build_five_trillion_component_root_wasm() -> Vec<u8> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("five-trillion-component");
-    FIVE_TRILLION_COMPONENT_BUILD_ONCE.call_once_force(|_| {
+    let wasms = FIVE_TRILLION_COMPONENT_BUILD_ONCE.get_or_init(|| {
         let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
@@ -196,9 +195,9 @@ pub(super) fn build_five_trillion_component_root_wasm() -> Vec<u8> {
             &[ROOT_CANISTER_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env],
-        );
+        )
     });
-    read_built_wasm(&target_dir, ROOT_CANISTER_PACKAGE)
+    wasms.wasm(ROOT_CANISTER_PACKAGE)
 }
 
 /// Build the deterministic Cycles Ledger boundary used by the literal-zero journey.
@@ -209,7 +208,7 @@ pub(super) fn build_journey_cycles_ledger_wasm() -> Vec<u8> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("journey-ledger");
-    JOURNEY_LEDGER_BUILD_ONCE.call_once_force(|_| {
+    let wasms = JOURNEY_LEDGER_BUILD_ONCE.get_or_init(|| {
         let config_path = root_canister_config_path(&workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
@@ -221,9 +220,9 @@ pub(super) fn build_journey_cycles_ledger_wasm() -> Vec<u8> {
             &[CYCLES_LEDGER_STUB_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env],
-        );
+        )
     });
-    read_built_wasm(&target_dir, CYCLES_LEDGER_STUB_PACKAGE)
+    wasms.wasm(CYCLES_LEDGER_STUB_PACKAGE)
 }
 
 /// Build the exact ICP Ledger/CMC boundary stub without rebuilding a production Root.
@@ -234,29 +233,29 @@ pub(super) fn build_icp_refill_stub_wasm() -> Vec<u8> {
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
     let target_dir = test_target_dir(&workspace_root).join("icp-refill-stub");
-    ICP_REFILL_STUB_BUILD_ONCE.call_once_force(|_| {
+    let wasms = ICP_REFILL_STUB_BUILD_ONCE.get_or_init(|| {
         build_internal_test_wasm_canisters_with_env(
             &workspace_root,
             &target_dir,
             &[ICP_REFILL_STUB_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[("ICP_ENVIRONMENT", "ic")],
-        );
+        )
     });
-    read_built_wasm(&target_dir, ICP_REFILL_STUB_PACKAGE)
+    wasms.wasm(ICP_REFILL_STUB_PACKAGE)
 }
 
 // Build and read the exact release-qualified sibling wasm_store artifact.
 pub(super) fn build_test_wasm_store_wasm() -> Vec<u8> {
+    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
     let workspace_root = workspace_root();
-    build_canisters_once(&workspace_root);
-    fs::read(
-        workspace_root
-            .join(".canic/release-builds")
-            .join(INTERNAL_TEST_RELEASE_BUILD_ID.1)
-            .join("artifacts/wasm_store/wasm_store.wasm.gz"),
-    )
-    .expect("read release-qualified sibling Wasm Store artifact")
+    WASM.get_or_init(|| {
+        let _serial_guard = CANISTER_BUILD_SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        build_bootstrap_wasm_store(&workspace_root, &root_canister_config_path(&workspace_root))
+    })
+    .clone()
 }
 
 // Build one independent PocketIC instance for a Fleet Registry fixture.
@@ -325,20 +324,18 @@ pub(super) fn build_icp_refill_pic() -> PocketIc {
 }
 
 // Build the test canisters once for the shared Fleet Registry fixtures.
-fn build_canisters_once(workspace_root: &Path) {
+fn build_canisters_once(workspace_root: &Path) -> &'static InternalTestWasms {
     let _serial_guard = CANISTER_BUILD_SERIAL
         .lock()
         .unwrap_or_else(std::sync::PoisonError::into_inner);
 
-    BUILD_ONCE.call_once_force(|_| {
+    BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root);
         let config_path = root_canister_config_path(workspace_root);
         let canonical_config_env = (
             canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
             config_path.to_str().expect("config path UTF-8"),
         );
-        progress("building bootstrap wasm_store artifact");
-        build_bootstrap_wasm_store(workspace_root, &config_path);
         progress("building PIC root wasm artifact");
         build_internal_test_wasm_canisters_with_env(
             workspace_root,
@@ -346,13 +343,12 @@ fn build_canisters_once(workspace_root: &Path) {
             &[ROOT_CANISTER_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[canonical_config_env],
-        );
-        progress("finished PIC wasm build");
-    });
+        )
+    })
 }
 
 // Build the sibling wasm_store independently before the fixture installs both Canisters.
-fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) {
+fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) -> Vec<u8> {
     let target_dir = canic_host::canister_build::canister_build_target_root(workspace_root);
     let artifact_path = workspace_root
         .join(".canic/release-builds")
@@ -440,6 +436,8 @@ fn build_bootstrap_wasm_store(workspace_root: &Path, config_path: &Path) {
     );
     test_progress::detail("WASM", &format!("bootstrap Store cache: {outcome}"));
     report_artifact_cache_maintenance("bootstrap-wasm-store", outcome.record().maintenance());
+    fs::read(retained_artifact_path(outcome.record(), "wasm_store"))
+        .expect("read retained bootstrap Store")
 }
 
 // Resolve the one canonical Fleet config used by every managed fixture wasm.
@@ -479,15 +477,6 @@ pub(super) fn five_trillion_component_root_canister_config_path(workspace_root: 
         .join("test")
         .join(ROOT_CANISTER_PACKAGE)
         .join("canic.five-trillion-component.toml")
-}
-
-// Read one built fast-profile wasm artifact from an explicit target directory.
-fn read_built_wasm(target_dir: &Path, crate_name: &str) -> Vec<u8> {
-    read_wasm(
-        target_dir,
-        &crate_name.replace('-', "_"),
-        CanicWasmBuildProfile::Fast.target_dir_name(),
-    )
 }
 
 // Resolve the shared PocketIC wasm target directory.

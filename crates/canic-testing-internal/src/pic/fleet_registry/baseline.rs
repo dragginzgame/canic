@@ -274,7 +274,7 @@ mod tests {
         ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
         prepare_artifact_cache, resolve_cargo_build_inputs,
     };
-    use ic_testkit::artifacts::{read_wasm, test_target_dir, workspace_root_for};
+    use ic_testkit::artifacts::{test_target_dir, workspace_root_for};
     #[cfg(test)]
     use ic_testkit::pic::PocketIcSnapshotExt;
     use ic_testkit::pic::{
@@ -2601,6 +2601,8 @@ exec icp "$@"
             outcome.record().maintenance(),
         );
 
+        stage_retained_release_artifacts(outcome.record(), &outputs);
+
         phase = phase.next("artifact_load");
         let artifacts =
             load_literal_zero_release_artifacts(adapter_root, release_build_id, configured_roles);
@@ -2635,6 +2637,7 @@ exec icp "$@"
                 snapshot.model(),
                 &role,
                 PackageValidationMode::Passive,
+                &canic_host::role_contract::CargoFeatureSelection::default(),
             ) else {
                 panic!("literal-zero role `{role}` must resolve to one supported package");
             };
@@ -3232,11 +3235,36 @@ exec icp "$@"
         let replay = acquire(first);
         assert!(replay.is_reused());
         assert_eq!(initial.record().key(), replay.record().key());
-        for (name, path) in outputs {
+        // A later build and destination replacement cannot change a retained input.
+        for path in outputs.values() {
+            std::fs::write(path, b"replaced mutable output").unwrap();
+        }
+        stage_retained_release_artifacts(initial.record(), &outputs);
+        for (name, path) in &outputs {
             assert_eq!(
                 std::fs::read_to_string(path).unwrap(),
                 format!("{first}:{name}")
             );
+            let replacement_path =
+                crate::pic::artifacts::retained_artifact_path(replacement.record(), name);
+            assert_eq!(
+                std::fs::read_to_string(replacement_path).unwrap(),
+                format!("{second}:{name}")
+            );
+        }
+    }
+
+    // Stage from immutable retained inputs into this invocation's private release root.
+    #[cfg(test)]
+    fn stage_retained_release_artifacts(
+        record: &ic_testkit::artifacts::ArtifactCacheRecord,
+        outputs: &BTreeMap<String, PathBuf>,
+    ) {
+        assert_eq!(record.artifacts().len(), outputs.len());
+        for (name, destination) in outputs {
+            let source = crate::pic::artifacts::retained_artifact_path(record, name);
+            std::fs::create_dir_all(destination.parent().unwrap()).unwrap();
+            std::fs::copy(source, destination).expect("stage retained release artifact");
         }
     }
 
@@ -3293,10 +3321,11 @@ exec icp "$@"
         }
         transaction.commit().unwrap();
         std::fs::remove_dir_all(literal_zero_release_root(&root, release)).unwrap();
-        assert!(matches!(
-            prepare_artifact_cache(&cache).unwrap(),
-            ArtifactCachePreparation::Reused(_)
-        ));
+        let ArtifactCachePreparation::Reused(record) = prepare_artifact_cache(&cache).unwrap()
+        else {
+            panic!("expected cached fixture authority");
+        };
+        stage_retained_release_artifacts(&record, &outputs);
         let restored = canic_host::release_set::fixture::load_fixture_artifact_manifest(
             &root,
             topology,
@@ -7244,7 +7273,7 @@ exec icp "$@"
         };
         let target = workspace.join("target/pic-wasm/operator-candid");
         let config = root_canister_config_path(workspace);
-        build_internal_test_wasm_canisters_with_env(
+        let wasms = build_internal_test_wasm_canisters_with_env(
             workspace,
             &target,
             &["delegation_root_stub"],
@@ -7258,7 +7287,7 @@ exec icp "$@"
             ],
         );
         let output = Command::new("candid-extractor")
-            .arg(target.join("wasm32-unknown-unknown/fast/delegation_root_stub.wasm"))
+            .arg(wasms.path("delegation_root_stub"))
             .output()
             .unwrap();
         assert!(
@@ -12364,6 +12393,7 @@ exec '{}' "$@"
                 snapshot.model(),
                 role,
                 canic_host::role_contract::PackageValidationMode::Passive,
+                &canic_host::role_contract::CargoFeatureSelection::default(),
             );
             let canic_host::role_contract::RolePackageValidation::Supported(evidence) = package
             else {
@@ -15242,18 +15272,14 @@ cycles = "80T"
     fn build_qualification_workload_wasm() -> Vec<u8> {
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let target_dir = test_target_dir(&workspace_root, "estate-qualification-reset");
-        build_internal_test_wasm_canisters_with_env(
+        let wasms = build_internal_test_wasm_canisters_with_env(
             &workspace_root,
             &target_dir,
             &[QUALIFICATION_WORKLOAD_PACKAGE],
             CanicWasmBuildProfile::Fast,
             &[],
         );
-        read_wasm(
-            &target_dir,
-            QUALIFICATION_WORKLOAD_PACKAGE,
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        )
+        wasms.wasm(QUALIFICATION_WORKLOAD_PACKAGE)
     }
 
     #[cfg(test)]
@@ -19015,7 +19041,7 @@ cycles = "80T"
             .iter()
             .map(|(_, package)| *package)
             .collect::<Vec<_>>();
-        build_internal_test_wasm_canisters_with_env(
+        let wasms = build_internal_test_wasm_canisters_with_env(
             workspace_root,
             &target_dir,
             &packages,
@@ -19025,15 +19051,9 @@ cycles = "80T"
                 canonical_config_path,
             )],
         );
-        let profile = CanicWasmBuildProfile::Fast.target_dir_name();
         roles_and_packages
             .iter()
-            .map(|(role, package)| {
-                (
-                    CanisterRole::new(role),
-                    read_wasm(&target_dir, package, profile),
-                )
-            })
+            .map(|(role, package)| (CanisterRole::new(role), wasms.wasm(package)))
             .collect()
     }
 

@@ -16,6 +16,7 @@ use crate::{
     bootstrap_store::{build_bootstrap_wasm_store_artifact, compile_bootstrap_wasm_store_artifact},
     build_toolchain::BuildToolchain,
     cargo_command,
+    cargo_metadata::CargoFeatureSelection,
     release_set::AppConfigSnapshot,
     role_contract::{
         PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
@@ -134,7 +135,7 @@ impl CanisterArtifactBuilder {
         }
 
         let config = AppConfigSnapshot::load(&context.config_path)?;
-        let spec = resolve_canister_artifact_build_spec(context, config.model())?;
+        let spec = resolve_canister_artifact_build_spec(context, config.model(), options)?;
         build_workspace_canister_artifact_from_spec(context, &spec, options, &self.toolchain)
     }
 
@@ -146,6 +147,8 @@ impl CanisterArtifactBuilder {
     ) -> Result<AppCanisterArtifactBuildOutput, Box<dyn std::error::Error>> {
         self.toolchain.require_profile(context.profile)?;
         let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
+        let config = AppConfigSnapshot::load(&context.config_path)?;
+        let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
         std::thread::scope(|scope| {
             let coordinator_started = Instant::now();
             let coordinator = compile_bootstrap_fleet_coordinator_artifact(context)?;
@@ -170,7 +173,7 @@ impl CanisterArtifactBuilder {
                     .map_err(|error| error.to_string())
             });
             let configured_started = Instant::now();
-            let configured = build_configured_artifacts(context, roles, &self.toolchain);
+            let configured = build_configured_artifacts(context, &specs, &self.toolchain);
             let configured_elapsed = configured_started.elapsed();
             let coordinator = coordinator
                 .join()
@@ -195,7 +198,9 @@ impl CanisterArtifactBuilder {
     ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
         self.toolchain.require_profile(context.profile)?;
         let _build_target_lock = lock_canister_build_target(&context.workspace_root)?;
-        build_configured_artifacts(context, roles, &self.toolchain)
+        let config = AppConfigSnapshot::load(&context.config_path)?;
+        let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
+        build_configured_artifacts(context, &specs, &self.toolchain)
     }
 }
 
@@ -208,17 +213,15 @@ pub fn build_workspace_canister_artifact(
 
 fn build_configured_artifacts(
     context: &WorkspaceBuildContext,
-    roles: &[String],
+    specs: &[CanisterArtifactBuildSpec],
     toolchain: &BuildToolchain,
 ) -> Result<Vec<ConfiguredCanisterArtifactBuildOutput>, Box<dyn std::error::Error>> {
-    let config = AppConfigSnapshot::load(&context.config_path)?;
-    let specs = resolve_canister_artifact_build_specs(context, config.model(), roles)?;
     let outputs =
-        build_workspace_canister_artifacts_from_specs_with_toolchain(context, &specs, toolchain)?;
+        build_workspace_canister_artifacts_from_specs_with_toolchain(context, specs, toolchain)?;
 
-    Ok(roles
+    Ok(specs
         .iter()
-        .cloned()
+        .map(|spec| spec.role.clone())
         .zip(outputs)
         .map(|(role, output)| ConfiguredCanisterArtifactBuildOutput { role, output })
         .collect())
@@ -575,6 +578,7 @@ fn finish_canister_artifact_output(
 pub fn resolve_canister_artifact_build_spec(
     context: &WorkspaceBuildContext,
     config: &canic_core::bootstrap::compiled::ConfigModel,
+    options: &CanisterArtifactBuildOptions,
 ) -> Result<CanisterArtifactBuildSpec, Box<dyn std::error::Error>> {
     let canister_name = context.role.as_str();
     let role = canic_core::ids::CanisterRole::owned(canister_name.to_string());
@@ -584,6 +588,10 @@ pub fn resolve_canister_artifact_build_spec(
         config,
         &role,
         PackageValidationMode::Build,
+        &CargoFeatureSelection {
+            features: options.cargo_features.clone(),
+            default_features: options.default_features,
+        },
     );
     resolve_canister_artifact_build_spec_from_validation(context, config, canister_name, validation)
 }
@@ -1170,6 +1178,18 @@ mod tests {
             .collect::<Vec<_>>();
 
         assert_eq!(failed_roles, ["missing-first", "missing-second"]);
+
+        let builder =
+            CanisterArtifactBuilder::for_profile(context.profile).expect("installed build tools");
+        let error = builder
+            .build_workspace_app_artifacts(&context, &roles)
+            .err()
+            .expect("whole-App build must reject invalid roles before infrastructure compilation");
+        assert!(
+            error
+                .downcast_ref::<ConfiguredBuildSpecFailures>()
+                .is_some()
+        );
     }
 
     fn build_context() -> WorkspaceBuildContext {

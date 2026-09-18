@@ -34,7 +34,7 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
     ];
     let mut declaration = base_env.to_vec();
     declaration.push((canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1"));
-    build_internal_test_wasm_canisters_with_features(
+    let declaration_wasms = build_internal_test_wasm_canisters_with_features(
         &context.workspace_root,
         &target,
         &["root_probe"],
@@ -42,8 +42,8 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
         &declaration,
         &features,
     );
-    let raw = target.join("wasm32-unknown-unknown/fast/root_probe.wasm");
-    let candid = Command::new("candid-extractor").arg(&raw).output().unwrap();
+    let raw = declaration_wasms.path("root_probe");
+    let candid = Command::new("candid-extractor").arg(raw).output().unwrap();
     assert!(
         candid.status.success(),
         "{}",
@@ -61,7 +61,7 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
         canic_core::role_contract::PROTOCOL_PROFILE_DIGEST_ENV,
         digest.as_str(),
     ));
-    build_internal_test_wasm_canisters_with_features(
+    let runtime_wasms = build_internal_test_wasm_canisters_with_features(
         &context.workspace_root,
         &target,
         &["root_probe"],
@@ -71,7 +71,7 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
     );
     std::fs::write(&output.did_path, &candid.stdout).unwrap();
     let shrink = Command::new("ic-wasm")
-        .arg(&raw)
+        .arg(runtime_wasms.path("root_probe"))
         .arg("-o")
         .arg(&output.wasm_path)
         .arg("shrink")

@@ -14,6 +14,15 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.23` updates ic-memory to 0.14.3 for more efficient bounded ledger encoding
+  under the existing reinstall-only release contract, and adopts ic-testkit 0.10.0
+  with retained exact artifact ownership throughout test fixture consumption.
+  IcyDB 0.258.0 test consumers share the memory runtime through explicit logical
+  allocation grants and identity-bound admission before commitment.
+  Application builds reject split memory runtimes before compilation and report
+  output paths that point into another workspace's mutable target. Completed
+  retained operations gain a bounded retirement review with receipt preservation,
+  fresh conservation checks and interruption-safe local handoff.
 - `0.110.22` reduces native build overhead and unnecessary rebuilds, improves
   deployment recovery/progress diagnostics and CI dependency handling, and updates
   memory/test dependencies with separate external-composition qualification.

@@ -9,6 +9,8 @@ mod package;
 #[cfg(test)]
 mod tests;
 
+pub use crate::cargo_metadata::CargoFeatureSelection;
+
 pub use descriptor::{
     StateDescriptorRegistry, materialize_state_manifest, validate_state_descriptor_registry,
 };
@@ -188,6 +190,10 @@ pub fn finding_detail(finding: &RoleContractFinding) -> String {
         ),
         RoleContractFinding::MultipleCanicPackages { packages } => format!(
             "the wasm runtime graph reaches multiple Canic packages: {}",
+            packages.join(", ")
+        ),
+        RoleContractFinding::MultipleMemoryRuntimes { packages } => format!(
+            "the selected Wasm role reaches multiple ic-memory package identities: {}. Align the application's framework and database dependencies to one ic-memory package identity before building; matching version labels from different sources is insufficient",
             packages.join(", ")
         ),
         RoleContractFinding::PackageAmbiguous { role } => {

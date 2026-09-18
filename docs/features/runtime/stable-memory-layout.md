@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses published ic-memory 0.14.1 and a single MemoryManager per canister.
+Canic uses published ic-memory 0.14.3 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
@@ -45,17 +45,76 @@ or workload. Application-owned stores and IcyDB share the same manager geometry;
 Canic does not change their schemas, IDs or ownership.
 
 Consumers composed into the same canister must use the same ic-memory package
-identity. IcyDB is a test-only dependency of this repository; its separate
-version in the workspace lockfile does not enter deployed Canic roles. Its
-composed integration is qualified explicitly once dependencies align, using
+identity. IcyDB is a test-only dependency of this repository and does not enter
+deployed Canic roles. The published 0.258.0 test consumer now shares ic-memory 0.14.3
+with Canic. Its composed integration is qualified explicitly using
 `make test-pocketic-case CASE=icydb_lifecycle_composition`. Canic's production
 Wasm dependency guard continues to require a single memory runtime.
 
+Application role validation also rejects multiple reachable `ic-memory` package
+identities with `role_contract_multiple_memory_runtimes` before compiling the
+role. Whole-App builds validate all configured roles before compiling infrastructure.
+Single-role checks follow the actual `--features` and `--no-default-features`
+selection. The check uses the existing selected-package Wasm dependency evidence;
+it does not scan every package in the workspace lockfile. Build/dev dependencies,
+inactive features, native-only edges and procedural-macro subtrees do not count.
+Renamed runtime dependencies do count, and equal versions from different package
+sources are still distinct runtimes. Align the application's framework/database
+dependencies to one package identity, then qualify their composed lifecycle.
+
 The 0.14 update retains fixed-ID declarations and bucket selection. It adds
 upstream limits to ledger recovery (including 16 MiB logical payloads, depth 32
-and bounded histories); out-of-contract state rejects. Canic does not enable
-key-only placement, automatic migration or the optional historical-admission
-hook. Release transitions retain Canic's reinstall-only policy.
+and bounded histories); out-of-contract state rejects. Canic retains its fixed
+framework declarations while applications may request logical placement within
+explicit grants and opt into composed admission. Release transitions retain
+Canic's reinstall-only policy; there is no automatic migration.
+
+## Composed consumer admission
+
+IcyDB 0.258.0 uses permanent logical namespace/store keys and explicit host
+grants. Register one composed admission callback for the entire artifact:
+
+```rust
+canic::memory::ic_memory_range!(
+    authority = "icydb.example",
+    start = 100,
+    end = 106,
+    mode = Allowed
+);
+canic::memory::memory_bootstrap_admission!(
+    identity = canic::memory::admission::PolicyIdentity::new(
+        "icydb.logical-memory-admission", 1,
+    ).expect("valid admission identity"),
+    prepare = icydb::db::prepare_memory_bootstrap,
+);
+```
+
+This seven-ID grant accommodates one namespace's three controls and one store's
+four allocations. Choose disjoint grants with sufficient capacity for the actual
+schema; admission itself grants no allocation authority. Schema declarations use
+`memory_namespace = "example"` and a journaled store's permanent `key` instead of
+physical memory IDs.
+
+The static callback registration is sealed when Canic selects its bootstrap
+policy. Duplicate and late registrations reject. Canic invokes the callback once
+over the complete sealed snapshot on each cold bootstrap attempt, after ledger
+recovery and before commitment or eager memory opening. Warm reuse requires the
+same declarations and composed policy identity and does not rerun admission.
+The existing synchronous lifecycle participant still runs after Canic restoration.
+
+The callback's semantic name, version and optional configuration digest are bound
+into Canic's policy configuration digest. Change that identity when the admission
+contract changes. Hosts with multiple consumers compose them in one callback and
+propagate each rejection; they must not register a hook per database. Typed
+consumer errors remain available in `MemoryRegistryError::Admission`; Canic's
+existing lifecycle error boundary still maps bootstrap failures to its error code.
+A rejected attempt cannot commit the candidate allocation set.
+
+IcyDB rejects omitted historical namespaces and selects only omitted stores'
+original journals for its subsequent recovery checks. This does not retire data,
+rename a store, bypass journal debt or permit cross-release migration. Release
+transitions remain reinstall-only. Canic's own fixed IDs and bucket size are
+unchanged, and artifacts without a callback retain the base policy identity.
 
 ## Representation and consolidation
 
