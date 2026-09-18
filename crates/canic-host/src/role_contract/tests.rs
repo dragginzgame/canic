@@ -29,6 +29,7 @@ fn batched_contracts_preserve_isolated_roles_order_and_rejections() {
                 config.model(),
                 role,
                 PackageValidationMode::Passive,
+                &CargoFeatureSelection::default(),
             ) {
                 RolePackageValidation::Supported(evidence) => {
                     resolve_declared_role_package_contract(config.model(), &evidence)

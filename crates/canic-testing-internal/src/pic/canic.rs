@@ -33,7 +33,7 @@ use canic_core::{
 };
 use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
-    artifacts::{read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{test_target_dir, workspace_root_for},
     pic::{
         CandidCallError, CandidCallExt, CanisterDiagnosticsRequest, CanisterInstallExt,
         InstallSpec, LabeledCanisterDiagnosticsRequest, PocketIc, PocketIcBuilder,
@@ -706,16 +706,9 @@ pub(super) fn install_root_args_with_release_set_digest_and_coordinator(
         .map_err(|_| Error::from_registered(canic_core::diagnostics::codes::STATE_FAILED))
 }
 
-fn ensure_canister_wasm_ready(
-    workspace_root: &Path,
-    target_dir: &Path,
-    crate_name: &str,
-    profile: CanicWasmBuildProfile,
-) {
-    build_internal_test_wasm_canisters(workspace_root, target_dir, &[crate_name], profile);
-}
-
-fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile) -> Vec<u8> {
+/// Return the exact cached bytes used by standalone test installs and upgrades.
+#[must_use]
+pub fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile) -> Vec<u8> {
     type CacheEntry = Arc<OnceLock<Vec<u8>>>;
     type CacheKey = (PathBuf, String, &'static str);
 
@@ -742,8 +735,8 @@ fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile) ->
         .get_or_init(|| {
             let target_name = format!("standalone-{crate_name}");
             let target_dir = test_target_dir(&workspace_root, &target_name);
-            ensure_canister_wasm_ready(&workspace_root, &target_dir, crate_name, profile);
-            read_wasm(&target_dir, crate_name, profile.target_dir_name())
+            build_internal_test_wasm_canisters(&workspace_root, &target_dir, &[crate_name], profile)
+                .wasm(crate_name)
         })
         .clone()
 }

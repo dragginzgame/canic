@@ -1082,9 +1082,32 @@ pub struct FleetReinstallRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetReinstallSourceRecord {
+    /// Byte-bound completed evidence; never a source of executable actions.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub terminal_retirement: Option<Box<FleetTerminalRetirementRecord>>,
     pub reviewed_desired: ReviewedDesiredFleetRecord,
     pub wasm_sha256_by_canister: BTreeMap<String, String>,
     pub candid_sha256_by_path: BTreeMap<String, String>,
+}
+
+/// Exact documents bound by a separately reviewed completed-operation retirement.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetTerminalSourceRecord {
+    pub operation_id: String,
+    pub plan_sha256: String,
+    pub plan_document_sha256: String,
+    pub journal_document_sha256: String,
+    pub state_document_sha256: String,
+    pub phase_document_sha256: BTreeMap<String, String>,
+}
+
+/// Source document bindings and fresh conservation presented by a separate retirement review.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetTerminalRetirementRecord {
+    pub source: FleetTerminalSourceRecord,
+    pub conservation: ActualCycleConservation,
 }
 
 /// Exact retained source bytes and issued protocol effects inspected for activation recovery.
@@ -1287,6 +1310,26 @@ pub struct EffectRecord {
     #[serde(deserialize_with = "serialization::required_option")]
     pub receipt: Option<String>,
     pub state: EffectState,
+}
+
+impl EffectRecord {
+    /// Validate paid retry counters against this exact action's reviewed limits.
+    pub(in crate::fleet_ensure) fn attempts_match(&self, action: &EnsureAction) -> bool {
+        let publication = match action.fixture_publication_attempt_limit() {
+            Some(limit) => limit > 0 && self.publication_attempts <= limit,
+            None => self.publication_attempts == 0,
+        };
+        let maintenance = match action {
+            EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
+                CurrentFleetProtocolAction::MaintainPoolReadiness {
+                    maximum_updates, ..
+                } => self.maintenance_attempts <= *maximum_updates,
+                _ => self.maintenance_attempts == 0,
+            },
+            _ => self.maintenance_attempts == 0,
+        };
+        publication && maintenance
+    }
 }
 
 /// Complete retained/live balance tuple for one exact retirement transfer.

@@ -260,6 +260,7 @@ fn build_complete_app(
     builder: &CanisterArtifactBuilder,
     started_at: Instant,
 ) -> Result<(), BuildCommandError> {
+    print_workspace_build_context_once(&context)?;
     let fixture_sources = canic_host::release_set::fixture::load_configured_fixture_sources(
         &context.icp_root,
         &context.config_path,

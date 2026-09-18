@@ -8,10 +8,10 @@
 //! resolved manifest or blocking role-contract findings.
 
 use crate::role_contract::{
-    PackageValidationMode, RolePackageValidation, materialize_state_manifest,
-    resolve_canonical_root_contract, resolve_declared_role_package_contract,
-    resolve_host_generated_fleet_coordinator_contract, resolve_host_generated_wasm_store_contract,
-    validate_declared_role_package,
+    CargoFeatureSelection, PackageValidationMode, RolePackageValidation,
+    materialize_state_manifest, resolve_canonical_root_contract,
+    resolve_declared_role_package_contract, resolve_host_generated_fleet_coordinator_contract,
+    resolve_host_generated_wasm_store_contract, validate_declared_role_package,
 };
 use canic_core::{
     bootstrap::parse_config_model,
@@ -84,6 +84,7 @@ pub fn resolve_workspace_state_manifest(
                     &config,
                     role,
                     PackageValidationMode::Passive,
+                    &CargoFeatureSelection::default(),
                 ) {
                     RolePackageValidation::Supported(package_evidence) => {
                         let resolution =

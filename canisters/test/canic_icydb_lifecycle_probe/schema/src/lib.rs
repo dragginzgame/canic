@@ -3,25 +3,13 @@
 use icydb::model::prelude::*;
 
 /// IcyDB model whose application memory stays above Canic's reserved range.
-#[canister(
-    memory_namespace = "canic_icydb_lifecycle",
-    memory_min = 100,
-    memory_max = 106,
-    commit_memory_id = 104,
-    startup_memory_id = 106,
-    integrity_progress_memory_id = 105
-)]
+#[canister(memory_namespace = "canic_icydb_lifecycle")]
 pub struct CanicIcydbLifecycleCanister {}
 
 /// One journaled store sufficient to exercise durable startup recovery.
 #[store(
     canister = "CanicIcydbLifecycleCanister",
-    storage(journaled(
-        data_memory_id = 100,
-        index_memory_id = 101,
-        schema_memory_id = 102,
-        journal_memory_id = 103
-    ))
+    storage(journaled(key = "lifecycle"))
 )]
 pub struct CanicIcydbLifecycleStore {}
 

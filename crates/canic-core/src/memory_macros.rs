@@ -154,3 +154,28 @@ macro_rules! eager_static {
         };
     };
 }
+
+/// Register the artifact's composed memory admission before Canic bootstrap.
+///
+/// Supply a semantic `ic_memory::PolicyIdentity` and a synchronous callback taking
+/// `&mut ic_memory::BootstrapAdmission` and returning `Result<(), E>` where `E`
+/// implements `Error + Send + Sync + 'static`. Register once per artifact, not per
+/// database. Grant consumer ranges separately with `ic_memory_range!`.
+#[macro_export]
+macro_rules! memory_bootstrap_admission {
+    (identity = $identity:expr, prepare = $prepare:path $(,)?) => {
+        const _: () = {
+            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
+            fn __canic_register_memory_admission() {
+                fn __canic_prepare_memory_admission(admission: &mut $crate::__reexports::ic_memory::BootstrapAdmission<'_>)
+                    -> ::core::result::Result<(), $crate::memory::registry::MemoryRegistryError>
+                {
+                    $prepare(admission).map_err(|source| $crate::memory::registry::MemoryRegistryError::Admission { source: ::std::boxed::Box::new(source) })
+                }
+                $crate::memory::admission::register(
+                    $crate::memory::admission::MemoryBootstrapAdmission::new($identity, __canic_prepare_memory_admission),
+                ).expect("Canic memory admission registration failed");
+            }
+        };
+    };
+}

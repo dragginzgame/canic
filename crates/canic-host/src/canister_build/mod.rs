@@ -8,6 +8,7 @@ mod compiler_cache;
 mod context;
 mod metrics;
 mod model;
+mod output_roots;
 mod process;
 mod reuse;
 

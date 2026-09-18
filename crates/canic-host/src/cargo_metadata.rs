@@ -7,11 +7,41 @@
 use serde::Deserialize;
 use serde_json::Value as JsonValue;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
 };
 
 use crate::cargo_command;
+
+/// Caller-selected features for one Cargo package graph.
+#[derive(Clone, Debug)]
+pub struct CargoFeatureSelection {
+    pub features: BTreeSet<String>,
+    pub default_features: bool,
+}
+
+impl Default for CargoFeatureSelection {
+    fn default() -> Self {
+        Self {
+            features: BTreeSet::new(),
+            default_features: true,
+        }
+    }
+}
+
+impl CargoFeatureSelection {
+    fn configure(&self, command: &mut std::process::Command) {
+        if !self.default_features {
+            command.arg("--no-default-features");
+        }
+        if !self.features.is_empty() {
+            command.args([
+                "--features",
+                &self.features.iter().cloned().collect::<Vec<_>>().join(","),
+            ]);
+        }
+    }
+}
 
 ///
 /// CargoMetadata
@@ -120,9 +150,11 @@ pub fn cargo_metadata_for_manifest(
     filter_platform: &str,
     locked: bool,
     offline: bool,
+    features: &CargoFeatureSelection,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
     let mut command = cargo_metadata_command(manifest_path);
     command.args(["--filter-platform", filter_platform]);
+    features.configure(&mut command);
     if locked {
         command.arg("--locked");
     }
@@ -139,8 +171,10 @@ pub fn cargo_metadata_catalog_for_manifest(
     manifest_path: &Path,
     locked: bool,
     offline: bool,
+    features: &CargoFeatureSelection,
 ) -> Result<CargoMetadata, Box<dyn std::error::Error>> {
     let mut command = cargo_metadata_command(manifest_path);
+    features.configure(&mut command);
     if locked {
         command.arg("--locked");
     }
@@ -158,6 +192,7 @@ pub fn cargo_tree_for_package(
     filter_platform: &str,
     locked: bool,
     offline: bool,
+    features: &CargoFeatureSelection,
     format: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
     let mut command = cargo_command();
@@ -181,6 +216,7 @@ pub fn cargo_tree_for_package(
             "--format",
             format,
         ]);
+    features.configure(&mut command);
     if locked {
         command.arg("--locked");
     }

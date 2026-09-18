@@ -1,5 +1,96 @@
 # Canic 0.110 Implementation Status
 
+## Post-.22 completed-source retirement extension — 2026-09-17
+
+CANIC-166's new completed staging source is distinct from the earlier issued
+partial activation. The selected .23 extension admits a separate review only after
+exact Applied receipts, immutable phases, fresh complete inventory and bounded
+cycle conservation reconcile. It reuses the existing preparation, effect journal
+and atomic handoff; source forecasts stay opaque and source actions never become
+executable replacement authority. Original phase files are archived with the source
+plan, journal and state. Review includes measured source accounting.
+
+Local source inspection passes for the reported 61-effect/two-phase source.
+Nineteen focused host regressions, the CLI retained-input regression and scoped
+warning-denied Clippy pass. The selected .23 local batch is ready for its release
+flow. Actual staging review, interrupted remote deployment and terminal effect-free
+replay are not established. This is a
+host-tool correction with no new runtime protocol or game rebuild requirement.
+The previous selected-batch readiness statement below predates this extension.
+
+
+## ICYDB-029 runtime composition completed — 2026-09-18
+
+The requested published IcyDB 0.258.0 update now completes this seam in the open
+.23 batch. Both maintained locks resolve its six packages and one ic-memory
+0.14.3. One artifact-owned admission callback is sealed before bootstrap, called
+over the complete snapshot before allocation commitment and covered by policy
+identity. Typed rejection, Canic range ownership and the single lifecycle owner
+remain intact. Both fixtures use logical keys and explicit host grants.
+
+Five native admission/grant regressions, 24 memory tests, 26 boundary guards,
+the existing seven PocketIC lifecycle/import journeys and scoped warning-denied
+Clippy pass. Both standalone audit feature variants compile under strict lint.
+Native omitted-journal qualification covers selection, original bytes/placement
+and grant rejection, not all IcyDB debt/retirement states. The current handoff
+records evidence and limits. This does not qualify Toko's live estate or add
+cross-release migration. No package publication or external mutation occurred.
+
+The selected .23 batch and changelogs are ready for the maintainer release flow;
+packages remain .22 and no full validation was run. RF2/B1 and wider speed work
+remain separate follow-ups. Test-only IcyDB remains outside normal release
+composition admission.
+
+
+## Post-.22 Toko build-admission and diagnostic extension — 2026-09-17
+
+The same .23 batch now addresses ICYDB-029's application memory-runtime split
+and CANIC-176's frozen-checkout output warning. Selected-role validation uses
+exact Cargo feature options and one reachable ic-memory package identity; whole-
+App preflight precedes infrastructure compilation. Output diagnostics report
+resolved runtime/declaration roots and warn about another workspace's target,
+while preserving explicit dedicated paths and existing cache/lock authority.
+Test-only IcyDB remains separate from Canic release admission.
+
+Fifty role-contract and seventy build/cache tests pass (one existing benchmark
+ignored), together with scoped core/host/CLI/internal-test warning-denied Clippy.
+The selected dependency/diagnostics batch and changelog are ready for the
+maintainer's release flow. Packages remain .22; no broad gate or publication ran.
+No new deployment-speed measurement or downstream adoption is claimed. See the
+[current handoff](../../status/current.md) for exact feedback identities, evidence,
+limitations and the separately retained RF2/B1/performance work.
+
+## Post-.22 testkit dependency extension — 2026-09-17
+
+The same .23 dependency batch adopts ic-testkit 0.10.0 and its retained exact
+artifact ownership contract. Internal builders return retained records; fixture
+reads, extraction and Root staging keep those owners alive. Complete release
+fixtures stage from retained inputs into private invocation directories, and
+blob-storage upgrades reuse their installation bytes. The earlier ic-memory
+.14.3 changes are preserved. Production runtime behavior is unchanged.
+
+Seven focused cache tests and the exact managed-projection PocketIC lifecycle
+case pass, together with scoped warning-denied Clippy including internal test
+code. The selected dependency batch and both changelog surfaces are prepared for
+the maintainer's release flow; package versions remain .22. No broad gate or
+publication ran. External IcyDB alignment remains separate. See the
+[current handoff](../../status/current.md) for evidence and limitations.
+
+## Post-.22 memory dependency batch — 2026-09-17
+
+The maintainer confirms .22 is published and requests current ic-memory. The
+selected .23 draft updates Canic and both lockfiles to published .14.3, adopting
+the upstream ledger encoding hard cut through the existing reinstall-only rule.
+Fixed allocation IDs, bucket sizes and host policy are unchanged. Test-only
+IcyDB's separate dependency schedule remains outside this release boundary.
+
+Twenty-three memory tests, four production ABI guards and the all-feature core
+Wasm check pass. Locked standalone graph inspection also resolves Canic to .14.3.
+The dependency batch and changelog are prepared for the maintainer's release
+flow; package versions remain .22 and no publication or broad validation ran.
+This is an existing-line dependency follow-up, not a next-minor decision. See
+the [current handoff](../../status/current.md) for evidence and limitations.
+
 ## Additional .22 native build reduction — 2026-09-17
 
 The next accepted speed attempt reduces native debug records to line tables.

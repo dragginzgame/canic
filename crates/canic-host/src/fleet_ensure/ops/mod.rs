@@ -419,6 +419,11 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error(
+        "retained terminal evidence is incomplete or inconsistent; preserve all source documents and paid-effect receipts"
+    )]
+    InvalidTerminalSource,
+
     #[error("startup funding configuration differs from the reviewed deployment configuration")]
     StartupConfigurationMismatch,
 

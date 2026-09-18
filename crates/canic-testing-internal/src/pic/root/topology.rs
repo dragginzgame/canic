@@ -43,12 +43,13 @@ enum RootStatusResponse {
 #[must_use]
 pub fn setup_root_topology(
     spec: &RootBaselineSpec<'_>,
+    artifacts: &ic_testkit::artifacts::ArtifactCacheRecord,
     root_wasm: Vec<u8>,
 ) -> InitializedRootTopology {
-    let wasm_store_wasm = fs::read(
-        spec.root_release_artifacts_dir
-            .join("wasm_store/wasm_store.wasm.gz"),
-    )
+    let wasm_store_wasm = fs::read(crate::pic::artifacts::retained_artifact_path(
+        artifacts,
+        "wasm_store",
+    ))
     .expect("read sibling Wasm Store artifact");
     for attempt in 1..=spec.root_setup_max_attempts {
         progress(
@@ -95,6 +96,7 @@ pub fn setup_root_topology(
         let stage_started_at = Instant::now();
         super::stage_managed_release_set(
             spec,
+            artifacts,
             &pic,
             prepared.wasm_store,
             prepared.installation_controller,

@@ -13,8 +13,8 @@ use canic_core::cdk::utils::hash::wasm_hash;
 use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     artifacts::{
-        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheSpec, WasmBuildSpec,
-        prepare_artifact_cache, resolve_cargo_build_inputs,
+        ArtifactCacheOutcome, ArtifactCachePreparation, ArtifactCacheRecord, ArtifactCacheSpec,
+        WasmBuildSpec, prepare_artifact_cache, resolve_cargo_build_inputs,
     },
     pic::{CandidCallExt, PocketIc, PocketIcTimeExt},
 };
@@ -28,7 +28,7 @@ use crate::pic::{
     artifacts::{
         INTERNAL_TEST_RELEASE_BUILD_ID, internal_test_artifact_maintenance_interval,
         internal_test_artifact_prune_policy, report_artifact_cache_maintenance,
-        run_icp_all_with_env, with_canonical_root_cargo_inputs,
+        retained_artifact_path, run_icp_all_with_env, with_canonical_root_cargo_inputs,
     },
     progress as test_progress,
 };
@@ -41,7 +41,8 @@ use super::{RootBaselineSpec, progress, progress_elapsed};
 ///
 /// Panics if exact inputs cannot be captured, the external build fails, inputs
 /// change during the build, or any required output cannot be committed.
-pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
+#[must_use]
+pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) -> ArtifactCacheRecord {
     progress(spec, "acquiring local ICP artifacts for root baseline");
     let started_at = std::time::Instant::now();
     let build_env = effective_build_env(spec);
@@ -85,6 +86,7 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
     );
     test_progress::detail("ROOT", &format!("artifact cache: {outcome}"));
     report_artifact_cache_maintenance("root-artifacts", outcome.record().maintenance());
+    outcome.record().clone()
 }
 
 /// Load the built `root.wasm.gz` artifact used for PocketIC root installs.
@@ -94,29 +96,31 @@ pub fn ensure_root_release_artifacts_built(spec: &RootBaselineSpec<'_>) {
 /// Panics if the root wasm artifact exists but cannot be read, or if it exceeds
 /// the configured PocketIC chunk-store size limit.
 #[must_use]
-pub fn load_root_wasm(spec: &RootBaselineSpec<'_>) -> Option<Vec<u8>> {
-    match fs::read(&spec.root_wasm_path) {
+pub fn load_root_wasm(
+    spec: &RootBaselineSpec<'_>,
+    artifacts: &ArtifactCacheRecord,
+) -> Option<Vec<u8>> {
+    let path = retained_artifact_path(artifacts, "root");
+    match fs::read(path) {
         Ok(bytes) => {
             assert!(
                 bytes.len() < spec.pocket_ic_wasm_chunk_store_limit_bytes,
                 "root wasm artifact is too large for PocketIC chunked install: {} bytes at {}. \
 Use a compressed `.wasm.gz` artifact and/or build canister wasm with `RUSTFLAGS=\"-C debuginfo=0\"`.",
                 bytes.len(),
-                spec.root_wasm_path.display()
+                path.display()
             );
             Some(bytes)
         }
         Err(err) if err.kind() == io::ErrorKind::NotFound => None,
-        Err(err) => panic!(
-            "failed to read root wasm at {}: {err}",
-            spec.root_wasm_path.display()
-        ),
+        Err(err) => panic!("failed to read root wasm at {}: {err}", path.display()),
     }
 }
 
 // Stage the configured ordinary release set directly into the fresh Store before Root adoption.
 pub(super) fn stage_managed_release_set(
     spec: &RootBaselineSpec<'_>,
+    artifacts: &ArtifactCacheRecord,
     pic: &PocketIc,
     store: Principal,
     installation_controller: Principal,
@@ -132,7 +136,7 @@ pub(super) fn stage_managed_release_set(
             spec,
             &format!("staging release {}/{}: {role_name}", index + 1, total),
         );
-        let wasm_module = load_release_wasm_gz(spec, &role_name);
+        let wasm_module = load_release_wasm_gz(artifacts, &role_name);
         let template_id = TemplateId::owned(format!("embedded:{role}"));
         let payload_hash = wasm_hash(&wasm_module);
         let payload_size_bytes = wasm_module.len() as u64;
@@ -182,13 +186,9 @@ pub(super) fn stage_managed_release_set(
 }
 
 // Load one built `.wasm.gz` artifact for a configured release role.
-fn load_release_wasm_gz(spec: &RootBaselineSpec<'_>, role_name: &str) -> Vec<u8> {
-    let artifact_path = spec
-        .root_release_artifacts_dir
-        .clone()
-        .join(role_name)
-        .join(format!("{role_name}.wasm.gz"));
-    let bytes = fs::read(&artifact_path)
+fn load_release_wasm_gz(artifacts: &ArtifactCacheRecord, role_name: &str) -> Vec<u8> {
+    let artifact_path = retained_artifact_path(artifacts, role_name);
+    let bytes = fs::read(artifact_path)
         .unwrap_or_else(|err| panic!("read {} failed: {err}", artifact_path.display()));
     assert!(
         !bytes.is_empty(),

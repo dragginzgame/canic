@@ -12,6 +12,19 @@ use candid::CandidType;
 use canic::{Error, prelude::*};
 use std::cell::{Cell, RefCell};
 
+canic::memory::ic_memory_range!(
+    authority = "icydb.canic_icydb_lifecycle",
+    start = 100,
+    end = 106,
+    mode = Allowed
+);
+
+canic::memory::memory_bootstrap_admission!(
+    identity = canic::memory::admission::PolicyIdentity::new("icydb.logical-memory-admission", 1)
+        .expect("valid IcyDB admission identity"),
+    prepare = icydb::db::prepare_memory_bootstrap,
+);
+
 icydb::start!(participant);
 
 /// Lifecycle phase most recently reconstructed on the current heap.

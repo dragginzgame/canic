@@ -13,7 +13,7 @@ mod tests;
 use crate::{
     build_toolchain::BuildToolchain,
     canister_build::WorkspaceBuildContext,
-    cargo_metadata::cargo_metadata_catalog_for_manifest,
+    cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
     durable_io::{lock_file_with_progress, read_regular_bytes, write_bytes},
     release_build::validate_finalized_release_build_manifest,
     release_set::{
@@ -334,9 +334,13 @@ fn input_snapshot(
     context: &WorkspaceBuildContext,
     tools: &[PathBuf],
 ) -> Result<BuildInputSnapshot, BuildReuseError> {
-    let metadata =
-        cargo_metadata_catalog_for_manifest(&context.workspace_root.join("Cargo.toml"), true, true)
-            .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+    let metadata = cargo_metadata_catalog_for_manifest(
+        &context.workspace_root.join("Cargo.toml"),
+        true,
+        true,
+        &CargoFeatureSelection::default(),
+    )
+    .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
     let mut roots = BTreeSet::new();
     let mut files = BTreeMap::new();
     for package in metadata.packages {

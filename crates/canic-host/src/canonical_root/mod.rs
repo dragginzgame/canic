@@ -7,7 +7,7 @@
 mod tests;
 
 use crate::{
-    cargo_metadata::cargo_metadata_catalog_for_manifest,
+    cargo_metadata::{CargoFeatureSelection, cargo_metadata_catalog_for_manifest},
     fleet_package::{
         self, FleetPackageSpec, resolved_canic_package, resolved_wrapper_dependencies,
     },
@@ -54,8 +54,12 @@ fn materialize_package(
         .skip(1)
         .find(|directory| directory.join("Cargo.toml").is_file())
         .ok_or("configuration has no Cargo manifest")?;
-    let metadata =
-        cargo_metadata_catalog_for_manifest(&cargo_root.join("Cargo.toml"), false, false)?;
+    let metadata = cargo_metadata_catalog_for_manifest(
+        &cargo_root.join("Cargo.toml"),
+        false,
+        false,
+        &CargoFeatureSelection::default(),
+    )?;
     let workspace = &metadata.workspace_root;
     let canic = resolved_canic_package(&metadata)?;
     let dependencies = resolved_wrapper_dependencies(&metadata, canic)?;

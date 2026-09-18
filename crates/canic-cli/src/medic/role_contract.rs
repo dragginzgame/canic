@@ -27,9 +27,10 @@ use canic_core::{
 use canic_host::{
     release_set::{AppConfigSnapshot, ConfiguredRoleLifecycle},
     role_contract::{
-        PackageValidationMode, RoleCargoGraphEvidence, RolePackageValidation, finding_detail,
-        materialize_state_manifest, resolve_canonical_root_contract,
-        resolve_declared_role_package_contract, validate_declared_role_package,
+        CargoFeatureSelection, PackageValidationMode, RoleCargoGraphEvidence,
+        RolePackageValidation, finding_detail, materialize_state_manifest,
+        resolve_canonical_root_contract, resolve_declared_role_package_contract,
+        validate_declared_role_package,
     },
 };
 
@@ -71,6 +72,7 @@ fn app_config_quality_checks(root: &Path, config: &Path) -> Vec<MedicCheck> {
                 snapshot.model(),
                 &role_id,
                 PackageValidationMode::Passive,
+                &CargoFeatureSelection::default(),
             ) {
                 RolePackageValidation::Supported(evidence) => {
                     checks.extend(check_role_contract_resolution(

@@ -36,6 +36,7 @@ pub(super) struct CargoGraphPackage {
     pub version: String,
     pub source: Option<String>,
     pub manifest_path: PathBuf,
+    pub is_proc_macro: bool,
     pub enabled_features: BTreeSet<String>,
 }
 
@@ -192,6 +193,10 @@ impl CorrelationState<'_, '_> {
             version: package.version.clone(),
             source: package.source.clone(),
             manifest_path: package.manifest_path.clone(),
+            is_proc_macro: package
+                .targets
+                .iter()
+                .any(|target| target.kind.iter().any(|kind| kind == "proc-macro")),
             enabled_features,
         };
         if let Some(existing) = self.packages.get_mut(&package.id) {

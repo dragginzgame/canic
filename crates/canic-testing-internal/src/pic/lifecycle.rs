@@ -27,17 +27,17 @@ use canic_core::shared_support::fleet_admission_policy::{
 use canic_host::release_set::AppConfigSnapshot;
 use ic_testkit::{
     Fake,
-    artifacts::{read_wasm, test_target_dir, workspace_root_for},
+    artifacts::{test_target_dir, workspace_root_for},
     pic::{PocketIc, PocketIcBuilder},
 };
 use std::{
     path::{Path, PathBuf},
-    sync::{Once, OnceLock},
+    sync::OnceLock,
 };
 
 use super::{
     artifacts::{
-        CanicWasmBuildProfile, build_internal_test_wasm_canisters,
+        CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters,
         build_internal_test_wasm_canisters_with_env,
     },
     canic::managed_test_init_identity,
@@ -50,11 +50,11 @@ const LIFECYCLE_CANISTER_CONFIG_PATH: &str = "apps/test/test-configs/root-shardi
 const AUTOMATIC_TOPUP_CONFIG_PATH: &str = "apps/test/canic.toml";
 const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
     "canisters/test/canic_icydb_lifecycle_probe/canic.toml";
-static BUILD_ONCE: Once = Once::new();
-static AUTOMATIC_TOPUP_BUILD_ONCE: Once = Once::new();
-static COMBINED_BUILD_ONCE: Once = Once::new();
+static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+static AUTOMATIC_TOPUP_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+static COMBINED_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
-static MANAGED_COMPONENT_GROUP_BUILD_ONCE: Once = Once::new();
+static MANAGED_COMPONENT_GROUP_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 const MANAGED_COMPONENT_GROUP_CONFIG_PATH: &str =
     "apps/test/test-configs/managed-component-group.toml";
@@ -419,13 +419,9 @@ impl LifecycleBoundaryFixture {
     #[must_use]
     pub fn install_automatic_topup_canister(&self) -> Principal {
         let workspace_root = workspace_root();
-        let target_dir = test_target_dir(&workspace_root, "pic-runtime-automatic-topup-wasm");
-        build_automatic_topup_canister_once(&workspace_root);
-        let wasm = read_wasm(
-            &target_dir,
-            "canister_test",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        );
+
+        let wasms = build_automatic_topup_canister_once(&workspace_root);
+        let wasm = wasms.wasm("canister_test");
         let canister_id = self.pic.create_canister();
         self.pic.add_cycles(canister_id, INSTALL_CYCLES);
         let payload = init_payload_for_config(canister_id, self.root, AUTOMATIC_TOPUP_CONFIG_PATH);
@@ -457,26 +453,14 @@ impl LifecycleBoundaryFixture {
 #[must_use]
 pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "pic-runtime-wasm");
-    build_canisters_once(&workspace_root);
+
+    let wasms = build_canisters_once(&workspace_root);
 
     LifecycleBoundaryFixture {
         root: Fake::principal(1),
-        canic_wasm: read_wasm(
-            &target_dir,
-            "canister_test",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        ),
-        runtime_probe_wasm: read_wasm(
-            &target_dir,
-            "runtime_probe",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        ),
-        authority_wasm: read_wasm(
-            &target_dir,
-            "intent_authority",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        ),
+        canic_wasm: wasms.wasm("canister_test"),
+        runtime_probe_wasm: wasms.wasm("runtime_probe"),
+        authority_wasm: wasms.wasm("intent_authority"),
         pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
     }
 }
@@ -498,16 +482,12 @@ pub fn install_canic_icydb_lifecycle_fixture_with_builder(
     builder: PocketIcBuilder,
 ) -> CanicIcydbLifecycleFixture {
     let workspace_root = workspace_root();
-    let target_dir = test_target_dir(&workspace_root, "pic-canic-icydb-lifecycle-wasm");
-    build_combined_canister_once(&workspace_root);
+
+    let wasms = build_combined_canister_once(&workspace_root);
 
     CanicIcydbLifecycleFixture {
         root: Fake::principal(1),
-        wasm: read_wasm(
-            &target_dir,
-            "canic_icydb_lifecycle_probe",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        ),
+        wasm: wasms.wasm("canic_icydb_lifecycle_probe"),
         pic: start_pocket_ic(builder),
     }
 }
@@ -549,12 +529,8 @@ pub fn lifecycle_participant_trap_wasm() -> Vec<u8> {
                     config_path.as_ref(),
                 ),
             ],
-        );
-        read_wasm(
-            &target_dir,
-            "canister_test",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
         )
+        .wasm("canister_test")
     })
     .clone()
 }
@@ -581,12 +557,8 @@ pub fn lifecycle_participant_init_trap_wasm() -> Vec<u8> {
                     config_path.as_ref(),
                 ),
             ],
-        );
-        read_wasm(
-            &target_dir,
-            "canister_test",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
         )
+        .wasm("canister_test")
     })
     .clone()
 }
@@ -604,25 +576,21 @@ pub fn icydb_participant_trap_wasm() -> Vec<u8> {
             &["canic_icydb_lifecycle_probe"],
             CanicWasmBuildProfile::Fast,
             &[ICYDB_PARTICIPANT_TRAP_ENV],
-        );
-        read_wasm(
-            &target_dir,
-            "canic_icydb_lifecycle_probe",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
         )
+        .wasm("canic_icydb_lifecycle_probe")
     })
     .clone()
 }
 
 // Build the dedicated lifecycle-boundary canisters once into the shared test target dir.
-fn build_canisters_once(workspace_root: &Path) {
-    BUILD_ONCE.call_once(|| {
+fn build_canisters_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root, "pic-runtime-wasm");
         let config_path = workspace_root.join(LIFECYCLE_CANISTER_CONFIG_PATH);
         let config_path = config_path
             .to_str()
             .expect("lifecycle canister config path is UTF-8");
-        build_internal_test_wasm_canisters_with_env(
+        let mut wasms = build_internal_test_wasm_canisters_with_env(
             workspace_root,
             &target_dir,
             &["canister_test"],
@@ -632,18 +600,19 @@ fn build_canisters_once(workspace_root: &Path) {
                 config_path,
             )],
         );
-        build_internal_test_wasm_canisters(
+        wasms.extend(build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
             &CANISTERS[1..],
             CanicWasmBuildProfile::Fast,
-        );
-    });
+        ));
+        wasms
+    })
 }
 
 // Build one capability-accurate automatic-topup fixture in an isolated Wasm target.
-fn build_automatic_topup_canister_once(workspace_root: &Path) {
-    AUTOMATIC_TOPUP_BUILD_ONCE.call_once(|| {
+fn build_automatic_topup_canister_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    AUTOMATIC_TOPUP_BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root, "pic-runtime-automatic-topup-wasm");
         let config_path = workspace_root.join(AUTOMATIC_TOPUP_CONFIG_PATH);
         let config_path = config_path
@@ -658,27 +627,29 @@ fn build_automatic_topup_canister_once(workspace_root: &Path) {
                 canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
                 config_path,
             )],
-        );
-    });
+        )
+    })
 }
 
 // Build the combined framework lifecycle probe once into its dedicated test target dir.
-fn build_combined_canister_once(workspace_root: &Path) {
-    COMBINED_BUILD_ONCE.call_once(|| {
+fn build_combined_canister_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    COMBINED_BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root, "pic-canic-icydb-lifecycle-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
             &["canic_icydb_lifecycle_probe"],
             CanicWasmBuildProfile::Fast,
-        );
-    });
+        )
+    })
 }
 
 // Build the public multi-role fixture Wasms once against their exact shared config.
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
-fn build_managed_component_group_canisters_once(workspace_root: &Path) {
-    MANAGED_COMPONENT_GROUP_BUILD_ONCE.call_once(|| {
+fn build_managed_component_group_canisters_once(
+    workspace_root: &Path,
+) -> &'static InternalTestWasms {
+    MANAGED_COMPONENT_GROUP_BUILD_ONCE.get_or_init(|| {
         let target_dir = test_target_dir(workspace_root, "pic-managed-component-group-wasm");
         let config_path = workspace_root.join(MANAGED_COMPONENT_GROUP_CONFIG_PATH);
         let config_path = config_path
@@ -693,8 +664,8 @@ fn build_managed_component_group_canisters_once(workspace_root: &Path) {
                 canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
                 config_path,
             )],
-        );
-    });
+        )
+    })
 }
 
 // Encode the standard valid non-root init payload for the lifecycle-boundary test canister.
@@ -1394,13 +1365,9 @@ mod tests {
     #[test]
     fn published_managed_app_support_drives_composed_lifecycle() {
         let workspace_root = workspace_root();
-        let target_dir = test_target_dir(&workspace_root, "pic-canic-icydb-lifecycle-wasm");
-        build_combined_canister_once(&workspace_root);
-        let wasm = read_wasm(
-            &target_dir,
-            "canic_icydb_lifecycle_probe",
-            CanicWasmBuildProfile::Fast.target_dir_name(),
-        );
+
+        let wasms = build_combined_canister_once(&workspace_root);
+        let wasm = wasms.wasm("canic_icydb_lifecycle_probe");
         let admitted = Fake::principal(15);
         let input = canic::testing::ManagedAppQualificationInput::new(
             include_str!("../../../../canisters/test/canic_icydb_lifecycle_probe/canic.toml"),
@@ -1473,16 +1440,9 @@ mod tests {
             FleetAdmissionProjectionPhase::Fenced
         );
 
-        let standalone_target = test_target_dir(&workspace_root, "pic-runtime-wasm");
-        build_canisters_once(&workspace_root);
-        let standalone = canic::testing::install_standalone_app(
-            read_wasm(
-                &standalone_target,
-                "runtime_probe",
-                CanicWasmBuildProfile::Fast.target_dir_name(),
-            ),
-            INSTALL_CYCLES,
-        );
+        let wasms = build_canisters_once(&workspace_root);
+        let standalone =
+            canic::testing::install_standalone_app(wasms.wasm("runtime_probe"), INSTALL_CYCLES);
         let before_upgrade: Result<(), Error> =
             standalone
                 .pic()
@@ -1505,18 +1465,14 @@ mod tests {
     )]
     fn published_managed_component_group_support_drives_child_lifecycle() {
         let workspace_root = workspace_root();
-        let target_dir = test_target_dir(&workspace_root, "pic-managed-component-group-wasm");
-        build_managed_component_group_canisters_once(&workspace_root);
+
+        let wasms = build_managed_component_group_canisters_once(&workspace_root);
         let admitted = Fake::principal(15);
         let unlisted = Fake::principal(16);
         let artifact = |role: &str, package: &str| {
             canic::testing::ManagedRoleQualificationArtifact::new(
                 role.parse().expect("canonical fixture role"),
-                read_wasm(
-                    &target_dir,
-                    package,
-                    CanicWasmBuildProfile::Fast.target_dir_name(),
-                ),
+                wasms.wasm(package),
             )
         };
         let input = canic::testing::ManagedComponentGroupQualificationInput::new(

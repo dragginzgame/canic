@@ -47,7 +47,7 @@ type GovernedTestCase = (&'static str, fn());
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 const TARGET_GOVERNED_CASE_ENV: &str = "CANIC_TARGET_GOVERNED_CASE";
 
-pub use artifacts::{CanicWasmBuildProfile, build_internal_test_wasm_canisters};
+pub use artifacts::{CanicWasmBuildProfile, InternalTestWasms, build_internal_test_wasm_canisters};
 pub use audit::{
     RootAuditProbeFixture, install_audit_leaf_probe, install_audit_root_probe,
     install_audit_scaling_probe,
@@ -55,7 +55,7 @@ pub use audit::{
 pub use canic::{
     CanicPicExt, install_standalone_canister, install_standalone_canister_on_pic,
     managed_test_init_identity, report_canister_diagnostics, report_canister_diagnostics_batch,
-    wait_until_ready,
+    standalone_canister_wasm, wait_until_ready,
 };
 pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,

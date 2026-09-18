@@ -5,6 +5,7 @@
 //! Boundary: completed Fleets and source-bound partial activations use distinct preparation reviews.
 
 pub(super) mod activation;
+mod terminal;
 #[cfg(test)]
 mod tests;
 
@@ -50,7 +51,22 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     }
     let journal = retained_plan::journal(&paths, &desired.environment, requested_fleet)?
         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-    let prior = verified_plan(read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?)?;
+    let prior = match read_plan(&paths) {
+        Ok(Some(plan)) => verified_plan(plan)?,
+        Ok(None) => return Err(EnsureWorkflowError::PlanMissing),
+        Err(EnsureStateError::Decode { .. }) => {
+            return terminal::plan_preparation(
+                root,
+                &paths,
+                desired,
+                desired_sha256,
+                created_at_time,
+                &state,
+                platform,
+            );
+        }
+        Err(error) => return Err(error.into()),
+    };
     if prior.scope != FleetEnsurePlanScope::Full
         || journal.completion != FleetEnsureCompletion::Converged
         || journal.plan_sha256 != prior.plan_sha256
@@ -157,9 +173,7 @@ fn preparation<P: EnsurePlatform>(
     platform: &mut P,
     state: &FleetEnsureStateRecord,
 ) -> Result<FleetEnsurePlan, EnsureWorkflowError<P::Error>> {
-    if capture::capture_source(root, source_authority.reviewed_desired.desired())?
-        != *source_authority
-    {
+    if capture::refresh_source(root, source_authority)? != *source_authority {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     let target_artifacts_sha256 = capture::target_artifacts_sha256(root, desired)?;
@@ -250,6 +264,14 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         .as_deref()
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     let (current, observation) = if plan.scope == FleetEnsurePlanScope::ReinstallPreparation {
+        if let Some(evidence) = &source_authority(intent)?.terminal_retirement {
+            let paths = EnsurePaths::under(root, &desired.environment, &desired.fleet);
+            let source = capture::terminal::read(&paths, &desired.environment, &desired.fleet)?;
+            if source.documents != evidence.source {
+                return Err(EnsureWorkflowError::DriftedBeforeApply);
+            }
+            terminal::verify(desired, source_authority(intent)?, &source, state, platform)?;
+        }
         let current = preparation(
             root,
             desired,

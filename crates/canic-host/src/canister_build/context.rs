@@ -38,6 +38,8 @@ impl WorkspaceBuildContext {
             format!("workspace: {}", self.workspace_root.display()),
         ];
 
+        lines.extend(super::output_roots::diagnostic_lines(&self.workspace_root));
+
         if self.icp_root != self.workspace_root {
             lines.push(format!("icp root: {}", self.icp_root.display()));
         }

@@ -6485,6 +6485,7 @@ fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
     let fixture = protocol_tranche_fixture(Vec::new());
     let hash = sha256_hex(b"current-wasm");
     let source = FleetReinstallSourceRecord {
+        terminal_retirement: None,
         reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
         wasm_sha256_by_canister: BTreeMap::from([("treasury".to_string(), hash.clone())]),
         candid_sha256_by_path: BTreeMap::from([("coordinator.did".to_string(), "11".repeat(32))]),
@@ -6602,6 +6603,7 @@ fn reinstall_preparation_requires_each_authority_to_cover_its_own_seal() {
     fixture.desired.canisters.push(root);
     let hash = sha256_hex(b"current-wasm");
     let source = FleetReinstallSourceRecord {
+        terminal_retirement: None,
         reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
         wasm_sha256_by_canister: BTreeMap::from([
             ("treasury".into(), hash.clone()),
@@ -6809,5 +6811,549 @@ fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
         Err(workflow::EnsureWorkflowError::JournalIntegrity)
     ));
     assert!(fixture.platform.mutations.is_empty());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+/// A deliberately non-executable completed source with a current immutable phase.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one completed-source fixture binds its plan, immutable phase and paid receipts"
+)]
+fn terminal_retirement_fixture() -> (
+    Fixture,
+    crate::fleet_ensure::ops::EnsurePaths,
+    FleetEnsurePlan,
+) {
+    use crate::fleet_ensure::{model::*, ops, policy::expected_plan_sha256};
+    let mut fixture = protocol_tranche_fixture(Vec::new());
+    fixture.desired.ledger_fee_cycles = "0.00000001B".into();
+    fixture.platform.desired = fixture.desired.clone();
+    for file in ["coordinator.did", "root.did", "store.did"] {
+        fs::write(fixture.root.join(file), b"service : {};").unwrap();
+    }
+    let mut plan = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "terminal-source",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap()
+    .plan;
+    let mut source_desired = fixture.desired.clone();
+    source_desired.canisters[0].wasm = Some("app.wasm".into());
+    plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(
+        &source_desired,
+    )));
+    plan.conservation.maximum_new_funding_cycles = 110;
+    plan.conservation.maximum_unavoidable_fee_cycles = 10;
+    plan.conservation.maximum_operator_debit_cycles = 120;
+    plan.conservation.maximum_execution_burn_cycles = 200;
+    plan.continuation = Some(FleetEnsureContinuationAuthority {
+        fixture_publication_retry_attempts: 0,
+        app_config_sha256: sha256_hex(b"config"),
+        application_artifact_union_sha256: sha256_hex(b"artifacts"),
+        coordinator_candid_sha256: sha256_hex(b"service : {};"),
+        maximum_successor_actions: 5,
+        root_candid_sha256: sha256_hex(b"service : {};"),
+        store_candid_sha256: sha256_hex(b"service : {};"),
+    });
+    let fund = EnsureAction::Fund {
+        pool_funding: None,
+        amount: 110,
+        created_at_time: 1,
+        expected_post_cycles: 610,
+        funding_deficit_cycles: 100,
+        funding_margin_cycles: 10,
+        ledger: LEDGER.into(),
+        name: "treasury".into(),
+        principal: TREASURY.into(),
+    };
+    plan.canisters[0].actions = vec![fund.clone()];
+    plan.protocol_actions.clear();
+    plan.plan_sha256 = expected_plan_sha256(&plan);
+    let mut phase = plan.clone();
+    phase.continuation = None;
+    phase.canisters[0].actions.clear();
+    phase.protocol_actions = vec![typed_protocol_action(&plan.operation_id)];
+    phase.plan_sha256 = expected_plan_sha256(&phase);
+    let paths = ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    let mut phase_paths = paths.clone();
+    phase_paths.plan = paths
+        .plan
+        .with_file_name("phases")
+        .join(format!("{}.json", phase.plan_sha256));
+    ops::write_plan(&phase_paths, &phase).unwrap();
+    ops::write_plan(&paths, &plan).unwrap();
+    let mut raw: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.plan).unwrap()).unwrap();
+    // Match the reported completed staging source: the informational forecast
+    // lacks successor/retry/startup fields, while continuation authority retains
+    // its exact action bound. No field may be filled in to execute this source.
+    raw["recovery_review"] = serde_json::json!({
+        "base_execution_burn_cycles": "0",
+        "continuation_reserve_cycles": "0",
+        "whole_continuation_ceiling_cycles": "0",
+        "known_pool_funding": [],
+        "discovery": "pending_current_protocol",
+    });
+    fs::write(&paths.plan, serde_json::to_vec(&raw).unwrap()).unwrap();
+    let effects = [fund, phase.protocol_actions[0].clone()]
+        .iter()
+        .map(|action| EffectRecord {
+            publication_attempts: 0,
+            maintenance_attempts: 0,
+            action_sha256: action_sha256(action),
+            created_principal: None,
+            destination_post_cycles: None,
+            destination_pre_cycles: None,
+            post_cycles: Some(610),
+            pre_cycles: Some(500),
+            pre_canister_version: None,
+            progress_identity: None,
+            receipt: Some("receipt-fixture".into()),
+            state: EffectState::Applied,
+        })
+        .collect();
+    let journal = FleetEnsureJournalRecord {
+        funding_reviews: Vec::new(),
+        successor_phases: vec![FleetEnsureSuccessorPhaseRecord {
+            execution_burn_before_phase: 0,
+            plan_sha256: phase.plan_sha256.clone(),
+            plan: None,
+        }],
+        completion: FleetEnsureCompletion::Converged,
+        estate_funding_required: None,
+        effects,
+        fleet: plan.fleet.clone(),
+        initial_controlled_cycles: 500,
+        initial_estate_funding_cycles_by_root: BTreeMap::new(),
+        initial_operator_cycles: 1000,
+        operation_id: plan.operation_id.clone(),
+        plan_sha256: plan.plan_sha256.clone(),
+        schema_version: 1,
+        stalled_observations: 0,
+    };
+    ops::write_journal(&paths, &journal).unwrap();
+    let mut state = ops::read_state(&paths, "test-fleet").unwrap();
+    state.active_registry = Some(empty_active_registry());
+    ops::write_state(&paths, &state).unwrap();
+    (fixture, paths, phase)
+}
+
+#[test]
+fn terminal_retirement_reads_receipts_without_making_source_executable() {
+    use crate::fleet_ensure::ops::{self, reinstall::terminal};
+    let (mut fixture, paths, _) = terminal_retirement_fixture();
+    assert!(matches!(
+        ops::read_plan(&paths),
+        Err(ops::EnsureStateError::Decode { .. })
+    ));
+    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
+    assert_eq!(source.actions.len(), 2);
+    assert_eq!(source.documents.phase_document_sha256.len(), 1);
+    let before = fs::read(&paths.plan).unwrap();
+    assert!(matches!(
+        workflow::plan(
+            &fixture.root,
+            &fixture.desired,
+            "changed",
+            "test-fleet",
+            2,
+            &mut fixture.platform
+        ),
+        Err(workflow::EnsureWorkflowError::RetainedTerminalReviewRequired { .. })
+    ));
+    assert_eq!(fs::read(&paths.plan).unwrap(), before);
+    assert!(fixture.platform.mutations.is_empty());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_retirement_requires_the_retained_continuation_action_bound() {
+    use crate::fleet_ensure::ops::{self, reinstall::terminal};
+    let (mut fixture, paths, _) = terminal_retirement_fixture();
+    terminal::read(&paths, "local", "test-fleet").unwrap();
+    let mut raw: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.plan).unwrap()).unwrap();
+    raw["continuation"]
+        .as_object_mut()
+        .unwrap()
+        .remove("maximum_successor_actions")
+        .unwrap();
+    fs::write(&paths.plan, serde_json::to_vec(&raw).unwrap()).unwrap();
+    let before = [
+        fs::read(&paths.plan).unwrap(),
+        fs::read(&paths.journal).unwrap(),
+        fs::read(&paths.state).unwrap(),
+    ];
+    assert!(matches!(
+        terminal::read(&paths, "local", "test-fleet"),
+        Err(ops::EnsureStateError::InvalidTerminalSource)
+    ));
+    assert!(matches!(
+        workflow::plan_reinstall(
+            &fixture.root,
+            &fixture.desired,
+            "target",
+            "test-fleet",
+            2,
+            &mut fixture.platform,
+        ),
+        Err(workflow::EnsureWorkflowError::State(
+            ops::EnsureStateError::InvalidTerminalSource
+        ))
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    for (index, path) in [&paths.plan, &paths.journal, &paths.state]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(fs::read(path).unwrap(), before[index]);
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_retirement_rejects_incomplete_or_changed_receipts_and_phases() {
+    use crate::fleet_ensure::ops::{self, reinstall::terminal};
+    let (fixture, paths, phase) = terminal_retirement_fixture();
+    let original = ops::read_journal(&paths).unwrap().unwrap();
+    for change in 0..8 {
+        let mut journal = original.clone();
+        match change {
+            0 => journal.effects[0].state = EffectState::Issued,
+            1 => journal.effects[0].receipt = None,
+            2 => journal.effects[0].post_cycles = Some(500),
+            3 => journal.effects[0].action_sha256 = sha256_hex(b"wrong effect"),
+            4 => {
+                journal.effects.pop();
+            }
+            5 => journal.effects[1].maintenance_attempts = 1,
+            6 => journal.effects[1].publication_attempts = 1,
+            7 => journal.completion = FleetEnsureCompletion::InProgress,
+            _ => unreachable!(),
+        }
+        ops::write_journal(&paths, &journal).unwrap();
+        assert!(
+            matches!(
+                terminal::read(&paths, "local", "test-fleet"),
+                Err(ops::EnsureStateError::InvalidTerminalSource)
+            ),
+            "case {change}"
+        );
+    }
+    ops::write_journal(&paths, &original).unwrap();
+    let phase_path = paths
+        .plan
+        .with_file_name("phases")
+        .join(format!("{}.json", phase.plan_sha256));
+    let mut raw: serde_json::Value =
+        serde_json::from_slice(&fs::read(&phase_path).unwrap()).unwrap();
+    raw["operation_id"] = serde_json::json!(sha256_hex(b"different operation"));
+    fs::write(phase_path, serde_json::to_vec(&raw).unwrap()).unwrap();
+    assert!(terminal::read(&paths, "local", "test-fleet").is_err());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_retirement_requires_exact_paid_debit_and_bounded_live_conservation() {
+    use crate::fleet_ensure::{
+        ops::reinstall::terminal, policy::reinstall::terminal::conservation,
+    };
+    let (fixture, paths, _) = terminal_retirement_fixture();
+    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
+    let observation = FleetObservation {
+        additional_controlled_cycles: BTreeMap::new(),
+        canisters: BTreeMap::new(),
+        estate_funding_domains: BTreeMap::new(),
+        ledger_fee_cycles: 10,
+        operator_cycles: 880,
+        protocol_ready: BTreeMap::new(),
+    };
+    let actual = conservation(&source, &observation, 600).unwrap();
+    assert_eq!(actual.measured_execution_burn_cycles, 10);
+    assert_eq!(actual.received_new_funding_cycles, 110);
+    assert_eq!(actual.operator_debit_cycles, 120);
+    for balance in [879, 881, 1001] {
+        let mut changed = observation.clone();
+        changed.operator_cycles = balance;
+        assert!(conservation(&source, &changed, 600).is_none());
+    }
+    for controlled in [409, 611] {
+        assert!(conservation(&source, &observation, controlled).is_none());
+    }
+    let mut changed = source;
+    changed.conservation.scheduled_transfer_cycles = 1;
+    assert!(conservation(&changed, &observation, 600).is_none());
+    if let EnsureAction::Fund { ledger, .. } = &mut changed.actions[0] {
+        *ledger = CONTROLLER.into();
+    }
+    assert!(conservation(&changed, &observation, 600).is_none());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
+    use crate::fleet_ensure::{
+        model::*,
+        ops::{self, reinstall::terminal},
+        policy::expected_plan_sha256,
+    };
+    let (fixture, paths, mut replacement) = terminal_retirement_fixture();
+    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
+    replacement.operation_id = sha256_hex(b"new reviewed operation");
+    replacement.scope = FleetEnsurePlanScope::ReinstallPreparation;
+    replacement.protocol_actions.clear();
+    replacement.reinstall = Some(Box::new(FleetReinstallRecord {
+        target_artifacts_sha256: None,
+        source: Some(Box::new(
+            terminal::capture(
+                &fixture.root,
+                &source,
+                ActualCycleConservation {
+                    estate_funding_cycles: 0,
+                    exact_estate_creation_fee_cycles: 0,
+                    exact_unavoidable_fee_cycles: 10,
+                    final_controlled_cycles: 600,
+                    measured_execution_burn_cycles: 10,
+                    observed_starting_cycles: 500,
+                    observed_settlement_credit_cycles: 0,
+                    operator_debit_cycles: 120,
+                    received_new_funding_cycles: 110,
+                },
+            )
+            .unwrap(),
+        )),
+        operation_id: replacement.operation_id.clone(),
+        source_operation_id: source.documents.operation_id.clone(),
+        authorities: Vec::new(),
+        assets: Vec::new(),
+        activation_reset: None,
+    }));
+    replacement.plan_sha256 = expected_plan_sha256(&replacement);
+    ops::reinstall::adoption::tests::assert_terminal_handoff(&paths, replacement);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one review journey checks inventory rejection, staged review and pre-apply drift without effects"
+)]
+fn terminal_retirement_review_binds_fresh_inventory_and_rechecks_before_apply() {
+    use crate::fleet_ensure::{model::*, ops};
+    let (mut fixture, paths, phase) = terminal_retirement_fixture();
+    let mut state = ops::read_state(&paths, "test-fleet").unwrap();
+    state.principals.insert("treasury".into(), TREASURY.into());
+    state.topology.insert(
+        "treasury".into(),
+        FleetEnsureTopologyRecord {
+            kind: DesiredCanisterKind::Coordinator,
+            module_hash: Some(sha256_hex(b"current-wasm")),
+            parent: None,
+            protocol_binding: None,
+            role: Some("coordinator".into()),
+        },
+    );
+    ops::write_state(&paths, &state).unwrap();
+    fixture.platform.operator_cycles = 880;
+    fixture.platform.live.get_mut(TREASURY).unwrap().cycles = 600;
+    let inventory = TerminalFleetInventory {
+        active_registry: state.active_registry.clone(),
+        controlled_cycles_by_principal: BTreeMap::new(),
+        entries: vec![RegistryEntry {
+            pid: TREASURY.into(),
+            role: Some("coordinator".into()),
+            parent_pid: None,
+            module_hash: Some(sha256_hex(b"current-wasm")),
+            protocol_binding: None,
+        }],
+    };
+    fixture.platform.terminal_inventory_expected_operation_id = Some(phase.operation_id.clone());
+    fixture.platform.reinstall_authority = Some(BTreeMap::from([(
+        "treasury".into(),
+        RootManagementCanisterObservation {
+            name: "treasury".into(),
+            subnet: SUBNET.into(),
+            live: fixture.platform.live[TREASURY].clone(),
+        },
+    )]));
+    let original = [
+        fs::read(&paths.plan).unwrap(),
+        fs::read(&paths.journal).unwrap(),
+        fs::read(&paths.state).unwrap(),
+    ];
+    // Missing or duplicate inventory cannot be masked by retained state or the burn allowance.
+    for change in 0..5 {
+        fixture.platform.terminal_inventory = inventory.clone();
+        let entries = &mut fixture.platform.terminal_inventory.entries;
+        match change {
+            0 => entries.clear(),
+            1 => entries.push(inventory.entries[0].clone()),
+            2 => entries[0].parent_pid = Some(RETIRED.into()),
+            3 => entries[0].module_hash = Some(sha256_hex(b"drifted module")),
+            4 => entries[0].role = Some("drifted-role".into()),
+            _ => unreachable!(),
+        }
+        assert!(matches!(
+            workflow::plan_reinstall(
+                &fixture.root,
+                &fixture.desired,
+                "target",
+                "test-fleet",
+                2,
+                &mut fixture.platform
+            ),
+            Err(workflow::EnsureWorkflowError::ConvergenceDrift)
+        ));
+        assert_eq!(fixture.platform.desired, fixture.desired);
+        assert!(fixture.platform.mutations.is_empty());
+    }
+    fixture.platform.terminal_inventory = inventory;
+    let review = workflow::plan_reinstall(
+        &fixture.root,
+        &fixture.desired,
+        "target",
+        "test-fleet",
+        2,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    assert_eq!(
+        review.plan.scope,
+        FleetEnsurePlanScope::ReinstallPreparation
+    );
+    assert_ne!(review.plan.operation_id, phase.operation_id);
+    assert!(
+        review
+            .plan
+            .reinstall
+            .as_ref()
+            .unwrap()
+            .source
+            .as_ref()
+            .unwrap()
+            .terminal_retirement
+            .is_some()
+    );
+    assert_eq!(fixture.platform.desired, fixture.desired);
+    assert!(fixture.platform.mutations.is_empty());
+    // Independent operator activity invalidates apply before the old operation is replaced.
+    fixture.platform.operator_cycles -= 1;
+    assert!(matches!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            "target",
+            "test-fleet",
+            &review.plan.plan_sha256,
+            &mut fixture.platform
+        ),
+        Err(workflow::EnsureWorkflowError::Conservation(_))
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    assert_eq!(fixture.platform.desired, fixture.desired);
+    for (index, path) in [&paths.plan, &paths.journal, &paths.state]
+        .into_iter()
+        .enumerate()
+    {
+        assert_eq!(fs::read(path).unwrap(), original[index]);
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_retirement_preserves_every_root_account_and_pool_identity() {
+    use crate::fleet_ensure::{
+        model::*, ops::reinstall::terminal, policy::reinstall::terminal::conservation,
+    };
+    let (fixture, paths, _) = terminal_retirement_fixture();
+    let mut source = terminal::read(&paths, "local", "test-fleet").unwrap();
+    source
+        .conservation
+        .estate_funding_domains
+        .push(EstateFundingDomainPlan {
+            allocated_workloads: 1,
+            available_cycles: Some(30),
+            available_pool_slots: 0,
+            creation_amount_cycles: 50,
+            cycles_ledger: LEDGER.into(),
+            creation_execution_margin_cycles: 0,
+            readiness_floor_cycles: 20,
+            eligible_ready_pool_assets: 1,
+            initial_pool_assets: vec![OLD_APP.into()],
+            ledger_fee_cycles: 10,
+            management_creation_fee_cycles: 50,
+            maximum_creation_debit_cycles: 0,
+            maximum_creation_fee_cycles: 0,
+            maximum_funding_cycles: 0,
+            occupied_pool_assets: 1,
+            pending_creation_count: 0,
+            pending_creation: None,
+            pool_maximum_size: 1,
+            planned_initial_workloads: 1,
+            required_creation_count: 0,
+            root: "root".into(),
+            root_principal: Some(TREASURY.into()),
+            shortfall_cycles: 0,
+        });
+    source
+        .journal
+        .initial_estate_funding_cycles_by_root
+        .insert("root".into(), 30);
+    let observation = FleetObservation {
+        additional_controlled_cycles: BTreeMap::new(),
+        canisters: BTreeMap::new(),
+        estate_funding_domains: BTreeMap::from([(
+            "root".into(),
+            EstateFundingDomainObservation {
+                balance_cycles: Some(30),
+                cycles_ledger: LEDGER.into(),
+                root_principal: Some(TREASURY.into()),
+                pool: Some(EstatePoolInventoryObservation {
+                    assets: vec![EstatePoolAssetObservation {
+                        creation_receipt: None,
+                        cycles: 20,
+                        lifecycle: EstatePoolAssetLifecycle::Workload,
+                        origin: EstatePoolAssetOrigin::Imported,
+                        principal: OLD_APP.into(),
+                    }],
+                    maximum_size: 1,
+                    minimum_size: 0,
+                    pending_creation: None,
+                    readiness_floor_cycles: 20,
+                    creation_execution_margin_cycles: 0,
+                }),
+            },
+        )]),
+        ledger_fee_cycles: 10,
+        operator_cycles: 880,
+        protocol_ready: BTreeMap::new(),
+    };
+    assert!(conservation(&source, &observation, 600).is_some());
+    for change in 0..6 {
+        let mut changed = observation.clone();
+        let domain = changed.estate_funding_domains.get_mut("root").unwrap();
+        match change {
+            0 => domain.balance_cycles = Some(29),
+            1 => domain.balance_cycles = None,
+            2 => domain.root_principal = Some(RETIRED.into()),
+            3 => domain.cycles_ledger = CONTROLLER.into(),
+            4 => domain.pool.as_mut().unwrap().assets.clear(),
+            5 => {
+                let assets = &mut domain.pool.as_mut().unwrap().assets;
+                assets.push(assets[0].clone());
+            }
+            _ => unreachable!(),
+        }
+        assert!(
+            conservation(&source, &changed, 600).is_none(),
+            "case {change}"
+        );
+    }
+    source.conservation.estate_funding_domains[0].required_creation_count = 1;
+    assert!(conservation(&source, &observation, 600).is_none());
     fs::remove_dir_all(fixture.root).unwrap();
 }

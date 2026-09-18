@@ -5,7 +5,7 @@
 //! Boundary: exact source documents are archived before replacement intent is committed.
 
 #[cfg(test)]
-pub(in crate::fleet_ensure::ops) mod tests;
+pub(in crate::fleet_ensure) mod tests;
 
 use crate::{
     durable_io::{create_new_bytes_with_parents, write_bytes},
@@ -27,18 +27,7 @@ pub(in crate::fleet_ensure) fn stage(
     plan: &FleetEnsurePlan,
 ) -> Result<(), EnsureStateError> {
     validate_plan(plan)?;
-    let source = &plan
-        .reinstall
-        .as_ref()
-        .ok_or_else(conflict)?
-        .activation_reset
-        .as_ref()
-        .ok_or_else(conflict)?
-        .source;
-    let current = super::source::read(paths, &plan.environment, &plan.fleet)?;
-    if current != *source {
-        return Err(conflict());
-    }
+    verify_source(paths, plan)?;
     let pending = review_paths(paths);
     write_plan(&pending, plan)
 }
@@ -51,14 +40,6 @@ pub(in crate::fleet_ensure) fn review(
         return Ok(None);
     };
     validate_plan(&plan)?;
-    let source = &plan
-        .reinstall
-        .as_ref()
-        .ok_or_else(conflict)?
-        .activation_reset
-        .as_ref()
-        .ok_or_else(conflict)?
-        .source;
     if let Some(marker) = marker(paths)? {
         if !marker.complete {
             return Err(conflict());
@@ -68,10 +49,7 @@ pub(in crate::fleet_ensure) fn review(
             return Ok(None);
         }
     }
-    let current = super::source::read(paths, &plan.environment, &plan.fleet)?;
-    if current != *source {
-        return Err(conflict());
-    }
+    verify_source(paths, &plan)?;
     Ok(Some(plan))
 }
 
@@ -93,14 +71,7 @@ pub(in crate::fleet_ensure) fn adopt(
     {
         return Err(conflict());
     }
-    let source = &plan
-        .reinstall
-        .as_ref()
-        .ok_or_else(conflict)?
-        .activation_reset
-        .as_ref()
-        .ok_or_else(conflict)?
-        .source;
+    let source = source_binding(plan)?;
     let plan_bytes = read_document_bytes(&review_paths(paths).plan)?.ok_or_else(conflict)?;
     let journal_bytes =
         serde_json::to_vec_pretty(journal).map_err(|source| EnsureStateError::Decode {
@@ -108,9 +79,9 @@ pub(in crate::fleet_ensure) fn adopt(
             source,
         })?;
     let intent = ActivationResetAdoptionRecord {
-        source_plan_sha256: source.plan_document_sha256.clone(),
-        source_journal_sha256: source.journal_document_sha256.clone(),
-        source_state_sha256: source.state_document_sha256.clone(),
+        source_plan_sha256: source.plan.to_string(),
+        source_journal_sha256: source.journal.to_string(),
+        source_state_sha256: source.state.to_string(),
         replacement_plan_sha256: sha256_hex(&plan_bytes),
         replacement_journal_sha256: sha256_hex(&journal_bytes),
         complete: false,
@@ -118,6 +89,15 @@ pub(in crate::fleet_ensure) fn adopt(
     for (path, digest) in source_documents(paths, &intent) {
         let bytes = exact_bytes(path, digest)?;
         retain(paths, digest, &bytes)?;
+    }
+    if let Some(source) = terminal_retirement(plan) {
+        for (label, digest) in &source.phase_document_sha256 {
+            let path = paths
+                .plan
+                .with_file_name("phases")
+                .join(format!("{label}.json"));
+            retain(paths, digest, &exact_bytes(&path, digest)?)?;
+        }
     }
     retain(paths, &intent.replacement_plan_sha256, &plan_bytes)?;
     retain(paths, &intent.replacement_journal_sha256, &journal_bytes)?;
@@ -136,6 +116,26 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
     // Validate the entire source archive and both active files before replacing either file.
     for (_, digest) in source_documents(paths, &intent) {
         exact_bytes(&object_path(paths, digest), digest)?;
+    }
+    let mut replacement = paths.clone();
+    replacement.plan = object_path(paths, &intent.replacement_plan_sha256);
+    exact_bytes(&replacement.plan, &intent.replacement_plan_sha256)?;
+    let replacement = read_plan(&replacement)
+        .map_err(|_| conflict())?
+        .ok_or_else(conflict)?;
+    validate_plan(&replacement)?;
+    if let Some(source) = terminal_retirement(&replacement) {
+        for (label, digest) in &source.phase_document_sha256 {
+            let mut phase_paths = paths.clone();
+            phase_paths.plan = object_path(paths, digest);
+            exact_bytes(&phase_paths.plan, digest)?;
+            let phase = read_plan(&phase_paths)
+                .map_err(|_| conflict())?
+                .ok_or_else(conflict)?;
+            if phase.plan_sha256 != *label || expected_plan_sha256(&phase) != *label {
+                return Err(conflict());
+            }
+        }
     }
     exact_bytes(&paths.state, &intent.source_state_sha256)?;
     let replacements = [
@@ -166,13 +166,78 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
     write_current(&marker_path(paths), &intent)
 }
 
+/// Borrow common byte bindings while preserving each source's distinct admission rules.
+struct SourceDocumentBinding<'a> {
+    operation_id: &'a str,
+    plan: &'a str,
+    journal: &'a str,
+    state: &'a str,
+}
+
+fn terminal_retirement(
+    plan: &FleetEnsurePlan,
+) -> Option<&crate::fleet_ensure::model::FleetTerminalSourceRecord> {
+    plan.reinstall
+        .as_ref()?
+        .source
+        .as_ref()?
+        .terminal_retirement
+        .as_deref()
+        .map(|retirement| &retirement.source)
+}
+
+fn source_binding(plan: &FleetEnsurePlan) -> Result<SourceDocumentBinding<'_>, EnsureStateError> {
+    let intent = plan.reinstall.as_ref().ok_or_else(conflict)?;
+    match (intent.activation_reset.as_deref(), intent.source.as_deref()) {
+        (Some(activation), None) => {
+            let source = &activation.source;
+            Ok(SourceDocumentBinding {
+                operation_id: &source.operation_id,
+                plan: &source.plan_document_sha256,
+                journal: &source.journal_document_sha256,
+                state: &source.state_document_sha256,
+            })
+        }
+        (None, Some(source)) => {
+            let source = &source
+                .terminal_retirement
+                .as_deref()
+                .ok_or_else(conflict)?
+                .source;
+            Ok(SourceDocumentBinding {
+                operation_id: &source.operation_id,
+                plan: &source.plan_document_sha256,
+                journal: &source.journal_document_sha256,
+                state: &source.state_document_sha256,
+            })
+        }
+        _ => Err(conflict()),
+    }
+}
+
+fn verify_source(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
+    let intent = plan.reinstall.as_ref().ok_or_else(conflict)?;
+    if let Some(expected) = terminal_retirement(plan) {
+        let current = super::terminal::read(paths, &plan.environment, &plan.fleet)?;
+        if current.documents != *expected {
+            return Err(conflict());
+        }
+    } else {
+        let expected = &intent
+            .activation_reset
+            .as_ref()
+            .ok_or_else(conflict)?
+            .source;
+        if super::source::read(paths, &plan.environment, &plan.fleet)? != *expected {
+            return Err(conflict());
+        }
+    }
+    Ok(())
+}
+
 fn validate_plan(plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
     let intent = plan.reinstall.as_ref().ok_or_else(conflict)?;
-    let source = &intent
-        .activation_reset
-        .as_ref()
-        .ok_or_else(conflict)?
-        .source;
+    let source = source_binding(plan)?;
     if expected_plan_sha256(plan) != plan.plan_sha256
         || plan.scope != crate::fleet_ensure::model::FleetEnsurePlanScope::ReinstallPreparation
         || intent.operation_id != plan.operation_id

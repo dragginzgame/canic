@@ -5,12 +5,16 @@
 //! Does not own: stable data schemas, ops storage APIs, or lifecycle orchestration.
 //! Boundary: lifecycle initializes this before stable structures are accessed.
 
+pub mod admission;
 pub(crate) mod ledger;
 mod policy;
 pub mod registry;
 pub mod runtime;
 
-pub use crate::{eager_init, eager_static, ic_memory_key, ic_memory_range};
+pub use crate::{
+    eager_init, eager_static, ic_memory_key, ic_memory_range, memory_bootstrap_admission,
+};
+pub use policy::CanicMemoryManagerPolicy;
 
 /// Stable allocation-policy authority for Canic core memory declarations.
 pub const CANIC_CORE_MEMORY_AUTHORITY: &str = "canic-core";
@@ -38,9 +42,11 @@ pub(crate) fn bootstrap_default_memory_manager()
 -> Result<(), ic_memory::RuntimeBootstrapError<registry::MemoryRegistryError>> {
     let config = ic_memory::MemoryManagerConfig::new(configured_bucket_pages())
         .map_err(ic_memory::RuntimeStateError::from)?;
-    ic_memory::bootstrap_default_memory_manager_with_config(
-        config,
-        &policy::CanicMemoryManagerPolicy::new(),
-    )
-    .map(|_| ())
+    let mut policy = policy::CanicMemoryManagerPolicy::new();
+    if let Some(participant) =
+        admission::seal().map_err(ic_memory::RuntimeBootstrapError::AdmissionPolicy)?
+    {
+        policy = policy.with_admission(participant);
+    }
+    ic_memory::bootstrap_default_memory_manager_with_config(config, &policy).map(|_| ())
 }

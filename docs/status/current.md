@@ -20,6 +20,219 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Pre-push CANIC-166 blocker confirmation — 2026-09-18
+
+The reported staging plan/journal/state still match the previously inspected
+source hashes. Its informational forecast lacks `maximum_successor_actions`,
+while authoritative continuation retains the bound (73). The pending .23 terminal
+retirement path handles this through an explicit separate `--reinstall` review.
+The regression fixture now matches the reported forecast field set; seven focused
+host recovery tests and warning-denied host library/test Clippy pass. Missing
+actual continuation authority rejects without effects or document mutation.
+[Evidence](../audits/reports/2026-09/2026-09-17/canic-166-terminal-retirement.md#pre-push-missing-field-confirmation--2026-09-18).
+
+The complete selected .23 batch and changelogs remain ready for the maintainer's
+release flow. Publication is needed before Toko can use this host fix; fresh live
+inventory/conservation review and staging deployment acceptance remain downstream.
+No IcyDB downgrade, source-field insertion, sibling mutation, full validation or
+push was performed. Package versions remain .22.
+
+## Post-.22 published IcyDB 0.258.0 composition — 2026-09-18
+
+The requested update now pins published IcyDB 0.258.0 in the workspace and the
+standalone composed audit fixture. All six IcyDB packages align in both locks;
+both resolve one ic-memory 0.14.3. Published VCS identity:
+`ece74446595f3ef948bde6973942eab1c7e38f7e`.
+
+This completes the previously queued ICYDB-029 admission seam: one sealed,
+artifact-owned callback runs over the whole snapshot before allocation commitment.
+Canic retains typed consumer rejection, includes admission semantics/configuration
+in policy identity, rejects duplicate/late registration and keeps its existing
+namespace/range policy and single lifecycle owner. Both IcyDB fixtures now use
+logical namespace/store keys and explicit host grants. Production Canic retains
+no IcyDB dependency. This completes the earlier queued integration work.
+
+Qualification passes: 24 focused Canic memory tests, five native published-IcyDB
+admission/grant regressions, and 26 lifecycle/memory/timer guards. The explicit
+PocketIC composition target passes all seven existing managed lifecycle/import
+journeys plus the three original native admission cases; the two added grant
+cases pass separately. Warning-denied Clippy passes for changed core/library/test
+surfaces, the lifecycle probe and both standalone audit variants.
+
+Evidence logs: `/tmp/canic-icydb-memory-unit.log`,
+`/tmp/canic-icydb-admission-test.log`, `/tmp/canic-icydb-258-guards.log`,
+`/tmp/canic-icydb-258-pocketic.log`, `/tmp/canic-icydb-258-clippy.log`,
+`/tmp/canic-icydb-258-core-test-clippy.log`, `/tmp/canic-icydb-258-test-clippy.log`,
+`/tmp/canic-icydb-258-audit-participant.log` and
+`/tmp/canic-icydb-258-audit-baseline.log`.
+
+Native omitted-store tests prove journal selection, original placement/bytes,
+revoked-grant rejection and unchanged storage on failure. They do not prove all
+IcyDB journal-debt/retirement states; those remain IcyDB's checks after opening.
+PocketIC proves the maintained managed fixture, not Toko's schema or live estate.
+The standalone audit was checked natively in both feature variants; no new Wasm
+size or instruction-performance comparison is claimed. Release transitions remain
+reinstall-only, and external consumer qualification remains separately selected.
+
+The complete selected .23 dependency/diagnostics/recovery/composition batch and
+both changelog surfaces are ready for the maintainer's release flow. Full
+validation was not run. Packages remain .22; no version bump, commit, push,
+publication or deployment ran, and no sibling repository was changed. Downstream
+adoption of the new hook still requires publishing this Canic batch and updating
+the application's declarations, grants and callback wiring. Broader RF2/B1/speed
+work remains outside this release batch.
+
+## Post-.22 CANIC-166 completed-source recovery — 2026-09-17
+
+The latest Toko feedback reopens CANIC-166 for a converged staging operation.
+Feedback snapshot SHA-256:
+`ea41849e8b0cf2cb11854b4bb8246e8c8610725b04eb08b9ca511a1165aceb20`.
+The missing `maximum_successor_actions` is in the informational recovery forecast,
+not the retained continuation authority. The exact source has 61 Applied effects
+and two current-readable immutable successor phases. The one-off read-only probe
+passed; no sibling files or live state were changed.
+
+The .23 recovery extension implements source-evidence inspection, fresh exact
+inventory and conservation admission, measured accounting in a separate preparation
+review, and the existing durable local handoff with source-phase archives. Current
+source plans are never synthesized from incompatible historical bytes. Scope is
+completed native funding/install plus protocol phases, without estate creation,
+funding reviews or transfer histories. Unexplained balance changes and missing
+assets fail closed. Receipt validation uses retained recorded completion evidence,
+not an independent historical Ledger block query.
+
+Qualification passes: exact-source read-only inspection, 19 focused host recovery
+regressions, the CLI retained-input selection regression, warning-denied host/CLI
+Clippy, focused secret scan and whitespace checks. The selected .23 dependency,
+diagnostics and host-recovery batch and both changelog surfaces are ready for the
+maintainer's release flow. No full validation was run. Packages remain .22; no
+commit, push or deployment occurred. CANIC-166's actual live review/reset and
+terminal deployment replay remain downstream acceptance, not established by the
+local tests. [Evidence and limitations](../audits/reports/2026-09/2026-09-17/canic-166-terminal-retirement.md).
+
+A subsequent read-only feedback check found an independent ICYDB-029 update:
+IcyDB 0.258.0 requires host admission before allocation commitment. Its tag resolves
+to `ece74446595f3ef948bde6973942eab1c7e38f7e`; feedback SHA-256 is
+`4301c59b0f4aa3c4679d14c62c230d46ca9d1f9e6d5d10330e8a31ed2a57fd4c`.
+This was a confirmed composition integration gap, separate from a test-only
+version mismatch. The requested published-IcyDB update subsequently implemented
+and qualified it; see the 2026-09-18 handoff above. The earlier host-only recovery
+qualification remains independent of consumer composition.
+
+## Post-.22 Toko dependency/build diagnostics — 2026-09-17
+
+The accepted .23 dependency batch now includes Toko's reopened ICYDB-029
+application-build rejection and CANIC-176 shared-output diagnostic follow-up.
+Read-only feedback snapshots: `docs/upstream/canic.md` SHA-256
+`ccd4ca0976276b609e949cf1fbafcc97f7a96a4ca1bf12135582f70c10234a03` and
+`docs/upstream/icydb.md` SHA-256
+`e059e59e375ec0838c5514ee145ebc6b51dc71604155e63edb2a3d0acf2fc603`
+in the sibling Toko checkout. No issue newer than CANIC-179 was present.
+
+Selected-role Cargo evidence now rejects multiple reachable ic-memory package
+identities with a typed finding and sanitized alignment guidance. It follows the
+actual requested feature/default-feature options, counts renamed runtime edges,
+and excludes build/dev, native-only, inactive and proc-macro-only paths. A
+complete-App build resolves every configured role before infrastructure
+compilation. This adds no new metadata command to default role validation.
+Test-only IcyDB's separate graph remains outside Canic release admission; an
+actual same-canister composition still requires one memory package identity.
+
+Build context reports selected and physically resolved runtime/declaration Cargo
+output roots. Paths into another workspace's target produce an advisory before
+compilation, including the frozen-checkout parent-symlink case. Independent and
+explicit dedicated target paths remain supported. This observes a bounded sharing
+hazard; it neither identifies arbitrary externally shared directories nor proves
+the cause of Toko's historical rejection. Toko owns its checkout/symlink repair.
+Cache identity, release binding and workspace locks are unchanged.
+
+Focused qualification passes: 50 role-contract tests, 70 build/cache tests (one
+existing extractor benchmark ignored), and warning-denied all-feature library/
+test Clippy for core, host, CLI and internal testing. Real Cargo fixture cases
+include explicit optional-feature activation and disabling defaults, without
+compiling fixture sources. The full-App negative regression rejects roles before
+infrastructure work. Controlled two-checkout filesystem cases cover diagnostics.
+Logs: `/tmp/canic-memory-runtime-role-final.log`,
+`/tmp/canic-upstream-build-final.log`, `/tmp/canic-upstream-final-clippy.log`.
+The dependency qualification recorded below remains applicable. No new broad
+suite, PocketIC run or end-to-end deployment timing is claimed for these host fixes.
+
+The selected .23 dependency/diagnostics batch and both changelog surfaces are
+ready for the maintainer's release flow. Packages remain .22; no version bump,
+commit, push or deployment ran. All earlier dirty work is preserved and siblings
+were not modified. This is an operator/correctness follow-up on the affected .110
+line under its existing cadence exception. RF2, B1 and wider speed work remain
+separate accepted follow-ups, not claims of this batch or authority to start a
+new minor. External IcyDB composition remains separate from Canic release readiness.
+
+## Post-.22 ic-testkit update — 2026-09-17
+
+The selected .23 dependency batch now also adopts published ic-testkit 0.10.0
+(previous requirement .9.0, resolved .9.1). Cargo registry metadata and the
+packaged migration guide confirm the new retained-artifact contract. The root
+manifest and lockfile are updated; the separate composed fixture has no
+ic-testkit dependency. The existing ic-memory .14.3 update is preserved.
+
+Internal Wasm builders return `InternalTestWasms`, owning cloned successful
+build records. Fixture singletons retain those records; readers and Candid/
+post-link tools consume their exact immutable paths. Root baseline setup carries
+its complete artifact record through Store staging. Complete-release tests copy
+retained artifacts into invocation-private directories before using host loaders.
+Blob-storage upgrades reuse the same owned bytes as standalone installs. No
+consumer reconstructs a testkit Wasm output path; production runtime semantics
+and cache identities remain unchanged. Active fixture records can retain entries
+beyond cache maintenance budgets until their test process releases them, as
+specified by upstream; no disk-usage or deployment-speed improvement is claimed.
+
+Focused qualification passes: five artifact tests, two release-cache regressions,
+and `pic::lifecycle::tests::managed_projection_fences_then_opens_and_restores`
+through the exact PocketIC case runner. The regression evidence covers replacement
+of mutable outputs, cold/warm acquisition, retention across cloning/pruning,
+reclamation after owner drop, distinct release identities and fixture-authority
+restoration. The real lifecycle case builds all three supporting Wasms and proves
+installation, admission transitions and restoration. Warning-denied Clippy passes
+for internal library/test code with governed features and the three changed
+integration targets. Logs: `/tmp/canic-testkit-0100-artifacts.log`,
+`/tmp/canic-testkit-0100-release-cache.log`, `/tmp/canic-testkit-0100-clippy.log`,
+`/tmp/canic-testkit-0100-test-clippy.log` and
+`/tmp/canic-testkit-0100-pocketic.log`. Full Fleet journeys and broad validation
+were not run; the focused case does not qualify every deployment topology.
+
+The complete selected dependency batch and both .23 changelog surfaces are ready
+for the maintainer's release flow. Package versions remain .22. No version bump,
+commit, push or deployment ran, and siblings were not modified. Test-only IcyDB
+alignment remains separate and does not block this Canic batch.
+
+## Post-.22 ic-memory update — 2026-09-17
+
+The maintainer confirms .22 is pushed (`13cc83f23`). Published registry metadata
+and the downloaded crate identify ic-memory 0.14.3 as the requested current
+release. The workspace requirement and both maintained lockfiles now move
+Canic from .14.1 to .14.3. The standalone composed fixture also refreshes local
+Canic package identities to their already-published .22 version. All unrelated
+registry packages, including test-only IcyDB and its ic-memory .13.3, are unchanged.
+
+The update adopts upstream admission cleanup and bounded CBOR byte-string ledger
+encoding. The upstream persisted-format hard cut follows Canic's existing
+reinstall-only release rule; no compatibility path is introduced. Fixed IDs,
+bucket sizes, policy and allocation ownership remain unchanged. No new Canic
+instruction, cycle or deployment-speed measurement is claimed.
+
+Focused qualification passes: 23 memory tests, four stable-memory ABI guards and
+the all-feature canic-core Wasm check. The production ABI guard confirms one
+memory package identity, and locked standalone graph inspection resolves Canic
+to .14.3. Logs: `/tmp/canic-ic-memory-0143-tests.log`,
+`/tmp/canic-ic-memory-0143-abi.log` and `/tmp/canic-ic-memory-0143-wasm.log`.
+An editor-owned check was allowed to finish before targeted compilation. No
+broad gate or new PocketIC/composed-runtime qualification was run.
+
+The selected dependency batch and both .23 changelog draft surfaces are prepared
+for the maintainer's release flow. Package versions remain .22; no version bump,
+commit, push or deployment ran. This dependency follow-up remains on the affected
+.110 line under the existing release-cadence exception; no next minor or closeout
+audit is started. External IcyDB alignment remains a separate integration concern,
+not a Canic release blocker. Sibling repositories were not modified.
+
 ## Further .22 speed work: native debug information — 2026-09-17
 
 The maintainer requested another speed attempt before pushing. The accepted

@@ -929,21 +929,49 @@ not replace their selected input. Completion requires terminal conservation
 and immediate effect-free replay. No successful local diagnostic or preview
 establishes those completion properties.
 
-If source inspection does not establish that bounded path, the diagnostic is
-`RetainedPlanUnreadable` and preserves the underlying error. There is no
-general force-reset, predecessor decoder or journal-supersession command.
-Resolve issued effects under their exact original authority before changing
-release contracts. When that owner cannot finish or establish a bounded
-retirement, stop at an evidence-backed recovery design; do not claim that
-installing an older CLI or retrying unchanged apply will resolve it.
+A completed operation has a separate bounded assessment. Ordinary Ensure reports
+`RetainedTerminalReviewRequired` when the receipt inspector recognizes a
+converged full operation with supported native funding/install effects and
+immutable protocol successor phases. An explicit `--reinstall` review can then
+inspect those completed effects without decoding the source plan as current
+executable authority. Informational recovery forecasts remain opaque source
+bytes; no missing field or replacement source digest is manufactured.
 
-CANIC-166 reports the same source operation previously investigated for
-CANIC-157. Its missing-field failure on ordinary planning is expected; the
-existing explicit recovery review is the supported next assessment. The
-[recovery evidence](../../audits/reports/2026-09/2026-09-08/activation-feedback.md#final-installed-source-proof)
-qualifies omitted review fields, source preservation, controller rejection,
-lost-install-response recovery, physical retention, conservation and replay on
-a disposable estate. Actual staging admission and execution remain separate.
+This assessment requires every action hash and Applied receipt to match, native
+payments to retain their original recorded balance evidence, and exact phase
+identities. Fresh source-bound inventory must contain the same complete physical
+estate and registry. Original operator debit, ledger fees, Root account balances,
+pool membership and controlled-cycle burn must reconcile within the source's
+bounds. Unresolved effects, creation/funding-review histories, pending creation,
+transfers, missing assets and unrelated operator balance changes reject this
+bounded path. Receipt inspection verifies the retained completion evidence; it
+does not independently fetch historical Ledger blocks.
+
+The separate preparation review exposes those measured values under
+`reinstall.source.terminal_retirement.conservation`, together with exact raw
+source document hashes. Review the full reset scope and selected target artifacts.
+Apply repeats source and live conservation checks before adoption. The existing
+local handoff archives the source plan, journal, state and every successor phase
+before committing replacement intent. Preserve the referenced content objects
+and source artifacts too. Interrupted handoff selects the same replacement pair;
+a completed handoff never rolls back subsequent progress. Subsequent preparation
+and full reset use the existing journaled effect owner and their selected digests.
+
+CANIC-166's September 17 staging report is this completed-source case: the missing
+`maximum_successor_actions` is in its informational forecast. Its two phase files
+and 61 Applied effects pass local source inspection. This host correction does
+not change canister runtime contracts or inherently require rebuilding the
+already-qualified game release. Actual source artifacts, Candid contracts, live
+authority and conservation must still pass review. Local inspection and handoff
+regressions do not establish staging admission, successful deployment or terminal
+effect-free replay after deployment.
+
+If neither bounded inspection succeeds, `RetainedPlanUnreadable` preserves the
+underlying error. There is no general force-reset, predecessor executable decoder
+or journal-supersession command. Resolve issued effects under their exact original
+authority before changing release contracts. The earlier
+[partial-activation recovery evidence](../../audits/reports/2026-09/2026-09-08/activation-feedback.md#final-installed-source-proof)
+remains evidence for that distinct source shape.
 
 ## Deliberate selected-build database wipe
 

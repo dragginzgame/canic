@@ -5,6 +5,7 @@
 //! Boundary: selected-build wipes and partial-activation repairs bind the complete physical estate.
 
 pub(in crate::fleet_ensure) mod activation;
+pub(in crate::fleet_ensure) mod terminal;
 
 use super::*;
 use crate::fleet_ensure::model::{
