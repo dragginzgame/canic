@@ -1,5 +1,16 @@
 # Canic 0.110 Implementation Status
 
+## .25 release-test correction — 2026-09-18
+
+The full gate exposed one stale mixed-topology assertion after CANIC-166/172:
+an interrupted reset now names its original operation and digest through
+`RetainedOperationRecoveryRequired`. The test asserts that exact identity.
+The complete targeted mixed-topology case passes, including both wipes,
+lost-response recovery, conservation and replay; warning-denied internal-test
+Clippy passes. No production behavior changed. The selected .25 batch is ready
+to retry its release flow; the full gate was not rerun. Full RF3 remains next.
+See the [current handoff](../../status/current.md) for the focused logs.
+
 ## Selected .25 release scope — 2026-09-18
 
 The maintainer selected the completed recovery fix, speed improvements and

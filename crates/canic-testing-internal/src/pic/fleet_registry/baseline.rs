@@ -10535,17 +10535,24 @@ esac
                     inspected,
                     RootCommandResponseFragment::InspectCanister(_)
                 ));
-                assert!(matches!(
-                    fleet_ensure_workflow::plan_reinstall(
-                        root,
-                        &source_desired,
-                        &desired_sha256(&source_desired),
-                        &desired.fleet,
-                        1_800_000_000_000_000_130,
-                        &mut platform()
+                let replacement = fleet_ensure_workflow::plan_reinstall(
+                    root,
+                    &source_desired,
+                    &desired_sha256(&source_desired),
+                    &desired.fleet,
+                    1_800_000_000_000_000_130,
+                    &mut platform(),
+                );
+                assert!(
+                    matches!(
+                        &replacement,
+                        Err(EnsureWorkflowError::RetainedOperationRecoveryRequired {
+                            operation_id, plan_sha256,
+                        }) if operation_id == &reset.plan.operation_id
+                            && plan_sha256 == &reset.plan.plan_sha256
                     ),
-                    Err(EnsureWorkflowError::ReinstallConflict)
-                ));
+                    "replacement must identify the interrupted reset: {replacement:?}"
+                );
                 std::fs::remove_file(root.join("lost-install-response")).unwrap();
                 let interrupted = fleet_ensure_workflow::apply(
                     root,
