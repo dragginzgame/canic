@@ -20,6 +20,28 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .25 mixed-topology release-test correction — 2026-09-18
+
+The maintainer's full release test failed in the mixed-topology reset journey:
+the interrupted-reset assertion still expected `ReinstallConflict` after the
+CANIC-166/172 correction introduced `RetainedOperationRecoveryRequired`.
+The test now requires that typed diagnostic and the exact interrupted operation
+and plan digest. The separate preparation-stage conflict assertion remains valid.
+No production code changed.
+
+The complete exact case
+`pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation`
+passes through the governed targeted runner: 620.50 seconds test execution,
+639 seconds runner, including both deliberate wipes, lost-response recovery,
+state/cycle conservation and effect-free replay. Warning-denied Clippy passes
+for `canic-testing-internal --lib --tests --all-features`; formatting and
+whitespace checks pass. Logs: `/tmp/canic-mixed-reset-recovery-regression.log`
+and `/tmp/canic-mixed-reset-recovery-clippy.log`.
+
+The selected .25 batch and changelog are ready to retry the governed release
+flow. The full gate has not been rerun by the agent; its failure is not recorded
+as a pass. Packages remain .24, full RF3 stays next, and no publication ran.
+
 ## Selected .25 release handoff — 2026-09-18
 
 The maintainer selected release of the completed fixes and diagnostics, with
