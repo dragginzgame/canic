@@ -53,7 +53,7 @@ fn durable_lock_reports_wait_for_another_process_and_retains_exclusion() {
     let path = root.join("complete-build-reuse.lock");
     let started = Instant::now();
     let mut progress = None;
-    let lock = lock_file_with_progress(&path, |elapsed| {
+    let lock = lock_file_with_progress(&path, |_, elapsed| {
         if progress.is_none() {
             progress = Some(elapsed);
             child

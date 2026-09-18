@@ -4,15 +4,17 @@
 //! Does not own: policy decisions, IC transport, or storage mechanics.
 //! Boundary: persists exact intent before each ops effect and reconciles it before any retry.
 
+#[cfg(test)]
+mod balance_observation;
 mod continuation;
 mod funding;
 #[cfg(test)]
 mod funding_tests;
 pub mod operator_mint;
+pub mod readiness;
 mod reinstall;
 mod retained_plan;
 mod root_reinstall;
-mod settlement;
 
 use crate::fleet_ensure::{
     dto::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState},
@@ -2910,7 +2912,10 @@ fn compatible_root_start_prerequisite(
             .iter()
             .zip(&current.canisters)
             .all(|(retained, current)| {
-                retained.observed_cycles.abs_diff(current.observed_cycles) <= maximum_movement
+                retained
+                    .observed_cycles
+                    .saturating_sub(current.observed_cycles)
+                    <= maximum_movement
             })
         && normalized_plan(retained) == normalized_plan(current)
 }
@@ -3001,7 +3006,7 @@ fn compatible_after_bounded_observation(
     for (retained_canister, current_canister) in retained.canisters.iter().zip(&current.canisters) {
         let movement = retained_canister
             .observed_cycles
-            .abs_diff(current_canister.observed_cycles);
+            .saturating_sub(current_canister.observed_cycles);
         if movement > maximum_observation_movement {
             return false;
         }
@@ -3149,7 +3154,12 @@ where
                 configured.cycles = configured.cycles.min(cycles);
             }
             Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Idle)
-                if configured.cycles == cycles => {}
+                if cycles >= configured.cycles =>
+            {
+                // A stopped asset can receive donations between protected reads.
+                // Count the latest balance once, without attributing its origin.
+                configured.cycles = cycles;
+            }
             Some(crate::fleet_ensure::model::RootOwnedCanisterLifecycle::Idle) => {
                 return Err(EnsureWorkflowError::TerminalInventory(
                     TerminalInventoryError::IdleCycleObservationConflict {
@@ -3246,11 +3256,9 @@ where
     }
     let (estate_funding_cycles, exact_estate_creation_fee_cycles) =
         reconcile_estate_funding(plan, journal, state, terminal)?;
-    let observed_settlement_credit_cycles = settlement::observed_credit(plan, journal)?;
     let available = journal
         .initial_controlled_cycles
         .checked_add(received_new_funding_cycles)
-        .and_then(|cycles| cycles.checked_add(observed_settlement_credit_cycles))
         .ok_or_else(|| {
             EnsureWorkflowError::Conservation(
                 "terminal controlled-cycle arithmetic overflowed".to_string(),
@@ -3263,17 +3271,14 @@ where
                 "terminal controlled cycles cannot cover reviewed estate creation fees".to_string(),
             )
         })?;
-    let measured_execution_burn_cycles = after_estate_fees
-        .checked_sub(final_controlled_cycles)
-        .ok_or_else(|| {
-            EnsureWorkflowError::Conservation(
-                "terminal estate exceeds starting cycles, received funding and bounded observed credits"
-                    .to_string(),
-            )
-        })?;
-    if measured_execution_burn_cycles > conservation.maximum_execution_burn_cycles {
+    // Native balances are open to third-party deposits. These are net observations,
+    // not authenticated funding or a measurement of gross execution consumption.
+    let observed_net_cycle_debit_cycles = after_estate_fees.saturating_sub(final_controlled_cycles);
+    let observed_net_cycle_credit_cycles =
+        final_controlled_cycles.saturating_sub(after_estate_fees);
+    if observed_net_cycle_debit_cycles > conservation.maximum_execution_burn_cycles {
         return Err(EnsureWorkflowError::Conservation(format!(
-            "measured execution burn {measured_execution_burn_cycles} exceeded reviewed maximum {}",
+            "observed net cycle debit {observed_net_cycle_debit_cycles} exceeded reviewed maximum {}",
             conservation.maximum_execution_burn_cycles
         )));
     }
@@ -3282,9 +3287,9 @@ where
         exact_estate_creation_fee_cycles,
         exact_unavoidable_fee_cycles: conservation.maximum_unavoidable_fee_cycles,
         final_controlled_cycles,
-        measured_execution_burn_cycles,
+        observed_net_cycle_debit_cycles,
         observed_starting_cycles: journal.initial_controlled_cycles,
-        observed_settlement_credit_cycles,
+        observed_net_cycle_credit_cycles,
         operator_debit_cycles,
         received_new_funding_cycles,
     })
@@ -3463,8 +3468,7 @@ fn first_estate_creation_observation_is_exact(
         .zip(receipt.first_observed_cycles)
         .is_some_and(|(funded_native_cycles, observed_cycles)| {
             observed_cycles >= receipt.readiness_floor_cycles
-                && observed_cycles <= funded_native_cycles
-                && funded_native_cycles - observed_cycles
+                && funded_native_cycles.saturating_sub(observed_cycles)
                     <= receipt.creation_execution_margin_cycles
         })
 }
@@ -4788,9 +4792,13 @@ mod tests {
         let mut changed = exact.clone();
         estate_creation_receipt(&mut changed, 0).first_observed_cycles = Some(34);
         drifted.push(changed);
-        let mut changed = exact.clone();
-        estate_creation_receipt(&mut changed, 0).first_observed_cycles = Some(41);
-        drifted.push(changed);
+        let mut donated = exact.clone();
+        estate_creation_receipt(&mut donated, 0).first_observed_cycles = Some(41);
+        assert_eq!(
+            exact_estate_creation_costs::<std::io::Error>(&state, &donated, domain)
+                .expect("external donation leaves exact creation cost unchanged"),
+            (100, 20)
+        );
         let mut changed = exact;
         changed
             .estate_funding_domains
@@ -5473,7 +5481,7 @@ mod tests {
     }
 
     #[test]
-    fn fresh_fleet_idle_cycle_duplicate_requires_exact_balance() {
+    fn fresh_fleet_idle_observation_accepts_donations_without_double_counting() {
         use crate::fleet_ensure::model::RootOwnedCanisterLifecycle;
 
         let additional = BTreeMap::from([("controlled-principal".to_string(), 100)]);
@@ -5482,13 +5490,21 @@ mod tests {
             .expect("merge exact Idle observation");
         assert!(idle.additional_controlled_cycles.is_empty());
 
-        let mut conflicting_idle = cycle_observation(RootOwnedCanisterLifecycle::Idle, 99);
+        let mut donated_idle = cycle_observation(RootOwnedCanisterLifecycle::Idle, 99);
+        attach_terminal_cycles::<std::io::Error>(&mut donated_idle, additional.clone()).unwrap();
+        assert_eq!(
+            controlled_cycles::<std::io::Error>(&donated_idle).unwrap(),
+            100
+        );
+        assert!(donated_idle.additional_controlled_cycles.is_empty());
+
+        let mut conflicting_idle = cycle_observation(RootOwnedCanisterLifecycle::Idle, 101);
         assert!(matches!(
             attach_terminal_cycles::<std::io::Error>(&mut conflicting_idle, additional.clone()),
             Err(EnsureWorkflowError::TerminalInventory(
                 TerminalInventoryError::IdleCycleObservationConflict {
                     canister,
-                    expected: 99,
+                    expected: 101,
                     observed: 100,
                 }
             )) if canister == "controlled-principal"

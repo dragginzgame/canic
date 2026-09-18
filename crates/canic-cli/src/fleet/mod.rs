@@ -6,6 +6,7 @@
 
 mod operator_mint;
 mod progress;
+mod readiness;
 mod startup_funding;
 mod subnet_catalog;
 #[cfg(test)]
@@ -66,6 +67,10 @@ const DEFAULT_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 #[derive(Debug, ThisError)]
 pub enum FleetCommandError {
+    #[error(transparent)]
+    Readiness(Box<canic_host::fleet_ensure::workflow::readiness::FleetReadinessError>),
+    #[error("early Fleet readiness checks found blockers; preserve retained work and resolve the reported conditions")]
+    ReadinessBlocked,
     #[error(transparent)]
     MintExecution(Box<canic_host::fleet_ensure::workflow::operator_mint::execution::OperatorMintExecutionError>),
     #[error("{0}")]
@@ -262,6 +267,7 @@ fn fleet_command() -> Command {
         .subcommand_required(true)
         .subcommand(ensure_command())
         .subcommand(generate_command())
+        .subcommand(readiness::command())
         .after_help(FLEET_HELP_AFTER)
 }
 
@@ -412,6 +418,9 @@ where
     }
     if args.first().and_then(|arg| arg.to_str()) == Some("generate") {
         return run_generate(GenerateOptions::parse(args)?);
+    }
+    if args.first().and_then(|arg| arg.to_str()) == Some("readiness") {
+        return readiness::run(args[1..].to_vec());
     }
     let options = EnsureOptions::parse(args)?;
     let root = resolve_current_canic_icp_root()?;
@@ -794,12 +803,12 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
             format_cycles(actual.estate_funding_cycles)
         ));
         lines.push(format!(
-            "measured_conservation: {} observed starting + {} received funding + {} observed settlement credit - {} exact Root-funded creation fees - {} measured execution burn = {} final controlled",
+            "observed_conservation: {} observed starting + {} received funding + {} observed net surplus - {} exact Root-funded creation fees - {} observed net deficit = {} final controlled",
             format_cycles(actual.observed_starting_cycles),
             format_cycles(actual.received_new_funding_cycles),
-            format_cycles(actual.observed_settlement_credit_cycles),
+            format_cycles(actual.observed_net_cycle_credit_cycles),
             format_cycles(actual.exact_estate_creation_fee_cycles),
-            format_cycles(actual.measured_execution_burn_cycles),
+            format_cycles(actual.observed_net_cycle_debit_cycles),
             format_cycles(actual.final_controlled_cycles)
         ));
     }

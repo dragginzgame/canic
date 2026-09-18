@@ -159,7 +159,7 @@ pub(crate) fn lock_regular_file_with_parents(
 /// Acquire the same exclusive lock, reporting contention while preserving its lifetime.
 pub(crate) fn lock_file_with_progress(
     path: &Path,
-    mut waiting: impl FnMut(std::time::Duration),
+    mut waiting: impl FnMut(&fs::File, std::time::Duration),
 ) -> io::Result<fs::File> {
     let started = std::time::Instant::now();
     open_regular_lock_file(path, |file| {
@@ -173,7 +173,7 @@ pub(crate) fn lock_file_with_progress(
                     Err(rustix::io::Errno::WOULDBLOCK) => {
                         let elapsed = started.elapsed();
                         if elapsed >= next_report {
-                            waiting(elapsed);
+                            waiting(file, elapsed);
                             next_report = elapsed + std::time::Duration::from_secs(5);
                         }
                         std::thread::sleep(std::time::Duration::from_millis(100));

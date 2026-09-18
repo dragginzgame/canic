@@ -14,12 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.24` avoids session-only rebuilds, unifies ordinary test compilation and
-  reuses that graph for the host proof, gives fixture compiler caches more room,
-  overlaps independent Fleet protocol-owner checks, and rejects known operator
-  funding shortfalls before starting a fresh Fleet execution journal, with
-  receipt-bound ICP conversion to recover retained underfunded operations, and
-  updates test-only IcyDB consumers to 0.259.0.
+- `0.110.24` reduces rebuild and observation overhead, explains build-lock waits,
+  adds pre-build Fleet readiness and receipt-bound ICP funding recovery, accepts
+  native donations with breaking net-accounting report fields, and updates
+  test-only IcyDB to 0.259.0.
 - `0.110.23` updates ic-memory to 0.14.3 for more efficient bounded ledger encoding
   under the existing reinstall-only release contract, and adopts ic-testkit 0.10.0
   with retained exact artifact ownership throughout test fixture consumption.

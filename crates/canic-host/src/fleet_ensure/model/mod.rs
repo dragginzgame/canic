@@ -888,7 +888,7 @@ pub struct EstateFundingRequiredRecord {
     pub shortfall_cycles: u128,
 }
 
-/// Terminal measured conservation result from the exact applied operation.
+/// Terminal net balance accounting for the exact applied operation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ActualCycleConservation {
     #[serde(with = "u128_text")]
@@ -899,14 +899,16 @@ pub struct ActualCycleConservation {
     pub exact_unavoidable_fee_cycles: u128,
     #[serde(with = "u128_text")]
     pub final_controlled_cycles: u128,
+    /// Net balance deficit after accounted funding and fees, not gross execution burn.
+    /// Concurrent external deposits may conceal consumption.
     #[serde(with = "u128_text")]
-    pub measured_execution_burn_cycles: u128,
+    pub observed_net_cycle_debit_cycles: u128,
     #[serde(with = "u128_text")]
     pub observed_starting_cycles: u128,
-    /// Bounded net credits observed across exact activation-recovery Stop receipts.
-    /// This observation does not classify their origin as refunds or funding.
+    /// Net surplus in the controlled estate. It grants no payment authority and
+    /// does not attribute an origin or prove a Ledger credit.
     #[serde(with = "u128_text")]
-    pub observed_settlement_credit_cycles: u128,
+    pub observed_net_cycle_credit_cycles: u128,
     #[serde(with = "u128_text")]
     pub operator_debit_cycles: u128,
     #[serde(with = "u128_text")]
@@ -930,10 +932,7 @@ pub(crate) const fn create_balance_is_terminal(
     let Some(actual_cycles) = actual_cycles else {
         return false;
     };
-    if actual_cycles > requested_initial_cycles {
-        return false;
-    }
-    requested_initial_cycles - actual_cycles <= maximum_observation_burn_cycles
+    requested_initial_cycles.saturating_sub(actual_cycles) <= maximum_observation_burn_cycles
 }
 
 /// Exact normalized desired input retained by one in-progress operation.
@@ -1481,6 +1480,8 @@ pub struct FleetEnsureContinuationAuthority {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureSuccessorPhaseRecord {
+    /// Highest net debit observed at a phase boundary; donations cannot reduce it.
+    /// This is not gross execution consumption, which balance snapshots cannot prove.
     #[serde(with = "u128_text")]
     pub execution_burn_before_phase: u128,
     pub plan_sha256: String,
@@ -1655,7 +1656,7 @@ pub(in crate::fleet_ensure) mod u128_text {
     }
 }
 
-mod option_u128_text {
+pub(crate) mod option_u128_text {
     use serde::{Deserialize, Deserializer, Serialize, Serializer};
 
     #[expect(

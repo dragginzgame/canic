@@ -178,7 +178,14 @@ post-build source checks and rejection of unobserved dependencies remain require
 
 The existing exclusive complete-build reuse lock remains held through lookup,
 compilation and finalization. Contention reports progress after one second and
-every five seconds thereafter. Stderr reports lock acquisition separately;
+every five seconds thereafter. Each waiting event includes the lock path and
+bounded advisory PID, workspace, profile and acquisition time in Unix seconds.
+Malformed, partial or missing metadata is reported as unavailable; stale metadata
+never authorizes lock breaking. Owners update the same locked inode and clear
+metadata before normal release; crashes rely on the kernel releasing exclusion.
+Command arguments and environment values are not recorded, and paths are escaped
+in terminal output. The next holder still verifies exact release/output evidence.
+Stderr reports lock acquisition separately;
 input/output verification time excludes it. These are phase observations, not
 evidence that lock waiting caused an earlier slow build.
 

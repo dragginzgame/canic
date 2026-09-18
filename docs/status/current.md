@@ -20,6 +20,94 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Accepted feedback follow-up — 2026-09-18
+
+The accepted CANIC-176 lock diagnostics, CANIC-172 early readiness and local
+recovery qualification, and CANIC-160 phase comparison are complete. The entire
+selected .24 batch is ready for the maintainer-selected release flow; packages
+remain .23 and both changelog surfaces are updated. Earlier donation, funding,
+dependency and speed changes are preserved.
+
+- Build contention reports bounded advisory owner metadata without changing
+  kernel exclusion. Crash recovery and verified reuse after waiting pass.
+- `fleet readiness` checks explicit signer/network authority, operator Ledger
+  balance and retained work before compilation. Optional caller estimates never
+  replace exact plan admission. No state or payment intent is written.
+- A new production-Ledger PocketIC proof joins authenticated mint credit,
+  original native withdrawal, actual lost-reply/duplicate recovery, terminal
+  conservation and effect-free replay. Its destination is a minimal canister,
+  not the complete managed Fleet. The existing mint interruption proof also passes.
+- Matched synthetic status-read medians improve from 71.543 to 23.999 ms for
+  three owners and 217.870 to 72.796 ms for nine, with the same call counts.
+  This is approximately 66% less time in that phase, not a whole-deployment claim.
+
+Thirty selected native tests, two CLI help checks, both exact PocketIC cases,
+the isolated phase comparison and all-target/all-feature warning-denied host/CLI
+Clippy pass. Formatting, whitespace, layering, shell syntax, scoped ShellCheck
+and exact test routing pass. No broad validation ran.
+
+[Evidence, source identities and limitations](../audits/reports/2026-09/2026-09-18/toko-feedback-follow-up.md)
+retain the exact samples and local log locations. Toko still needs publication
+and adoption, the readiness call in its deployment wrapper, exact authorized
+retained staging recovery and matched end-to-end timing. No sibling was changed;
+no version bump, commit, push, live funding or deployment occurred.
+
+## Native canister donation follow-up — 2026-09-18
+
+The maintainer identified a remaining accounting defect after the previous
+push-readiness handoff: anyone can increase a native canister balance, but
+creation, funding and terminal checks assumed several balances could only fall.
+This follow-up supersedes the earlier readiness statement; its focused evidence
+is complete below. The existing .24 draft remains open; packages stay .23.
+
+Native observation checks now admit increases while preserving exact creation
+and withdrawal receipts, original starting balances, minimum funding floors,
+operator debit bounds, authority and same-operation retry identities. Idle asset
+observations accept an increase without counting the Principal twice. Terminal
+accounting reports mutually exclusive observed net debit/credit, replacing the
+misleading gross-burn label and narrow Stop-credit inference. Successor phases
+retain the highest recorded net-debit watermark.
+
+Balance snapshots cannot distinguish donations from simultaneous consumption;
+this is not a gross execution meter or an authenticated donation total. Root and
+operator Ledger accounts retain their strict receipt accounting. Drain/delete
+residual limits stay enforced: extra cycles must remain controlled, even when a
+late donation requires another drain or review. A changed unissued action set
+still requires a fresh plan before effects.
+
+Focused evidence:
+
+- 339 host Fleet tests, 19 CLI Fleet tests and the runtime pool's exact creation
+  receipt test pass: `/tmp/canic-donation-native.log`. Coverage includes donation
+  before intent, lost-reply recovery, one payment, repeat replay, no receipt
+  substitution, excessive loss, authority drift, net accounting in all four plan
+  scopes and a nondecreasing successor watermark.
+- The exact host fresh-estate PocketIC proof passes: donation after a lost creation
+  reply, same-operation convergence with one creation, another terminal donation
+  and effect-free replay. Log: `/tmp/canic-donation-pocketic.log`. Execution was
+  0.78 seconds; the scoped runner including compilation was 90 seconds. These are
+  test diagnostics, not a deployment-speed comparison.
+- This PocketIC proof uses real disposable canisters with fixture Ledger
+  bookkeeping and direct test top-ups. It does not qualify production-Ledger
+  donation transport, the entire managed reinstall journey or live Toko recovery.
+  Existing internal journey assertions were updated for the net accounting fields;
+  the broad lifecycle suite was not rerun.
+- A read-only Toko source search found no references to the removed report field
+  names in Rust, TypeScript, shell or Python. This is not downstream qualification.
+  No sibling files changed.
+
+Warning-denied library/test Clippy passes for host, CLI, control plane and the
+internal fixture crate including its governed catalogue:
+`/tmp/canic-donation-clippy.log`. One test-only Box allocation was corrected after
+the native run; no runtime behavior changed during lint cleanup. Changed-file
+formatting, layering and whitespace checks pass.
+
+The complete selected .24 batch, including this donation correction, is ready
+for the maintainer-selected release flow. Both changelog surfaces and operator
+accounting docs are updated. The actual-report field rename is a hard cut; no
+compatibility aliases or package version changes were introduced. No broad
+validation, version bump, commit, push or live funding/deployment ran.
+
 ## Published IcyDB 0.259.0 test-consumer update — 2026-09-18
 
 The workspace and standalone composed-Wasm audit fixture now pin published

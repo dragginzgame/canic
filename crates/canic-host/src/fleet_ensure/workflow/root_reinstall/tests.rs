@@ -324,8 +324,10 @@ fn payment_requires_retained_prebalance_that_can_reconcile() {
         verify_effect_authority(&plan, action, None, &state, &mut fixture.platform),
         Err(EnsureWorkflowError::JournalIntegrity)
     ));
+    verify_effect_authority(&plan, action, Some(501), &state, &mut fixture.platform)
+        .expect("donation before intent preserves the reviewed payment authority");
     assert!(matches!(
-        verify_effect_authority(&plan, action, Some(501), &state, &mut fixture.platform),
+        verify_effect_authority(&plan, action, Some(479), &state, &mut fixture.platform),
         Err(EnsureWorkflowError::DriftedBeforeApply)
     ));
     fixture
@@ -339,4 +341,22 @@ fn payment_requires_retained_prebalance_that_can_reconcile() {
         .live
         .cycles = 600;
     verify_effect_authority(&plan, action, Some(500), &state, &mut fixture.platform).unwrap();
+}
+
+#[test]
+fn root_review_accepts_native_surplus_only_with_the_same_action_authority() {
+    let (fixture, plan, _) = fixture();
+    let mut donated = plan.clone();
+    donated.canisters[0].observed_cycles = 10_000;
+    assert!(compatible_root_start_prerequisite(
+        &plan,
+        &donated,
+        &fixture.desired
+    ));
+    donated.canisters[0].actions.remove(1);
+    assert!(!compatible_root_start_prerequisite(
+        &plan,
+        &donated,
+        &fixture.desired
+    ));
 }

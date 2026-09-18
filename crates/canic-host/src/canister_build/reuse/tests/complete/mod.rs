@@ -2,7 +2,6 @@ mod environment;
 
 use super::*;
 use crate::{
-    durable_io::lock_file,
     release_build::{
         finalize_release_build_from_manifest, plan_release_build_for_profile_and_network,
     },
@@ -61,12 +60,14 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
 }
 
 fn prepared_reuse(context: &WorkspaceBuildContext) -> CompleteBuildReuse {
-    let lock = lock_file(
-        &context
-            .icp_root
-            .join(".canic/locks/complete-build-reuse.lock"),
-    )
-    .unwrap();
+    prepared_reuse_with_progress(context, |_| {})
+}
+
+fn prepared_reuse_with_progress(
+    context: &WorkspaceBuildContext,
+    progress: impl FnMut(BuildReuseProgress),
+) -> CompleteBuildReuse {
+    let lock = lock::BuildLock::acquire(context, progress).unwrap();
     diagnostics::InputDiagnostics::prepare(&context.icp_root);
     let inputs = input_snapshot(context, &[]).unwrap();
     CompleteBuildReuse {
@@ -278,4 +279,44 @@ fn artifact(root: &Path, name: &str, release: ReleaseBuildId) -> (PathBuf, PathB
     fs::write(&path, &bytes).unwrap();
     fs::write(&gzip_path, encoder.finish().unwrap()).unwrap();
     (path, gzip_path)
+}
+
+#[test]
+fn waiting_build_reuses_verified_release_after_owner_finishes() {
+    run_with_private_cargo_target(|| {
+        let (root, context) = infrastructure_build_fixture();
+        let owner = prepared_reuse(&context);
+        let release = finalize_fixture(&context);
+        owner
+            .record(
+                release,
+                vec![
+                    "app".into(),
+                    "root".into(),
+                    "fleet_coordinator".into(),
+                    "wasm_store".into(),
+                ],
+            )
+            .unwrap();
+        let (send, receive) = std::sync::mpsc::channel();
+        let waiting_context = context.clone();
+        let contender = std::thread::spawn(move || {
+            let reuse = prepared_reuse_with_progress(&waiting_context, |progress| {
+                if let BuildReuseProgress::WaitingForLock(wait) = progress {
+                    send.send(wait).unwrap();
+                }
+            });
+            reuse.load().unwrap().unwrap().release_build_id
+        });
+        let wait = receive
+            .recv_timeout(std::time::Duration::from_secs(10))
+            .unwrap();
+        assert_eq!(
+            wait.recorded_owner.unwrap().workspace,
+            context.workspace_root
+        );
+        drop(owner);
+        assert_eq!(contender.join().unwrap(), release);
+        fs::remove_dir_all(root).unwrap();
+    });
 }

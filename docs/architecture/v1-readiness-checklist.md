@@ -59,8 +59,8 @@ canic fleet ensure <fleet> --desired <path> --apply <plan_sha256>
 - An ambiguous response was reconciled before retrying.
 - Operator debit did not exceed the reviewed maximum.
 - No canister was stopped or deleted above the material residual threshold.
-- Terminal measured conservation balances exactly within the reviewed burn
-  ceiling.
+- Terminal observed net deficit stays within the reviewed allowance; native
+  surplus is reported separately. Neither proves gross execution consumption.
 - An immediate second plan and apply contain zero mutation actions.
 
 ## Unsupported State

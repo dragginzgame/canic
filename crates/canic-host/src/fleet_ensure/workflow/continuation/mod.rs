@@ -263,17 +263,23 @@ pub(super) fn append<P: EnsurePlatform>(
         return Err(pause(FleetEnsureSuccessorReviewReason::ProtocolAuthority));
     }
     let actual = verify_terminal_conservation(plan, journal, state, observation)?;
+    let observed_debit = actual.observed_net_cycle_debit_cycles.max(
+        journal
+            .successor_phases
+            .last()
+            .map_or(0, |phase| phase.execution_burn_before_phase),
+    );
     let remaining = plan
         .conservation
         .maximum_execution_burn_cycles
-        .saturating_sub(actual.measured_execution_burn_cycles);
+        .saturating_sub(observed_debit);
     let phase = crate::fleet_ensure::policy::recovery::affordable_successor(
         desired,
         phase.clone(),
         remaining,
     )?
     .ok_or_else(|| pause(FleetEnsureSuccessorReviewReason::BudgetExceeded))?;
-    let candidate = candidate_journal(journal, &phase, actual.measured_execution_burn_cycles);
+    let candidate = candidate_journal(journal, &phase, observed_debit);
     verify_records(plan, &candidate)?;
     verify_canonical(plan, &candidate, state, platform)?;
     // The immutable phase must exist before the journal can expose authority to execute it.

@@ -3,6 +3,7 @@
 
 mod operator_mint_reply_tests;
 mod operator_mint_tests;
+mod real_mint_funding;
 
 use super::{
     tests::{estate_funding_observation, estate_funding_plan, retained_evidence},
@@ -680,9 +681,35 @@ fn native_funding_review_recovers_lost_withdrawal_and_conserves_exact_credit() {
     assert_eq!(actual.received_new_funding_cycles, 95);
     assert_eq!(actual.exact_unavoidable_fee_cycles, 5);
     assert_eq!(actual.estate_funding_cycles, 0);
-    assert_eq!(actual.measured_execution_burn_cycles, 35);
+    assert_eq!(actual.observed_net_cycle_debit_cycles, 35);
     assert_eq!(actual.observed_starting_cycles, 50 + NATIVE_BASE);
     assert_eq!(actual.final_controlled_cycles, 110 + NATIVE_BASE);
+}
+
+#[test]
+fn native_funding_donations_preserve_receipt_retry_and_replay() {
+    let mut fixture = Fixture::native();
+    let review = fixture.native_review().unwrap().unwrap();
+    fixture.platform.native_balance += 1_000;
+    fixture.platform.fault = FundingTransportFault::LostReply;
+    assert!(matches!(
+        fixture.native_resume(&review.review_sha256),
+        Err(EnsureWorkflowError::Platform(_))
+    ));
+    fixture.platform.native_balance += 2_000;
+    fixture.native_resume(&review.review_sha256).unwrap();
+    fixture.native_resume(&review.review_sha256).unwrap();
+    assert_eq!(fixture.platform.transfers.len(), 1);
+    let journal = read_journal(&fixture.paths).unwrap().unwrap();
+    let state = read_state(&fixture.paths, "fleet").unwrap();
+    let terminal = fixture.platform.observe("operation", &state).unwrap();
+    let actual =
+        verify_terminal_conservation::<io::Error>(&fixture.plan, &journal, &state, &terminal)
+            .unwrap();
+    assert_eq!(actual.operator_debit_cycles, 100);
+    assert_eq!(actual.received_new_funding_cycles, 95);
+    assert_eq!(actual.observed_net_cycle_credit_cycles, 3_000);
+    assert_eq!(actual.observed_net_cycle_debit_cycles, 0);
 }
 
 #[test]

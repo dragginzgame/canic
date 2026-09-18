@@ -10,7 +10,7 @@ use crate::fleet_ensure::{
 };
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Account for every recorded native payment and reject unexplained credits, debit or missing assets.
+/// Account for every recorded native payment and reject unexplained Ledger movement, net loss or missing assets.
 pub(in crate::fleet_ensure) fn conservation(
     source: &TerminalSourceView,
     observation: &FleetObservation,
@@ -46,11 +46,11 @@ pub(in crate::fleet_ensure) fn conservation(
     {
         return None;
     }
-    let burn = source
+    let accounted = source
         .journal
         .initial_controlled_cycles
-        .checked_add(funding)?
-        .checked_sub(controlled_cycles)?;
+        .checked_add(funding)?;
+    let burn = accounted.saturating_sub(controlled_cycles);
     if burn > bounds.maximum_execution_burn_cycles {
         return None;
     }
@@ -59,9 +59,9 @@ pub(in crate::fleet_ensure) fn conservation(
         exact_estate_creation_fee_cycles: 0,
         exact_unavoidable_fee_cycles: fees,
         final_controlled_cycles: controlled_cycles,
-        measured_execution_burn_cycles: burn,
+        observed_net_cycle_debit_cycles: burn,
         observed_starting_cycles: source.journal.initial_controlled_cycles,
-        observed_settlement_credit_cycles: 0,
+        observed_net_cycle_credit_cycles: controlled_cycles.saturating_sub(accounted),
         operator_debit_cycles: debit,
         received_new_funding_cycles: funding,
     })
