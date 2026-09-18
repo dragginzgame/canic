@@ -24,6 +24,49 @@ fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
 }
 
 #[test]
+fn operator_mint_options_separate_review_payment_and_cancellation() {
+    let parse = |args: &[&str]| EnsureOptions::parse(args.iter().map(OsString::from));
+    let review = parse(&["ensure", "staging", "--operator-mint"]).unwrap();
+    assert!(review.operator_mint);
+    assert!(review.apply.is_none());
+    assert!(review.cancel_mint.is_none());
+    let digest = "31".repeat(32);
+    let approved = parse(&["ensure", "staging", "--operator-mint", "--apply", &digest]).unwrap();
+    assert_eq!(approved.apply.as_deref(), Some(digest.as_str()));
+    let cancelled = parse(&[
+        "ensure",
+        "staging",
+        "--operator-mint",
+        "--cancel-mint",
+        &digest,
+    ])
+    .unwrap();
+    assert_eq!(cancelled.cancel_mint.as_deref(), Some(digest.as_str()));
+    for args in [
+        vec!["ensure", "staging", "--operator-mint", "--reinstall"],
+        vec!["ensure", "staging", "--cancel-mint", &digest],
+        vec![
+            "ensure",
+            "staging",
+            "--operator-mint",
+            "--cancel-mint",
+            &digest,
+            "--apply",
+            &digest,
+        ],
+        vec![
+            "ensure",
+            "staging",
+            "--mint-cmc",
+            "rkp4c-7iaaa-aaaaa-aaaca-cai",
+        ],
+    ] {
+        assert!(matches!(parse(&args), Err(FleetCommandError::Usage(_))));
+    }
+    assert!(!parse(&["ensure", "staging"]).unwrap().operator_mint);
+}
+
+#[test]
 fn generate_defaults_to_policy_seed_and_desired_paths() {
     let release = "01".repeat(32);
     let options = GenerateOptions::parse([
@@ -196,6 +239,10 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("retain in-progress journal");
     let mut options = EnsureOptions {
+        operator_mint: false,
+        mint_cmc: "rkp4c-7iaaa-aaaaa-aaaca-cai".into(),
+        mint_icp_ledger: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
+        cancel_mint: None,
         reinstall: false,
         apply: Some(plan.plan_sha256.clone()),
         desired: PathBuf::from("missing.toml"),
@@ -769,6 +816,7 @@ fn native_funding_review_reports_destination_amount_and_approval() {
     let mut report = cycle_quantity_report(principal);
     let digest = "42".repeat(32);
     report.funding_review = Some(FundingReviewRecord {
+        operator_mint: None,
         action: EnsureAction::Fund {
             pool_funding: None,
             amount: 95,

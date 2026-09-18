@@ -4,6 +4,7 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod operator_mint;
 mod progress;
 mod startup_funding;
 mod subnet_catalog;
@@ -65,6 +66,8 @@ const DEFAULT_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 #[derive(Debug, ThisError)]
 pub enum FleetCommandError {
+    #[error(transparent)]
+    MintExecution(Box<canic_host::fleet_ensure::workflow::operator_mint::execution::OperatorMintExecutionError>),
     #[error("{0}")]
     Usage(String),
 
@@ -207,6 +210,10 @@ impl GenerateOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct EnsureOptions {
+    operator_mint: bool,
+    mint_cmc: String,
+    mint_icp_ledger: String,
+    cancel_mint: Option<String>,
     reinstall: bool,
     apply: Option<String>,
     desired: PathBuf,
@@ -233,6 +240,10 @@ impl EnsureOptions {
         );
         Ok(Self {
             reinstall: ensure.get_flag("reinstall"),
+            operator_mint: ensure.get_flag("operator-mint"),
+            mint_cmc: required_string(ensure, "mint-cmc"),
+            mint_icp_ledger: required_string(ensure, "mint-icp-ledger"),
+            cancel_mint: string_option(ensure, "cancel-mint"),
             apply: string_option(ensure, "apply"),
             desired,
             environment: string_option(ensure, "environment"),
@@ -363,10 +374,19 @@ fn ensure_command() -> Command {
                 .action(ArgAction::SetTrue)
                 .num_args(0)
                 .conflicts_with("apply")
+                .conflicts_with("operator-mint")
                 .help(
                     "Review a selected-build database wipe or supported partial-activation recovery",
                 ),
         )
+        .arg(value_arg("operator-mint").long("operator-mint").action(ArgAction::SetTrue).num_args(0)
+            .help("Review, inspect or apply one receipt-bound ICP conversion for a retained operator shortfall"))
+        .arg(value_arg("mint-cmc").long("mint-cmc").default_value("rkp4c-7iaaa-aaaaa-aaaca-cai").requires("operator-mint")
+            .help("CMC Principal for the conversion review"))
+        .arg(value_arg("mint-icp-ledger").long("mint-icp-ledger").default_value("ryjl3-tyaaa-aaaaa-aaaba-cai").requires("operator-mint")
+            .help("ICP Ledger Principal for the conversion review"))
+        .arg(value_arg("cancel-mint").long("cancel-mint").value_parser(parse_digest).requires("operator-mint").conflicts_with("apply")
+            .help("Cancel an unapproved conversion review by its exact digest"))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
 }
@@ -401,6 +421,9 @@ where
         root.join(&options.desired)
     };
     let loaded = load_ensure_authority(&root, &desired_path, &options)?;
+    if options.operator_mint {
+        return operator_mint::run(&root, &loaded, &options);
+    }
     let json_progress = options.json;
     let next_review = format!(
         "canic fleet ensure {} --environment {} --desired {} --icp {}",
@@ -785,6 +808,21 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
 
 fn append_funding_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
     if let Some(review) = &report.funding_review {
+        if let canic_host::fleet_ensure::model::FundingPauseRecord::Operator(pause) = &review.pause
+        {
+            lines.extend([
+                format!("funding_review_sha256: {}", review.review_sha256),
+                "funding_destination: operator_ledger_account".into(),
+                format!("funding_operator: {}", pause.operator),
+                format!(
+                    "operator_shortfall_cycles: {}",
+                    format_cycles(pause.shortfall_cycles)
+                ),
+                format!("original_withdrawal_action_sha256: {}", pause.action_sha256),
+                "conversion_review: repeat ensure with --operator-mint".into(),
+            ]);
+            return;
+        }
         lines.extend([
             format!("funding_review_sha256: {}", review.review_sha256),
             format!("funding_root: {}", review.pause.root_principal()),
@@ -795,6 +833,8 @@ fn append_funding_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
                         "root_ledger_account",
                     canic_host::fleet_ensure::model::FundingPauseRecord::Native(_) =>
                         "root_native_balance",
+                    canic_host::fleet_ensure::model::FundingPauseRecord::Operator(_) =>
+                        "operator_ledger_account",
                 }
             ),
             format!("funding_ledger: {}", review.pause.cycles_ledger()),

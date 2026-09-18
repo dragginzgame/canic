@@ -32,6 +32,8 @@ mod tests {
     #[cfg(test)]
     mod native_funding;
     #[cfg(test)]
+    mod operator_shortfall;
+    #[cfg(test)]
     mod sibling_funding;
     #[cfg(test)]
     mod state_cascade;
@@ -10414,6 +10416,7 @@ esac
             assert_eq!(installs, 3, "reset exactly Coordinator, Store and Root");
             phase = phase.next("reset_interruptions_and_recovery");
             if wipe == 0 {
+                operator_shortfall::assert_fresh_reinstall_rejection(&input, &reset.plan);
                 let protected_withdrawals =
                     assert_sealed_reinstall_funding_retry(&input, &reset.plan);
                 std::fs::write(root.join("fail-before-install"), []).unwrap();

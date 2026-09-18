@@ -161,12 +161,22 @@ interruption and replay; focused recovery tests prepare their real canister
 preconditions without repeating that entire journey. Application deployment
 sizes belong in downstream qualification. Capacity arithmetic and rejection
 boundaries remain covered independently of expensive deployment cardinality.
-The ordinary integration inventory is resolved into one multi-package Cargo invocation so
-its shared dependency graph is compiled once rather than once per owning
-package. Pure internal fixture tests join workspace unit/lib/bin coverage in
-the same Cargo invocation. The internal library test binary excludes the
+The ordinary integration inventory joins workspace unit/lib/bin coverage in
+one Cargo invocation, using explicit integration target names. This preserves
+the workspace feature graph through the ordinary tier instead of recompiling
+dependencies for a package-scoped integration pass. Integration target names
+must not cross inventory selection classes. Pure internal fixture tests join
+the same invocation. The internal library test binary excludes the
 stateful Fleet catalogue unless its governed PocketIC feature is selected;
-normal fixture-library consumers retain their configured fixture surface. Timing output calls this
+normal fixture-library consumers retain their configured fixture surface.
+In a complete run, the later governed host PocketIC stage selects the same
+workspace library/binary Cargo graph as ordinary tests, avoiding a second host
+harness caused solely by package-scoped dependency feature resolution. Its
+`governed_pocketic_` filter and ignored/serial selection run only the host proofs;
+other harnesses select no tests. The ordinary-failure barrier and internal
+catalogue ordering remain. PocketIC-only and exact-case runs retain the scoped
+host graph because they have not built the ordinary workspace graph.
+Timing output calls this
 `libtest-parallel` to distinguish parallelism inside one Cargo invocation from
 concurrent suite execution. When Make selects `sccache`, the runner reports
 request/hit/miss deltas, retains the server through the complete two-hour test
@@ -224,6 +234,14 @@ than spawning an implicit or unobservable child process.
 
 Local governed tests retain content-addressed Wasm and sealed release-artifact
 sets under `target/test-artifacts` and reuse the shared incremental Wasm target.
+Each Local/Ic fixture compiler target has an 8 GiB whole-target cleanup threshold
+and seven-day idle expiry, checked at most hourly under ic-testkit's build lock.
+The observed Local target exceeds 4 GiB, so the former threshold could discard
+useful compiler state. The new threshold leaves headroom; it reserves no disk
+space and is not a hard cap during compilation. Clearances and maintenance
+failures appear in normal output with the affected target; retained/skipped
+maintenance remains verbose-only. Exact artifact verification is independent
+of this mutable compiler cache policy.
 The PocketIC lane selects an installed native ICP CLI matching the repository
 pin before starting its server. `CANIC_TEST_ICP_BIN` explicitly selects that
 executable; otherwise an already-native `icp` on PATH is retained. If a launcher

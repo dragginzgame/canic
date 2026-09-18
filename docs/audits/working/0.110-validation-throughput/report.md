@@ -1,5 +1,328 @@
 # Release-test throughput qualification
 
+## Fixture compiler cache retention — 2026-09-18
+
+Read-only apparent-size measurements (`du -sb`) of the retained fixture compiler
+targets found Local at 4,682,199,036 bytes (4.36 GiB) and Ic at 3,084,675,040 bytes
+(2.87 GiB). These are retained footprints, not a claim that every file is needed
+by the next build. The prior policy's 4 GiB threshold is below the Local target.
+Published ic-testkit 0.10.0 clears the entire mutable target when a due retention
+check finds it oversized; it preserves the target directory and coordination
+metadata. Canic previously rendered these outcomes only in verbose output.
+The normal .23 log therefore does not establish whether a historical clearance
+caused any particular cold build.
+
+The threshold is now 8 GiB per Local/Ic fixture compiler target, about 1.83 times
+the observed Local footprint. This is a maintenance allowance with headroom,
+not a reserved allocation, hard in-build disk cap or canister memory limit.
+Seven-day idle expiry, hourly maintenance, locking and best-effort failure
+handling remain. The existing 2 GiB immutable artifact-cache pruning policy is
+unchanged. The production App compiler target is a separate owner. No source,
+release identity, network, profile, feature or output checks are relaxed.
+
+Normal output now exposes completed clearances with target path and before/after
+logical bytes, and reports maintenance failures as warnings. Retained, missing
+and skipped results remain verbose-only. Future pressure above the new threshold
+will therefore be visible instead of silently causing another cold compiler target.
+
+Focused qualification:
+
+- Six internal artifact tests pass, including an actual ic-testkit maintenance
+  call retaining a 5 GiB sparse compiler file and clearing a 9 GiB file. Both
+  preserve the coordination lock and source fixture. No live cache was cleared.
+- The clearance is visible in ordinary, non-verbose output. Sparse files exercise
+  logical-size accounting without allocating gigabytes of physical test data.
+- Strict Clippy passes for the internal library and tests; formatting and
+  whitespace checks pass. No PocketIC or full workspace suite ran.
+
+Logs: `/tmp/canic-compiler-retention-tests.log` (0.16 seconds test execution;
+90 seconds native compilation) and `/tmp/canic-compiler-retention-clippy.log`.
+Base remains `732b4629e690cc5f014078b73201129cd9630271` plus the open .24 work;
+lockfile and source hashes are retained in `/tmp/canic-compiler-retention-identities.txt`.
+Keep this bounded cache-policy correction in .24. It prevents the measured
+retained footprint from triggering size-based clearance under the new policy;
+no complete-release timing reduction has been measured. Long recovery journeys
+and distinct artifact recipes remain separate throughput work.
+
+## Ordinary test graph consolidation — 2026-09-18
+
+The same successful .23 log records 109 seconds for workspace library/binary
+checks, followed by 102 seconds for ordinary integrations. The latter compiles
+Canic control-plane, host, CLI and internal testing again and spends 91 seconds
+in Cargo. Those times include different test selections; they are not a measured
+91-second saving or additional time outside the 4,791-second runner total.
+
+The full and ordinary lanes now select workspace library/binary tests and every
+registered ordinary integration in one Cargo invocation. Integration names come
+from the inventory; the former hard-coded package list is removed. Cargo retains
+`--no-fail-fast`, libtest's default parallelism and exclusion of ignored tests.
+The existing failure barrier still precedes PocketIC. Fast, exact-case and
+PocketIC-only selections remain separate. A target name cannot cross inventory
+selection classes, preventing workspace-wide name selection from admitting a
+serial or external-composition target. Integration tests now intentionally use
+the same dependency feature union as ordinary workspace unit tests.
+
+Focused evidence uses the actual runner and inventory guard in a disposable
+three-package Cargo workspace. Only dependency-tool version preflight is stubbed;
+Cargo compilation and test execution are real. It proves:
+
+- unit, binary and registered integration execution with the workspace feature union;
+- exclusion of ignored proofs and serial/external integration targets whose source
+  deliberately fails compilation if selected;
+- a retained failure when a unit test fails, continued integration execution and
+  rejection before PocketIC startup;
+- rejection of a cross-class target-name collision;
+- later host-proof executable reuse (`fresh=true`);
+- a package-scoped integration control builds a different dependency artifact,
+  while repeating the combined graph reuses its original artifact (`fresh=true`).
+
+Fixture: `/tmp/canic-ordinary-graph.eHHC7f`; script/log:
+`/tmp/canic-ordinary-graph-probe.sh`, `/tmp/canic-ordinary-graph-probe.log`.
+The guard checks exactly one ordinary invocation and equality with the complete
+selected integration inventory. Ordinary/full/PocketIC/fast/exact-case plans,
+release-integrity guard, focused ShellCheck, Bash syntax and whitespace checks
+pass. Logs: `/tmp/canic-ordinary-graph-plan.log`,
+`/tmp/canic-ordinary-graph-contract.log`. Source identities are recorded in
+`/tmp/canic-ordinary-graph-identities.txt`. The release guard's deliberate
+negative cleanup fixtures are expected.
+
+Keep in the existing .24 batch. No Canic workspace tests or long PocketIC suite
+were rerun; complete-release savings await the maintainer's selected release run.
+This removes another known graph switch but does not claim to resolve the
+roughly hour-long internal PocketIC workload. Inspection found distinct network,
+configuration and release identities in costly Root/App artifact builds; none
+were collapsed. The nineteen-Workload/five-Ready proof remains intact.
+
+Toko's latest read-only feedback confirms .23 paired adoption with IcyDB 0.258.0,
+255 native tests, strict Clippy, Wasm/Candid checks and both managed tests passing.
+Live CANIC-166 retained-source review/application remains separate evidence.
+
+## Release-test compile-graph reuse — 2026-09-18
+
+The successful .23 validation log is
+`target/validation-runs/20260918T075716Z-43326.AIQJTN/0.log`. Its test runner
+took 4,791 seconds; preceding successful gates took about 66 seconds. Internal
+PocketIC accounts for 4,146 seconds. The largest cases were mixed topology
+(727.54 seconds) and retained reinstall (459.46 seconds). Ten recorded
+`artifact_build_and_seal` spans total 1,049.17 seconds; these are nested inside
+the tests and must not be added to suite totals. Recorded protocol-action
+observations total 92.43 seconds, so the preceding status-read optimization alone
+cannot remove the dominant release-test cost.
+
+### Confirmed native graph switch
+
+Ordinary tests executed `canic_host-19b4daf9e74d17e5`; the later package-only
+host proof used `canic_host-711eb51430b17a73`, after 155 seconds of compilation
+for 1.08 seconds of test execution. Their retained Cargo fingerprint records
+agree on host features (`[]`), rustc, profile and rustflags. Ten dependency
+fingerprints differ, including Canic core/control-plane, Candid, ic-agent,
+ic-testkit and syn. Re-selecting only the host changed the resolved native graph.
+
+The full runner now repeats `--workspace --lib --bins` for the governed host
+filter, matching its ordinary compile graph. The same ignored-only filter and
+single test thread remain. Other harnesses select no tests. The ordinary failure
+barrier still precedes any PocketIC startup. PocketIC-only and targeted commands
+remain scoped because those invocations have no ordinary workspace build to
+reuse. No compiled binary is guessed from a directory or executed outside Cargo;
+Cargo retains freshness checks and test runtime environment ownership.
+
+### Focused qualification
+
+A temporary three-package Cargo workspace models a shared dependency whose
+feature is enabled by a peer. With unchanged sources, lock and compiler:
+
+| Invocation | Host artifact | Fresh |
+| --- | --- | --- |
+| Ordinary workspace library/binary tests | `fixture_host-2ca0cc7ddaa7cb00` | No, initial build |
+| Scoped host ignored proof | `fixture_host-c5ac1d9d368afc94` | No, different graph |
+| Repeated workspace graph, host ignored filter | `fixture_host-2ca0cc7ddaa7cb00` | Yes |
+
+The selected proof passes with the appropriate dependency features. Unrelated
+ignored core/peer tests deliberately panic if run and remain unselected. This
+proves graph/executable reuse, not a Canic end-to-end latency result.
+Fixture/script/results: `/tmp/canic-feature-graph.GKUQh5`,
+`/tmp/canic-feature-graph-probe.sh`, `/tmp/canic-feature-graph-probe.log`.
+
+The exact current-source Canic proof passes through the governed runner:
+`make test-pocketic-case CASE=fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects`.
+It compiles in 2m30s and executes in 1.29 seconds; this scoped run qualifies
+recovery coverage, not the full-run graph optimization. Log:
+`/tmp/canic-release-graph-host-proof.log`.
+
+Full/PocketIC-only plans, the release-integrity contract guard, Bash syntax,
+scoped ShellCheck with repository exclusions and whitespace checks pass.
+The contract retains the scoped standalone path and rejects ignored host-filter
+matches outside the host package. Logs: `/tmp/canic-release-graph-full-plan.log`,
+`/tmp/canic-release-graph-pocketic-plan.log`, `/tmp/canic-release-graph-contract.log`.
+The contract's deliberate failure fixtures do not indicate a failed guard.
+
+Base is `732b4629e690cc5f014078b73201129cd9630271`, plus the retained .24
+worktree. Rust/Cargo are 1.98.1; Cargo.lock is unchanged. Fingerprint comparisons
+and candidate script SHA-256 identities are retained in
+`/tmp/canic-release-graph-evidence.json`. No broad Canic suite was rerun.
+
+### Artifact disposition and next boundary
+
+The same log already shows exact release-artifact cache hits around 1.8–2.0
+seconds. Source inspection finds distinct configurations, Local/Ic compilation,
+audit Root variants and deliberately distinct initial/reinstall release nonces.
+They must not share final Wasms by dropping release or configuration binding.
+No blanket artifact cache change is justified by this inspection. The accepted
+nineteen-Workload/five-Ready capacity case remains required; reducing its count
+would remove an explicitly retained contract rather than optimize execution.
+
+Keep the compile-graph change in .24. It targets the observed second host build;
+its complete-release saving still requires the maintainer's next full run.
+Further work should attribute expensive artifact compiler/link steps and repeated
+setup within exact long-running journeys while preserving capacity, interruption,
+conservation and effect-free replay coverage. No claim is made that this change
+resolves the remaining roughly hour-long internal PocketIC workload.
+
+
+## Protocol-owner status overlap — 2026-09-18
+
+CANIC-160's next bounded latency change removes sequential waiting in
+`current_protocol_owners_are_ready`. Each protocol-planning pass previously read
+all present Coordinator/Root/Store statuses serially before checking their exact
+modules. It now uses the existing four-read collector. Configured-canister and
+protocol-owner paths share the same status preparation/consumption helpers.
+
+| Healthy observation | Previous scheduling | Candidate scheduling |
+| --- | --- | --- |
+| Three distinct owners | Three sequential reads | One group of three reads |
+| Nine distinct owners | Nine sequential reads | Three groups: four, four, one |
+
+These are request schedules, not measured latency ratios. The native synchronized
+transport fixture proves four simultaneous requests, nine completions, no
+outstanding request on return and no extra healthy-path calls. Missing owners and
+module decisions stay after the status scan. Results are consumed in configured
+order: an earlier stopped owner still returns not-ready before a later transport
+failure, while an earlier transport error retains its exact typed failure even
+if another response arrives first. No later group starts after either outcome.
+Issued requests in a failed group are drained; an early failure can therefore
+incur up to the remaining reads in that group. Remote attempts retain existing
+accounting. No deployment mutation is parallelized or skipped.
+
+Fresh repeated observations see changed running/module state. Injected failures
+are not retained across retries, and the next successful call reads current
+statuses. Existing per-observation cache scope and authorization remain intact.
+The change reuses the existing platform collector rather than adding a cache,
+transport, polling loop or test framework.
+
+Qualification at base `732b4629e690cc5f014078b73201129cd9630271` plus the
+open .24 batch, Rust/Cargo 1.98.1 and unchanged Cargo.lock:
+
+- `ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh cargo test --locked -p canic-host --lib fleet_ensure::ops::platform::tests::`: 46 pass.
+- `ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh cargo clippy --locked -p canic-host --lib --tests -- -D warnings`: pass.
+- Changed-file rustfmt and whitespace checks: pass.
+
+Logs: `/tmp/canic-owner-status-tests.log`, `/tmp/canic-owner-status-clippy.log`.
+Candidate platform.rs SHA-256:
+`3e5fbdb71d7331355ada42e0baa24002b6f9d786f95d0530c0aae72338ef70df`.
+Toko feedback remains the snapshot recorded below; no new confirmed Canic blocker
+was found. Keep this bounded scheduling improvement. Native transport evidence
+does not establish PocketIC/mainnet elapsed savings or a whole-release speedup;
+no broad suite or deployment was run. Both speed changes remain in the same .24
+changelog draft, with package versions unchanged.
+
+
+## Agent-session build reuse — 2026-09-18
+
+CANIC-176 requests a controlled explanation for launcher-environment cache
+misses. Toko's eight-role 111.26-second run also changed source/configuration and
+cannot isolate the cost of its reported CODEX differences. This Canic experiment
+isolates only `CODEX_SESSION_ID` and `CODEX_THREAD_ID`, using the existing host
+complete-build fixture and a real Cargo/build-script/compiler Wasm probe.
+
+### Source and experiment identities
+
+Base: published Canic 0.110.23, commit
+`732b4629e690cc5f014078b73201129cd9630271`. Rust is
+`1.98.1 (48a229cea 2026-09-01)`; Cargo is
+`1.98.1 (797e8a9bc 2026-08-05)`. Both runs use the fixture's unchanged Fast
+Wasm profile and `wasm32-unknown-unknown` target. Workspace manifest and lock
+remain unchanged. SHA-256 identities:
+
+| Input | SHA-256 |
+| --- | --- |
+| Workspace Cargo.toml | `c6fcf70a441a60cfc499e7931ab19faf0868fc04221ea666f5a0abd0146a86c5` |
+| Workspace Cargo.lock | `6b05c3e38e5ad453f71f2039a036acfb5933fd1f5ae29ef00bae0bd443ab49e6` |
+| Control build_environment/mod.rs | `cfcefaff7ce5cf82b44578bba57e7a8c0b542514507636c52e4e2df275937182` |
+| Candidate build_environment/mod.rs | `381822287c6690ead4286c538f69019ea8d02ac619a240a1ccc0408ea03c57d3` |
+| Control complete/environment/mod.rs test | `ccb4285520cb0f378f0e0ef0828880a7550a1fdf0554f37529952c003c503b44` |
+| Candidate complete/environment/mod.rs test | `c508221aa67d98168f89795ab7ba4fbe318beeb4a29dcbe652a0de53595ea0fe` |
+| Candidate candid_cache/tests.rs | `8ea6c5ee74d12af679d6bd9766b6f5cc3a643087ecdfbf265fadea1713689d8f` |
+
+The control first runs with both IDs absent, then with synthetic A and B pairs.
+Each within-run pair keeps source, features, profile, tools, generated dependency
+lock and every other inherited environment input fixed. The candidate repeats
+those cases with absence assertions in the build script and Rust compiler;
+its probe also asserts that an unknown `CODEX_BUILD_FIXTURE_INPUT` remains
+visible. Those additional probe assertions distinguish the candidate fixture
+source from the control: this is a cache-behavior experiment, not a matched
+cross-version raw-Wasm-size or compile-time benchmark.
+
+| Case | Control | Candidate |
+| --- | --- | --- |
+| First build with absent IDs | Miss | Miss |
+| Session A, all other inputs unchanged | Miss, identical compiler Wasm | Hit, identical inputs/release/compiler Wasm |
+| Session B, all other inputs unchanged | Miss, identical compiler Wasm | Hit, identical inputs/release/compiler Wasm |
+| Actual build-script input changes | Miss, compiler Wasm changes | Miss, compiler Wasm changes |
+| Dependency source or governed config changes | Miss | Miss |
+
+The candidate also preserves Candid-extraction hits for absent/A/B/absent IDs,
+with output equal to fresh extraction. The native extractor verifies that the
+IDs are absent at execution. Independently changing an unknown CODEX input
+invalidates extraction reuse; repeating its unchanged value hits. Complete-build
+diagnostics retain that unknown input's changed-key attribution without exposing
+values. Existing credential and shell-depth checks remain covered.
+
+### Adopted boundary and qualification
+
+The existing `build_environment` owner removes exactly the credential-path key
+and these two correlation IDs; it continues setting `SHLVL=0`. The same exact
+list governs child execution and cache inputs. Make, CI, sandbox/permission,
+compiler and unknown launcher keys remain bound. Both cache owners include the
+environment policy source in identity, so adoption incurs one initial miss.
+No new cache, release-identity relaxation or downstream filtering is introduced.
+Build scripts can no longer consume the two withheld session IDs.
+
+Focused commands, each through `scripts/ci/run-with-test-scratch.sh` with
+`ICP_ENVIRONMENT=local`:
+
+- Control: `cargo test --locked -p canic-host --lib canister_build::reuse::tests::complete::environment:: -- --nocapture`.
+  One test passes, recording two `reuse=false unchanged_wasm=true` observations.
+- Candidate: `cargo test --locked -p canic-host --lib canister_build::`.
+  70 pass; one existing real-extractor benchmark remains ignored.
+- `cargo clippy --locked -p canic-host --lib --tests -- -D warnings` passes.
+  Changed-file rustfmt and whitespace checks pass.
+
+Logs: `/tmp/canic-session-reuse-control.log`,
+`/tmp/canic-session-reuse-candidate.log`, `/tmp/canic-session-reuse-clippy.log`.
+Control input hashes are also in `/tmp/canic-session-control-inputs.json`.
+
+Limits: complete-release manifests are synthetic; compiler Wasm is real. The
+fixture deliberately invokes Cargo even on a complete-cache hit to compare its
+output. It does not measure elapsed time saved by skipping an actual production
+pipeline. Extraction uses a native fixture, not a newly qualified real extractor.
+No matched direct/Make/CI launcher matrix, Toko workload build or live deployment
+was run. Other environment changes can still cause misses. Keep this bounded
+change; leave whole-deployment speedup and wider launcher qualification unclaimed.
+
+### Feedback snapshot
+
+During the work, Toko recorded .23 adoption paired with IcyDB 0.258.0. Its new
+CANIC-166 attempt stopped at its own qualified release's tool-version binding,
+before Canic live review. No new confirmed Canic defect was found. Downstream
+managed qualification and actual source review/apply/replay remain outstanding;
+no sibling files were changed. Feedback snapshots read after the update:
+
+| Read-only feedback | SHA-256 |
+| --- | --- |
+| Toko docs/upstream/canic.md | `9e0285f0625843018bc7cb1b922759bf84285dc5c7de85fda7c5dfc004c954e3` |
+| Toko docs/upstream/icydb.md | `314c2d1623486012fb46c01b01cdbd8b591641161d4c1aeaa22e2569a53a0629` |
+
+
 ## Native debug-information reduction — 2026-09-17
 
 The maintainer requested another speed attempt before publishing .22. Retained

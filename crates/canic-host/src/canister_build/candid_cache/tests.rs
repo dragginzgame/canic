@@ -101,14 +101,26 @@ fn shell_depth_and_credentials_preserve_extraction_reuse_and_other_inputs_invali
     cache_fixture(&root);
     fs::write(root.join("role.wasm"), declaration_module("service : {};")).unwrap();
     let thread = std::thread::current();
-    let invoke = |credential: Option<&str>, input: &str, depth: &str| {
+    let invoke = |credential: Option<&str>,
+                  input: &str,
+                  depth: &str,
+                  session: Option<(&str, &str)>,
+                  launcher_input: &str| {
         let mut command = Command::new(env::current_exe().unwrap());
         command
             .args(["--exact", thread.name().unwrap()])
             .env(CHILD_ROOT, &root)
             .env(BUILD_INPUT, input)
             .env("SHLVL", depth)
+            .env("CODEX_BUILD_FIXTURE_INPUT", launcher_input)
+            .env_remove("CODEX_SESSION_ID")
+            .env_remove("CODEX_THREAD_ID")
             .env_remove(CREDENTIAL);
+        if let Some((session, thread)) = session {
+            command
+                .env("CODEX_SESSION_ID", session)
+                .env("CODEX_THREAD_ID", thread);
+        }
         if let Some(value) = credential {
             command.env(CREDENTIAL, value);
         }
@@ -121,10 +133,29 @@ fn shell_depth_and_credentials_preserve_extraction_reuse_and_other_inputs_invali
         );
         fs::read(root.join("reused")).unwrap()
     };
-    assert_eq!(invoke(Some("fixture-credential-a"), "alpha", "1"), [0]);
-    assert_eq!(invoke(Some("fixture-credential-b"), "alpha", "2"), [1]);
-    assert_eq!(invoke(None, "alpha", "7"), [1]);
-    assert_eq!(invoke(Some("fixture-credential-a"), "beta", "1"), [0]);
+    assert_eq!(
+        invoke(Some("fixture-credential-a"), "alpha", "1", None, "alpha"),
+        [0]
+    );
+    assert_eq!(
+        invoke(Some("fixture-credential-b"), "alpha", "2", None, "alpha"),
+        [1]
+    );
+    assert_eq!(invoke(None, "alpha", "7", None, "alpha"), [1]);
+    for session in [
+        Some(("session-a", "thread-a")),
+        Some(("session-b", "thread-b")),
+        None,
+    ] {
+        assert_eq!(invoke(None, "alpha", "1", session, "alpha"), [1]);
+    }
+    // Unknown CODEX keys remain ordinary child inputs and independently invalidate reuse.
+    assert_eq!(invoke(None, "alpha", "1", None, "beta"), [0]);
+    assert_eq!(invoke(None, "alpha", "1", None, "beta"), [1]);
+    assert_eq!(
+        invoke(Some("fixture-credential-a"), "beta", "1", None, "beta"),
+        [0]
+    );
     fs::remove_dir_all(root).unwrap();
 }
 
@@ -374,6 +405,8 @@ fn cache_fixture(root: &Path) -> CandidExtractionCache {
         r#"
 fn main() {
     assert!(std::env::var_os("CANIC_ICP_IDENTITY_PASSWORD_FILE").is_none());
+    assert!(std::env::var_os("CODEX_SESSION_ID").is_none());
+    assert!(std::env::var_os("CODEX_THREAD_ID").is_none());
     let bytes = std::fs::read(std::env::args_os().nth(1).unwrap()).unwrap();
     if !bytes.starts_with(b"\0asm") { std::process::exit(1); }
     let marker = b"service : {";

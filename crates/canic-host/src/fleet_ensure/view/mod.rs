@@ -4,6 +4,7 @@
 //! Does not own: persisted authority, funding admission or cycle effects.
 //! Boundary: projections describe assumptions and never authorize spending.
 
+pub mod operator_mint;
 pub mod startup_funding;
 pub(in crate::fleet_ensure) mod terminal_source;
 

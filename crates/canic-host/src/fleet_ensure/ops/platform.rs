@@ -1047,28 +1047,43 @@ impl IcpEnsurePlatform {
         &self,
         state: &FleetEnsureStateRecord,
     ) -> Result<bool, IcpEnsurePlatformError> {
-        let mut owners = Vec::new();
-        for configured in self.desired.canisters.iter().filter(|configured| {
-            configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
-                && matches!(
-                    configured.kind,
-                    DesiredCanisterKind::Coordinator
-                        | DesiredCanisterKind::Root
-                        | DesiredCanisterKind::Store
-                )
-        }) {
-            let live = self
-                .current_principal(state, &configured.name)
-                .map(|principal| self.status_optional(principal))
-                .transpose()?
-                .flatten();
-            if live
-                .as_ref()
-                .is_some_and(|live| live.status != CanisterRuntimeStatus::Running)
-            {
-                return Ok(false);
+        let configured = self
+            .desired
+            .canisters
+            .iter()
+            .filter(|configured| {
+                configured.presence == crate::fleet_ensure::model::DesiredPresence::Present
+                    && matches!(
+                        configured.kind,
+                        DesiredCanisterKind::Coordinator
+                            | DesiredCanisterKind::Root
+                            | DesiredCanisterKind::Store
+                    )
+            })
+            .collect::<Vec<_>>();
+        let mut owners = Vec::with_capacity(configured.len());
+        for batch in configured.chunks(super::bounded_observations::MAX_IN_FLIGHT) {
+            let mut statuses = self.read_status_batch(
+                batch
+                    .iter()
+                    .filter_map(|owner| self.current_principal(state, &owner.name)),
+            );
+            // Consume in configured order after draining this batch. A stopped owner
+            // still precedes a later transport error; neither starts another batch.
+            for configured in batch {
+                let live = self
+                    .current_principal(state, &configured.name)
+                    .map(|principal| self.status_batch_response(&mut statuses, principal))
+                    .transpose()?
+                    .flatten();
+                if live
+                    .as_ref()
+                    .is_some_and(|live| live.status != CanisterRuntimeStatus::Running)
+                {
+                    return Ok(false);
+                }
+                owners.push((*configured, live));
             }
-            owners.push((configured, live));
         }
         // Check running state and module identity from the same fresh status read.
         // Keep missing-owner/module decisions after the status scan so transport
@@ -2924,43 +2939,61 @@ impl IcpEnsurePlatform {
         state: &FleetEnsureStateRecord,
         observed: &mut BTreeMap<String, Option<LiveCanister>>,
     ) -> Result<(), IcpEnsurePlatformError> {
-        let mut seen = BTreeSet::new();
-        let requests = configured
-            .iter()
-            .filter_map(|canister| self.current_principal(state, &canister.name))
-            .filter(|principal| seen.insert(*principal))
-            .filter(|principal| matches!(self.cached_status(principal), StatusCacheEntry::Miss))
-            .collect::<Vec<_>>();
-        let icp = &self.icp;
-        let mut results = super::bounded_observations::collect(&requests, |principal| {
-            Ok::<_, std::convert::Infallible>((*principal, Self::read_status_with(icp, principal)))
-        })
-        .expect("read outcomes are retained for ordered authority decisions")
-        .into_iter()
-        .collect::<BTreeMap<_, _>>();
+        let mut results = self.read_status_batch(
+            configured
+                .iter()
+                .filter_map(|canister| self.current_principal(state, &canister.name)),
+        );
         for canister in configured {
             let Some(principal) = self.current_principal(state, &canister.name) else {
                 observed.insert(canister.name.clone(), None);
                 continue;
             };
-            let status = if let StatusCacheEntry::Hit(cached) = self.cached_status(principal) {
-                Ok(cached)
-            } else {
-                results
-                    .remove(principal)
-                    .unwrap_or_else(|| self.status_optional(principal))
-            };
-            if let Ok(live) = &status
-                && let Some(snapshot) = self.observation_snapshot.borrow_mut().as_mut()
-            {
-                snapshot
-                    .statuses
-                    .insert(principal.to_string(), live.clone());
-            }
+            let status = self.status_batch_response(&mut results, principal);
             let live = self.configured_status_or_root(canister, principal, state, status)?;
             observed.insert(canister.name.clone(), live);
         }
         Ok(())
+    }
+
+    fn read_status_batch<'a>(
+        &self,
+        principals: impl Iterator<Item = &'a str>,
+    ) -> BTreeMap<&'a str, Result<Option<LiveCanister>, IcpEnsurePlatformError>> {
+        let mut seen = BTreeSet::new();
+        let requests = principals
+            .filter(|principal| seen.insert(*principal))
+            .filter(|principal| matches!(self.cached_status(principal), StatusCacheEntry::Miss))
+            .collect::<Vec<_>>();
+        let icp = &self.icp;
+        super::bounded_observations::collect(&requests, |principal| {
+            Ok::<_, std::convert::Infallible>((*principal, Self::read_status_with(icp, principal)))
+        })
+        .expect("read outcomes are retained for ordered authority decisions")
+        .into_iter()
+        .collect()
+    }
+
+    fn status_batch_response(
+        &self,
+        results: &mut BTreeMap<&str, Result<Option<LiveCanister>, IcpEnsurePlatformError>>,
+        principal: &str,
+    ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
+        let status = if let StatusCacheEntry::Hit(cached) = self.cached_status(principal) {
+            Ok(cached)
+        } else {
+            results
+                .remove(principal)
+                .unwrap_or_else(|| self.status_optional(principal))
+        };
+        if let Ok(live) = &status
+            && let Some(snapshot) = self.observation_snapshot.borrow_mut().as_mut()
+        {
+            snapshot
+                .statuses
+                .insert(principal.to_string(), live.clone());
+        }
+        status
     }
 
     fn cached_status(&self, principal: &str) -> StatusCacheEntry {
@@ -5548,6 +5581,52 @@ echo effect >> effects
             fixture
         }
 
+        fn synchronized_owners(count: usize) -> Self {
+            let mut fixture = Self::new();
+            for index in fixture.platform.desired.canisters.len()..count {
+                let mut root = fixture.platform.desired.canisters[1].clone();
+                root.name = format!("owner-{index:02}");
+                root.principal = Some(root.name.clone());
+                fixture.status(&root.name, "Running", true);
+                fixture.platform.desired.canisters.push(root);
+            }
+            let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+            std::fs::write(
+                fixture.root.join("icp"),
+                format!(
+                    r#"#!/bin/sh
+if [ "$1" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi
+while [ "$#" -gt 0 ] && [ "$1" != status ]; do shift; done
+shift
+cd '{}'
+printf 'start:%s\n' "$1" >> events
+started=$(grep -c '^start:' events)
+goal=$(( (started + {bound} - 1) / {bound} * {bound} ))
+[ "$goal" -le {count} ] || goal={count}
+attempts=0
+while [ "$(grep -c '^start:' events)" -lt "$goal" ]; do
+    attempts=$((attempts + 1))
+    [ "$attempts" -lt 500 ] || exit 1
+    sleep 0.01
+done
+if [ -e "$1.delay" ]; then
+    attempts=0
+    while ! grep -q '^finish:root$' events; do
+        attempts=$((attempts + 1))
+        [ "$attempts" -lt 500 ] || exit 1
+        sleep 0.01
+    done
+fi
+printf 'finish:%s\n' "$1" >> events
+cat "$1.json"
+"#,
+                    fixture.root.display()
+                ),
+            )
+            .unwrap();
+            fixture
+        }
+
         fn status(&self, name: &str, status: &str, current_module: bool) {
             let module = if current_module {
                 artifact_hash(&self.root.join("owner.wasm")).unwrap()
@@ -7343,6 +7422,115 @@ esac
 
     #[cfg(unix)]
     #[test]
+    fn protocol_owner_observations_overlap_within_bound_and_drain_partial_batches() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let count = bound * 2 + 1;
+        let fixture = ProtocolOwnersFixture::synchronized_owners(count);
+        assert!(
+            fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        let events = std::fs::read_to_string(fixture.root.join("events")).unwrap();
+        let mut active = 0;
+        let mut maximum = 0;
+        let mut completed = 0;
+        for event in events.lines() {
+            if event.starts_with("start:") {
+                active += 1;
+                maximum = maximum.max(active);
+            } else {
+                assert!(event.starts_with("finish:"));
+                assert!(active > 0);
+                active -= 1;
+                completed += 1;
+            }
+            assert!(active <= bound);
+        }
+        assert_eq!(active, 0);
+        assert_eq!(maximum, bound);
+        assert_eq!(completed, count);
+        assert_eq!(
+            fixture.platform.icp.remote_call_count(),
+            u64::try_from(count).unwrap()
+        );
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn protocol_owner_observations_drain_failure_keep_order_and_retry_fresh() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let count = bound + 1;
+        let fixture = ProtocolOwnersFixture::synchronized_owners(count);
+        let wrong = std::fs::read(fixture.root.join("store.json")).unwrap();
+        std::fs::write(fixture.root.join("coordinator.json"), wrong).unwrap();
+        std::fs::write(fixture.root.join("coordinator.delay"), b"").unwrap();
+        std::fs::remove_file(fixture.root.join("root.json")).unwrap();
+        assert!(
+            matches!(fixture.platform.current_protocol_owners_are_ready(&fixture.state),
+                Err(IcpEnsurePlatformError::StatusIdentityMismatch { expected, .. }) if expected == "coordinator"
+            )
+        );
+        let events = std::fs::read_to_string(fixture.root.join("events")).unwrap();
+        assert_eq!(
+            events
+                .lines()
+                .filter(|event| event.starts_with("finish:"))
+                .count(),
+            bound
+        );
+        assert!(!events.contains("owner-04"));
+        assert!(events.find("finish:root").unwrap() < events.find("finish:coordinator").unwrap());
+        assert_eq!(
+            fixture.platform.icp.remote_call_count(),
+            u64::try_from(bound).unwrap()
+        );
+        fixture.status("coordinator", "Running", true);
+        fixture.status("root", "Running", true);
+        std::fs::remove_file(fixture.root.join("events")).unwrap();
+        assert!(
+            fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        assert_eq!(
+            fixture.platform.icp.remote_call_count(),
+            u64::try_from(bound + count).unwrap()
+        );
+        assert!(fixture.platform.observation_snapshot.borrow().is_none());
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn protocol_owner_observations_stopped_owner_precedes_later_failure() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let fixture = ProtocolOwnersFixture::synchronized_owners(bound + 1);
+        fixture.status("coordinator", "Stopped", true);
+        std::fs::remove_file(fixture.root.join("root.json")).unwrap();
+        assert!(
+            !fixture
+                .platform
+                .current_protocol_owners_are_ready(&fixture.state)
+                .unwrap()
+        );
+        let events = std::fs::read_to_string(fixture.root.join("events")).unwrap();
+        assert_eq!(
+            events
+                .lines()
+                .filter(|event| event.starts_with("finish:"))
+                .count(),
+            bound
+        );
+        assert!(!events.contains("owner-04"));
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn protocol_owner_observations_read_each_owner_once_and_refresh_between_calls() {
         let fixture = ProtocolOwnersFixture::new();
         assert!(
@@ -7351,10 +7539,10 @@ esac
                 .current_protocol_owners_are_ready(&fixture.state)
                 .unwrap()
         );
-        assert_eq!(
-            std::fs::read_to_string(fixture.root.join("calls")).unwrap(),
-            "coordinator\nroot\nstore\n"
-        );
+        let calls = std::fs::read_to_string(fixture.root.join("calls")).unwrap();
+        let mut owners = calls.lines().collect::<Vec<_>>();
+        owners.sort_unstable();
+        assert_eq!(owners, ["coordinator", "root", "store"]);
         fixture.status("store", "Stopping", true);
         assert!(
             !fixture

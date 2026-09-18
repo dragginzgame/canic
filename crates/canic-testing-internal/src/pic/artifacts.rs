@@ -5,9 +5,10 @@ use canic_host::role_contract::{
 use ic_testkit::artifacts::{
     ArtifactCacheMaintenance, ArtifactCachePrunePolicy, ArtifactCacheSpec, LabeledWasmBuildSpec,
     SharedIncrementalTargetMaintenanceConfig, SharedIncrementalTargetMaintenanceFailureMode,
-    SharedIncrementalTargetPrunePolicy, WasmBuildBatchConfig, WasmBuildBatchProgressEvent,
-    WasmBuildBatchReport, WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase,
-    WasmBuildRecord, WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
+    SharedIncrementalTargetMaintenanceOutcome, SharedIncrementalTargetPrunePolicy,
+    WasmBuildBatchConfig, WasmBuildBatchProgressEvent, WasmBuildBatchReport,
+    WasmBuildProgressConfig, WasmBuildProgressEvent, WasmBuildProgressPhase, WasmBuildRecord,
+    WasmBuildSpec, build_wasm_canisters_cached_batch_with_config_and_progress,
     resolve_cargo_build_inputs,
 };
 #[cfg(all(
@@ -36,7 +37,9 @@ const INTERNAL_TEST_WASM_CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_WASM_CACHE_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
 const INTERNAL_TEST_WASM_HEARTBEAT_INTERVAL: Duration = Duration::from_secs(15);
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_AGE: Duration = Duration::from_hours(168);
-const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES: u64 = 4 * 1024 * 1024 * 1024;
+// The observed local compiler footprint is 4.36 GiB. Whole-target pruning at
+// 4 GiB discards useful compilation; 8 GiB leaves headroom while bounding retention.
+const INTERNAL_TEST_SHARED_WASM_TARGET_MAX_BYTES: u64 = 8 * 1024 * 1024 * 1024;
 const INTERNAL_TEST_SHARED_WASM_TARGET_MAINTENANCE_INTERVAL: Duration = Duration::from_hours(1);
 
 /// Bind external artifact reuse to the actual configured canonical Root Cargo graph.
@@ -615,12 +618,29 @@ fn report_wasm_build_progress(event: WasmBuildBatchProgressEvent) {
             event: WasmBuildProgressEvent::SharedTargetMaintenanceFinished { outcome },
             ..
         } => {
-            progress::detail("WASM", &format!("{label}: shared target {outcome}"));
+            report_shared_target_maintenance(&label, &outcome);
         }
         WasmBuildBatchProgressEvent::BuildFailed { label, .. } => {
             progress::event("WASM", ProgressStatus::Fail, &label);
         }
         _ => {}
+    }
+}
+
+fn report_shared_target_maintenance(
+    label: &str,
+    outcome: &SharedIncrementalTargetMaintenanceOutcome,
+) {
+    let description = format!("{label}: shared target {outcome}");
+    if outcome.failure_message().is_some() {
+        progress::event("CACHE", ProgressStatus::Warn, &description);
+    } else if outcome
+        .maintenance()
+        .is_some_and(ic_testkit::artifacts::SharedIncrementalTargetMaintenance::was_cleared)
+    {
+        progress::event("CACHE", ProgressStatus::Info, &description);
+    } else {
+        progress::detail("CACHE", &description);
     }
 }
 
@@ -711,6 +731,7 @@ fn build_ci_wasm_artifacts_script(workspace_root: &Path) -> PathBuf {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ic_testkit::artifacts::maintain_shared_incremental_target_at_most_every;
 
     #[test]
     fn retained_artifact_handoff_survives_replacement_and_pruning() {
@@ -964,5 +985,53 @@ mod tests {
             maintenance.failure_mode(),
             SharedIncrementalTargetMaintenanceFailureMode::BestEffort
         );
+    }
+
+    #[test]
+    fn shared_wasm_target_retains_working_set_and_clears_excess() {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let root = std::env::temp_dir().join(format!(
+            "canic-compiler-retention-{}-{nonce}",
+            std::process::id()
+        ));
+        fs::create_dir_all(root.join("src")).unwrap();
+        fs::write(
+            root.join("Cargo.toml"),
+            "[package]\nname = \"retention_fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n",
+        )
+        .unwrap();
+        fs::write(root.join("src/lib.rs"), "pub fn fixture() {}\n").unwrap();
+        let target = root.join("target/compiler");
+        fs::create_dir_all(&target).unwrap();
+        let artifact = target.join("working-set.rlib");
+        let spec = WasmBuildSpec::new(
+            &root,
+            &root.join("target/exact"),
+            &["retention_fixture"],
+            "debug",
+        )
+        .with_shared_incremental_target(&target);
+        // Sparse files exercise the actual logical-byte accounting without
+        // allocating gigabytes of test data or touching a live compiler cache.
+        for (bytes, should_clear) in [(5_u64 << 30, false), (9_u64 << 30, true)] {
+            fs::File::create(&artifact).unwrap().set_len(bytes).unwrap();
+            let outcome = maintain_shared_incremental_target_at_most_every(
+                &spec,
+                internal_test_shared_wasm_target_prune_policy(),
+                Duration::ZERO,
+            )
+            .unwrap();
+            let report = outcome.maintenance().unwrap();
+            assert!(report.logical_size_bytes_before() >= bytes);
+            assert_eq!(report.was_cleared(), should_clear);
+            assert_eq!(artifact.exists(), !should_clear);
+            assert!(target.join(".ic-testkit/wasm-incremental.lock").is_file());
+            assert!(root.join("src/lib.rs").is_file());
+            report_shared_target_maintenance("retention fixture", &outcome);
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 }

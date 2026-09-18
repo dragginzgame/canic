@@ -502,8 +502,21 @@ fast_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" fast)" ||
 if rg -- '(^==> plan:.*--(workspace|lib|bins)|pocketic-serial)' <<<"$fast_test_plan" >/dev/null; then
     fail "the fast lane includes workspace units or PocketIC"
 fi
-CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full >/dev/null ||
+full_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full)" ||
     fail "the full workspace test plan cannot be resolved"
+rg -F -- '--workspace --lib --bins governed_pocketic_ -- --test-threads=1 --nocapture --ignored' \
+    <<<"$full_test_plan" >/dev/null ||
+    fail "full validation must reuse the ordinary workspace graph for governed host proofs"
+# This filter is reserved for host proofs: selecting the already-built workspace
+# must not admit another package's ignored tests into the serial host stage.
+while IFS= read -r source_file; do
+    [[ "$source_file" == "$ROOT/crates/canic-host/"* ]] && continue
+    while IFS= read -r function_name; do
+        if test_is_ignored "$source_file" "$function_name"; then
+            fail "the governed_pocketic_ ignored-test filter is reserved for canic-host"
+        fi
+    done < <(sed -nE 's/^[[:space:]]*fn[[:space:]]+([[:alnum:]_]*governed_pocketic_[[:alnum:]_]*)\(.*/\1/p' "$source_file")
+done < <(rg -l 'fn .*governed_pocketic_' "$ROOT/crates" --glob '*.rs')
 ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary)" ||
     fail "the ordinary workspace test plan cannot be resolved"
 rg -F -- '--workspace --lib --bins' <<<"$ordinary_test_plan" >/dev/null ||
@@ -512,8 +525,14 @@ if rg -- '^==> plan:.*(--exclude|governed-pocketic-tests|--ignored)' <<<"$ordina
     fail "the ordinary workspace plan excludes library coverage or enables stateful tests"
 fi
 ordinary_cargo_invocations="$(rg -c '^==> plan: cargo test ' <<<"$ordinary_test_plan")"
-[[ "$ordinary_cargo_invocations" -gt 0 && "$ordinary_cargo_invocations" -le 2 ]] ||
-    fail "the ordinary workspace plan must compile through at most two Cargo invocations"
+[[ "$ordinary_cargo_invocations" -eq 1 ]] ||
+    fail "ordinary unit/binary and integration tests must share one Cargo invocation"
+ordinary_selected_targets="$(sed -n 's/^==> plan: cargo test //p' <<<"$ordinary_test_plan" |
+    awk '{ for (i = 1; i < NF; i++) if ($i == "--test") print $(i + 1) }' | LC_ALL=C sort)"
+ordinary_expected_targets="$(awk -F '\t' 'NR > 1 && $3 != "integration" && $4 == "parallel" && $5 == "ordinary" { print $2 }' \
+    "$WORKSPACE_TEST_INVENTORY" | LC_ALL=C sort)"
+[[ "$ordinary_selected_targets" = "$ordinary_expected_targets" ]] ||
+    fail "ordinary workspace selection differs from its exact integration inventory"
 ordinary_inventory_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { count++ } END { print count + 0 }' "$WORKSPACE_TEST_INVENTORY")"
 ordinary_package_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { print $1 }' "$WORKSPACE_TEST_INVENTORY" | sort -u | wc -l)"
 rg -F "==> combined inventory: $ordinary_inventory_count targets across $ordinary_package_count packages" \

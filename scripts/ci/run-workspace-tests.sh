@@ -387,12 +387,6 @@ run_test() {
     return 0
 }
 
-run_parallel_test() {
-    local label="$1"
-    shift
-    run_test parallel "$label" "$@"
-}
-
 run_serial_pocketic_test() {
     local label="$1"
     shift
@@ -401,7 +395,8 @@ run_serial_pocketic_test() {
 
 is_governed_canic_host_pocketic_test() {
     [[ "$TARGETED_POCKETIC_TEST" = \
-        'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ]]
+        'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ||
+        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::operator_mint_tests::governed_pocketic_operator_mint_recovers_receipts' ]]
 }
 
 run_inventory_tests() {
@@ -432,39 +427,27 @@ run_inventory_tests() {
     run_test "$execution" "$label" "${cargo_args[@]}"
 }
 
-run_combined_inventory_tests() {
-    local label="$1"
-    local execution="$2"
-    local suite="$3"
-    shift 3
-    local packages=("$@")
-    local cargo_args=()
+run_ordinary_tests() {
+    # Keep unit/binary and explicitly inventoried integration targets on one
+    # workspace graph. A second package-scoped pass changes feature unification.
+    local cargo_args=(--workspace --lib --bins)
     local -A selected_packages=()
-    local package
-    for package in "${packages[@]}"; do
-        selected_packages["$package"]=1
-        cargo_args+=(-p "$package")
-    done
-
     local row_package row_target release_lane row_execution row_suite
     local selected=0
     while IFS=$'\t' read -r row_package row_target release_lane row_execution row_suite; do
-        [[ -n "${selected_packages[$row_package]:-}" ]] || continue
-        [[ "$row_execution" = "$execution" && "$row_suite" = "$suite" ]] || continue
+        [[ "$row_execution/$row_suite" = "parallel/ordinary" ]] || continue
         [[ "$release_lane" != "integration" ]] || continue
-        if [[ "$MODE" = "fast" && "$release_lane" != "fast" ]]; then
-            continue
-        fi
+        selected_packages["$row_package"]=1
         cargo_args+=(--test "$row_target")
         selected=$((selected + 1))
     done < <(tail -n +2 "$INVENTORY")
 
     [[ "$selected" -gt 0 ]] || {
-        echo "no $MODE inventory targets selected for combined $execution/$suite suite" >&2
+        echo "no ordinary integration targets selected" >&2
         exit 2
     }
-    echo "==> combined inventory: $selected targets across ${#packages[@]} packages"
-    run_test "$execution" "$label" "${cargo_args[@]}"
+    echo "==> combined inventory: $selected targets across ${#selected_packages[@]} packages"
+    run_test parallel "workspace ordinary tests" "${cargo_args[@]}"
 }
 
 clear_pocketic_build_targets() {
@@ -564,34 +547,19 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     cargo fetch --locked
 fi
 
-# The internal library's ordinary tests join the workspace graph. Its stateful
-# catalogue is compiled only when the serial PocketIC lane enables its feature.
-if [[ "$MODE" == "full" || "$MODE" == "ordinary" ]]; then
-    run_parallel_test \
-        "workspace parallel lib/bin tests" \
-        --workspace \
-        --lib \
-        --bins
-fi
-
 if [[ "$MODE" == "fast" ]]; then
     run_inventory_tests "fast release-surface integration tests" canic parallel ordinary
     finish_test_run
     exit 0
 fi
 
-if [[ "$MODE" != "pocketic" && "$MODE" != "targeted-pocketic" ]]; then
+if [[ "$MODE" == "full" || "$MODE" == "ordinary" ]]; then
     # Every checked-in top-level integration target is classified by the
     # guarded inventory. Parallel-safe targets form an independently runnable
     # CI lane before the expensive PocketIC work.
-    run_combined_inventory_tests \
-        "ordinary integration tests" \
-        parallel \
-        ordinary \
-        canic-cli \
-        canic-core \
-        canic-testing-internal \
-        canic
+    # The internal library's stateful catalogue remains disabled until the
+    # serial PocketIC lane selects its feature.
+    run_ordinary_tests
 
     if [[ "$MODE" == "ordinary" ]]; then
         finish_test_run
@@ -674,10 +642,16 @@ run_serial_pocketic_test \
 
 # Private host workflows retain their focused unit-test access to internal
 # orchestration while sharing the same bounded server and serial execution.
+# A full run already compiled workspace lib/bin tests. Select that same graph
+# again so dependency feature unification does not force a second host harness.
+# The filter runs only governed host proofs; other harnesses select no tests.
+host_proof_targets=(-p canic-host --lib)
+if [[ "$MODE" == "full" ]]; then
+    host_proof_targets=(--workspace --lib --bins)
+fi
 run_serial_pocketic_test \
     "canic-host governed PocketIC proofs" \
-    -p canic-host \
-    --lib \
+    "${host_proof_targets[@]}" \
     governed_pocketic_ \
     -- \
     --ignored
