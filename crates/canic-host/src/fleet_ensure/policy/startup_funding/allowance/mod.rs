@@ -6,9 +6,12 @@
 #[cfg(test)]
 mod tests;
 
-use crate::fleet_ensure::view::startup_funding::{
-    StartupChildAccounting, StartupChildFundingAllowance, StartupChildFundingBinding,
-    StartupUsageUnavailable,
+use crate::fleet_ensure::{
+    policy::startup_funding::live_binding,
+    view::startup_funding::{
+        StartupChildAccounting, StartupChildFundingAllowance, StartupChildFundingBinding,
+        StartupUsageUnavailable,
+    },
 };
 use canic_core::{
     bootstrap::compiled::ConfigModel,
@@ -30,18 +33,10 @@ pub(in crate::fleet_ensure) fn project(
     binding: &StartupChildFundingBinding,
     usage: &StartupChildAccounting,
 ) -> Result<StartupChildFundingAllowance, StartupUsageUnavailable> {
-    if binding.release_set.release_build_id != release {
-        return Err(StartupUsageUnavailable::SelectedBuildNotInstalled);
-    }
-    let spec = topology
-        .get(&binding.component_spec)
-        .ok_or(StartupUsageUnavailable::AuthorityMismatch)?;
-    if spec.spec_hash != binding.spec_hash {
-        return Err(StartupUsageUnavailable::PolicyTransition);
-    }
+    live_binding::declared(topology, release, binding)?;
     let source = config
         .component_specs
-        .get(&binding.component_spec)
+        .get(&binding.component.component_spec)
         .and_then(|source| source.get_canister(&binding.role))
         .ok_or(StartupUsageUnavailable::AuthorityMismatch)?;
     let limits = FundingLimits {

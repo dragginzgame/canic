@@ -57,6 +57,14 @@ pub struct CanisterArtifactBuilder {
     toolchain: BuildToolchain,
 }
 
+/// Prepare generated infrastructure manifests and locks before snapshotting source inputs.
+pub fn prepare_workspace_infrastructure_packages(
+    context: &WorkspaceBuildContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    crate::bootstrap_coordinator::prepare_bootstrap_fleet_coordinator_package(context)?;
+    crate::bootstrap_store::prepare_bootstrap_wasm_store_package(context)
+}
+
 ///
 /// CanisterBuildGroup
 ///
@@ -939,6 +947,65 @@ mod tests {
     use super::*;
     use canic_core::ids::BuildNetwork;
 
+    #[test]
+    fn generated_infrastructure_inputs_are_stable_before_compilation() {
+        let directory = crate::test_support::temp_dir("infrastructure-input-preparation");
+        let package = directory.join("consumer");
+        fs::create_dir_all(package.join("src")).unwrap();
+        fs::write(
+            package.join("Cargo.toml"),
+            "[package]\nname = \"fixture-consumer\"\nversion = \"0.1.0\"\nedition = \"2024\"\n[workspace]\n",
+        )
+        .unwrap();
+        fs::write(package.join("src/lib.rs"), "").unwrap();
+        let context = WorkspaceBuildContext {
+            role: "root".into(),
+            profile: CanisterBuildProfile::Fast,
+            environment: "local".into(),
+            build_network: canic_core::ids::BuildNetwork::Local,
+            workspace_root: PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../.."),
+            icp_root: directory.clone(),
+            config_path: package.join("canic.toml"),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: None,
+        };
+        let spec = ic_testkit::artifacts::WasmBuildSpec::new(
+            &package,
+            &directory.join("target"),
+            &["fixture-consumer"],
+            "release",
+        );
+        let cold = ic_testkit::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
+        prepare_workspace_infrastructure_packages(&context).unwrap();
+        assert!(
+            !cold.is_content_current().unwrap(),
+            "late package preparation changes an enclosing package's frozen inputs"
+        );
+        let prepared = ic_testkit::artifacts::resolve_cargo_build_inputs(&spec).unwrap();
+        prepare_workspace_infrastructure_packages(&context).unwrap();
+        assert!(prepared.is_content_current().unwrap());
+        assert!(prepared.is_current(&spec).unwrap());
+        for name in ["canic-fleet-coordinator", "canic-fleet-wasm-store"] {
+            let root = package.join(".canic/generated").join(name);
+            assert!(root.join("Cargo.lock").is_file());
+            assert!(root.join("src/lib.rs").is_file());
+        }
+        assert!(
+            !directory.join("target").exists(),
+            "preparation must not compile"
+        );
+        fs::write(
+            package.join(".canic/generated/canic-fleet-wasm-store/src/lib.rs"),
+            "changed source",
+        )
+        .unwrap();
+        assert!(
+            !prepared.is_content_current().unwrap(),
+            "preparing early must not exclude later source changes"
+        );
+        fs::remove_dir_all(directory).unwrap();
+    }
     #[test]
     fn configured_specs_group_into_one_cargo_command_per_workspace() {
         let specs = [

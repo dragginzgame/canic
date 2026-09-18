@@ -11,7 +11,9 @@ use crate::{
             DrainAuthority, EffectRecord, EffectState, EnsureAction,
             EstateFundingDomainObservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion,
             FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
-            LiveCanister, RootOwnedCanisterLifecycle, create_balance_is_terminal,
+            FleetReinstallRecord, FleetReinstallSourceRecord, FleetTerminalRetirementRecord,
+            FleetTerminalSourceRecord, LiveCanister, RootOwnedCanisterLifecycle,
+            create_balance_is_terminal,
             operator_mint::{
                 OperatorMintAuthority, OperatorMintNotificationOutcomeRecord,
                 OperatorMintReceiptRecord, OperatorMintTransferOutcomeRecord,
@@ -3051,7 +3053,7 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
         )],
     );
     let source = sha256_hex(b"retained initial operator shortfall");
-    let report = workflow::plan(
+    let mut report = workflow::plan(
         &fixture.root,
         &fixture.desired,
         &source,
@@ -3084,6 +3086,27 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
     .unwrap();
     journal.effects.push(prepared.record);
     journal.initial_operator_cycles = 0;
+    let live = fixture.platform.live[TREASURY].clone();
+    retain_recorded_retirement(
+        &mut report.plan,
+        vec![crate::fleet_ensure::model::RootManagementBinding {
+            controllers: live.controllers.clone(),
+            module_sha256: live.module_sha256.clone().unwrap(),
+            name: "treasury".into(),
+            principal: TREASURY.into(),
+            subnet: SUBNET.into(),
+        }],
+    );
+    fixture.platform.reinstall_authority = Some(BTreeMap::from([(
+        "treasury".into(),
+        crate::fleet_ensure::model::RootManagementCanisterObservation {
+            live,
+            name: "treasury".into(),
+            subnet: SUBNET.into(),
+        },
+    )]));
+    journal.plan_sha256.clone_from(&report.plan.plan_sha256);
+    crate::fleet_ensure::ops::write_plan(&paths, &report.plan).unwrap();
     crate::fleet_ensure::ops::write_journal(&paths, &journal).unwrap();
     fixture.platform.set_operator_cycles(0);
     fixture.platform.operator_funding =
@@ -3093,6 +3116,39 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
             operator_cycles: 0,
         });
     let original_plan = fs::read(&paths.plan).unwrap();
+    assert_eq!(
+        workflow::retained_in_progress_plan::<MockError>(&fixture.root, "local", "test-fleet")
+            .unwrap(),
+        Some(report.plan.clone())
+    );
+    assert!(!workflow::operator_mint::fresh_quote_available(&paths).unwrap());
+    assert!(workflow::operator_mint::status(&paths).unwrap().is_none());
+    let mut tampered: serde_json::Value = serde_json::from_slice(&original_plan).unwrap();
+    tampered["reinstall"]["source"]["terminal_retirement"]["conservation"]["measured_execution_burn_cycles"] =
+        serde_json::json!("0");
+    fs::write(&paths.plan, serde_json::to_vec(&tampered).unwrap()).unwrap();
+    assert!(matches!(
+        workflow::retained_in_progress_plan::<MockError>(&fixture.root, "local", "test-fleet"),
+        Err(workflow::EnsureWorkflowError::PlanIntegrity)
+    ));
+    assert!(matches!(
+        workflow::operator_mint::status(&paths),
+        Err(workflow::EnsureWorkflowError::PlanIntegrity)
+    ));
+    fs::write(&paths.plan, &original_plan).unwrap();
+    assert!(matches!(
+        workflow::plan_reinstall(
+            &fixture.root, &fixture.desired, "new-release", "test-fleet", 2,
+            &mut fixture.platform,
+        ),
+        Err(workflow::EnsureWorkflowError::RetainedOperationRecoveryRequired {
+            operation_id, plan_sha256,
+        }) if operation_id == report.plan.operation_id && plan_sha256 == report.plan.plan_sha256
+    ));
+    assert_eq!(
+        crate::fleet_ensure::ops::read_journal(&paths).unwrap(),
+        Some(journal.clone())
+    );
     let review = workflow::plan(
         &fixture.root,
         &fixture.desired,
@@ -3166,7 +3222,49 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
             .terminal
     );
     assert_eq!(fixture.platform.mutations, mutations);
+    assert_eq!(fs::read(&paths.plan).unwrap(), original_plan);
     fs::remove_dir_all(fixture.root).unwrap();
+}
+
+/// Attach immutable retirement history to the native funding fixture. This is
+/// evidence-only coverage; managed reset/seal journeys retain their own fixtures.
+pub(super) fn retain_recorded_retirement(
+    plan: &mut FleetEnsurePlan,
+    authorities: Vec<crate::fleet_ensure::model::RootManagementBinding>,
+) {
+    let source_operation = sha256_hex(b"completed retirement source");
+    plan.reinstall = Some(Box::new(FleetReinstallRecord {
+        target_artifacts_sha256: None,
+        activation_reset: None,
+        operation_id: plan.operation_id.clone(),
+        source_operation_id: source_operation.clone(),
+        authorities,
+        assets: Vec::new(),
+        source: Some(Box::new(FleetReinstallSourceRecord {
+            reviewed_desired: *plan.reviewed_desired.clone().unwrap(),
+            wasm_sha256_by_canister: BTreeMap::new(),
+            candid_sha256_by_path: BTreeMap::new(),
+            terminal_retirement: Some(Box::new(FleetTerminalRetirementRecord {
+                source: FleetTerminalSourceRecord {
+                    operation_id: source_operation,
+                    plan_sha256: sha256_hex(b"source plan"),
+                    plan_document_sha256: sha256_hex(b"source plan bytes"),
+                    journal_document_sha256: sha256_hex(b"source journal bytes"),
+                    state_document_sha256: sha256_hex(b"source state bytes"),
+                    phase_document_sha256: BTreeMap::new(),
+                },
+                conservation: serde_json::from_value(serde_json::json!({
+                    "estate_funding_cycles": "0", "exact_estate_creation_fee_cycles": "0",
+                    "exact_unavoidable_fee_cycles": "10", "final_controlled_cycles": "600",
+                    "measured_execution_burn_cycles": "10", "observed_starting_cycles": "500",
+                    "observed_settlement_credit_cycles": "0", "operator_debit_cycles": "120",
+                    "received_new_funding_cycles": "110",
+                }))
+                .unwrap(),
+            })),
+        })),
+    }));
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(plan);
 }
 
 fn retain_operator_credit_fixture(

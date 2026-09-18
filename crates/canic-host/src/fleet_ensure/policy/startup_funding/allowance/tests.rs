@@ -1,8 +1,7 @@
 use super::*;
 use canic_core::{
-    cdk::types::Cycles,
-    control_plane_support::config::ComponentDeploymentConfiguration,
-    ids::{FleetSubnetRootReleaseSet, ReleaseBuildNonce, ReleaseSetDigest},
+    cdk::types::Cycles, control_plane_support::config::ComponentDeploymentConfiguration,
+    ids::ReleaseBuildNonce,
 };
 
 fn limits() -> FundingLimits {
@@ -89,20 +88,11 @@ fn allowance_requires_the_selected_release_spec_and_role() {
         .component_topology;
     let spec = &topology.component_specs[0];
     let release = ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes([1; 32]));
-    let binding = StartupChildFundingBinding {
-        release_set: FleetSubnetRootReleaseSet {
-            release_build_id: release,
-            manifest_digest: ReleaseSetDigest::from_bytes([2; 32]),
-        },
-        spec_hash: spec.spec_hash,
-        parent: "root".into(),
-        role: spec.component_role.clone(),
-        component_spec: spec.component_spec.clone(),
-    };
+    let binding = super::super::tests::funding_binding(spec);
     let expected = project(&config, &topology, release, &binding, &usage()).unwrap();
     assert_eq!(expected.next_request_policy_cap_cycles, Some(5));
     let mut changed = binding.clone();
-    changed.spec_hash = [99; 32];
+    changed.component.spec_hash = [99; 32];
     assert_eq!(
         project(&config, &topology, release, &changed, &usage()),
         Err(StartupUsageUnavailable::PolicyTransition)

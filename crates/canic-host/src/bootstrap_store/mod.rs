@@ -43,6 +43,14 @@ struct BootstrapWasmStoreSource {
     canonical_did_path: PathBuf,
 }
 
+/// Materialize and admit generated package inputs before an artifact cache snapshots them.
+pub fn prepare_bootstrap_wasm_store_package(
+    context: &WorkspaceBuildContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = resolve_bootstrap_wasm_store_source(context)?;
+    require_built_in_wasm_store_contract(&source.manifest_path)
+}
+
 // Build the implicit bootstrap `wasm_store` artifact and populate the canonical
 // local ICP artifact paths for downstream/root builds.
 pub fn build_bootstrap_wasm_store_artifact(

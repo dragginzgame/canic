@@ -257,7 +257,9 @@ pub(in crate::fleet_ensure) fn capture(
     source.terminal_retirement = Some(Box::new(
         crate::fleet_ensure::model::FleetTerminalRetirementRecord {
             source: view.documents.clone(),
-            conservation,
+            conservation: crate::fleet_ensure::model::FleetRetirementConservationRecord::NetBalance(
+                conservation,
+            ),
         },
     ));
     Ok(source)

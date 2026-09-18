@@ -6,8 +6,8 @@
 
 use super::format_cycles;
 use canic_host::fleet_ensure::view::startup_funding::{
-    StartupCoordinatorUsage, StartupFundingForecast, StartupNativeBalance, StartupRootFunding,
-    StartupUsageUnavailable,
+    StartupChildLocalDemand, StartupCoordinatorUsage, StartupDemandUnavailable,
+    StartupFundingForecast, StartupNativeBalance, StartupRootFunding, StartupUsageUnavailable,
 };
 use std::fmt::Write as _;
 
@@ -50,6 +50,7 @@ fn render_usage(text: &mut String, usage: &StartupCoordinatorUsage) {
                 StartupUsageUnavailable::ParentRelayRequired => {
                     "funding parent requires an update relay"
                 }
+                StartupUsageUnavailable::ParentNotObserved => "funding parent was not observed",
                 StartupUsageUnavailable::SelectedBuildNotInstalled => {
                     "selected build not installed"
                 }
@@ -96,7 +97,7 @@ fn render_root(text: &mut String, root: &StartupRootFunding) {
             writeln!(
                 text,
                 "    child_funding_parent: {}; child={}; role={}; component_spec={}",
-                binding.parent, child.child, binding.role, binding.component_spec
+                binding.parent, child.child, binding.role, binding.component.component_spec
             )
             .unwrap();
         }
@@ -121,10 +122,12 @@ fn render_root(text: &mut String, root: &StartupRootFunding) {
                 writeln!(text, "    child_grant_allowance: unavailable ({reason:?}); no unused allowance assumed").unwrap();
             }
         }
+        render_local_demand(text, &child.local_demand);
     }
     if !root.child_usage.is_empty() {
         writeln!(text, "    child_usage_scope: allocation-qualified Root-funded Workloads only; descendant usage requires parent relay; charged totals may include pending grants; recovery quote remains separate").unwrap();
         writeln!(text, "    child_allowance_scope: policy cap only; funding enablement, parent reserves and window eligibility still apply; not remaining demand or approved spending").unwrap();
+        writeln!(text, "    child_local_demand_scope: own threshold only; excludes descendant transfers and burn; balance and ledger are separate observations; next request still requires parent admission; not a recovery quote").unwrap();
     }
     writeln!(text, "    native_balance: {}", balance(root.balance)).unwrap();
     writeln!(
@@ -187,6 +190,28 @@ fn render_root(text: &mut String, root: &StartupRootFunding) {
     }
 }
 
+fn render_local_demand(
+    text: &mut String,
+    demand: &Result<StartupChildLocalDemand, StartupDemandUnavailable>,
+) {
+    match demand {
+        Ok(demand) => {
+            writeln!(text, "    child_local_demand: balance={} cycles; threshold={}; shortfall={} cycles; beyond_lifetime_allowance={} cycles; next_request_policy_cycles={}",
+                demand.observed_balance_cycles,
+                demand.threshold_cycles.map_or_else(|| "disabled".into(), |amount| amount.to_string()),
+                demand.shortfall_cycles, demand.shortfall_beyond_lifetime_allowance_cycles,
+                demand.next_request_policy_cycles).unwrap();
+        }
+        Err(reason) => {
+            writeln!(
+                text,
+                "    child_local_demand: unavailable ({reason:?}); no zero demand assumed"
+            )
+            .unwrap();
+        }
+    }
+}
+
 fn balance(value: StartupNativeBalance) -> String {
     match value {
         StartupNativeBalance::ConfiguredCreation(cycles) => {
@@ -205,9 +230,8 @@ mod tests {
     use super::*;
     use canic_core::{cdk::types::Cycles, ids::CyclesFundingBudget};
 
-    #[test]
-    fn startup_report_distinguishes_evidence_and_retains_sub_display_unit_shortfall() {
-        let mut forecast = StartupFundingForecast {
+    fn forecast() -> StartupFundingForecast {
+        StartupFundingForecast {
             coordinator_usage: StartupCoordinatorUsage::Unavailable(
                 StartupUsageUnavailable::NotObserved,
             ),
@@ -229,7 +253,53 @@ mod tests {
                 root: "root-0".to_owned(),
                 shortfall_cycles: 1,
             }],
-        };
+        }
+    }
+
+    fn child_binding() -> canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding
+    {
+        use canic_core::ids::*;
+        let principal = |byte| candid::Principal::from_slice(&[byte]);
+        canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
+            release_set: FleetSubnetRootReleaseSet {
+                release_build_id: ReleaseBuildId::from_nonce(ReleaseBuildNonce::from_random_bytes(
+                    [2; 32],
+                )),
+                manifest_digest: ReleaseSetDigest::from_bytes([3; 32]),
+            },
+            component: ComponentBinding {
+                authority: FleetRegistryAuthority {
+                    binding: FleetCoordinatorBinding {
+                        fleet: FleetBinding {
+                            fleet: FleetKey {
+                                canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                                fleet_id: FleetId::from_generated_bytes([4; 32]),
+                            },
+                            app: AppId::from("test"),
+                        },
+                        coordinator_subnet: SubnetId::from_principal(principal(1)),
+                        coordinator: principal(2),
+                    },
+                    epoch: 1,
+                },
+                component: ComponentInstanceId::from_generated_bytes([5; 32]),
+                component_spec: "hubs".parse().unwrap(),
+                spec_hash: [1; 32],
+                role: "hub".into(),
+                placement_subnet: SubnetId::from_principal(principal(1)),
+                fleet_subnet_root: principal(3),
+                canister_id: principal(4),
+            },
+            parent: principal(4),
+            canister_id: principal(5),
+            parent_role: Some("hub".into()),
+            role: "shard".into(),
+        }
+    }
+
+    #[test]
+    fn startup_report_distinguishes_evidence_and_retains_sub_display_unit_shortfall() {
+        let mut forecast = forecast();
         let report = render(&forecast);
         assert!(report.contains("coordinator_balance: 0.000B (observed)"));
         assert!(report.contains("native_balance: 10.000T (configured creation)"));
@@ -259,6 +329,8 @@ mod tests {
         assert!(report.contains("spent=30 cycles; reserved=25 cycles; remaining=45 cycles"));
         forecast.roots[0].child_usage.push(
             canic_host::fleet_ensure::view::startup_funding::StartupChildFundingUsage {
+                observed_balance_cycles: Some(10),
+                local_demand: Err(canic_host::fleet_ensure::view::startup_funding::StartupDemandUnavailable::PendingGrant),
                 allowance: Ok(
                     canic_host::fleet_ensure::view::startup_funding::StartupChildFundingAllowance {
                         maximum_per_child_cycles: 200,
@@ -286,26 +358,33 @@ mod tests {
             report.contains("accounted=130 cycles; pending_operations=1; reserved_cycles=unknown")
         );
         assert!(report.contains("allocation-qualified Root-funded Workloads only"));
+        assert!(report.contains("child_local_demand: unavailable (PendingGrant)"));
         assert!(report.contains("remaining_after_charges=70 cycles; cooldown_remaining=5s; next_request_policy_cap_cycles=unknown"));
-        forecast.roots[0].child_usage[0].binding = Some(
-            canic_host::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
-                spec_hash: [1; 32],
-                release_set: canic_core::ids::FleetSubnetRootReleaseSet {
-                    release_build_id: canic_core::ids::ReleaseBuildId::from_nonce(
-                        canic_core::ids::ReleaseBuildNonce::from_random_bytes([2; 32]),
-                    ),
-                    manifest_digest: canic_core::ids::ReleaseSetDigest::from_bytes([3; 32]),
-                },
-                parent: "hub".into(),
-                role: "shard".into(),
-                component_spec: "hubs".parse().unwrap(),
-            },
-        );
+        forecast.roots[0].child_usage[0].binding = Some(child_binding());
         forecast.roots[0].child_usage[0].usage = Err(
             canic_host::fleet_ensure::view::startup_funding::StartupUsageUnavailable::ParentRelayRequired,
         );
         let report = render(&forecast);
-        assert!(report.contains("parent: hub; child=child; role=shard; component_spec=hubs"));
+        assert!(report.contains(&format!(
+            "parent: {}; child=child; role=shard; component_spec=hubs",
+            child_binding().parent
+        )));
         assert!(report.contains("ParentRelayRequired"));
+    }
+
+    #[test]
+    fn local_demand_report_preserves_exact_deficits() {
+        let mut report = String::new();
+        render_local_demand(
+            &mut report,
+            &Ok(StartupChildLocalDemand {
+                observed_balance_cycles: 10,
+                threshold_cycles: Some(20),
+                shortfall_cycles: 11,
+                shortfall_beyond_lifetime_allowance_cycles: 6,
+                next_request_policy_cycles: 5,
+            }),
+        );
+        assert!(report.contains("balance=10 cycles; threshold=20; shortfall=11 cycles; beyond_lifetime_allowance=6 cycles; next_request_policy_cycles=5"));
     }
 }

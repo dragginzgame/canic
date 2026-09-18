@@ -193,6 +193,17 @@ It is available while Root is Prepared; it creates no state or paid effect.
 The child key identifies ledger usage, not proof of current registry membership
 or grant eligibility. Generation obtains child identities from its seeded inventory.
 
+Allocation projections retain the complete Component binding, including Fleet
+authority, epoch, Component identity and placement. Before reading Root-local
+charges, generation matches the selected Fleet/Coordinator/Root placement, Root
+Spec admission, selected release and declared role edge. Observed descendants
+must join to an observed parent with the same Component binding and release set,
+and the expected parent role. Missing parents produce `ParentNotObserved` for
+allowance and demand; duplicate Principals, cycles and inconsistent joins reject
+qualification. The iterative walk shares completed results across branches.
+These checks establish consistency of observed allocations, not a complete live
+inventory or independent freshness proof for the advertised registry epoch.
+
 Charged usage includes a grant before its transfer completes; a failed transfer
 restores that charge. Consequently it is not always a settled-success total.
 Unknown, missing or expired reservation evidence is displayed as `unknown`,
@@ -218,6 +229,22 @@ enablement, window limits and other runtime admission checks still apply.
 It is not a remaining-demand estimate or permission to top up. Minimum native
 Root recovery remains available independently of descendant telemetry; a Root
 may need that recovery before it can afford a relay observation.
+
+The preview now also reports `child_local_demand` for an observed balance and
+settled, policy-bound ledger. This is the child's own deficit to one cycle above
+its automatic top-up threshold, including the uncovered part beyond its remaining
+lifetime allowance. The next-request amount uses the configured top-up amount
+and current runtime policy cap; cooldown or exhaustion can make that amount zero
+while the deficit remains positive. Disabled top-ups are labelled explicitly.
+Pending transfers, missing balances and invalid policy/accounting evidence leave
+demand unavailable, even when the last observed balance was high. Reservations
+are not deducted again.
+
+This local projection excludes outgoing descendant grants, execution burn,
+parent liquidity, funding enablement and window admission. Balance and ledger
+are separate observations, not an atomic snapshot. It adds no calls or spending
+authority and does not replace the fresh-child scenario or the recovery quote.
+Recursive live demand and budgeted descendant collection remain RF3 work.
 
 Do not add these internal transfers to computation burn or new operator
 funding. The generation estimate leaves creation amounts, desired state,

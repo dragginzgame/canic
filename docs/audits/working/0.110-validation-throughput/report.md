@@ -1,5 +1,65 @@
 # Release-test throughput qualification
 
+## Avoided Root builds and stable preparation — 2026-09-18
+
+The child-funding and retained-estate fixtures built a canonical Root before
+replacing it with an audit Root. They now build the audit Root directly, retaining
+package admission and finalization. All 21 artifacts in the child-funding release
+are byte-identical. Consecutive warm artifact-build phases take 38.56 and 13.93
+seconds; cache history and machine load prevent a whole-release speed claim.
+
+The initial qualification also reproduced a late cache-input rejection after
+410 seconds of artifact work. Coordinator/Store generated packages were created
+inside the snapshotted audit package. Their preparation now precedes the snapshot;
+the cold-directory regression retains rejection of later source changes.
+
+Both affected PocketIC journeys and scoped Clippy pass. This completes the
+selected .25 planning/fixture throughput batch; shared host/runtime baseline
+isolation remains separate work. [Evidence and limitations](../../reports/2026-09/2026-09-18/fixture-build-throughput.md).
+
+## PocketIC duplication audit — 2026-09-18
+
+[The source/log review](../../reports/2026-09/2026-09-18/pocketic-redundancy.md)
+finds one repeated invalid-state lifecycle upgrade and one smaller uncertain
+refill case subsumed by the four-asset case. The internal runner executed every
+registered case once, with no duplicate registrations. Most expensive overlap
+is repeated artifact/Fleet setup or different recovery triggers, not equivalent
+tests that can simply be deleted. Keep capacity and same-operation recovery
+proofs, and measure any reduced fixture before replacing its current owner.
+The subsequent authorized cleanup removes the duplicate lifecycle upgrade and
+smaller uncertain refill case. All six lifecycle tests and the surviving exact
+four-asset PocketIC proof pass. The accepted B1 protocol requires its warm-ups,
+and the larger journeys retain distinct reset/funding contracts. Shared host/runtime
+fixtures require their own isolation design; a canister-only snapshot is insufficient.
+Cold compilation in these focused runs does not establish a release speedup.
+The dynamic governed inventory check, scoped warning-denied Clippy for both
+changed targets, formatting and whitespace checks also pass.
+
+## Published .24 baseline and next planning slice — 2026-09-18
+
+The successful retained test log is
+`target/validation-runs/20260918T140257Z-60259.NaOVNO/0.log`: 4,187 seconds runner
+wall time (the enclosing validation record rounds to 4,188). Ordinary tests take
+194 seconds, the internal PocketIC suite 3,621, host governed proof 24, runtime
+PocketIC integrations 288, blob storage 54 and payload checks 5. These are phase
+diagnostics from one release, not a controlled comparison against .23.
+
+Within the internal suite, the mixed-topology journey takes 665.225 seconds and
+generated reinstall 457.827. Ten artifact build/seal spans total 829.537 seconds;
+ten generation/initial-review spans total 605.850. Nested spans overlap their
+parents and must not be added to the total. Finalization already overlaps;
+dependency admission is small in the retained samples. Do not promise an
+hour-scale improvement from another small observation optimization.
+
+The next completed planning slice overlaps Root/Store authority pairs within the
+existing four-read bound. The matched synthetic phase comparison preserves exact
+results and call counts, improving multi-Root latency while one Root stays flat.
+[Evidence and limitations](../../reports/2026-09/2026-09-18/root-authority-throughput.md)
+record source identity, samples and focused checks. This does not measure total
+release or deployment improvement. The larger speed target remains repeated
+artifact/setup work in the expensive journeys with all current safety assertions
+and explicit workload/reserve capacities retained.
+
 ## Fixture compiler cache retention — 2026-09-18
 
 Read-only apparent-size measurements (`du -sb`) of the retained fixture compiler

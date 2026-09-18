@@ -1,4 +1,4 @@
-//! Bind the existing local balance-control audit Root into a disposable test release.
+//! Build the local balance-control audit Root directly for a disposable test release.
 //! Production Root generation and release artifacts are unaffected.
 
 use super::super::*;
@@ -9,7 +9,9 @@ pub fn uses_audit_root(config: &Path) -> bool {
         || config.ends_with("canisters/audit/root_probe/retained-estate.toml")
 }
 
-pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArtifactBuildOutput) {
+pub fn build_audit_root(context: &WorkspaceBuildContext) -> CanisterArtifactBuildOutput {
+    assert!(uses_audit_root(&context.config_path));
+    assert_eq!(context.profile, CanisterBuildProfile::Fast);
     assert_eq!(context.build_network, BuildNetwork::Local);
     let target = context
         .workspace_root
@@ -17,6 +19,15 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
     let config = context.config_path.to_str().unwrap();
     let release = context.release_build_id.unwrap().to_string();
     let snapshot = AppConfigSnapshot::load(&context.config_path).unwrap();
+    let evidence = admitted_root_package(context, &snapshot);
+    let canic_core::role_contract::RoleContractResolution::Resolved { contract } =
+        canic_host::role_contract::resolve_declared_role_package_contract(
+            snapshot.model(),
+            &evidence,
+        )
+    else {
+        panic!("audit Root must retain the resolved role contract");
+    };
     let features = canic_core::role_contract::required_features_for_role(
         snapshot.model(),
         &CanisterRole::ROOT,
@@ -50,9 +61,9 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
         String::from_utf8_lossy(&candid.stderr)
     );
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
-        &output.protocol_release_identity,
-        &output.protocol_role,
-        &output.protocol_capabilities,
+        &evidence.canic_version,
+        &CanisterRole::ROOT,
+        &contract.capabilities,
         &candid.stdout,
     );
     let digest = profile.protocol_profile_digest.to_string();
@@ -69,9 +80,54 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
         &runtime,
         &features,
     );
-    std::fs::write(&output.did_path, &candid.stdout).unwrap();
+    let role_path = |extension| {
+        literal_zero_role_artifact_path(
+            &context.icp_root,
+            context.release_build_id.unwrap(),
+            "root",
+            extension,
+        )
+    };
+    let wasm_path = role_path("wasm");
+    let output = CanisterArtifactBuildOutput {
+        package_name: "root_probe".into(),
+        package_version: evidence.role_package_version,
+        protocol_release_identity: evidence.canic_version,
+        protocol_role: CanisterRole::ROOT,
+        protocol_capabilities: contract.capabilities,
+        artifact_root: wasm_path.parent().unwrap().to_path_buf(),
+        wasm_path,
+        wasm_gz_path: role_path("wasm.gz"),
+        did_path: role_path("did"),
+        candid_sha256: profile.candid_sha256,
+        protocol_profile_digest: profile.protocol_profile_digest,
+        transforms: Vec::new(),
+    };
+    finalize_audit_root(&output, runtime_wasms.path("root_probe"), &candid.stdout);
+    output
+}
+
+fn admitted_root_package(
+    context: &WorkspaceBuildContext,
+    snapshot: &AppConfigSnapshot,
+) -> canic_host::role_contract::RoleCargoGraphEvidence {
+    let RolePackageValidation::Supported(evidence) = validate_declared_role_package(
+        &context.config_path,
+        snapshot.model(),
+        &CanisterRole::ROOT,
+        PackageValidationMode::Build,
+        &canic_host::role_contract::CargoFeatureSelection::default(),
+    ) else {
+        panic!("audit Root must retain admitted canonical role authority");
+    };
+    evidence
+}
+
+fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, candid: &[u8]) {
+    std::fs::create_dir_all(&output.artifact_root).unwrap();
+    std::fs::write(&output.did_path, candid).unwrap();
     let shrink = Command::new("ic-wasm")
-        .arg(runtime_wasms.path("root_probe"))
+        .arg(runtime)
         .arg("-o")
         .arg(&output.wasm_path)
         .arg("shrink")
@@ -103,9 +159,4 @@ pub fn bind_audit_root(context: &WorkspaceBuildContext, output: &mut CanisterArt
         gzip(&std::fs::read(&output.wasm_path).unwrap()),
     )
     .unwrap();
-    output.package_name = "root_probe".into();
-    output.candid_sha256 = profile.candid_sha256;
-    output.protocol_profile_digest = profile.protocol_profile_digest;
-    // Canonical-Root transform measurements do not describe this audit artifact.
-    output.transforms.clear();
 }

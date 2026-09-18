@@ -1,0 +1,141 @@
+{
+  "artifacts": [
+    {
+      "name": "application-manifest",
+      "bytes": 2123,
+      "sha256": "93a0ccbdb7005bd3db9499370e9134a6f5e02a9dc1dde48ca9097a88a5290b86",
+      "identical": true
+    },
+    {
+      "name": "current-manifest",
+      "bytes": 596,
+      "sha256": "803fec054be485436e7e26f53cf26f2d97b84116fa6cac9fdd7d83590d800749",
+      "identical": true
+    },
+    {
+      "name": "fixture-faa7931a285b1ec5b6665c93bacb3752dc68fc3b90effa364dfc142aaf7e193b-0",
+      "bytes": 23,
+      "sha256": "655828475fb4544fc52c038c9bd68ae07ae1e2fc7f447cf64c19e2395630efe8",
+      "identical": true
+    },
+    {
+      "name": "fixture-manifest",
+      "bytes": 785,
+      "sha256": "59a59b57e803c937bd0d80cc4bda33f823adeb7d57e30cb8c00a46cd2eb25b5a",
+      "identical": true
+    },
+    {
+      "name": "fleet_coordinator-did",
+      "bytes": 47466,
+      "sha256": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+      "identical": true
+    },
+    {
+      "name": "fleet_coordinator-wasm",
+      "bytes": 5329380,
+      "sha256": "4a66f42c5e737dd7e40972881240d75b8d986be2d3116ab17023ce3d173a2645",
+      "identical": true
+    },
+    {
+      "name": "fleet_coordinator-wasm.gz",
+      "bytes": 1336675,
+      "sha256": "327703df179c090c2204a4b06041eb67b43560f5cb53ba300ec933c158737a5d",
+      "identical": true
+    },
+    {
+      "name": "infrastructure-manifest",
+      "bytes": 3368,
+      "sha256": "ffd42a1dc4abdaeb8d7c176ae3cda7a9135ac9d75f73f8310d6c06bb9ba1eee4",
+      "identical": true
+    },
+    {
+      "name": "release-plan",
+      "bytes": 125,
+      "sha256": "e1bbacf699e5a100741198d6e961c213f571a8b72a1f4de1fea1a828046e52b6",
+      "identical": true
+    },
+    {
+      "name": "root-did",
+      "bytes": 107038,
+      "sha256": "01aea2a2b8c5ef14c59d1159349ea538d71bec6d31c908fb08e3b18c92a9e193",
+      "identical": true
+    },
+    {
+      "name": "root-wasm",
+      "bytes": 10277852,
+      "sha256": "99894627de20a72efb55d96c551154ee661abf15ddf9304af1b49482dc6cc838",
+      "identical": true
+    },
+    {
+      "name": "root-wasm.gz",
+      "bytes": 2629366,
+      "sha256": "f341441f7975d3f205265bb375ff1d34326c5eddb32c409642d8d505f08c2265",
+      "identical": true
+    },
+    {
+      "name": "user_hub-did",
+      "bytes": 43956,
+      "sha256": "3ec5b1935c70903ac43ec6b618637e465ab29327303a4e802497bbe409ea7d14",
+      "identical": true
+    },
+    {
+      "name": "user_hub-wasm",
+      "bytes": 4175871,
+      "sha256": "0ea3707602af71d5a1e3669bad598c6073c01c104f98577ae2c225ce5bc28027",
+      "identical": true
+    },
+    {
+      "name": "user_hub-wasm.gz",
+      "bytes": 1084126,
+      "sha256": "3a64116b7a1a6798fceaa2e5290d2aeb7813189be1a0fb122bb9f094ed0822ea",
+      "identical": true
+    },
+    {
+      "name": "user_shard-did",
+      "bytes": 47852,
+      "sha256": "8964f12ca7bb3ce60df673d298cb2044ac4fcdc93f04f0a36b887725a00d540f",
+      "identical": true
+    },
+    {
+      "name": "user_shard-wasm",
+      "bytes": 4550742,
+      "sha256": "dc4779a9755d9988150d7f8363088dffd6d9fc1680df09c8d53d72e67908d87d",
+      "identical": true
+    },
+    {
+      "name": "user_shard-wasm.gz",
+      "bytes": 1172263,
+      "sha256": "3287a338d2fd70c3fc9e5e94620593cd05b0327aa8da75d2c92ef39f558c06ca",
+      "identical": true
+    },
+    {
+      "name": "wasm_store-did",
+      "bytes": 20583,
+      "sha256": "a1dfa90f1eb8d0916bb64f2d7e17f5798d79730a3e7bf29a4521bad2d5c6da7d",
+      "identical": true
+    },
+    {
+      "name": "wasm_store-wasm",
+      "bytes": 3768851,
+      "sha256": "d6096d5d9811a1525d92b2e3d3e2bca851993247f9cc130d6fc9b3a10623f315",
+      "identical": true
+    },
+    {
+      "name": "wasm_store-wasm.gz",
+      "bytes": 980502,
+      "sha256": "93e8d0fd86cab01ffed717a63051682b1b6d568e6ec19df8b6df39a2675fc273",
+      "identical": true
+    }
+  ],
+  "reference_cache_fingerprint": "d37a27b5ed8e818c31cec31b7df7cac3595210092548c11ad3f194160bccb7e2",
+  "candidate_cache_fingerprint": "8b63aa6729f241a0ad41629aaffb38059b6fce00c572c1bdbea3bb2adc97a4da",
+  "scope": "native-child-recovery; complete emitted release artifacts; byte comparison",
+  "base_commit": "933a35b66403f6a94f99803252cc52c0aec32958",
+  "source_sha256": {
+    "Cargo.lock": "e2d8e186b747bb35ec191f597b8e5dd90f5f172749196e8bdfbfbc1054496cc9",
+    "rust-toolchain.toml": "7553618f800829444096beea3dce84c3d07585efda504c19adb6787369bbd9e8",
+    "crates/canic-host/src/canister_build/artifact.rs": "fbccc9395a293643e9f6d86199d5c5ef5af7c79f3a725756c9a8fa856436a107",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "93225099314811aed998e9353c4ede9be4d2aa0e38477deb31513cbadb599e27",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/native_funding/artifact/mod.rs": "f9ae91d90e1fcfc495d6937609d1785d9c1aa8f84b0970e67677dcbe33a1b799"
+  }
+}

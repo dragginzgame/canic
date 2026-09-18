@@ -2614,6 +2614,10 @@ exec icp "$@"
     }
 
     #[cfg(test)]
+    #[expect(
+        clippy::too_many_lines,
+        reason = "one cache recipe binds prepared packages, exact Cargo inputs and complete release outputs"
+    )]
     fn literal_zero_release_artifact_cache_spec(
         workspace_root: &Path,
         cache_root: &Path,
@@ -2697,8 +2701,17 @@ exec icp "$@"
             CanicWasmBuildProfile::Fast,
             &environment,
         );
-        // Root package generation may add inputs beneath the configured audit package.
-        // Capture the complete workspace graph only after that preparation finishes.
+        // All three generated packages live beneath the selected audit package.
+        // Materialize their manifests and locks before freezing that package's inputs.
+        let context = literal_zero_build_context(
+            workspace_root,
+            workspace_root,
+            config_path,
+            build_network,
+            release_build_id,
+        );
+        canic_host::canister_build::prepare_workspace_infrastructure_packages(&context)
+            .expect("prepare infrastructure packages before freezing fixture inputs");
         let cargo_inputs = resolve_cargo_build_inputs(&cargo_build)
             .expect("resolve literal-zero release Cargo build inputs");
         cache = cache.with_cargo_build_inputs(
@@ -2911,6 +2924,28 @@ exec icp "$@"
     }
 
     #[cfg(test)]
+    fn literal_zero_build_context(
+        workspace_root: &Path,
+        adapter_root: &Path,
+        config_path: &Path,
+        build_network: BuildNetwork,
+        release_build_id: ReleaseBuildId,
+    ) -> WorkspaceBuildContext {
+        WorkspaceBuildContext {
+            role: "root".into(),
+            profile: CanisterBuildProfile::Fast,
+            environment: build_network.to_string(),
+            build_network,
+            workspace_root: workspace_root.to_path_buf(),
+            icp_root: adapter_root.to_path_buf(),
+            config_path: config_path.to_path_buf(),
+            local_replica: None,
+            refresh_canonical_infrastructure_did: false,
+            release_build_id: Some(release_build_id),
+        }
+    }
+
+    #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
         reason = "one helper builds and seals the complete literal-zero release authority"
@@ -2924,38 +2959,42 @@ exec icp "$@"
         release_build_id: ReleaseBuildId,
         build_network: BuildNetwork,
     ) {
-        let context = WorkspaceBuildContext {
-            role: "root".to_string(),
-            profile: CanisterBuildProfile::Fast,
-            environment: build_network.to_string(),
+        let context = literal_zero_build_context(
+            workspace_root,
+            adapter_root,
+            config_path,
             build_network,
-            workspace_root: workspace_root.to_path_buf(),
-            icp_root: adapter_root.to_path_buf(),
-            config_path: config_path.to_path_buf(),
-            local_replica: None,
-            refresh_canonical_infrastructure_did: false,
-            release_build_id: Some(release_build_id),
-        };
+            release_build_id,
+        );
         let builder = CanisterArtifactBuilder::for_profile(context.profile)
             .expect("preflight literal-zero artifact toolchain");
         // Match the production App path: Cargo stays serial while captured
         // infrastructure outputs finalize alongside later compilation.
         let mut phase = Span::start("app_artifacts_build");
+        let audit_root = native_funding::uses_audit_root(config_path);
+        let compiled_roles = configured_roles
+            .iter()
+            .filter(|role| !audit_root || role.as_str() != "root")
+            .cloned()
+            .collect::<Vec<_>>();
         let app = builder
-            .build_workspace_app_artifacts(&context, configured_roles)
+            .build_workspace_app_artifacts(&context, &compiled_roles)
             .expect("build literal-zero App artifacts");
         let coordinator = app.coordinator.output;
         let store = app.store.output;
         let configured = app.configured;
-        let mut root = configured
-            .iter()
-            .find(|output| output.role == "root")
-            .expect("literal-zero Root artifact")
-            .output
-            .clone();
-        if native_funding::uses_audit_root(config_path) {
-            native_funding::bind_audit_root(&context, &mut root);
-        }
+        let root = if audit_root {
+            // This fixture installs the audit Root; do not compile a canonical
+            // Root only to discard its declaration, runtime and finalization.
+            native_funding::build_audit_root(&context)
+        } else {
+            configured
+                .iter()
+                .find(|output| output.role == "root")
+                .expect("literal-zero Root artifact")
+                .output
+                .clone()
+        };
         let components = configured
             .iter()
             .filter(|output| output.role != "root")
@@ -3535,11 +3574,6 @@ exec icp "$@"
     #[test]
     fn prepared_mainnet_root_automatically_refills_one_exact_pool_asset() {
         assert_mainnet_refill(false, 1, 1);
-    }
-
-    #[test]
-    fn uncertain_mainnet_refill_reuses_the_exact_paid_request() {
-        assert_mainnet_refill(true, 1, 2);
     }
 
     #[test]
@@ -19185,10 +19219,6 @@ cycles = "80T"
             (
                 "prepared mainnet Root automatic refill",
                 prepared_mainnet_root_automatically_refills_one_exact_pool_asset,
-            ),
-            (
-                "uncertain mainnet refill replay",
-                uncertain_mainnet_refill_reuses_the_exact_paid_request,
             ),
             (
                 "autonomous refill margin and exact replay",

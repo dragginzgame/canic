@@ -48,6 +48,14 @@ struct BootstrapFleetCoordinatorSource {
     canonical_did_path: PathBuf,
 }
 
+/// Materialize and admit generated package inputs before an artifact cache snapshots them.
+pub fn prepare_bootstrap_fleet_coordinator_package(
+    context: &WorkspaceBuildContext,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let source = resolve_bootstrap_fleet_coordinator_source(context)?;
+    require_built_in_fleet_coordinator_contract(&source.manifest_path)
+}
+
 /// Build the dedicated Fleet Coordinator wrapper selected from the exact Canic dependency graph.
 pub fn build_bootstrap_fleet_coordinator_artifact(
     context: &WorkspaceBuildContext,

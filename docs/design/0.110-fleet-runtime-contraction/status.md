@@ -1,5 +1,135 @@
 # Canic 0.110 Implementation Status
 
+## Selected .25 release scope — 2026-09-18
+
+The maintainer selected the completed recovery fix, speed improvements and
+funding diagnostics for .25, keeping full RF3 as the next accepted batch. The
+selected outcome is implemented and qualified; both changelog surfaces are
+ready for the governed release flow. Earlier statements that full RF3 is not
+push-ready do not block this explicitly bounded release.
+
+Included: CANIC-166/172 retirement admission and original-operation guidance;
+bounded Root/Store reads, stable generated build inputs, direct audit-Root
+builds and duplicate PocketIC removal; local funding deficits and complete
+allocation-binding diagnostics. Existing native, transport, focused PocketIC
+and scoped Clippy evidence is retained in the
+[release handoff](../../status/current.md#selected-25-release-handoff--2026-09-18).
+No full-suite or whole-release speed result is claimed. Package versions remain
+.24; no version/publication/live effect ran.
+
+Full RF3 remains open for CANIC-156/174: reviewed-budget descendant collection,
+complete live inventory and current-registry qualification, recursive demand,
+recovery-quote integration and transport/IC recovery proof. Minimum native Root
+recovery stays independent of telemetry. Actual Toko staging recovery follows
+publication/adoption under its original authority and is not established by
+the local proof. RF3 remains ahead of B1; no minor closeout is implied.
+
+## RF3 funding allocation bindings — 2026-09-18
+
+The .25 draft now preserves complete allocation identity, checks selected Fleet/
+Coordinator/Root placement and Spec admission, and validates observed parent
+chains against declared role edges and shared Component/release authority.
+Missing parents are unknown; duplicates, cycles and conflicting joins reject.
+An iterative walk shares completed results without extra observation calls.
+25 host funding tests, two CLI tests and generated-estate/replay qualification
+pass, as does scoped warning-denied Clippy. Changelogs and the funding runbook are updated.
+
+RF3 is not complete or push-ready: budgeted descendant ledgers, complete live
+inventory/current-registry proof, recursive demand, full recovery quotes and IC
+evidence remain. Minimum native recovery stays independent of telemetry. No
+newer confirmed Toko blocker was found; earlier recovery/speed evidence remains
+valid separately. No version/publication/live effects or sibling edits ran.
+[Evidence](../../audits/reports/2026-09/2026-09-18/rf3-funding-bindings.md).
+
+## RF3 observed child shortfalls — 2026-09-18
+
+RF3 implementation has started under the maintainer's continuation. The existing
+.25 draft now includes local child deficit diagnostics derived from observed
+balances and settled policy-bound ledger charges. Unknown/pending evidence is
+never zero demand. Runtime policy owns allowance/cooldown limits; generation
+adds no update calls or payment authority. The 21 focused host tests, native
+generation/replay fixture, both CLI tests and scoped warning-denied Clippy pass.
+
+The complete RF3 batch remains unfinished: budgeted descendant relay, exact live
+placements, recursive demand, complete recovery reserves and IC evidence are
+next. Earlier recovery/speed readiness remains independently valid; this does
+not close CANIC-156/174 or establish live Toko recovery. The latest upstream
+scan contains no newer confirmed blocker. Both changelogs and the operations
+runbook are updated; no version/publication/live effects ran.
+[Evidence and boundaries](../../audits/reports/2026-09/2026-09-18/rf3-local-demand.md).
+
+## CANIC-166/172 retirement evidence — 2026-09-18
+
+The new .24 staging admission blocker is corrected in the open .25 batch.
+Immutable completed retirement accounting preserves its recorded vocabulary
+and canonical encoding, so Toko's otherwise-current retained plan verifies
+against its original digest. No executable predecessor schema, field defaults,
+payment substitution or plan rewrite was introduced. Fresh accounting remains
+strict. An unfinished operation receives an explicit recovery diagnostic when
+a new reinstall is requested; original funding/recovery must complete before
+the selected-release reset review.
+
+348 focused native tests, one exact production-Ledger mint/withdrawal and
+lost-reply proof, and all-target/all-feature warning-denied host/CLI Clippy pass.
+The exact retained source also passes local journal/mint admission on an unchanged
+private copy. Both changelog surfaces cover this correction and the already
+qualified speed work; the selected .25 batch is ready for its release flow.
+Live staging recovery is still downstream qualification after publication,
+including exact retry/receipt status, source authority and cycle accounting.
+No version bump, publication or live effect ran.
+[Evidence](../../audits/reports/2026-09/2026-09-18/retirement-recovery.md).
+
+## Fixture build throughput — 2026-09-18
+
+The selected .25 planning/fixture speed batch is complete. Audit-Root fixtures
+no longer compile and finalize an unused canonical Root. Generated infrastructure
+packages are prepared before enclosing Cargo input snapshots, fixing the late
+cache rejection exposed during qualification without weakening mutation guards.
+The cold-directory regression, exact child-funding proof, retained-estate reinstall
+proof and scoped warning-denied Clippy pass; all 21 child-funding artifacts match
+the reference byte for byte. Observed warm artifact construction is 38.56 versus
+13.93 seconds, with no full-release speed claim.
+
+Both changelog surfaces are ready for the maintainer-selected release flow;
+packages remain .24. Shared host/runtime snapshot isolation and RF3 remain
+separate work, not prerequisites for these qualified fixes. No publication ran.
+[Evidence](../../audits/reports/2026-09/2026-09-18/fixture-build-throughput.md).
+
+## PocketIC redundancy cleanup — 2026-09-18
+
+The open .25 speed batch removes the repeated invalid-state lifecycle upgrade
+and the one-asset uncertain refill case subsumed by the four-asset proof. All six
+lifecycle tests, the surviving four-asset case, the dynamic inventory check and
+scoped warning-denied Clippy pass. Required qualification warm-ups and distinct
+reset/funding journeys remain. Sharing host/runtime fixtures requires additional
+isolation design; repeated artifact/setup work remains the larger speed target.
+This completes the deduplication review, not the entire accepted throughput batch.
+
+[Dispositions and focused evidence](../../audits/reports/2026-09/2026-09-18/pocketic-redundancy.md).
+
+## Post-.24 planning throughput — 2026-09-18
+
+The maintainer confirms .24 is pushed and explicitly continues .110 operator
+latency corrections. Keep these accepted regressions on the affected minor
+despite the soft twelve-release guideline; do not infer minor closeout.
+
+The bounded Root/Store observation slice is complete in the open .25 speed batch.
+Canonical owner: host current-protocol planning. Independent pairs share the
+existing four-read collector; exact Root/Store agreement, configured ordering,
+drained failures and fresh retry remain. Native transport fixtures prove overlap,
+partial batches, missing authority, disagreement and corrected retry. The opt-in
+same-executable measurement shows a benefit for multiple Roots, with no claim
+for single-Root or complete release performance. No paid effect changed.
+
+Latest Toko feedback records .24 adoption; retained staging recovery and actual
+deployment/cache measurements remain downstream evidence, not new confirmed
+Canic defects. Next accepted speed work is attribution and reduction of repeated
+build/setup work in the long PocketIC journeys, retaining their full safety
+coverage. Keep further slices in .25 rather than recommending a patch for this
+one change. RF3 remains a separate accepted recovery-forecast batch.
+
+[Current evidence](../../audits/reports/2026-09/2026-09-18/root-authority-throughput.md).
+
 ## Accepted Toko feedback follow-up — 2026-09-18
 
 The additional CANIC-176, CANIC-172 and CANIC-160 work is complete in the same
@@ -848,7 +978,7 @@ It does not close 0.110 or authorize implementation in another minor.
 | Batch | Outcome and owner | Required evidence | Status |
 | --- | --- | --- | --- |
 | RF2 | Receipt-safe ICP conversion within retained recovery; host funding/journal owner | Exact transfer and mint identities, credits, fees and receipts; unchanged original balances; interrupted/lost-response recovery, conservation and effect-free replay; focused host and PocketIC qualification | Preserved for the next batch after selected .18; exact requests, durable review/approval/replies and certified deposit/ICP transfer/archive verification pass native regressions in the saved patch; bounded acquisition/read recovery, credit/CLI integration, timestamp uniqueness and IC qualification remain |
-| RF3 | Complete live recovery funding forecasts; host observation/planning owners using runtime policy | Budgeted descendant relay, exact role/placement and policy binding, live usage/reservations in demand quotes, unavailable/underfunded telemetry, full recovery reserve scope; focused policy, transport and IC evidence | Accepted follow-up after RF2, ahead of B1 |
+| RF3 | Complete live recovery funding forecasts; host observation/planning owners using runtime policy | Budgeted descendant relay, exact role/placement and policy binding, live usage/reservations in demand quotes, unavailable/underfunded telemetry, full recovery reserve scope; focused policy, transport and IC evidence | Next accepted batch after selected .25 fixes/diagnostics, ahead of B1; full RF3 remains open |
 
 The current diagnostics are allowances and individual inspection reserves, not
 complete recovery demand or new spending authority. Minimum native recovery
