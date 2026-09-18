@@ -20,6 +20,219 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Published IcyDB 0.259.0 test-consumer update — 2026-09-18
+
+The workspace and standalone composed-Wasm audit fixture now pin published
+IcyDB 0.259.0, up from 0.258.0. Registry search and exact lookup confirmed that
+0.259.1, although present in the sibling changelog, was not yet published.
+Both lockfiles align all six IcyDB crates and keep one ic-memory 0.14.3.
+The standalone lock also catches its local Canic path packages up to their
+existing .23 versions; no Canic package version changed. No unrelated registry
+package changed, and sibling repositories remain untouched.
+
+Five focused native memory-admission tests pass. Warning-denied Clippy passes
+for the lifecycle/schema fixtures and the metrics-enabled standalone participant;
+logs are `/tmp/canic-icydb-02590-fixture-clippy.log` and
+`/tmp/canic-icydb-02590-audit-clippy.log`. Metadata confirms the existing
+unpublished fixture/build/dev dependency edges only. Whitespace checks pass.
+No new PocketIC lifecycle run, Wasm size measurement or broad validation is
+claimed. An independently started workspace check briefly held the target lock;
+our waiting test was stopped and resumed only after that owner finished.
+
+The complete selected .24 batch remains ready for the maintainer-selected release
+flow, with both changelog surfaces updated. Existing CANIC-172 recovery and speed
+work is preserved. IcyDB remains test-only and its independent version schedule
+is not a production Canic release blocker. No commit, push, deployment or package
+version bump occurred.
+
+## CANIC-172: operator admission and receipt-bound recovery — 2026-09-18
+
+The open .24 batch now includes the new Toko blocker fix and the preserved .24
+speed work. Published .23 let full reinstall bypass the maximum-operator-debit
+check and retain an underfunded original Fund intent. Fresh admission now checks
+all scopes before journal replacement/adoption or payment intent, with the exact
+shortfall and a read-only ICP quote against the selected plan.
+
+RF2's preserved source was restored selectively and completed through host
+transport, bounded authenticated receipt acquisition, once-only credit and CLI.
+`fleet ensure --operator-mint` quotes a fresh selected plan or reviews/displays
+conversion for a retained original withdrawal or supplementary funding pause.
+Apply its exact conversion digest separately from Fleet execution. Credit uses
+initial operator cycles plus authenticated net mint credits; initial balances,
+source seals and original withdrawal identity remain unchanged. Transfer and
+notification retries retain their exact arguments. Expired or unavailable proof
+stays unresolved; a receipt-less Intent is never proof of nonpayment.
+
+Focused evidence:
+
+- 80 host and 19 CLI native tests pass, covering quote rounding, fresh/retained
+  selection, binding, cancellation/approval, certificate/signature/chain rejection,
+  archive authority, unresolved outcomes, once-only credit and funding accounting.
+  The original underfunded withdrawal resumes after admitted credit, survives a
+  lost reply, converges with one payment and replays without effects. Log:
+  `/tmp/canic-172-final-native.log`.
+- The exact production-Ledger PocketIC conversion case passes in 5.00s (64s
+  runner including compilation). It uses disposable ICP Ledger, CMC and Cycles
+  Ledger canisters: normal approval, lost transfer reply, lost notification reply,
+  interruption before credit persistence, actual deposit fee and conversion replay.
+  Real pruned certificates exposed an owned-CBOR decoding defect, now corrected
+  without weakening Agent signature/delegation/range checks. Log:
+  `/tmp/canic-172-production-mint-final.log`.
+- Its subsequent funding/conservation checks use a host model, not a complete
+  real-Ledger managed Fleet. Original-withdrawal convergence is native evidence.
+  The earlier full mixed-topology reinstall PocketIC journey passes with fresh
+  underfunding rejection, preparation preservation, lost replies, conservation
+  and replay; its operator Ledger is a stub. Log:
+  `/tmp/canic-172-reinstall-pocketic.log` (1,014.85s execution).
+- Scoped warning-denied host/CLI/internal library/test Clippy passes
+  (`/tmp/canic-172-final-clippy.log`). Changed-file formatting/whitespace, layering,
+  runner inventory, shell syntax and scoped ShellCheck pass.
+  No broad workspace or release validation ran.
+- A final 85-case host selection also passes after staged-reinstall quote routing
+  was corrected: the selected review takes precedence over its predecessor
+  without altering source plan/journal/state. Log: `/tmp/canic-172-quote-final.log`.
+
+The implementation and operator docs/changelog are complete for the selected
+CANIC-172 correction; the complete .24 batch is ready for the maintainer-selected
+release gate. This is not proof that
+Toko's live retained operation has recovered. Its exact signer/network, request
+age, available receipts and final conservation still require downstream review
+and apply. The requested read-only readiness assessment **before compilation**
+is a separate follow-up; this quote requires a selected plan. RF3/B1 remain
+separate work. The affected-line correction remains on .110 despite the soft
+release-count guideline, rather than stranding published users.
+
+Packages remain .23 and both changelogs extend the open .24 entry. The saved RF2
+snapshot remains intact. No version bump, commit, push, deployment, live funding
+or sibling mutation occurred. See the [operator instructions](../features/operations/fleet-ensure.md#operator-icp-conversion)
+and [design status](../design/0.110-fleet-runtime-contraction/status.md#canic-172-operator-admission-and-retained-recovery--2026-09-18).
+
+## .24 fixture compiler cache retention — 2026-09-18
+
+The retained Local fixture compiler target measures 4.36 GiB, above its former
+4 GiB whole-target cleanup threshold. The threshold is now 8 GiB per network;
+seven-day idle expiry, hourly locked maintenance and exact artifact verification
+remain. Clearances and maintenance failures are now visible in normal output.
+This changes compiler disk retention, not canister memory or runtime behavior.
+
+Six focused artifact tests and strict internal library/test Clippy pass. The
+real maintenance regression retains a 5 GiB sparse fixture, clears 9 GiB and
+preserves source and locking. No live cache was cleared. Earlier eviction and
+complete-release savings are not established by the old logs. See the
+[throughput evidence](../audits/working/0.110-validation-throughput/report.md#fixture-compiler-cache-retention--2026-09-18).
+
+The complete selected .24 speed batch and both changelog surfaces remain ready
+for the maintainer-selected release flow. Packages stay .23. No full suite,
+version bump, commit, push, deployment or sibling mutation ran. Toko feedback
+is unchanged; broader PocketIC throughput work remains follow-up.
+
+## .24 ordinary test graph consolidation — 2026-09-18
+
+Full/ordinary validation now compiles workspace unit/binary tests and every
+registered ordinary integration in one Cargo invocation. This removes the
+separate package-scoped integration graph; the .23 baseline spent 91 seconds
+compiling that stage after unit tests. Actual whole-run savings remain unmeasured.
+
+The actual runner passes a disposable Cargo fixture covering unit/binary and
+integration selection, ignored/serial/external exclusion, feature unification,
+continued failures, the barrier before PocketIC, cross-class target-name
+collision rejection and fresh later host-proof reuse. Exact plan/inventory
+checks, release-integrity contract guard and shell lint pass. No broad Canic
+suite ran. [Evidence](../audits/working/0.110-validation-throughput/report.md#ordinary-test-graph-consolidation--2026-09-18).
+
+Toko now reports .23 native, strict Clippy, Wasm/Candid and both managed tests
+passing; no new confirmed Canic defect was identified. Live retained-source
+review/apply remains downstream. The complete selected .24 speed batch and both
+changelog surfaces are ready for the maintainer-selected release flow. Packages
+stay .23; no commit, push, version bump, deployment or sibling mutation occurred.
+Larger artifact/recovery throughput work remains follow-up.
+
+## .24 release-test compile-graph reuse — 2026-09-18
+
+The latest successful .23 validation took approximately 81 minutes: the test
+runner accounts for 4,791 seconds, including 4,146 seconds in the internal
+PocketIC lane. Its later host proof compiled for 155 seconds and executed for
+1.08 seconds. Retained fingerprints show unchanged host features, compiler and
+profile but ten different dependency fingerprints between workspace and scoped
+host test graphs.
+
+Full validation now selects the ordinary workspace library/binary graph again
+for the serial governed host proof filter. Focused and PocketIC-only commands
+remain scoped. The exact current-source host recovery/replay proof passes
+(1.29 seconds execution); a small controlled Cargo fixture proves the original
+executable is fresh on the repeated workspace graph while the scoped graph builds
+a second executable. Unrelated ignored tests remain unselected. Plan checks,
+release-integrity contract guard, shell lint and whitespace checks pass.
+
+The 17m29s of recorded artifact-build spans are not established as redundant:
+existing hits restore exact artifacts in about two seconds, while topologies,
+networks and the two reinstall release identities remain distinct. The accepted
+nineteen-Workload/five-Ready capacity proof remains intact. Further reduction
+needs focused fixture/build attribution. This change targets the observed host
+recompilation; no complete-run savings or full validation rerun is claimed.
+See the [release-test evidence](../audits/working/0.110-validation-throughput/report.md#release-test-compile-graph-reuse--2026-09-18).
+
+The selected .24 speed batch and both changelog surfaces are ready for the
+maintainer-selected release flow. Packages remain .23; no commit, version bump,
+push, deployment or sibling mutation was performed. The previous host/runtime
+speed changes remain preserved. Larger PocketIC throughput work remains open.
+
+
+## .24 speed batch: protocol-owner status overlap — 2026-09-18
+
+The requested next speed change extends the existing four-read collector to
+Coordinator/Root/Store readiness in each protocol-planning pass. A normal
+three-owner Fleet now issues those reads together. Larger sets remain bounded;
+all issued reads drain before configured-order decisions. Stopped-owner versus
+later-transport-error precedence and deferred missing/module checks are retained.
+No observation survives into the next call and no deployment effect is batched.
+
+All 46 focused host platform tests pass, including bounded/partial overlap,
+out-of-order failure, stopped-owner precedence, fresh retry and the shared
+configured-status path. Warning-denied host library/test Clippy, formatting and
+whitespace checks pass. The proof uses native transport fixtures, not a new IC
+journey or whole-deployment timing. See the
+[throughput evidence](../audits/working/0.110-validation-throughput/report.md#protocol-owner-status-overlap--2026-09-18).
+
+Toko feedback is unchanged from the preceding scan: .23 is adopted and its live
+recovery qualification remains separate. The complete selected .24 speed batch
+now includes session-only cache normalization and protocol-owner read overlap;
+both changelog surfaces are ready for the maintainer-selected release flow.
+Packages remain .23. No broad validation, version bump, commit, push, deployment
+or sibling mutation ran. Wider launcher/latency measurement and RF2/RF3/B1 remain
+separate follow-ups.
+
+
+## Post-.23 Toko feedback and session cache reuse — 2026-09-18
+
+The maintainer confirms .23 published; local HEAD is
+`732b4629e690cc5f014078b73201129cd9630271`. Toko's latest feedback records
+adoption with IcyDB 0.258.0 and shared ic-memory 0.14.3. Its CANIC-166 staging
+attempt stops at its own qualified release's `tool-versions.env` binding before
+Canic review. That is not evidence of a new Canic recovery defect. Live source
+review/apply/replay and managed application qualification remain downstream.
+No new confirmed Canic defect was found in this scan.
+
+The next bounded CANIC-176 speed batch removes only `CODEX_SESSION_ID` and
+`CODEX_THREAD_ID` from build/tool execution and fingerprints. A control run
+reproduced two misses with unchanged real compiler Wasm when only session IDs
+changed. The candidate preserves complete-build and extraction reuse, exact
+release identity and Wasm bytes; genuine inputs still invalidate. Both identity
+owners bind the changed policy, so existing records incur one initial miss.
+
+All 70 focused host build/cache tests pass (one existing real-extractor benchmark
+ignored), scoped warning-denied host library/test Clippy passes, and changed-file
+formatting/whitespace checks pass. See the
+[throughput report](../audits/working/0.110-validation-throughput/report.md) for
+source identities, logs and limitations. No whole-deployment speedup or complete
+CANIC-176 launcher-matrix qualification is claimed.
+
+The complete bounded session-reuse batch and .24 changelog draft are ready for
+the maintainer-selected release flow; Cargo packages stay .23. No version bump, full validation, commit, push, deployment or sibling edit
+was performed. RF2/RF3/B1 remain separately parked. Historical handoffs below
+retain their original pre-publication context.
+
+
 ## Release validation repair: IcyDB test dependency boundary — 2026-09-18
 
 The maintainer's validation exposed one host unit failure: the IcyDB dependency

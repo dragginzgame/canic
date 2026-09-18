@@ -154,18 +154,21 @@ environment normalization below.
 An attributed launcher key is evidence to investigate at its owner, not permission
 to exclude it from build identity.
 
-Build commands remove `CANIC_ICP_IDENTITY_PASSWORD_FILE` from their inherited
-environment. Cargo (including metadata and build scripts), compiler/cache probes,
+Build commands remove `CANIC_ICP_IDENTITY_PASSWORD_FILE`, `CODEX_SESSION_ID` and
+`CODEX_THREAD_ID` from their inherited environment. Cargo (including metadata and build scripts), compiler/cache probes,
 Candid extraction, Wasm transformations, provenance commands and build-tool
 acquisition share this boundary. Complete-build and Candid-extraction identities
-and reuse diagnostics exclude that same key and bind the compiled environment
-policy. Changing or removing this deployment credential therefore does not by
-itself invalidate reuse. Canic also sets `SHLVL=0` on every build/tool child and
+and reuse diagnostics exclude those same exact keys and bind the compiled
+environment policy. Changing or removing the deployment credential or either
+session correlation ID therefore does not by itself invalidate reuse. The policy
+change requires one initial miss; custom build scripts cannot use these withheld
+session IDs as artifact inputs. Canic also sets `SHLVL=0` on every build/tool child and
 fingerprints that same value, so shell nesting cannot select another release.
 Child shells may increment their own depth normally; custom build scripts must
 not use the launcher's shell nesting as an artifact input. This normalization
 covers commands as well as cache keys. All other environment values remain bound,
-including Make's variables. Deployment commands retain their existing
+including Make's variables, CI and sandbox configuration, and unknown `CODEX_*`
+keys. There is no prefix-based exclusion. Deployment commands retain their existing
 identity-unlocking behavior.
 
 This separates an inherited deployment setting from compilation; it is not a

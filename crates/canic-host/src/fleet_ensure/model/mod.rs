@@ -4,6 +4,7 @@
 //! Does not own: transport parsing, policy decisions, persistence, or IC effects.
 //! Boundary: workflow persists these records before and after every effect.
 
+pub mod operator_mint;
 mod serialization;
 
 use serde::{Deserialize, Serialize};
@@ -1510,14 +1511,19 @@ pub struct FleetEnsureReport {
     pub terminal: bool,
 }
 
-/// Exact additional transfer reviewed within an existing Fleet operation.
-/// The nullable effect is the durable approval boundary; planning never sets it.
+/// Funding review within an existing Fleet operation.
+///
+/// An operator shortfall
+/// refers to the original action and never adds a second withdrawal effect.
+/// Other pauses use the nullable effect as the additional transfer approval.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FundingReviewRecord {
     pub action: EnsureAction,
     #[serde(deserialize_with = "serialization::required_option")]
     pub effect: Option<EffectRecord>,
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub operator_mint: Option<operator_mint::OperatorMintReviewRecord>,
     pub pause: FundingPauseRecord,
     pub review_sha256: String,
 }
@@ -1533,24 +1539,27 @@ pub struct FundingReviewRecord {
 pub enum FundingPauseRecord {
     Estate(EstateFundingRequiredRecord),
     Native(NativeFundingRequiredRecord),
+    Operator(operator_mint::InitialOperatorFundingRequiredRecord),
 }
 
 impl FundingPauseRecord {
-    /// Root name retained by the original operation.
+    /// Original withdrawal target; for an operator pause this is not the mint account.
     #[must_use]
     pub fn root(&self) -> &str {
         match self {
             Self::Estate(p) => &p.root,
             Self::Native(p) => &p.root,
+            Self::Operator(p) => &p.target,
         }
     }
 
-    /// Exact receiver Principal on the reviewed Ledger.
+    /// Original withdrawal receiver Principal, separate from the operator mint account.
     #[must_use]
     pub fn root_principal(&self) -> &str {
         match self {
             Self::Estate(p) => &p.root_principal,
             Self::Native(p) => &p.root_principal,
+            Self::Operator(p) => &p.target_principal,
         }
     }
 
@@ -1560,15 +1569,17 @@ impl FundingPauseRecord {
         match self {
             Self::Estate(p) => &p.cycles_ledger,
             Self::Native(p) => &p.cycles_ledger,
+            Self::Operator(p) => &p.cycles_ledger,
         }
     }
 
-    /// Cycles observed at the destination before review.
+    /// Balance observed at the paused account or native destination before review.
     #[must_use]
     pub const fn available_cycles(&self) -> u128 {
         match self {
             Self::Estate(p) => p.available_cycles,
             Self::Native(p) => p.available_cycles,
+            Self::Operator(p) => p.available_cycles,
         }
     }
 
@@ -1578,6 +1589,7 @@ impl FundingPauseRecord {
         match self {
             Self::Estate(p) => p.shortfall_cycles,
             Self::Native(p) => p.shortfall_cycles,
+            Self::Operator(p) => p.shortfall_cycles,
         }
     }
 
@@ -1587,6 +1599,7 @@ impl FundingPauseRecord {
         match self {
             Self::Estate(p) => p.ledger_fee_cycles,
             Self::Native(p) => p.ledger_fee_cycles,
+            Self::Operator(p) => p.ledger_fee_cycles,
         }
     }
 }
@@ -1622,7 +1635,7 @@ pub struct NativeFundingObservation {
     pub operator_cycles: u128,
 }
 
-mod u128_text {
+pub(in crate::fleet_ensure) mod u128_text {
     use serde::{Deserialize, Deserializer, Serializer};
 
     pub fn serialize<S>(value: &u128, serializer: S) -> Result<S::Ok, S::Error>

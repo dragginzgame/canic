@@ -8,6 +8,7 @@ mod continuation;
 mod funding;
 #[cfg(test)]
 mod funding_tests;
+pub mod operator_mint;
 mod reinstall;
 mod retained_plan;
 mod root_reinstall;
@@ -135,6 +136,25 @@ where
     E: std::error::Error + 'static,
 {
     #[error(
+        "operator conversion must be resolved or its unapproved review cancelled before Fleet effects continue: {review_sha256}; inspect with fleet ensure --operator-mint"
+    )]
+    OperatorMintPending { review_sha256: String },
+
+    #[error(
+        "operator conversion required for retained funding review {review_sha256}; preserve the original withdrawal intent"
+    )]
+    OperatorFundingRequired { review_sha256: String },
+
+    #[error("operator conversion review, approval digest or current authority differs")]
+    OperatorMintReviewConflict,
+
+    #[error("operator conversion reply conflicts with a retained transaction outcome")]
+    OperatorMintReplyConflict,
+
+    #[error("operator conversion wire data is invalid: {0}")]
+    OperatorMintWire(#[from] crate::fleet_ensure::ops::operator_mint::OperatorMintWireError),
+
+    #[error(
         "retained Fleet operation cannot be resumed: {source}; local source evidence identifies operation {operation_id}, journal plan reference {plan_sha256}, source document {source_document_sha256}; preserve plan, journal, state and artifacts; request an explicit --reinstall review without --apply using the selected corrected release; live authority, complete estate and cycle checks must pass before any reset; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
     )]
     RetainedActivationReviewRequired {
@@ -236,7 +256,8 @@ where
     },
 
     #[error(
-        "selected Cycles Ledger account has {actual} cycles, below reviewed maximum debit {required}"
+        "selected Cycles Ledger account has {actual} cycles, below reviewed maximum debit {required}; shortfall {} cycles; no new execution journal or funding intent was retained; fund the selected operator account before retrying this reviewed plan; repeat fleet ensure with --operator-mint and without --apply for a read-only ICP quote",
+        required.saturating_sub(*actual)
     )]
     InsufficientOperatorCycles { actual: u128, required: u128 },
 
@@ -384,7 +405,7 @@ where
                 && intent.operation_id == retained.operation_id
         });
     if !prepared_full {
-        verify_journal(&journal, &retained, requested_fleet, &state)?;
+        verify_journal_integrity(&journal, &retained, requested_fleet, &state)?;
     }
     Ok(Some(retained))
 }
@@ -1124,6 +1145,15 @@ where
                 platform,
                 &state,
             )?;
+            // Every fresh scope crosses this boundary, including reinstall verification.
+            // Retained intents must instead reconcile their exact, possibly paid request.
+            let required = retained_plan.conservation.maximum_operator_debit_cycles;
+            if observation.operator_cycles < required {
+                return Err(EnsureWorkflowError::InsufficientOperatorCycles {
+                    actual: observation.operator_cycles,
+                    required,
+                });
+            }
             root_reinstall::verify_initial_funding(
                 &retained_plan,
                 observation.operator_cycles,
@@ -2445,12 +2475,6 @@ where
             Err(error) => return Err(error.into()),
         }
     };
-    if observation.operator_cycles < retained_plan.conservation.maximum_operator_debit_cycles {
-        return Err(EnsureWorkflowError::InsufficientOperatorCycles {
-            actual: observation.operator_cycles,
-            required: retained_plan.conservation.maximum_operator_debit_cycles,
-        });
-    }
     bind_terminal_inventory_operation(
         &mut current,
         retained_plan.terminal_inventory_operation_id.clone(),
@@ -3192,14 +3216,15 @@ where
     let funded = funding_plan(plan, journal)?;
     let conservation = &funded.conservation;
     let final_controlled_cycles = controlled_cycles(terminal)?;
-    let operator_debit_cycles = journal
-        .initial_operator_cycles
-        .checked_sub(terminal.operator_cycles)
-        .ok_or_else(|| {
-            EnsureWorkflowError::Conservation(
-                "operator balance increased during apply; review a new plan".to_string(),
-            )
-        })?;
+    let operator_debit_cycles =
+        crate::fleet_ensure::policy::operator_mint::operator_source(journal)
+            .ok_or(EnsureWorkflowError::JournalIntegrity)?
+            .checked_sub(terminal.operator_cycles)
+            .ok_or_else(|| {
+                EnsureWorkflowError::Conservation(
+                    "operator balance increased during apply; review a new plan".to_string(),
+                )
+            })?;
     if operator_debit_cycles > conservation.maximum_operator_debit_cycles {
         return Err(EnsureWorkflowError::Conservation(format!(
             "operator debit {operator_debit_cycles} exceeded reviewed maximum {}",
@@ -3688,6 +3713,29 @@ fn verify_journal<E>(
 where
     E: std::error::Error + 'static,
 {
+    verify_journal_integrity(journal, plan, requested_fleet, state)?;
+    if let Some(review) = journal
+        .funding_reviews
+        .iter()
+        .filter_map(|r| r.operator_mint.as_ref())
+        .find(|review| review.receipt.is_none())
+    {
+        return Err(EnsureWorkflowError::OperatorMintPending {
+            review_sha256: review.review_sha256.clone(),
+        });
+    }
+    Ok(())
+}
+
+fn verify_journal_integrity<E>(
+    journal: &FleetEnsureJournalRecord,
+    plan: &FleetEnsurePlan,
+    requested_fleet: &str,
+    state: &FleetEnsureStateRecord,
+) -> Result<(), EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
     if journal.fleet != requested_fleet
         || journal.operation_id != plan.operation_id
         || journal.plan_sha256 != plan.plan_sha256
@@ -3697,6 +3745,7 @@ where
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
     funding::verify(plan, journal, state)?;
+    operator_mint::verify(plan, journal)?;
     continuation::verify_records(plan, journal)?;
     let actions = continuation::actions(plan, journal);
     let effect_count_matches = journal.effects.len() <= actions.len();

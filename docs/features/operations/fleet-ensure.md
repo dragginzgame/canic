@@ -484,6 +484,44 @@ loss or funding above the reviewed bounds fails before a new debit. Terminal
 verification still reconciles every credit and exact creation debit; the funding
 review does not increase creation limits or excuse an unexplained balance change.
 
+### Operator ICP conversion
+
+Fresh apply checks the complete reviewed operator debit before retaining a new
+execution journal. When it reports a shortfall, `canic fleet ensure <fleet>
+--operator-mint` reads the selected plan's operator balance, CMC rate and Ledger
+fees and reports an advisory ICP amount. It creates no journal or payment.
+This requires a selected plan; a staged reinstall review takes precedence over
+its predecessor without changing source evidence. It is not a readiness check
+before compilation.
+
+For a retained original withdrawal or supplementary funding pause, the same
+option retains or displays an exact conversion review. The report binds the
+operator, network root, ICP Ledger, CMC, Cycles Ledger, amount, transfer fee and
+fixed timestamp. `--mint-icp-ledger` and `--mint-cmc` override their canonical
+canister identities when a different selected network requires them. Review
+those identities and the maximum ICP debit before applying.
+
+Apply the conversion with `--operator-mint --apply <operator_mint_review_sha256>`.
+This authorizes one ICP transfer and its CMC notification, not Fleet withdrawals.
+Retries use the identical transfer and notification arguments. Canic authenticates
+the ICP transaction and the memo/account-bound Cycles Ledger deposit, then records
+gross cycles, actual deposit fee and net credit exactly once. Original Fleet
+starting balances, source seals and withdrawal identity remain unchanged.
+
+After `credit_admitted: true`, repeat ensure without `--operator-mint`, using
+the original plan digest for the original retained withdrawal, or the separately
+reviewed funding digest for supplementary funding. The conversion does not
+approve an additional Fleet debit. Completed conversion replay is effect-free.
+Use `--operator-mint --cancel-mint <operator_mint_review_sha256>` only to cancel
+an unapproved review; the original Fleet operation remains retained.
+
+Quotes round up using the observed rate and estimated deposit fee, with the ICP
+transfer fee reported separately. A changed rate never authorizes a second
+payment. Processing, refunds without complete accounting, expired identities,
+and unavailable or over-budget receipt history remain unresolved. Do not reset
+the journal, change timestamps, or independently mint into a retained operation.
+An Intent without a receipt is not proof that its original withdrawal did not pay.
+
 Every autonomous pool creation retains its exact Ledger block, operation,
 amount, Ledger fee, management creation fee, readiness floor, execution margin
 and first observed native balance. Terminal conservation sums those receipts,

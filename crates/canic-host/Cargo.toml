@@ -30,12 +30,16 @@ canic-control-plane = { workspace = true, features = [
 ] }
 canic-core = { workspace = true, features = ["auth-chain-key-ecdsa"] }
 ciborium = { workspace = true }
+crc32fast = { workspace = true }
 flate2 = { workspace = true }
 getrandom = { workspace = true }
 hmac = { workspace = true }
 ic-agent = { workspace = true }
+ic-certification = { workspace = true }
 ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
+icrc-ledger-types = { workspace = true }
+prost = { workspace = true }
 reqwest = { workspace = true, optional = true }
 serde = { workspace = true, features = ["derive"] }
 serde-saphyr = { workspace = true }
@@ -53,6 +57,7 @@ rustix = { workspace = true }
 
 [dev-dependencies]
 ic-testkit = { workspace = true }
+ic-verify-bls-signature = { workspace = true }
 
 [[example]]
 name = "local_fleet"

@@ -16,6 +16,7 @@ IFS= read -r actual_header <"$INVENTORY"
 [ "$actual_header" = "$expected_header" ] || fail "invalid inventory header"
 
 declare -A seen=()
+declare -A target_classes=()
 entry_count=0
 fast_count=0
 parallel_count=0
@@ -52,6 +53,13 @@ while IFS=$'\t' read -r package target release_lane execution suite extra; do
             ;;
         *) fail "line $line_number has invalid execution/suite classification: $execution/$suite" ;;
     esac
+
+    # Cargo's --test selector matches a target name across selected workspace
+    # packages. One name must never cross execution or release-lane boundaries.
+    target_class="$release_lane/$execution/$suite"
+    [[ -z "${target_classes[$target]:-}" || "${target_classes[$target]}" = "$target_class" ]] ||
+        fail "test target name crosses selection classes: $target"
+    target_classes["$target"]="$target_class"
 
     if [[ "$release_lane" = "integration" || "$suite" = "external-composition" ]]; then
         [[ "$release_lane/$execution/$suite" = "integration/pocketic-serial/external-composition" ]] ||

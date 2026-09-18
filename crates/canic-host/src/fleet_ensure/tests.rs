@@ -12,10 +12,15 @@ use crate::{
             EstateFundingDomainObservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion,
             FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
             LiveCanister, RootOwnedCanisterLifecycle, create_balance_is_terminal,
+            operator_mint::{
+                OperatorMintAuthority, OperatorMintNotificationOutcomeRecord,
+                OperatorMintReceiptRecord, OperatorMintTransferOutcomeRecord,
+            },
         },
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
             action_sha256,
+            operator_mint::{journal as records, prepare_intent},
         },
         workflow,
     },
@@ -2918,6 +2923,60 @@ fn issued_funding_reconciles_burn_and_replays_without_a_second_withdrawal() {
 }
 
 #[test]
+fn operator_shortfall_rejects_before_journalling_and_funded_retry_reconciles() {
+    let mut fixture = fixture();
+    let source = sha256_hex(b"operator shortfall admission");
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let required = planned.plan.conservation.maximum_operator_debit_cycles;
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    let original = fs::read(&paths.plan).unwrap();
+    for actual in [0, required - 1] {
+        fixture.platform.set_operator_cycles(actual);
+        assert!(matches!(
+            apply_fixture_plan(&mut fixture, &source, &planned.plan),
+            Err(workflow::EnsureWorkflowError::InsufficientOperatorCycles {
+                actual: observed, required: debit,
+            }) if observed == actual && debit == required
+        ));
+        assert!(!paths.journal.exists());
+        assert_eq!(fs::read(&paths.plan).unwrap(), original);
+        assert!(fixture.platform.mutations.is_empty());
+    }
+    let funding = workflow::ordered_actions(&planned.plan)
+        .into_iter()
+        .find(|action| matches!(action, EnsureAction::Fund { .. }))
+        .unwrap();
+    let funding_hash = action_sha256(funding);
+    fixture.platform.fail_once(funding_hash.clone());
+    fixture.platform.set_operator_cycles(required);
+    assert!(matches!(
+        apply_fixture_plan(&mut fixture, &source, &planned.plan),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    assert!(fixture.platform.operator_cycles < required);
+    let resumed = apply_fixture_plan(&mut fixture, &source, &planned.plan).unwrap();
+    assert!(resumed.terminal);
+    assert_eq!(fixture.platform.mutation_count(&funding_hash), 1);
+    let journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    assert_eq!(journal.initial_operator_cycles, required);
+    let mutations = fixture.platform.mutations.clone();
+    let replay = apply_fixture_plan(&mut fixture, &source, &planned.plan).unwrap();
+    assert!(replay.terminal);
+    assert_eq!(fixture.platform.mutations, mutations);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn failed_initial_funding_observation_never_persists_or_pays_that_intent() {
     let mut fixture = fixture();
     let source = "f4".repeat(32);
@@ -2968,6 +3027,208 @@ fn failed_initial_funding_observation_never_persists_or_pays_that_intent() {
         ]
     );
     fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one retained-withdrawal journey checks immutable authority, lost reply, conservation and terminal replay"
+)]
+fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
+    let mut fixture = fixture();
+    fixture
+        .desired
+        .canisters
+        .retain(|canister| canister.name == "treasury");
+    fixture.desired.canisters[0].minimum_cycles = "10000".into();
+    fixture.desired.canisters[0].initial_cycles = "10000".into();
+    fixture.platform = MockPlatform::new(
+        fixture.desired.clone(),
+        [live(
+            TREASURY,
+            500,
+            Some(&sha256_hex(b"current-wasm")),
+            true,
+            &[CONTROLLER],
+        )],
+    );
+    let source = sha256_hex(b"retained initial operator shortfall");
+    let report = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let action = workflow::ordered_actions(&report.plan)[0].clone();
+    assert!(matches!(action, EnsureAction::Fund { .. }));
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    // Reproduce the released admission bug from an interrupted fresh journal;
+    // the current entrypoint itself correctly refuses this starting balance.
+    fixture.platform.funding_observation_failures = 1;
+    assert!(matches!(
+        apply_fixture_plan(&mut fixture, &source, &report.plan),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    let mut journal = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    assert!(journal.effects.is_empty());
+    let state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet").unwrap();
+    let prepared = crate::fleet_ensure::ops::effect_preparation::prepare_effect(
+        &mut fixture.platform,
+        &report.plan.operation_id,
+        &action,
+        &state,
+    )
+    .unwrap();
+    journal.effects.push(prepared.record);
+    journal.initial_operator_cycles = 0;
+    crate::fleet_ensure::ops::write_journal(&paths, &journal).unwrap();
+    fixture.platform.set_operator_cycles(0);
+    fixture.platform.operator_funding =
+        Some(crate::fleet_ensure::view::OperatorFundingObservation {
+            cycles_ledger: LEDGER.into(),
+            ledger_fee_cycles: 10,
+            operator_cycles: 0,
+        });
+    let original_plan = fs::read(&paths.plan).unwrap();
+    let review = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_001,
+        &mut fixture.platform,
+    )
+    .unwrap()
+    .funding_review
+    .unwrap();
+    assert!(matches!(
+        review.pause,
+        crate::fleet_ensure::model::FundingPauseRecord::Operator(_)
+    ));
+    assert_eq!(review.action, action);
+    assert!(review.effect.is_none());
+    let retained = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    assert_eq!(retained.effects, journal.effects);
+    assert_eq!(retained.initial_operator_cycles, 0);
+    assert_eq!(
+        retained.initial_controlled_cycles,
+        journal.initial_controlled_cycles
+    );
+    assert_eq!(fs::read(&paths.plan).unwrap(), original_plan);
+    assert!(fixture.platform.mutations.is_empty());
+    assert!(matches!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &source,
+            "test-fleet",
+            &review.review_sha256,
+            &mut fixture.platform
+        ),
+        Err(workflow::EnsureWorkflowError::OperatorFundingRequired { .. })
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    // This native accounting fixture starts after durable credit admission. The
+    // production-Ledger PocketIC case separately authenticates the two receipts.
+    let credit = report.plan.conservation.maximum_operator_debit_cycles + 100;
+    retain_operator_credit_fixture(&paths, &report.plan, &review, credit);
+    fixture.platform.set_operator_cycles(credit);
+    let action_hash = action_sha256(&action);
+    fixture.platform.fail_once(action_hash.clone());
+    assert!(matches!(
+        apply_fixture_plan(&mut fixture, &source, &report.plan),
+        Err(workflow::EnsureWorkflowError::Platform(_))
+    ));
+    let completed = apply_fixture_plan(&mut fixture, &source, &report.plan).unwrap();
+    assert!(completed.terminal);
+    assert_eq!(
+        completed.actual_conservation.unwrap().operator_debit_cycles,
+        report.plan.conservation.maximum_operator_debit_cycles
+    );
+    assert_eq!(fixture.platform.mutation_count(&action_hash), 1);
+    let retained = crate::fleet_ensure::ops::read_journal(&paths)
+        .unwrap()
+        .unwrap();
+    assert_eq!(retained.initial_operator_cycles, 0);
+    assert_eq!(
+        retained.effects[0].action_sha256,
+        journal.effects[0].action_sha256
+    );
+    let mutations = fixture.platform.mutations.clone();
+    assert!(
+        apply_fixture_plan(&mut fixture, &source, &report.plan)
+            .unwrap()
+            .terminal
+    );
+    assert_eq!(fixture.platform.mutations, mutations);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+fn retain_operator_credit_fixture(
+    paths: &crate::fleet_ensure::ops::EnsurePaths,
+    plan: &FleetEnsurePlan,
+    funding: &crate::fleet_ensure::model::FundingReviewRecord,
+    credit: u128,
+) {
+    let digest = |text: &str| {
+        canic_core::cdk::utils::hash::decode_hex(text)
+            .unwrap()
+            .try_into()
+            .unwrap()
+    };
+    let intent = prepare_intent(
+        OperatorMintAuthority {
+            operation_id: digest(&plan.operation_id),
+            plan_sha256: digest(&plan.plan_sha256),
+            funding_review_sha256: digest(&funding.review_sha256),
+            network_identity_sha256: [8; 32],
+            operator: CONTROLLER.parse().unwrap(),
+            icp_ledger: OLD_APP.parse().unwrap(),
+            cmc: "rkp4c-7iaaa-aaaaa-aaaca-cai".parse().unwrap(),
+            cycles_ledger: LEDGER.parse().unwrap(),
+        },
+        100_000_000,
+        10_000,
+        1_800_000_000_000_000_010,
+    )
+    .unwrap();
+    let review = records::approve(&records::review(intent.clone()).unwrap()).unwrap();
+    let review = records::transfer_outcome(
+        &review,
+        OperatorMintTransferOutcomeRecord::Accepted { block_index: 1 },
+    );
+    let review = records::notification(&review, 1).unwrap();
+    let mut review = records::notification_outcome(
+        &review,
+        OperatorMintNotificationOutcomeRecord::Minted {
+            deposit_block_index: 2,
+            gross_minted_cycles: credit + 1,
+            historical_balance_cycles: credit,
+        },
+    );
+    review.receipt = Some(OperatorMintReceiptRecord {
+        destination_owner: intent.authority.operator,
+        destination_subaccount: None,
+        deposit_memo: intent.deposit_memo,
+        intent,
+        icp_block_index: 1,
+        deposit_block_index: 2,
+        gross_minted_cycles: credit + 1,
+        deposit_fee_cycles: 1,
+        net_credit_cycles: credit,
+    });
+    let mut journal = crate::fleet_ensure::ops::read_journal(paths)
+        .unwrap()
+        .unwrap();
+    records::retain(&mut journal, Some(review));
+    crate::fleet_ensure::ops::write_journal(paths, &journal).unwrap();
 }
 
 #[test]

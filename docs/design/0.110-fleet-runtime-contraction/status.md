@@ -1,5 +1,103 @@
 # Canic 0.110 Implementation Status
 
+## CANIC-172 operator admission and retained recovery — 2026-09-18
+
+Published .23 accepted a full reinstall with 693,932,575,589 operator cycles
+against an 81,375,002,534,785-cycle reviewed debit. Full reinstall verification
+returned before the ordinary balance check; its rejected withdrawal retained
+one original Intent. CANIC-166's two preparation seals had completed.
+
+The .24 correction checks maximum debit at the common fresh-journal boundary
+before any replacement, adoption or funding intent. The selected-plan quote
+reports balance, exact shortfall, observed CMC rate and separate transfer/deposit
+fees without payment. It is not the requested pre-compilation readiness check.
+
+RF2 is restored from the preserved snapshot and integrated into this correction.
+Original first-withdrawal recovery has its own exact funding-review binding;
+supplementary Native/Estate reviews can also proceed when the operator needs
+conversion. The host retains amount/fee/time/account/network authority before
+payment, authenticates the exact ICP transfer and memo-bound Cycles Ledger mint,
+and adds actual net credit once. Baselines and source seals remain immutable.
+Conversion approval is separate from original/supplementary withdrawal approval.
+No journal reset, independent top-up, duplicate timestamp or new withdrawal is
+used to escape ambiguous payment state.
+
+| Evidence | Result and boundary |
+| --- | --- |
+| Native host/CLI | 80 host and 19 CLI cases pass; original underfunded Intent reaches convergence with lost-reply recovery and effect-free replay; negative crypto/archive/outcome cases use native fixtures |
+| Production Ledgers in PocketIC | Normal conversion plus lost transfer/notification replies and pre-credit interruption pass; actual gross/fee/net and receipt authentication, once-only admission and conversion replay checked |
+| Managed mixed-topology PocketIC | Earlier fresh-admission rejection and full reinstall/replay pass against the operator Ledger stub |
+| Remaining live evidence | Exact staging authority/request age/available receipts, complete retained Fleet apply and terminal conservation; no live operation was changed |
+
+The production-Ledger proof's later Fleet funding uses a host model with no
+Coordinator topology; it is not a combined real-Ledger managed-Fleet recovery.
+Certificate acquisition now handles owned pruned trees under existing budgets
+and Agent verification. Receipt discovery is bounded to one certified ICP archive
+hop and 1,024 Cycles Ledger blocks. Missing/expired evidence remains unresolved.
+The [upstream Ledger source](https://github.com/dfinity/cycles-ledger/blob/main/cycles-ledger/src/storage.rs)
+shows a prunable duplicate index and a balance check before later timestamp
+validation. Therefore a later insufficient-funds response alone is not proof
+of nonpayment; this source inference does not qualify a deployed Ledger module.
+
+The selected correction and preserved speed batch have updated operator docs
+and the open .24 changelog. Scoped final checks and exact logs are in the
+[current handoff](../../status/current.md). No broad gate was pre-run. Complete
+live recovery forecasts (RF3), B1 and early pre-build readiness remain follow-ups.
+Packages remain .23. The saved RF2 source is untouched; no publication, version
+bump, live funding or sibling mutation occurred. This necessary operator recovery
+fix stays on the affected .110 line beyond the soft twelve-release guideline.
+
+## Post-.23 host speed batch — 2026-09-18
+
+The maintainer confirms .23 published and requests Toko feedback first, then speed.
+The latest feedback records .23 adoption with 255 native tests, strict Clippy,
+Wasm/Candid checks and both managed tests passing. CANIC-166 live retained-source
+review/apply remains separate, with no new confirmed Canic defect.
+
+| Field | Selected bounded batch |
+| --- | --- |
+| Outcome | Avoid session-only rebuilds, repeated release-test compile graphs, undersized fixture-cache retention and sequential protocol-owner status waiting |
+| Owner | Host build environment/caches, Fleet status collector, workspace runner and internal fixture artifact owner |
+| Evidence | Session-only control misses with identical compiler Wasm; candidate hits with equal input/release/output identities; build-script/compiler/extractor absence checks; real inputs and unknown launcher keys still invalidate |
+| Validation | 70 build/cache tests, 46 platform tests, exact host PocketIC proof, controlled Cargo graph experiment, runner contract and shell lint pass; scoped strict Clippy/formatting pass; one existing build benchmark ignored |
+| Status | Complete bounded batch; .24 draft ready for the maintainer-selected release flow |
+
+The next requested extension overlaps protocol-owner status with the existing
+four-read bound. Native transport tests prove partial batches, complete draining,
+configured-order errors, stopped-owner precedence and fresh retries. Runtime
+module checks remain after the status scan; no mutation order changes.
+
+The requested release-test extension reuses the ordinary workspace graph for
+full validation's serial host proof, avoiding the observed package-graph switch.
+The exact proof remains selected and passes. The controlled Cargo fixture retains
+the original executable with `fresh=true`; full-run timing remains unmeasured.
+Ordinary unit/binary tests and all registered ordinary integrations now share
+one workspace Cargo invocation as well. The controlled runner fixture proves
+selection, feature unification, continued failures, the PocketIC barrier and
+fresh later host reuse. Inventory checks reject cross-class target-name collisions.
+The 81-minute release baseline and distinct artifact recipe findings are recorded
+in the throughput report. Larger fixture/build attribution remains follow-up;
+the accepted nineteen-Workload/five-Ready capacity proof is not reduced.
+
+The fixture compiler cache's measured Local footprint is 4.36 GiB, exceeding its
+former 4 GiB whole-target cleanup threshold. The threshold is now 8 GiB per
+network, with seven-day expiry and hourly locked maintenance retained. Clearances
+and maintenance failures are visible without verbose output. Six artifact tests
+and strict internal library/test Clippy pass, including actual retention of a
+5 GiB sparse fixture and safe clearance at 9 GiB. No historical eviction or
+whole-run saving is claimed; the old normal logs do not establish either.
+
+This consolidates build environment, cache identities, status reads, release-test
+runner reuse, regressions and documentation in one speed batch. No new cache or runtime protocol is added.
+No external effects need interruption qualification. Direct/Make/CI/Toko launcher
+comparisons and end-to-end latency remain wider performance work; RF2/RF3/B1
+remain separate. The minor already exceeds the 12-release guideline: this stays
+on the affected .110 line as an explicitly requested operator-performance
+follow-up, without opening another minor or allocating one patch per proof.
+See the [throughput report](../../audits/working/0.110-validation-throughput/report.md)
+and [current handoff](../../status/current.md) for evidence and limits.
+
+
 ## Post-.22 completed-source retirement extension — 2026-09-17
 
 CANIC-166's new completed staging source is distinct from the earlier issued

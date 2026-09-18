@@ -60,6 +60,8 @@ fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
     ];
     stage(paths, &plan).unwrap();
     assert_eq!(review(paths).unwrap(), Some(plan.clone()));
+    // A selected reset quote must not inspect or quote its predecessor's plan.
+    assert!(crate::fleet_ensure::workflow::operator_mint::fresh_quote_available(paths).unwrap());
     assert_eq!(
         crate::fleet_ensure::workflow::retained_reinstall_apply_plan::<std::io::Error>(
             &paths.workspace,

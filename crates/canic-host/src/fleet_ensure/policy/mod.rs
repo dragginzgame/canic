@@ -5,6 +5,7 @@
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
 mod creation_fee;
+pub mod operator_mint;
 pub(super) mod recovery;
 pub(super) mod reinstall;
 pub(in crate::fleet_ensure) mod root_reinstall;

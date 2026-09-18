@@ -410,19 +410,15 @@ fn validate_observation<E: std::error::Error + 'static>(
         .checked_add(funds)
         .and_then(|n| n.checked_add(fees))
         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-    let prior_debit = journal
-        .initial_operator_cycles
+    let prior_debit = crate::fleet_ensure::policy::operator_mint::operator_source(journal)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?
         .checked_sub(observation.operator_cycles);
-    let debit = pause
-        .shortfall_cycles
-        .checked_add(pause.ledger_fee_cycles)
-        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     let balance_is_bounded = observation.live.cycles <= pause.available_cycles
         && pause.available_cycles - observation.live.cycles <= pause.funding_margin_cycles;
     if observation.cycles_ledger != pause.cycles_ledger
         || observation.ledger_fee_cycles != pause.ledger_fee_cycles
         || prior_debit.is_none_or(|spent| spent > maximum)
-        || (!approved && (!balance_is_bounded || observation.operator_cycles < debit))
+        || (!approved && !balance_is_bounded)
     {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
@@ -471,6 +467,7 @@ pub(super) fn resume<P: EnsurePlatform>(
         review.effect.is_some(),
     )?;
     if review.effect.is_none() {
+        funding::require_operator_funds(review, observation.operator_cycles)?;
         journal.funding_reviews[index].effect = Some(records::intent(
             &review.action,
             observation.operator_cycles,

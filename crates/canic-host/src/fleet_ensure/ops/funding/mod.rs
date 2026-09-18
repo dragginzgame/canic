@@ -7,6 +7,7 @@ use crate::fleet_ensure::{
     model::{
         EffectRecord, EffectState, EnsureAction, EstateFundingRequiredRecord, FleetEnsurePlan,
         FundingPauseRecord, FundingReviewRecord, NativeFundingRequiredRecord,
+        operator_mint::InitialOperatorFundingRequiredRecord,
     },
     ops::action_sha256,
 };
@@ -27,11 +28,54 @@ pub(in crate::fleet_ensure) fn review(
             principal: pause.root_principal.clone(),
         },
         effect: None,
+        operator_mint: None,
         pause: FundingPauseRecord::Estate(pause.clone()),
         review_sha256: String::new(),
     };
     record.review_sha256 = digest(&record);
     record
+}
+
+/// Bind an operator conversion review to the original withdrawal, without a new effect.
+pub(in crate::fleet_ensure) fn operator_review(
+    action: &EnsureAction,
+    operator: &str,
+    available_cycles: u128,
+    required_debit_cycles: u128,
+    ledger_fee_cycles: u128,
+) -> Option<FundingReviewRecord> {
+    let EnsureAction::Fund {
+        ledger,
+        name,
+        principal,
+        ..
+    } = action
+    else {
+        return None;
+    };
+    let shortfall_cycles = required_debit_cycles.checked_sub(available_cycles)?;
+    if shortfall_cycles == 0 {
+        return None;
+    }
+    let mut record = FundingReviewRecord {
+        action: action.clone(),
+        effect: None,
+        operator_mint: None,
+        pause: FundingPauseRecord::Operator(InitialOperatorFundingRequiredRecord {
+            action_sha256: action_sha256(action),
+            cycles_ledger: ledger.clone(),
+            operator: operator.into(),
+            target: name.clone(),
+            target_principal: principal.clone(),
+            available_cycles,
+            required_debit_cycles,
+            shortfall_cycles,
+            ledger_fee_cycles,
+        }),
+        review_sha256: String::new(),
+    };
+    record.review_sha256 = digest(&record);
+    Some(record)
 }
 
 /// Validated native quote inputs mapped into the durable review by ops.
@@ -83,6 +127,7 @@ pub(in crate::fleet_ensure) fn native_review(
             principal: pause.root_principal.clone(),
         },
         effect: None,
+        operator_mint: None,
         pause: FundingPauseRecord::Native(pause),
         review_sha256: String::new(),
     };

@@ -1,6 +1,9 @@
 //! Host persistence and review regressions for an underfunded retained operation.
 //! The platform models host evidence; real Ledger effects are qualified in PocketIC.
 
+mod operator_mint_reply_tests;
+mod operator_mint_tests;
+
 use super::{
     tests::{estate_funding_observation, estate_funding_plan, retained_evidence},
     *,
@@ -77,6 +80,8 @@ impl Fixture {
             desired,
             plan,
             platform: FundingPlatform {
+                controllers: vec![ROOT.into()],
+                cycles_ledger: "ledger".into(),
                 balance: 40,
                 native_balance: 10,
                 operator: 1000,
@@ -125,6 +130,8 @@ enum FundingTransportFault {
 }
 
 struct FundingPlatform {
+    controllers: Vec<String>,
+    cycles_ledger: String,
     drift_controller: bool,
     balance: u128,
     native_balance: u128,
@@ -145,6 +152,12 @@ impl EnsurePlatform for FundingPlatform {
         _: &FleetEnsureStateRecord,
     ) -> Result<FleetObservation, Self::Error> {
         let mut observation = estate_funding_observation(Some(self.balance));
+        observation
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .cycles_ledger
+            .clone_from(&self.cycles_ledger);
         observation.ledger_fee_cycles = if self.drift_fee { 6 } else { 5 };
         observation.operator_cycles = self.operator;
         observation.canisters.insert(
@@ -154,7 +167,7 @@ impl EnsurePlatform for FundingPlatform {
                 controllers: if self.drift_controller {
                     vec!["aaaaa-aa".into()]
                 } else {
-                    vec![ROOT.into()]
+                    self.controllers.clone()
                 },
                 cycles: self.native_balance,
                 module_sha256: None,
@@ -598,6 +611,36 @@ fn native_funding_review_preserves_issued_operation_and_separate_approval() {
     fixture.platform.native_balance = 10 + NATIVE_BASE;
     assert!(fixture.native_review().unwrap().is_none());
     assert_eq!(fixture.platform.transfers.len(), 1);
+}
+
+#[test]
+fn operator_mint_can_be_reviewed_before_supplementary_funds_are_available() {
+    for native in [false, true] {
+        let mut fixture = if native {
+            Fixture::native()
+        } else {
+            Fixture::new()
+        };
+        let mut journal = read_journal(&fixture.paths).unwrap().unwrap();
+        journal.initial_operator_cycles = 0;
+        write_journal(&fixture.paths, &journal).unwrap();
+        fixture.platform.operator = 0;
+        let review = fixture.native_review().unwrap().unwrap();
+        assert!(review.effect.is_none());
+        assert!(matches!(
+            fixture.native_resume(&review.review_sha256),
+            Err(EnsureWorkflowError::OperatorFundingRequired { .. })
+        ));
+        assert!(fixture.platform.transfers.is_empty());
+        assert!(
+            read_journal(&fixture.paths)
+                .unwrap()
+                .unwrap()
+                .funding_reviews[0]
+                .effect
+                .is_none()
+        );
+    }
 }
 
 #[test]

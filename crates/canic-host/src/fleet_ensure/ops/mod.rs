@@ -13,6 +13,7 @@ pub(super) mod current_protocol;
 pub(super) mod effect_preparation;
 pub(super) mod funding;
 mod install_history;
+pub mod operator_mint;
 mod plan_content;
 mod platform;
 mod protocol;

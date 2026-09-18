@@ -4,6 +4,7 @@
 //! Boundary: preserves protocol effects and delegates transfers to the existing adapter.
 
 mod native;
+mod operator;
 
 use crate::fleet_ensure::{
     model::{
@@ -20,7 +21,7 @@ pub(super) fn native_review_applicable(
     plan: &FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
 ) -> bool {
-    native::applicable(plan, journal)
+    native::applicable(plan, journal) || operator::applicable(plan, journal)
 }
 
 pub(super) fn verify<E: std::error::Error + 'static>(
@@ -40,6 +41,7 @@ pub(super) fn verify<E: std::error::Error + 'static>(
         })
         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     native::verify(plan, journal, state)?;
+    operator::verify(plan, journal)?;
     if journal
         .funding_reviews
         .iter()
@@ -53,6 +55,13 @@ pub(super) fn verify<E: std::error::Error + 'static>(
     for review in &journal.funding_reviews {
         if incomplete {
             return Err(EnsureWorkflowError::JournalIntegrity);
+        }
+        if matches!(review.pause, FundingPauseRecord::Operator(_)) {
+            incomplete = review
+                .operator_mint
+                .as_ref()
+                .is_none_or(|mint| mint.receipt.is_none());
+            continue;
         }
         incomplete = review
             .effect
@@ -114,15 +123,26 @@ pub(super) fn prepare<P: EnsurePlatform>(
     platform: &mut P,
 ) -> Result<Option<FundingReviewRecord>, EnsureWorkflowError<P::Error>> {
     if let Some(review) = journal.funding_reviews.last()
+        && !(matches!(review.pause, FundingPauseRecord::Operator(_))
+            && review
+                .operator_mint
+                .as_ref()
+                .is_some_and(|mint| mint.receipt.is_some()))
         && review
             .effect
             .as_ref()
             .is_none_or(|effect| effect.state != EffectState::Applied)
     {
-        if review.effect.is_none() && matches!(review.pause, FundingPauseRecord::Native(_)) {
+        if review.effect.is_none()
+            && review.operator_mint.is_none()
+            && matches!(review.pause, FundingPauseRecord::Native(_))
+        {
             return native::refresh(paths, plan, journal, state, created_at_time, platform);
         }
         return Ok(Some(review.clone()));
+    }
+    if let Some(review) = operator::prepare(paths, plan, journal, platform)? {
+        return Ok(Some(review));
     }
     let Some(pause) = &journal.estate_funding_required else {
         return native::prepare(paths, plan, journal, state, created_at_time, platform);
@@ -203,10 +223,6 @@ fn verify_balance<P: EnsurePlatform>(
                     && !pending.uncertain_result
                     && pending.diagnostic == Some(crate::fleet_ensure::model::EstatePoolCreationDiagnostic::FundingRequired))
         });
-    let debit = pause
-        .shortfall_cycles
-        .checked_add(pause.ledger_fee_cycles)
-        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     // New credits are an exact extension of the original operator debit bound.
     let (funding, fees) = totals::<P::Error>(journal, None)?;
     let maximum = plan
@@ -215,14 +231,10 @@ fn verify_balance<P: EnsurePlatform>(
         .checked_add(funding)
         .and_then(|n| n.checked_add(fees))
         .ok_or(EnsureWorkflowError::JournalIntegrity)?;
-    let prior_debit = journal
-        .initial_operator_cycles
+    let prior_debit = crate::fleet_ensure::policy::operator_mint::operator_source(journal)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?
         .checked_sub(observation.operator_cycles);
-    if !exact_account
-        || !pending_matches
-        || observation.operator_cycles < debit
-        || prior_debit.is_none_or(|spent| spent > maximum)
-    {
+    if !exact_account || !pending_matches || prior_debit.is_none_or(|spent| spent > maximum) {
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     let reviewed = plan
@@ -348,6 +360,19 @@ pub(super) fn resume<P: EnsurePlatform>(
         return Ok(());
     };
     let review = &journal.funding_reviews[index];
+    if matches!(review.pause, FundingPauseRecord::Operator(_)) {
+        if review
+            .operator_mint
+            .as_ref()
+            .is_some_and(|mint| mint.receipt.is_some())
+        {
+            // Only the original action driver may reconcile the retained withdrawal.
+            return Ok(());
+        }
+        return Err(EnsureWorkflowError::OperatorFundingRequired {
+            review_sha256: review.review_sha256.clone(),
+        });
+    }
     let FundingPauseRecord::Estate(pause) = &review.pause else {
         return Err(EnsureWorkflowError::JournalIntegrity);
     };
@@ -366,6 +391,7 @@ pub(super) fn resume<P: EnsurePlatform>(
             )));
         }
         let source = verify_balance(plan, journal, state, review, platform)?;
+        require_operator_funds(review, source)?;
         let intent = records::intent(&review.action, source, review.pause.available_cycles());
         journal.funding_reviews[index].effect = Some(intent);
         write_journal(paths, journal)?;
@@ -420,6 +446,24 @@ pub(super) fn resume<P: EnsurePlatform>(
     // balance is reconciled against exact creation receipts at terminal verification.
     journal.stalled_observations = 0;
     write_journal(paths, journal)?;
+    Ok(())
+}
+
+/// Check the reviewed debit before introducing a supplementary payment intent.
+fn require_operator_funds<E: std::error::Error + 'static>(
+    review: &FundingReviewRecord,
+    available: u128,
+) -> Result<(), EnsureWorkflowError<E>> {
+    let debit = review
+        .pause
+        .shortfall_cycles()
+        .checked_add(review.pause.ledger_fee_cycles())
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    if available < debit {
+        return Err(EnsureWorkflowError::OperatorFundingRequired {
+            review_sha256: review.review_sha256.clone(),
+        });
+    }
     Ok(())
 }
 
