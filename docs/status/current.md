@@ -20,6 +20,21 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release validation repair: IcyDB test dependency boundary — 2026-09-18
+
+The maintainer's validation exposed one host unit failure: the IcyDB dependency
+allowlist omitted `canic-tests`' new dev dependency for admission qualification.
+The corrected guard allows that exact dev edge and unpublished harness, retains
+exact fixture edges, and continues rejecting any production transitive consumer.
+All 38 focused package-boundary tests and warning-denied host library/test Clippy
+pass. Logs: `/tmp/canic-icydb-boundary-regression.log` and
+`/tmp/canic-icydb-boundary-clippy.log`. Formatting and whitespace checks pass.
+
+The selected .23 batch and changelog remain ready for the maintainer release-flow
+retry. No full validation, version bump, commit or push was run for this repair.
+The preceding complete-validation attempt failed; these targeted results do not
+replace a successful release validation receipt.
+
 ## Pre-push CANIC-166 blocker confirmation — 2026-09-18
 
 The reported staging plan/journal/state still match the previously inspected
