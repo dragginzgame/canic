@@ -1074,7 +1074,7 @@ fn qualification_harness_packages_are_test_only_leaves() {
 }
 
 #[test]
-fn icydb_dependency_graph_is_confined_to_the_test_fixture() {
+fn icydb_dependency_graph_is_confined_to_test_consumers() {
     const FIXTURE_PACKAGES: [&str; 2] = [
         "canic-icydb-lifecycle-schema",
         "canic_icydb_lifecycle_probe",
@@ -1096,12 +1096,18 @@ fn icydb_dependency_graph_is_confined_to_the_test_fixture() {
     for package_name in FIXTURE_PACKAGES {
         assert_unpublished_package_under(&metadata, package_name, &fixture_root);
     }
+    assert_unpublished_package_under(
+        &metadata,
+        "canic-tests",
+        &workspace.join("crates/canic-tests"),
+    );
 
     let icydb_edges = workspace_dependency_edges(&metadata, &workspace, |dependency| {
         dependency == "icydb" || dependency.starts_with("icydb-")
     });
     let expected_icydb_edges = [
         ("canic-icydb-lifecycle-schema", "normal", "icydb"),
+        ("canic-tests", "dev", "icydb"),
         ("canic_icydb_lifecycle_probe", "build", "icydb"),
         ("canic_icydb_lifecycle_probe", "normal", "icydb"),
     ]
@@ -1116,12 +1122,13 @@ fn icydb_dependency_graph_is_confined_to_the_test_fixture() {
     .collect();
     assert_eq!(
         icydb_edges, expected_icydb_edges,
-        "IcyDB-family dependencies must remain inside the exact test fixture"
+        "IcyDB-family dependencies must remain inside the fixture or the harness dev dependencies"
     );
     assert_eq!(
         workspace_reverse_consumers_of_icydb(&metadata, &workspace),
         BTreeSet::from([
             "canic-icydb-lifecycle-schema".to_string(),
+            "canic-tests".to_string(),
             "canic_icydb_lifecycle_probe".to_string(),
         ]),
         "no production workspace package may reach IcyDB transitively"
