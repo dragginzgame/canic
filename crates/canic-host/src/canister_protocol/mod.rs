@@ -1,6 +1,6 @@
 //! Module: canister_protocol
 //!
-//! Responsibility: invoke typed Canic Candid methods through the maintained ICP CLI adapter.
+//! Responsibility: invoke typed Canic Candid methods through ICP-selected transports.
 //! Does not own: domain sequencing, endpoint authorization, or management-Canister effects.
 //! Boundary: domain workflows supply exact Canister, method, and arguments through explicit
 //! query or update operations.
@@ -30,6 +30,14 @@ enum ProtocolCallMode {
 
 #[derive(Debug, ThisError)]
 pub enum CanisterProtocolError {
+    #[error("read-only query {method} on Canister {canister} failed: {source}")]
+    ReadOnlyQuery {
+        canister: Principal,
+        method: &'static str,
+        #[source]
+        source: crate::icp::IcpQueryError,
+    },
+
     #[error("invalid bound inspection contract for Root {caller}: {detail}")]
     InspectionContract { caller: Principal, detail: String },
 
@@ -196,6 +204,27 @@ where
         input,
         ProtocolCallMode::Query,
     )
+}
+
+/// Read a compiled Canic status contract while preserving typed transport failures.
+pub fn query_authenticated<I: CandidType, O: CandidType + DeserializeOwned>(
+    icp: &IcpCli,
+    canister: Principal,
+    method: &'static str,
+    input: &I,
+) -> Result<O, CanisterProtocolError> {
+    let response: Result<O, canic_core::dto::error::Error> = icp
+        .query_candid_readonly(canister, method, input)
+        .map_err(|source| CanisterProtocolError::ReadOnlyQuery {
+            canister,
+            method,
+            source,
+        })?;
+    response.map_err(|error| CanisterProtocolError::Response {
+        canister,
+        method,
+        source: IcpJsonResponseError::Rejected(error),
+    })
 }
 
 fn invoke_with_candid<I, O>(

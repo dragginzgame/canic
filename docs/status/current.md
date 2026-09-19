@@ -20,6 +20,142 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Further test setup throughput — 2026-09-19
+
+The complete bounded .26 batch, including this further setup improvement and
+the four Toko items below, is ready for the maintainer-selected release gate.
+Both changelog surfaces are current; packages and dependency pins remain .25.
+The latest read-only Toko handoff check still lists the same four items.
+
+Fresh fixture infrastructure installs directly through PocketIC using the
+existing production initializer compiler, exact Wasm digest and operator.
+Each case retains a fresh replica and independent host state. Ledger creation,
+recovery effects, lost replies and conservation retain their existing paths.
+Five focused IC cases pass: estate funding, issued-creation pause, native-child
+funding, Failed-reserve repair and activation reset. The two initializer/estate
+regressions, governed registry check and scoped warning-denied host/internal
+all-feature Clippy also pass.
+
+In the warm-artifact pair, installation takes 24.126 versus 11.933 seconds and
+complete cases take 165.233 versus 154.977 seconds. Server history and machine
+load differ; this is an observed local gain, not a whole-suite or Toko deployment
+claim. Whole-instance checkpoint reuse was tried and discarded because its
+save/load rounds changed prepared time and cycle balances. All prototype code
+is removed. Further terminal-read work and full RF3 remain separate follow-ups.
+No dependency change, sibling edit, version/publication or broad gate ran.
+See the [measurements and limitations](../audits/working/0.110-validation-throughput/report.md).
+
+## Expanded Toko feedback batch — 2026-09-19
+
+All four current handoff items are addressed in the bounded .26 batch, ready
+for the maintainer-selected release gate. This supersedes the earlier, narrower
+scope below. Both changelog surfaces are ready; packages and dependency pins
+remain .25. No broad gate, version bump, Git publication or sibling edit ran.
+
+1. CANIC-160: explicit planning-snapshot reuse, one-observation terminal replay
+   and one-use exact successor funding evidence remove repeated reads. Evidence
+   expires across effects, pacing, changed reviewed input, errors and restart.
+2. CANIC-160: inclusive parent stages, identity lookups and served cache hits
+   explain nested observation work. Parent/child totals must not be added.
+3. CANIC-160/172: a non-authorizing forecast separates known imports and funding
+   from live discovery. Completed prerequisite phases retain remaining work;
+   plan hashes and reviewed spending/effect authority do not change.
+4. CANIC-176: published .24/.25 archive provenance and the actual installed .24
+   CLI are qualified. Warm/session repeats take 4.61/4.68 seconds with four
+   complete cache hits. Two real competing CLIs report the actual lock owner,
+   serialize safely and retain every release-file hash. Toko's .24 pin already
+   includes these diagnostics; no dependency change is needed for this item.
+
+The complete disposable reinstall comparison passes on both subjects with the
+same recovery/conservation assertions. Common-stage observation attempts fall
+from 1,044 to 1,017 and PoolBalances time from 3.289 to 0.830 seconds. Complete
+retained-estate reinstall takes 277.737 versus 275.936 seconds: only a modest
+observed gain, not proof of a significant whole-deployment speedup. Root and
+terminal inventory checks remain fresh. Different embedded source paths change
+Wasm hashes; isolated build-cache warmth also prevents whole-runner comparison.
+
+Expanded host selections pass (132 tests, three opt-in cases unselected), as do
+the focused funded-estate lost-response journey, warm/session and kernel-lock
+regressions. Final active-checkout checks pass: 21 Fleet CLI tests, generated
+estate/replay, and warning-denied host/CLI/internal all-feature Clippy. Full RF3
+live collection/quotes and further terminal-read optimization remain separate;
+exact Toko deployment duration is unmeasured. See the
+[qualification and identities](../audits/working/0.110-validation-throughput/report.md).
+
+## Post-.25 speed work — 2026-09-19
+
+The maintainer confirms .25 is live and prioritizes further speed work. The
+published base is `1a32d9594871fe8de838843b857fd9385c90a503` (`v0.110.25`).
+The successful release test runner took 2,674 seconds (44m 34s), compared with
+the retained .24 run's 4,187 seconds. Cache warmth differs; this is an observed
+baseline, not a controlled attribution of the improvement.
+
+The first .26 slice shares verified release evidence within one Root-authority
+compilation. For R Roots, complete-manifest reads and fixture verification fall
+from R+1 to one, and application-union loads from R to one. Root/Store init
+compilation similarly avoids its second complete-manifest read and fixture
+verification. Each subsequent call revalidates; there is no persistent cache.
+
+Ten selected host tests pass, including the generated-estate planning/replay
+fixture, four-Root authority equivalence, manifest mutation/retry rejection and
+exact compiled Coordinator/Root/Store initializer authority. One unrelated
+opt-in frontend check is ignored. Warning-denied host library/test all-feature
+Clippy passes after narrowing test-helper visibility; formatting and whitespace
+checks pass. Both changelog surfaces start the .26 draft. Packages remain .25.
+No broad gate, PocketIC suite, version bump, publication or live effect ran.
+
+The second slice isolates complete fixture artifact construction from journey
+assertions and timing code. The cache binds the dedicated builder, its audit-Root
+builder and shared artifact helpers, retaining Cargo/config/tool/fixture/release
+identity inputs. A journey-only edit now reuses the complete artifact set; a
+build-helper change still invalidates it. No recovery case or assertion was removed.
+
+The exact funded-estate transfer/autonomous-creation recovery case passes before
+and after extraction. All 17 sealed artifacts are byte-identical. After a
+controlled journey-only comment edit, the complete cache hits and skips building:
+artifact resolution takes 4.86 seconds, test execution 56.10 seconds and the
+targeted runner 73 seconds. The preceding warm cache-miss candidate took 20.11
+seconds building and 93 seconds in the runner. Cache history and machine load
+prevent treating these as a controlled full-release speedup. The original
+instrumented control spent 250.69 seconds building, but only 12.38 installing;
+creation took 0.48 seconds and controller setup 0.008 seconds.
+
+The build-helper mutation/reuse regression and both existing release-cache
+identity/fixture-authority tests pass. The new regression is registered in the
+governed catalogue; its inventory check passes. Scoped internal Clippy passes.
+The maintainer expanded this same .26 batch with CANIC-160 observation
+attribution, bounded authority reuse and typed transient query recovery. Pool
+balance preparation now checks shared Root/operator authority once per batch of
+at most four assets; a nine-asset regression reduces local identity lookups from
+nine to three. Every asset retains controller/module validation, and later
+batches, observations and effects retain their authority boundaries. CLI and JSON
+report identity lookup attempts and served cache hits alongside remote attempts.
+
+Coordinator provisioning-status reads use the existing authenticated agent with
+at most three logical attempts in a 30-second network-read budget. Only typed
+transient transport failures retry; signer, network, target, request and retained
+operation/plan authority stay bound. Application, authentication, signature and
+decoding failures stop; updates keep their existing receipt-based recovery.
+
+Eighty-five focused native tests and scoped warning-denied Clippy pass. The exact
+funded-estate transfer/autonomous-creation recovery journey passes with signature
+verification enabled, terminal conservation and effect-free replay (54.78 seconds
+test, 71 seconds runner). Its growth wrapper now exposes the same PocketIC URL
+and root key to native reads as it already used for CLI calls. This is local
+qualification, not live Toko HTTP-502 recovery or a matched full-reinstall speedup.
+The final fixture-correction Clippy check, changed-file formatting and whitespace
+checks also pass. The complete bounded .26 batch and both changelog surfaces are
+ready for the maintainer-selected release gate. The operator runbook is current.
+Packages remain .25; no broad gate, bump, publication or sibling mutation ran.
+
+The read-only Toko recheck records successful original-operation recovery and
+0.3.3 staging delivery. CANIC-160 still has larger cross-phase observation reuse
+and continuation-forecast candidates; the supplied 4/4-to-4/18 transition does
+not itself establish duplicate effects. Full RF3 reserve forecasting and
+CANIC-176 downstream warm-build/lock-diagnostic adoption checks remain open.
+
+[Timing, qualification logs and limits](../audits/working/0.110-validation-throughput/report.md).
+
 ## .25 mixed-topology release-test correction — 2026-09-18
 
 The maintainer's full release test failed in the mixed-topology reset journey:

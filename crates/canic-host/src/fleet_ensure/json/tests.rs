@@ -124,9 +124,16 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
 
     let mut without_chunks = report;
     without_chunks.plan.protocol_actions.clear();
+    let mut expected =
+        to_value(&without_chunks).expect("encode ordinary report without Store chunks");
+    expected.as_object_mut().unwrap().insert(
+        "continuation_forecast".into(),
+        to_value(&crate::fleet_ensure::policy::continuation_forecast::forecast(&without_chunks))
+            .unwrap(),
+    );
     assert_eq!(
         report_json_value(&without_chunks).expect("project report without Store chunks"),
-        to_value(&without_chunks).expect("encode ordinary report without Store chunks")
+        expected
     );
 }
 

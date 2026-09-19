@@ -116,6 +116,7 @@ enum MockFundingRead {
 }
 
 pub(super) struct MockPlatform {
+    observation_calls: usize,
     pub(super) root_management: Option<crate::fleet_ensure::model::RootManagementObservation>,
     pub(super) operator_funding: Option<crate::fleet_ensure::view::OperatorFundingObservation>,
     pub(super) reinstall_authority:
@@ -174,6 +175,7 @@ impl MockPlatform {
             .map(|cycles| cycles.to_u128())
             .expect("fixture ledger fee");
         Self {
+            observation_calls: 0,
             reinstall_authority: None,
             root_management: None,
             operator_funding: None,
@@ -921,6 +923,7 @@ impl EnsurePlatform for MockPlatform {
         _operation_id: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<FleetObservation, Self::Error> {
+        self.observation_calls += 1;
         let canisters = self
             .desired
             .canisters
@@ -3398,6 +3401,7 @@ fn assert_same_plan_replay(
         crate::fleet_ensure::ops::EnsurePaths::under(root, &desired.environment, &plan.fleet);
     let retained_journal_bytes = fs::read(&paths.journal).unwrap();
     let mutations = platform.mutations.clone();
+    let observations = platform.observation_calls;
     let same_plan = workflow::apply(
         root,
         desired,
@@ -3408,6 +3412,7 @@ fn assert_same_plan_replay(
     )
     .expect("replay the completed review without generating another plan");
     assert!(same_plan.terminal);
+    assert_eq!(platform.observation_calls - observations, 1);
     assert_eq!(same_plan.effects_applied, 0);
     assert_eq!(platform.mutations, mutations);
     assert_eq!(fs::read(&paths.journal).unwrap(), retained_journal_bytes);

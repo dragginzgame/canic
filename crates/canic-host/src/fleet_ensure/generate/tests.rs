@@ -963,6 +963,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         );
     }
     let desired = generated.desired;
+    crate::fleet_ensure::ops::qualify_release_input_reuse(&root, &desired);
     crate::fleet_ensure::policy::startup_funding::live_binding::qualify_selected(&desired);
     assert_eq!(
         desired
@@ -2592,6 +2593,39 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &mut reinstall_platform,
     )
     .expect("review the exact Root reset before current protocol observation");
+    let forecast = crate::fleet_ensure::policy::continuation_forecast::forecast(&reinstall);
+    let configured_imports =
+        &later.desired.bootstrap.as_ref().unwrap().roots[0].canister_pool_imports;
+    assert_eq!(forecast.imports.len(), configured_imports.len());
+    assert!(!configured_imports.is_empty());
+    assert!(forecast.imports.iter().all(|import| {
+        configured_imports.contains(&import.canister)
+            && import.principal.is_some()
+            && import.state == crate::fleet_ensure::view::continuation::ContinuationImportState::PostInitializationObservation
+    }));
+    assert_eq!(
+        forecast.authority,
+        crate::fleet_ensure::view::continuation::ContinuationAuthority::SeparateReview
+    );
+    assert!(!forecast.requires_live_discovery.is_empty());
+    assert_eq!(
+        reinstall.plan.plan_sha256,
+        crate::fleet_ensure::policy::expected_plan_sha256(&reinstall.plan)
+    );
+    let mut completed_preview = reinstall.clone();
+    completed_preview.terminal = true;
+    let prerequisite =
+        crate::fleet_ensure::policy::continuation_forecast::forecast(&completed_preview);
+    assert_eq!(prerequisite.imports, forecast.imports);
+    assert_eq!(prerequisite.authority, forecast.authority);
+    completed_preview.plan.scope = crate::fleet_ensure::model::FleetEnsurePlanScope::Full;
+    let complete = crate::fleet_ensure::policy::continuation_forecast::forecast(&completed_preview);
+    assert!(
+        complete.imports.is_empty()
+            && complete.dependent_funding.is_empty()
+            && complete.requires_live_discovery.is_empty()
+    );
+
     assert_eq!(
         reinstall.plan.scope,
         crate::fleet_ensure::model::FleetEnsurePlanScope::RootReinstallPrerequisite

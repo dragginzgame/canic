@@ -8,6 +8,7 @@ mod error;
 mod identity;
 mod management;
 mod model;
+mod query;
 mod replica;
 mod response;
 mod run;
@@ -29,6 +30,7 @@ pub use model::{
     IcpCanisterQueryStats, IcpCanisterStatusReport, IcpCanisterStatusSettings,
     IcpCanisterVisibility, IcpCli, IcpRawOutput, IcpSnapshot, LocalReplicaTarget,
 };
+pub use query::IcpQueryError;
 pub(crate) use response::response_bytes;
 pub use response::{IcpJsonResponseError, decode_json_result_response};
 pub(crate) use run::run_status;

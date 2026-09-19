@@ -5,7 +5,7 @@
 //! Boundary: exact desired authority, resolved Principals, and finalized release evidence must agree.
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 use crate::{
     fleet_ensure::{
@@ -17,8 +17,9 @@ use crate::{
     },
     release_build::validate_finalized_release_build_manifest,
     release_set::{
-        CanicInfrastructureArtifactEntry, CanicInfrastructureArtifactManifest,
-        CanicInfrastructureRole, FleetSubnetRootReleaseSetManifest,
+        ApplicationArtifactUnion, CanicInfrastructureArtifactEntry,
+        CanicInfrastructureArtifactManifest, CanicInfrastructureRole, CurrentReleaseSetManifest,
+        FleetSubnetRootReleaseSetManifest, fixture::FixtureArtifactManifest,
         load_persisted_application_artifact_union,
         load_persisted_canic_infrastructure_artifact_manifest,
         load_persisted_current_release_set_manifest,
@@ -93,6 +94,13 @@ pub enum CanicInitError {
     Argument(#[from] ProtocolEffectError),
 }
 
+///
+/// CanicInitRequest
+///
+/// Ops-owned inputs for compiling release-bound infrastructure initialization.
+/// Local Fleet and disposable PocketIC fixtures share the production compiler.
+/// This request neither authorizes nor performs installation.
+///
 pub struct CanicInitRequest<'a> {
     pub desired: &'a DesiredFleet,
     pub init: &'a DesiredCanisterInit,
@@ -127,7 +135,7 @@ pub fn compile_root_authorities(
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
     validate_finalized_release_build_manifest(root, bootstrap.release_build_id, &complete.path)
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
-    complete
+    let fixtures = complete
         .manifest
         .verify_fixtures(
             root,
@@ -147,12 +155,13 @@ pub fn compile_root_authorities(
     )?;
     let store_artifact =
         infrastructure_entry(&infrastructure.manifest, CanicInfrastructureRole::WasmStore)?;
+    let release = RootReleaseInputs::load(root, bootstrap, &complete.manifest, fixtures.manifest)?;
     bootstrap
         .roots
         .iter()
         .map(|input| {
             compile_root_authority(
-                root,
+                &release,
                 desired,
                 principals,
                 &authority,
@@ -166,6 +175,12 @@ pub fn compile_root_authorities(
         .collect()
 }
 
+/// Compile binary initialization after checking the selected release and role authority.
+///
+/// # Errors
+///
+/// Rejects incomplete bootstrap inputs, unresolved Principals, inconsistent release
+/// evidence, fixture authority or a Wasm identity that differs from the selected role.
 #[expect(
     clippy::too_many_lines,
     reason = "one typed initializer compiler keeps all infrastructure role branches together"
@@ -206,7 +221,7 @@ pub fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, Cani
         &complete.path,
     )
     .map_err(|error| CanicInitError::Release(error.to_string()))?;
-    complete
+    let fixtures = complete
         .manifest
         .verify_fixtures(
             request.root,
@@ -243,7 +258,12 @@ pub fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, Cani
                 &infrastructure.manifest,
             )?;
             let root_authority = compile_root_authority(
-                request.root,
+                &RootReleaseInputs::load(
+                    request.root,
+                    bootstrap,
+                    &complete.manifest,
+                    fixtures.manifest,
+                )?,
                 request.desired,
                 request.principals,
                 &authority,
@@ -279,7 +299,12 @@ pub fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, Cani
                 &infrastructure.manifest,
             )?;
             let root_authority = compile_root_authority(
-                request.root,
+                &RootReleaseInputs::load(
+                    request.root,
+                    bootstrap,
+                    &complete.manifest,
+                    fixtures.manifest,
+                )?,
                 request.desired,
                 request.principals,
                 &authority,
@@ -350,12 +375,46 @@ fn encode_store_arguments(
     .map_err(Into::into)
 }
 
+/// Release evidence shared only within one authority compilation, never across calls.
+struct RootReleaseInputs {
+    union: ApplicationArtifactUnion,
+    fixtures: FixtureArtifactManifest,
+}
+
+impl RootReleaseInputs {
+    fn load(
+        root: &Path,
+        bootstrap: &DesiredFleetBootstrap,
+        complete: &CurrentReleaseSetManifest,
+        fixtures: FixtureArtifactManifest,
+    ) -> Result<Self, CanicInitError> {
+        let union = load_persisted_application_artifact_union(
+            root,
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+            bootstrap.release_build_id,
+        )
+        .map_err(|error| CanicInitError::Release(error.to_string()))?;
+        if complete.application_artifact_union_sha256 != union.digest {
+            return Err(CanicInitError::Release(
+                "complete release authority does not bind the application artifact union"
+                    .to_string(),
+            ));
+        }
+        Ok(Self {
+            union: union.union,
+            fixtures,
+        })
+    }
+}
+
 #[expect(
     clippy::too_many_arguments,
     reason = "authority compilation receives each independently verified binding explicitly"
 )]
 fn compile_root_authority(
-    workspace_root: &Path,
+    release: &RootReleaseInputs,
     desired: &DesiredFleet,
     principals: &BTreeMap<String, String>,
     authority: &FleetRegistryAuthority,
@@ -382,38 +441,13 @@ fn compile_root_authority(
         .component_topology
         .validate_root_binding(&binding)
         .map_err(|error| CanicInitError::Authority(error.to_string()))?;
-    let union = load_persisted_application_artifact_union(
-        workspace_root,
-        &bootstrap
-            .component_deployment_configuration
-            .component_topology,
-        bootstrap.release_build_id,
-    )
-    .map_err(|error| CanicInitError::Release(error.to_string()))?;
-    let complete =
-        load_persisted_current_release_set_manifest(workspace_root, bootstrap.release_build_id)
-            .map_err(|error| CanicInitError::Release(error.to_string()))?;
-    if complete.manifest.application_artifact_union_sha256 != union.digest {
-        return Err(CanicInitError::Release(
-            "complete release authority does not bind the application artifact union".to_string(),
-        ));
-    }
-    let fixtures = complete
-        .manifest
-        .verify_fixtures(
-            workspace_root,
-            &bootstrap
-                .component_deployment_configuration
-                .component_topology,
-        )
-        .map_err(|error| CanicInitError::Release(error.to_string()))?;
     let manifest = FleetSubnetRootReleaseSetManifest::project(
         &bootstrap
             .component_deployment_configuration
             .component_topology,
         &binding,
-        &union.union,
-        &fixtures.manifest,
+        &release.union,
+        &release.fixtures,
     )
     .map_err(|error| CanicInitError::Release(error.to_string()))?;
     let manifest_digest = manifest
@@ -422,8 +456,8 @@ fn compile_root_authority(
                 .component_deployment_configuration
                 .component_topology,
             &binding,
-            &union.union,
-            &fixtures.manifest,
+            &release.union,
+            &release.fixtures,
         )
         .map_err(|error| CanicInitError::Release(error.to_string()))?;
     Ok(FleetSubnetRootAuthority {

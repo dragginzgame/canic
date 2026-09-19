@@ -1,5 +1,68 @@
 # Canic 0.110 Implementation Status
 
+## Further .26 fixture setup qualification — 2026-09-19
+
+The bounded .26 batch remains ready for the maintainer-selected release gate.
+Fresh recovery-fixture infrastructure now installs directly through PocketIC
+with the existing production initializer compiler and exact selected Wasm digest.
+Each case keeps independent replica/host state; paid creation and recovery
+assertions remain. Five focused IC cases, initializer/estate/registry regressions
+and scoped warning-denied host/internal Clippy pass. Warm-pair installation falls
+24.126 to 11.933 seconds; complete cases fall 165.233 to 154.977 seconds. Server
+history differs, so no complete release or Toko deployment gain is established.
+The earlier checkpoint prototype changed prepared accounting and was discarded.
+Both changelogs are current; packages/pins remain unchanged. No broad gate,
+version bump, publication or sibling edit ran. Full RF3 and further terminal-read
+work remain separate. [Evidence](../../audits/working/0.110-validation-throughput/report.md).
+
+## Expanded .26 acceptance — 2026-09-19
+
+Ready for the maintainer-selected release gate, superseding the narrower scope
+below. All four current Toko items are addressed: safe planning/replay/successor
+evidence reuse, inclusive nested attribution, non-authorizing continuation
+forecasts and published/installed CLI warm/session/competing-lock qualification.
+The exact installed .24 CLI already contains CANIC-176's released diagnostics.
+Both real competing builds retain complete cache reuse and immutable outputs.
+
+Both complete reinstall subjects pass unchanged safety assertions. Common-stage
+observation calls fall 1,044 to 1,017; retained-estate reinstall takes 277.737
+versus 275.936 seconds. This single pair establishes only modest observed
+end-to-end improvement. Distinct embedded source paths change Wasm hashes and
+isolated cache warmth prevents a whole-runner timing claim. Native regressions,
+focused IC recovery and final scoped warning-denied Clippy pass. Both changelog
+surfaces are ready; versions/pins remain unchanged and no broad gate ran.
+Full RF3 live funding and further terminal-read optimization remain separate.
+[Evidence and limitations](../../audits/working/0.110-validation-throughput/report.md).
+
+## Post-.25 speed batch — 2026-09-19
+
+The maintainer confirms .25 publication and selects more speed work before
+continuing full RF3. Keep accepted operator/validation latency corrections on
+the affected .110 line despite the soft twelve-release guideline; no minor
+closeout is implied. The .26 draft starts with per-call release-input sharing
+for Root authority and init compilation, retaining fresh validation across calls.
+Multi-Root parity, initializer authority, evidence mutation/retry and generated
+planning/replay checks pass; scoped host Clippy passes. Packages remain .25.
+
+The measured setup slice isolates the fixture artifact builder from journey
+assertions/timing edits. All 17 funding-fixture artifacts remain byte-identical;
+the exact recovery journey passes after extraction and after a journey-only edit
+that reuses the complete cache without building. Build-helper mutation/reuse,
+release identity, fixture restoration and governed catalogue checks pass, as does
+scoped internal Clippy. The maintainer extended the same batch with CANIC-160:
+per-batch pool authority preparation, identity/cache observation attribution and
+typed transient provisioning-status retries. Eighty-five focused native tests
+and the exact funded-estate recovery/replay journey pass. Scoped Clippy,
+including the final fixture network-wiring correction, and formatting checks pass.
+The query transport keeps signature verification and exact operation/plan checks;
+no mutation replay or across-effect cache was introduced. Both changelog surfaces
+and the operator runbook are current; the complete bounded .26 batch is ready for
+the maintainer-selected release gate. The .25 runner baseline remains 2,674
+seconds; no controlled whole-release saving is claimed. The expanded acceptance
+above adds safe reuse and continuation forecasts; full RF3 remains follow-up
+work. Packages stay .25.
+[Current evidence](../../audits/working/0.110-validation-throughput/report.md).
+
 ## .25 release-test correction — 2026-09-18
 
 The full gate exposed one stale mixed-topology assertion after CANIC-166/172:

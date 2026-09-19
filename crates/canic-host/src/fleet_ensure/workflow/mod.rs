@@ -421,11 +421,34 @@ where
 }
 
 /// Build and retain one read-only plan from current desired state plus live observation.
+pub fn plan<P>(
+    root: &Path,
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    desired_sha256: &str,
+    requested_fleet: &str,
+    created_at_time: u64,
+    platform: &mut P,
+) -> Result<FleetEnsureReport, EnsureWorkflowError<P::Error>>
+where
+    P: EnsurePlatform,
+{
+    platform.with_planning_observations(|platform| {
+        plan_with_observations(
+            root,
+            desired,
+            desired_sha256,
+            requested_fleet,
+            created_at_time,
+            platform,
+        )
+    })
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one locked read-only transaction reconciles retained authority, observation and the immutable plan"
 )]
-pub fn plan<P>(
+fn plan_with_observations<P>(
     root: &Path,
     desired: &crate::fleet_ensure::model::DesiredFleet,
     desired_sha256: &str,
@@ -1224,6 +1247,9 @@ where
         retain_estate_funding_pause(&paths, &mut journal, None)?;
     }
     let mut terminal_state;
+    // Only the immediately following protocol phase may consume this evidence.
+    // It is invocation-local and never survives interruption or a preceding effect.
+    let mut continuation_observation: Option<ContinuationObservation> = None;
     loop {
         let execution_actions = continuation::actions(&retained_plan, &journal)
             .into_iter()
@@ -1238,6 +1264,11 @@ where
                 let action_hash = action_sha256(action);
                 let observation_policy = effect_observation_policy(operation_desired, action)?;
                 let retained_effect = journal.effects.get(index);
+                let continued_observation = retained_effect
+                    .is_none_or(|effect| effect.state != EffectState::Applied)
+                    .then(|| continuation_observation.take())
+                    .flatten()
+                    .filter(|evidence| evidence.first_action_sha256 == action_hash);
                 if retained_effect.is_none_or(|effect| effect.state != EffectState::Applied) {
                     let phase = action_progress_phase(action);
                     if reported_phase != Some(phase) {
@@ -1249,9 +1280,12 @@ where
                     && retained_effect.is_none_or(|effect| effect.state == EffectState::Intent)
                     && !prior_fleet_protocol_effect_started(&actions, &journal, index)
                 {
-                    let funding_observation = platform
-                        .observe(&journal.operation_id, &state)
-                        .map_err(EnsureWorkflowError::Platform)?;
+                    let funding_observation = match continued_observation {
+                        Some(evidence) => evidence.observation,
+                        None => platform
+                            .observe(&journal.operation_id, &state)
+                            .map_err(EnsureWorkflowError::Platform)?,
+                    };
                     let funded_plan = funding_plan(&retained_plan, &journal)?;
                     let required =
                         estate_funding_requirement(&funded_plan, &state, &funding_observation)?;
@@ -1883,6 +1917,15 @@ where
                         Ok(()) => {
                             write_state(&paths, &terminal_state)?;
                             state = terminal_state.clone();
+                            continuation_observation = journal
+                                .successor_phases
+                                .last()
+                                .and_then(|phase| phase.plan.as_ref())
+                                .and_then(|phase| phase.protocol_actions.first())
+                                .map(|first| ContinuationObservation {
+                                    first_action_sha256: action_sha256(first),
+                                    observation: terminal_observation,
+                                });
                             report_progress_state(
                                 platform,
                                 &retained_plan,
@@ -2680,6 +2723,12 @@ fn reviewed_estate_root_principal<'a>(
                 .map(String::as_str)
         })
         .or_else(|| state.principals.get(&domain.root).map(String::as_str))
+}
+
+/// Evidence captured after all preceding effects, bound to one successor's first action.
+struct ContinuationObservation {
+    first_action_sha256: String,
+    observation: FleetObservation,
 }
 
 fn prior_fleet_protocol_effect_started(

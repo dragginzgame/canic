@@ -31,6 +31,7 @@ impl IcpCli {
     #[must_use]
     pub fn new(executable: impl Into<String>, environment: Option<String>) -> Self {
         Self {
+            identity_lookups: std::sync::Arc::default(),
             remote_calls: std::sync::Arc::default(),
             executable: executable.into(),
             environment,
@@ -48,6 +49,12 @@ impl IcpCli {
     #[must_use]
     pub(crate) fn remote_call_count(&self) -> u64 {
         self.remote_calls.load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    /// Local Principal resolution attempts, shared across transport clones.
+    pub(crate) fn identity_lookup_count(&self) -> u64 {
+        self.identity_lookups
+            .load(std::sync::atomic::Ordering::Relaxed)
     }
 
     pub(super) fn record_remote_call(&self) {

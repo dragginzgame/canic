@@ -1,8 +1,17 @@
 //! Build the local balance-control audit Root directly for a disposable test release.
 //! Production Root generation and release artifacts are unaffected.
 
-use super::super::*;
+use super::literal_zero_role_artifact_path;
+use crate::pic::CanicWasmBuildProfile;
 use crate::pic::artifacts::build_internal_test_wasm_canisters_with_features;
+use canic_core::ids::{BuildNetwork, CanisterRole};
+use canic_host::{
+    canister_build::{CanisterArtifactBuildOutput, CanisterBuildProfile, WorkspaceBuildContext},
+    release_set::AppConfigSnapshot,
+    role_contract::{PackageValidationMode, RolePackageValidation, validate_declared_role_package},
+};
+use flate2::{Compression, write::GzEncoder};
+use std::{io::Write, path::Path, process::Command};
 
 pub fn uses_audit_root(config: &Path) -> bool {
     config.ends_with("canisters/audit/root_probe/native-child-recovery.toml")
@@ -159,4 +168,10 @@ fn finalize_audit_root(output: &CanisterArtifactBuildOutput, runtime: &Path, can
         gzip(&std::fs::read(&output.wasm_path).unwrap()),
     )
     .unwrap();
+}
+
+fn gzip(bytes: &[u8]) -> Vec<u8> {
+    let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
+    encoder.write_all(bytes).expect("gzip fixture Wasm");
+    encoder.finish().expect("finish fixture Wasm gzip")
 }

@@ -1,5 +1,526 @@
 # Release-test throughput qualification
 
+## Fresh recovery-fixture installation — 2026-09-19
+
+The next accepted speed slice reduces repeated setup while keeping each case's
+replica, identity, host directory and journal independent. The shared preparation
+helper still creates canisters through the production Ledger adapter. It now
+installs the three infrastructure canisters directly through PocketIC, using the
+exact selected Wasm bytes, checked file digest, operator and production initializer
+compiler. The compiler's existing request/error/function are exposed under the
+host's `local-fleet` feature; there is no alternate initializer or runtime mode.
+Fresh-only typed initialization and complete newly allocated identities are
+required. Controllers, generated planning, paid recovery, lost replies, terminal
+conservation and effect-free replay retain their existing paths and assertions.
+The complete fresh journey and interrupted reset installs retain ICP transport.
+
+### Focused evidence
+
+The unchanged control ran the estate-funding and issued-creation-pause cases in
+one process. The first candidate also passes both but rebuilt artifacts for its
+changed host source; its whole duration is not comparable. A subsequent five-case
+qualification passes activation reset, four-Workload Failed-reserve repair, those
+same two funding cases and native-child funding recovery. The latter proof retains
+the exact original child claim across native withdrawal/recovery. No case or
+assertion was removed, and no broad suite ran.
+
+| Measured phase, seconds | Control | Candidate, warm artifacts |
+| --- | ---: | ---: |
+| Estate funding: infrastructure installs | 12.078 | 6.044 |
+| Issued-creation pause: infrastructure installs | 12.048 | 5.889 |
+| Estate funding: complete case | 55.026 | 49.842 |
+| Issued-creation pause: complete case | 110.207 | 105.135 |
+| Both installation phases | 24.126 | 11.933 |
+| Both complete cases | 165.233 | 154.977 |
+
+Installation setup falls by about 50.5%; these two complete cases improve by
+10.3 seconds (6.2%) in the observed comparison. The warm candidate cases run
+within the five-case process, after the other two scenarios; the control process
+runs only the pair. Shared-server history and machine load are not identical, so
+this is a local observation, not a controlled whole-suite speed guarantee. Their
+artifact preparation is comparable: 6.344/5.694 seconds in the control versus
+5.766/5.717 in the warm candidate. The other candidate install phases take
+5.992, 6.285 and 5.923 seconds. The five-case run takes 951.65 seconds including
+cold builds for additional configurations; do not compare that with the pair.
+
+Both subjects use the active Canic checkout on published
+`1a32d9594871fe8de838843b857fd9385c90a503`, package .25, unchanged dependency
+lock/toolchain, Fast Wasm profile, ICP 1.5.0 and PocketIC 16.0.0. The candidate
+only changes fixture installation and exports the already-used compiler; its
+production compiler body, runtime sources and recovery assertions are unchanged
+from the control. There is no measured Toko deployment or complete release-gate
+improvement from this test-only setup change.
+
+Logs: `/tmp/canic-funding-install-control.log`,
+`/tmp/canic-funding-install-candidate.log`,
+`/tmp/canic-funding-install-qualification.log`.
+Final native checks pass: exact generated Coordinator/Root/Store initializer
+authority, generated multi-component estate planning/apply/replay, and governed
+registry ordering. Warning-denied host/internal library/test all-feature Clippy
+passes. Logs: `/tmp/canic-fixture-install-native.log` and
+`/tmp/canic-fixture-install-clippy.log`. The complete bounded .26 batch and both
+changelog surfaces are ready for the maintainer-selected release gate; package
+versions and dependency pins remain unchanged.
+
+### Discarded whole-instance reuse trial
+
+A preceding private prototype saved the complete stopped replica and exact host
+files for the two identical initial funding recipes. Its file restoration check
+passed, but reopening the instance advanced time by four nanoseconds and changed
+one prepared canister's balance by 261,450 cycles. The pinned server performs a
+checkpoint round on save and initialization rounds on load; see the
+[PocketIC 16 source](https://github.com/dfinity/ic/blob/fc21803c3c3a8dd452b3b58b959751c41fecb89c/rs/pocket_ic_server/src/pocket_ic.rs).
+This was not a drop-in replacement for the exact prepared accounting. The trial
+was discarded rather than adding a balance tolerance or altering recovery inputs.
+Its module, host snapshot helper, registry entry and builder changes are removed.
+This does not rule out a separately designed checkpoint-based fixture with its
+own accounted preparation boundary. Evidence:
+`/tmp/canic-funding-setup-candidate.log`,
+`/tmp/canic-funding-setup-candidate-retry.log`.
+
+## Expanded CANIC-160/172/176 acceptance — 2026-09-19
+
+The four-item Toko handoff expands the existing .26 batch. Its bounded outcomes
+are implemented and qualified, ready for the maintainer-selected release gate.
+Changes remain in Canic; application pins, package versions and sibling
+repositories are unchanged. Earlier sections record preceding slices; this
+acceptance supersedes their narrower scope and outstanding qualification notes.
+
+### Observation and continuation boundaries
+
+Planning owns an explicit read-only snapshot shared by Root management,
+configured-canister observation and protocol preparation. Nested consumers reuse
+it. Success, error, pacing, a changed reviewed desired input and an effect all
+end the relevant evidence lifetime. No persisted cache or inferred cross-command
+freshness was added. The transport regression reduces the first Root/configured
+read group from five attempts to four, then proves fresh reads after pacing,
+input rebinding, failed scope exit and the next invocation.
+
+Completed replay proves terminal inventory first, then uses one fresh observation
+of the merged estate for convergence and conservation. The native recovery
+fixtures require exactly one replay observation and no additional mutation.
+A just-admitted successor also carries its predecessor observation once to the
+first exact action's funding check. The digest-bound handoff exists only in the
+current invocation; restart, mismatch or an intervening effect cannot reuse it.
+All existing debit, controller/module, canonical action, interruption and terminal
+conservation checks remain.
+
+`Planning` and `FleetSnapshot` timings are inclusive, with `parent_stage` naming
+the enclosing stage. Remote attempts, local identity resolutions and actually
+served cache hits explain collection versus cached projection. Parent and child
+counts overlap; adding them would double-count work. Logical host attempts are
+not all IC messages, HTTP packets or replica execution costs.
+
+The report's `continuation_forecast` is a projection outside the immutable plan.
+It exposes known import identities, separately reviewed funding estimates, the
+actual successor authority ceiling and categories still requiring live evidence.
+A completed preparation, Root-reset or Root-start prerequisite does not imply
+a completed Fleet and keeps its pending discovery projection. A recovery estimate cannot manufacture
+successor authority. Decimal cycle values retain `u128` precision. This is not
+full RF3 live descendant collection or a complete funding quote.
+
+Focused qualification: 132 host cases passed across platform, continuation,
+workflow, JSON and generated-estate selections; three opt-in cases were not run.
+The corrected generated forecast passes, as do 21 Fleet CLI cases and scoped
+warning-denied host/CLI all-feature Clippy. The funded-estate transfer and
+creation lost-response PocketIC case passes in 62.97 seconds (137-second runner,
+including its compilation), with conservation and effect-free replay. Logs:
+`/tmp/canic160-expanded-host-tests.log`,
+`/tmp/canic160-expanded-recovery.log`,
+`/tmp/canic160-forecast-final.log`,
+`/tmp/canic160-expanded-clippy-final.log`.
+
+Final active-checkout validation also passes: 21 Fleet CLI cases, generated
+estate/replay and warning-denied all-feature library/test Clippy for host, CLI
+and testing-internal. These checks include the final report-only refinement
+that preserves live discovery for every non-Full prerequisite scope. Logs:
+`/tmp/canic160-final-main-tests.log`, `/tmp/canic160-final-main-clippy.log`.
+
+### CANIC-176 publication and installed-binary acceptance
+
+Toko's manifest, `tool-versions.env`, CLI version and Cargo installation record
+identify tag `v0.110.24`, commit
+`933a35b66403f6a94f99803252cc52c0aec32958`. The installed executable is
+`/home/adam/.cargo/bin/canic`, SHA-256
+`edfa5a47163a7133af2cea27cca5ee42429b04d8027469ac7cb52b994924f943`.
+Cargo metadata is provenance evidence, not a reproducible-binary attestation;
+the actual executable was therefore exercised directly.
+
+Both .24 and .25 published host/CLI archives were downloaded read-only, checked
+against registry checksums and their `.cargo_vcs_info.json`, and the relevant
+source files compared with the exact local tags. Lock-owner diagnostics, CLI
+rendering and the session filter are byte-identical across those tags and the
+current tree. This corrects the assumption that a .24 pin by itself means those
+features have not been adopted.
+
+| Published archive | SHA-256 |
+| --- | --- |
+| canic-host 0.110.24 | `7794689a9f6afb7efaec83c252d6c39135f06c7c8f10b879537d19e10fe3b145` |
+| canic-cli 0.110.24 | `78b567c40349a043c4837bca57e2d8b2ab724c85b97bd2fb1a328acc38cf906e` |
+| canic-host 0.110.25 | `d7b2463f0f74fdcc2fe3266b63021189af328987fddd0513cbacba33b3657c7b` |
+| canic-cli 0.110.25 | `f1983c52c621113080ca1d68f7b4e588f411ffaa3cc8abc981e07183cf6a07c4` |
+
+Acceptance used an isolated archive of that exact .24 tag, its locked dependency
+graph, `canisters/audit/root_probe/activation.toml`, Local network and Fast
+profile. The selected installed CLI built canonical Coordinator, Store and Root
+plus the audit application. No replica or deployment was used for this build
+check. The active .25 checkout correctly fails the .24 CLI's dependency-version
+admission and is not a valid matched subject; an active-workspace dependency
+source scan also encountered an unrelated node_modules symlink. Neither was
+bypassed or edited. The isolated tag removes those uncontrolled inputs.
+
+| Installed CLI case | Result |
+| --- | --- |
+| Initial four-artifact build | Complete, 314.36 seconds |
+| Identical warm repeat | Four verified complete-release hits, 4.61 seconds |
+| Only session/thread IDs changed | Four hits, 4.68 seconds |
+| Held kernel lock, matching launcher environment | All owner fields printed; waits; four hits, 5.83 seconds including 1.10 seconds acquiring the lock |
+
+The first two warm checks retain release
+`d0bb4b07ce998dfb8b8f96fc2798dc5cf0aafcbd26666247b9f4f2e53eabffcf`.
+All 18 sealed release files retain their hashes. An initial lock-test launcher
+changed PATH through a nested login shell, correctly invalidating complete reuse
+and producing release
+`b930586c91489cd77d733383eed2a94390cbda64da4df17f0419c68251e1a5a9`.
+That confounded run is not warm-reuse evidence. Repeating with the identical
+launcher held the actual existing lock inode, verified that the CLI stayed
+blocked, checked PID/workspace/profile/start-time/path diagnostics, then released
+the kernel lock and observed complete reuse. Both releases' files remain unchanged.
+The separate native lock regression kills an owner and proves safe interrupted
+ownership recovery; oversized/invalid metadata remains advisory. The real-Cargo
+warm/session regression also rejects changed source/configuration/build inputs.
+
+A final acceptance starts two actual installed CLI processes with the same
+launcher environment. The contender reports the owner's real executable PID,
+workspace, profile, start time and lock path, then acquires the kernel lock after
+the owner exits. Both report four complete-release hits without compilation;
+all 36 files across both retained releases remain unchanged. Owner and contender
+elapsed times are 12.76 and 17.27 seconds, respectively, with the latter including
+lock waiting. These are contention diagnostics, not a faster warm-build claim.
+
+Evidence: `/tmp/canic176-publication-v24.json`,
+`/tmp/canic176-warm-regressions.log`,
+`/tmp/canic176-installed-first.log`, `/tmp/canic176-installed-warm.log`,
+`/tmp/canic176-installed-session.log`,
+`/tmp/canic176-installed-lock-matched.log`,
+`/tmp/canic176-initial-artifacts.json`, `/tmp/canic176-real-contention.json`,
+`/tmp/canic176-real-owner.log`, `/tmp/canic176-real-contender.log`.
+This qualifies the inspected installed CLI and synthetic Canic application;
+it does not establish an exact Toko eight-role build or Toko deployment duration.
+
+### Matched complete reinstall comparison
+
+Both sequential exact
+`pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet`
+runs pass, comparing isolated .25 host source with a frozen candidate. Both use the
+same current disposable journey and artifact builder, exact dependency lock and
+existing tooling. The baseline's unselected timing unit test retains its old DTO
+literal; the executed journey and timing implementation are identical. No recovery
+assertion or estate cardinality is reduced: nineteen Workloads and five Ready
+assets, lost install reply, authority rejection, exact receipts/controllers,
+bounded native debit, retained Root Ledger balance, terminal conservation and
+immediate effect-free replay. Source manifests are retained in
+`/tmp/canic160-comparison-identities.json`; logs are
+`/tmp/canic160-reinstall-control.log` and
+`/tmp/canic160-reinstall-candidate-isolated.log`. The first candidate listing
+attempt reused an older host library from the shared Cargo target and failed on
+its missing timing fields before running the test. It is excluded from evidence.
+The candidate therefore uses a separate target directory. Only native fingerprint
+markers for the four experiment-built packages were invalidated in the shared
+target; artifacts and dependency caches were retained so subsequent main-tree
+checks rebuild their own source. Compilation and cache warmth are not comparable
+elapsed-time evidence. Final main-tree checks above pass against the actual
+active source, not either experiment directory.
+
+| Input | Identity |
+| --- | --- |
+| Control | `v0.110.25`, commit `1a32d9594871fe8de838843b857fd9385c90a503` |
+| Frozen candidate source-manifest SHA-256 | `e45dcd7421df51aacc22f8fe616bd3903b3f377776ef7e0e66370363773c0895` |
+| Shared Cargo.lock SHA-256 | `1df28d519b52f3eb5fabc4980eefe495d7de36c0ee40fbf8b6337793d052468e` |
+| Shared executed baseline.rs SHA-256 | `9d93b0e64f5a6d282121aaccc78146115b8f08b2dfb2d260f1a6f6753747d5cd` |
+| Rust / Cargo | 1.98.1 (`48a229cea 2026-09-01`) / 1.98.1 (`797e8a9bc 2026-08-05`) |
+| Wasm / IC tooling | Fast profile; ic-wasm 0.11.1; ICP 1.5.0; PocketIC 16.0.0 |
+
+The frozen manifest remains unchanged throughout qualification. The subsequent
+active-source prerequisite forecast refinement affects reporting only and is
+covered by the final native checks; measured observation/execution code is
+unchanged. Runtime source and configuration match across subjects. Initial and
+replacement release identities also match:
+`a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae` and
+`33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a`.
+
+Count only the common named stages below, excluding the new inclusive Planning
+and FleetSnapshot parents. Attempts are logical host observations, not total
+network messages, effects or IC instructions.
+
+| Observation measure | Control | Candidate |
+| --- | ---: | ---: |
+| Common-stage attempts | 1,044 | 1,017 |
+| RootManagement attempts / events | 31 / 19 | 31 / 19 |
+| ConfiguredCanisters attempts / events | 380 / 24 | 371 / 23 |
+| ProtocolActions attempts | 184 | 169 |
+| TerminalInventory attempts | 378 | 378 |
+| PoolBalances remote attempts | 0 | 0 |
+| PoolBalances elapsed seconds | 3.289 | 0.830 |
+| PoolBalances local identity attempts | Not exposed | 36 |
+| PoolBalances served cache hits | Not exposed | 180 |
+| Common-stage elapsed seconds | 85.398 | 83.284 |
+
+One full snapshot and 27 logical attempts (2.59%) are removed. RootManagement
+and terminal inventory retain their distinct fresh-check purposes in this
+journey. Zero PoolBalances remote attempts now identifies cached projection
+with local identity work; it does not mean the stage is free.
+
+| Phase, seconds | Control | Candidate |
+| --- | ---: | ---: |
+| Initial artifact preparation | 289.910 | 311.257 |
+| Initial working Fleet | 91.666 | 95.769 |
+| Replacement artifacts/generation | 44.497 | 43.674 |
+| Root review/authority rejection | 5.247 | 5.264 |
+| Lost-install response/recovery | 12.095 | 11.618 |
+| Successor reviews/convergence | 188.578 | 189.117 |
+| Retained-estate state/replay | 27.318 | 26.262 |
+| Complete retained-estate reinstall, including replacement preparation | 277.737 | 275.936 |
+| Whole test / runner | 677.296 / 754 | 701.158 / 896 |
+
+The observed reinstall difference is only 1.801 seconds (0.65%) in one pair.
+It does not establish a substantial developer wait reduction or a faster full
+release gate. The colder isolated candidate build makes whole-runner timings
+unsuitable for attributing this optimization.
+
+The estate is functionally equivalent, not byte-identical: five of seventeen
+artifacts per release match exactly (four Candid files and the fixture manifest).
+Wasm hashes differ and embedded absolute checkout paths are present. App,
+Coordinator and Root raw sizes match at 3,905,687, 5,332,062 and 9,704,247 bytes;
+Store raw size changes 3,771,978 to 3,772,120, with code size 3,463,388 to
+3,463,400. Generated Cargo paths differ between isolated subjects. No precise
+latency or IC-instruction attribution is claimed from these binaries. Artifact
+hashes and stage measurements are retained in
+`/tmp/canic160-artifact-comparison.json`,
+`/tmp/canic160-control-measurements.json` and
+`/tmp/canic160-candidate-measurements.json`.
+
+The four handoff requests are accounted for within this batch. Further safe
+terminal-inspection reuse needs separate evidence and design; full RF3 paid
+descendant collection/live quotes remain outside this scope. Neither the
+synthetic reinstall nor the installed-CLI build proves exact Toko workload
+latency. No Toko edit, dependency bump, broad validation or publication ran.
+
+## CANIC-160 observation work and transient reads — 2026-09-19
+
+The maintainer accepted the follow-up after a read-only Toko review. Its latest
+handoff reports 18.390 seconds across three local observation stages, plus two
+roughly 1.4-second PoolBalances stages with zero logical remote attempts. These
+are phase observations, not total reinstall time or proof that intervening
+effects permit a stale full-estate snapshot.
+
+### Implemented boundary
+
+Pool-balance preparation shares the Root/operator admission check within each
+existing batch of at most four PendingReset/Failed assets. Each asset still
+checks controller/module authority; all issued reads drain, failures retain
+input order, and only a fully validated batch publishes balances. The next
+batch checks the selected operator again. Existing snapshots still expire after
+the observation, on success or failure, before effects.
+
+The nine-asset regression reduces identity Principal lookups from nine to three.
+Its first pass reports 19 logical remote attempts; a repeated pass in the same
+snapshot reports zero attempts, three identity lookups and twelve served cache
+hits. This identifies local work behind a zero-call phase without claiming it
+was free. A changed operator between batches rejects before later reads, and a
+new snapshot rechecks authority. No whole-phase cache survives mutations.
+
+Coordinator provisioning-status queries now use the existing authenticated
+agent so retry decisions retain typed transport errors. An immutable encoded
+request and one verified signer/network bind at most three logical attempts,
+with 250/500 ms backoff, ten seconds per attempt and thirty seconds overall after
+authority resolution. The 8 MiB HTTP response bound and Candid decoding quotas
+bound response handling. Signature verification stays enabled. Agent-internal
+HTTP retries and certificate reads share the time budget but are not separately
+counted logical attempts.
+
+Only timeout, selected transient HTTP and connection/body transport failures
+retry. Authentication, signature, response-size, application and decoding failures
+stop. Typed `STATE_UNAVAILABLE` retains the existing absent-operation decision;
+operation/plan checks and terminal validation stay with their current owners.
+No mutation dispatch is part of this retry helper. Exhaustion returns the typed
+failure and leaves ordinary same-operation recovery responsible for the journal.
+
+### Qualification and limits
+
+- 41 pool-related host tests, 20 current-protocol tests and 17 inventory tests
+  pass. One manual matched-latency test stays ignored.
+- Three new transport tests pass: typed retry/exhaustion, fail-closed permanent
+  failures, and actual HTTP 502 responses with identical query requests. The
+  isolated HTTP error server disables query signature verification only in its
+  test agent because it does not implement certificate `read_state`; production
+  verification remains enabled and is exercised by PocketIC.
+- The CLI observation rendering test and three internal timing tests pass.
+  Total focused native evidence is 85 passing tests.
+- The exact funded-estate transfer/autonomous-creation recovery journey passes:
+  54.78 seconds test execution, 71 seconds runner. It covers successful native
+  status decoding, lost-response recovery, terminal conservation and effect-free
+  replay. The growth fixture wrapper exposes its PocketIC network/root key to
+  native reads, matching its existing CLI routing. The first run exposed that
+  missing fixture wiring before any query could be sent; it did not justify
+  weakening production authority resolution.
+- Scoped warning-denied host/CLI/internal Clippy passes, including a final
+  internal recheck after the fixture correction. Changed-file formatting and
+  whitespace checks pass. The complete bounded .26 batch and both changelog
+  surfaces are ready for the maintainer-selected release gate.
+
+This preceding slice does not simulate a 502 during a live Toko deployment, measure a complete
+matched local reinstall or qualify larger across-phase reuse. Adjacent
+RootManagement checks still have distinct planning, before-effect and terminal
+purposes. The expanded acceptance above subsequently qualifies bounded reuse,
+continuation forecasting and a complete local reinstall; full RF3 remains
+separate work. Toko's 4/4-to-4/18 continuation is not itself duplicate execution.
+
+Source is the uncommitted .26 candidate on
+`1a32d9594871fe8de838843b857fd9385c90a503`; packages remain .25. Cargo lock SHA-256
+is `1df28d519b52f3eb5fabc4980eefe495d7de36c0ee40fbf8b6337793d052468e`.
+Qualification uses Rust 1.98.1, ICP CLI 1.5.0, ic-agent 0.49.2 and PocketIC 16.0.0.
+Logs: `/tmp/canic160-observation-regressions.log`,
+`/tmp/canic160-query-retries.log`, `/tmp/canic160-cli-timing.log`,
+`/tmp/canic160-internal-timing.log`, `/tmp/canic160-scoped-clippy.log`,
+`/tmp/canic160-fixture-clippy.log` and `/tmp/canic160-query-recovery-pocketic.log`. No broad validation, package bump,
+publication or sibling mutation ran.
+
+## Fixture builder isolation and measured setup — 2026-09-19
+
+The complete fixture artifact recipe previously hashed the entire
+`fleet_registry/baseline.rs` journey file. An assertion or timing-only edit
+therefore invalidated the sealed artifact set. Artifact preparation, compilation,
+sealing and staging now live under `baseline/tests/release_artifacts/`; the audit
+Root builder moves there too, with explicit imports and its unchanged gzip
+implementation. The cache hashes that builder, the audit builder and shared
+`pic/artifacts.rs` helpers. It retains the existing exact Cargo graphs, lockfiles,
+tools, profile, network, config, fixture content and release identity inputs.
+No source exclusion is added to the Cargo input collector.
+
+The governed regression uses the real artifact transaction cache: changing the
+journey source retains the entry, changing each build-helper input invalidates
+it, and restoring each input recovers the original entry. Existing tests still
+prove distinct release identities and fixture-authority restoration. The
+regression is registered in the normal governed catalogue.
+
+### Exact funding-case qualification
+
+Every PocketIC run selected only
+`pic::fleet_registry::baseline::tests::funded_estate_recovers_transfer_and_autonomous_creation_responses`
+through `make test-pocketic-case`. Production Ledger creation, CLI installation,
+lost-response recovery, funding checks and effect-free replay remain intact.
+
+| Run | Artifact build/seal | Complete artifact resolution | Test execution | Targeted runner |
+| --- | ---: | ---: | ---: | ---: |
+| Instrumented control | 250.69 s | 261.43 s | 316.27 s | 478 s |
+| Extracted builder, warm lower caches | 20.11 s | 25.52 s | 76.78 s | 93 s |
+| Journey-only comment edit | skipped (complete cache hit) | 4.86 s | 56.10 s | 73 s |
+
+All three runs pass. All 17 sealed output files from the control and extracted
+builder have identical SHA-256 digests, including Wasms, Candid and manifests.
+The last run changes only a setup-timing explanation in the journey file; it
+reuses the candidate's complete artifact entry and contains no build/seal span.
+The subsequent source changes only expose/register the regression for the
+governed runner; its inventory and final Clippy checks cover that registration.
+
+New nested setup spans measure creation, each installation, aggregate installation
+and controller setup. In the control, these take 0.476, 3.550/6.081/2.746, 12.377
+and 0.008 seconds respectively. Generation/initial review still totals 50.66
+seconds and includes later provisioning work; these are nested spans and must
+not be summed. This measurement does not justify replacing production setup or
+introducing shared mutable Fleet baselines. Installation transport is unchanged.
+
+Cache warmth and machine load differ. The 250.69-to-20.11-second difference is
+not an optimization result. The supported result is complete artifact reuse
+after a journey-only edit, while preserving artifact bytes and recovery behavior.
+There is no full release-gate or downstream deployment saving measured here.
+Release-version changes and actual build-input changes still require new entries.
+Audit-Root construction is relocated without changing its function bodies; its
+separate child-funding PocketIC case was not rerun for this extraction.
+
+### Retained evidence
+
+- Published base and dependency lock remain those recorded below. Rust 1.98.1,
+  ICP CLI 1.5.0 and PocketIC 16.0.0 were used; packages remain .25.
+- Control: `/tmp/canic-infrastructure-setup-timing.log`; extracted candidate:
+  `/tmp/canic-helper-cache-funding-candidate.log`; journey-only replay:
+  `/tmp/canic-helper-cache-journey-edit-replay.log`.
+- Artifact inventories: `/tmp/canic-artifact-isolation-before.json` and
+  `/tmp/canic-artifact-isolation-candidate.json`. Control cache entry:
+  `ff6db7fd456af0a81122d82d5b41c1a6327bc67d0772da0e2942cbb90cd0d2c3`;
+  candidate/replay entry:
+  `16c5161f0658831c31a1fec80de3e7b71f3904164e364230bc256da1ba60fc2e`.
+- Focused cache-boundary test: `/tmp/canic-helper-cache-regression.log`;
+  both existing release-cache tests: `/tmp/canic-release-cache-regressions.log`;
+  catalogue check: `/tmp/canic-helper-cache-inventory.log`;
+  scoped warning-denied Clippy: `/tmp/canic-helper-cache-clippy.log`.
+
+The .26 bounded speed batch combines this fixture-cache improvement with the
+per-call release-input sharing below. Its implementation, focused evidence and
+changelog are ready for the maintainer-selected release gate; no broad gate,
+version mutation or publication was performed.
+
+## Published .25 baseline and authority-input reuse — 2026-09-19
+
+The maintainer confirms .25 is live. Its successful test log is
+`target/validation-runs/20260918T210334Z-2561.DRB1FA/0.log`: runner wall time
+2,674 seconds, with the enclosing record rounding to 2,675. Internal PocketIC
+takes 2,421 seconds; the host proofs take 15, runtime integrations 133, blob
+storage 15 and payload checks four. The earlier .24 runner took 4,187 seconds.
+Different cache warmth and source state prevent controlled attribution.
+
+Ten production-adapter journeys account for 1,725.25 seconds. Their generation/
+initial-review spans total 582.25 seconds and include infrastructure preparation,
+not only generation. Eight artifact-build/seal spans total 260.40 seconds.
+Mixed topology takes 528.86 seconds and generated reinstall 390.35. These nested
+spans must not be added together. No live compiler-target clearance appears in
+this successful run; the logged 9 GiB clearance is the sparse retention test.
+
+### Shared evidence within one compilation
+
+`compile_root_authorities` previously loaded the complete release and verified
+fixture payloads before the loop, then repeated both for every Root. Each Root
+also loaded the same application union. Root and Store initializer compilation
+repeated the first two checks in its inner authority compiler.
+
+The authority compiler now receives private, call-local release inputs. The
+outer boundary still validates finalization, infrastructure binding and fixture
+payloads; the application union must match the same complete manifest. Each Root
+retains its own topology validation, projection, digest, placement and Principal
+bindings. Nothing survives the call or is reused across effects or release IDs.
+Coordinator initialization keeps its existing admission boundary.
+
+For R Roots, complete-manifest reads and fixture verification calls fall from
+R+1 to one; application-union loads fall from R to one. For a Root/Store init,
+complete-manifest reads and fixture verification fall from two to one. These
+are source-derived work counts, not measured duration or complete-suite savings.
+
+### Focused qualification
+
+- `cargo test --locked -p canic-host --lib generated_` under the governed scratch
+  wrapper: ten pass, one unrelated opt-in Node.js test ignored. The existing
+  generated-estate native fixture exercises four-Root results against separate
+  compilation, actual Coordinator/Root/Store init decoding, alteration of each
+  complete/infrastructure/application/fixture manifest followed by rejection,
+  restored-evidence retry and its existing planning/application/replay journey.
+  Log: `/tmp/canic-authority-input-reuse-tests.log`.
+- `cargo clippy --locked -p canic-host --lib --tests --all-features -- -D warnings`
+  passes after narrowing a test helper's visibility. Log:
+  `/tmp/canic-authority-input-reuse-clippy.log`. Changed-file rustfmt and whitespace
+  checks pass. No Canic lifecycle or remote effect changed, so this slice did not
+  start PocketIC or a broad gate.
+- Base `1a32d9594871fe8de838843b857fd9385c90a503` (`v0.110.25`); Cargo lock SHA-256
+  `1df28d519b52f3eb5fabc4980eefe495d7de36c0ee40fbf8b6337793d052468e`.
+  Package versions and lockfile are unchanged by this slice.
+
+The native fixture has empty provisioning payloads; it proves authority and
+fresh validation, not large-payload throughput. A deployment or full-release
+timing reduction remains unmeasured. Continue the .26 speed batch on the measured
+infrastructure/setup costs without replacing complete recovery proofs with this
+local result. Toko's latest source records successful staging recovery/reset and
+a new CANIC-160 typed transient-observation retry request; no sibling was changed.
+
 ## Avoided Root builds and stable preparation — 2026-09-18
 
 The child-funding and retained-estate fixtures built a canonical Root before

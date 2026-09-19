@@ -489,12 +489,7 @@ pub(super) fn compile(
     let mut root_authorities =
         query_current_root_authorities(icp, desired, state, &root_candid_path, &store_candid_path)?;
     root_authorities.sort_unstable_by_key(|authority| authority.binding.placement_subnet);
-    let component_status = query_operation(
-        icp,
-        &coordinator_candid_path,
-        coordinator_principal,
-        operation_id,
-    )?;
+    let component_status = query_operation(icp, coordinator_principal, operation_id)?;
     let registry_sequence = compile_current_registry_sequence_with_status(
         desired,
         state,
@@ -1177,13 +1172,7 @@ fn observe_with_staging(
             observation(component_registry_progresses(expected, &status), &status)
         }
         CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash } => {
-            let Some(status) = query_operation(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                request.operation_id,
-            )?
-            else {
+            let Some(status) = query_operation(icp, resolved.target, request.operation_id)? else {
                 return Ok(unavailable_observation());
             };
             if status.operation_id != request.operation_id || status.plan_hash != *plan_hash {
@@ -2637,7 +2626,6 @@ pub(super) fn query_registry(
 
 pub(super) fn query_operation(
     icp: &IcpCli,
-    candid: &Path,
     coordinator: Principal,
     operation_id: [u8; 32],
 ) -> Result<
@@ -2645,9 +2633,8 @@ pub(super) fn query_operation(
     CurrentProtocolError,
 > {
     let response: Result<CoordinatorOperationReadResponse, CanisterProtocolError> =
-        query_with_candid(
+        crate::canister_protocol::query_authenticated(
             icp,
-            candid,
             coordinator,
             protocol::CANIC_COORDINATOR_OPERATION_STATUS,
             &CoordinatorOperationReadRequest::Operation(OperationStatusRequest { operation_id }),

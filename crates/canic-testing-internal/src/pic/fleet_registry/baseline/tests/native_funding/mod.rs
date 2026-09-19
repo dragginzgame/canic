@@ -3,15 +3,11 @@
 //! Responsibility: qualify native supplementary funding against a real issued IC operation.
 //! Boundary: the existing fixture injects an underforecast; production adapters own all effects.
 
-mod artifact;
-
 use super::*;
 use canic_host::fleet_ensure::{
     model::{FundingPauseRecord, FundingReviewRecord},
     ops::{EnsurePaths, read_journal},
 };
-
-pub(super) use artifact::{build_audit_root, uses_audit_root};
 
 #[derive(Clone, Copy, Eq, PartialEq)]
 pub(super) enum Scenario {
