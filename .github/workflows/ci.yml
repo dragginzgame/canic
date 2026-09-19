@@ -171,12 +171,19 @@ jobs:
           source tool-versions.env
           cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
+      - name: Install ordinary test Wasm prerequisites
+        shell: bash
+        run: |
+          rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
+          bash scripts/ci/install-ic-wasm.sh
       - name: Check ordinary test helper tools
         shell: bash
         run: |
           cargo get --version
           rg --version
           rg --pcre2-version
+          rustup target list --toolchain "$CANIC_INTERNAL_TOOLCHAIN" --installed | rg -x wasm32-unknown-unknown
+          ic-wasm --version
       - name: Check runner disk before ordinary tests
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary tests before run" --min-free-mib 4096 --summary-only

@@ -61,11 +61,10 @@ mod tests {
     #[cfg(test)]
     use canic::dto::fleet_subnet_root::FleetSubnetWasmStoreAdoptionRequest;
     #[cfg(test)]
+    use canic::dto::pool::{CanisterPoolAssetOrigin, CanisterPoolAssetStatus};
     use canic::dto::pool::{
-        CanisterPoolAssetOrigin, CanisterPoolAssetStatus, PoolCanisterRequest, PoolImportResponse,
-    };
-    use canic::dto::pool::{
-        CanisterPoolResponse, CanisterPoolStatusRequest, PoolMaintenanceResponse,
+        CanisterPoolResponse, CanisterPoolStatusRequest, PoolCanisterRequest, PoolImportResponse,
+        PoolMaintenanceResponse,
     };
     #[cfg(test)]
     use canic::dto::runtime::{CanicRuntimeStatus, TimerRegistrationStatus};
@@ -334,8 +333,8 @@ mod tests {
             reason = "the production adapter uses the replicated history Candid sidecar"
         )]
         InspectCanisterHistory(CanisterInspectionRequest),
-        #[cfg(test)]
         ImportPoolCanister(PoolCanisterRequest),
+        #[cfg(test)]
         MaintainPool,
         #[cfg(test)]
         ObserveCanister(FleetCanisterObservabilityRequest),
@@ -383,7 +382,6 @@ mod tests {
                 canic::dto::fixture_provisioning::FixtureStoreError,
             >,
         ),
-        #[cfg(test)]
         ImportPoolCanister(PoolImportResponse),
         #[cfg(test)]
         InspectCanister(CanisterStatusResponse),
@@ -5414,7 +5412,96 @@ exec icp "$@"
             nonterminal.is_empty(),
             "an immediate Store/Root replay must issue no update; nonterminal={nonterminal:?}"
         );
+        qualify_independent_store_chunks(&pic, wasm_store, installation_controller);
         std::fs::remove_dir_all(artifact_root).expect("remove artifact-union fixture");
+    }
+
+    #[cfg(test)]
+    fn qualify_independent_store_chunks(pic: &PocketIc, store: Principal, caller: Principal) {
+        let chunks = (0..5_u8).map(|byte| vec![byte; 64]).collect::<Vec<_>>();
+        let template_id = TemplateId::owned("canary:concurrent-upload".into());
+        let version = TemplateVersion::owned("concurrent-upload".into());
+        let preparation = TemplateChunkSetPrepareInput {
+            manifest: None,
+            template_id: template_id.clone(),
+            version: version.clone(),
+            payload_hash: wasm_hash(&chunks.concat()),
+            payload_size_bytes: 320,
+            chunk_hashes: chunks.iter().map(|chunk| wasm_hash(chunk)).collect(),
+        };
+        let request = |index: usize| TemplateChunkInput {
+            preparation: (index == 0).then(|| preparation.clone()),
+            template_id: template_id.clone(),
+            version: version.clone(),
+            chunk_index: u32::try_from(index).unwrap(),
+            bytes: chunks[index].clone(),
+        };
+        let prepared: Result<(), Error> = pic
+            .update_candid_as(
+                store,
+                caller,
+                canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                (request(0),),
+            )
+            .unwrap();
+        prepared.expect("chunk zero admits metadata before concurrent suffix");
+        // Submit the whole suffix before awaiting replies, then drain in reverse
+        // order. The first reply is deliberately discarded and recovered by hash.
+        let messages = (1..chunks.len())
+            .map(|index| {
+                pic.submit_call(
+                    store,
+                    caller,
+                    canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                    encode_one(request(index)).unwrap(),
+                )
+                .unwrap()
+            })
+            .collect::<Vec<_>>();
+        for (index, message) in messages.into_iter().enumerate().rev() {
+            let reply = pic.await_call(message).expect("drain independent upload");
+            if index != 0 {
+                decode_one::<Result<(), Error>>(&reply).unwrap().unwrap();
+            }
+        }
+        let observed = current_store_staging_status(pic, store, caller, &template_id, &version);
+        assert_eq!(
+            observed.stored_chunk_hashes,
+            preparation
+                .chunk_hashes
+                .iter()
+                .cloned()
+                .map(Some)
+                .collect::<Vec<_>>()
+        );
+        // Reject a conflicting sibling without changing any acknowledged chunk.
+        let mut conflicting = request(2);
+        conflicting.bytes[0] ^= 1;
+        let response: Result<(), Error> = pic
+            .update_candid_as(
+                store,
+                caller,
+                canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                (conflicting,),
+            )
+            .unwrap();
+        assert_eq!(
+            response.unwrap_err().code(),
+            canic_core::diagnostics::codes::DIGEST_CONFLICT.raw_code()
+        );
+        let replay: Result<(), Error> = pic
+            .update_candid_as(
+                store,
+                caller,
+                canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                (request(1),),
+            )
+            .unwrap();
+        replay.expect("exact replay preserves concurrently stored siblings");
+        assert_eq!(
+            current_store_staging_status(pic, store, caller, &template_id, &version),
+            observed
+        );
     }
 
     #[test]
@@ -18264,21 +18351,78 @@ cycles = "80T"
         caller: Principal,
         count: usize,
     ) {
-        for _ in 0..count {
-            let RootCommandResponseFragment::MaintainPool(response) =
-                root_command_as(pic, root, caller, RootCommandFragment::MaintainPool)
-                    .expect("reset prepaid Canister")
-            else {
-                panic!("Root returned a differently correlated pool response");
-            };
-            assert!(
-                matches!(
-                    response,
-                    PoolMaintenanceResponse::ResetReady { .. }
-                        | PoolMaintenanceResponse::Maintained
-                ),
-                "unexpected pool reset response: {response:?}"
-            );
+        #[cfg(test)]
+        let phase = Span::start("prepaid_pool_preparation");
+        let before = root_pool_status_as(pic, root, caller);
+        assert!(
+            before.next_start_after.is_none(),
+            "complete setup inventory"
+        );
+        let assets = before
+            .entries
+            .iter()
+            .filter(|asset| {
+                asset.origin != canic::dto::pool::CanisterPoolAssetOrigin::InfrastructureStore
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(assets.len(), count);
+        assert!(assets.iter().all(|asset| matches!(
+            asset.status,
+            canic::dto::pool::CanisterPoolAssetStatus::PendingReset
+                | canic::dto::pool::CanisterPoolAssetStatus::Ready
+        )));
+        let pending = assets
+            .iter()
+            .filter(|asset| asset.status == canic::dto::pool::CanisterPoolAssetStatus::PendingReset)
+            .collect::<Vec<_>>();
+        crate::pic::progress::detail(
+            "FLEET",
+            &format!(
+                "prepaid pool setup: {} imports, 2 inventory reads, at most 4 in flight",
+                pending.len()
+            ),
+        );
+        // Setup uses the same independent import requests as the host. Keep
+        // maintenance/refill behavior in its dedicated journeys, and retain
+        // separate replica state plus Root's controller/module/balance checks.
+        for batch in pending.chunks(4) {
+            #[expect(
+                clippy::needless_collect,
+                reason = "submit the complete bounded batch before awaiting any reply"
+            )]
+            let messages = batch
+                .iter()
+                .map(|asset| {
+                    pic.submit_call(
+                        root,
+                        caller,
+                        canic::protocol::CANIC_ROOT_COMMAND,
+                        encode_one(RootCommandFragment::ImportPoolCanister(
+                            canic::dto::pool::PoolCanisterRequest {
+                                canister_id: asset.canister_id,
+                            },
+                        ))
+                        .unwrap(),
+                    )
+                })
+                .collect::<Vec<_>>();
+            // Drain every accepted ingress even when another submission failed.
+            let replies = messages
+                .into_iter()
+                .map(|message| message.map(|id| pic.await_call(id)))
+                .collect::<Vec<_>>();
+            for (asset, reply) in batch.iter().zip(replies) {
+                let reply = reply
+                    .expect("submit prepaid import")
+                    .expect("await prepaid import");
+                let result: Result<RootCommandResponseFragment, Error> =
+                    decode_one(&reply).unwrap();
+                assert!(
+                    matches!(result.unwrap(), RootCommandResponseFragment::ImportPoolCanister(
+                    canic::dto::pool::PoolImportResponse::Imported { canister_id }
+                ) if canister_id == asset.canister_id)
+                );
+            }
         }
         let status = root_pool_status_as(pic, root, caller);
         assert_eq!(
@@ -18286,6 +18430,8 @@ cycles = "80T"
             u32::try_from(count).expect("bounded fixture pool size")
         );
         assert_eq!(status.pending_reset, 0);
+        #[cfg(test)]
+        phase.finish();
     }
 
     fn bind_init_args_to_pocket_ic_subnet(

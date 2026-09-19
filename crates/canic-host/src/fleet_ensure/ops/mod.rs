@@ -12,6 +12,7 @@ mod current_inventory;
 pub(super) mod current_protocol;
 pub(super) mod effect_preparation;
 pub(super) mod funding;
+pub mod independent_effects;
 mod install_history;
 pub mod operator_mint;
 mod plan_content;
@@ -393,6 +394,21 @@ pub trait EnsurePlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error>;
+
+    /// Submit admitted independent effects with durable intents and drain every result.
+    /// Results retain input order; a failed call must not discard sibling receipts.
+    /// An outer error is permitted only before submitting any of the calls.
+    fn apply_independent_effects(
+        &mut self,
+        operation_id: &str,
+        uploads: &[independent_effects::IndependentEffect<'_>],
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<Result<EffectOutcome, Self::Error>>, Self::Error> {
+        Ok(uploads
+            .iter()
+            .map(|upload| self.apply(operation_id, upload.action, upload.record, state))
+            .collect())
+    }
 }
 
 /// Current Fleet ensure state paths. Historical install directories are never read.

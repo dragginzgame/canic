@@ -482,7 +482,8 @@ fn build_declarations(root: &Path) -> BTreeMap<String, bool> {
         .unwrap();
     assert!(
         output.status.success(),
-        "{}",
+        "Cargo declaration build failed:\n{}\n{}",
+        String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
     let fresh = String::from_utf8(output.stdout)

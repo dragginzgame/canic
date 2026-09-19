@@ -17,6 +17,9 @@ pub const FLEET_ENSURE_SCHEMA_VERSION: u16 = 1;
 pub const MAX_FLEET_ENSURE_CANISTERS: usize = 4_096;
 pub const MAX_FLEET_ENSURE_PROTOCOL_STEPS: usize = 4_096;
 
+/// Host concurrency bound for admitted independent effects, not total plan capacity.
+pub(in crate::fleet_ensure) const MAX_INDEPENDENT_EFFECTS_IN_FLIGHT: usize = 4;
+
 /// One exact observed canister state used by planning and effect reconciliation.
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]

@@ -10,6 +10,7 @@ mod continuation;
 mod funding;
 #[cfg(test)]
 mod funding_tests;
+mod independent_effects;
 pub mod operator_mint;
 pub mod readiness;
 mod reinstall;
@@ -1261,8 +1262,8 @@ where
         loop {
             let mut deferred_controller_observation = false;
             for (index, action) in actions.iter().enumerate() {
-                let action_hash = action_sha256(action);
                 let observation_policy = effect_observation_policy(operation_desired, action)?;
+                let action_hash = action_sha256(action);
                 let retained_effect = journal.effects.get(index);
                 let continued_observation = retained_effect
                     .is_none_or(|effect| effect.state != EffectState::Applied)
@@ -1303,6 +1304,16 @@ where
                         )));
                     }
                 }
+                independent_effects::apply_batch(
+                    &paths,
+                    &retained_plan,
+                    &actions,
+                    index,
+                    &mut journal,
+                    &state,
+                    platform,
+                    observation_policy.maximum_stalled_observations,
+                )?;
                 let mut initial_observation = if journal.effects.len() <= index {
                     let prepared = prepare_effect(platform, &journal.operation_id, action, &state)
                         .map_err(EnsureWorkflowError::Platform)?;

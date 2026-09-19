@@ -1,5 +1,139 @@
 # Release-test throughput qualification
 
+## Canic-only pool batching and fixture setup — 2026-09-19
+
+Scope: the accepted .29 speed batch, qualified entirely with disposable Canic
+fixtures. No downstream application or live environment is part of acceptance.
+The host generalizes the prepared-chunk executor to distinct pool imports under
+one exact Root/Candid authority, at most four in flight. Initial funding
+admission precedes batching. Every intent is durable before any submission;
+workers drain on failure, preserve successful receipts, and reconcile each
+asset through the existing observer. Root's per-asset controller, module and
+balance checks, cycle accounting and interrupted-operation recovery are unchanged.
+No import effects or wire calls are combined or omitted.
+
+### Matched production-adapter recovery
+
+The existing mixed-topology/Ready-reserve case runs once with the candidate and
+once with a temporary serial-pool control. The control changes only pool update
+submission: grouped intents/observations and Store concurrency stay identical.
+It therefore isolates pool concurrency, not every difference from published .28.
+Both paths run initial recovery and two deliberate reinstalls, including lost
+replies, selected-build interference, application-row reset, interrupted installs,
+funding/conservation and immediate effect-free replay.
+
+| Import stage | Serial control | Concurrent candidate | Import effects |
+| --- | ---: | ---: | ---: |
+| Initial recovery | 10.616 s | 6.967 s | 6 |
+| First deliberate reinstall | 12.297 s | 8.101 s | 6 |
+| Second deliberate reinstall | 9.945 s | 6.663 s | 6 |
+| Total | 32.858 s | 21.731 s | 18 |
+
+The observed import-stage saving is 11.127 seconds (33.9%). Each window spans
+first-to-last `import_reconciliation` progress events for one operation/plan;
+the initial window includes lost-response reentry. It includes intervening
+observations, not just update transport. These are elapsed-latency observations,
+not IC instruction/cycle measurements or counts of all nested calls.
+
+Corresponding monotonic full recovery-phase spans are 121.959/183.281/145.321
+seconds serial and 116.184/175.540/138.598 seconds concurrent. However, the entire
+production-adapter journey takes 583.284 seconds serial versus 623.904 seconds
+concurrent: artifact preparation is warmer in the later serial run (40.528
+versus 97.851 seconds). Thus total-run timing does not establish an end-to-end
+speedup. This is one sequential pair on separate disposable instances, not a
+repeated benchmark or a measurement of the full release gate.
+
+Both runs use the same Cargo lock, toolchain, configuration and runtime source.
+All 30 files in each of the two fixture release sets match byte-for-byte across
+candidate/control. The temporary serial branch is removed and the exact measured
+candidate executor restored before final checks.
+
+### Shared prepaid-pool setup
+
+The existing setup helper observes complete inventory, excludes infrastructure
+Store ownership, skips Ready assets and submits pending explicit imports in
+batches of four. It drains accepted messages before inspecting failures and
+verifies final Ready/pending counts. Dedicated maintenance/autonomous-refill
+journeys retain their production behavior and coverage.
+
+The existing four-Shard activation case passes before and after. Its setup span
+falls from 0.371733 to 0.199016 seconds: 0.172717 seconds saved (46.5%), a small
+absolute improvement. Whole-test durations of 362.25 versus 27.55 seconds are
+mostly cold versus warm artifact resolution (334.725 versus 5.818 seconds),
+not a batching gain. The second run reuses all 21 exact fixture artifacts.
+No new cache behavior, test framework, PocketIC case or extra Fleet setup is added.
+
+### Identities and qualification
+
+- Development base: `a5c22253b06d4666eacba81bd84be81ef3bd89eb` (.28), plus the
+  open .29 changes; packages remain .28.
+- Cargo.lock SHA-256:
+  `b1dff5a3c11e2946325a3cdae7bfa8e20a49c4ca6032f0c8d3e2a1dfb114b524`.
+- Measured/restored candidate executor SHA-256:
+  `2b21791aa41269e3ee0446a2356885f61073c8b4e0e42f640e4600e3ddc5d615`.
+- Serial-control executor SHA-256:
+  `8af62896ad2f4edff48a7dfb8ec4b41ef245261d015a3e21d68135ea7a39134d`.
+- Rust 1.98.1 (`48a229cea`, 2026-09-01), ic-wasm 0.11.1,
+  candid-extractor 0.1.6, ICP CLI 1.5.0, PocketIC 16.0.0; fast Wasm profile,
+  local disposable instances, `CARGO_BUILD_JOBS=4`.
+- Candidate artifact cache entries:
+  `23abc2ea2c3f50d90df8626d4e1d0f164e31aa80c257f2b71e261579f6546876`
+  and `91fc5f1812785488b752234c6f6c7c23400abeede68c960e3978a6ed7d04214a`.
+- Matching serial entries, respectively:
+  `c612a15f848d003d9c5ad8f35e11ff4b0e8ba6c18d4b404f85035a0bddfa8b31`
+  and `ca5b5f22272dfd5b59a5210b212446f2a92ab467b9f94d12a3bd34957a498a94`.
+- Focused Fleet Ensure native tests: 369 pass, six existing opt-in cases ignored.
+  Pool authority/duplicate boundaries and shared executor error/restart behavior
+  are covered; the real adapter case supplies full pool recovery evidence.
+- Final scoped host/internal all-target warning-denied Clippy, formatting of all
+  11 changed Rust files and diff checks pass. Final cleanup changes only test
+  allocation syntax, test-only enum visibility and a lint expectation preserving
+  submit-before-await ordering; the measured host executor is unchanged.
+
+Local logs: `.tmp/pool-batches-native.log`, `.tmp/pool-batches-pocketic.log`,
+`.tmp/pool-batches-serial-control.log`, `.tmp/pool-setup-baseline.log`,
+`.tmp/pool-setup-candidate.log` and `.tmp/pool-batches-clippy.log`.
+Per-file hashes are retained in `.tmp/pool-batches-comparison-identities.json`
+and `.tmp/pool-setup-cache-identities.json`; these are local scratch evidence,
+not a durable measurement framework. Recommendation: keep bounded concurrency
+and the simpler explicit setup. Do not extrapolate these local savings to the
+roughly 82-minute prior release gate; complete-gate savings remain unmeasured.
+
+## CANIC-160 bounded independent uploads — 2026-09-19
+
+Development base: published .28 release commit
+`a5c22253b06d4666eacba81bd84be81ef3bd89eb`. The host overlaps at most four
+fresh, distinct nonzero chunks under one exact Store/Candid/template/version
+binding, only after chunk-zero preparation is Applied. Preparation, fixture
+streams, activation and recovery of retained effects use the existing ordered
+driver. No new wire or journal schema, selected build, payload size or reviewed
+effect count is introduced. Four limits network pressure, not total chunks.
+
+Six focused native tests cover worker overlap/drain and input-order results,
+durable intents, two bounded batches, rejected calls, lost replies, retention
+of successful sibling receipts, reconstruction from intents with no saved
+responses, exact replay, authority boundaries and the original stall bound's
+failing-action attribution, including existing content-addressed plan coverage.
+The tests retain real per-effect identities; they do not replace IC management
+with production test-only behavior.
+
+The existing `current_store_bootstraps_application_catalog_and_replays_zero_effects`
+PocketIC case now also prepares a small synthetic payload, submits its four
+remaining chunks before awaiting replies, drains in reverse order, discards
+one reply and verifies all exact live hashes. A conflicting chunk fails with
+`DIGEST_CONFLICT`; replay preserves sibling chunks and the complete staging
+status. This uses the case's existing installed Store and adds no separate
+Fleet setup or registered case. The case passes in 175.01 seconds; the focused
+runner takes 341 seconds including compilation and fixture setup.
+
+Evidence: `.tmp/store-chunks-native.log`, `.tmp/store-chunks-pocketic.log`,
+`.tmp/store-chunks-clippy.log`. Final scoped host/internal warning-denied Clippy,
+formatting and diff checks pass. These are correctness and scheduling proofs,
+not a matched production-transport or Toko reinstall latency comparison.
+The worker test proves overlap; PocketIC proves Store semantics using direct
+submission. No full validation speedup or end-to-end deployment saving is claimed.
+Pool reconciliation and Canic-only matched qualification are completed above.
+
 ## CANIC-160 combined Store publication — 2026-09-19
 
 Base: published .27 commit `6f4b3ff5609eb8383d692d92b897688b901bc2b0`,

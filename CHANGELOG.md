@@ -14,6 +14,8 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.29` overlaps independent Store uploads and pool imports with durable
+  recovery, shortens pool test setup and fixes ordinary CI build prerequisites.
 - `0.110.28` combines Store publication metadata with the first chunk upload,
   reducing update calls while preserving exact recovery; updates test-only IcyDB
   to 0.259.6 and host HMAC/SHA-2 dependencies.
