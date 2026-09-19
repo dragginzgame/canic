@@ -133,9 +133,7 @@ done
 for single_use_tool in \
     'cargo install candid-extractor' \
     'bash scripts/ci/install-icp-cli.sh' \
-    'bash scripts/ci/install-ic-wasm.sh' \
-    'bash scripts/ci/install-binaryen.sh' \
-    'rustup target add'; do
+    'bash scripts/ci/install-binaryen.sh'; do
     [ "$(rg -c -F "$single_use_tool" "$CI")" -eq 1 ] ||
         fail "CI must install $single_use_tool exactly once in its owning lane"
 done
@@ -176,7 +174,20 @@ rg -F 'rg --version' <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests do not verify the ripgrep test helper"
 rg -F 'rg --pcre2-version' <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests do not verify ripgrep PCRE2 support"
+rg -F 'rustup target list --toolchain "$CANIC_INTERNAL_TOOLCHAIN" --installed | rg -x wasm32-unknown-unknown' \
+    <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not verify the Rust Wasm target"
+rg -F 'ic-wasm --version' <<<"$ordinary_job" >/dev/null ||
+    fail "CI ordinary tests do not verify ic-wasm"
 pocketic_job="$(sed -n '/^  tests-pocketic:/,/^  release-build:/p' "$CI")"
+for wasm_prerequisite in \
+    'rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown' \
+    'bash scripts/ci/install-ic-wasm.sh'; do
+    [[ "$(rg -c -F "$wasm_prerequisite" <<<"$ordinary_job")" == 1 ]] ||
+        fail "CI ordinary tests must install $wasm_prerequisite exactly once"
+    [[ "$(rg -c -F "$wasm_prerequisite" <<<"$pocketic_job")" == 1 ]] ||
+        fail "CI PocketIC tests must install $wasm_prerequisite exactly once"
+done
 rg -F 'needs: [checks]' <<<"$pocketic_job" >/dev/null ||
     fail "CI PocketIC tests must wait for the complete Rust checks job"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \

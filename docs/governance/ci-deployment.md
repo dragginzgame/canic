@@ -76,6 +76,12 @@ and drift in transitive informational advisory inventories are warnings. Missing
 required authority documents, known vulnerabilities, yanked dependencies and
 unmaintained direct dependencies remain blocking.
 
+The ordinary CI job also installs the internal Rust toolchain's
+`wasm32-unknown-unknown` target and checksum-bound `ic-wasm`. Host build-cache
+tests fingerprint that sysroot and compile small declaration fixtures; artifact
+preflight tests resolve the actual Fast-profile toolchain. These prerequisites
+do not start PocketIC or require the full deployment-tool installation.
+
 Make-based work shares the repository `target/`. When `sccache` is available
 and no explicit `RUSTC_WRAPPER` is set, Make selects it through the repository
 wrapper and disables Rust incremental compilation so compiler results remain

@@ -1,5 +1,17 @@
 # Canic 0.110 Implementation Status
 
+## Published-line ordinary CI repair — 2026-09-19
+
+Keep this correction on .110 despite the soft release-count guideline: the
+published workflow omits prerequisites required by its maintained host tests.
+The bounded .29 repair supplies the Wasm Rust target and checksum-bound
+`ic-wasm`, guards each owning job and preserves fixture compiler diagnostics.
+All 18 affected/regression tests, workflow/shell lint and the release-integrity
+contract pass. The completed chunk-upload work below joins the same open .29
+draft; both changelog surfaces are ready for the maintainer-selected release
+flow. Packages stay .28 and no publication is implied. The pool and test-setup
+work below completes the accepted Canic-only .29 throughput scope.
+
 ## CANIC-160 publication and import throughput — 2026-09-19
 
 The maintainer accepts the new Toko effect-count feedback after publishing .27.
@@ -8,10 +20,18 @@ no minor closeout or package bump is implied.
 
 | Sequence | Owner | Scope and required evidence | Status |
 | --- | --- | --- | --- |
-| Store publication consolidation | Control plane and host | Atomic metadata/first-chunk admission through the bounded byte lane, exact retained content, lost-reply recovery and matched Store journey | .28 complete and ready for release; fewer calls proven, elapsed improvement unproven |
+| Store publication consolidation | Control plane and host | Atomic metadata/first-chunk admission through the bounded byte lane, exact retained content, lost-reply recovery and matched Store journey | Published in .28; fewer calls proven, elapsed improvement unproven |
 | Requested dependency updates | Host and test/audit fixtures | IcyDB 0.259.6 ownership/admission and HMAC 0.13.0 with host SHA-2 0.11.0; stable tag/hash encoding | Complete; 46 focused tests and scoped fixture/host Clippy pass |
-| Independent chunk uploads | Host execution/journal | Bounded issuance after preparation, exact per-chunk authority, drain issued work on failure and reconcile every outstanding result | Accepted next; not implemented |
-| Pool reconciliation batches | Root workflow and host | Per-asset controller/module/balance checks, ordered failures, partial-result recovery and cycle accounting; measure calls and complete time | Accepted after chunk work; not implemented |
+| Independent chunk uploads | Host execution/journal | Bounded issuance after preparation, exact per-chunk authority, drain issued work on failure and reconcile every outstanding result | Complete in the open .29 batch; six native tests, the extended existing Root/Store PocketIC case and scoped warning-denied Clippy pass; whole-deployment savings unmeasured |
+| Pool reconciliation batches | Host execution/journal | Existing per-asset checks, funding admission, ordered failures, interruption recovery and conservation; matched production-adapter timing | Complete in .29; 18 import effects take 32.858 seconds serial versus 21.731 seconds concurrent in three phases; both paths pass recovery and exact replay |
+| PocketIC setup and Canic verification | Testing | Bounded pending-asset imports, unchanged runtime artifacts, warm reuse and existing lifecycle journeys | Complete in .29; setup saves 0.173 seconds in one pair, all 21 warm outputs reused, two 30-file release sets match between control and candidate |
+
+The complete .29 batch is ready for the maintainer-selected release flow:
+369 focused Fleet Ensure native tests, the existing Root/Store and four-Shard
+cases, both matched production-adapter recovery paths, scoped warning-denied
+host/internal Clippy and formatting pass. Both changelog surfaces are current;
+packages stay .28. Acceptance is entirely within Canic, with no consumer-specific
+verification or live operation required. No full-gate speedup is claimed.
 
 Store publication now combines manifest, metadata and chunk zero in one update,
 within the existing byte envelope. Native rejection/replay/content-reference

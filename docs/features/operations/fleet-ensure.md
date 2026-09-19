@@ -798,6 +798,21 @@ workspace-relative `bytes_path` under
 `bytes_size`; the referenced object is the same hash-verified content retained
 for interruption recovery.
 
+After a payload's metadata and chunk zero are confirmed, apply may upload up to
+four remaining independent chunks together. Each retains its own reviewed action
+and durable intent. Submitted calls are drained before returning an error; successful
+sibling receipts and exact live hash observations are retained. A restart reconciles
+the retained individual effects before issuing later work. The bound controls network
+pressure, not artifact capacity. Preparation, fixture streams and activation are
+ordered, and the reviewed cycle budget and terminal conservation checks still apply.
+
+Apply can also reconcile up to four distinct pool assets together when their
+Root and Candid authority match. Initial funding admission still runs before
+issuance. Each asset keeps its own intent, controller/module/balance checks,
+receipt and interruption recovery. All submitted calls finish before a failure
+returns, retaining successful siblings. Duplicate assets or changed authority
+end a batch; funding, provisioning and maintenance actions remain ordered.
+
 Before the first effect, changed desired bytes, artifacts, authority-bearing
 live state, funding sufficiency or the live Cycles Ledger fee stop apply and
 require a new plan. Live native balances may increase through donations or refunds; decreases
@@ -816,8 +831,8 @@ new plan from the resulting live estate; it never guesses a compensating debit.
 Any newly created Principal remains retained as pending current authority, so
 the successor plan reuses that canister instead of issuing another creation.
 An interrupted invocation retains one intent per action under
-`.canic/fleet-ensure/<environment>/<fleet>/` and resumes that action before
-opening another. The stall budget counts only consecutive non-progress.
+`.canic/fleet-ensure/<environment>/<fleet>/` and reconciles retained actions before
+opening another batch. The stall budget counts only consecutive non-progress.
 If a verified current-schema in-progress plan still uses the former inline
 Store-chunk projection, apply first publishes those exact bytes to the
 content-addressed object store and atomically rewrites `plan.json` to hashes

@@ -4356,6 +4356,22 @@ impl EnsurePlatform for IcpEnsurePlatform {
         })
     }
 
+    fn apply_independent_effects(
+        &mut self,
+        _operation_id: &str,
+        uploads: &[super::independent_effects::IndependentEffect<'_>],
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<Result<EffectOutcome, Self::Error>>, Self::Error> {
+        self.observation_snapshot.take();
+        self.require_operator()?;
+        Ok(
+            super::independent_effects::apply(&self.icp, &self.root, uploads)?
+                .into_iter()
+                .map(|result| result.map_err(Into::into))
+                .collect(),
+        )
+    }
+
     #[expect(
         clippy::too_many_lines,
         reason = "the platform keeps every approved single-step effect in one exhaustive match"

@@ -20,6 +20,64 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Canic-only .29 throughput batch — 2026-09-19
+
+The maintainer completes the accepted Store-upload, pool-reconciliation and
+PocketIC setup work entirely within Canic. No consumer-specific acceptance,
+source inspection or live operation is required. Package versions remain .28;
+the open .29 changelog covers the complete batch and the ordinary CI repair.
+
+The host submits at most four independent prepared Store chunks or distinct
+pool imports under exact shared target/Candid authority. Every intent precedes
+submission; all calls drain and successful sibling evidence survives failure.
+Initial funding admission runs before pool batching. Existing per-asset checks,
+per-effect interruption recovery, stall attribution and terminal conservation
+remain intact. Four bounds pressure, not plan or artifact capacity. Runtime and
+wire contracts are unchanged by this host scheduling change.
+
+The matched Canic production-adapter recovery comparison passes both paths.
+Its three import stages total 32.858 seconds serial versus 21.731 seconds
+concurrent, an observed 33.9% reduction. Both selected artifact sets (30 files
+each) match byte-for-byte. Overall test durations differ in artifact preparation;
+they do not establish a complete deployment or release-gate speedup. The shared
+prepaid-pool setup falls from 0.372 to 0.199 seconds in one controlled case;
+this is a small absolute saving. Exact warm reuse of all 21 fixture artifacts
+is verified separately. No new PocketIC case or Fleet setup is added.
+
+All 369 focused Fleet Ensure native tests pass, as do the existing Root/Store,
+four-Shard activation and production-adapter mixed-topology recovery cases.
+Final scoped warning-denied host/internal Clippy, changed-file formatting and
+diff checks pass. The complete accepted .29 batch and both changelog surfaces
+are ready for the maintainer-selected release flow. Evidence and limits: [throughput report](../audits/working/0.110-validation-throughput/report.md).
+No broad gate, version bump, commit, push or live deployment ran.
+
+## Ordinary CI prerequisites repaired after .28 — 2026-09-19
+
+The maintainer's 1081-second ordinary-test failure matches the
+[.27 CI job](https://github.com/dragginzgame/canic/actions/runs/35447335409/job/105909240500),
+not the completed local .28 release validation. Twelve host tests fail: ten
+build-cache snapshots require the uninstalled Wasm sysroot, one Candid cache
+fixture compiles Wasm, and one artifact-preflight test cannot find `ic-wasm`.
+CI compiles for 16m 47s; the host harness itself finishes in 29.14s. The .28
+workflow has the same missing prerequisites; its local full gate passes because
+the maintainer machine already has them.
+
+The ordinary job now installs the internal toolchain's Wasm target and the
+existing checksum-bound `ic-wasm`, and verifies both before tests. The CI guard
+requires each prerequisite once in each owning test job instead of once across
+the whole workflow. No tests are skipped or moved into PocketIC. Candid fixture
+failures now retain Cargo's JSON stdout as well as stderr, exposing compiler
+diagnostics previously hidden by the harness.
+
+All 18 focused regressions pass, including the twelve CI failures. Actionlint,
+repository-configured ShellCheck and the CI release-integrity contract pass.
+Evidence: `.tmp/ci-0.110.27-ordinary-raw.log`,
+`.tmp/ci-ordinary-prerequisites-tests.log` and
+`.tmp/ci-ordinary-prerequisites-contract.log`. This bounded CI repair is ready
+for the maintainer's release decision; .29 changelog surfaces are open and
+packages remain .28. No commit, push or broad validation was run for this repair.
+The completed concurrency and pool-setup work above joins the same .29 batch.
+
 ## Requested IcyDB and host HMAC updates — 2026-09-19
 
 The maintainer requests the .28 release after a fresh read-only Toko feedback

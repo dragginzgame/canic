@@ -6,6 +6,7 @@
 
 pub mod continuation_forecast;
 mod creation_fee;
+pub(in crate::fleet_ensure) mod independent_effects;
 pub mod operator_mint;
 pub(super) mod recovery;
 pub(super) mod reinstall;

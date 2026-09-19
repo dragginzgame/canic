@@ -147,6 +147,7 @@ pub(super) struct MockPlatform {
     reviewed_protocol_actions: Vec<EnsureAction>,
     publication_journal: Option<PathBuf>,
     publication_attempts_on_issue: Vec<u32>,
+    independent_batches: Vec<Vec<String>>,
     fresh_protocol_actions: Vec<EnsureAction>,
     protocol_pending_waits: u32,
     provisioning_progress: Option<FleetProvisioningProgress>,
@@ -208,6 +209,7 @@ impl MockPlatform {
             reviewed_protocol_actions: Vec::new(),
             publication_journal: None,
             publication_attempts_on_issue: Vec::new(),
+            independent_batches: Vec::new(),
             fresh_protocol_actions: Vec::new(),
             protocol_pending_waits: 0,
             provisioning_progress: None,
@@ -796,6 +798,35 @@ impl MockPlatform {
 
 impl EnsurePlatform for MockPlatform {
     type Error = MockError;
+
+    fn apply_independent_effects(
+        &mut self,
+        operation_id: &str,
+        uploads: &[crate::fleet_ensure::ops::independent_effects::IndependentEffect<'_>],
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<Result<EffectOutcome, Self::Error>>, Self::Error> {
+        if let Some(path) = &self.publication_journal {
+            let journal: FleetEnsureJournalRecord =
+                serde_json::from_slice(&fs::read(path).unwrap()).unwrap();
+            for upload in uploads {
+                assert!(
+                    journal.effects.contains(upload.record),
+                    "all intents precede any submission"
+                );
+                assert_eq!(upload.record.state, EffectState::Intent);
+            }
+        }
+        self.independent_batches.push(
+            uploads
+                .iter()
+                .map(|upload| action_sha256(upload.action))
+                .collect(),
+        );
+        Ok(uploads
+            .iter()
+            .map(|upload| self.apply(operation_id, upload.action, upload.record, state))
+            .collect())
+    }
 
     fn observe_root_management(
         &mut self,
@@ -7738,5 +7769,320 @@ fn terminal_retirement_preserves_every_root_account_and_pool_identity() {
     }
     source.conservation.estate_funding_domains[0].required_creation_count = 1;
     assert!(conservation(&source, &observation, 600).is_none());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+fn store_chunk_fixture() -> Fixture {
+    let mut fixture = publication_retry_fixture(1);
+    let chunks = (0..7_u8).map(|value| vec![value; 64]).collect::<Vec<_>>();
+    let template_id = TemplateId::owned("concurrent-store".into());
+    let version = TemplateVersion::owned("concurrent-release".into());
+    let mut preparation = Some(TemplateChunkSetPrepareInput {
+        manifest: None,
+        template_id: template_id.clone(),
+        version: version.clone(),
+        payload_hash: canic_core::cdk::utils::hash::wasm_hash(&chunks.concat()),
+        payload_size_bytes: 448,
+        chunk_hashes: chunks
+            .iter()
+            .map(|bytes| canic_core::cdk::utils::hash::wasm_hash(bytes))
+            .collect(),
+    });
+    fixture.platform.reviewed_protocol_actions = chunks
+        .into_iter()
+        .enumerate()
+        .map(|(index, bytes)| {
+            fleet_protocol_action(
+                &format!("store-chunk-{index}"),
+                CurrentFleetProtocolAction::PublishStoreChunk {
+                    request: TemplateChunkInput {
+                        preparation: preparation.take(),
+                        template_id: template_id.clone(),
+                        version: version.clone(),
+                        chunk_index: u32::try_from(index).unwrap(),
+                        bytes,
+                    },
+                },
+            )
+        })
+        .collect();
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    fixture.platform.publication_journal = Some(paths.journal);
+    for action in &mut fixture.platform.reviewed_protocol_actions {
+        let EnsureAction::FleetProtocol {
+            principal, candid, ..
+        } = action
+        else {
+            unreachable!()
+        };
+        *principal = Principal::from_slice(&[72]).to_text();
+        *candid = "store.did".into();
+    }
+    fixture
+}
+
+fn pool_batch_fixture() -> Fixture {
+    let mut fixture = publication_retry_fixture(1);
+    fixture.platform.reviewed_protocol_actions = (0..7_u8)
+        .map(|index| {
+            let mut action = fleet_protocol_action(
+                &format!("pool-import-{index}"),
+                CurrentFleetProtocolAction::ReconcilePoolAsset {
+                    request: canic_core::dto::pool::PoolCanisterRequest {
+                        canister_id: Principal::from_slice(&[100 + index]),
+                    },
+                    minimum_cycles: Cycles::new(100),
+                },
+            );
+            let EnsureAction::FleetProtocol {
+                principal, candid, ..
+            } = &mut action
+            else {
+                unreachable!()
+            };
+            *principal = Principal::from_slice(&[71]).to_text();
+            *candid = "root.did".into();
+            action
+        })
+        .collect();
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    fixture.platform.publication_journal = Some(paths.journal);
+    fixture
+}
+
+#[test]
+fn pool_batches_stop_at_authority_and_duplicate_asset_boundaries() {
+    use crate::fleet_ensure::policy::independent_effects::batch_len;
+    let fixture = pool_batch_fixture();
+    let actions = &fixture.platform.reviewed_protocol_actions;
+    assert_eq!(batch_len(&actions.iter().collect::<Vec<_>>(), &[], 0), 4);
+    for axis in 0..5 {
+        let mut changed = actions.clone();
+        let duplicate = changed[0].clone();
+        let EnsureAction::FleetProtocol {
+            principal,
+            candid,
+            candid_sha256,
+            action,
+            ..
+        } = &mut changed[1]
+        else {
+            unreachable!()
+        };
+        match axis {
+            0 => *principal = RETIRED.into(),
+            1 => *candid = "other.did".into(),
+            2 => *candid_sha256 = "ff".repeat(32),
+            3 => changed[1] = duplicate,
+            4 => {
+                **action = CurrentFleetProtocolAction::MaintainPoolReadiness {
+                    minimum_ready: 1,
+                    readiness_floor: Cycles::new(100),
+                    maximum_updates: 1,
+                };
+            }
+            _ => unreachable!(),
+        }
+        assert_eq!(batch_len(&changed.iter().collect::<Vec<_>>(), &[], 0), 1);
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn store_chunks_batch_after_preparation_and_replay_without_effects() {
+    let mut fixture = store_chunk_fixture();
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "chunks",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let report = apply_fixture_plan(&mut fixture, "chunks", &planned.plan).unwrap();
+    assert!(report.terminal);
+    assert_eq!(
+        fixture
+            .platform
+            .independent_batches
+            .iter()
+            .map(Vec::len)
+            .collect::<Vec<_>>(),
+        [4, 2]
+    );
+    let mutations = fixture.platform.mutations.clone();
+    assert_eq!(mutations.len(), 7);
+    assert!(mutations.values().all(|count| *count == 1));
+    apply_fixture_plan(&mut fixture, "chunks", &planned.plan).unwrap();
+    assert_eq!(fixture.platform.mutations, mutations);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn store_chunks_drain_failures_keep_sibling_receipts_and_resume_exactly() {
+    // Exercise a rejected call and a committed call with a lost response.
+    for lost_reply in [false, true] {
+        let mut fixture = store_chunk_fixture();
+        let planned = workflow::plan(
+            &fixture.root,
+            &fixture.desired,
+            "chunks",
+            "test-fleet",
+            1,
+            &mut fixture.platform,
+        )
+        .unwrap();
+        let first = action_sha256(&planned.plan.protocol_actions[1]);
+        if lost_reply {
+            fixture.platform.fail_once(first.clone());
+        } else {
+            fixture.platform.stall_before_mutation(first.clone(), 1);
+        }
+        assert!(matches!(
+            apply_fixture_plan(&mut fixture, "chunks", &planned.plan),
+            Err(workflow::EnsureWorkflowError::Platform(_))
+        ));
+        assert_eq!(fixture.platform.independent_batches.len(), 1);
+        let paths =
+            crate::fleet_ensure::ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
+        let journal = crate::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap();
+        assert_eq!(journal.effects.len(), 5, "no later batch issued");
+        assert_eq!(
+            journal.effects[1].state,
+            if lost_reply {
+                EffectState::Applied
+            } else {
+                EffectState::Intent
+            }
+        );
+        for record in &journal.effects[2..] {
+            assert_eq!(record.state, EffectState::Applied);
+            assert_eq!(record.receipt.as_deref(), Some("protocol-receipt"));
+        }
+        // Also qualify a process death after submission but before any replies
+        // or terminal observations reached disk. The Store evidence survives.
+        let mut interrupted = journal;
+        for record in &mut interrupted.effects[1..] {
+            record.state = EffectState::Intent;
+            record.receipt = None;
+            record.progress_identity = None;
+        }
+        crate::fleet_ensure::ops::write_journal(&paths, &interrupted).unwrap();
+        // Reconstruct the adapter without its process-local response cache.
+        let mut resumed = MockPlatform::new(
+            fixture.desired.clone(),
+            fixture.platform.live.values().cloned(),
+        );
+        resumed.protocol_ready = fixture.platform.protocol_ready.clone();
+        resumed.reviewed_protocol_actions = fixture.platform.reviewed_protocol_actions.clone();
+        resumed.publication_journal = Some(paths.journal);
+        fixture.platform = resumed;
+        let report = apply_fixture_plan(&mut fixture, "chunks", &planned.plan).unwrap();
+        assert!(report.terminal);
+        assert_eq!(fixture.platform.mutations.contains_key(&first), !lost_reply);
+        for action in &planned.plan.protocol_actions[2..5] {
+            assert!(
+                !fixture
+                    .platform
+                    .mutations
+                    .contains_key(&action_sha256(action))
+            );
+        }
+        fs::remove_dir_all(fixture.root).unwrap();
+    }
+}
+
+#[test]
+fn store_chunks_require_applied_preparation_and_exact_batch_authority() {
+    use crate::fleet_ensure::policy::independent_effects::batch_len;
+    let fixture = store_chunk_fixture();
+    let actions = &fixture.platform.reviewed_protocol_actions;
+    let mut record = EffectRecord {
+        action_sha256: action_sha256(&actions[0]),
+        state: EffectState::Applied,
+        publication_attempts: 0,
+        maintenance_attempts: 0,
+        created_principal: None,
+        destination_post_cycles: None,
+        destination_pre_cycles: None,
+        post_cycles: None,
+        pre_cycles: None,
+        pre_canister_version: None,
+        progress_identity: None,
+        receipt: None,
+    };
+    let refs = actions.iter().collect::<Vec<_>>();
+    assert_eq!(batch_len(&refs, &[record.clone()], 1), 4);
+    record.state = EffectState::Issued;
+    assert_eq!(batch_len(&refs, &[record.clone()], 1), 0);
+    record.state = EffectState::Applied;
+    assert_eq!(batch_len(&refs, &[], 0), 0);
+    for axis in 0..6 {
+        let mut changed = actions.clone();
+        let EnsureAction::FleetProtocol {
+            action,
+            candid,
+            candid_sha256,
+            principal,
+            ..
+        } = &mut changed[2]
+        else {
+            unreachable!()
+        };
+        let CurrentFleetProtocolAction::PublishStoreChunk { request } = action.as_mut() else {
+            unreachable!()
+        };
+        match axis {
+            0 => *principal = RETIRED.to_string(),
+            1 => *candid = "other.did".into(),
+            2 => *candid_sha256 = "ff".repeat(32),
+            3 => request.version = TemplateVersion::owned("different".into()),
+            4 => request.template_id = TemplateId::owned("different".into()),
+            5 => request.chunk_index = 1,
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            batch_len(&changed.iter().collect::<Vec<_>>(), &[record.clone()], 1),
+            1
+        );
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn store_chunks_stall_bound_reports_the_failed_chunk_after_draining() {
+    let mut fixture = store_chunk_fixture();
+    fixture.desired.maximum_stalled_observations = 1;
+    fixture.platform.desired = fixture.desired.clone();
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "chunks",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    fixture
+        .platform
+        .stall_before_mutation(action_sha256(&planned.plan.protocol_actions[2]), 1);
+    assert!(
+        matches!(apply_fixture_plan(&mut fixture, "chunks", &planned.plan),
+        Err(workflow::EnsureWorkflowError::Stalled { action, observations: 1, .. }) if action == "store-chunk-2")
+    );
+    assert_eq!(fixture.platform.independent_batches.len(), 1);
+    for action in [
+        &planned.plan.protocol_actions[1],
+        &planned.plan.protocol_actions[3],
+        &planned.plan.protocol_actions[4],
+    ] {
+        assert_eq!(
+            fixture.platform.mutations.get(&action_sha256(action)),
+            Some(&1)
+        );
+    }
     fs::remove_dir_all(fixture.root).unwrap();
 }
