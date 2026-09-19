@@ -20,6 +20,56 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Post-.26 observation throughput — 2026-09-19
+
+The maintainer confirms .26 publication and requests Toko feedback first, then
+further speed work. The corrected read-only scan includes the new adoption notes
+at the top of Toko's ledger and CANIC-168's in-place update, not only its tail.
+Toko now pins the .26 library and CLI with IcyDB 0.259.4 and reports 282 native
+tests, Wasm checks, medic, state audit and timer checks passing. Its managed build
+correctly rejected reusable evidence after concurrent gameplay-source edits;
+Candid parity and managed journeys remain unqualified. CANIC-168's sandboxed
+sccache failure correctly reports the explicit empty-wrapper choice. These
+reports establish adoption and functioning diagnostics, not a new Canic defect.
+The downstream next check is `RUSTC_WRAPPER= make qualification` after source
+edits settle; no Toko reinstall/warm-cache timing or live recovery is established
+by this adoption. Sibling work remains read-only.
+
+Canic-side .26 acceptance now passes against the installed published CLI and a
+disposable copy of the exact .26 tag. The four-role Fast build takes 253.789
+seconds initially, then 4.639 unchanged and 4.637 after session-ID changes only.
+Both repeats reuse all four verified artifacts without runtime compilation and
+preserve all 18 retained release-file hashes. Two real competing CLI processes
+report the exact lock owner and serialize with the same complete reuse. Eleven
+focused regressions pass for cache startup/overrides, changed-input and tampered
+output rejection, environment handling, interrupted ownership and malformed
+advisory metadata. This closes the requested Canic-side released-CLI acceptance;
+Toko's eight-role warm build, managed qualification and live recovery remain
+downstream evidence. No new production change or application workaround is needed.
+Exact identities and logs are in the timing report linked below.
+
+The .26 release recorded 86m 30s of validation stages, including 80m 03s for
+tests; complete publication/push duration was not recorded. Internal PocketIC
+took 4,100 seconds versus 2,421 in .25, with substantially more compiler misses.
+The [timing transcription](../audits/working/0.110-validation-throughput/report.md)
+retains phase evidence and comparison limits after external cleanup deleted logs.
+
+After the maintainer confirmed cleanup finished, the repeated control and native
+inspection-query candidate both passed the exact funding/recovery case with all
+17 sealed artifacts byte-identical. Terminal inventory stayed 3.677 versus 3.684
+seconds; the post-build journey took 45.400 versus 46.139. The experiment was
+discarded. Production Rust source remains unchanged.
+
+The retained speed change gives dependency-gate regression tests a deterministic
+three-package local graph and synthetic advisory database. It exercises the real
+gate, Cargo metadata, advisory parser and stale-file isolation in 1.869 seconds,
+versus 134 in the .26 record. Vulnerability/direct-unmaintained/yanked rejection
+and informational drift acceptance remain covered. The actual production security
+audit is unchanged. Focused tests, ShellCheck, Bash syntax and the release-integrity
+contract pass. Both changelog surfaces open .27; packages/pins remain .26.
+This preflight slice is qualified, while the broader speed batch remains open for
+the larger fixture-build cost. No broad gate, version/publication or sibling edit ran.
+
 ## Further test setup throughput — 2026-09-19
 
 The complete bounded .26 batch, including this further setup improvement and

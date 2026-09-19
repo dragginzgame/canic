@@ -1,5 +1,32 @@
 # Canic 0.110 Implementation Status
 
+## Post-.26 validation throughput — 2026-09-19
+
+The maintainer confirms .26 publication and continues Toko-first speed work.
+The corrected handoff scan confirms downstream .26 library/CLI adoption and 282
+passing native tests. Concurrent-source rejection and CANIC-168's sandbox-cache
+diagnostic worked as intended; managed qualification and live timing remain
+downstream work. No new Canic defect is established by these reports.
+Installed .26 CLI acceptance passes on the exact-tag four-role fixture: unchanged
+and session-only repeats take 4.639/4.637 seconds, with four complete cache hits
+and all 18 release-file hashes unchanged. Two actual competing builds expose the
+correct owner and serialize safely; eleven focused cache/lock regressions pass,
+including interruption recovery. CANIC-176's Canic-side released-CLI evidence is
+complete; exact Toko workload and live acceptance are still downstream work.
+Keep these latency follow-ups on the affected .110 line despite the soft release
+count guideline; no minor closeout or new package version is authorized.
+
+| Outcome | Owner | Included evidence | Validation | Status |
+| --- | --- | --- | --- | --- |
+| Reduce validation preparation while retaining security and recovery coverage | CI/test infrastructure | Deterministic dependency-gate graph/database, real stale-advisory isolation, .26 timing attribution; further fixture-build cost qualification | Gate classification/rejection tests, scoped shell lint and CI contract; focused IC proof for any retained runtime change | Active; preflight slice qualified, larger artifact-build work next |
+
+The gate regression takes 1.869 seconds versus the prior 134-second record;
+the production security audit remains unchanged. Both changelog surfaces open
+.27 with packages/pins still .26. A native inspection-query experiment passed
+the real recovery case but did not improve execution time and was removed.
+The complete speed batch remains open; this is not a push recommendation for
+one preflight change. [Evidence](../../audits/working/0.110-validation-throughput/report.md).
+
 ## Further .26 fixture setup qualification — 2026-09-19
 
 The bounded .26 batch remains ready for the maintainer-selected release gate.
