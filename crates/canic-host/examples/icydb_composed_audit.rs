@@ -1,7 +1,10 @@
 //! Build the ICYDB-033 controlled pair through the existing artifact owner.
 //! This audit tool does not install canisters or publish release artifacts.
 
-use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
+use canic_core::{
+    cdk::utils::hash::hex_bytes,
+    ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce},
+};
 use canic_host::canister_build::{
     CanisterArtifactBuildOptions, CanisterArtifactBuilder, CanisterBuildProfile,
     WorkspaceBuildContext, read_wasm_artifact_metrics,
@@ -97,7 +100,7 @@ fn measure(wasm: &Path) -> Result<Value, Box<dyn std::error::Error>> {
     // This Linux audit measures raw sections only; no transport size is claimed here.
     let metrics = read_wasm_artifact_metrics(wasm, Path::new("/dev/null"))?;
     Ok(json!({
-        "sha256": format!("{:x}", Sha256::digest(&bytes)),
+        "sha256": hex_bytes(Sha256::digest(&bytes)),
         "raw_bytes": metrics.raw_bytes,
         "code_section_bytes": metrics.code_section_bytes,
         "data_section_bytes": metrics.data_section_bytes,
