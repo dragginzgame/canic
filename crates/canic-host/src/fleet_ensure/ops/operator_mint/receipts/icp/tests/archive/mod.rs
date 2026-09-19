@@ -15,7 +15,7 @@ use ic_agent::agent::signed_update_inspect;
 use ic_certification::{Certificate, Delegation, fork, labeled, leaf};
 use icrc_ledger_types::icrc3::archive::QueryArchiveFn;
 use serde_bytes::ByteBuf;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 
 fn callback() -> ArchivedRange {
     ArchivedRange {

@@ -32,7 +32,7 @@ use canic_core::{
 };
 use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 pub use persistence::{

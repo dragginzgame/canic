@@ -25,7 +25,7 @@ use ic_agent::{Agent, AgentError, RequestId, agent::signed::SignedUpdate};
 use ic_certification::LookupResult;
 use prost::Message;
 use serde_bytes::ByteBuf;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 
 pub use wire::ArchiveReadError;

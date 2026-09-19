@@ -24,7 +24,7 @@ use canic_core::{
         root_store::ROOT_STORE_RELEASE_SET_MANIFEST_MAX_BYTES,
     },
 };
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs, io,

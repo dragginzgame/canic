@@ -7,7 +7,7 @@
 use crate::durable_io::{create_private_bytes_with_parents, read_private_bytes};
 use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
-use sha2::Sha256;
+use sha2_host::Sha256;
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
 const KEY_PATH: &str = ".canic/local-secrets/build-environment.key";

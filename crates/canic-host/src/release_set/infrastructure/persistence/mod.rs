@@ -26,7 +26,7 @@ use canic_core::{
     ids::{CanisterRole, ReleaseBuildId},
     role_contract::{ProtocolProfileDigest, RoleCapabilityKey},
 };
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::collections::BTreeSet;
 use thiserror::Error as ThisError;
 

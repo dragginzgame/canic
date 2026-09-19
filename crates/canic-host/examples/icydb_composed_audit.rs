@@ -10,7 +10,7 @@ use canic_host::canister_build::{
     WorkspaceBuildContext, read_wasm_artifact_metrics,
 };
 use serde_json::{Value, json};
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{collections::BTreeSet, env, fs, path::Path};
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {

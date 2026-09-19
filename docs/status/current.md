@@ -28,6 +28,11 @@ checking pass; all-target Clippy catches the remaining SHA-2 formatter in the
 composed-Wasm audit example. It now uses the shared lowercase hex helper, and
 focused all-target/all-feature host Clippy passes. The release gate must rerun
 against the corrected committed source before versioning or pushing.
+The retry also catches the host's member-local SHA-2 version in the ordinary
+manifest guard, before PocketIC begins. The root now owns `sha2-host` for the
+host's digest 0.11 dependency; host consumers inherit it, while runtime `sha2`
+stays on 0.10. All seven manifest tests and all-target/all-feature host Clippy
+pass without weakening the guard or changing resolved dependency versions.
 
 The maintainer extends .28 with dependency updates after Store qualification.
 Registry metadata confirms published IcyDB 0.259.6 and HMAC 0.13.0. Workspace

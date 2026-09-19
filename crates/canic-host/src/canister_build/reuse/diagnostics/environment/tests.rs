@@ -1,6 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
-use sha2::Digest as _;
+use sha2_host::Digest as _;
 use std::fs;
 
 fn inputs(value: &str) -> Vec<(OsString, OsString)> {

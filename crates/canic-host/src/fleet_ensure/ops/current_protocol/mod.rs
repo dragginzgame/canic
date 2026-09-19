@@ -85,7 +85,7 @@ use canic_core::{
     protocol,
 };
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     fs,

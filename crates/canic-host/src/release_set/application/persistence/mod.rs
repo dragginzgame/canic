@@ -27,7 +27,7 @@ use canic_core::{
     ids::{CanisterRole, ReleaseBuildId},
     role_contract::ProtocolProfileDigest,
 };
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 use super::{

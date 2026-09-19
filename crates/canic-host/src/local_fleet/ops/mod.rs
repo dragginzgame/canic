@@ -21,7 +21,7 @@ use crate::{
 use candid::Principal;
 use canic_core::cdk::utils::hash::hex_bytes;
 use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 use std::{

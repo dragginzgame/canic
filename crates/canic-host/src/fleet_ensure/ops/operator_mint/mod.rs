@@ -15,7 +15,7 @@ use crate::fleet_ensure::model::operator_mint::{
     OperatorMintTransferOutcomeRecord,
 };
 use candid::{Nat, Principal};
-use sha2::{Digest, Sha224, Sha256};
+use sha2_host::{Digest, Sha224, Sha256};
 use thiserror::Error;
 
 const MINT_MEMO: u64 = 0x544e_494d;

@@ -19,7 +19,7 @@ use candid::{CandidType, Nat};
 use ic_agent::Agent;
 use icrc_ledger_types::{icrc::generic_value::Value, icrc3::blocks::ICRC3DataCertificate};
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use thiserror::Error;
 
 pub use certificate::CertificateVerificationError;

@@ -113,6 +113,8 @@ serde_path_to_error = "0.1.20"
 # Keep `sha2` pinned to the existing 0.10 line used by the IC/runtime stack so
 # canister builds do not pull in a second `sha2` version.
 sha2 = "0.10.9"
+# Host HMAC 0.13 uses digest 0.11, independently of canister cryptography.
+sha2-host = { package = "sha2", version = "0.11.0" }
 syn = "3.0"
 thiserror = "2.0"
 tokio = { version = "1.53.1", features = ["macros", "rt-multi-thread"] }
