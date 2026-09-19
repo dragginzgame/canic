@@ -20,7 +20,27 @@ fn durable_lock_reports_wait_for_another_process_and_retains_exclusion() {
         process::{Command, Stdio},
         time::{Duration, Instant},
     };
+    const DRIVER: &str = "CANIC_TEST_PROGRESS_LOCK_DRIVER";
     const CHILD_ROOT: &str = "CANIC_TEST_PROGRESS_LOCK_ROOT";
+    let thread = std::thread::current();
+    let test_name = thread.name().expect("libtest names each test thread");
+    if std::env::var_os(DRIVER).is_none() {
+        // Parallel tests can fork while this case holds a descriptor. CLOEXEC
+        // closes inherited copies only at exec, so isolate the immediate Drop
+        // release assertion from unrelated child-process creation.
+        let output = Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", test_name])
+            .env(DRIVER, "1")
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "isolated lock test failed:\n{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        );
+        return;
+    }
     if let Some(root) = std::env::var_os(CHILD_ROOT) {
         let _lock = lock_file(&PathBuf::from(root).join("complete-build-reuse.lock")).unwrap();
         println!("LOCK_HELD");
@@ -30,9 +50,8 @@ fn durable_lock_reports_wait_for_another_process_and_retains_exclusion() {
         return;
     }
     let root = temp_root("progress-lock");
-    let thread = std::thread::current();
     let mut child = Command::new(std::env::current_exe().unwrap())
-        .args(["--exact", thread.name().unwrap(), "--nocapture"])
+        .args(["--exact", test_name, "--nocapture"])
         .env(CHILD_ROOT, &root)
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())

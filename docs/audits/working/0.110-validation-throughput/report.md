@@ -1,5 +1,26 @@
 # Release-test throughput qualification
 
+## .27 parallel lock-test correction — 2026-09-19
+
+The maintainer's ordinary-test phase failed after 273 seconds, before PocketIC.
+The host target reported 858 passed, one failed and nine ignored. The failing
+`durable_lock_reports_wait_for_another_process_and_retains_exclusion` assertion
+received typed `WouldBlock` when reacquiring immediately after dropping the
+held file. Unrelated parallel fork/exec activity can temporarily retain that
+open file description: CLOEXEC closes the inherited descriptor at exec, not
+fork. This invalidates the test's assumption that it alone owns all copies.
+
+The test now re-executes its exact case before creating lock descriptors, keeping
+the actual child owner, progress callback, exclusion check and immediate release
+assertion intact. No production lock change, extra retry or sleep was introduced.
+The 21 focused durable-I/O, build-lock and subprocess tests pass; twenty further
+repetitions of the five lock/subprocess cases pass. Scoped warning-denied host
+library/test Clippy, changed-file formatting and whitespace checks also pass.
+Logs: `.tmp/canic-lock-release-regression.log`,
+`.tmp/canic-lock-release-repeat.log`, `.tmp/canic-lock-release-clippy.log`.
+This fixes the reported release-test blocker; no complete gate was rerun and
+the broader throughput follow-up remains open.
+
 ## Published .26 release timing and next observation slice — 2026-09-19
 
 The maintainer confirms .26 publication. The published checkout is

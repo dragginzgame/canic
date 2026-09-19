@@ -20,6 +20,24 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .27 lock-regression correction — 2026-09-19
+
+The maintainer's release attempt stopped at the ordinary-test barrier:
+`durable_lock_reports_wait_for_another_process_and_retains_exclusion` received
+`WouldBlock` on immediate reacquisition after dropping its lock. The assertion
+ran in the parallel host test process, where another test's fork can retain the
+same open file description until exec despite CLOEXEC. The regression now
+re-executes only itself in a dedicated process before opening its locks. Its
+real competing child, wait/progress, exclusion and immediate drop-release
+assertions remain unchanged; production locking and retry policy are unchanged.
+
+All 21 focused durable-I/O, build-lock and subprocess tests pass. Twenty further
+repetitions of the five lock/subprocess cases pass (100 executions), as do scoped
+warning-denied host library/test Clippy, changed-file formatting and whitespace
+checks. Both .27 changelog surfaces include the correction. The reported test
+blocker is fixed and ready for the maintainer's release retry; the broader speed
+follow-up remains open. No broad validation, package bump or publication ran.
+
 ## Post-.26 observation throughput — 2026-09-19
 
 The maintainer confirms .26 publication and requests Toko feedback first, then
