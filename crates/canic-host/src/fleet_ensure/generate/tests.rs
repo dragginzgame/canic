@@ -25,7 +25,7 @@ use crate::{
     test_support::temp_dir,
 };
 use canic_control_plane::{
-    dto::template::TemplateChunkSetPrepareInput,
+    dto::template::TemplateChunkInput,
     ids::{TemplateId, TemplateVersion},
 };
 use canic_core::{
@@ -3927,19 +3927,19 @@ fn terminal_observation_protocol_actions(
     };
     vec![
         EnsureAction::FleetProtocol {
-            action: Box::new(CurrentFleetProtocolAction::PrepareStoreChunkSet {
-                request: TemplateChunkSetPrepareInput {
+            action: Box::new(CurrentFleetProtocolAction::PublishStoreChunk {
+                request: TemplateChunkInput {
+                    preparation: None,
                     template_id: TemplateId::from("root"),
                     version: TemplateVersion::from("current"),
-                    payload_hash: vec![1; 32],
-                    payload_size_bytes: 1,
-                    chunk_hashes: vec![vec![2; 32]],
+                    chunk_index: 0,
+                    bytes: vec![2],
                 },
             }),
             candid: protocol.store_candid.clone(),
             candid_sha256: "11".repeat(32),
             maximum_execution_burn_cycles: 1,
-            name: "store-chunk-preparation".to_string(),
+            name: "store-chunk-publication".to_string(),
             principal: store,
         },
         EnsureAction::FleetProtocol {

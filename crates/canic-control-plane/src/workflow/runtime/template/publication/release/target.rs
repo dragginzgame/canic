@@ -96,6 +96,7 @@ impl WasmStorePublicationWorkflow {
                 .prepare_chunk_set(
                     publication_permit,
                     TemplateChunkSetPrepareInput {
+                        manifest: None,
                         template_id: manifest.template_id.clone(),
                         version: manifest.version.clone(),
                         payload_hash: manifest.payload_hash.clone(),

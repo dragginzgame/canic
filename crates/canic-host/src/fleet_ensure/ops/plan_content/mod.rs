@@ -142,13 +142,24 @@ fn typed_chunk_authorities(
         let EnsureAction::FleetProtocol { action, .. } = action else {
             continue;
         };
-        let CurrentFleetProtocolAction::PrepareStoreChunkSet { request } = action.as_ref() else {
+        let CurrentFleetProtocolAction::PublishStoreChunk { request } = action.as_ref() else {
             continue;
         };
+        let Some(preparation) = &request.preparation else {
+            continue;
+        };
+        let chunk_key = chunk_set_key(request.template_id.as_str(), request.version.as_str());
+        let preparation_key = chunk_set_key(
+            preparation.template_id.as_str(),
+            preparation.version.as_str(),
+        );
+        if request.chunk_index != 0 || chunk_key != preparation_key {
+            return authority_error("preparation must bind the exact first published chunk");
+        }
         insert_authority(
             &mut authorities,
-            chunk_set_key(request.template_id.as_str(), request.version.as_str()),
-            request.chunk_hashes.clone(),
+            preparation_key,
+            preparation.chunk_hashes.clone(),
         )?;
     }
     Ok(authorities)
@@ -159,10 +170,30 @@ fn projected_chunk_authorities(
 ) -> Result<BTreeMap<ChunkSetKey, Vec<Vec<u8>>>, EnsureStateError> {
     let mut authorities = BTreeMap::new();
     for action in protocol_actions(projection)? {
-        if fleet_protocol_action_kind(action)? != Some("prepare_store_chunk_set") {
+        if fleet_protocol_action_kind(action)? != Some("publish_store_chunk") {
             continue;
         }
-        let request = request(action)?;
+        let chunk = request(action)?;
+        let preparation = chunk
+            .get("preparation")
+            .ok_or_else(|| authority("published chunk has no preparation field"))?;
+        if preparation.is_null() {
+            continue;
+        }
+        let request = preparation
+            .as_object()
+            .ok_or_else(|| authority("published chunk preparation is invalid"))?;
+        let chunk_key = chunk_set_key(
+            &text_field(chunk, "template_id")?,
+            &text_field(chunk, "version")?,
+        );
+        let preparation_key = chunk_set_key(
+            &text_field(request, "template_id")?,
+            &text_field(request, "version")?,
+        );
+        if unsigned_field(chunk, "chunk_index")? != 0 || chunk_key != preparation_key {
+            return authority_error("preparation must bind the exact first published chunk");
+        }
         let chunk_hashes = serde_json::from_value::<Vec<Vec<u8>>>(
             request
                 .get("chunk_hashes")

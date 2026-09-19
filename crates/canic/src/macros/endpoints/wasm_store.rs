@@ -358,14 +358,14 @@ macro_rules! canic_emit_local_wasm_store_endpoints {
             }
         }
 
-        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::__internal::core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES))]
         async fn canic_wasm_store_publish_chunk(
             request: ::canic::dto::template::TemplateChunkInput,
         ) -> Result<(), ::canic::Error> {
             ::canic::api::canister::template::WasmStoreCanisterApi::publish_chunk(request)
         }
 
-        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::CANIC_WASM_CHUNK_BYTES + 64 * 1024))]
+        #[$crate::canic_update(internal, requires(custom(::canic::__internal::control_plane::api::template::WasmStoreMutationCallerPredicate)), payload(max_bytes = ::canic::__internal::core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES))]
         async fn canic_wasm_store_publish_fixture(
             request: ::canic::dto::fixture_provisioning::FixtureChunkUpload,
         ) -> Result<Result<::canic::dto::fixture_provisioning::FixtureSourceStatus, ::canic::dto::fixture_provisioning::FixtureStoreError>, ::canic::Error> {

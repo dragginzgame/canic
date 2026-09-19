@@ -5072,31 +5072,25 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     let version = TemplateVersion::owned("22".repeat(32));
     let bytes = vec![42; 4_096];
     let chunk_hash = canic_core::cdk::utils::hash::wasm_hash(&bytes);
-    let actions = vec![
-        fleet_protocol_action(
-            "prepare-store-chunks",
-            CurrentFleetProtocolAction::PrepareStoreChunkSet {
-                request: TemplateChunkSetPrepareInput {
+    let actions = vec![fleet_protocol_action(
+        "publish-store-chunk",
+        CurrentFleetProtocolAction::PublishStoreChunk {
+            request: TemplateChunkInput {
+                preparation: Some(TemplateChunkSetPrepareInput {
+                    manifest: None,
                     template_id: template_id.clone(),
                     version: version.clone(),
                     payload_hash: chunk_hash.clone(),
                     payload_size_bytes: bytes.len() as u64,
                     chunk_hashes: vec![chunk_hash.clone()],
-                },
+                }),
+                template_id,
+                version,
+                chunk_index: 0,
+                bytes: bytes.clone(),
             },
-        ),
-        fleet_protocol_action(
-            "publish-store-chunk",
-            CurrentFleetProtocolAction::PublishStoreChunk {
-                request: TemplateChunkInput {
-                    template_id,
-                    version,
-                    chunk_index: 0,
-                    bytes: bytes.clone(),
-                },
-            },
-        ),
-    ];
+        },
+    )];
     let mut plan = FleetEnsurePlan {
         continuation: None,
         canisters: Vec::new(),
@@ -5185,7 +5179,13 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     );
     let mut partial = plan;
     partial.fleet = "content-addressed-partial-plan".to_string();
-    partial.protocol_actions.remove(0);
+    let EnsureAction::FleetProtocol { action, .. } = &mut partial.protocol_actions[0] else {
+        panic!("Store action");
+    };
+    let CurrentFleetProtocolAction::PublishStoreChunk { request } = action.as_mut() else {
+        panic!("Store chunk");
+    };
+    request.preparation = None;
     partial.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&partial);
     crate::fleet_ensure::ops::write_plan(&partial_paths, &partial)
         .expect("write publish-only partial-progress plan");
@@ -5347,10 +5347,8 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
         "bootstrap_store",
         "join_root",
         "prepare_component_registry",
-        "prepare_store_chunk_set",
         "provision_components",
         "publish_store_chunk",
-        "stage_store_manifest",
         "synchronize_registry",
     ]);
     assert_eq!(current_protocol_variants(&plan), expected_variants);
@@ -6663,9 +6661,6 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
                 CurrentFleetProtocolAction::AdoptStore { .. } => "adopt_store",
                 CurrentFleetProtocolAction::BootstrapStore { .. } => "bootstrap_store",
                 CurrentFleetProtocolAction::JoinRoot { .. } => "join_root",
-                CurrentFleetProtocolAction::PrepareStoreChunkSet { .. } => {
-                    "prepare_store_chunk_set"
-                }
                 CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => {
                     "prepare_component_registry"
                 }
@@ -6675,7 +6670,6 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
                     "publish_store_fixture_chunk"
                 }
                 CurrentFleetProtocolAction::PublishStoreChunk { .. } => "publish_store_chunk",
-                CurrentFleetProtocolAction::StageStoreManifest { .. } => "stage_store_manifest",
                 CurrentFleetProtocolAction::SynchronizeRegistry { .. } => "synchronize_registry",
             }),
             _ => None,

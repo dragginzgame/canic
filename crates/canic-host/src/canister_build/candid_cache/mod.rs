@@ -13,6 +13,7 @@ use super::{
     reuse::{BuildReuseError, file_hash, require_native_tool, resolve_tool},
 };
 use crate::durable_io::{read_regular_bytes, write_bytes};
+use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -138,7 +139,7 @@ impl CandidExtractionCache {
             directory,
             extractor,
             extractor_sha256,
-            identity: format!("{:x}", identity.finalize()),
+            identity: hex_bytes(identity.finalize()),
         })
     }
 
@@ -166,7 +167,7 @@ impl CandidExtractionCache {
             schema_version: 1,
             identity: self.identity.clone(),
             wasm_sha256,
-            candid_sha256: format!("{:x}", Sha256::digest(&candid)),
+            candid_sha256: hex_bytes(Sha256::digest(&candid)),
             candid: String::from_utf8(candid.clone())?,
         };
         let bytes = serde_json::to_vec(&record)?;
@@ -198,7 +199,7 @@ impl CandidExtractionCache {
         if record.schema_version != 1
             || record.identity != self.identity
             || record.wasm_sha256 != wasm_sha256
-            || record.candid_sha256 != format!("{:x}", Sha256::digest(record.candid.as_bytes()))
+            || record.candid_sha256 != hex_bytes(Sha256::digest(record.candid.as_bytes()))
         {
             return Err(BuildReuseError::Evidence(
                 "Candid extraction binding differs".into(),

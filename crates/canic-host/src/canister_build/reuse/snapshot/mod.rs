@@ -8,6 +8,7 @@
 mod tests;
 
 use super::{BuildReuseError, add_optional, collect_files, hash_field, source_entry_is_excluded};
+use canic_core::cdk::utils::hash::hex_bytes;
 use sha2::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
@@ -29,7 +30,7 @@ impl BuildInputSnapshot {
             hash_field(&mut digest, path.as_bytes());
             hash_field(&mut digest, hash.as_bytes());
         }
-        format!("{:x}", digest.finalize())
+        hex_bytes(digest.finalize())
     }
 
     /// Admit the current inventory only when every input was verified before compilation.

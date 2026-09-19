@@ -5351,10 +5351,8 @@ exec icp "$@"
                     CurrentFleetProtocolAction::AdoptStore { .. }
                     | CurrentFleetProtocolAction::BootstrapStore { .. }
                     | CurrentFleetProtocolAction::PrepareStoreFixture { .. } => installed.root_id,
-                    CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
-                    | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
-                    | CurrentFleetProtocolAction::PublishStoreChunk { .. }
-                    | CurrentFleetProtocolAction::StageStoreManifest { .. } => wasm_store,
+                    CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
+                    | CurrentFleetProtocolAction::PublishStoreChunk { .. } => wasm_store,
                     _ => panic!("Store sequence emitted a non-Store/Root action"),
                 },
             })
@@ -12238,9 +12236,7 @@ cycles = "80T"
             CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
             | CurrentFleetProtocolAction::PrepareStoreFixture { .. }
             | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
-            | CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
             | CurrentFleetProtocolAction::PublishStoreChunk { .. }
-            | CurrentFleetProtocolAction::StageStoreManifest { .. }
             | CurrentFleetProtocolAction::AdoptStore { .. }
             | CurrentFleetProtocolAction::BootstrapStore { .. } => 0,
             CurrentFleetProtocolAction::JoinRoot { .. } => 1,
@@ -12366,10 +12362,6 @@ cycles = "80T"
                 assert_eq!(status.content_id, expected.content_id);
                 assert!(status.next_chunk >= expected.next_chunk);
             }
-            CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
-                store_prepare_as(pic, step.target, store_controller, request.clone())
-                    .expect("prepare current Store chunk set");
-            }
             CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
                 let response = root_command(
                     pic,
@@ -12405,10 +12397,6 @@ cycles = "80T"
                     )
                     .expect("publish current Store chunk transport");
                 response.expect("publish current Store chunk");
-            }
-            CurrentFleetProtocolAction::StageStoreManifest { request } => {
-                store_stage_manifest_as(pic, step.target, store_controller, request.clone())
-                    .expect("stage current Store manifest");
             }
         }
     }
@@ -12571,19 +12559,6 @@ cycles = "80T"
                 matches!(response, Ok(canic_control_plane::dto::template::StoreCatalogResponse::Fixture(Ok(status)))
                     if status.content_id == expected.content_id && status.next_chunk >= expected.next_chunk)
             }
-            CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
-                let status = current_store_staging_status(
-                    pic,
-                    step.target,
-                    store_controller,
-                    &request.template_id,
-                    &request.version,
-                );
-                status.chunk_set_present
-                    && status.expected_chunk_hashes == request.chunk_hashes
-                    && status.payload_hash.as_deref() == Some(request.payload_hash.as_slice())
-                    && status.payload_size_bytes == Some(request.payload_size_bytes)
-            }
             CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
                 matches!(
                     root_status(
@@ -12624,16 +12599,17 @@ cycles = "80T"
                     .stored_chunk_hashes
                     .get(request.chunk_index as usize)
                     .is_some_and(|actual| actual.as_ref() == Some(&expected))
-            }
-            CurrentFleetProtocolAction::StageStoreManifest { request } => {
-                let status = current_store_staging_status(
-                    pic,
-                    step.target,
-                    store_controller,
-                    &request.template_id,
-                    &request.version,
-                );
-                status.manifest.as_ref() == Some(&current_manifest_response(request))
+                    && request.preparation.as_ref().is_none_or(|preparation| {
+                        status.chunk_set_present
+                            && status.expected_chunk_hashes == preparation.chunk_hashes
+                            && status.payload_hash.as_deref()
+                                == Some(preparation.payload_hash.as_slice())
+                            && status.payload_size_bytes == Some(preparation.payload_size_bytes)
+                            && preparation.manifest.as_ref().is_none_or(|manifest| {
+                                status.manifest.as_ref()
+                                    == Some(&current_manifest_response(manifest))
+                            })
+                    })
             }
             CurrentFleetProtocolAction::SynchronizeRegistry { expected, request } => {
                 matches!(
@@ -14934,6 +14910,7 @@ cycles = "80T"
         let payload = b"direct root Store authorization";
         let payload_hash = wasm_hash(payload);
         let prepare = TemplateChunkSetPrepareInput {
+            manifest: None,
             template_id: TemplateId::owned("canary:direct-root-update".to_string()),
             version: TemplateVersion::from(format!(
                 "{}-direct-root-update",
@@ -14972,7 +14949,8 @@ cycles = "80T"
             .authority
             .wasm_store_authority
             .installation_controller;
-        let controller_prepare = TemplateChunkSetPrepareInput {
+        let mut controller_prepare = TemplateChunkSetPrepareInput {
+            manifest: None,
             template_id: TemplateId::owned("canary:operator-update".to_string()),
             version: TemplateVersion::from(format!(
                 "{}-operator-update",
@@ -14982,17 +14960,71 @@ cycles = "80T"
             payload_size_bytes: payload.len() as u64,
             chunk_hashes: vec![payload_hash],
         };
-        let prepared = store_prepare_as(
+        controller_prepare.manifest = Some(TemplateManifestInput {
+            template_id: controller_prepare.template_id.clone(),
+            role: CanisterRole::new("preparation-canary"),
+            version: controller_prepare.version.clone(),
+            payload_hash: controller_prepare.payload_hash.clone(),
+            payload_size_bytes: controller_prepare.payload_size_bytes,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(0),
+            created_at: 0,
+        });
+        let upload = TemplateChunkInput {
+            preparation: Some(controller_prepare.clone()),
+            template_id: controller_prepare.template_id.clone(),
+            version: controller_prepare.version.clone(),
+            chunk_index: 0,
+            bytes: payload.to_vec(),
+        };
+        // Discard the byte-lane result, then recover using only exact Store state.
+        pic.update_call(
+            fixture.response.wasm_store,
+            retained_installation_controller,
+            canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+            encode_one(upload.clone()).unwrap(),
+        )
+        .expect("combined Store preparation with lost response");
+        let retained = current_store_staging_status(
             &pic,
             fixture.response.wasm_store,
             retained_installation_controller,
-            controller_prepare.clone(),
+            &controller_prepare.template_id,
+            &controller_prepare.version,
         );
         assert_eq!(
-            prepared
-                .expect("retained installation controller must keep Store mutation authority")
-                .chunk_hashes,
+            retained.expected_chunk_hashes,
             controller_prepare.chunk_hashes
+        );
+        assert_eq!(
+            retained.manifest,
+            controller_prepare
+                .manifest
+                .as_ref()
+                .map(current_manifest_response)
+        );
+        assert!(retained.complete);
+        assert_eq!(retained.stored_chunk_hashes, vec![Some(wasm_hash(payload))]);
+        let replay: Result<(), Error> = pic
+            .update_candid_as(
+                fixture.response.wasm_store,
+                retained_installation_controller,
+                canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
+                (upload,),
+            )
+            .unwrap();
+        replay.expect("retained installation controller replays the exact first chunk");
+        assert_eq!(
+            current_store_staging_status(
+                &pic,
+                fixture.response.wasm_store,
+                retained_installation_controller,
+                &controller_prepare.template_id,
+                &controller_prepare.version,
+            ),
+            retained
         );
         assert_prepared(&pic, fixture.root_id);
     }
@@ -15113,6 +15145,7 @@ cycles = "80T"
         let payload = b"co-located Fleet Store authority";
         let payload_hash = wasm_hash(payload);
         let request = TemplateChunkSetPrepareInput {
+            manifest: None,
             template_id: TemplateId::owned("canary:co-located-fleet".to_string()),
             version: TemplateVersion::from(format!(
                 "{}-fleet-isolation",
@@ -18531,6 +18564,7 @@ cycles = "80T"
             store,
             installation_controller,
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: template_id.clone(),
                 version: version.clone(),
                 payload_hash: wasm_hash(payload),
@@ -18546,6 +18580,7 @@ cycles = "80T"
                     installation_controller,
                     canic::protocol::CANIC_WASM_STORE_PUBLISH_CHUNK,
                     (TemplateChunkInput {
+                        preparation: None,
                         template_id: template_id.clone(),
                         version: version.clone(),
                         chunk_index: u32::try_from(chunk_index).expect("bounded chunk index"),

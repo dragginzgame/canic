@@ -23,7 +23,7 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
-use canic_core::ids::ReleaseBuildId;
+use canic_core::{cdk::utils::hash::hex_bytes, ids::ReleaseBuildId};
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -470,7 +470,7 @@ fn input_identity(context: &WorkspaceBuildContext) -> Result<String, BuildReuseE
         }
         hash_field(&mut digest, &output.stdout);
     }
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(hex_bytes(digest.finalize()))
 }
 
 #[cfg(test)]
@@ -622,7 +622,7 @@ pub(super) fn file_hash(path: &Path) -> Result<String, BuildReuseError> {
         }
         digest.update(&buffer[..count]);
     }
-    Ok(format!("{:x}", digest.finalize()))
+    Ok(hex_bytes(digest.finalize()))
 }
 
 fn hash_field(digest: &mut Sha256, value: &[u8]) {

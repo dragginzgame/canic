@@ -116,6 +116,7 @@ impl WasmStoreInternalClient {
         self.call_result(
             Self::PUBLISH_CHUNK,
             (TemplateChunkInputRef {
+                preparation: None,
                 template_id,
                 version,
                 chunk_index,
@@ -276,6 +277,7 @@ impl WasmStoreInternalClient {
 // Borrowed chunk publish input for store-side chunk staging.
 #[derive(CandidType)]
 struct TemplateChunkInputRef<'a> {
+    preparation: Option<&'a TemplateChunkSetPrepareInput>,
     pub template_id: &'a TemplateId,
     pub version: &'a TemplateVersion,
     pub chunk_index: u32,

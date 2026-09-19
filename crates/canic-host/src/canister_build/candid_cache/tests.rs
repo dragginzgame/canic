@@ -242,7 +242,7 @@ fn real_extractor_reuse_matches_fresh_declarations() {
         "{}",
         serde_json::json!({
             "inputs": inputs,
-            "candid_sha256": outputs.iter().map(|bytes| format!("{:x}", Sha256::digest(bytes))).collect::<Vec<_>>(),
+            "candid_sha256": outputs.iter().map(|bytes| hex_bytes(Sha256::digest(bytes))).collect::<Vec<_>>(),
             "cold_cache_millis": first_millis,
             "reused_millis": reused_millis,
             "fresh_extraction_millis": fresh_millis,

@@ -669,6 +669,7 @@ mod tests {
         let payload = vec![1_u8, 2, 3];
         TemplateChunkedOps::prepare_chunk_set_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: TemplateId::new("embedded:app"),
                 version: TemplateVersion::new("0.18.0"),
                 payload_hash: wasm_hash(&payload),
@@ -680,6 +681,7 @@ mod tests {
         .unwrap();
 
         let err = TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            preparation: None,
             template_id: TemplateId::new("embedded:app"),
             version: TemplateVersion::new("0.18.0"),
             chunk_index: 0,

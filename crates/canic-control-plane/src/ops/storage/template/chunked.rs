@@ -233,19 +233,66 @@ impl TemplateChunkedOps {
         created_at: u64,
         limits: WasmStoreLimits,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        let (release, info_record) = chunk_set_record_from_input(input, created_at)?;
+        Self::admit_preparation(input, created_at, limits, None)
+    }
 
-        let projected_manifests = TemplateManifestStateStore::export().entries;
+    #[cfg(feature = "wasm-store-canister")]
+    fn admit_preparation(
+        mut input: TemplateChunkSetPrepareInput,
+        created_at: u64,
+        limits: WasmStoreLimits,
+        first_chunk: Option<TemplateChunkInput>,
+    ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
+        let manifest = input.manifest.take();
+        if let Some(manifest) = &manifest {
+            validate_prepared_manifest(manifest, &input)?;
+        }
+        let (release, mut info_record) = chunk_set_record_from_input(input, created_at)?;
+        if let Some(existing) = TemplateChunkSetStateStore::get(&release) {
+            // Exact retries retain the original timestamp and all uploaded chunks.
+            info_record.created_at = existing.created_at;
+            if info_record != existing {
+                return Err(InternalError::conflict());
+            }
+        }
+        let first_chunk = first_chunk
+            .map(|chunk| {
+                let chunk_release =
+                    TemplateReleaseKey::new(chunk.template_id.clone(), chunk.version.clone());
+                if chunk_release != release || chunk.chunk_index != 0 || chunk.preparation.is_some()
+                {
+                    return Err(InternalError::invalid_input());
+                }
+                validated_chunk_record(chunk, &info_record)
+            })
+            .transpose()?;
+        let projected_manifests = manifest.as_ref().map_or_else(
+            || TemplateManifestStateStore::export().entries,
+            projected_manifests_after_replace,
+        );
         let projected_chunk_sets = replace_chunk_set_entry(release.clone(), info_record.clone());
-        let projected_bytes = TemplateManifestStateStore::occupied_bytes()
+        let mut projected_bytes = manifest_store_bytes(&projected_manifests)
             + chunk_set_store_bytes(&projected_chunk_sets)
             + TemplateChunkStore::occupied_bytes()
             + crate::storage::stable::fixture_store::FixtureStore::occupied_bytes();
+        if let Some((key, record)) = &first_chunk {
+            projected_bytes = projected_bytes
+                .saturating_sub(TemplateChunkStore::entry_bytes(key).unwrap_or(0))
+                .saturating_add(chunk_entry_store_bytes(key, record));
+        }
         let projected_versions =
             projected_template_versions(&projected_manifests, &projected_chunk_sets);
         ensure_store_limits_from_versions(limits, projected_bytes, projected_versions)?;
 
+        // All records pass admission before any write. No await or fallible
+        // step separates these commits; a platform trap rolls back this message.
+        if let Some(manifest) = manifest {
+            TemplateManifestOps::replace_approved_from_input(manifest);
+        }
         TemplateChunkSetStateStore::upsert(release, info_record.clone());
+        if let Some((key, record)) = first_chunk {
+            TemplateChunkStore::upsert(key, record);
+        }
 
         Ok(chunk_set_record_to_response(info_record))
     }
@@ -265,9 +312,14 @@ impl TemplateChunkedOps {
     // Publish one chunk into a local store with capacity enforcement.
     #[cfg(feature = "wasm-store-canister")]
     pub fn publish_chunk_in_store_from_input(
-        input: TemplateChunkInput,
+        mut input: TemplateChunkInput,
+        created_at: u64,
         limits: WasmStoreLimits,
     ) -> Result<(), InternalError> {
+        if let Some(preparation) = input.preparation.take() {
+            Self::admit_preparation(preparation, created_at, limits, Some(input))?;
+            return Ok(());
+        }
         let (chunk_key, new_record) = validated_chunk_record_from_input(input)?;
         canic_core::perf!("publish_store_validate_chunk");
 
@@ -419,6 +471,34 @@ impl TemplateChunkedOps {
     }
 }
 
+#[cfg(feature = "wasm-store-canister")]
+fn validate_prepared_manifest(
+    manifest: &TemplateManifestInput,
+    input: &TemplateChunkSetPrepareInput,
+) -> Result<(), InternalError> {
+    let manifest_release =
+        TemplateReleaseKey::new(manifest.template_id.clone(), manifest.version.clone());
+    let chunk_release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
+    let same_payload = (
+        manifest.payload_hash.as_slice(),
+        manifest.payload_size_bytes,
+    ) == (input.payload_hash.as_slice(), input.payload_size_bytes);
+    let approved_chunked = manifest.manifest_state == TemplateManifestState::Approved
+        && manifest.chunking_mode == crate::ids::TemplateChunkingMode::Chunked;
+    if manifest_release != chunk_release || !same_payload || !approved_chunked {
+        return Err(InternalError::invalid_input());
+    }
+    let record = input_to_record(manifest.clone());
+    if TemplateManifestStateStore::export()
+        .entries
+        .iter()
+        .any(|entry| entry.release == manifest_release && entry.record != record)
+    {
+        return Err(InternalError::conflict());
+    }
+    Ok(())
+}
+
 #[cfg(any(test, feature = "wasm-store-canister"))]
 fn chunk_set_record_from_input(
     input: TemplateChunkSetPrepareInput,
@@ -445,9 +525,25 @@ fn chunk_set_record_from_input(
 fn validated_chunk_record_from_input(
     input: TemplateChunkInput,
 ) -> Result<(TemplateChunkKey, TemplateChunkRecord), InternalError> {
-    let release = TemplateReleaseKey::new(input.template_id, input.version);
+    let release = TemplateReleaseKey::new(input.template_id.clone(), input.version.clone());
     let info = TemplateChunkSetStateStore::get(&release)
         .ok_or_else(|| TemplateManifestOpsError::TemplateChunkSetMissing(release.clone()))?;
+
+    validated_chunk_record(input, &info)
+}
+
+#[cfg(any(test, feature = "wasm-store-canister"))]
+fn validated_chunk_record(
+    input: TemplateChunkInput,
+    info: &TemplateChunkSetRecord,
+) -> Result<(TemplateChunkKey, TemplateChunkRecord), InternalError> {
+    let release = TemplateReleaseKey::new(input.template_id, input.version);
+    if input.preparation.is_some()
+        || input.bytes.is_empty()
+        || input.bytes.len() > canic_core::CANIC_WASM_CHUNK_BYTES
+    {
+        return Err(InternalError::invalid_input());
+    }
 
     if input.chunk_index >= info.chunk_count {
         return Err(TemplateManifestOpsError::TemplateChunkIndexOutOfRange(
@@ -626,6 +722,239 @@ mod tests {
     }
 
     #[cfg(feature = "wasm-store-canister")]
+    fn combined_preparation() -> (TemplateChunkSetPrepareInput, WasmStoreLimits) {
+        let mut manifest = approved_manifest_input();
+        manifest.payload_hash = wasm_hash(&[9; 32]);
+        let request = TemplateChunkSetPrepareInput {
+            template_id: manifest.template_id.clone(),
+            version: manifest.version.clone(),
+            payload_hash: manifest.payload_hash.clone(),
+            payload_size_bytes: manifest.payload_size_bytes,
+            chunk_hashes: vec![manifest.payload_hash.clone()],
+            manifest: Some(manifest),
+        };
+        (
+            request,
+            WasmStoreLimits {
+                max_store_bytes: 10_000,
+                max_templates: Some(1),
+                max_template_versions_per_template: Some(1),
+            },
+        )
+    }
+
+    #[cfg(feature = "wasm-store-canister")]
+    #[test]
+    fn combined_preparation_replays_without_resetting_uploaded_content() {
+        reset_store();
+        let (request, limits) = combined_preparation();
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 10, limits)
+            .unwrap();
+        TemplateChunkedOps::publish_chunk_in_store_from_input(
+            TemplateChunkInput {
+                preparation: None,
+                template_id: request.template_id.clone(),
+                version: request.version.clone(),
+                chunk_index: 0,
+                bytes: vec![9; 32],
+            },
+            77,
+            limits,
+        )
+        .unwrap();
+        let before =
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+        assert!(before.complete);
+        assert!(before.manifest.is_some());
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 20, limits)
+            .unwrap();
+        assert_eq!(
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version),
+            before
+        );
+        let release = TemplateReleaseKey::new(request.template_id, request.version);
+        assert_eq!(
+            TemplateChunkSetStateStore::get(&release)
+                .unwrap()
+                .created_at,
+            10
+        );
+    }
+
+    #[cfg(feature = "wasm-store-canister")]
+    #[test]
+    fn combined_preparation_rejects_invalid_admission_without_partial_records() {
+        let (request, limits) = combined_preparation();
+        for case in 0..7 {
+            reset_store();
+            let mut candidate = request.clone();
+            let mut admitted_limits = limits;
+            match case {
+                0 => {
+                    candidate.manifest.as_mut().unwrap().version =
+                        TemplateVersion::new("different");
+                }
+                1 => candidate.manifest.as_mut().unwrap().payload_hash = vec![0; 32],
+                2 => candidate.manifest.as_mut().unwrap().payload_size_bytes += 1,
+                3 => candidate.chunk_hashes.clear(),
+                4 => admitted_limits.max_store_bytes = 0,
+                5 => admitted_limits.max_templates = Some(0),
+                _ => admitted_limits.max_template_versions_per_template = Some(0),
+            }
+            assert!(
+                TemplateChunkedOps::prepare_chunk_set_in_store_from_input(
+                    candidate,
+                    10,
+                    admitted_limits
+                )
+                .is_err()
+            );
+            let after =
+                TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+            assert!(after.manifest.is_none());
+            assert!(!after.chunk_set_present);
+        }
+    }
+
+    #[cfg(feature = "wasm-store-canister")]
+    #[test]
+    fn combined_preparation_conflicts_preserve_both_admitted_records() {
+        reset_store();
+        let (request, limits) = combined_preparation();
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(request.clone(), 10, limits)
+            .unwrap();
+        let before =
+            TemplateChunkedOps::staging_status_response(&request.template_id, &request.version);
+        let mut changed_manifest = request.clone();
+        changed_manifest.manifest.as_mut().unwrap().role = CanisterRole::new("different");
+        let mut changed_chunks = request.clone();
+        changed_chunks.chunk_hashes[0] = vec![0; 32];
+        for candidate in [changed_manifest, changed_chunks] {
+            let error =
+                TemplateChunkedOps::prepare_chunk_set_in_store_from_input(candidate, 20, limits)
+                    .unwrap_err();
+            assert_eq!(
+                error.public_error().code(),
+                InternalError::conflict().public_error().code()
+            );
+            assert_eq!(
+                TemplateChunkedOps::staging_status_response(&request.template_id, &request.version),
+                before
+            );
+        }
+    }
+
+    #[cfg(feature = "wasm-store-canister")]
+    #[test]
+    fn first_chunk_admission_is_atomic_and_replays_without_resetting_later_chunks() {
+        reset_store();
+        let (mut preparation, limits) = combined_preparation();
+        preparation.chunk_hashes = vec![wasm_hash(&[9; 16]), wasm_hash(&[9; 16])];
+        let first = TemplateChunkInput {
+            preparation: Some(preparation.clone()),
+            template_id: preparation.template_id,
+            version: preparation.version,
+            chunk_index: 0,
+            bytes: vec![9; 16],
+        };
+        TemplateChunkedOps::publish_chunk_in_store_from_input(first.clone(), 10, limits).unwrap();
+        let later = TemplateChunkInput {
+            preparation: None,
+            chunk_index: 1,
+            ..first.clone()
+        };
+        TemplateChunkedOps::publish_chunk_in_store_from_input(later, 20, limits).unwrap();
+        let before =
+            TemplateChunkedOps::staging_status_response(&first.template_id, &first.version);
+        assert!(before.complete);
+        assert_eq!(before.stored_chunk_count, 2);
+        TemplateChunkedOps::publish_chunk_in_store_from_input(first.clone(), 30, limits).unwrap();
+        assert_eq!(
+            TemplateChunkedOps::staging_status_response(&first.template_id, &first.version),
+            before
+        );
+        let release = TemplateReleaseKey::new(first.template_id.clone(), first.version.clone());
+        assert_eq!(
+            TemplateChunkSetStateStore::get(&release)
+                .unwrap()
+                .created_at,
+            10
+        );
+        let mut conflicting = first;
+        conflicting
+            .preparation
+            .as_mut()
+            .unwrap()
+            .manifest
+            .as_mut()
+            .unwrap()
+            .role = CanisterRole::new("other");
+        let error = TemplateChunkedOps::publish_chunk_in_store_from_input(conflicting, 40, limits)
+            .unwrap_err();
+        assert_eq!(
+            error.public_error().code(),
+            InternalError::conflict().public_error().code()
+        );
+        assert_eq!(
+            TemplateChunkedOps::staging_status_response(&release.template_id, &release.version),
+            before
+        );
+    }
+
+    #[cfg(feature = "wasm-store-canister")]
+    #[test]
+    fn first_chunk_rejection_preserves_an_empty_store_including_capacity_failure() {
+        let (preparation, limits) = combined_preparation();
+        let first = TemplateChunkInput {
+            preparation: Some(preparation.clone()),
+            template_id: preparation.template_id,
+            version: preparation.version,
+            chunk_index: 0,
+            bytes: vec![9; 32],
+        };
+        reset_store();
+        TemplateChunkedOps::publish_chunk_in_store_from_input(first.clone(), 10, limits).unwrap();
+        let exact_bytes = TemplateManifestStateStore::occupied_bytes()
+            + TemplateChunkSetStateStore::occupied_bytes()
+            + TemplateChunkStore::occupied_bytes();
+        for case in 0..8 {
+            reset_store();
+            let mut candidate = first.clone();
+            let mut admitted_limits = limits;
+            match case {
+                0 => candidate.bytes[0] = 1,
+                1 => candidate.chunk_index = 1,
+                2 => candidate.template_id = TemplateId::new("other"),
+                3 => candidate.bytes.clear(),
+                4 => candidate.bytes = vec![9; canic_core::CANIC_WASM_CHUNK_BYTES + 1],
+                5 => admitted_limits.max_store_bytes = exact_bytes - 1,
+                6 => {
+                    candidate
+                        .preparation
+                        .as_mut()
+                        .unwrap()
+                        .manifest
+                        .as_mut()
+                        .unwrap()
+                        .payload_size_bytes += 1;
+                }
+                _ => candidate.preparation.as_mut().unwrap().chunk_hashes.clear(),
+            }
+            assert!(
+                TemplateChunkedOps::publish_chunk_in_store_from_input(
+                    candidate,
+                    20,
+                    admitted_limits
+                )
+                .is_err()
+            );
+            assert!(TemplateManifestStateStore::export().entries.is_empty());
+            assert!(TemplateChunkSetStateStore::export().entries.is_empty());
+            assert_eq!(TemplateChunkStore::count(), 0);
+        }
+    }
+
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn publish_chunk_in_store_rejects_incremental_capacity_overflow() {
         reset_store();
@@ -650,6 +979,7 @@ mod tests {
 
         TemplateChunkedOps::prepare_chunk_set_in_store_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 payload_hash,
@@ -667,11 +997,13 @@ mod tests {
 
         TemplateChunkedOps::publish_chunk_in_store_from_input(
             TemplateChunkInput {
+                preparation: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 chunk_index: 0,
                 bytes: chunk_zero,
             },
+            77,
             WasmStoreLimits {
                 max_store_bytes: 10_000,
                 max_templates: None,
@@ -692,11 +1024,13 @@ mod tests {
 
         let err = TemplateChunkedOps::publish_chunk_in_store_from_input(
             TemplateChunkInput {
+                preparation: None,
                 template_id: release.template_id,
                 version: release.version,
                 chunk_index: 1,
                 bytes: chunk_one,
             },
+            77,
             WasmStoreLimits {
                 max_store_bytes: exact_limit,
                 max_templates: None,
@@ -725,6 +1059,7 @@ mod tests {
 
         TemplateChunkedOps::prepare_chunk_set_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 payload_hash: wasm_hash(&old_chunk),
@@ -735,6 +1070,7 @@ mod tests {
         )
         .unwrap();
         TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            preparation: None,
             template_id: release.template_id.clone(),
             version: release.version.clone(),
             chunk_index: 0,
@@ -744,6 +1080,7 @@ mod tests {
 
         TemplateChunkedOps::prepare_chunk_set_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 payload_hash: wasm_hash(&new_chunk),
@@ -769,6 +1106,7 @@ mod tests {
         );
 
         TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            preparation: None,
             template_id: release.template_id.clone(),
             version: release.version.clone(),
             chunk_index: 0,
@@ -804,6 +1142,7 @@ mod tests {
 
         TemplateChunkedOps::prepare_chunk_set_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 payload_hash: wasm_hash(&payload),
@@ -814,6 +1153,7 @@ mod tests {
         )
         .unwrap();
         TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+            preparation: None,
             template_id: release.template_id.clone(),
             version: release.version.clone(),
             chunk_index: 1,
@@ -823,6 +1163,7 @@ mod tests {
 
         TemplateChunkedOps::prepare_chunk_set_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 payload_hash: wasm_hash(&chunk_zero),
@@ -856,6 +1197,7 @@ mod tests {
         let payload_hash = wasm_hash(&payload);
         TemplateChunkedOps::prepare_chunk_set_from_input(
             TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 payload_hash: payload_hash.clone(),
@@ -867,6 +1209,7 @@ mod tests {
         .expect("prepare exact payload");
         for (chunk_index, bytes) in chunks.into_iter().enumerate() {
             TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
+                preparation: None,
                 template_id: release.template_id.clone(),
                 version: release.version.clone(),
                 chunk_index: u32::try_from(chunk_index).expect("bounded test index"),

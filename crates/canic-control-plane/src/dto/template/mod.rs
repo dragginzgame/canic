@@ -61,6 +61,8 @@ pub struct TemplateManifestResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct TemplateChunkSetPrepareInput {
+    /// Optional approved manifest admitted atomically with this exact chunk set.
+    pub manifest: Option<TemplateManifestInput>,
     pub template_id: TemplateId,
     pub version: TemplateVersion,
     pub payload_hash: Vec<u8>,
@@ -74,6 +76,8 @@ pub struct TemplateChunkSetPrepareInput {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, serde::Serialize)]
 pub struct TemplateChunkInput {
+    /// Exact metadata admitted with chunk zero; absent for subsequent chunks.
+    pub preparation: Option<TemplateChunkSetPrepareInput>,
     pub template_id: TemplateId,
     pub version: TemplateVersion,
     pub chunk_index: u32,

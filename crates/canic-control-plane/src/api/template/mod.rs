@@ -349,7 +349,8 @@ fn local_publish_chunk(request: TemplateChunkInput) -> Result<(), Error> {
     WasmStoreGcOps::require_writable()?;
     let store = config::current_wasm_store().map_err(Error::from)?;
     let limits = WasmStoreLimits::from(&store);
-    TemplateChunkedOps::publish_chunk_in_store_from_input(request, limits).map_err(Error::from)
+    TemplateChunkedOps::publish_chunk_in_store_from_input(request, now_secs(), limits)
+        .map_err(Error::from)
 }
 
 #[cfg(feature = "wasm-store-canister")]

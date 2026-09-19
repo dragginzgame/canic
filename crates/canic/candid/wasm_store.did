@@ -503,6 +503,7 @@ type StoreStatusResponse = variant {
   Authority : FleetSubnetWasmStoreAuthority;
 };
 type TemplateChunkInput = record {
+  preparation : opt TemplateChunkSetPrepareInput;
   chunk_index : nat32;
   template_id : text;
   version : text;
@@ -517,6 +518,7 @@ type TemplateChunkRequest = record {
 type TemplateChunkResponse = record { bytes : blob };
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
 type TemplateChunkSetPrepareInput = record {
+  manifest : opt TemplateManifestInput;
   payload_size_bytes : nat64;
   chunk_hashes : vec blob;
   template_id : text;

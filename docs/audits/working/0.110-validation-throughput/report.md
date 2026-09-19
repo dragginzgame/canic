@@ -1,5 +1,117 @@
 # Release-test throughput qualification
 
+## CANIC-160 combined Store publication — 2026-09-19
+
+Base: published .27 commit `6f4b3ff5609eb8383d692d92b897688b901bc2b0`,
+validated source `d8feaa2bb14b9d7147dbbbbdb0044c1bef4f3011`. The latest
+read-only Toko CANIC-160 handoff and
+`docs/upstream/artifacts/canic-effect-count-2026-09-19.json` record 52 planned
+effects during an in-progress .26 local reinstall: three infrastructure
+reinstalls, fourteen pool reconciliations, six chunk preparations, fifteen chunk
+uploads, five role manifests and nine other effects. It is not a completed
+wall-clock baseline. Sibling repositories remained read-only.
+
+The host now attaches chunk-set preparation and an optional role manifest to
+chunk zero. The Store checks release/payload agreement, existing-record conflicts,
+chunk hash and combined capacity before committing any records. There is no
+await or fallible return between those writes; a message trap rolls back the
+transaction. Exact retries preserve the original timestamp and later uploaded
+chunks. Recovery requires matching metadata, manifest and chunk bytes, and
+rejects status for another template/version. Content-addressed retained plans
+bind nested preparation to the exact first chunk and reject substituted content.
+
+Separate host preparation/manifest actions are removed. Runtime publication
+still prepares chunks before promoting its manifest with the maintained Store
+command. Canonical Candid and all callers use the new DTO fields. The host
+checks the encoded upload against the existing 1 MiB plus 64 KiB byte envelope;
+the ordinary command budget remains 16 KiB. Complete payload verification and
+controller authorization remain in force.
+
+### Matched Store journey
+
+A temporary instrumented version of the existing
+`current_store_bootstraps_application_catalog_and_replays_zero_effects` case
+runs separate-call and combined-call publication on fresh disposable Fleets.
+Both use the same compiled runtime, source/dependency graph, five-component
+configuration, artifact union and fixture bytes. This configuration shares a
+role artifact: its two payload sets need two preparations and one role manifest.
+The separate-call path expands those three metadata calls through maintained
+Store commands. Both paths discard upload replies, recover through the same
+status checks, complete Root bootstrap and prove immediate effect-free replay.
+The extra comparison setup is removed from the shipped test source.
+
+| Path | Direct host updates | Publication bytes | Store sequence and replay |
+| --- | ---: | ---: | ---: |
+| Separate metadata calls | 11 | 1,170,482 | 559 ms |
+| Combined first upload | 8 | 1,170,482 | 563 ms |
+
+The reduction is three actual host updates (27.3%). **No elapsed-time improvement
+is established**: the candidate is four milliseconds slower in this single pair.
+The timing window covers the Store action sequence, its completion observations
+and final replay checks; compilation, installation and artifact-union setup are
+excluded. These direct PocketIC calls do not include the real CLI subprocess or
+network path. Internal canister-to-canister calls are not included in the direct
+host-update count. This is not a Toko workload, full reinstall benchmark or
+instruction/cycle measurement. It supports keeping the call consolidation,
+not claiming a measured end-to-end speedup.
+
+Build/evidence identities:
+
+- Rust `1.98.1`, PocketIC server/library `16.0.0`; pinned ICP CLI `1.5.0`.
+- Cargo lock SHA-256:
+  `dea0ba496928ddc226bba3e729e1d49606cbb00064a76d1f76eb1199f65056d8`.
+- Store artifact release-build identity:
+  `a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae`.
+- Matched Store Wasm SHA-256:
+  `e9c7e758a7d93eeef9e16f4658c6d72e4c4a17cafe7390870d760decccb169f0`;
+  code-section bytes: 3,476,051.
+- Instrumented test source SHA-256:
+  `69eec55e485859143f8382fc8a85b69627a4e8dbdb8b30981fa3f48bd26dd2d1`,
+  retained locally at `.tmp/canic160-paired-journey-source.rs`.
+- Final source diff against the base, including test-only cleanup after the
+  measurement, is retained at `.tmp/canic160-store-publication-source.patch`;
+  SHA-256: `66513a5bb45124e6a6d45e141032c3197e96b60fff27d2c227cc61ff2509fa3d`.
+
+The maintainer subsequently requested IcyDB and host HMAC/SHA-2 updates in the
+same .28 draft. The lock and source identities above belong to this completed
+Store comparison, before that dependency update; they are not identities for a
+later complete release candidate.
+
+### Qualification and release boundary
+
+Nine Store regressions and fifteen host regressions pass, including admission
+without partial writes, exact timestamp/chunk retention, forged preparation
+rejection, full byte-envelope bounds, retained-content hashing and unchanged
+funding authority. Canonical Candid equality and the generated retained-estate
+apply/replay regression pass; the changed Candid test also passes scoped Clippy
+(`.tmp/canic160-final-surface-checks.log`). The opt-in external retained
+plan test was not supplied evidence and remains ignored. Scoped warning-denied
+all-feature control-plane, host and internal-test Clippy passes. The exact
+prepared-Root/Store case passes on the final test source with real first-upload
+lost-response recovery, exact replay and existing authorization checks: 58.44
+seconds including artifact builds, 181 seconds for the runner. The paired
+Store-bootstrap case passes in 158.37 seconds including builds, with a 310-second
+runner. These runner times are qualification costs, not performance comparisons.
+
+Local logs: `.tmp/canic160-first-chunk-tests.log`,
+`.tmp/canic160-first-chunk-contract-lint.log`,
+`.tmp/canic160-first-chunk-final-native.log`,
+`.tmp/canic160-first-chunk-host-final.log`,
+`.tmp/canic160-paired-journey.log`, `.tmp/canic160-first-chunk-pocketic.log`.
+The contract/lint log retains initial new-test lint findings, corrected before
+the passing scoped lint. The first final-native log retains a cache fixture
+failure: it returned another template's status, newly rejected by exact response
+binding. The host-final log records its correction and passing tests/lint.
+
+The .28 Store-publication release batch is complete; both changelog surfaces are
+ready, while package versions/pins remain .27. No broad validation, version bump,
+commit, push or live deployment ran. The arithmetic projection for Toko's
+recorded shape is 52 to 41 planned effects and 26 to 15 publication effects,
+provided each preparation fits the admitted first upload. It is not a recompiled
+Toko plan or measured Toko timing. Bounded independent uploads and pool batches
+remain the next accepted work, with issued-work drainage, partial recovery and
+per-asset cycle accounting intact.
+
 ## .27 parallel lock-test correction — 2026-09-19
 
 The maintainer's ordinary-test phase failed after 273 seconds, before PocketIC.
