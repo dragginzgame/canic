@@ -40,10 +40,9 @@ use canic_control_plane::dto::fleet_coordinator::{
 use canic_control_plane::dto::{
     root::RootOperationStatusResponse,
     template::{
-        StoreCatalogRequest, StoreCatalogResponse, StoreCommand, StoreCommandResponse,
-        StoreStatusRequest, StoreStatusResponse, TemplateChunkInput, TemplateChunkSetPrepareInput,
-        TemplateLookupRequest, TemplateManifestInput, TemplateManifestResponse,
-        TemplateStagingStatusResponse,
+        StoreCatalogRequest, StoreCatalogResponse, StoreStatusRequest, StoreStatusResponse,
+        TemplateChunkInput, TemplateChunkSetPrepareInput, TemplateLookupRequest,
+        TemplateManifestInput, TemplateManifestResponse, TemplateStagingStatusResponse,
     },
 };
 use canic_control_plane::ids::{
@@ -862,9 +861,7 @@ const fn current_protocol_stage(action: &CurrentFleetProtocolAction) -> u8 {
         CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
         | CurrentFleetProtocolAction::PrepareStoreFixture { .. }
         | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
-        | CurrentFleetProtocolAction::PrepareStoreChunkSet { .. }
         | CurrentFleetProtocolAction::PublishStoreChunk { .. }
-        | CurrentFleetProtocolAction::StageStoreManifest { .. }
         | CurrentFleetProtocolAction::AdoptStore { .. }
         | CurrentFleetProtocolAction::BootstrapStore { .. } => 0,
         CurrentFleetProtocolAction::JoinRoot { .. } => 1,
@@ -1142,14 +1139,6 @@ fn observe_with_staging(
             source_bytes,
             ..
         } => fixture::observe_upload(icp, &resolved, expected, *source_bytes),
-        CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
-            let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
-            let applied = status.chunk_set_present
-                && status.expected_chunk_hashes == request.chunk_hashes
-                && status.payload_hash.as_deref() == Some(request.payload_hash.as_slice())
-                && status.payload_size_bytes == Some(request.payload_size_bytes);
-            observation(applied, &status)
-        }
         CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
             let response: Result<RootStatusResponseFragment, CanisterProtocolError> =
                 query_with_candid(
@@ -1186,18 +1175,15 @@ fn observe_with_staging(
         CurrentFleetProtocolAction::PublishStoreChunk { request } => {
             let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
             let expected = canic_core::cdk::utils::hash::wasm_hash(&request.bytes);
-            let applied = status
+            let chunk_applied = status
                 .stored_chunk_hashes
                 .get(request.chunk_index as usize)
                 .is_some_and(|actual| actual.as_ref() == Some(&expected));
-            observation(applied, &status)
-        }
-        CurrentFleetProtocolAction::StageStoreManifest { request } => {
-            let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
-            observation(
-                status.manifest.as_ref() == Some(&manifest_response(request)),
-                &status,
-            )
+            let preparation_applied = request
+                .preparation
+                .as_ref()
+                .is_none_or(|preparation| prepared_store_status_matches(preparation, &status));
+            observation(chunk_applied && preparation_applied, &status)
         }
         CurrentFleetProtocolAction::SynchronizeRegistry { expected, request } => {
             let Some(status) = query_root_operation(
@@ -1423,43 +1409,6 @@ pub(super) fn apply(
             source_bytes,
             ..
         } => fixture::upload(icp, &resolved, request, expected, *source_bytes)?,
-        CurrentFleetProtocolAction::PrepareStoreChunkSet { request } => {
-            let response: StoreCommandResponse = call_with_candid(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                protocol::CANIC_WASM_STORE_COMMAND,
-                &StoreCommand::PrepareChunkSet(request.clone()),
-            )?;
-            let StoreCommandResponse::PrepareChunkSet(response) = response else {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            };
-            if response.chunk_hashes != request.chunk_hashes {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            }
-            Sha256::digest(
-                candid::encode_one(request)
-                    .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?,
-            )
-            .to_vec()
-        }
-        CurrentFleetProtocolAction::StageStoreManifest { request } => {
-            let response: StoreCommandResponse = call_with_candid(
-                icp,
-                &resolved.candid_path,
-                resolved.target,
-                protocol::CANIC_WASM_STORE_COMMAND,
-                &StoreCommand::StageManifest(request.clone()),
-            )?;
-            if !matches!(response, StoreCommandResponse::StageManifest) {
-                return Err(CurrentProtocolError::ResponseMismatch);
-            }
-            Sha256::digest(
-                candid::encode_one(request)
-                    .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?,
-            )
-            .to_vec()
-        }
         CurrentFleetProtocolAction::PublishStoreChunk { request } => {
             call_with_candid::<_, ()>(
                 icp,
@@ -1688,6 +1637,23 @@ impl<'a> From<&'a RootComponentRegistryStatusResponse> for ComponentRegistryAuth
     }
 }
 
+fn prepared_store_status_matches(
+    request: &TemplateChunkSetPrepareInput,
+    status: &TemplateStagingStatusResponse,
+) -> bool {
+    let same_release =
+        (&status.template_id, &status.version) == (&request.template_id, &request.version);
+    same_release
+        && status.chunk_set_present
+        && status.expected_chunk_hashes == request.chunk_hashes
+        && status.payload_hash.as_deref() == Some(request.payload_hash.as_slice())
+        && status.payload_size_bytes == Some(request.payload_size_bytes)
+        && request
+            .manifest
+            .as_ref()
+            .is_none_or(|manifest| status.manifest.as_ref() == Some(&manifest_response(manifest)))
+}
+
 fn manifest_response(request: &TemplateManifestInput) -> TemplateManifestResponse {
     TemplateManifestResponse {
         template_id: request.template_id.clone(),
@@ -1762,6 +1728,9 @@ fn query_store_staging(
     let StoreCatalogResponse::Template(status) = response else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
+    if (&status.template_id, &status.version) != (template_id, version) {
+        return Err(CurrentProtocolError::ResponseMismatch);
+    }
     Ok(status)
 }
 
@@ -2262,6 +2231,7 @@ pub fn compile_current_store_sequence_from_union(
         )),
         version.clone(),
         &manifest_bytes,
+        None,
     )?;
 
     let mut artifacts = BTreeMap::<CanisterRole, &ApplicationArtifactEntry>::new();
@@ -2280,21 +2250,25 @@ pub fn compile_current_store_sequence_from_union(
         let bytes = read_qualified_artifact(root, artifact)?;
         let payload_hash = canic_core::cdk::utils::hash::wasm_hash(&bytes);
         let template_id = TemplateId::owned(format!("{ROOT_STORE_ARTIFACT_TEMPLATE_PREFIX}{role}"));
-        actions.push(CurrentFleetProtocolAction::StageStoreManifest {
-            request: TemplateManifestInput {
-                template_id: template_id.clone(),
-                role: role.clone(),
-                version: version.clone(),
-                payload_hash: payload_hash.clone(),
-                payload_size_bytes: bytes.len() as u64,
-                store_binding: WasmStoreBinding::new("bootstrap"),
-                chunking_mode: TemplateChunkingMode::Chunked,
-                manifest_state: TemplateManifestState::Approved,
-                approved_at: Some(0),
-                created_at: 0,
-            },
-        });
-        append_chunk_actions(&mut actions, template_id, version.clone(), &bytes)?;
+        let artifact_manifest = TemplateManifestInput {
+            template_id: template_id.clone(),
+            role: role.clone(),
+            version: version.clone(),
+            payload_hash: payload_hash.clone(),
+            payload_size_bytes: bytes.len() as u64,
+            store_binding: WasmStoreBinding::new("bootstrap"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(0),
+            created_at: 0,
+        };
+        append_chunk_actions(
+            &mut actions,
+            template_id,
+            version.clone(),
+            &bytes,
+            Some(artifact_manifest),
+        )?;
         catalog.push(RootStoreCatalogEntry {
             role,
             raw_module_hash: decode_sha256(&artifact.wasm_sha256_hex)?,
@@ -2355,6 +2329,7 @@ fn append_chunk_actions(
     template_id: TemplateId,
     version: TemplateVersion,
     bytes: &[u8],
+    manifest: Option<TemplateManifestInput>,
 ) -> Result<(), CurrentProtocolError> {
     let chunks = bytes
         .chunks(canic_core::CANIC_WASM_CHUNK_BYTES)
@@ -2364,28 +2339,37 @@ fn append_chunk_actions(
         .iter()
         .map(|chunk| canic_core::cdk::utils::hash::wasm_hash(chunk))
         .collect::<Vec<_>>();
-    actions.push(CurrentFleetProtocolAction::PrepareStoreChunkSet {
-        request: TemplateChunkSetPrepareInput {
+    let mut preparation = Some(TemplateChunkSetPrepareInput {
+        manifest,
+        template_id: template_id.clone(),
+        version: version.clone(),
+        payload_hash: canic_core::cdk::utils::hash::wasm_hash(bytes),
+        payload_size_bytes: bytes.len() as u64,
+        chunk_hashes,
+    });
+    if chunks.is_empty() {
+        return Err(CurrentProtocolError::Configuration(
+            "Store publication payload is empty".into(),
+        ));
+    }
+    for (index, bytes) in chunks.into_iter().enumerate() {
+        let request = TemplateChunkInput {
+            preparation: preparation.take(),
             template_id: template_id.clone(),
             version: version.clone(),
-            payload_hash: canic_core::cdk::utils::hash::wasm_hash(bytes),
-            payload_size_bytes: bytes.len() as u64,
-            chunk_hashes,
-        },
-    });
-    for (index, bytes) in chunks.into_iter().enumerate() {
-        actions.push(CurrentFleetProtocolAction::PublishStoreChunk {
-            request: TemplateChunkInput {
-                template_id: template_id.clone(),
-                version: version.clone(),
-                chunk_index: u32::try_from(index).map_err(|_| {
-                    CurrentProtocolError::Configuration(
-                        "Store artifact has too many chunks".to_string(),
-                    )
-                })?,
-                bytes,
-            },
-        });
+            chunk_index: u32::try_from(index).map_err(|_| {
+                CurrentProtocolError::Configuration("Store artifact has too many chunks".into())
+            })?,
+            bytes,
+        };
+        let encoded = candid::encode_one(&request)
+            .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
+        if encoded.len() > canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES {
+            return Err(CurrentProtocolError::Configuration(
+                "Store publication exceeds the bounded chunk request envelope".into(),
+            ));
+        }
+        actions.push(CurrentFleetProtocolAction::PublishStoreChunk { request });
     }
     Ok(())
 }

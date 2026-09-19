@@ -81,6 +81,8 @@ pub const VERSION: &str = env!("CARGO_PKG_VERSION");
 // Canonical hardcoded 1 MiB chunk size for Canic wasm staging/install flows.
 // The management canister wasm chunk store rejects larger payloads.
 pub const CANIC_WASM_CHUNK_BYTES: usize = 1_048_576;
+/// Existing byte-lane envelope, including bounded publication metadata.
+pub const CANIC_WASM_CHUNK_REQUEST_MAX_BYTES: usize = CANIC_WASM_CHUNK_BYTES + 64 * 1024;
 
 crate::ic_memory_range!(
     authority = CANIC_CORE_MEMORY_AUTHORITY,

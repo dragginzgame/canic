@@ -672,9 +672,6 @@ pub enum CurrentFleetProtocolAction {
         expected: canic_core::dto::fixture_provisioning::FixtureSourceStatus,
         source_bytes: u64,
     },
-    PrepareStoreChunkSet {
-        request: canic_control_plane::dto::template::TemplateChunkSetPrepareInput,
-    },
     PrepareComponentRegistry {
         expected: canic_core::dto::component_registry::RootComponentRegistryStatusResponse,
         request: canic_core::dto::component_registry::RootComponentRegistryPreparationRequest,
@@ -685,9 +682,6 @@ pub enum CurrentFleetProtocolAction {
     },
     PublishStoreChunk {
         request: canic_control_plane::dto::template::TemplateChunkInput,
-    },
-    StageStoreManifest {
-        request: canic_control_plane::dto::template::TemplateManifestInput,
     },
     SynchronizeRegistry {
         expected: canic_core::dto::fleet_registry::FleetSubnetRootRegistrySyncResponse,
@@ -729,10 +723,9 @@ impl CurrentFleetProtocolAction {
             | Self::PrepareStoreFixture { .. }
             | Self::PrepareComponentRegistry { .. }
             | Self::SynchronizeRegistry { .. } => DesiredCanisterKind::Root,
-            Self::PrepareStoreChunkSet { .. }
-            | Self::PublishStoreChunk { .. }
-            | Self::PublishStoreFixtureChunk { .. }
-            | Self::StageStoreManifest { .. } => DesiredCanisterKind::Store,
+            Self::PublishStoreChunk { .. } | Self::PublishStoreFixtureChunk { .. } => {
+                DesiredCanisterKind::Store
+            }
         }
     }
 
@@ -747,10 +740,8 @@ impl CurrentFleetProtocolAction {
             | Self::JoinRoot { .. }
             | Self::PrepareComponentRegistry { .. }
             | Self::PrepareStoreFixture { .. }
-            | Self::PrepareStoreChunkSet { .. }
             | Self::PublishStoreChunk { .. }
-            | Self::PublishStoreFixtureChunk { .. }
-            | Self::StageStoreManifest { .. } => None,
+            | Self::PublishStoreFixtureChunk { .. } => None,
             Self::ActivateRegistryMirror { request, .. }
             | Self::SynchronizeRegistry { request, .. } => Some(request.operation_id),
             Self::AdoptStore { request } => Some(request.operation_id),

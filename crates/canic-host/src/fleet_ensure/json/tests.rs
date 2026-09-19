@@ -67,6 +67,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
             protocol_actions: vec![EnsureAction::FleetProtocol {
                 action: Box::new(CurrentFleetProtocolAction::PublishStoreChunk {
                     request: TemplateChunkInput {
+                        preparation: None,
                         template_id: TemplateId::owned("component:app".to_string()),
                         version: TemplateVersion::owned("14".repeat(32)),
                         chunk_index: 3,

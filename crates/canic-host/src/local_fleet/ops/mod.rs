@@ -19,6 +19,7 @@ use crate::{
     },
 };
 use candid::Principal;
+use canic_core::cdk::utils::hash::hex_bytes;
 use ic_testkit::pocket_ic::{PocketIc, common::rest::Topology};
 use sha2::{Digest, Sha256};
 #[cfg(unix)]
@@ -373,7 +374,7 @@ pub fn binary_sha256(path: &Path) -> Result<String, LocalFleetError> {
         }
         hash.update(&buffer[..count]);
     }
-    Ok(format!("{:x}", hash.finalize()))
+    Ok(hex_bytes(hash.finalize()))
 }
 
 /// A reset receives a fresh environment namespace, so old Ensure journals cannot be resumed there.

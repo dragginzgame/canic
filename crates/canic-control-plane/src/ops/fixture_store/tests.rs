@@ -267,6 +267,7 @@ fn fixture_capacity_includes_metadata_payload_grants_and_template_bytes() {
     let error =
         crate::ops::storage::template::TemplateChunkedOps::prepare_chunk_set_in_store_from_input(
             crate::dto::template::TemplateChunkSetPrepareInput {
+                manifest: None,
                 template_id: crate::ids::TemplateId::new("embedded:fixture-capacity"),
                 version: crate::ids::TemplateVersion::new("0.110.14"),
                 payload_hash: Sha256::digest([1]).to_vec(),

@@ -172,3 +172,45 @@ fn fixture_content_round_trips_without_inline_payloads_and_rejects_substitution(
     }
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn fused_chunk_content_rejects_changed_preparation_authority() {
+    let (root, paths) = paths("fused-chunk");
+    let bytes = vec![7; 32];
+    let digest = wasm_hash(&bytes);
+    retain_object(&paths, &digest, &bytes).unwrap();
+    let mut projection = serde_json::json!({"protocol_actions": [{
+        "kind": "fleet_protocol", "action": {
+            "kind": "publish_store_chunk", "request": {
+                "template_id": "app", "version": "current", "chunk_index": 0,
+                "bytes": bytes, "preparation": {
+                    "manifest": null, "template_id": "app", "version": "current",
+                    "payload_hash": digest, "payload_size_bytes": 32,
+                    "chunk_hashes": [digest]
+                }
+            }
+        }
+    }]});
+    let original = projection.clone();
+    remove_inline_bytes(&mut projection).unwrap();
+    let mut hydrated = projection.clone();
+    hydrate(&paths, &mut hydrated).unwrap();
+    assert_eq!(hydrated, original);
+    for case in 0..4 {
+        let mut wrong = projection.clone();
+        let request = &mut wrong["protocol_actions"][0]["action"]["request"];
+        match case {
+            0 => request["preparation"]["template_id"] = Value::String("other".into()),
+            1 => request["chunk_index"] = Value::from(1),
+            2 => request["preparation"]["chunk_hashes"] = serde_json::json!([vec![8; 32]]),
+            _ => {
+                request.as_object_mut().unwrap().remove("preparation");
+            }
+        }
+        std::assert_matches!(
+            hydrate(&paths, &mut wrong),
+            Err(EnsureStateError::StoreChunkAuthority { .. })
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
+}

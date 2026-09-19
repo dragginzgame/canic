@@ -355,20 +355,19 @@ esac
             stored_chunk_count: 3,
             complete: true,
         };
-        let mut actions =
-            vec![CurrentFleetProtocolAction::StageStoreManifest { request: manifest }];
-        actions.push(CurrentFleetProtocolAction::PrepareStoreChunkSet {
-            request: TemplateChunkSetPrepareInput {
-                template_id: status.template_id.clone(),
-                version: status.version.clone(),
-                payload_hash: status.payload_hash.clone().unwrap(),
-                payload_size_bytes: 3,
-                chunk_hashes: status.expected_chunk_hashes.clone(),
-            },
+        let mut actions = Vec::new();
+        let mut preparation = Some(TemplateChunkSetPrepareInput {
+            manifest: Some(manifest),
+            template_id: status.template_id.clone(),
+            version: status.version.clone(),
+            payload_hash: status.payload_hash.clone().unwrap(),
+            payload_size_bytes: 3,
+            chunk_hashes: status.expected_chunk_hashes.clone(),
         });
         for (chunk_index, byte) in (0..3).zip([1, 2, 3]) {
             actions.push(CurrentFleetProtocolAction::PublishStoreChunk {
                 request: TemplateChunkInput {
+                    preparation: preparation.take(),
                     template_id: status.template_id.clone(),
                     version: status.version.clone(),
                     chunk_index,
@@ -464,6 +463,35 @@ fn store_staging_reads_once_per_plan_and_refreshes_changed_chunks() {
 
 #[cfg(unix)]
 #[test]
+fn combined_store_preparation_requires_exact_manifest_and_chunk_evidence() {
+    let mut fixture = StoreStagingFixture::new();
+    assert!(fixture.pending().unwrap().is_empty());
+    let manifest = fixture.status.manifest.take().unwrap();
+    fixture.respond();
+    let pending = fixture.pending().unwrap();
+    assert_eq!(pending.len(), 1);
+    assert!(
+        matches!(&pending[0], EnsureAction::FleetProtocol { action, .. }
+        if matches!(action.as_ref(), CurrentFleetProtocolAction::PublishStoreChunk { request } if request.preparation.is_some()))
+    );
+    fixture.status.manifest = Some(manifest.clone());
+    fixture.status.manifest.as_mut().unwrap().role = CanisterRole::new("different");
+    fixture.respond();
+    assert_eq!(fixture.pending().unwrap().len(), 1);
+    fixture.status.manifest = Some(manifest);
+    fixture.status.expected_chunk_hashes[0] = vec![0; 32];
+    fixture.respond();
+    assert_eq!(fixture.pending().unwrap().len(), 1);
+    fixture.status.template_id = TemplateId::new("other");
+    fixture.respond();
+    assert!(matches!(
+        fixture.pending(),
+        Err(CurrentProtocolError::ResponseMismatch)
+    ));
+}
+
+#[cfg(unix)]
+#[test]
 fn store_staging_failures_are_not_reused_and_candid_is_revalidated() {
     let fixture = StoreStagingFixture::new();
     let desired = desired(Vec::new());
@@ -505,7 +533,7 @@ fn store_staging_failures_are_not_reused_and_candid_is_revalidated() {
 #[cfg(unix)]
 #[test]
 fn store_staging_observations_bind_each_query_identity() {
-    let fixture = StoreStagingFixture::new();
+    let mut fixture = StoreStagingFixture::new();
     let mut observations = StoreStagingObservations::default();
     let template = &fixture.status.template_id;
     let version = &fixture.status.version;
@@ -559,6 +587,12 @@ fn store_staging_observations_bind_each_query_identity() {
             TemplateVersion::new("other"),
         ),
     ] {
+        fixture.status.template_id = template.clone();
+        fixture.status.version = version.clone();
+        let manifest = fixture.status.manifest.as_mut().unwrap();
+        manifest.template_id = template.clone();
+        manifest.version = version.clone();
+        fixture.respond();
         let resolved = ResolvedProtocolAction {
             action: &fixture.actions[0],
             target,
@@ -1636,7 +1670,7 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
     assert_eq!(compiled, repeated);
     assert!(matches!(
         compiled.actions.first(),
-        Some(CurrentFleetProtocolAction::PrepareStoreChunkSet { .. })
+        Some(CurrentFleetProtocolAction::PublishStoreChunk { request }) if request.preparation.is_some()
     ));
     assert!(
         compiled
@@ -1645,6 +1679,29 @@ fn fresh_fleet_store_bootstrap_is_deterministic() {
             .any(|action| matches!(action, CurrentFleetProtocolAction::BootstrapStore { .. }))
     );
     assert_eq!(compiled.expected_bootstrap.catalog.len(), 1);
+    let prepared_manifests = compiled
+        .actions
+        .iter()
+        .filter_map(|action| match action {
+            CurrentFleetProtocolAction::PublishStoreChunk { request } => request
+                .preparation
+                .as_ref()
+                .and_then(|preparation| preparation.manifest.as_ref()),
+            _ => None,
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        prepared_manifests.len(),
+        compiled.expected_bootstrap.catalog.len()
+    );
+    assert_eq!(
+        prepared_manifests[0].role,
+        compiled.expected_bootstrap.catalog[0].role
+    );
+    assert_eq!(
+        prepared_manifests[0].payload_hash,
+        compiled.expected_bootstrap.catalog[0].payload_hash
+    );
     assert_ne!(compiled.bootstrap_request.operation_id, [0; 32]);
 
     fs::remove_dir_all(root).expect("remove test root");
@@ -2025,4 +2082,42 @@ fn fixture_publication_binding_reserves_reviewed_attempts_and_rejects_overflow()
         Err(CurrentProtocolError::ResponseMismatch)
     ));
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn store_chunk_compilation_fuses_only_the_first_chunk_within_the_byte_envelope() {
+    let bytes = vec![9; canic_core::CANIC_WASM_CHUNK_BYTES + 1];
+    let mut actions = Vec::new();
+    append_chunk_actions(
+        &mut actions,
+        TemplateId::new("app"),
+        TemplateVersion::new("current"),
+        &bytes,
+        None,
+    )
+    .unwrap();
+    assert_eq!(actions.len(), 2);
+    for (index, action) in actions.iter().enumerate() {
+        let CurrentFleetProtocolAction::PublishStoreChunk { request } = action else {
+            panic!("chunk publication")
+        };
+        assert_eq!(request.chunk_index as usize, index);
+        assert_eq!(request.preparation.is_some(), index == 0);
+        assert!(
+            candid::encode_one(request).unwrap().len()
+                <= canic_core::CANIC_WASM_CHUNK_REQUEST_MAX_BYTES
+        );
+    }
+    let mut rejected = Vec::new();
+    assert!(matches!(
+        append_chunk_actions(
+            &mut rejected,
+            TemplateId::owned("a".repeat(100_000)),
+            TemplateVersion::new("current"),
+            &bytes,
+            None
+        ),
+        Err(CurrentProtocolError::Configuration(_))
+    ));
+    assert!(rejected.is_empty());
 }

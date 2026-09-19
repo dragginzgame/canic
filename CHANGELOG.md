@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.28` combines Store publication metadata with the first chunk upload,
+  reducing update calls while preserving exact recovery; updates test-only IcyDB
+  to 0.259.6 and host HMAC/SHA-2 dependencies.
 - `0.110.27` speeds up dependency-gate regression tests with local deterministic
   fixtures while retaining the live release security audit, and isolates the
   lock-release regression from parallel process creation.

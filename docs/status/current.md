@@ -20,6 +20,78 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Requested IcyDB and host HMAC updates — 2026-09-19
+
+The maintainer extends .28 with dependency updates after Store qualification.
+Registry metadata confirms published IcyDB 0.259.6 and HMAC 0.13.0. Workspace
+and standalone audit pins/locks now align all six IcyDB crates at 0.259.6;
+ic-memory remains 0.14.3. The standalone lock also records the existing .27
+Canic path-package versions, without changing any package version.
+
+Canic's direct HMAC use is host-only environment-comparison diagnostics: retain
+keyed tags to identify changed environment names without retaining values or
+unkeyed hashes. It is not build authority or token authentication. HMAC 0.13.0
+requires digest 0.11, so only the host's SHA-2 dependency advances to 0.11.0 and
+the call imports `KeyInit`. Digest formatting uses the existing lowercase
+`hex_bytes` helper, preserving the hash encoding after upstream removed
+`LowerHex`. The runtime's SHA-2 0.10 and transitive HMAC 0.12.1
+through ECDSA/RFC6979 and HKDF remain owned by those dependencies. An independent
+HMAC-SHA256 known-output regression checks the domain and field framing.
+
+Forty focused host/cache tests pass, including the independent HMAC output,
+privacy, exact reuse, content tampering, Candid extraction and test-only IcyDB
+ownership. Five native memory-admission tests and the timer dependency-graph
+guard pass. Scoped warning-denied host/schema/lifecycle-fixture Clippy and the
+standalone metrics participant Clippy pass. Logs:
+`.tmp/canic-icydb-hmac-tests-final.log` and `.tmp/canic-icydb-hmac-clippy.log`.
+The real-extractor opt-in case remains ignored. No new PocketIC lifecycle proof
+or Wasm size comparison is claimed for the IcyDB update.
+
+An independently started workspace/editor Clippy briefly owned the target and
+was allowed to finish before these checks. The Store measurements below predate
+this dependency update and retain their original source/lock identity. The full
+selected .28 batch, including Store publication and these dependencies, is ready
+for the maintainer's governed release flow; both changelog surfaces are ready.
+Canic package versions remain .27. No broad gate, version bump, commit, push or
+live deployment ran. IcyDB remains test/audit-only; independent downstream pins
+are not a production release blocker. Chunk concurrency and pool batching remain
+the next accepted batches.
+
+## CANIC-160 Store publication consolidation — 2026-09-19
+
+After .27 publication, the maintainer accepts Store consolidation, then bounded
+independent chunk uploads and pool reconciliation. The latest read-only Toko
+handoff still contains those candidates; its .26 receipt counts 52 planned
+effects and is not a completed deployment timing baseline.
+
+The complete .28 Store-publication batch is implemented and qualified. A first
+chunk carries chunk-set metadata and an optional role manifest through the
+existing 1 MiB plus 64 KiB byte envelope. Matching authority, conflict, hash and
+combined capacity checks precede all writes. Exact retries preserve timestamps
+and later chunks. Host plans remove separate manifest/preparation actions, keep
+content-addressed chunk bytes and reconcile all parts of the combined effect.
+Store status for another template/version is rejected. Runtime publication
+retains its separate post-upload manifest promotion.
+
+Nine Store and fifteen host regressions plus canonical Candid equality pass;
+scoped all-feature control-plane/host/internal Clippy passes. The exact
+prepared-Root/Store PocketIC case proves real lost-response recovery and replay.
+A temporary paired version of the existing Store-bootstrap journey also passes
+on fresh disposable Fleets, with identical 1,170,482 publication bytes: separate
+metadata calls use 11 host updates in 559 ms; combined publication uses eight
+updates in 563 ms. This proves fewer calls, **not an elapsed-time improvement**.
+Build/install time is excluded; direct PocketIC calls do not qualify Toko's CLI
+or network latency. Temporary instrumentation is removed from the normal suite.
+
+Both changelog surfaces describe .28; Canic packages remain .27. This Store
+release batch is ready for the maintainer's governed release flow. No full gate,
+version bump, Git publication, live deployment or sibling edit ran. Independent
+chunk uploads and pool batching are the next accepted batches, not completed
+work. They must preserve issued-work drainage, individual recovery and cycle
+accounting. The Toko-shape projection is 52 to 41 effects if all six preparations
+fit the bounded first upload; it is not a measured Toko plan or timing result.
+[Evidence and limitations](../audits/working/0.110-validation-throughput/report.md).
+
 ## .27 lock-regression correction — 2026-09-19
 
 The maintainer's release attempt stopped at the ordinary-test barrier:

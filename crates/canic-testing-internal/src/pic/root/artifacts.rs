@@ -160,6 +160,7 @@ pub(super) fn stage_managed_release_set(
         stage_manifest(pic, store, installation_controller, manifest);
 
         let prepare = TemplateChunkSetPrepareInput {
+            manifest: None,
             template_id: template_id.clone(),
             version: version.clone(),
             payload_hash: payload_hash.clone(),
@@ -174,6 +175,7 @@ pub(super) fn stage_managed_release_set(
                 store,
                 installation_controller,
                 TemplateChunkInput {
+                    preparation: None,
                     template_id: template_id.clone(),
                     version: version.clone(),
                     chunk_index: u32::try_from(chunk_index)

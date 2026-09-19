@@ -5008,20 +5008,20 @@ mod tests {
         plan.conservation.estate_funding_domains[0].shortfall_cycles = 0;
         let action = EnsureAction::FleetProtocol {
             action: Box::new(
-                crate::fleet_ensure::model::CurrentFleetProtocolAction::PrepareStoreChunkSet {
-                    request: canic_control_plane::dto::template::TemplateChunkSetPrepareInput {
+                crate::fleet_ensure::model::CurrentFleetProtocolAction::PublishStoreChunk {
+                    request: canic_control_plane::dto::template::TemplateChunkInput {
+                        preparation: None,
                         template_id: canic_control_plane::ids::TemplateId::from("root"),
                         version: canic_control_plane::ids::TemplateVersion::from("current"),
-                        payload_hash: vec![1; 32],
-                        payload_size_bytes: 1,
-                        chunk_hashes: vec![vec![2; 32]],
+                        chunk_index: 0,
+                        bytes: vec![2],
                     },
                 },
             ),
             candid: "store.did".to_string(),
             candid_sha256: "11".repeat(32),
             maximum_execution_burn_cycles: 0,
-            name: "prepare-store-chunks".to_string(),
+            name: "publish-store-chunk".to_string(),
             principal: "rrkah-fqaaa-aaaaa-aaaaq-cai".to_string(),
         };
         let action_hash = action_sha256(&action);
@@ -5133,13 +5133,13 @@ mod tests {
     fn estate_funding_is_rechecked_until_the_first_protocol_effect_starts() {
         let protocol_action = || EnsureAction::FleetProtocol {
             action: Box::new(
-                crate::fleet_ensure::model::CurrentFleetProtocolAction::PrepareStoreChunkSet {
-                    request: canic_control_plane::dto::template::TemplateChunkSetPrepareInput {
+                crate::fleet_ensure::model::CurrentFleetProtocolAction::PublishStoreChunk {
+                    request: canic_control_plane::dto::template::TemplateChunkInput {
+                        preparation: None,
                         template_id: canic_control_plane::ids::TemplateId::from("root"),
                         version: canic_control_plane::ids::TemplateVersion::from("current"),
-                        payload_hash: vec![1; 32],
-                        payload_size_bytes: 1,
-                        chunk_hashes: vec![vec![2; 32]],
+                        chunk_index: 0,
+                        bytes: vec![2],
                     },
                 },
             ),

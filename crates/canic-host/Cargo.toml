@@ -45,7 +45,8 @@ serde = { workspace = true, features = ["derive"] }
 serde-saphyr = { workspace = true }
 serde_bytes = { workspace = true }
 serde_json = { workspace = true }
-sha2 = { workspace = true }
+# HMAC 0.13 uses digest 0.11; runtime cryptography retains the workspace SHA-2.
+sha2 = "0.11.0"
 syn = { workspace = true, features = ["full", "visit"] }
 thiserror = { workspace = true }
 tokio = { workspace = true, features = ["time"] }

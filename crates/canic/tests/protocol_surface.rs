@@ -1841,3 +1841,21 @@ fn state_cascade_store_response_matches_canonical_candid() {
     candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
         .expect("Store response contract equals current Rust, including cascade outcomes");
 }
+
+#[cfg(feature = "wasm-store-canister")]
+#[test]
+fn store_preparation_command_matches_canonical_candid() {
+    let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));
+    let (mut env, _) = CandidSource::Text(&did)
+        .load()
+        .expect("canonical Store Candid");
+    let mut rust = TypeContainer::new();
+    let command = rust.add::<canic_control_plane::dto::template::StoreCommand>();
+    let chunk = rust.add::<canic_control_plane::dto::template::TemplateChunkInput>();
+    for (name, ty) in [("StoreCommand", command), ("TemplateChunkInput", chunk)] {
+        let canonical = env.find_type(name).unwrap().clone();
+        let ty = env.merge_type(rust.env.clone(), ty);
+        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+            .expect("Store publication matches its canonical Candid contract");
+    }
+}

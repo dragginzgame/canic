@@ -113,3 +113,21 @@ fn missing_corrupt_shared_and_linked_keys_disable_comparison_without_replacement
     assert!(EnvironmentComparison::capture(&root, &values).is_none());
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn keyed_environment_tag_matches_independent_sha256_reference() {
+    // Python standard-library HMAC-SHA256 over the domain and length-prefixed fields.
+    let expected: [u8; 32] = [
+        47, 77, 213, 184, 240, 88, 48, 90, 187, 112, 113, 56, 64, 24, 7, 244, 9, 245, 144, 241,
+        182, 0, 204, 124, 17, 170, 78, 205, 26, 240, 20, 132,
+    ];
+    assert_eq!(
+        tag(
+            &[0x0b; 32],
+            b"environment-value",
+            &[b"CANIC_TEST_BUILD_INPUT", b"synthetic-setting"]
+        ),
+        expected
+    );
+    assert_ne!(tag(&[0x0b; 32], b"environment-key-id", &[]), expected);
+}

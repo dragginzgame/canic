@@ -62,7 +62,6 @@ const fn protocol_kind(action: &CurrentFleetProtocolAction) -> &'static str {
         CurrentFleetProtocolAction::MaintainPoolReadiness { .. } => "maintain_pool_readiness",
         CurrentFleetProtocolAction::ObservePoolReadiness { .. } => "observe_pool_readiness",
         CurrentFleetProtocolAction::PrepareComponentRegistry { .. } => "prepare_component_registry",
-        CurrentFleetProtocolAction::PrepareStoreChunkSet { .. } => "prepare_store_chunk_set",
         CurrentFleetProtocolAction::ProvisionComponents { .. } => "provision_components",
         CurrentFleetProtocolAction::PrepareStoreFixture { .. } => "prepare_store_fixture",
         CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. } => {
@@ -70,7 +69,6 @@ const fn protocol_kind(action: &CurrentFleetProtocolAction) -> &'static str {
         }
         CurrentFleetProtocolAction::PublishStoreChunk { .. } => "publish_store_chunk",
         CurrentFleetProtocolAction::ReconcilePoolAsset { .. } => "reconcile_pool_asset",
-        CurrentFleetProtocolAction::StageStoreManifest { .. } => "stage_store_manifest",
         CurrentFleetProtocolAction::SynchronizeRegistry { .. } => "synchronize_registry",
     }
 }

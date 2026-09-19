@@ -5,7 +5,7 @@
 //! Boundary: retain keyed comparison tags only; keep their random key private and local.
 
 use crate::durable_io::{create_private_bytes_with_parents, read_private_bytes};
-use hmac::{Hmac, Mac};
+use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2::Sha256;
 use std::{collections::BTreeMap, ffi::OsString, path::Path};

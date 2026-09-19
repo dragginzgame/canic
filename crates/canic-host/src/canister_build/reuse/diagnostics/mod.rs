@@ -16,6 +16,7 @@ use crate::{
     },
     durable_io::{read_regular_bytes, write_bytes},
 };
+use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::{
@@ -104,8 +105,8 @@ impl InputDiagnostics {
             environment,
             environment_keys,
             value_comparison,
-            source: format!("{:x}", source.finalize()),
-            configuration: format!("{:x}", configuration.finalize()),
+            source: hex_bytes(source.finalize()),
+            configuration: hex_bytes(configuration.finalize()),
         }
     }
 
@@ -192,5 +193,5 @@ fn environment_evidence(mut environment: Vec<(OsString, OsString)>) -> (String, 
             keys.insert(key.to_string());
         }
     }
-    (format!("{:x}", digest.finalize()), keys)
+    (hex_bytes(digest.finalize()), keys)
 }

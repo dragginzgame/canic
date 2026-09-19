@@ -1,5 +1,29 @@
 # Canic 0.110 Implementation Status
 
+## CANIC-160 publication and import throughput — 2026-09-19
+
+The maintainer accepts the new Toko effect-count feedback after publishing .27.
+Keep this operator-latency work on .110 despite the soft release-count guideline;
+no minor closeout or package bump is implied.
+
+| Sequence | Owner | Scope and required evidence | Status |
+| --- | --- | --- | --- |
+| Store publication consolidation | Control plane and host | Atomic metadata/first-chunk admission through the bounded byte lane, exact retained content, lost-reply recovery and matched Store journey | .28 complete and ready for release; fewer calls proven, elapsed improvement unproven |
+| Requested dependency updates | Host and test/audit fixtures | IcyDB 0.259.6 ownership/admission and HMAC 0.13.0 with host SHA-2 0.11.0; stable tag/hash encoding | Complete; 46 focused tests and scoped fixture/host Clippy pass |
+| Independent chunk uploads | Host execution/journal | Bounded issuance after preparation, exact per-chunk authority, drain issued work on failure and reconcile every outstanding result | Accepted next; not implemented |
+| Pool reconciliation batches | Root workflow and host | Per-asset controller/module/balance checks, ordered failures, partial-result recovery and cycle accounting; measure calls and complete time | Accepted after chunk work; not implemented |
+
+Store publication now combines manifest, metadata and chunk zero in one update,
+within the existing byte envelope. Native rejection/replay/content-reference
+checks, scoped Clippy, canonical Candid and real Root/Store lost-response proof
+pass. The paired disposable Store-bootstrap journey reduces host updates from
+11 to eight at identical bytes; 559 versus 563 ms establishes no elapsed gain.
+Its temporary instrumentation is removed, so normal validation does not add a
+second Fleet setup. No whole-deployment improvement is claimed. .28 changelog
+surfaces include the completed dependency update and are ready; Canic packages
+remain .27. No broad gate or publication ran.
+[Evidence](../../audits/working/0.110-validation-throughput/report.md).
+
 ## Post-.26 validation throughput — 2026-09-19
 
 The maintainer confirms .26 publication and continues Toko-first speed work.
