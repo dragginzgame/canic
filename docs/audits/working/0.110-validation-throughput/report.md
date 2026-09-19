@@ -1,5 +1,171 @@
 # Release-test throughput qualification
 
+## Published .26 release timing and next observation slice — 2026-09-19
+
+The maintainer confirms .26 publication. The published checkout is
+`80265fa0fff0ffabd290e634452f0608a5c64fae`; its generated validation receipt
+names source `90bcc731112c525869c0cb6deda341522a14ac9c`. A corrected read-only
+scan includes Toko's new top-of-ledger adoption section and CANIC-168's in-place
+update: library and CLI now pin .26, with 282 native tests, Wasm checks, medic,
+state audit and timer checks passing. Concurrent gameplay-source edits correctly
+prevented recording reusable managed-build evidence; Candid parity and managed
+journeys did not run. The sandboxed implicit-sccache failure correctly reports
+the explicit `RUSTC_WRAPPER=` choice. No Canic change is justified by these
+expected protections. The downstream qualification rerun requires stable source;
+live reinstall, warm-cache performance and retained recovery remain unverified
+by this adoption. Earlier tail-only scanning missed this new adoption evidence.
+
+### Published .26 feedback acceptance
+
+The installed `/home/adam/.cargo/bin/canic` reports `canic 0.110.26`; binary
+SHA-256 is `5dfa15dcb26fde7225f8f2a2b256b6d07889710e86e2ce0a0d5843450b326aef`.
+The subject is a disposable archive of exact tag `v0.110.26`, commit
+`80265fa0fff0ffabd290e634452f0608a5c64fae`, under Canic's `.tmp/`.
+Cargo.lock SHA-256 is
+`b39047666d2982a3cb5e5f6f1dafea238b7469582ec54da2bc31dfbc26c3c4b1`.
+The standalone App uses `canisters/audit/root_probe/activation.toml`, Fast profile,
+local environment, explicit empty `RUSTC_WRAPPER` and `CARGO_INCREMENTAL=0`.
+Rust/Cargo 1.98.1, ICP 1.5.0 and ic-wasm 0.11.1 are unchanged. No deployment or
+managed journey ran. Its release-build identity is
+`e1e59a512c2314a349b98f0ef58c09a29eb9dffa1b0e3db7dbc4e82583c99919`.
+
+| Installed CLI invocation | Seconds | Verified complete artifact hits |
+| --- | ---: | ---: |
+| Initial build in disposable source | 253.789 | 0 |
+| Unchanged repeat | 4.639 | 4 |
+| Only session/thread identifiers changed | 4.637 | 4 |
+
+Both repeats skip runtime Cargo/link and preserve all 18 retained release-file
+hashes, including the four Wasms and release manifest. The initial duration is
+fixture-specific; this is not a matched comparison with an older release or a
+measurement of Toko's eight-role application.
+
+Two real installed CLI processes then contend on that fixture's complete-build
+lock. The waiting process reports actual owner PID 45771, exact workspace and
+lock paths, Fast profile and recorded start time; contender PID is 45774. Both
+finish successfully with four verified complete cache hits and all 18 release
+files unchanged. The existing interrupted-owner regression separately kills a
+lock-holding child and proves safe acquisition without deleting the lock inode;
+the malformed-metadata regression proves advisory data is not lock authority.
+
+Nine additional focused host regressions pass for implicit cache startup failure,
+disappeared cache binaries, successful discovery, explicit empty/custom wrappers,
+underlying Cargo failure, changed-source diagnostics, tampered output rejection
+and environment normalization. Together with the two lock tests this is eleven
+passing focused regressions. Native regressions use the active .26 checkout;
+the installed CLI acceptance uses the immutable tag archive. No production Rust,
+dependency, runtime policy or downstream source changed for this qualification.
+
+Retained local evidence is under `.tmp/canic-feedback-26-cli-1qyvdhfq/`:
+`identity.json` records exact arguments and source/binary identities;
+`initial.log`, `warm.log`, `session.log`, their `*-result.json` and
+`*-outputs.json` retain timings and hashes. `lock-owner.log`,
+`lock-contender.log` and `lock-result.json` retain contention evidence.
+Focused logs are `.tmp/canic-feedback-26-regressions.log` and
+`.tmp/canic-feedback-26-lock-tests.log`. These are local working evidence,
+not immutable release-validation receipts.
+
+This completes CANIC-176's Canic-side released-CLI acceptance and confirms the
+CANIC-168 explicit override and source-integrity protections. It does not close
+Toko's stable-source managed qualification, exact-workload warm timing,
+CANIC-160 live reinstall latency or CANIC-166/172 staging funding/convergence.
+Those require downstream execution; sibling repositories remain read-only.
+No additional production fix or downstream workaround is justified by the new
+adoption notes. The open .27 speed batch remains unchanged and incomplete.
+
+The successful release timing records were read before external cleanup removed
+`target/` during this follow-up. The following transcription preserves their
+measurements; the original local logs are no longer available.
+
+| Recorded validation stage | Seconds |
+| --- | ---: |
+| Formatting, invariants, dependency, secret and shell checks | 172 |
+| Workspace check | 54 |
+| Clippy | 62 |
+| Control-plane feature gate | 99 |
+| Test target | 4,803 |
+| Sum of sequential outer stages | 5,190 (86m 30s) |
+
+Nested invariant timings are already included and must not be added again.
+This is recorded validation time, not a complete publication/Git-push duration.
+The outer records were under `target/validation-runs/20260919T095307Z-24610.hJvUt9`,
+`20260919T095559Z-45413.4vpoxT`, `20260919T095755Z-57735.hseSqS` and
+`20260919T095934Z-3529.OMsS9j`. The latter test log reported:
+
+| Test phase | .25 seconds | .26 seconds |
+| --- | ---: | ---: |
+| Ordinary tests | 85 | 282 |
+| Internal ordered PocketIC suite | 2,421 | 4,100 |
+| Host governed proofs | 15 | 28 |
+| Runtime integrations | 133 | 317 |
+| Blob storage | 15 | 65 |
+| Payload limits | 4 | 7 |
+| Runner wall time, including overhead | 2,674 | 4,801 |
+
+Compiler-cache deltas report 449 requests/67 hits/6 misses for .25 versus
+924/56/144 for .26. These counters do not attribute all elapsed time. The
+four-Shard case takes 336.201 seconds, including 295.861 seconds in artifact
+build/seal. Mixed topology takes 675.030 seconds and generated reinstall
+476.657. Recorded release-artifact resolution totals 622.32 seconds, including
+505.83 in build/seal; these nested spans must not be added to suite time.
+Cache warmth, source/version identities and machine load differ. The slower
+release does not establish a regression in the previously measured setup slice,
+nor do its local improvements establish whole-release speedup.
+
+### Discarded native inspection-preflight experiment
+
+The candidate used the existing authenticated native query transport for
+inspection-reserve preflight after checking the exact bound Candid selector.
+Live reserve validation and protected management inspection remained required.
+The first unchanged-source control was interrupted by cleanup. After the
+maintainer confirmed cleanup was complete, both the new control and candidate
+passed the exact funded-estate lost-transfer/autonomous-creation-response case,
+including conservation and effect-free replay. All 17 sealed artifacts, including
+four raw Wasms, are byte-identical. Lockfile, tools, test and release identity match.
+
+| Matched execution boundary | Control seconds | Candidate seconds |
+| --- | ---: | ---: |
+| Generation, initial review and recovery after artifact preparation | 45.400 | 46.139 |
+| Terminal inventory, summed observations | 3.677 | 3.684 |
+
+Both terminal samples retain 18 logical remote attempts. The native candidate
+adds two identity lookups. There is no demonstrated improvement; the experiment
+is removed and production source is unchanged. Total cases take 240.710 versus
+75.269 seconds, but artifact resolution takes 183.387 versus 27.922 seconds:
+the warmer second build is not a query speedup. Source base is the .26 commit
+above; Cargo.lock SHA-256 is
+`b39047666d2982a3cb5e5f6f1dafea238b7469582ec54da2bc31dfbc26c3c4b1`.
+The tools are Rust/Cargo 1.98.1, ICP 1.5.0, PocketIC 16 and ic-wasm 0.11.1;
+fixture Wasms use the Fast profile. Retained logs:
+`.tmp/canic-inspection-native-control.log`,
+`.tmp/canic-inspection-native-candidate.log`; artifact hashes:
+`.tmp/canic-inspection-control-artifacts.json`.
+
+### Deterministic dependency-gate regression fixture
+
+The next retained change replaces the test's fresh full advisory-database download
+and repeated Canic metadata resolution with a three-package local Cargo graph and
+one synthetic advisory. It copies and exercises the actual gate script, real Cargo
+metadata, real cargo-audit parser and tracked-only Git clone. The local database
+with an untracked duplicate must fail before its isolated tracked copy succeeds.
+Classification still proves rejection of vulnerabilities, unmaintained direct
+dependencies and yanked packages; transitive informational additions, removals
+and version drift remain non-blocking. Fixtures no longer assume that today's
+upstream database contains a particular first warning. Temporary work stays under
+Canic's `.tmp/` and is removed after the test.
+
+The focused test passes in 1.869 seconds, versus the old release record's 134
+seconds. This removes the observed slow fixture preparation, not the production
+security audit: `check-dependency-risk-inventory.sh`, its invocation against
+Canic's actual locked graph and its live advisory checks are unchanged. The
+comparison uses different data/setup by design and is not a new full-release
+measurement. ShellCheck, Bash syntax and the release-integrity contract guard
+pass; the latter's deliberately failing cleanup fixtures are expected. Logs:
+`.tmp/canic-risk-fixture.log`, `.tmp/canic-risk-fixture-timing.json`,
+`.tmp/canic-risk-release-contract.log`. No full suite, version bump, publication
+or sibling edit ran. Keep this qualified preflight improvement in the open .27
+speed batch; the larger repeated artifact-build cost remains the next target.
+
 ## Fresh recovery-fixture installation — 2026-09-19
 
 The next accepted speed slice reduces repeated setup while keeping each case's
