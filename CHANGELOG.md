@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.26` reduces repeated Fleet preparation and test setup, explains
+  nested observation costs and remaining import/funding work, and retries transient
+  provisioning-status reads.
 - `0.110.25` restores retained funding recovery with immutable retirement evidence
   and shortens Fleet planning and PocketIC preparation; adds observed child
   shortfall diagnostics bound to Component authority.

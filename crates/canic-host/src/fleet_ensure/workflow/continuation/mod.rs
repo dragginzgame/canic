@@ -179,26 +179,9 @@ pub(super) fn replay<P: EnsurePlatform>(
     state: &FleetEnsureStateRecord,
     platform: &mut P,
 ) -> Result<ActualCycleConservation, EnsureWorkflowError<P::Error>> {
-    let observation = platform
-        .observe(&plan.operation_id, state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    let protocol = platform
-        .protocol_actions(&plan.operation_id, state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    let current = compile_plan(
-        desired,
-        &resolve_desired_artifacts(root, desired)?,
-        &protocol,
-        &plan.desired_sha256,
-        &plan.fleet,
-        &observation,
-        plan.planned_at_time,
-        &plan.operation_id,
-        None,
-    )?;
-    if !ordered_actions(&current).is_empty() {
-        return Err(review(FleetEnsureSuccessorReviewReason::AdditionalEffect));
-    }
+    // Inventory already proves the terminal protocol and physical closure. Observe
+    // the merged estate once, after its paid inspections, and use that same fresh
+    // evidence for convergence and conservation. No effect occurs between them.
     let inventory = platform
         .terminal_inventory(completed_inventory_operation(plan, journal, state)?, state)
         .map_err(EnsureWorkflowError::Platform)?;
@@ -209,6 +192,23 @@ pub(super) fn replay<P: EnsurePlatform>(
         .observe(&plan.operation_id, &verified_state)
         .map_err(EnsureWorkflowError::Platform)?;
     attach_terminal_cycles(&mut final_observation, cycles)?;
+    let protocol = platform
+        .protocol_actions(&plan.operation_id, &verified_state)
+        .map_err(EnsureWorkflowError::Platform)?;
+    let current = compile_plan(
+        desired,
+        &resolve_desired_artifacts(root, desired)?,
+        &protocol,
+        &plan.desired_sha256,
+        &plan.fleet,
+        &final_observation,
+        plan.planned_at_time,
+        &plan.operation_id,
+        None,
+    )?;
+    if !ordered_actions(&current).is_empty() {
+        return Err(review(FleetEnsureSuccessorReviewReason::AdditionalEffect));
+    }
     super::reinstall::verify_terminal_estate(plan, &final_observation)?;
     super::reinstall::verify_terminal_authority(plan, &verified_state, platform)?;
     verify_terminal_conservation(plan, journal, &verified_state, &final_observation)

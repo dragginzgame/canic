@@ -210,13 +210,8 @@ pub(super) fn terminal_inventory(
         FleetRegistryOps::version(&registry.authority, config.component_topology(), &registry)
             .map_err(|error| inventory_error(error.to_string()))?;
     let operation_id = operation_bytes(operation_id)?;
-    let component_operation = query_operation(
-        icp,
-        &coordinator_candid,
-        coordinator_principal,
-        operation_id,
-    )?
-    .ok_or_else(|| terminal_field_missing("coordinator.operation"))?;
+    let component_operation = query_operation(icp, coordinator_principal, operation_id)?
+        .ok_or_else(|| terminal_field_missing("coordinator.operation"))?;
     validate_terminal_coordinator_component_status(
         operation_id,
         &registry_version,

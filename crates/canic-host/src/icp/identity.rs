@@ -36,6 +36,8 @@ impl IcpCli {
 
     /// Return the Principal text for the identity that will execute ICP commands.
     pub fn identity_principal_text(&self) -> Result<String, IcpCommandError> {
+        self.identity_lookups
+            .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let mut command = self.identity_principal_command();
         run_output(&mut command, self)
     }

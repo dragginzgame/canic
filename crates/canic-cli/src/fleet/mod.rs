@@ -653,10 +653,15 @@ fn render_observation_timing(
         serde_json::json!({"event": "fleet_ensure_observation", "schema_version": 1, "observation": timing}).to_string()
     } else {
         format!(
-            "Fleet observation {:?}: {} ms, {} remote call attempts{}",
+            "Fleet observation {:?}: {} ms, {} remote call attempts, {} identity lookups, {} cached reads{}{}",
             timing.stage,
             timing.elapsed_millis,
             timing.remote_call_attempts,
+            timing.identity_lookup_attempts,
+            timing.cached_read_hits,
+            timing
+                .parent_stage
+                .map_or_else(String::new, |parent| format!(", within {parent:?}")),
             if timing.succeeded { "" } else { ", failed" }
         )
     }
@@ -783,6 +788,7 @@ fn render_text_report(report: &FleetEnsureReport) -> String {
         ),
         "estate_funding_domains:".to_string(),
     ];
+    append_continuation_forecast(&mut lines, report);
     append_recovery_review(&mut lines, report);
     append_reinstall_guidance(&mut lines, report);
     append_estate_funding_domains(&mut lines, conservation);
@@ -857,6 +863,45 @@ fn append_funding_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
             ),
             format!("funding_apply: --apply {}", review.review_sha256),
         ]);
+    }
+}
+
+fn append_continuation_forecast(lines: &mut Vec<String>, report: &FleetEnsureReport) {
+    let forecast = canic_host::fleet_ensure::policy::continuation_forecast::forecast(report);
+    if forecast.imports.is_empty()
+        && forecast.dependent_funding.is_empty()
+        && forecast.requires_live_discovery.is_empty()
+    {
+        return;
+    }
+    let authority = match forecast.authority {
+        canic_host::fleet_ensure::view::continuation::ContinuationAuthority::Complete => "complete",
+        canic_host::fleet_ensure::view::continuation::ContinuationAuthority::SeparateReview => "separate review required",
+        canic_host::fleet_ensure::view::continuation::ContinuationAuthority::WithinReviewedProtocolBounds => "within reviewed protocol bounds",
+    };
+    let bound = forecast.maximum_successor_actions.map_or_else(
+        || "no successor authority".to_owned(),
+        |maximum| format!("at most {maximum} successor actions, not an estimate"),
+    );
+    lines.push(format!(
+        "continuation_forecast: {authority}; {} actions in this base review; {bound}",
+        forecast.reviewed_actions
+    ));
+    for import in &forecast.imports {
+        lines.push(format!(
+            "forecast_import: Root {}; {}; principal {}; {:?}",
+            import.root,
+            import.canister,
+            import.principal.as_deref().unwrap_or("not allocated"),
+            import.state
+        ));
+    }
+    for funding in &forecast.dependent_funding {
+        lines.push(format!("forecast_dependent_funding: Root {}; {}; {} cycles plus {} fee; separate review required",
+            funding.root, funding.principal, format_cycles(funding.amount_cycles), format_cycles(funding.ledger_fee_cycles)));
+    }
+    if !forecast.requires_live_discovery.is_empty() {
+        lines.push(format!("continuation_live_discovery: {:?}; known imports are not proof of readiness; additional funding or creation debit requires a new review", forecast.requires_live_discovery));
     }
 }
 

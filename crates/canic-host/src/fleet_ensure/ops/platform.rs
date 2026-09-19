@@ -49,7 +49,7 @@ use canic_core::{
 };
 use serde::Deserialize;
 use std::{
-    cell::RefCell,
+    cell::{Cell, RefCell},
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},
     thread,
@@ -862,6 +862,13 @@ enum StatusCacheEntry {
     Hit(Option<LiveCanister>),
 }
 
+/// Cumulative diagnostic counters sampled at observation boundaries.
+struct ObservationCounters {
+    remote_calls: u64,
+    identity_lookups: u64,
+    cached_reads: u64,
+}
+
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
     desired: DesiredFleet,
@@ -869,6 +876,8 @@ pub struct IcpEnsurePlatform {
     initial_observation_delay: Duration,
     maximum_observation_delay: Duration,
     observation_snapshot: RefCell<Option<FleetObservationSnapshot>>,
+    cached_reads: Cell<u64>,
+    observation_stages: Vec<FleetObservationStage>,
     progress_handler: Option<Box<dyn FnMut(FleetEnsureProgress)>>,
     observation_handler: Option<Box<dyn FnMut(FleetObservationTiming)>>,
     estate_observations: BTreeMap<String, EstateFundingDomainObservation>,
@@ -903,6 +912,8 @@ impl IcpEnsurePlatform {
             initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
             observation_snapshot: RefCell::new(None),
+            cached_reads: Cell::new(0),
+            observation_stages: Vec::new(),
             progress_handler: None,
             observation_handler: None,
             estate_observations: BTreeMap::new(),
@@ -934,13 +945,22 @@ impl IcpEnsurePlatform {
         &mut self,
         stage: FleetObservationStage,
         started: std::time::Instant,
-        calls_before: u64,
+        before: ObservationCounters,
         succeeded: bool,
     ) {
         let timing = FleetObservationTiming {
             stage,
+            parent_stage: self.observation_stages.last().copied(),
             elapsed_millis: started.elapsed().as_millis(),
-            remote_call_attempts: self.icp.remote_call_count().saturating_sub(calls_before),
+            remote_call_attempts: self
+                .icp
+                .remote_call_count()
+                .saturating_sub(before.remote_calls),
+            identity_lookup_attempts: self
+                .icp
+                .identity_lookup_count()
+                .saturating_sub(before.identity_lookups),
+            cached_read_hits: self.cached_reads.get().saturating_sub(before.cached_reads),
             succeeded,
         };
         if let Some(handler) = &mut self.observation_handler {
@@ -953,9 +973,23 @@ impl IcpEnsurePlatform {
         stage: FleetObservationStage,
         observe: impl FnOnce(&mut Self) -> Result<T, IcpEnsurePlatformError>,
     ) -> Result<T, IcpEnsurePlatformError> {
+        self.measure_observation(stage, observe)
+    }
+
+    fn measure_observation<T, E>(
+        &mut self,
+        stage: FleetObservationStage,
+        observe: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
         let started = std::time::Instant::now();
-        let calls = self.icp.remote_call_count();
+        let calls = ObservationCounters {
+            remote_calls: self.icp.remote_call_count(),
+            identity_lookups: self.icp.identity_lookup_count(),
+            cached_reads: self.cached_reads.get(),
+        };
+        self.observation_stages.push(stage);
         let result = observe(self);
+        self.observation_stages.pop();
         self.finish_observation_timing(stage, started, calls, result.is_ok());
         result
     }
@@ -984,17 +1018,38 @@ impl IcpEnsurePlatform {
         self
     }
 
-    // The scope ends on every Result path before workflow can issue an effect.
-    // Action observations and subsequent retries therefore always read live state.
+    // Nested stages share one explicit read-only scope. The owner expires it on
+    // every Result path; retries and effects invalidate it independently.
     fn with_observation_snapshot<T>(
         &mut self,
         observe: impl FnOnce(&mut Self) -> Result<T, IcpEnsurePlatformError>,
     ) -> Result<T, IcpEnsurePlatformError> {
+        self.with_readonly_snapshot(observe)
+    }
+
+    fn with_readonly_snapshot<T, E>(
+        &mut self,
+        observe: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        if self.observation_snapshot.borrow().is_some() {
+            return observe(self);
+        }
         self.observation_snapshot
             .replace(Some(FleetObservationSnapshot::default()));
         let result = observe(self);
         self.observation_snapshot.take();
         result
+    }
+
+    fn invalidate_observation_snapshot(&self) {
+        if let Some(snapshot) = self.observation_snapshot.borrow_mut().as_mut() {
+            *snapshot = FleetObservationSnapshot::default();
+        }
+    }
+
+    fn record_cached_read(&self) {
+        self.cached_reads
+            .set(self.cached_reads.get().saturating_add(1));
     }
 
     fn require_operator(&self) -> Result<(), IcpEnsurePlatformError> {
@@ -1244,6 +1299,7 @@ impl IcpEnsurePlatform {
             .as_ref()
             .and_then(|snapshot| snapshot.pool_pages.get(&key).cloned())
         {
+            self.record_cached_read();
             return Ok(page);
         }
         let response: RootPoolStatusResponse = query_with_candid(
@@ -1580,6 +1636,7 @@ impl IcpEnsurePlatform {
             .as_ref()
             .and_then(|snapshot| snapshot.statuses.get(principal).cloned())
         {
+            self.record_cached_read();
             return Ok(cached);
         }
         let observed = self.read_status_optional(principal)?;
@@ -2115,11 +2172,21 @@ impl IcpEnsurePlatform {
             })
             .collect::<Vec<_>>();
         for batch in indices.chunks(super::bounded_observations::MAX_IN_FLIGHT) {
+            // One shared authority check precedes this batch's independent reads.
+            // The next batch, observation and effect all establish authority again.
+            self.require_pool_balance_authority(&assets[batch[0]].principal, root)?;
             let prepared = batch
                 .iter()
                 .map(|index| {
                     let target = &assets[*index].principal;
-                    self.prepare_pool_balance_inspection(target, root, target, InspectedModule::Any)
+                    Ok::<_, IcpEnsurePlatformError>(PreparedPoolInspection {
+                        authority: PoolInspectionAuthority::parse(root, target)?,
+                        name: target,
+                        root,
+                        requirement: PoolInspectionRequirement::RootControlled(
+                            InspectedModule::Any,
+                        ),
+                    })
                 })
                 .collect::<Vec<_>>();
             let authorities = prepared
@@ -2152,19 +2219,27 @@ impl IcpEnsurePlatform {
         principal: &str,
         module: InspectedModule,
     ) -> Result<PreparedPoolInspection<'a>, IcpEnsurePlatformError> {
-        if self.required_root_status(name, root)? != CanisterRuntimeStatus::Running {
-            return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
-                canister: name.to_string(),
-                field: "running Root",
-            });
-        }
-        self.require_operator()?;
+        self.require_pool_balance_authority(name, root)?;
         Ok(PreparedPoolInspection {
             authority: PoolInspectionAuthority::parse(root, principal)?,
             name,
             root,
             requirement: PoolInspectionRequirement::RootControlled(module),
         })
+    }
+
+    fn require_pool_balance_authority(
+        &self,
+        name: &str,
+        root: &str,
+    ) -> Result<(), IcpEnsurePlatformError> {
+        if self.required_root_status(name, root)? != CanisterRuntimeStatus::Running {
+            return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+                canister: name.to_string(),
+                field: "running Root",
+            });
+        }
+        self.require_operator()
     }
 
     fn complete_pool_inspection(
@@ -2207,6 +2282,7 @@ impl IcpEnsurePlatform {
             .as_ref()
             .and_then(|snapshot| snapshot.pool_inspections.get(&authority).cloned())
         {
+            self.record_cached_read();
             return Ok(response);
         }
         Self::fetch_pool_inspection(&self.icp, &self.root_protocol_candid()?, authority)
@@ -2980,6 +3056,7 @@ impl IcpEnsurePlatform {
         principal: &str,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
         let status = if let StatusCacheEntry::Hit(cached) = self.cached_status(principal) {
+            self.record_cached_read();
             Ok(cached)
         } else {
             results
@@ -3172,6 +3249,15 @@ impl IcpEnsurePlatform {
 impl EnsurePlatform for IcpEnsurePlatform {
     type Error = IcpEnsurePlatformError;
 
+    fn with_planning_observations<T, E>(
+        &mut self,
+        observe: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.measure_observation(FleetObservationStage::Planning, |platform| {
+            platform.with_readonly_snapshot(observe)
+        })
+    }
+
     fn report_progress(&mut self, progress: FleetEnsureProgress) {
         if let Some(handler) = self.progress_handler.as_mut() {
             handler(progress);
@@ -3204,6 +3290,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
     }
 
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+        self.invalidate_observation_snapshot();
         self.desired = desired.clone();
         Ok(())
     }
@@ -3213,6 +3300,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         _action: &EnsureAction,
         consecutive_unchanged_observations: u32,
     ) {
+        self.invalidate_observation_snapshot();
         thread::sleep(protocol_observation_delay(
             consecutive_unchanged_observations,
             self.initial_observation_delay,
@@ -3225,6 +3313,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         _target: &str,
         consecutive_retained_observations: u32,
     ) {
+        self.invalidate_observation_snapshot();
         thread::sleep(protocol_observation_delay(
             consecutive_retained_observations,
             self.initial_observation_delay,
@@ -3800,8 +3889,10 @@ impl EnsurePlatform for IcpEnsurePlatform {
         operation_id: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<FleetObservation, Self::Error> {
-        self.with_observation_snapshot(|platform| {
-            platform.observe_fleet_snapshot(operation_id, state)
+        self.timed_observation(FleetObservationStage::FleetSnapshot, |platform| {
+            platform.with_observation_snapshot(|platform| {
+                platform.observe_fleet_snapshot(operation_id, state)
+            })
         })
     }
 
@@ -4276,6 +4367,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         _record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
+        self.observation_snapshot.take();
         self.require_operator()?;
         match action {
             EnsureAction::SealAuthority { .. } => {
@@ -6405,6 +6497,187 @@ printf 'finish\n' >> events
             1_000
         );
         assert_eq!(platform.icp.remote_call_count(), 3);
+        std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn planning_observations_share_root_reads_and_expire_before_retry() {
+        use std::sync::{Arc, Mutex};
+        let mut fixture = PoolInspectionFixture::fresh(1);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&events);
+        fixture.owners.platform = fixture
+            .owners
+            .platform
+            .with_observation_handler(move |event| sink.lock().unwrap().push(event))
+            .with_observation_delay_bounds(Duration::ZERO, Duration::ZERO);
+        let platform = &mut fixture.owners.platform;
+        let state = &fixture.owners.state;
+        let root = fixture.root_id.to_text();
+        platform
+            .with_planning_observations(|platform| {
+                assert!(
+                    platform
+                        .observe_root_management(state, &BTreeSet::new())?
+                        .is_none()
+                );
+                platform.timed_observation(
+                    FleetObservationStage::ConfiguredCanisters,
+                    |platform| {
+                        platform.with_observation_snapshot(|platform| {
+                            platform.observe_configured_canisters(state)
+                        })
+                    },
+                )?;
+                assert_eq!(platform.icp.remote_call_count(), 4);
+                platform.pace_root_owned_observation("root", 1);
+                platform.status_optional(&root)?;
+                assert_eq!(platform.icp.remote_call_count(), 5);
+                Ok::<_, IcpEnsurePlatformError>(())
+            })
+            .unwrap();
+        assert!(platform.observation_snapshot.borrow().is_none());
+        let events = events.lock().unwrap();
+        let total = events.last().unwrap();
+        assert_eq!(total.stage, FleetObservationStage::Planning);
+        assert_eq!(total.parent_stage, None);
+        assert_eq!(total.remote_call_attempts, 5);
+        assert!(total.cached_read_hits > 0);
+        for event in &events[..events.len() - 1] {
+            assert_eq!(event.parent_stage, Some(FleetObservationStage::Planning));
+        }
+        drop(events);
+        platform
+            .with_planning_observations(|platform| {
+                platform.status_optional(&root)?;
+                let desired = platform.desired.clone();
+                platform.bind_reviewed_desired(&desired)?;
+                platform.status_optional(&root)?;
+                Err::<(), _>(IcpEnsurePlatformError::Arithmetic("failed planning"))
+            })
+            .unwrap_err();
+        assert!(platform.observation_snapshot.borrow().is_none());
+        assert_eq!(platform.icp.remote_call_count(), 7);
+        platform.status_optional(&root).unwrap();
+        assert_eq!(platform.icp.remote_call_count(), 8);
+        std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_balance_timings_distinguish_cached_reads_and_bound_identity_lookups() {
+        use std::sync::{Arc, Mutex};
+        let count = super::super::bounded_observations::MAX_IN_FLIGHT * 2 + 1;
+        let mut fixture = PoolInspectionFixture::fresh(u32::try_from(count).unwrap());
+        let mut observation = fixture.retained_observation();
+        let assets = &mut observation
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .pool
+            .as_mut()
+            .unwrap()
+            .assets;
+        for asset in assets.iter_mut() {
+            asset.lifecycle = EstatePoolAssetLifecycle::Failed;
+        }
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&timings);
+        fixture.owners.platform = fixture
+            .owners
+            .platform
+            .with_observation_handler(move |timing| sink.lock().unwrap().push(timing));
+        let platform = &mut fixture.owners.platform;
+        let root = fixture.root_id.to_text();
+        platform
+            .with_observation_snapshot(|platform| {
+                for _ in 0..2 {
+                    platform
+                        .timed_observation(FleetObservationStage::PoolBalances, |platform| {
+                            platform.refresh_pool_balances(&root, assets)
+                        })?;
+                }
+                Ok(())
+            })
+            .unwrap();
+        let recorded = timings.lock().unwrap();
+        assert_eq!(recorded.len(), 2);
+        let batches =
+            u64::try_from(count.div_ceil(super::super::bounded_observations::MAX_IN_FLIGHT))
+                .unwrap();
+        assert_eq!(
+            recorded[0].remote_call_attempts,
+            1 + 2 * u64::try_from(count).unwrap()
+        );
+        assert_eq!(recorded[0].identity_lookup_attempts, batches);
+        assert_eq!(recorded[1].remote_call_attempts, 0);
+        assert_eq!(recorded[1].identity_lookup_attempts, batches);
+        assert_eq!(
+            recorded[1].cached_read_hits,
+            u64::try_from(count).unwrap() + batches
+        );
+        drop(recorded);
+        std::fs::write(
+            fixture.owners.root.join("operator"),
+            Principal::from_slice(&[99]).to_text(),
+        )
+        .unwrap();
+        let failed = platform.with_observation_snapshot(|platform| {
+            platform.timed_observation(FleetObservationStage::PoolBalances, |platform| {
+                platform.refresh_pool_balances(&root, assets)
+            })
+        });
+        assert!(matches!(
+            failed,
+            Err(IcpEnsurePlatformError::OperatorMismatch { .. })
+        ));
+        let recorded = timings.lock().unwrap();
+        assert!(!recorded[2].succeeded);
+        assert_eq!(recorded[2].identity_lookup_attempts, 1);
+        assert_eq!(recorded[2].remote_call_attempts, 1);
+        drop(recorded);
+        std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn pool_balance_batch_rechecks_operator_before_issuing_later_reads() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let mut fixture = PoolInspectionFixture::fresh(u32::try_from(bound + 1).unwrap());
+        fixture.inspection_hook(&format!(
+            "printf '%s' '{}' > '{}/operator'",
+            Principal::from_slice(&[99]),
+            fixture.owners.root.display()
+        ));
+        let mut observation = fixture.retained_observation();
+        let assets = &mut observation
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .pool
+            .as_mut()
+            .unwrap()
+            .assets;
+        for asset in assets.iter_mut() {
+            asset.lifecycle = EstatePoolAssetLifecycle::Failed;
+        }
+        let result = fixture
+            .owners
+            .platform
+            .with_observation_snapshot(|platform| {
+                platform.refresh_pool_balances(&fixture.root_id.to_text(), assets)
+            });
+        assert!(matches!(
+            result,
+            Err(IcpEnsurePlatformError::OperatorMismatch { .. })
+        ));
+        assert!(assets[..bound].iter().all(|asset| asset.cycles == 1_000));
+        assert_eq!(assets[bound].cycles, 500);
+        assert_eq!(
+            fixture.owners.platform.icp.remote_call_count(),
+            1 + 2 * u64::try_from(bound).unwrap()
+        );
         std::fs::remove_dir_all(&fixture.owners.root).unwrap();
     }
 

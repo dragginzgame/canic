@@ -47,7 +47,11 @@ use std::{
 use thiserror::Error as ThisError;
 
 #[cfg(feature = "local-fleet")]
-pub(crate) use canic_init::{CanicInitRequest, compile_arguments, compile_root_authorities};
+pub(crate) use canic_init::compile_root_authorities;
+#[cfg(test)]
+pub(in crate::fleet_ensure) use canic_init::tests::qualify_release_input_reuse;
+#[cfg(feature = "local-fleet")]
+pub use canic_init::{CanicInitError, CanicInitRequest, compile_arguments};
 #[cfg(test)]
 pub(crate) use platform::install_effect_applied;
 pub(crate) use platform::{
@@ -175,6 +179,18 @@ pub enum ReinstallAssetCheck {
 /// Platform boundary used by the workflow and deterministic test adapters.
 pub trait EnsurePlatform {
     type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Reuse observations only within one read-only planning transaction. Adapters
+    /// must expire evidence on exit, retries, changed inputs and before any effect.
+    fn with_planning_observations<T, E>(
+        &mut self,
+        observe: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E>
+    where
+        Self: Sized,
+    {
+        observe(self)
+    }
 
     /// Report informational progress without changing operation authority or effects.
     fn report_progress(&mut self, _progress: crate::fleet_ensure::dto::FleetEnsureProgress) {}

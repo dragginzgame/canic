@@ -29,6 +29,11 @@ pub fn report_json_value(report: &FleetEnsureReport) -> Result<Value, serde_json
     let mut projection = Map::new();
     insert_serialized(
         &mut projection,
+        "continuation_forecast",
+        &crate::fleet_ensure::policy::continuation_forecast::forecast(report),
+    )?;
+    insert_serialized(
+        &mut projection,
         "actual_conservation",
         &report.actual_conservation,
     )?;

@@ -75,17 +75,41 @@ remaining time or indicate full-Fleet readiness before terminal verification.
 
 Observation diagnostics also use stderr. JSON emits
 `event: "fleet_ensure_observation"`, `schema_version: 1`, and an `observation`
-containing `stage`, `elapsed_millis`, `remote_call_attempts` and `succeeded`.
+containing `stage`, `parent_stage`, `elapsed_millis`, `remote_call_attempts`,
+`identity_lookup_attempts`, `cached_read_hits` and `succeeded`.
 Counts represent logical remote-call attempts, including failures, rather than
 transport packets or handshake traffic. Independent infrastructure reads may
 overlap up to four at a time. Pool reads and error precedence retain configured
-order; every issued batch drains before an error returns. The existing snapshot
-expires after the observation, including failed observations, before effects.
+order; every issued batch drains before an error returns. An explicit planning transaction shares its read-only snapshot across Root
+management, estate observation and protocol preparation. Nested consumers reuse
+that snapshot; it expires on success or failure, pacing, changed reviewed inputs
+and before an effect. Standalone observations retain their own shorter lifetime.
 The counter covers remote attempts issued inside the named stage, not the cost
 of evidence it reuses from an earlier stage. A non-zero PoolBalances duration
 with zero attempts can include local preparation, validation and use of an
 already observed response within that same read-only snapshot. It does not mean
 zero work or authorize reusing the balance in a later review or after mutation.
+Identity lookup attempts count local ICP Principal resolutions, including
+failures. Cache hits count responses actually served to consumers, including
+repeated consumers of the same response. Pool-balance preparation validates
+shared Root/operator authority once per batch of at most four assets; every
+asset retains its controller/module checks. A later batch checks the operator
+again. Nested stage durations/counts overlap and must not be summed as disjoint
+whole-operation work. `Planning` and `FleetSnapshot` report inclusive totals;
+`parent_stage` identifies nested work. Sum only non-overlapping top-level events
+when estimating observed-stage totals; this is not a count of every IC message.
+
+Coordinator provisioning-status reads retry only typed transient transport
+failures: HTTP 408/429/502/503/504, connection/body transport failures and timeouts.
+The authenticated agent binds the signer, network, target, method and arguments
+for all attempts. There are at most three logical query attempts, with 250/500 ms
+backoff, a ten-second per-attempt limit and a thirty-second overall network-read
+budget after identity/network resolution. Agent-internal HTTP retries and
+certificate reads share that deadline but are not separate logical attempts.
+Response bodies are bounded to 8 MiB. Authentication, signature, application and
+Candid decoding failures stop immediately; mutation calls are outside this retry
+path. Exhaustion retains the original issued operation for ordinary same-digest
+recovery; it never authorizes a replacement effect.
 
 Terminal inventory also overlaps independent Component partition reads and,
 within each parent's child set, Root allocation-receipt reads up to four at a
@@ -1178,6 +1202,22 @@ including the funding margin and exact configured Ledger fee. Their presence in
 `recovery_review` grants no debit authority. `pending_current_protocol` explicitly
 marks work that can only be resolved after installation and fresh observation.
 A zero-funding infrastructure phase is therefore not a complete deployment quote.
+
+Reports also expose `continuation_forecast` outside the immutable plan. It lists
+known import names and Principals, distinguishes post-initialization candidates
+from already reviewed reconciliation, carries separately reviewed dependent
+funding estimates, and names readiness, capacity and publication/provisioning
+work that still needs live discovery. The successor-action limit is an authority
+ceiling, not an estimate. A terminal Root-reset prerequisite still carries this
+forecast; only full terminal completion clears the remaining-work projection.
+
+When a freshly observed phase is admitted as an exact bounded successor, its
+observation may satisfy the immediately following protocol funding check. The
+handoff is bound to the first action digest, stays in this invocation and is
+consumed once. Any restart or intervening effect requires fresh observation.
+Terminal replay first proves inventory, then uses one fresh merged-estate snapshot
+for both convergence and conservation; controller, authority and effect-free
+replay checks remain.
 
 Typed `SuccessorReviewRequired` errors and `review_required` progress include the
 newly observed target/action list, maximum additional debit including fees and

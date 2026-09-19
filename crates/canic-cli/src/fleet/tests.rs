@@ -707,31 +707,9 @@ fn deliberate_reinstall_cannot_replace_a_reviewed_apply_digest() {
 #[test]
 fn recovery_review_is_visible_in_text_json_and_typed_progress() {
     use canic_host::fleet_ensure::model::{
-        FleetEnsureSuccessorReviewReason, FleetRecoveryReview, FleetReviewAction,
-        FleetSuccessorReview, RecoveryDiscovery, RootStartupFundingForecast,
-        StartupFundingReuseAssumption,
+        FleetEnsureSuccessorReviewReason, FleetReviewAction, FleetSuccessorReview,
     };
-    let mut report = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
-    report.plan.recovery_review = Some(Box::new(FleetRecoveryReview {
-        base_execution_burn_cycles: 40,
-        continuation_reserve_cycles: 60,
-        whole_continuation_ceiling_cycles: 120,
-        maximum_successor_actions: 8,
-        fixture_publication_retry_attempts: 2,
-        per_step_burn_cycles: 12,
-        startup_funding: vec![RootStartupFundingForecast {
-            root: "root".into(),
-            startup_minimum_cycles: 40,
-            maximum_continuation_steps: 4,
-            continuation_allowance_cycles: 48,
-            configured_minimum_cycles: 80,
-            required_native_cycles: 88,
-            reuse_assumption: StartupFundingReuseAssumption::FreshChildrenAndFullPublication,
-            unfunded_role: None,
-        }],
-        known_pool_funding: Vec::new(),
-        discovery: RecoveryDiscovery::PendingCurrentProtocol,
-    }));
+    let report = recovery_quantity_report();
     let value = report_json_value(&report).unwrap();
     assert_eq!(
         value["plan"]["recovery_review"]["continuation_reserve_cycles"],
@@ -794,18 +772,105 @@ fn recovery_review_is_visible_in_text_json_and_typed_progress() {
     assert_eq!(quote_review_argument("a'b"), "'a'\"'\"'b'");
 }
 
+fn recovery_quantity_report() -> FleetEnsureReport {
+    use canic_host::fleet_ensure::model::{
+        FleetRecoveryReview, PoolRecoveryFunding, RecoveryDiscovery, RootStartupFundingForecast,
+        StartupFundingReuseAssumption,
+    };
+    let mut report = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    report.plan.recovery_review = Some(Box::new(FleetRecoveryReview {
+        base_execution_burn_cycles: 40,
+        continuation_reserve_cycles: 60,
+        whole_continuation_ceiling_cycles: 120,
+        maximum_successor_actions: 8,
+        fixture_publication_retry_attempts: 2,
+        per_step_burn_cycles: 12,
+        startup_funding: vec![RootStartupFundingForecast {
+            root: "root".into(),
+            startup_minimum_cycles: 40,
+            maximum_continuation_steps: 4,
+            continuation_allowance_cycles: 48,
+            configured_minimum_cycles: 80,
+            required_native_cycles: 88,
+            reuse_assumption: StartupFundingReuseAssumption::FreshChildrenAndFullPublication,
+            unfunded_role: None,
+        }],
+        known_pool_funding: vec![PoolRecoveryFunding {
+            root: "root".into(),
+            principal: "asset".into(),
+            amount_cycles: u128::from(u64::MAX) + 1,
+            ledger_fee_cycles: 7,
+            funding_deficit_cycles: u128::from(u64::MAX),
+            funding_margin_cycles: 1,
+            expected_post_cycles: u128::from(u64::MAX) + 1,
+        }],
+        discovery: RecoveryDiscovery::PendingCurrentProtocol,
+    }));
+    report
+}
+
+#[test]
+fn continuation_forecast_preserves_funding_precision_without_granting_authority() {
+    let report = recovery_quantity_report();
+    let value = report_json_value(&report).unwrap();
+    let continuation = &value["continuation_forecast"];
+    assert_eq!(continuation["authority"], "separate_review");
+    assert!(continuation["maximum_successor_actions"].is_null());
+    assert_eq!(
+        continuation["dependent_funding"][0]["amount_cycles"],
+        "18446744073709551616"
+    );
+    assert_eq!(
+        continuation["dependent_funding"][0]["ledger_fee_cycles"],
+        "7"
+    );
+    assert!(
+        !continuation["requires_live_discovery"]
+            .as_array()
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(value["plan"], serde_json::to_value(&report.plan).unwrap());
+    assert!(render_text_report(&report).contains("separate review required"));
+    for scope in [
+        FleetEnsurePlanScope::ReinstallPreparation,
+        FleetEnsurePlanScope::RootReinstallPrerequisite,
+        FleetEnsurePlanScope::RootStartPrerequisite,
+    ] {
+        let mut prerequisite = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
+        prerequisite.plan.scope = scope;
+        prerequisite.terminal = true;
+        let value = report_json_value(&prerequisite).unwrap();
+        let forecast = &value["continuation_forecast"];
+        assert_eq!(forecast["authority"], "separate_review");
+        assert!(
+            !forecast["requires_live_discovery"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+    }
+}
+
 #[test]
 fn observation_timing_is_informational_and_preserves_failed_call_counts() {
     let timing = canic_host::fleet_ensure::dto::FleetObservationTiming {
         stage: canic_host::fleet_ensure::dto::FleetObservationStage::ConfiguredCanisters,
+        parent_stage: Some(canic_host::fleet_ensure::dto::FleetObservationStage::FleetSnapshot),
         elapsed_millis: 111,
         remote_call_attempts: 4,
+        identity_lookup_attempts: 2,
+        cached_read_hits: 7,
         succeeded: false,
     };
     let json: serde_json::Value =
         serde_json::from_str(&render_observation_timing(&timing, true)).unwrap();
     assert_eq!(json["event"], "fleet_ensure_observation");
     assert_eq!(json["observation"]["remote_call_attempts"], 4);
+    assert_eq!(json["observation"]["identity_lookup_attempts"], 2);
+    assert_eq!(json["observation"]["cached_read_hits"], 7);
+    assert_eq!(json["observation"]["parent_stage"], "fleet_snapshot");
+    assert!(render_observation_timing(&timing, false).contains("within FleetSnapshot"));
     assert_eq!(json["observation"]["succeeded"], false);
     assert!(json.get("progress").is_none());
 }

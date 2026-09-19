@@ -12,8 +12,10 @@ use serde::Serialize;
 pub enum FleetObservationStage {
     ConfiguredCanisters,
     EstateFunding,
+    FleetSnapshot,
     LedgerFee,
     OperatorBalance,
+    Planning,
     PoolBalances,
     ProtocolActions,
     ProtocolReadiness,
@@ -25,7 +27,14 @@ pub enum FleetObservationStage {
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct FleetObservationTiming {
     pub stage: FleetObservationStage,
+    /// Enclosing inclusive stage, if any; child counts must not be added to its totals.
+    pub parent_stage: Option<FleetObservationStage>,
     pub elapsed_millis: u128,
+    /// Logical host transport attempts, including failures; excludes internal IC hops.
     pub remote_call_attempts: u64,
+    /// Local ICP identity Principal lookups, including failures.
+    pub identity_lookup_attempts: u64,
+    /// Responses served from the current observation cache, including repeated consumers.
+    pub cached_read_hits: u64,
     pub succeeded: bool,
 }

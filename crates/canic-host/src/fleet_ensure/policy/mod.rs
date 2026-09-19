@@ -4,6 +4,7 @@
 //! Does not own: storage, clocks, transport, live observation, or effects.
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
+pub mod continuation_forecast;
 mod creation_fee;
 pub mod operator_mint;
 pub(super) mod recovery;

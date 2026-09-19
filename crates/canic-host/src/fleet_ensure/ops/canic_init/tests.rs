@@ -43,6 +43,154 @@ placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 "#;
 
+/// Exercise shared release evidence using the generated, finalized native estate fixture.
+pub(in crate::fleet_ensure) fn qualify_release_input_reuse(root: &Path, desired: &DesiredFleet) {
+    qualify_compiled_initializers(root, desired);
+    let mut desired = desired.clone();
+    let mut principals = desired
+        .canisters
+        .iter()
+        .filter_map(|canister| {
+            canister
+                .principal
+                .as_ref()
+                .map(|principal| (canister.name.clone(), principal.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let bootstrap = desired.bootstrap.as_mut().unwrap();
+    let template = bootstrap.roots[0].clone();
+    for index in 1..4_u8 {
+        let mut next = template.clone();
+        next.root = format!("extra-root-{index}");
+        next.store = format!("extra-store-{index}");
+        principals.insert(
+            next.root.clone(),
+            Principal::from_slice(&[index, 80]).to_text(),
+        );
+        principals.insert(
+            next.store.clone(),
+            Principal::from_slice(&[index, 81]).to_text(),
+        );
+        bootstrap.roots.push(next);
+    }
+    let complete =
+        load_persisted_current_release_set_manifest(root, bootstrap.release_build_id).unwrap();
+    let fixtures = complete
+        .manifest
+        .verify_fixtures(
+            root,
+            &bootstrap
+                .component_deployment_configuration
+                .component_topology,
+        )
+        .unwrap();
+    let directory = complete.path.parent().unwrap();
+    let together = compile_root_authorities(root, &desired, &principals).unwrap();
+    let separately = desired
+        .bootstrap
+        .as_ref()
+        .unwrap()
+        .roots
+        .iter()
+        .map(|input| {
+            let mut one = desired.clone();
+            one.bootstrap.as_mut().unwrap().roots = vec![input.clone()];
+            compile_root_authorities(root, &one, &principals)
+                .unwrap()
+                .pop()
+                .unwrap()
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(
+        together, separately,
+        "shared inputs preserve every Root authority"
+    );
+
+    for path in [
+        complete.path.clone(),
+        directory.join("infrastructure-artifact-manifest.json"),
+        directory.join("application-artifact-union.json"),
+        fixtures.path,
+    ] {
+        let original = std::fs::read(&path).unwrap();
+        std::fs::write(&path, b"{}").unwrap();
+        assert!(
+            matches!(
+                compile_root_authorities(root, &desired, &principals),
+                Err(CanicInitError::Release(_))
+            ),
+            "a subsequent compilation must reject changed release evidence"
+        );
+        std::fs::write(&path, original).unwrap();
+        assert_eq!(
+            compile_root_authorities(root, &desired, &principals).unwrap(),
+            together
+        );
+    }
+}
+
+fn qualify_compiled_initializers(root: &Path, desired: &DesiredFleet) {
+    let principals = desired
+        .canisters
+        .iter()
+        .filter_map(|canister| {
+            canister
+                .principal
+                .as_ref()
+                .map(|principal| (canister.name.clone(), principal.clone()))
+        })
+        .collect::<BTreeMap<_, _>>();
+    let authorities = compile_root_authorities(root, desired, &principals).unwrap();
+    let bootstrap = desired.bootstrap.as_ref().unwrap();
+    let infrastructure =
+        load_persisted_canic_infrastructure_artifact_manifest(root, bootstrap.release_build_id)
+            .unwrap();
+    for (init, role) in [
+        (
+            DesiredCanisterInit::Coordinator,
+            CanicInfrastructureRole::FleetCoordinator,
+        ),
+        (
+            DesiredCanisterInit::Root {
+                root: bootstrap.roots[0].root.clone(),
+            },
+            CanicInfrastructureRole::FleetSubnetRoot,
+        ),
+        (
+            DesiredCanisterInit::Store {
+                root: bootstrap.roots[0].root.clone(),
+            },
+            CanicInfrastructureRole::WasmStore,
+        ),
+    ] {
+        let artifact = infrastructure_entry(&infrastructure.manifest, role).unwrap();
+        let bytes = compile_arguments(&CanicInitRequest {
+            desired,
+            init: &init,
+            operation_id: "authority-input-reuse",
+            principals: &principals,
+            root,
+            wasm: &artifact.wasm_relative_path,
+            wasm_sha256: &artifact.wasm_sha256_hex,
+        })
+        .unwrap();
+        match init {
+            DesiredCanisterInit::Coordinator => {
+                let args: FleetCoordinatorInitArgs = candid::decode_one(&bytes).unwrap();
+                assert_eq!(args.authority, authorities[0].1.binding.authority);
+            }
+            DesiredCanisterInit::Root { .. } => {
+                let args: FleetSubnetRootInitArgs = candid::decode_one(&bytes).unwrap();
+                assert_eq!(args.authority, authorities[0].1);
+            }
+            DesiredCanisterInit::Store { .. } => {
+                let args: FleetSubnetWasmStoreInitArgs = candid::decode_one(&bytes).unwrap();
+                assert_eq!(args.authority, authorities[0].1.wasm_store_authority);
+            }
+        }
+    }
+}
+
 #[test]
 fn generated_coordinator_root_and_store_init_bytes_decode_to_exact_authority() {
     let fixture = fixture();

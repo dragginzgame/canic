@@ -67,12 +67,14 @@ pub(super) fn generate(
     // Only transport is local: generation validates the sealed IC build, the
     // current Root authority and the synthetic Registry-backed placement evidence.
     let wrapper = workspace.join("growth-generator-icp");
+    let network = json!({"api_url": replica.url, "root_key": replica.root_key}).to_string();
     fs::write(
         &wrapper,
         format!(
             r#"#!/bin/bash
 set -euo pipefail
 case " $* " in
+  *" network status "*) printf '%s\n' '{network}'; exit 0 ;;
   *" canister "*|*" cycles "*)
     unset ICP_ENVIRONMENT
     args=()
