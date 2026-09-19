@@ -14,7 +14,7 @@ use crate::durable_io::{
 use crate::entropy::{EntropyError, random_bytes_32};
 use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use ciborium::Value;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},

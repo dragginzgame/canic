@@ -15,7 +15,7 @@ use crate::{
 };
 use canic_core::ids::{BuildNetwork, CanonicalNetworkId};
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     fmt::Write as _,
     io,

@@ -37,7 +37,7 @@ use canic_core::{
     },
     ids::{FleetName, FleetSubnetCanisterPoolConfig},
 };
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
 use thiserror::Error as ThisError;
 

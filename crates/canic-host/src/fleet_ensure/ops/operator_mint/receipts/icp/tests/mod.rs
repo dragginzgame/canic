@@ -26,7 +26,7 @@ use ic_certification::{fork, labeled, leaf};
 use ic_verify_bls_signature::PrivateKey;
 use prost::Message;
 use serde::Deserialize;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 
 struct Fixture {
     key: PrivateKey,

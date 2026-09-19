@@ -38,7 +38,7 @@ use canic_core::{
     },
     shared_support::fleet_admission_policy::bind_initial_fleet_admission_policy,
 };
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     path::{Path, PathBuf},

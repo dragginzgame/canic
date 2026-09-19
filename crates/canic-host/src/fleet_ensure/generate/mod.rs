@@ -58,7 +58,7 @@ use canic_core::{
 };
 use ic_query::subnet_catalog::{CatalogLoadOutcome, SubnetSpecialization};
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     path::{Path, PathBuf},

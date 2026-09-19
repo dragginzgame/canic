@@ -1,5 +1,5 @@
 use super::*;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::fs;
 
 fn entry(root: &std::path::Path, candid: &[u8]) -> RegistryEntry {

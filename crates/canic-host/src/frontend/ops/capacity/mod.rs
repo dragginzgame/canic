@@ -11,7 +11,7 @@ use crate::{
     icp::IcpCli,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     collections::BTreeMap,
     fs,

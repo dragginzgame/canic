@@ -15,7 +15,7 @@ use super::{
 use crate::durable_io::{read_regular_bytes, write_bytes};
 use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
-use sha2::{Digest, Sha256};
+use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
