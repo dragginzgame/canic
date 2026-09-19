@@ -22,6 +22,13 @@ open-draft statements describe that earlier development state.
 
 ## Requested IcyDB and host HMAC updates — 2026-09-19
 
+The maintainer requests the .28 release after a fresh read-only Toko feedback
+check found no additional blocker. Complete release preflight and workspace
+checking pass; all-target Clippy catches the remaining SHA-2 formatter in the
+composed-Wasm audit example. It now uses the shared lowercase hex helper, and
+focused all-target/all-feature host Clippy passes. The release gate must rerun
+against the corrected committed source before versioning or pushing.
+
 The maintainer extends .28 with dependency updates after Store qualification.
 Registry metadata confirms published IcyDB 0.259.6 and HMAC 0.13.0. Workspace
 and standalone audit pins/locks now align all six IcyDB crates at 0.259.6;
