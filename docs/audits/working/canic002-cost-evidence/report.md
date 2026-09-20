@@ -203,3 +203,20 @@ maintainer-selected release flow. Canic versions remain .32; the accepted
 IcyDB test-only mismatch is unchanged. Complete transfer attribution and actual
 downstream balance verification remain open. No broad gate, version bump,
 Git publication, deployment or sibling edit ran.
+
+## .33 release-validation timer guard repair
+
+The maintainer's ordinary-test barrier failed on the timer dependency inventory:
+its lockfile and workspace assertions still hard-coded ic-timers 0.7.1. The
+guard now inspects the locked, offline production Wasm dependency graph against
+the exact workspace pin. Test-only IcyDB composition can retain 0.7.1 while
+Canic must resolve exactly ic-timers 0.8.0. Package identity parsing preserves
+distinct versions and sources and collapses repeated Cargo tree entries;
+existing provider and manifest-consumer checks remain.
+
+All 16 timer inventory tests and this target's warning-denied all-feature Clippy
+pass. Logs are `.tmp/canic002-timer-guard-{tests,clippy}.log`. The supplied
+`invalid Candid` diagnostics are deliberate malformed-input fixtures, not the
+failing target. The .33 draft includes this repair. The maintainer's failed
+broad validation remains to be rerun against the corrected source; its serial
+PocketIC suites did not run. No broad gate or release transaction ran here.

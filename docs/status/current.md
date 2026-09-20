@@ -20,6 +20,24 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## CANIC-002 timer dependency guard repair — 2026-09-20
+
+The maintainer's .33 release validation found one failing ordinary target:
+`canic-core --test timer_inventory_guard`. Its dependency guard still required
+only ic-timers 0.7.1 in the lockfile and workspace manifest. The guard now
+resolves the locked, offline production Wasm graph and requires exactly the
+workspace-pinned timer package. It permits IcyDB's explicitly accepted test-only
+0.7.1 dependency while rejecting absent, duplicate or alternate-source
+production timer identities. Existing provider and manifest custody checks remain.
+
+All 16 timer inventory tests and warning-denied Clippy for this target pass;
+logs are `.tmp/canic002-timer-guard-{tests,clippy}.log`. The `invalid Candid`
+diagnostics in the supplied log come from deliberate malformed-input fixtures.
+The complete .33 batch is ready for the maintainer-selected release flow with
+this correction included; both changelog surfaces remain ready. The failed
+broad validation has not been rerun, and its PocketIC barrier was skipped.
+No version bump, Git publication, deployment or sibling edit ran for this repair.
+
 ## CANIC-002 registration-aware measurements complete — 2026-09-20
 
 After .32 publication, the maintainer requests ic-timers 0.8.0 and accepts
