@@ -165,6 +165,9 @@ pub fn validate_declared_role_package(
     validate_declared_role_package_with_cache(config_path, config, role, mode, &mut cache)
 }
 
+/// Validate requested roles in order, sharing workspace metadata for this call only.
+/// Each role retains its isolated dependency-tree and package-contract checks.
+#[must_use]
 pub fn validate_declared_role_packages(
     config_path: &Path,
     config: &canic_core::bootstrap::compiled::ConfigModel,

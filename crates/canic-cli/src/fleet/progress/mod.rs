@@ -1,43 +1,287 @@
 //! Module: fleet::progress
 //!
-//! Responsibility: bound repeated informational wait output with a periodic heartbeat.
+//! Responsibility: present host events as live progress, milestones or JSON.
 //! Does not own: polling, reconciliation, effects, errors or review decisions.
-//! Boundary: only unchanged waiting events are suppressed; elapsed time is not progress.
+//! Boundary: the animation clock only redraws retained informational observations.
 
+pub(super) mod render;
+mod terminal;
 #[cfg(test)]
 mod tests;
 
-use canic_host::fleet_ensure::dto::{FleetEnsureProgress, FleetEnsureProgressState};
-use std::time::{Duration, Instant};
+use crate::fleet::{render_observation_timing, render_progress};
+use canic_host::fleet_ensure::dto::{
+    FleetEnsureProgress, FleetEnsureProgressState, FleetObservationStage, FleetObservationTiming,
+};
+use std::{
+    io::{self, IsTerminal, Write},
+    sync::{Arc, Mutex, mpsc},
+    thread::{self, JoinHandle},
+    time::{Duration, Instant},
+};
 
 const HEARTBEAT: Duration = Duration::from_secs(30);
 
-/// Invocation-local last emitted state and monotonic heartbeat deadline.
+/// Invocation-local milestone identity and last emitted heartbeat.
 #[derive(Default)]
-pub(super) struct ProgressOutput {
-    last_wait: Option<(FleetEnsureProgress, Instant)>,
+struct ProgressOutput {
+    last: Option<(FleetEnsureProgress, Instant)>,
 }
 
 impl ProgressOutput {
-    /// Emit changes immediately; retain the latest elapsed detail for each heartbeat.
-    pub(super) fn should_emit(&mut self, progress: &FleetEnsureProgress, now: Instant) -> bool {
-        let FleetEnsureProgressState::AwaitingProgress { .. } = progress.state else {
-            self.last_wait = None;
+    fn should_emit(&mut self, progress: &FleetEnsureProgress, now: Instant) -> bool {
+        if actionable(progress) {
+            self.last = None;
             return true;
-        };
-        let mut identity = progress.clone();
-        if let FleetEnsureProgressState::AwaitingProgress {
-            elapsed_seconds, ..
-        } = &mut identity.state
-        {
-            *elapsed_seconds = 0;
         }
-        if self.last_wait.as_ref().is_some_and(|(previous, emitted)| {
+        let mut identity = without_elapsed(progress);
+        // Counts and per-effect targets refresh the panel, not the milestone log.
+        if matches!(identity.state, FleetEnsureProgressState::Advancing) {
+            identity.applied_effects = 0;
+            identity.next_action = None;
+        }
+        if self.last.as_ref().is_some_and(|(previous, emitted)| {
             previous == &identity && now.saturating_duration_since(*emitted) < HEARTBEAT
         }) {
             return false;
         }
-        self.last_wait = Some((identity, now));
+        self.last = Some((identity, now));
         true
+    }
+}
+
+fn transition_identity(progress: &FleetEnsureProgress) -> FleetEnsureProgress {
+    let mut identity = without_elapsed(progress);
+    if let FleetEnsureProgressState::AwaitingProgress {
+        provisioning: Some(detail),
+        ..
+    } = &mut identity.state
+    {
+        detail.pending_root_failure = None;
+    }
+    identity
+}
+
+fn without_elapsed(progress: &FleetEnsureProgress) -> FleetEnsureProgress {
+    let mut identity = progress.clone();
+    if let FleetEnsureProgressState::AwaitingProgress {
+        elapsed_seconds, ..
+    } = &mut identity.state
+    {
+        *elapsed_seconds = 0;
+    }
+    identity
+}
+
+const fn actionable(progress: &FleetEnsureProgress) -> bool {
+    !matches!(
+        progress.state,
+        FleetEnsureProgressState::Advancing | FleetEnsureProgressState::AwaitingProgress { .. }
+    )
+}
+
+/// Rendering transport selected from the existing JSON flag and terminal capabilities.
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum Transport {
+    Json,
+    Live,
+    Plain,
+}
+
+/// Retained display state shared by callbacks and the local repaint clock.
+struct Display {
+    transport: Transport,
+    disabled: bool,
+    planning_reported: bool,
+    milestones: ProgressOutput,
+    painter: terminal::Painter,
+    latest: Option<FleetEnsureProgress>,
+    observed: Instant,
+    changed: Instant,
+}
+
+impl Display {
+    fn progress(&mut self, progress: FleetEnsureProgress, now: Instant) -> io::Result<()> {
+        if self.disabled {
+            return Ok(());
+        }
+        if self.transport == Transport::Json {
+            return writeln!(io::stderr().lock(), "{}", render_progress(&progress, true));
+        }
+        if self.latest.as_ref().map(transition_identity).as_ref()
+            != Some(&transition_identity(&progress))
+        {
+            self.changed = now;
+        }
+        self.observed = now;
+        if actionable(&progress) {
+            self.latest = None;
+            self.painter
+                .clear(&mut io::stderr().lock(), terminal::size())?;
+            // The final report owns the single terminal outcome summary.
+            if !matches!(progress.state, FleetEnsureProgressState::Complete) {
+                writeln!(io::stderr().lock(), "{}", render_progress(&progress, false))?;
+            }
+        } else {
+            self.latest = Some(progress);
+            self.repaint(now)?;
+        }
+        Ok(())
+    }
+
+    fn repaint(&mut self, now: Instant) -> io::Result<()> {
+        if self.disabled {
+            return Ok(());
+        }
+        if let Some(progress) = &self.latest {
+            let size = terminal::size();
+            if self.transport != Transport::Live || size.0 < 60 || size.1 < 14 {
+                self.painter.clear(&mut io::stderr().lock(), size)?;
+                if self.milestones.should_emit(progress, now) {
+                    writeln!(
+                        io::stderr().lock(),
+                        "{}",
+                        render::milestone(
+                            progress,
+                            now.saturating_duration_since(self.observed),
+                            now.saturating_duration_since(self.changed)
+                        )
+                    )?;
+                }
+                return Ok(());
+            }
+            let lines = render::panel(
+                progress,
+                now.saturating_duration_since(self.observed),
+                now.saturating_duration_since(self.changed),
+            );
+            self.painter.paint(&mut io::stderr().lock(), &lines, size)?;
+        }
+        Ok(())
+    }
+
+    fn observation(&mut self, timing: FleetObservationTiming) -> io::Result<()> {
+        if self.disabled {
+            return Ok(());
+        }
+        if self.transport == Transport::Json {
+            return writeln!(
+                io::stderr().lock(),
+                "{}",
+                render_observation_timing(&timing, true)
+            );
+        }
+        let summary = timing.stage == FleetObservationStage::Planning
+            && timing.parent_stage.is_none()
+            && !self.planning_reported;
+        if !timing.succeeded || summary {
+            self.painter
+                .clear(&mut io::stderr().lock(), terminal::size())?;
+            if timing.succeeded {
+                self.planning_reported = true;
+                writeln!(
+                    io::stderr().lock(),
+                    "Planning: {}ms, {} remote call attempts (inclusive)",
+                    timing.elapsed_millis,
+                    timing.remote_call_attempts
+                )?;
+            } else {
+                self.latest = None;
+                writeln!(
+                    io::stderr().lock(),
+                    "{}",
+                    render_observation_timing(&timing, false)
+                )?;
+            }
+        }
+        Ok(())
+    }
+}
+
+/// Cloneable callback sink; display failure never changes paid-work decisions.
+#[derive(Clone)]
+pub(super) struct ProgressSink(Arc<Mutex<Display>>);
+
+impl ProgressSink {
+    pub(super) fn progress(&self, progress: FleetEnsureProgress) {
+        self.update(|display| display.progress(progress, Instant::now()));
+    }
+
+    pub(super) fn observation(&self, timing: FleetObservationTiming) {
+        self.update(|display| display.observation(timing));
+    }
+
+    fn update(&self, update: impl FnOnce(&mut Display) -> io::Result<()>) {
+        if let Ok(mut display) = self.0.lock()
+            && update(&mut display).is_err()
+        {
+            display.disabled = true;
+            display.latest = None;
+        }
+    }
+}
+
+/// Joins the repaint worker and clears its frame before final output or errors.
+pub(super) struct ProgressSession {
+    sink: ProgressSink,
+    stop: mpsc::Sender<()>,
+    worker: Option<JoinHandle<()>>,
+}
+
+impl ProgressSession {
+    pub(super) fn new(json: bool) -> Self {
+        let live = terminal::supports_live(
+            io::stderr().is_terminal(),
+            std::env::var("TERM").ok().as_deref(),
+            std::env::var_os("NO_COLOR").is_some(),
+        ) && !json;
+        let now = Instant::now();
+        let sink = ProgressSink(Arc::new(Mutex::new(Display {
+            transport: if json {
+                Transport::Json
+            } else if live {
+                Transport::Live
+            } else {
+                Transport::Plain
+            },
+            disabled: false,
+            planning_reported: false,
+            milestones: ProgressOutput::default(),
+            painter: terminal::Painter::default(),
+            latest: None,
+            observed: now,
+            changed: now,
+        })));
+        let (stop, receiver) = mpsc::channel();
+        let worker_sink = sink.clone();
+        let worker = (!json).then(|| {
+            thread::spawn(move || {
+                while matches!(
+                    receiver.recv_timeout(Duration::from_millis(250)),
+                    Err(mpsc::RecvTimeoutError::Timeout)
+                ) {
+                    worker_sink.update(|display| display.repaint(Instant::now()));
+                }
+            })
+        });
+        Self { sink, stop, worker }
+    }
+
+    pub(super) fn sink(&self) -> ProgressSink {
+        self.sink.clone()
+    }
+}
+
+impl Drop for ProgressSession {
+    fn drop(&mut self) {
+        let _ = self.stop.send(());
+        if let Some(worker) = self.worker.take() {
+            let _ = worker.join();
+        }
+        self.sink.update(|display| {
+            display
+                .painter
+                .clear(&mut io::stderr().lock(), terminal::size())
+        });
     }
 }

@@ -1,5 +1,85 @@
 # Release-test throughput qualification
 
+## Post-.30 artifact preparation qualification — 2026-09-20
+
+Base: `1345f990b` (`v0.110.30`). The maintainer accepts a targeted preparation
+batch after publication. Retained .30 validation log:
+`target/validation-runs/20260920T084111Z-46471.hBKAny/0.log`.
+The complete test command took 4,668 seconds; internal PocketIC took 3,992.
+Mixed topology took 628.872 seconds and retained reinstall 422.778 seconds.
+
+Across the instrumented artifact-resolution spans, 908.37 seconds include:
+
+| Work | Elapsed total |
+| --- | ---: |
+| Build and seal artifacts | 794.78 s |
+| Construct artifact recipes | 75.69 s |
+| Cache lookup, reporting and staging on hit paths | 23.52 s |
+| Commit newly built outputs | 14.30 s |
+
+Parent totals include child work. Generation/review spans also contain recovery
+in cases that exit early, so they are not pure setup measurements. Existing
+whole-release cache hits still construct fresh input recipes, as required to
+detect changed source/configuration. Configuration, network and release identity
+differences explain some cold builds; this batch does not merge those identities
+or restore a prior live Fleet snapshot.
+
+The recipe previously validated each configured application role independently,
+reloading workspace-wide Cargo metadata for each role. It now uses the existing
+host batch validator: fresh metadata/catalog per workspace per call, with each
+role's separate selected dependency tree and contract checks retained. Canonical
+Root inputs, generated infrastructure preparation and content-cache authority
+remain unchanged. The existing batch function is exposed to host consumers;
+no process-global or persisted metadata cache is introduced.
+
+### Matched role-evidence qualification
+
+The real five-role mixed-topology configuration is resolved four times by each
+path, alternating which path runs first. Every complete evidence vector is
+identical, including roles, packages, workspace/manifest paths, versions and
+features. Both paths retain passive, locked/offline admission and fresh inputs.
+
+| Pair | Isolated validation | Batched validation |
+| --- | ---: | ---: |
+| Batch first | 4.666 s | 2.113 s |
+| Isolated first | 4.499 s | 2.087 s |
+| Batch first | 6.010 s | 2.099 s |
+| Isolated first | 4.498 s | 1.932 s |
+
+Median elapsed time falls from 4.5825 to 2.093 seconds, saving about 2.49 seconds
+(54.3%) in this role-validation step. The sample is small and sibling builds
+were active on the machine. This is not a full cache-recipe, whole-test or
+release-gate speedup. Single-role fixtures have no repeated workspace metadata
+to eliminate. Configured artifact compilation already uses the same batch
+validator; no new production application-build speedup is claimed here.
+
+All 39 host package-validation tests pass, including exact ordered errors,
+duplicate requested roles and fresh rejection after a manifest changes. Both
+fixture-helper tests and the two existing release-cache identity/restore tests
+pass. Scoped warning-denied host/internal Clippy, including governed fixture
+code, passes. The existing mixed-topology PocketIC journey passes fresh
+convergence, both deliberate resets, lost-response recovery, application-state
+checks, conservation, effect-free replay and public-memory qualification.
+Capacity and paid setup remain intact. No PocketIC case or Fleet setup is added.
+Changed-file formatting and diff checks pass.
+
+The final journey takes 1,039.64 seconds, or 1,220 seconds including its runner
+and harness preparation. Initial artifact preparation takes 498.364 seconds;
+the alternate release resolves in 51.500 seconds. This cold run is not a matched
+whole-journey speed comparison with .30's warmed full-suite run. Only the
+alternating evidence comparison above establishes the measured saving.
+
+Logs: `.tmp/fixture-prep-role-tests.log`, `.tmp/fixture-prep-evidence.log`,
+`.tmp/fixture-prep-cache-tests.log`, `.tmp/fixture-prep-clippy.log` and
+`.tmp/fixture-prep-mixed-pocketic.log`. No broad suite is run. The .30 log's
+configured declaration builds alone total 154.57 seconds and configured runtime
+Cargo/link totals 223.05 seconds; Coordinator/Store runtime Cargo/link adds
+121.26/156.17 seconds. These instrumented build phases overlap their parent
+totals and remain the larger throughput opportunity after this bounded cleanup.
+The complete bounded preparation batch and both .31 changelog surfaces are ready
+for the maintainer-selected release flow. Packages remain .30; no broad gate,
+version bump, Git publication or deployment is performed.
+
 ## CANIC-180 recovery and phase observation reuse — 2026-09-20
 
 Development base: published `v0.110.29`, commit

@@ -2110,6 +2110,20 @@ fn report_progress_state<P: EnsurePlatform>(
     state: FleetEnsureProgressState,
 ) {
     platform.report_progress(FleetEnsureProgress {
+        next_action: if matches!(
+            state,
+            FleetEnsureProgressState::Advancing
+                | FleetEnsureProgressState::AwaitingProgress { .. }
+                | FleetEnsureProgressState::FundingRequired
+        ) && phase != FleetEnsurePhase::TerminalVerification
+        {
+            crate::fleet_ensure::ops::progress::next_action(
+                &continuation::actions(plan, journal),
+                journal,
+            )
+        } else {
+            None
+        },
         state,
         operation_id: plan.operation_id.clone(),
         plan_sha256: plan.plan_sha256.clone(),

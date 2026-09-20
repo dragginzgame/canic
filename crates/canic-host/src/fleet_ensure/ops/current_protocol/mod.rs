@@ -1235,6 +1235,7 @@ fn component_provisioning_observation(
     durable_progress.pending_root_failure = None;
     let mut observation = observation(applied, &durable_progress)?;
     observation.provisioning_progress = Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
+        pending_root_failure: status.pending_root_failure,
         phase: status.phase,
         root_batch_count: status.root_batch_count,
         accepted_root_count: status.accepted_root_count,

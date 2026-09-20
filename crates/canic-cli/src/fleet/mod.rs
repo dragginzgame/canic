@@ -36,7 +36,7 @@ use canic_host::{
         DesiredFleetLoadError, EnsureWorkflowError, FleetEnsureReport, FleetGenerateError,
         FleetGenerateRequest, FreshEstateSeedRequest, IcpEnsurePlatform, IcpEnsurePlatformError,
         LoadedDesiredFleet, apply,
-        dto::{FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState},
+        dto::{FleetEnsureProgress, FleetEnsureProgressState},
         generate_desired_fleet, initialize_fresh_estate_seed, load_desired_fleet,
         model::{EnsureAction, InstallMode},
         plan, plan_reinstall, report_json_value, retained_in_progress_plan,
@@ -49,7 +49,7 @@ use std::{
     ffi::OsString,
     fs, io,
     path::PathBuf,
-    time::{Instant, SystemTime, UNIX_EPOCH},
+    time::{SystemTime, UNIX_EPOCH},
 };
 use thiserror::Error as ThisError;
 
@@ -93,6 +93,13 @@ pub enum FleetCommandError {
 
     #[error(transparent)]
     Json(#[from] serde_json::Error),
+
+    #[error("{report}")]
+    JsonReported {
+        report: String,
+        #[source]
+        source: Box<Self>,
+    },
 
     #[error(transparent)]
     Workflow(Box<EnsureWorkflowError<IcpEnsurePlatformError>>),
@@ -423,6 +430,18 @@ where
         return readiness::run(args[1..].to_vec());
     }
     let options = EnsureOptions::parse(args)?;
+    let json = options.json;
+    run_ensure(options).map_err(|error| if json { json_error(error) } else { error })
+}
+
+fn json_error(source: FleetCommandError) -> FleetCommandError {
+    FleetCommandError::JsonReported {
+        report: serde_json::json!({"event": "fleet_ensure_error", "schema_version": 1, "message": source.to_string()}).to_string(),
+        source: Box::new(source),
+    }
+}
+
+fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
     let root = resolve_current_canic_icp_root()?;
     let desired_path = if options.desired.is_absolute() {
         options.desired.clone()
@@ -442,7 +461,9 @@ where
         quote_review_argument(&options.icp)
     );
     let progress_review = next_review.clone();
-    let mut progress_output = progress::ProgressOutput::default();
+    let progress_session = progress::ProgressSession::new(json_progress);
+    let progress_sink = progress_session.sink();
+    let observation_sink = progress_session.sink();
     let platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
         .with_progress_handler(move |mut progress| {
             if let FleetEnsureProgressState::ReviewRequired {
@@ -452,12 +473,10 @@ where
             {
                 review.next_review_command.clone_from(&progress_review);
             }
-            if progress_output.should_emit(&progress, Instant::now()) {
-                eprintln!("{}", render_progress(&progress, json_progress));
-            }
+            progress_sink.progress(progress);
         });
     let mut platform = platform.with_observation_handler(move |timing| {
-        eprintln!("{}", render_observation_timing(&timing, json_progress));
+        observation_sink.observation(timing);
     });
     let report = if let Some(digest) = &options.apply {
         apply(
@@ -490,7 +509,28 @@ where
             &mut platform,
         )?
     };
-    render_report(&report, options.json)
+    drop(progress_session);
+    if options.apply.is_some() && !options.json {
+        output::write_text(None, &render_apply_report(&report))
+    } else {
+        render_report(&report, options.json)
+    }
+}
+
+fn render_apply_report(report: &FleetEnsureReport) -> String {
+    if report.terminal
+        && report.plan.scope == canic_host::fleet_ensure::model::FleetEnsurePlanScope::Full
+    {
+        format!(
+            "Fleet {}: deployment verified; {} effects applied this invocation.\nOperation: {}\nPlan: {}\n",
+            report.plan.fleet,
+            report.effects_applied,
+            report.plan.operation_id,
+            report.plan.plan_sha256
+        )
+    } else {
+        render_text_report(report)
+    }
 }
 
 fn quote_review_argument(value: &str) -> String {
@@ -676,56 +716,7 @@ fn render_progress(progress: &FleetEnsureProgress, json: bool) -> String {
         })
         .to_string();
     }
-    let phase = match progress.phase {
-        FleetEnsurePhase::Infrastructure => "infrastructure",
-        FleetEnsurePhase::ImportReconciliation => "import reconciliation",
-        FleetEnsurePhase::ControlPlane => "control plane",
-        FleetEnsurePhase::WorkloadProvisioning => "Workload provisioning",
-        FleetEnsurePhase::PoolReadiness => "pool readiness",
-        FleetEnsurePhase::TerminalVerification => "terminal verification",
-        FleetEnsurePhase::Complete => "complete",
-    };
-    let state = match &progress.state {
-        FleetEnsureProgressState::Advancing => "advancing",
-        FleetEnsureProgressState::AwaitingProgress { .. } => "awaiting progress",
-        FleetEnsureProgressState::PrerequisiteComplete => "prerequisite complete",
-        FleetEnsureProgressState::FundingRequired => "funding required",
-        FleetEnsureProgressState::ReviewRequired { .. } => "new review required",
-        FleetEnsureProgressState::Complete => "complete",
-    };
-    let details = match &progress.state {
-        FleetEnsureProgressState::AwaitingProgress {
-            elapsed_seconds,
-            provisioning,
-        } => {
-            if let Some(provisioning) = provisioning {
-                format!(
-                    "; elapsed {elapsed_seconds}s this invocation; {:?}; accepted Roots {}/{}; provisioned Roots {}/{}; directory Roots {}/{}; runtime Roots {}/{}; Components {}",
-                    provisioning.phase,
-                    provisioning.accepted_root_count,
-                    provisioning.root_batch_count,
-                    provisioning.provisioned_root_count,
-                    provisioning.root_batch_count,
-                    provisioning.directory_confirmed_root_count,
-                    provisioning.directory_confirmation_root_count,
-                    provisioning.runtime_activated_root_count,
-                    provisioning.root_batch_count,
-                    provisioning.component_count,
-                )
-            } else {
-                format!("; elapsed {elapsed_seconds}s this invocation")
-            }
-        }
-        FleetEnsureProgressState::ReviewRequired {
-            review: Some(review),
-            ..
-        } => format!("; {review}"),
-        _ => String::new(),
-    };
-    format!(
-        "Fleet ensure: {phase}: {state} ({}/{} reviewed effects applied){details}",
-        progress.applied_effects, progress.reviewed_effects
-    )
+    progress::render::plain(progress)
 }
 
 fn render_report(report: &FleetEnsureReport, json: bool) -> Result<(), FleetCommandError> {

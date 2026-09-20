@@ -23,7 +23,7 @@ canic-backup = { workspace = true }
 canic-core = { workspace = true, features = ["blob-storage-billing"] }
 canic-host = { workspace = true }
 clap = { workspace = true }
-rustix = { workspace = true }
+rustix = { workspace = true, features = ["termios"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
 thiserror = { workspace = true }

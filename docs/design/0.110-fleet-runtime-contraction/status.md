@@ -1,5 +1,53 @@
 # Canic 0.110 Implementation Status
 
+## CANIC-150 deployment progress — 2026-09-20
+
+The maintainer accepts Toko Miner's compact-progress feedback as a bounded
+operator follow-up on the published .110 line. Host owns truthful projections;
+CLI owns terminal, plain and JSON rendering. This joins the existing .31 draft,
+without another release boundary or a minor transition. The earlier fixture
+preparation work remains intact.
+
+| Outcome | Owner | Included evidence | Validation | Status |
+| --- | --- | --- | --- | --- |
+| Make deployment work and waits readable without changing execution | Host progress projection and CLI renderer | Supplied 48–70/72 trace, Root stages, stale/unknown observations, successor denominators, funding/review guidance, terminal resizing/cancellation/error cleanup and machine output | 67 focused host/CLI regressions, real pseudo-terminal replay, scoped all-target/all-feature Clippy and source hygiene pass | Complete for Canic; downstream launcher acceptance remains open |
+
+No sibling edits or live deployment are authorized by this implementation.
+Ordinary Toko launcher acceptance remains downstream; local replay qualifies the
+Canic renderer without claiming application latency or activation evidence.
+The complete in-repository .31 batch, including prior fixture preparation, is
+ready for the maintainer-selected release flow. Both changelog surfaces and the
+operations contract are updated; package versions remain .30. Evidence is
+retained in `.tmp/canic150-*.log`, with a readable panel at
+`.tmp/canic150-panel.txt`. No broad gate, versioning or publication ran.
+
+## Post-.30 fixture preparation — 2026-09-20
+
+The maintainer confirms .30 publication and accepts the next bounded PocketIC
+preparation batch. Keep it in the already accepted .110 throughput track despite
+the soft release-count guideline: it completes existing test/build preparation
+work without a new runtime contract or minor transition. Minor closeout remains
+human-owned; no release or publication is implied by this implementation batch.
+
+| Outcome | Owner | Included evidence | Status |
+| --- | --- | --- | --- |
+| Remove repeated Cargo workspace discovery from Fleet fixture preparation | Host role validation and internal artifact fixtures | Exact isolated/batched evidence, changed-manifest rejection, matched real-config timings, existing cache-boundary regressions and mixed-topology recovery | Complete; 43 focused native tests, the mixed-topology PocketIC case, scoped Clippy and source hygiene pass |
+
+The .30 release log attributes 908.37 seconds to instrumented release-artifact
+resolution, including 794.78 seconds building/sealing, 75.69 seconds constructing
+recipes and 23.52 seconds in cache lookup/staging. These nested measurements are
+not additive to total test time. Shared metadata targets part of recipe cost;
+larger compile/link and recovery costs remain open. Packages remain .30, with
+one .31 draft for this batch.
+
+Four alternating pairs preserve identical five-role evidence and reduce median
+validation from 4.5825 to 2.093 seconds (54.3%). This saves about 2.49 seconds in
+one recipe step, with no whole-suite or production deployment speed claim.
+The complete bounded preparation batch is ready to push through the
+maintainer-selected release flow, and both changelog surfaces are ready for
+publication. Broader throughput work remains active; no broad gate, versioning
+or publication ran. [Evidence](../../audits/working/0.110-validation-throughput/report.md).
+
 ## ICYDB-033 six-subject handoff — 2026-09-20
 
 The maintainer accepts IcyDB's 0.260 W1 handoff as a separate bounded Canic

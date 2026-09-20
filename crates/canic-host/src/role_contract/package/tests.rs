@@ -113,6 +113,51 @@ fn batched_contracts_refresh_manifest_evidence_between_operations() {
 }
 
 #[test]
+fn batched_package_evidence_keeps_order_errors_and_fresh_invocations() {
+    let fixture = FixtureWorkspace::materialize("supported");
+    let path = fixture.root.join("canic.toml");
+    let config = parse_config_model(&fs::read_to_string(&path).unwrap()).unwrap();
+    let roles = [
+        CanisterRole::from("missing"),
+        CanisterRole::from("app"),
+        CanisterRole::from("app"),
+    ];
+    let resolve =
+        || validate_declared_role_packages(&path, &config, &roles, PackageValidationMode::Build);
+    let original = resolve();
+    let isolated = roles
+        .iter()
+        .map(|role| {
+            validate_declared_role_package(
+                &path,
+                &config,
+                role,
+                PackageValidationMode::Build,
+                &CargoFeatureSelection::default(),
+            )
+        })
+        .collect::<Vec<_>>();
+    assert_eq!(original, isolated);
+    assert!(matches!(
+        original.as_slice(),
+        [
+            RolePackageValidation::Unsupported(RoleContractFinding::RoleUnknown { .. }),
+            RolePackageValidation::Supported(_),
+            RolePackageValidation::Supported(_),
+        ]
+    ));
+    fixture.rewrite("role/Cargo.toml", "role = \"app\"", "role = \"different\"");
+    assert!(matches!(
+        resolve().as_slice(),
+        [
+            RolePackageValidation::Unsupported(RoleContractFinding::RoleUnknown { .. }),
+            RolePackageValidation::Unsupported(RoleContractFinding::PackageMetadataMismatch { .. }),
+            RolePackageValidation::Unsupported(RoleContractFinding::PackageMetadataMismatch { .. }),
+        ]
+    ));
+}
+
+#[test]
 fn isolated_renamed_canic_workspace_is_rejected() {
     let fixture = FixtureWorkspace::materialize("renamed_canic");
     let validation = validate_test_role_package(
