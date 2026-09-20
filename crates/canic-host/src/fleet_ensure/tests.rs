@@ -1253,6 +1253,73 @@ impl EnsurePlatform for MockPlatform {
 }
 
 #[test]
+fn completed_replay_after_operator_spending_requires_fresh_review_without_effects() {
+    let mut fixture = fixture();
+    let digest = sha256_hex(b"completed replay account activity");
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &digest,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let complete = apply_fixture_plan(&mut fixture, &digest, &planned.plan).unwrap();
+    assert!(complete.terminal);
+    assert_eq!(
+        apply_fixture_plan(&mut fixture, &digest, &planned.plan)
+            .unwrap()
+            .effects_applied,
+        0
+    );
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &fixture.desired.environment,
+        "test-fleet",
+    );
+    let journal = fs::read(&paths.journal).unwrap();
+    let state = fs::read(&paths.state).unwrap();
+    let plan = fs::read(&paths.plan).unwrap();
+    let mutations = fixture.platform.mutations.clone();
+    fixture.platform.operator_cycles -= 100;
+    let changed = apply_fixture_plan(&mut fixture, &digest, &planned.plan).unwrap_err();
+    assert!(
+        matches!(changed, workflow::EnsureWorkflowError::TerminalReplayBalanceChanged {
+        operation_id, plan_sha256, current_operator_cycles, ..
+    } if operation_id == planned.plan.operation_id
+        && plan_sha256 == planned.plan.plan_sha256
+        && current_operator_cycles == fixture.platform.operator_cycles)
+    );
+    assert_eq!(fs::read(&paths.journal).unwrap(), journal);
+    assert_eq!(fs::read(&paths.state).unwrap(), state);
+    assert_eq!(fs::read(&paths.plan).unwrap(), plan);
+    assert_eq!(fixture.platform.mutations, mutations);
+
+    let fresh = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &digest,
+        "test-fleet",
+        1_800_000_000_000_000_100,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    assert_ne!(fresh.plan.plan_sha256, planned.plan.plan_sha256);
+    assert!(workflow::ordered_actions(&fresh.plan).is_empty());
+    assert_eq!(fresh.plan.conservation.maximum_operator_debit_cycles, 0);
+    let recovered = apply_fixture_plan(&mut fixture, &digest, &fresh.plan).unwrap();
+    assert!(recovered.terminal);
+    assert_eq!(recovered.effects_applied, 0);
+    assert_eq!(
+        recovered.actual_conservation.unwrap().operator_debit_cycles,
+        0
+    );
+    assert_eq!(fixture.platform.mutations, mutations);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
     let mut fixture = fixture();
     fixture.platform.progress_journal = Some(

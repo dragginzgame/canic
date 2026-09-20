@@ -6,3 +6,8 @@ publish = false
 
 [dependencies]
 icydb = { version = "=0.259.6", default-features = false }
+
+[features]
+default = []
+entity = []
+ten = ["entity"]

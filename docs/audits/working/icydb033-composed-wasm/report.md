@@ -1,5 +1,9 @@
 # ICYDB-033: first controlled Canic composition pair
 
+Current follow-up: [six-subject IcyDB 0.260 W1 handoff](w1.md). This report
+retains the historical two-subject experiment and its original dependency pins;
+its statements about unstarted query/write variants describe that earlier work.
+
 Follow-up: the fresh 0.257.11 composed
 [startup-driver outlining experiment](outlining.md) is complete. Its matched
 baseline/candidate binaries are identical; the annotation was discarded.

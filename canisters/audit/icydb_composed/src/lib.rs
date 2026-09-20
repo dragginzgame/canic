@@ -1,17 +1,17 @@
-//! Controlled Canic host with an optional empty, metrics-enabled IcyDB participant.
-//! No provisioning fixture, entity, application query or application write is linked.
+//! Controlled Canic composition with cumulative IcyDB binding/query/write subjects.
 
 #![expect(
     clippy::unused_async,
     reason = "Canic lifecycle hooks require async signatures"
 )]
-#![cfg_attr(
-    feature = "participant",
-    expect(
-        clippy::redundant_pub_crate,
-        reason = "published IcyDB generates crate-visible bindings inside private actor modules"
-    )
+#![expect(
+    clippy::redundant_pub_crate,
+    reason = "audit operations and generated IcyDB bindings retain crate-local visibility"
 )]
+
+mod operations;
+
+use operations::AuditOutcome;
 
 #[cfg(feature = "participant")]
 canic::memory::ic_memory_range!(
@@ -49,5 +49,21 @@ canic::start!();
 async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
+
+// The wire adapters stay present in every subject, including the host control.
+#[canic::canic_query(public)]
+fn audit_binding(entity: u8) -> Result<AuditOutcome, canic::Error> {
+    Ok(operations::binding(entity))
+}
+
+#[canic::canic_query(public)]
+fn audit_page(entity: u8) -> Result<AuditOutcome, canic::Error> {
+    Ok(operations::page(entity))
+}
+
+#[canic::canic_update(public)]
+fn audit_insert(entity: u8, id: u64, value: u64) -> Result<AuditOutcome, canic::Error> {
+    Ok(operations::insert(entity, id, value))
+}
 
 canic::finish!();

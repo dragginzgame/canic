@@ -1,5 +1,88 @@
 # Release-test throughput qualification
 
+## CANIC-180 recovery and phase observation reuse — 2026-09-20
+
+Development base: published `v0.110.29`, commit
+`eaace2777e9dfb4601c1af86f609c946a25dbc5d`. The maintainer confirms Toko Miner
+uses .29 and is preparing further feedback. Read-only inspection finds
+CANIC-180: a separately authorised debit
+after a completed deployment makes old-digest replay fail conservation. The
+accepted contract keeps original accounting and gives a typed, actionable
+`TerminalReplayBalanceChanged` error when the operator balance leaves the
+reviewed range. Fresh review can produce a zero-action, zero-debit plan. It
+does not rewrite receipts or relax in-progress conservation.
+
+The host also shares configured-owner observations with protocol planning in
+the existing bounded scope when replanning after a phase and during terminal
+replay. Pacing invalidates the evidence; effects, separate terminal authority
+checks and the next decision require fresh reads. The existing timing schema
+is unchanged; `planning` records include child calls and must not be summed
+again with their children.
+
+### Matched retained-estate journey
+
+The existing nineteen-Workload/five-Ready case retains its required capacity,
+six depleted imports, lost withdrawal/install replies and recovery assertions.
+It now makes an actual receipted 1T Ledger transfer after completion, proves
+old-plan rejection leaves completed records unchanged, and completes a fresh
+zero-effect plan without more debit. No additional Fleet or PocketIC case is
+introduced. Native coverage also checks deposits, in-progress failures and
+refresh after an infrastructure status change.
+
+| Phase | Control | Final | Control observation calls | Final observation calls |
+| --- | ---: | ---: | ---: | ---: |
+| Initial working Fleet | 88.861 s | 89.255 s | 143 | 140 |
+| Successor review and convergence | 163.278 s | 165.254 s | 508 | 499 |
+| Retained state and replay | 31.792 s | 31.495 s | 418 | 415 |
+
+The control already includes the replay diagnostic and terminal-replay sharing;
+this comparison isolates the added phase sharing, not every change from .29.
+Both use the original fixed 25 ms fixture observation delay. Recorded
+observation calls fall by 15. Counts sum only top-level observation stages;
+they exclude uninstrumented execution calls and internal IC hops. These are
+single sequential local runs, and they establish no material elapsed speedup.
+
+Whole journeys take 634.325 and 330.836 seconds. Initial artifact resolution
+alone falls from 278.955 to 6.108 seconds because the final run reuses warm
+artifacts. This is not a new cache optimization or an end-to-end speed claim.
+All 24 selected Wasm, compressed Wasm and Candid files across both release sets
+match exactly across control, experiment and final runs. Cargo.lock SHA-256 is
+`3e047aaac5f2ec0f57848c4bb01d513cd1a1906b7d9ea8880add7ceaf7db730b`;
+the runtime, toolchain and selected artifacts are unchanged.
+
+A fixture-only backoff experiment increasing the 25 ms delay to a 250 ms cap
+reduces some pending observations but takes 263.080 seconds for initial and
+successor convergence versus 252.139 seconds in the control. It is reverted;
+there is no evidence to ship this pacing change. The large retained topology
+and two mixed-topology resets remain required recovery/capacity coverage.
+
+### Qualification and remaining work
+
+All 372 focused Fleet Ensure native tests pass, with six existing opt-in cases
+ignored. The final retained-estate PocketIC test passes in 330.94 seconds
+(350 seconds including its runner). The existing mixed-topology case also
+passes fresh convergence and both deliberate resets, including lost replies,
+application-row preservation on retry/reset on reinstall, conservation and
+effect-free replay. It takes 863.15 seconds (865 including its runner), with
+297.671 seconds in initial artifact preparation and 61.117 seconds preparing
+the alternate release set. This is coverage, not a paired speed measurement.
+Final warning-denied Clippy for the host/internal libraries and tests, formatting
+of all six changed Rust files and diff checks pass.
+
+Local evidence: `.tmp/canic180-fleet-native.log`,
+`.tmp/canic180-phase-native.log`, `.tmp/canic180-retained-pocketic.log`,
+`.tmp/canic180-retained-candidate.log`, `.tmp/canic180-retained-final.log`,
+`.tmp/canic180-mixed-final.log` and `.tmp/canic180-final-clippy.log`.
+Control/candidate/final source hashes, artifact identities and extracted timing
+records live under `.tmp/canic180-{control,candidate,final}-*` as scratch evidence.
+
+The .29 retained gate records roughly 3,352 seconds in internal PocketIC; its
+mixed and retained journeys take approximately 606 and 400 seconds. This batch
+does not rerun or establish a reduction in that full gate. Larger fixture-build
+and deployment latency work remains active. Packages stay .29, with one open
+.30 changelog draft; no broad validation, versioning, publication or live
+deployment is performed.
+
 ## Canic-only pool batching and fixture setup — 2026-09-19
 
 Scope: the accepted .29 speed batch, qualified entirely with disposable Canic

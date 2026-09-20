@@ -20,6 +20,62 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## ICYDB-033 six-subject return handoff — 2026-09-20
+
+The maintainer requests completion of IcyDB's 0.260 W1 prerequisite. The
+existing Canic audit fixture and host runner now cover host, empty metrics
+participant, one binding, fixed typed page, typed insert and ten matching
+entities. Fixed audit adapters keep the wire shape controlled. SQL stays off;
+the synchronous lifecycle, memory profile and published IcyDB 0.259.6 remain.
+
+All six fresh canonical builds pass on Rust 1.98.1 and one frozen .29-plus-dirty
+snapshot, preserving the existing CANIC-180/observation changes. Raw Wasm sizes
+are 2,920,668 / 4,337,881 / 4,377,586 / 5,270,399 / 5,386,411 / 5,394,613 bytes.
+All 1,950 recorded inputs remain unchanged through the builds. Compiler/final
+hashes, code/data/function counts and local artifacts are retained in the
+[return handoff](../audits/working/icydb033-composed-wasm/w1.md) and its structured
+evidence. Every optimized named function maps exactly to a canonical body;
+export-root paths retain the intended bindings/query/write operations.
+
+All six declaration-mode subjects, schema and runner pass scoped warning-denied
+Clippy; runner rejection and participant Candid equality checks pass. The first
+page's 892,813-byte increment points to IcyDB's structural projection/page owner
+for investigation; no safe reduction is demonstrated. Nine additional matching
+entities add 8,202 bytes for this cohort only. No runtime/lifecycle semantic,
+instruction/cycle, wall-clock or full Toko qualification is claimed.
+
+The complete requested attribution batch and both .30 changelog surfaces are
+ready for release review. IcyDB's status owner can resume W1 reconciliation
+without waiting for a Canic production optimisation. Full ICYDB-033 application
+attribution and Canic B1 acceptance remain open. No sibling edit, package/pin
+change, broad validation, version bump, Git publication or deployment ran.
+The standalone lock only records existing .29 Canic path-package versions.
+
+## CANIC-180 recovery and observation batch — 2026-09-20
+
+The maintainer confirms Toko Miner uses .29 and is preparing new feedback.
+Read-only inspection identifies CANIC-180's completed-replay failure after
+unrelated operator spending. The host now reports typed
+`TerminalReplayBalanceChanged` with original operation/plan/balance bounds and
+fresh-plan recovery guidance. Completed records and in-progress conservation
+remain intact. The existing PocketIC retained-estate journey proves a real
+receipted 1T debit, old-plan rejection and zero-effect/zero-debit fresh recovery.
+
+Phase and replay replanning reuse infrastructure observations within the
+existing bounded decision scope. Fifteen repeated observation calls disappear
+in the matched phase comparison; elapsed improvement is unproven. A slower
+fixture-pacing experiment is reverted. Warm artifacts explain most of the
+whole-test timing difference. Required capacity and reset coverage remain.
+
+All 372 focused native tests and the two targeted PocketIC recovery journeys
+pass, including mixed-topology fresh convergence and both deliberate resets.
+Final scoped host/internal Clippy, changed-file formatting and diff checks pass.
+The complete bounded replay/observation batch and both .30 changelog surfaces
+are ready to push through the maintainer-selected release flow.
+Package versions remain .29. Larger fixture-build/deployment latency work stays
+open; no full-gate speedup is claimed. No broad gate, version bump, commit, push
+or live deployment ran. [Evidence and limits](../audits/working/0.110-validation-throughput/report.md).
+
 ## Canic-only .29 throughput batch — 2026-09-19
 
 The maintainer completes the accepted Store-upload, pool-reconciliation and

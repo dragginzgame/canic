@@ -188,24 +188,30 @@ pub(super) fn replay<P: EnsurePlatform>(
     let cycles = inventory.controlled_cycles_by_principal.clone();
     let mut verified_state = state.clone();
     merge_terminal_inventory(&mut verified_state, inventory)?;
-    let mut final_observation = platform
-        .observe(&plan.operation_id, &verified_state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    attach_terminal_cycles(&mut final_observation, cycles)?;
-    let protocol = platform
-        .protocol_actions(&plan.operation_id, &verified_state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    let current = compile_plan(
-        desired,
-        &resolve_desired_artifacts(root, desired)?,
-        &protocol,
-        &plan.desired_sha256,
-        &plan.fleet,
-        &final_observation,
-        plan.planned_at_time,
-        &plan.operation_id,
-        None,
-    )?;
+    // This is one read-only replanning decision after the inventory's paid reads.
+    // Share configured-owner status with protocol planning, then expire it before
+    // the separate terminal authority checks or any later replay.
+    let (final_observation, current) = platform.with_planning_observations(|platform| {
+        let mut final_observation = platform
+            .observe(&plan.operation_id, &verified_state)
+            .map_err(EnsureWorkflowError::Platform)?;
+        attach_terminal_cycles(&mut final_observation, cycles)?;
+        let protocol = platform
+            .protocol_actions(&plan.operation_id, &verified_state)
+            .map_err(EnsureWorkflowError::Platform)?;
+        let current = compile_plan(
+            desired,
+            &resolve_desired_artifacts(root, desired)?,
+            &protocol,
+            &plan.desired_sha256,
+            &plan.fleet,
+            &final_observation,
+            plan.planned_at_time,
+            &plan.operation_id,
+            None,
+        )?;
+        Ok::<_, EnsureWorkflowError<P::Error>>((final_observation, current))
+    })?;
     if !ordered_actions(&current).is_empty() {
         return Err(review(FleetEnsureSuccessorReviewReason::AdditionalEffect));
     }
