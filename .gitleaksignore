@@ -1,6 +1,25 @@
 # Reviewed false positives from historical code and audit evidence. Entries are
 # exact Gitleaks fingerprints so a new occurrence, path, line, rule, or commit
 # remains visible to the scanner.
+# ICYDB-033 W1 source inventory: these 16 values reproduce the SHA-256 of
+# each named file at e9e8277ddef6f8519d03a8ff50f658129a0fafc1.
+# Only these reviewed commit/path/rule/line occurrences are excluded.
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:445
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:493
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:676
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:688
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:772
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:780
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:835
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:930
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:958
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:965
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:966
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:980
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:1075
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:1083
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:1724
+e9e8277ddef6f8519d03a8ff50f658129a0fafc1:docs/audits/working/icydb033-composed-wasm/w1-measurements.json:generic-api-key:1911
 daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-14/0.92-layer-boundary-v2.md:generic-api-key:153
 daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json:generic-api-key:8
 daa6791366add2216ea4ddab9c218d845d22a20a:docs/audits/reports/2026-07/2026-07-15/artifacts/wasm-footprint-v2/method.json:generic-api-key:9

@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.30` adds a breaking typed completed-replay diagnostic with fresh-plan
   recovery guidance, reduces repeated deployment-status reads and extends
-  controlled IcyDB footprint attribution through query, insert and entity scaling.
+  controlled IcyDB footprint attribution through query, insert and entity scaling,
+  with reviewed checksum-only secret-scan exceptions.
 - `0.110.29` overlaps independent Store uploads and pool imports with durable
   recovery, shortens pool test setup and fixes ordinary CI build prerequisites.
 - `0.110.28` combines Store publication metadata with the first chunk upload,
