@@ -1352,6 +1352,14 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
     assert_eq!(fixture.platform.progress.len(), 1);
     assert_eq!(fixture.platform.progress[0].applied_effects, 0);
     assert_eq!(
+        fixture.platform.progress[0]
+            .next_action
+            .as_ref()
+            .unwrap()
+            .target,
+        actions[0].name()
+    );
+    assert_eq!(
         fixture.platform.progress[0].phase,
         FleetEnsurePhase::Infrastructure
     );
@@ -1367,23 +1375,12 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
     .expect("recover the effect before publishing completion progress");
     assert!(completed.terminal);
     let progress = &fixture.platform.progress;
-    // One event per durable effect, plus initial phase and terminal boundaries.
-    assert!(progress.len() <= actions.len() + 3);
-    let advancing = progress
-        .iter()
-        .filter(|event| event.phase == FleetEnsurePhase::Infrastructure)
-        .map(|event| event.applied_effects)
-        .collect::<Vec<_>>();
-    assert_eq!(
-        advancing,
-        (0..=completed.effects_applied).collect::<Vec<_>>()
+    assert_durable_progress_counts(
+        progress,
+        &planned.plan,
+        actions.len(),
+        completed.effects_applied,
     );
-    assert!(progress.iter().all(|event| {
-        event.operation_id == planned.plan.operation_id
-            && event.plan_sha256 == planned.plan.plan_sha256
-            && event.reviewed_effects == actions.len()
-            && event.applied_effects as usize <= event.reviewed_effects
-    }));
     assert!(
         progress
             .windows(2)
@@ -1393,6 +1390,8 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
         progress.last().expect("terminal event").phase,
         FleetEnsurePhase::Complete
     );
+    assert_eq!(progress.last().unwrap().next_action, None);
+    assert_unfinished_action_projection(&fixture.root, &actions);
     assert_eq!(
         progress.last().expect("terminal event").applied_effects,
         completed.effects_applied
@@ -1415,6 +1414,43 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
             && event.phase != FleetEnsurePhase::Infrastructure
     }));
     fs::remove_dir_all(fixture.root).expect("remove progress fixture");
+}
+
+fn assert_durable_progress_counts(
+    progress: &[FleetEnsureProgress],
+    plan: &FleetEnsurePlan,
+    action_count: usize,
+    applied: u32,
+) {
+    // One event per durable effect, plus initial phase and terminal boundaries.
+    assert!(progress.len() <= action_count + 3);
+    let advancing = progress
+        .iter()
+        .filter(|event| event.phase == FleetEnsurePhase::Infrastructure)
+        .map(|event| event.applied_effects)
+        .collect::<Vec<_>>();
+    assert_eq!(advancing, (0..=applied).collect::<Vec<_>>());
+    assert!(progress.iter().all(|event| {
+        event.operation_id == plan.operation_id
+            && event.plan_sha256 == plan.plan_sha256
+            && event.reviewed_effects == action_count
+            && event.applied_effects as usize <= event.reviewed_effects
+    }));
+}
+
+fn assert_unfinished_action_projection(root: &std::path::Path, actions: &[&EnsureAction]) {
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(root, "local", "test-fleet");
+    let mut journal: FleetEnsureJournalRecord =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    // Concurrent completion can leave a hole; aggregate applied counts cannot locate it.
+    journal.effects[0].state = EffectState::Intent;
+    let pending = crate::fleet_ensure::ops::progress::next_action(actions, &journal).unwrap();
+    assert_eq!(pending.target, actions[0].name());
+    journal.effects[0].state = EffectState::Applied;
+    assert_eq!(
+        crate::fleet_ensure::ops::progress::next_action(actions, &journal),
+        None
+    );
 }
 
 fn is_pool_maintenance(action: &EnsureAction) -> bool {
@@ -4908,6 +4944,7 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     fixture.platform.protocol_command_only = true;
     fixture.platform.protocol_pending_waits = 10;
     let summary = FleetProvisioningProgress {
+        pending_root_failure: None,
         phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
         root_batch_count: 1,
         accepted_root_count: 1,

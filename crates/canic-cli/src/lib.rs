@@ -281,6 +281,11 @@ pub const fn version_text() -> &'static str {
 #[must_use]
 pub fn render_cli_error(error: &CliError) -> String {
     match error {
+        CliError::Fleet(err)
+            if matches!(err.as_ref(), fleet::FleetCommandError::JsonReported { .. }) =>
+        {
+            err.to_string()
+        }
         CliError::BlobStorage(err) => err.json_error_report().unwrap_or_else(|| error.to_string()),
         CliError::Build(build::BuildCommandError::Clap(err)) | CliError::Clap(err) => {
             err.to_string().trim_end().to_string()

@@ -17,6 +17,7 @@ mod install_history;
 pub mod operator_mint;
 mod plan_content;
 mod platform;
+pub(super) mod progress;
 mod protocol;
 pub(super) mod recovery;
 pub(super) mod reinstall;

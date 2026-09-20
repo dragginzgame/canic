@@ -1,5 +1,6 @@
 use super::*;
 use crate::test_support::temp_dir;
+use canic_host::fleet_ensure::dto::FleetEnsurePhase;
 use canic_host::fleet_ensure::{
     model::{
         ActualCycleConservation, CanisterDisposition, CanisterPlan, CanisterRuntimeStatus,
@@ -579,6 +580,7 @@ fn text_report_formats_pending_funding_and_unobserved_balances() {
 fn advancing_progress_refreshes_counts_in_text_and_json() {
     for applied_effects in [0, 1, 16, 28, 34] {
         let progress = FleetEnsureProgress {
+            next_action: None,
             operation_id: "e1".repeat(32),
             plan_sha256: "e2".repeat(32),
             phase: FleetEnsurePhase::Infrastructure,
@@ -588,7 +590,7 @@ fn advancing_progress_refreshes_counts_in_text_and_json() {
         };
         assert!(
             render_progress(&progress, false)
-                .contains(&format!("({applied_effects}/34 reviewed effects applied)"))
+                .contains(&format!("reviewed effects {applied_effects}/34"))
         );
         let json: serde_json::Value =
             serde_json::from_str(&render_progress(&progress, true)).unwrap();
@@ -603,12 +605,14 @@ fn advancing_progress_refreshes_counts_in_text_and_json() {
 #[test]
 fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
     let mut progress = FleetEnsureProgress {
+        next_action: None,
         operation_id: "reviewed-operation".into(),
         plan_sha256: "reviewed-plan".into(),
         phase: FleetEnsurePhase::WorkloadProvisioning,
         state: FleetEnsureProgressState::AwaitingProgress {
             elapsed_seconds: 63,
             provisioning: Some(canic_host::fleet_ensure::dto::FleetProvisioningProgress {
+                pending_root_failure: None,
                 phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
                 root_batch_count: 1,
                 accepted_root_count: 1,
@@ -625,13 +629,12 @@ fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
     let text = render_progress(&progress, false);
     for detail in [
         "50/52",
-        "63s this invocation",
-        "ActivatingRuntimes",
-        "accepted Roots 1/1",
-        "provisioned Roots 1/1",
-        "directory Roots 1/1",
-        "runtime Roots 0/1",
-        "Components 3",
+        "63s awaiting this effect here",
+        "Waiting for application services to start",
+        "prepared Roots 1/1",
+        "registered Roots 1/1",
+        "active Roots 0/1",
+        "Components in scope 3",
     ] {
         assert!(text.contains(detail), "missing {detail} from {text}");
     }
@@ -642,6 +645,7 @@ fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
             "kind": "awaiting_progress",
             "elapsed_seconds": 63,
             "provisioning": {
+                "pending_root_failure": null,
                 "phase": "ActivatingRuntimes",
                 "root_batch_count": 1,
                 "accepted_root_count": 1,
@@ -668,6 +672,7 @@ fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
 #[test]
 fn phase_progress_json_has_exact_operation_authority_and_numeric_counts() {
     let progress = FleetEnsureProgress {
+        next_action: None,
         operation_id: "e1".repeat(32),
         plan_sha256: "e2".repeat(32),
         phase: FleetEnsurePhase::ImportReconciliation,
@@ -741,6 +746,7 @@ fn recovery_review_is_visible_in_text_json_and_typed_progress() {
     assert!(rendered.contains("4 steps at"));
     assert!(rendered.contains("requires fresh funding review"));
     let progress = FleetEnsureProgress {
+        next_action: None,
         operation_id: "operation".into(),
         plan_sha256: "plan".into(),
         phase: FleetEnsurePhase::TerminalVerification,
@@ -935,4 +941,41 @@ fn readiness_requires_explicit_operator_and_has_no_apply_surface() {
     let mut apply = args.map(OsString::from).to_vec();
     apply.extend([OsString::from("--apply"), OsString::from("11".repeat(32))]);
     assert!(parse_matches(command, apply).is_err());
+}
+
+#[test]
+fn concise_apply_success_requires_full_terminal_verification() {
+    let mut report = cycle_quantity_report("rrkah-fqaaa-aaaaa-aaaaq-cai");
+    report.terminal = true;
+    report.plan.scope = FleetEnsurePlanScope::Full;
+    assert!(render_apply_report(&report).contains("deployment verified"));
+    for scope in [
+        FleetEnsurePlanScope::ReinstallPreparation,
+        FleetEnsurePlanScope::RootReinstallPrerequisite,
+        FleetEnsurePlanScope::RootStartPrerequisite,
+    ] {
+        report.plan.scope = scope;
+        assert_eq!(render_apply_report(&report), render_text_report(&report));
+        assert!(!render_apply_report(&report).contains("deployment verified"));
+    }
+    report.plan.scope = FleetEnsurePlanScope::Full;
+    report.terminal = false;
+    assert_eq!(render_apply_report(&report), render_text_report(&report));
+}
+
+#[test]
+fn json_workflow_errors_keep_machine_output_and_typed_source() {
+    let error = json_error(FleetCommandError::Io(io::ErrorKind::Interrupted.into()));
+    let FleetCommandError::JsonReported { source, .. } = &error else {
+        panic!("JSON error boundary")
+    };
+    assert!(
+        matches!(source.as_ref(), FleetCommandError::Io(error) if error.kind() == io::ErrorKind::Interrupted)
+    );
+    let cli_error = crate::CliError::from(error);
+    let rendered = crate::render_cli_error(&cli_error);
+    let json: serde_json::Value = serde_json::from_str(&rendered).unwrap();
+    assert_eq!(json["event"], "fleet_ensure_error");
+    assert_eq!(json["schema_version"], 1);
+    assert_eq!(crate::cli_error_exit_code(&cli_error), 1);
 }

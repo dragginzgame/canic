@@ -43,6 +43,9 @@ pub enum FleetEnsureProgressState {
 /// Counts describe Roots, not individual Component activation or funding authority.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct FleetProvisioningProgress {
+    /// Latest retryable Root failure from this observation, not a new retry decision.
+    pub pending_root_failure:
+        Option<canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure>,
     pub phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase,
     pub root_batch_count: u32,
     pub accepted_root_count: u32,
@@ -56,10 +59,50 @@ pub struct FleetProvisioningProgress {
 /// Bounded progress event bound to the exact reviewed operation.
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
 pub struct FleetEnsureProgress {
+    /// First unfinished reviewed action, not proof that its remote execution has started.
+    pub next_action: Option<FleetEnsureActionProgress>,
     pub operation_id: String,
     pub plan_sha256: String,
     pub phase: FleetEnsurePhase,
     pub state: FleetEnsureProgressState,
     pub applied_effects: u32,
     pub reviewed_effects: usize,
+}
+
+/// Bounded host projection of reviewed work; carries no payload or execution authority.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct FleetEnsureActionProgress {
+    pub kind: FleetEnsureActionKind,
+    pub target: String,
+}
+
+/// Informational action identity projected from the maintained reviewed action contract.
+#[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FleetEnsureActionKind {
+    ActivateRegistry,
+    ActivateRegistryMirror,
+    AdoptStore,
+    BootstrapStore,
+    Create,
+    Delete,
+    Fund,
+    FundEstate,
+    Install,
+    JoinRoot,
+    MaintainPoolReadiness,
+    ObservePoolReadiness,
+    PrepareComponentRegistry,
+    PrepareStoreFixture,
+    Protocol,
+    ProvisionComponents,
+    PublishStoreChunk,
+    PublishStoreFixtureChunk,
+    ReconcilePoolAsset,
+    SealAuthority,
+    SetControllers,
+    Start,
+    Stop,
+    SynchronizeRegistry,
+    Transfer,
 }

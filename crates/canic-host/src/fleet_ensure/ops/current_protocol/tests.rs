@@ -1305,6 +1305,7 @@ fn assert_provisioning_progress_is_bounded(
     assert_eq!(
         observed.provisioning_progress,
         Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
+            pending_root_failure: None,
             phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
             root_batch_count: 2,
             accepted_root_count: 2,
@@ -1342,6 +1343,14 @@ fn assert_retry_timestamp_is_not_durable_progress(
         },
     );
     let mut repeated_failure = first_failure.clone();
+    assert_eq!(
+        component_provisioning_observation(false, &first_failure)
+            .unwrap()
+            .provisioning_progress
+            .unwrap()
+            .pending_root_failure,
+        first_failure.pending_root_failure,
+    );
     repeated_failure
         .pending_root_failure
         .as_mut()

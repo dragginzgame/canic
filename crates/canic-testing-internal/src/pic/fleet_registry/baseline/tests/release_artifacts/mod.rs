@@ -33,7 +33,9 @@ use canic_host::{
         compile_and_persist_canic_infrastructure_artifact_manifest,
         compile_and_persist_current_release_set_manifest,
     },
-    role_contract::{PackageValidationMode, RolePackageValidation, validate_declared_role_package},
+    role_contract::{
+        PackageValidationMode, RolePackageValidation, validate_declared_role_packages,
+    },
 };
 use ciborium::Value;
 use ic_testkit::artifacts::{
@@ -175,18 +177,19 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
     if audit_root::uses_audit_root(config_path) {
         packages.insert("root_probe".to_string());
     }
-    for role in configured_roles {
-        let role = CanisterRole::from(role.clone());
-        if role.is_root() {
-            continue;
-        }
-        let RolePackageValidation::Supported(evidence) = validate_declared_role_package(
-            config_path,
-            snapshot.model(),
-            &role,
-            PackageValidationMode::Passive,
-            &canic_host::role_contract::CargoFeatureSelection::default(),
-        ) else {
+    let roles = configured_roles
+        .iter()
+        .map(|role| CanisterRole::from(role.clone()))
+        .filter(|role| !role.is_root())
+        .collect::<Vec<_>>();
+    let validations = validate_declared_role_packages(
+        config_path,
+        snapshot.model(),
+        &roles,
+        PackageValidationMode::Passive,
+    );
+    for (role, validation) in roles.iter().zip(validations) {
+        let RolePackageValidation::Supported(evidence) = validation else {
             panic!("literal-zero role `{role}` must resolve to one supported package");
         };
         packages.insert(evidence.role_package_name);

@@ -494,15 +494,41 @@ JSON carries `state.elapsed_seconds` and nullable `state.provisioning` on
 `awaiting_progress` events; provisioning phases retain Coordinator enum names.
 These bounded informational fields add no polls, do not publish the internal
 progress identity, and cannot replace fresh funding or completion evidence.
-For both text and JSON, the CLI emits meaningful phase, effect-count, authority
-and provisioning changes immediately. It suppresses identical waiting events
-until the first observation at least 30 seconds after the last emitted wait.
-That heartbeat includes the current elapsed wait and pending phase. Elapsed time
-alone does not count as progress. Advancing, funding, review, prerequisite and
-completion events always print; errors and observation timing remain unchanged.
-This is output control only: polling, reconciliation and execution do not slow
-down, and a blocked remote call does not gain an independent heartbeat timer.
-JSON progress remains on stderr; the final report is on stdout. Dated
+Interactive stderr uses a compact panel with named work, a Root stage table,
+reviewed-effect accounting and the age of the latest progress observation and
+transition. A local spinner indicates an observed wait; at thirty seconds without
+a new progress event it becomes a stale-observation marker. Neither animation nor
+an all-applied counter proves backend health, time remaining or final success.
+The displayed effect wait is the host's last reported duration, not a fabricated
+live measurement. No extra IC reads or changes to polling, retries or effects
+are made for display.
+
+The host's nullable `next_action` projects the first unfinished reviewed action
+from its journal position, with a typed kind and bounded target name. It is not
+proof that remote execution has started. Provisioning's nullable
+`pending_root_failure` preserves an already observed retry diagnostic. Individual
+Component readiness and per-stage durations remain unavailable. Root counts are
+never presented as Component counts or a whole-deployment percentage.
+
+Redirected stderr, limited terminals and `NO_COLOR` use plain milestone output
+with thirty-second local heartbeats, including explicit observation age when a
+remote call stops returning new events. Advancing counters alone do not print a line per
+effect; phase, authority, denominator and provisioning changes remain visible.
+Funding, review, prerequisite and failure messages interrupt the panel and retain
+the existing commands and detailed guidance. Resizing to a narrow or short terminal
+falls back to plain milestones. No alternate screen, hidden cursor or raw input
+mode needs recovery after cancellation.
+
+Successful per-query timings and cache/identity counts are available through the
+existing explicit `--json` mode. Default text prints one inclusive planning summary;
+failed observations stay visible. JSON emits every typed host event on stderr and
+the complete final report on stdout, without animation or milestone suppression.
+Errors after ensure-option parsing use the `fleet_ensure_error` JSON event;
+invalid CLI syntax still follows the ordinary argument-parser error path.
+For detailed evidence, select `--json` on the intended invocation and redirect
+stdout and stderr to separate files; Canic does not create an implicit log file.
+Full successful apply prints a concise outcome and operation/plan identities;
+prerequisite and review reports retain their detailed output. Dated
 [reinstall evidence](../../audits/reports/2026-09/2026-09-05/fleet-reinstall-journey.md)
 and the [combined paid-growth proof](../../audits/reports/2026-09/2026-09-07/canic-140-retained-creation-fee.md)
 record the completed focused qualification and its downstream acceptance limits.

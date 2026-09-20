@@ -5,6 +5,71 @@ use ic_testkit::artifacts::workspace_root_for;
 use std::time::SystemTime;
 
 #[test]
+#[ignore = "focused qualification resolves the real fixture Cargo graphs"]
+pub fn batched_fixture_role_evidence_matches_isolated_validation() {
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let path = workspace.join("apps/test/test-configs/generated-mixed-topology.toml");
+    let snapshot = AppConfigSnapshot::load(&path).unwrap();
+    let roles = snapshot
+        .model()
+        .roles
+        .keys()
+        .filter(|role| !role.is_root())
+        .cloned()
+        .collect::<Vec<_>>();
+    assert!(!roles.is_empty());
+    let isolated = || {
+        roles
+            .iter()
+            .map(|role| {
+                canic_host::role_contract::validate_declared_role_package(
+                    &path,
+                    snapshot.model(),
+                    role,
+                    PackageValidationMode::Passive,
+                    &canic_host::role_contract::CargoFeatureSelection::default(),
+                )
+            })
+            .collect::<Vec<_>>()
+    };
+    let batched = || {
+        validate_declared_role_packages(
+            &path,
+            snapshot.model(),
+            &roles,
+            PackageValidationMode::Passive,
+        )
+    };
+    // Alternate order to avoid attributing the first filesystem warm-up to batching.
+    for round in 0..4 {
+        let run = |batch: bool| {
+            let started = Instant::now();
+            let evidence = if batch { batched() } else { isolated() };
+            let elapsed = started.elapsed();
+            assert!(
+                evidence
+                    .iter()
+                    .all(|item| matches!(item, RolePackageValidation::Supported(_)))
+            );
+            (evidence, elapsed)
+        };
+        let (first, second) = (run(round % 2 == 0), run(round % 2 != 0));
+        assert_eq!(first.0, second.0);
+        let (batch, serial) = if round % 2 == 0 {
+            (first.1, second.1)
+        } else {
+            (second.1, first.1)
+        };
+        eprintln!(
+            "fixture role evidence: round={round} roles={} isolated_ms={} batched_ms={}",
+            roles.len(),
+            serial.as_millis(),
+            batch.as_millis(),
+        );
+    }
+}
+
+#[test]
 pub fn journey_edits_reuse_artifacts_but_build_helper_edits_invalidate() {
     let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
     let root = std::env::temp_dir().join(format!(

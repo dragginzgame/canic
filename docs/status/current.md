@@ -20,6 +20,63 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## CANIC-150 progress presentation complete — 2026-09-20
+
+The maintainer accepts Toko Miner's compact deployment-progress follow-up.
+Interactive stderr now replaces one small stage panel instead of scrolling
+every advancing effect. It shows reviewed work, observed Root readiness,
+reported retries and observation/transition age. Local animation never changes
+polling or effects; stale waits are explicit. Plain output coalesces advancing
+counters and emits bounded local heartbeats even while a remote call is blocked.
+JSON keeps every typed event and successful diagnostic; parsed ensure failures
+remain machine-readable. Funding, review, prerequisite and error guidance stays
+visible. Only full terminal verification receives the concise success report.
+
+The host projects the next unfinished action from journal positions and carries
+the existing retry diagnostic. No new IC calls, persisted schemas, authority,
+effects or retry decisions are introduced. The existing receipt/recovery tests
+still pass, including an out-of-order completion hole and a long provisioning
+wait without reissue. Unknown Component detail remains explicitly unavailable.
+
+All 67 focused native tests pass: 43 CLI cases and 24 host progress/protocol
+cases. One pre-existing ignored protocol qualification remains unselected.
+Both changed packages pass warning-denied all-target/all-feature Clippy;
+changed-file formatting and diff checks pass. Real pseudo-terminal replays
+exercise the supplied 48–70/72 sequence, narrow resize and Ctrl-C; terminal
+settings remain unchanged. Logs are `.tmp/canic150-{cli-tests,host-progress,
+host-protocol,host-wait,clippy}.log` and `.tmp/canic150-terminal-*.log`.
+The captured panel is `.tmp/canic150-panel.txt`.
+
+The complete Canic implementation batch joins the existing fixture-preparation
+work in .31 and is ready for the maintainer-selected release flow. Both changelog
+surfaces and the operations contract are updated; packages remain .30.
+Ordinary Toko launcher/live acceptance remains downstream, not established by
+the synthetic callback replay. No broad gate, new PocketIC run, sibling edit,
+version bump, commit, push or deployment ran for this presentation batch.
+
+## Post-.30 fixture preparation complete — 2026-09-20
+
+The maintainer confirms .30 publication and accepts the next PocketIC preparation
+batch. Fleet artifact-cache recipes now share workspace Cargo metadata through
+the existing host batch validator, retaining separate role dependency trees,
+package checks, source fingerprints and release identities. The batch API is
+exposed to artifact consumers; metadata is fresh on each invocation.
+
+Four alternating comparisons on the real five-role mixed topology preserve
+identical evidence. Median role-validation time falls from 4.5825 to 2.093
+seconds, about 2.49 seconds saved (54.3%) for that step. Cold compilation remains
+the larger cost; no full-suite or production deployment improvement is claimed.
+
+All 43 focused native tests, the existing mixed-topology PocketIC journey with
+both deliberate resets, scoped host/internal Clippy, changed-file formatting
+and diff checks pass. Capacity, lost-response recovery, conservation and
+effect-free replay remain covered. No new Fleet setup or PocketIC case is added.
+The complete bounded preparation batch is ready to push through the
+maintainer-selected release flow; both .31 changelog surfaces are ready for
+publication, with package versions still .30. Broader compile/link and recovery
+throughput work remains active. No broad gate, version bump, commit, push or
+deployment ran. [Evidence and limits](../audits/working/0.110-validation-throughput/report.md).
+
 ## .30 preflight secret-scan repair — 2026-09-20
 
 The maintainer's release validation stops at sixteen Gitleaks findings in the
