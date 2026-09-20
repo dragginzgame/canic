@@ -1,5 +1,50 @@
 # Canic 0.110 Implementation Status
 
+## ICYDB-033 six-subject handoff — 2026-09-20
+
+The maintainer accepts IcyDB's 0.260 W1 handoff as a separate bounded Canic
+attribution batch on the existing .110 line. Extend the existing composition
+fixture and host audit runner; keep IcyDB/Toko read-only and production pins,
+package versions and release state unchanged. This supplies missing current
+composition evidence, not minor closeout or acceptance of the full B1 baseline.
+
+| Outcome | Owner | Included evidence | Validation | Status |
+| --- | --- | --- | --- | --- |
+| Return six matched composition subjects to IcyDB's W1 owner | Canic audit fixture and host artifact builder | Host, empty participant, one binding, page, insert and ten-entity subjects; frozen inputs and adjacent sizes; retained-operation reachability and named attribution or no-proven-reduction conclusion | Scoped compilation/Clippy, canonical artifact qualification, exact source/lock hashes and post-link inspection | Complete; ready for IcyDB W1 reconciliation and Canic release review |
+
+The [return handoff](../../audits/working/icydb033-composed-wasm/w1.md) and
+structured evidence retain all six fresh measurements. Adjacent raw increments
+are 1,417,213 / 39,705 / 892,813 / 116,012 / 8,202 bytes. All six canonical
+builds, scoped Clippy, exact post-link body mapping and operation reachability
+pass; 1,950 frozen inputs remain unchanged through the builds. The structural
+projection/page owner is worth investigating, with no demonstrated reduction.
+Both .30 changelog surfaces include this complete batch. It is ready for the
+maintainer's release flow; no new patch boundary or production optimisation is
+introduced. Runtime/lifecycle semantics, cycles/instructions and full Toko
+application attribution remain unmeasured. The IcyDB status owner can continue
+W1 from this evidence; no sibling edit, version bump or publication ran.
+
+## Completed replay and repeated observations — 2026-09-20
+
+The maintainer accepts CANIC-180 and deployment/PocketIC speed work, and confirms
+Toko Miner now uses .29. Keep this operator-recovery correction and its bounded
+observation cleanup on the affected .110 line despite the soft release-count
+guideline. This does not begin a new minor or accept a minor closeout audit.
+
+| Outcome | Owner | Scope and evidence | Status |
+| --- | --- | --- | --- |
+| Actionable completed replay after unrelated account activity | Host workflow and operator docs | Typed balance-range error; unchanged accounting and in-progress failures; real Ledger debit, old-plan rejection and zero-effect fresh recovery in the existing retained-estate journey | Ready; native and PocketIC evidence pass |
+| Fewer repeated deployment observations | Host platform/workflow | Reuse within phase/replay decisions, fresh reads after pacing and on later decisions; unchanged terminal authority/conservation; both existing mixed-topology resets | Ready; 15 fewer measured observation calls, no demonstrated elapsed speedup |
+| Larger validation/deployment throughput | Host and testing | Further artifact-build cost and meaningful matched latency qualification | Active; rejected pacing experiment removed, required capacity/reset coverage retained |
+
+These first two outcomes form one bounded .30 replay/observation batch. All 372
+focused native tests and both targeted PocketIC journeys pass, as do final scoped
+host/internal Clippy, changed-file formatting and diff checks. The complete batch
+is ready to push through the maintainer-selected release flow. Both changelog
+surfaces are ready for publication, with packages still .29.
+No broad gate, versioning, Git publication or live deployment is performed.
+[Evidence](../../audits/working/0.110-validation-throughput/report.md).
+
 ## Published-line ordinary CI repair — 2026-09-19
 
 Keep this correction on .110 despite the soft release-count guideline: the

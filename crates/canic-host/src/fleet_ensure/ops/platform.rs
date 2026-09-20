@@ -7895,6 +7895,40 @@ esac
 
     #[cfg(unix)]
     #[test]
+    fn replay_planning_shares_configured_owner_reads_and_refreshes_next_decision() {
+        let mut fixture = ProtocolOwnersFixture::new();
+        let state = &fixture.state;
+        let platform = &mut fixture.platform;
+        platform
+            .with_planning_observations(|platform| {
+                platform.with_observation_snapshot(|platform| {
+                    platform.observe_configured_canisters(state)
+                })?;
+                assert_eq!(platform.icp.remote_call_count(), 3);
+                assert!(platform.current_protocol_owners_are_ready(state)?);
+                assert_eq!(platform.icp.remote_call_count(), 3);
+                Ok::<_, IcpEnsurePlatformError>(())
+            })
+            .unwrap();
+        assert!(platform.observation_snapshot.borrow().is_none());
+        fixture.status("store", "Stopped", true);
+        let platform = &mut fixture.platform;
+        let ready = platform
+            .with_planning_observations(|platform| {
+                platform.with_observation_snapshot(|platform| {
+                    platform.observe_configured_canisters(state)
+                })?;
+                platform.current_protocol_owners_are_ready(state)
+            })
+            .unwrap();
+        assert!(!ready);
+        assert_eq!(platform.icp.remote_call_count(), 6);
+        assert!(platform.observation_snapshot.borrow().is_none());
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn protocol_owner_observations_read_each_owner_once_and_refresh_between_calls() {
         let fixture = ProtocolOwnersFixture::new();
         assert!(

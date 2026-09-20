@@ -1230,9 +1230,14 @@ When a freshly observed phase is admitted as an exact bounded successor, its
 observation may satisfy the immediately following protocol funding check. The
 handoff is bound to the first action digest, stays in this invocation and is
 consumed once. Any restart or intervening effect requires fresh observation.
+Replanning after a completed phase shares configured infrastructure status with
+protocol planning within one decision. Pacing clears that evidence, and the
+scope ends before a continuation is appended or any new effect is issued.
 Terminal replay first proves inventory, then uses one fresh merged-estate snapshot
 for both convergence and conservation; controller, authority and effect-free
-replay checks remain.
+replay checks remain. Its read-only replanning decision shares infrastructure
+status with protocol planning. That evidence expires before the separate terminal
+authority check and never carries into another replay.
 
 Typed `SuccessorReviewRequired` errors and `review_required` progress include the
 newly observed target/action list, maximum additional debit including fees and
@@ -1241,3 +1246,21 @@ operation identity remain available through that review boundary; reviewed
 funding still requires fresh authority, fee and balance revalidation before any
 debit. The same informative pause also applies after an explicitly reviewed
 recovery phase when activation work remains.
+
+### Completed replay after operator account activity
+
+A completed plan still checks its original operator source and reviewed debit
+against the current Cycles Ledger balance. Unrelated account activity is outside
+that replay contract; completed accounting must not be rewritten to accommodate
+it. A balance outside that reviewed range returns `TerminalReplayBalanceChanged`,
+naming the operation, plan and balance bounds. In-progress conservation and
+recovery remain unchanged.
+
+After separately authorised spending or a deposit changes that balance, preserve
+the completed plan, journal and receipts. Run `canic fleet ensure <fleet>` with
+the same environment and desired input, without `--apply`, to review a fresh plan.
+If the Fleet remains converged, the fresh plan has no actions and no operator
+debit. Review its actual actions and debit before applying its new digest; drift
+can require additional work. Do not repeat a reinstall or edit the old journal
+to make its balance agree. Immediate replay with unchanged accounting remains
+effect-free.

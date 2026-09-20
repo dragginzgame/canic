@@ -10759,6 +10759,51 @@ exec '{}' "$@"
         )
         .expect("original full plan replay");
         assert_eq!(same_plan.effects_applied, 0);
+        let retained_journal = std::fs::read(&old_paths.journal).unwrap();
+        let retained_plan = std::fs::read(&old_paths.plan).unwrap();
+        let recipient = Principal::from_slice(&[0xce; 29]);
+        let unrelated_debit = 1_000_000_000_000_u128;
+        let before_debit = ledger_account_balance(pic, ledger, operator);
+        let receipt: Result<Nat, QualificationIcrc1TransferError> = pic
+            .update_candid_as(
+                ledger,
+                operator,
+                "icrc1_transfer",
+                (QualificationIcrc1TransferArg {
+                    from_subaccount: None,
+                    to: QualificationIcrc1Account {
+                        owner: recipient,
+                        subaccount: None,
+                    },
+                    fee: Some(Nat::from(0_u8)),
+                    created_at_time: None,
+                    memo: None,
+                    amount: Nat::from(unrelated_debit),
+                },),
+            )
+            .expect("separately receipted spending after Fleet completion");
+        receipt.expect("unrelated transfer has a real Ledger receipt");
+        assert_eq!(
+            ledger_account_balance(pic, ledger, recipient),
+            Nat::from(unrelated_debit)
+        );
+        let after_debit = ledger_account_balance(pic, ledger, operator);
+        assert_eq!(after_debit, before_debit - Nat::from(unrelated_debit));
+        let rejected = fleet_ensure_workflow::apply(
+            root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &latest.plan.plan_sha256,
+            &mut platform(),
+        );
+        assert!(matches!(
+            rejected,
+            Err(EnsureWorkflowError::TerminalReplayBalanceChanged { .. })
+        ));
+        assert_eq!(std::fs::read(&old_paths.journal).unwrap(), retained_journal);
+        assert_eq!(std::fs::read(&old_paths.plan).unwrap(), retained_plan);
+        assert_eq!(ledger_account_balance(pic, ledger, operator), after_debit);
         let again = fleet_ensure_workflow::plan(
             root,
             &desired,
@@ -10769,6 +10814,7 @@ exec '{}' "$@"
         )
         .expect("plan the completed replacement");
         assert!(planned_actions(&again.plan).is_empty());
+        assert_eq!(again.plan.conservation.maximum_operator_debit_cycles, 0);
         let replay = fleet_ensure_workflow::apply(
             root,
             &desired,
@@ -10779,6 +10825,8 @@ exec '{}' "$@"
         )
         .expect("newly planned effect-free replay");
         assert_eq!(replay.effects_applied, 0);
+        assert_eq!(replay.actual_conservation.unwrap().operator_debit_cycles, 0);
+        assert_eq!(ledger_account_balance(pic, ledger, operator), after_debit);
         assert_eq!(
             std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap(),
             mutations

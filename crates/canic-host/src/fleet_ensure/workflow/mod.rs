@@ -275,6 +275,18 @@ where
     #[error("terminal Fleet cycle conservation failed: {0}")]
     Conservation(String),
 
+    #[error(
+        "completed Fleet operation {operation_id} cannot replay accounting for plan {plan_sha256}: current operator balance {current_operator_cycles} is outside the reviewed range {minimum_operator_cycles}..={operator_source_cycles}; subsequent account activity cannot be attributed to this Fleet operation; preserve the completed plan, journal and receipts, run `canic fleet ensure {fleet}` without --apply to review a fresh plan, then apply only its newly reviewed digest and debit; do not repeat the completed deployment or edit its accounting"
+    )]
+    TerminalReplayBalanceChanged {
+        fleet: String,
+        operation_id: String,
+        plan_sha256: String,
+        current_operator_cycles: u128,
+        minimum_operator_cycles: u128,
+        operator_source_cycles: u128,
+    },
+
     #[error("terminal Fleet inventory failed exact current-authority validation: {0}")]
     TerminalInventory(#[source] TerminalInventoryError),
 
@@ -1833,80 +1845,94 @@ where
             terminal_state.active_registry = None;
         }
         project_current_fleet_inventory(&terminal_state)?;
-        let mut terminal_observation = platform
-            .observe(&retained_plan.operation_id, &terminal_state)
-            .map_err(EnsureWorkflowError::Platform)?;
         {
-            let artifacts = resolve_desired_artifacts(root, operation_desired)?;
-            let observation_started = Instant::now();
-            let converged = loop {
-                let protocol_actions = platform
-                    .protocol_actions(&retained_plan.operation_id, &terminal_state)
-                    .map_err(EnsureWorkflowError::Platform)?;
-                match compile_plan(
-                    operation_desired,
-                    &artifacts,
-                    &protocol_actions,
-                    operation_desired_sha256,
-                    requested_fleet,
-                    &terminal_observation,
-                    retained_plan.planned_at_time,
-                    &retained_plan.operation_id,
-                    None,
-                ) {
-                    Ok(plan) => {
-                        if journal.stalled_observations != 0 {
-                            journal.stalled_observations = 0;
-                            write_journal(&paths, &journal)?;
-                        }
-                        break plan;
-                    }
-                    Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
-                        journal.stalled_observations =
-                            journal.stalled_observations.saturating_add(1);
-                        retain_observed_cycles(&mut state, &terminal_observation);
-                        write_state(&paths, &state)?;
-                        write_journal(&paths, &journal)?;
-                        if journal.stalled_observations
-                            >= operation_desired.maximum_stalled_observations
-                        {
-                            return Err(EnsureWorkflowError::RootOwnedObservationStalled {
-                                last_lifecycle: root_owned_lifecycle_label(
-                                    &terminal_observation,
-                                    &name,
-                                )
-                                .to_string(),
-                                observations: journal.stalled_observations,
-                                target: name,
-                            });
-                        }
-                        report_progress_state(
-                            platform,
-                            &retained_plan,
-                            &journal,
-                            FleetEnsurePhase::TerminalVerification,
-                            FleetEnsureProgressState::AwaitingProgress {
-                                elapsed_seconds: observation_started.elapsed().as_secs(),
-                                provisioning: None,
-                            },
-                        );
-                        platform.pace_root_owned_observation(&name, journal.stalled_observations);
-                        terminal_observation = platform
-                            .observe(&retained_plan.operation_id, &terminal_state)
+            // Replanning after a completed phase is one read-only decision.
+            // Pacing expires its evidence; appending or issuing work happens only
+            // after this scope has closed.
+            let (terminal_observation, converged) =
+                platform.with_planning_observations(|platform| {
+                    let mut terminal_observation = platform
+                        .observe(&retained_plan.operation_id, &terminal_state)
+                        .map_err(EnsureWorkflowError::Platform)?;
+                    let artifacts = resolve_desired_artifacts(root, operation_desired)?;
+                    let observation_started = Instant::now();
+                    let converged = loop {
+                        let protocol_actions = platform
+                            .protocol_actions(&retained_plan.operation_id, &terminal_state)
                             .map_err(EnsureWorkflowError::Platform)?;
-                    }
-                    Err(error @ EnsurePolicyError::EstatePoolCapacity { .. }) => {
-                        retain_observed_cycles(&mut terminal_state, &terminal_observation);
-                        retain_completed_reinstalls(&mut terminal_state, &retained_plan, &journal);
-                        write_state(&paths, &terminal_state)?;
-                        journal.completion = FleetEnsureCompletion::ReplanRequired;
-                        journal.stalled_observations = 0;
-                        write_journal(&paths, &journal)?;
-                        return Err(error.into());
-                    }
-                    Err(error) => return Err(error.into()),
-                }
-            };
+                        match compile_plan(
+                            operation_desired,
+                            &artifacts,
+                            &protocol_actions,
+                            operation_desired_sha256,
+                            requested_fleet,
+                            &terminal_observation,
+                            retained_plan.planned_at_time,
+                            &retained_plan.operation_id,
+                            None,
+                        ) {
+                            Ok(plan) => {
+                                if journal.stalled_observations != 0 {
+                                    journal.stalled_observations = 0;
+                                    write_journal(&paths, &journal)?;
+                                }
+                                break plan;
+                            }
+                            Err(EnsurePolicyError::PendingRootOwnedBalance { name }) => {
+                                journal.stalled_observations =
+                                    journal.stalled_observations.saturating_add(1);
+                                retain_observed_cycles(&mut state, &terminal_observation);
+                                write_state(&paths, &state)?;
+                                write_journal(&paths, &journal)?;
+                                if journal.stalled_observations
+                                    >= operation_desired.maximum_stalled_observations
+                                {
+                                    return Err(EnsureWorkflowError::RootOwnedObservationStalled {
+                                        last_lifecycle: root_owned_lifecycle_label(
+                                            &terminal_observation,
+                                            &name,
+                                        )
+                                        .to_string(),
+                                        observations: journal.stalled_observations,
+                                        target: name,
+                                    });
+                                }
+                                report_progress_state(
+                                    platform,
+                                    &retained_plan,
+                                    &journal,
+                                    FleetEnsurePhase::TerminalVerification,
+                                    FleetEnsureProgressState::AwaitingProgress {
+                                        elapsed_seconds: observation_started.elapsed().as_secs(),
+                                        provisioning: None,
+                                    },
+                                );
+                                platform.pace_root_owned_observation(
+                                    &name,
+                                    journal.stalled_observations,
+                                );
+                                terminal_observation = platform
+                                    .observe(&retained_plan.operation_id, &terminal_state)
+                                    .map_err(EnsureWorkflowError::Platform)?;
+                            }
+                            Err(error @ EnsurePolicyError::EstatePoolCapacity { .. }) => {
+                                retain_observed_cycles(&mut terminal_state, &terminal_observation);
+                                retain_completed_reinstalls(
+                                    &mut terminal_state,
+                                    &retained_plan,
+                                    &journal,
+                                );
+                                write_state(&paths, &terminal_state)?;
+                                journal.completion = FleetEnsureCompletion::ReplanRequired;
+                                journal.stalled_observations = 0;
+                                write_journal(&paths, &journal)?;
+                                return Err(error.into());
+                            }
+                            Err(error) => return Err(error.into()),
+                        }
+                    };
+                    Ok::<_, EnsureWorkflowError<P::Error>>((terminal_observation, converged))
+                })?;
             if converged
                 .canisters
                 .iter()
@@ -3294,15 +3320,30 @@ where
     let funded = funding_plan(plan, journal)?;
     let conservation = &funded.conservation;
     let final_controlled_cycles = controlled_cycles(terminal)?;
-    let operator_debit_cycles =
+    let operator_source_cycles =
         crate::fleet_ensure::policy::operator_mint::operator_source(journal)
-            .ok_or(EnsureWorkflowError::JournalIntegrity)?
-            .checked_sub(terminal.operator_cycles)
-            .ok_or_else(|| {
-                EnsureWorkflowError::Conservation(
-                    "operator balance increased during apply; review a new plan".to_string(),
-                )
-            })?;
+            .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let minimum_operator_cycles =
+        operator_source_cycles.saturating_sub(conservation.maximum_operator_debit_cycles);
+    if journal.completion == FleetEnsureCompletion::Converged
+        && !(minimum_operator_cycles..=operator_source_cycles).contains(&terminal.operator_cycles)
+    {
+        return Err(EnsureWorkflowError::TerminalReplayBalanceChanged {
+            fleet: plan.fleet.clone(),
+            operation_id: plan.operation_id.clone(),
+            plan_sha256: plan.plan_sha256.clone(),
+            current_operator_cycles: terminal.operator_cycles,
+            minimum_operator_cycles,
+            operator_source_cycles,
+        });
+    }
+    let operator_debit_cycles = operator_source_cycles
+        .checked_sub(terminal.operator_cycles)
+        .ok_or_else(|| {
+            EnsureWorkflowError::Conservation(
+                "operator balance increased during apply; review a new plan".to_string(),
+            )
+        })?;
     if operator_debit_cycles > conservation.maximum_operator_debit_cycles {
         return Err(EnsureWorkflowError::Conservation(format!(
             "operator debit {operator_debit_cycles} exceeded reviewed maximum {}",

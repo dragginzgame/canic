@@ -1,4 +1,4 @@
-//! Build the ICYDB-033 controlled pair through the existing artifact owner.
+//! Build the six ICYDB-033 controlled subjects through the existing artifact owner.
 //! This audit tool does not install canisters or publish release artifacts.
 
 use canic_core::{
@@ -22,7 +22,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         [command, workspace, evidence, variant] if command == "build" => {
             build(Path::new(workspace), Path::new(evidence), variant)?;
         }
-        _ => return Err("usage: icydb_composed_audit build <workspace> <evidence> <host|participant> | measure <wasm>".into()),
+        _ => return Err("usage: icydb_composed_audit build <workspace> <evidence> <host|participant|binding|query|write|ten> | measure <wasm>".into()),
     }
     Ok(())
 }
@@ -34,10 +34,18 @@ fn build(
 ) -> Result<(), Box<dyn std::error::Error>> {
     let cargo_features = match variant {
         "host" => BTreeSet::new(),
-        "participant" => std::iter::once("participant".to_owned()).collect(),
-        _ => return Err("variant must be host or participant".into()),
+        "participant" | "binding" | "query" | "write" | "ten" => {
+            std::iter::once(variant.to_owned()).collect()
+        }
+        _ => return Err("variant must be host, participant, binding, query, write or ten".into()),
     };
     let workspace = workspace.canonicalize()?;
+    let target =
+        env::var_os("CARGO_TARGET_DIR").ok_or("set absolute CARGO_TARGET_DIR for the audit")?;
+    let target = Path::new(&target);
+    if !target.is_absolute() {
+        return Err("CARGO_TARGET_DIR must be absolute for exact compiler-artifact capture".into());
+    }
     fs::create_dir_all(evidence)?;
     let evidence = evidence.canonicalize()?;
     // Deliberately synthetic, shared identity; this is not a deployment build plan.
@@ -59,15 +67,13 @@ fn build(
     let output = builder.build_workspace_canister_artifact_with_options(
         &context,
         &CanisterArtifactBuildOptions {
-            cargo_features,
+            cargo_features: cargo_features.clone(),
             default_features: false,
             sidecar_only_candid: true,
         },
     )?;
-    let target =
-        env::var_os("CARGO_TARGET_DIR").ok_or("set absolute CARGO_TARGET_DIR for the audit")?;
     let compiler_wasm =
-        Path::new(&target).join("wasm32-unknown-unknown/release/canic_composed_wasm_probe.wasm");
+        target.join("wasm32-unknown-unknown/release/canic_composed_wasm_probe.wasm");
     for (source, extension) in [
         (&output.wasm_path, "wasm"),
         (&output.wasm_gz_path, "wasm.gz"),
@@ -78,6 +84,9 @@ fn build(
     }
     let report = json!({
         "variant": variant,
+        "cargo_features": cargo_features,
+        "default_features": false,
+        "sidecar_only_candid": true,
         "release_build_id": release_build_id.to_string(),
         "profile": "release",
         "network": "local",

@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.110.27"
+version = "0.110.29"
 dependencies = [
  "candid",
  "canic-core",
@@ -165,7 +165,7 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.110.27"
+version = "0.110.29"
 dependencies = [
  "async-trait",
  "candid",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.110.27"
+version = "0.110.29"
 dependencies = [
  "proc-macro2",
  "quote",

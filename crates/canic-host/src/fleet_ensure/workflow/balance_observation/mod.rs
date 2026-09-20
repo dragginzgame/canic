@@ -1,7 +1,7 @@
 //! Native balance observations do not authenticate deposits or measure gross burn.
 
 use crate::fleet_ensure::{
-    model::{FleetEnsurePlanScope, FleetObservation},
+    model::{FleetEnsureCompletion, FleetEnsurePlanScope, FleetObservation},
     workflow::{
         EnsureWorkflowError,
         tests::{estate_funding_plan, retained_evidence},
@@ -79,5 +79,41 @@ fn observation(cycles: u128) -> FleetObservation {
         ledger_fee_cycles: 0,
         operator_cycles: 1_000,
         protocol_ready: BTreeMap::new(),
+    }
+}
+
+#[test]
+fn terminal_account_diagnostic_preserves_in_progress_conservation_and_receipts() {
+    let mut plan = estate_funding_plan();
+    plan.conservation.maximum_operator_debit_cycles = 100;
+    let (state, mut journal) = retained_evidence();
+    journal.initial_operator_cycles = 1_000;
+    for completion in [
+        FleetEnsureCompletion::InProgress,
+        FleetEnsureCompletion::Prepared,
+        FleetEnsureCompletion::Converged,
+    ] {
+        journal.completion = completion;
+        let retained = serde_json::to_vec(&journal).unwrap();
+        for balance in [899, 1_001] {
+            let mut terminal = observation(100);
+            terminal.operator_cycles = balance;
+            let error =
+                verify_terminal_conservation::<io::Error>(&plan, &journal, &state, &terminal)
+                    .unwrap_err();
+            if completion == FleetEnsureCompletion::Converged {
+                assert!(
+                    matches!(error, EnsureWorkflowError::TerminalReplayBalanceChanged {
+                    current_operator_cycles,
+                    minimum_operator_cycles: 900,
+                    operator_source_cycles: 1_000,
+                    ..
+                } if current_operator_cycles == balance)
+                );
+            } else {
+                assert!(matches!(error, EnsureWorkflowError::Conservation(_)));
+            }
+            assert_eq!(serde_json::to_vec(&journal).unwrap(), retained);
+        }
     }
 }

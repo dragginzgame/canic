@@ -18,12 +18,17 @@ crate-type = ["cdylib"]
 [features]
 default = []
 participant = ["dep:icydb", "dep:canic-composed-empty-schema"]
+binding = ["participant", "canic-composed-empty-schema/entity"]
+query = ["binding"]
+write = ["query"]
+ten = ["write", "canic-composed-empty-schema/ten"]
 
 [dependencies]
 canic = { path = "../../../crates/canic", default-features = false, features = [] }
 candid = "0.10"
 ic-cdk = "0.20.3"
 icydb = { version = "=0.259.6", default-features = false, features = ["metrics"], optional = true }
+canic-composed-empty-schema = { path = "schema", optional = true }
 
 [build-dependencies]
 canic = { path = "../../../crates/canic", default-features = false }
