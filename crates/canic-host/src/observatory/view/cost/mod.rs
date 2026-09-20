@@ -31,7 +31,28 @@ pub enum CostSampleState {
 #[serde(tag = "kind", rename_all = "snake_case", deny_unknown_fields)]
 pub enum CostMetricKind {
     Gauge,
-    Counter { window_id: u64, saturated: bool },
+    Counter {
+        window_id: u64,
+        saturated: bool,
+    },
+    TimerCounter {
+        registration: TimerRegistrationView,
+        saturated: bool,
+    },
+}
+
+///
+/// TimerRegistrationView
+///
+/// Source-owned lifetime for timer measurements in one observed canister history.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimerRegistrationView {
+    pub canister_version: u64,
+    pub started_at_ns: u64,
+    pub sequence: u64,
 }
 
 ///
@@ -95,7 +116,7 @@ pub enum CostEvidenceLimitation {
     SingleSnapshot,
     SourceWindowChanged,
     SourceWindowUnavailable,
-    TimerRegistrationResetUnobservable,
+    AggregateTimerCallbacksUnqualified,
     TransferCoverageIncomplete,
     UnattributedExecutionMessageStorage,
 }

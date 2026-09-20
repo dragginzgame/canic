@@ -40,7 +40,7 @@ pub(super) fn collect(
         window: outcome(transport.cost_window(entry), source),
         limitations: vec![
             CostEvidenceLimitation::SingleSnapshot,
-            CostEvidenceLimitation::TimerRegistrationResetUnobservable,
+            CostEvidenceLimitation::AggregateTimerCallbacksUnqualified,
             CostEvidenceLimitation::TransferCoverageIncomplete,
             CostEvidenceLimitation::UnattributedExecutionMessageStorage,
         ],
@@ -137,6 +137,17 @@ pub(super) fn samples(
                     saturated,
                 } => CostMetricKind::Counter {
                     window_id,
+                    saturated,
+                },
+                PublicMetricKind::TimerCounter {
+                    registration,
+                    saturated,
+                } => CostMetricKind::TimerCounter {
+                    registration: TimerRegistrationView {
+                        canister_version: registration.canister_version,
+                        started_at_ns: registration.started_at_ns,
+                        sequence: registration.sequence,
+                    },
                     saturated,
                 },
             },

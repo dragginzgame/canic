@@ -1,5 +1,28 @@
 # Canic 0.110 Implementation Status
 
+## Post-.32 timer registration evidence — 2026-09-20
+
+The maintainer confirms .32 publication and requests ic-timers 0.8.0. Retain
+this dependency prerequisite for the accepted CANIC-002 follow-up on .110
+despite the cadence guideline; it does not begin another minor. The maintainer
+accepts IcyDB's temporary test-only timer-version mismatch without changing its pin.
+
+| Outcome | Owner | Included evidence | Status |
+| --- | --- | --- | --- |
+| Adopt the published timer registration-identity API | Canic dependency and native timer integration | Both lockfiles, current adoption/observability docs, native timer regression and existing PocketIC timer-authority target | Complete; 13 native and nine PocketIC cases pass, with clean diff checks |
+| Carry source registrations into snapshots and safe offline timer deltas | Core metrics, host comparison and CLI | Atomic value/identity projection, Candid/JSON propagation, reset/regrowth and saturation rejection, cancellation/trap proof, bounded source/history and private output | Complete; 59 focused native/contract checks and nine final PocketIC cases pass; scoped Clippy and source hygiene pass |
+
+The .33 draft records this bounded dependency update. Canic package versions
+remain .32. The complete expanded batch and both changelog surfaces are ready
+for the maintainer-selected release flow. The final fixture records a
+21,963,109-instruction sampling maximum above the unchanged 20-million advisory,
+and 5,277,144 reserved history bytes within 8 MiB. These are fixture observations,
+not a matched cost comparison. Complete transfer accounting, aggregate callback
+frequency and downstream balance verification remain open.
+IcyDB shared-inventory qualification awaits its matching published timer
+dependency and does not block the Canic update. No sibling edits or publication
+are included. [Evidence and remaining work](../../audits/working/canic002-cost-evidence/report.md).
+
 ## CANIC-150 deployment progress — 2026-09-20
 
 The maintainer accepts Toko Miner's compact-progress feedback as a bounded

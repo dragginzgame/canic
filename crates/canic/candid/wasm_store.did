@@ -363,6 +363,12 @@ type PublicMetricFamily = variant {
 type PublicMetricKind = variant {
   Gauge;
   Counter : record { window_id : nat64; saturated : bool };
+  TimerCounter : record { registration : TimerMetricRegistration; saturated : bool };
+};
+type TimerMetricRegistration = record {
+  canister_version : nat64;
+  started_at_ns : nat64;
+  sequence : nat64;
 };
 // Select a published aggregate family and one bounded page.
 type PublicMetricsRequest = record {

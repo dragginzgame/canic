@@ -106,16 +106,10 @@ pub(super) fn bounded_core_entries(limit: usize) -> Result<Vec<MetricEntry>, cra
 /// Sample performance directly; the upstream timer registry admits at most 64 timers.
 pub(super) fn bounded_performance_entries(
     limit: usize,
+    timers: &[ic_timers::TimerSnapshot],
 ) -> Result<Vec<MetricEntry>, crate::InternalError> {
     let counters = perf::bounded_entries(limit)?;
-    let timers = ic_timers::timer_inventory().ok();
-    Ok(prefix_entries(
-        "perf",
-        perf_entries_from(
-            counters,
-            timers.as_ref().map_or(&[], |inventory| inventory.timers()),
-        ),
-    ))
+    Ok(prefix_entries("perf", perf_entries_from(counters, timers)))
 }
 
 #[must_use]

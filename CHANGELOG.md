@@ -14,6 +14,8 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.33` updates ic-timers to 0.8.0 and carries registration identities into
+  cached measurements and offline timer comparisons that reject counter resets.
 - `0.110.32` separates timer scheduler/work measurements and adds optional
   private observatory cost snapshots and offline comparisons with explicit
   source-window and attribution limits.

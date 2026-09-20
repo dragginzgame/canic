@@ -158,6 +158,7 @@ fn public_snapshots_preserve_observer_authority() {
     assert_eq!(stale.state, PublicSnapshotState::Stale);
     assert_eq!(stale.sampled_at_ns, snapshot.sampled_at_ns);
     assert_eq!(stale.metrics.entries, snapshot.metrics.entries);
+    assert_timer_registration_continuity(&fixture.pic, published);
 }
 
 fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetric]) {
@@ -169,7 +170,7 @@ fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetr
     assert!(
         timer_rows
             .iter()
-            .all(|row| row.kind == canic::dto::public_status::PublicMetricKind::Gauge)
+            .all(|row| matches!(row.kind, canic::dto::public_status::PublicMetricKind::TimerCounter { registration, saturated: false } if registration.sequence > 0 && registration.started_at_ns <= row.observed_at_ns))
     );
     for phase in ["scheduler", "work"] {
         let name = format!("perf.timer.runtime-probe.application.cost-watchdog.{phase}");
@@ -181,6 +182,7 @@ fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetr
         assert_eq!(instructions.unit, "instructions");
         assert!(instructions.value > 0);
         assert!(completions.value > 0);
+        assert_eq!(instructions.kind, completions.kind);
     }
     for timer in timer_rows
         .iter()
@@ -194,6 +196,86 @@ fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetr
             );
         }
     }
+}
+
+fn assert_timer_registration_continuity(pic: &PocketIc, canister: Principal) {
+    use canic::dto::public_status::{PublicMetricKind, PublicMetricsRequest};
+    let sample = || {
+        let sampled: Result<(), Error> = pic
+            .update_candid(canister, "sample_public_metrics", ())
+            .unwrap();
+        sampled.unwrap();
+        let reply: Result<PublicStatusResponse, Error> = pic
+            .query_candid(
+                canister,
+                protocol::CANIC_PUBLIC_STATUS,
+                (PublicStatusRequest::Metrics(PublicMetricsRequest {
+                    family: PublicMetricFamily::Performance,
+                    page: PageRequest {
+                        limit: 256,
+                        offset: 0,
+                    },
+                }),),
+            )
+            .unwrap();
+        let PublicStatusResponse::Metrics(snapshot) = reply.unwrap() else {
+            panic!();
+        };
+        snapshot
+            .metrics
+            .entries
+            .into_iter()
+            .find(|row| row.name == "perf.timer.runtime-probe.application.cost-watchdog.work.calls")
+            .unwrap()
+    };
+    let invoke = |method: &str, unregister: bool| {
+        let reply: Result<(), Error> = pic.update_candid(canister, method, (unregister,)).unwrap();
+        reply.unwrap();
+    };
+    let before = sample();
+    invoke("cancel_cost_probe_watchdog", false);
+    let cancelled = sample();
+    assert_eq!(before.kind, cancelled.kind);
+    assert_eq!(before.value, cancelled.value);
+    invoke("set_cost_probe_trap", true);
+    let reply: Result<(), Error> = pic
+        .update_candid(canister, "schedule_cost_probe_watchdog", ())
+        .unwrap();
+    reply.unwrap();
+    for _ in 0..10 {
+        pic.tick();
+    }
+    let interrupted = sample();
+    assert_eq!(interrupted.kind, before.kind);
+    assert_eq!(interrupted.value, before.value);
+    invoke("set_cost_probe_trap", false);
+    invoke("cancel_cost_probe_watchdog", true);
+    for _ in 0..3 {
+        let reply: Result<(), Error> = pic
+            .update_candid(canister, "schedule_cost_probe_watchdog", ())
+            .unwrap();
+        reply.unwrap();
+        for _ in 0..10 {
+            pic.tick();
+        }
+    }
+    let replaced = sample();
+    assert!(replaced.value > before.value);
+    let registration = |kind| {
+        let PublicMetricKind::TimerCounter {
+            registration,
+            saturated: false,
+        } = kind
+        else {
+            panic!();
+        };
+        registration
+    };
+    let old = registration(before.kind);
+    let new = registration(replaced.kind);
+    assert_eq!(old.canister_version, new.canister_version);
+    assert_eq!(old.started_at_ns, new.started_at_ns);
+    assert_ne!(old.sequence, new.sequence);
 }
 
 #[derive(CandidType, Deserialize)]

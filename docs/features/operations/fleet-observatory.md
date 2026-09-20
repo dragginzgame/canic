@@ -83,17 +83,19 @@ The report separates balance, parent-owned total/per-child grants, callback
 starts, scheduler instructions and work instructions. Total and per-child grants
 are two views of the same funding; do not add them together. Timer `.calls` counts
 completed measurement samples, whereas Operations contains starts. The latter
-may include callbacks whose measurement has not completed. Timer values remain
-gauges: the timer owner lacks per-registration reset identity, so an apparently
-increasing total cannot establish a safe callback rate. Window anchors identify
-heap restarts only. A final anchor newer than a collected sample produces
-`source_window_changed`; missing heap metadata produces
+may include callbacks whose measurement has not completed. Each timer instruction
+total and completed-sample count carries `measurement.kind = "timer_counter"`,
+its source registration (`canister_version`, `started_at_ns`, `sequence`) and
+per-field saturation. These fields are sampled together from ic-timers 0.8.0.
+Aggregate callback-start rows remain gauges because they mix registrations.
+Window anchors identify heap restarts. A final anchor newer than a collected
+sample produces `source_window_changed`; missing heap metadata produces
 `source_window_unavailable`. Consumers must retain the exact role identity,
 source epoch and source times when comparing observations.
 
 This is measurement evidence, not an automatic consumption estimate. Structured
-limitations identify the single snapshot, unobservable timer registration
-resets, incomplete transfer coverage and unattributed execution/message/storage
+limitations identify the single snapshot, unqualified aggregate callback counts,
+incomplete transfer coverage and unattributed execution/message/storage
 cost. Grant counters cover their funding owner, not every external deposit,
 creation, attached-cycle call or transfer. Instructions have no assumed cycle
 conversion. No per-timer bill or savings percentage is inferred.
@@ -135,9 +137,10 @@ Each role retains independent available/unavailable results:
 | `incoming_grants` | Movement of the recorded parent's exact grant counter for this child |
 | `outgoing_grants` | Movement of this role's total grant counter, without adding per-child counters again |
 | `known_grant_adjusted_decrease` | Opening plus known incoming grants minus known outgoing grants minus closing |
+| `timer_measurements` | Named scheduler/work instruction totals and completed-sample count movements within the same registration |
 
-Each available result carries actual source start/end times, elapsed nanoseconds
-and exact signed decimal cycles. Negative adjusted values remain negative;
+Each available cycle result carries actual source start/end times, elapsed
+nanoseconds and exact signed decimal cycles. Negative adjusted values remain negative;
 they can expose unobserved incoming transfers rather than implying negative
 burn. Full-width values use checked arithmetic without floating point or
 instruction conversion. No daily extrapolation is performed.
@@ -151,11 +154,21 @@ that alignment. A mismatched interval leaves the individual movements visible
 and makes the combined adjustment unavailable. Stale source frames, repeated
 cached samples, resets and truncation are also typed failures.
 
-The comparison always retains incomplete-transfer, unknown timer-registration
-continuity and unattributed execution/message/storage limitations. A zero
+Timer results retain their registration, actual interval, unit and decimal
+`amount`. Each counter is qualified independently; its interval need not match
+the cycle interval because no combined attribution is claimed. Both source
+pages must be fresh and complete. Each row must match its page's sample time,
+have a valid unit and registration, and belong to the retained canister version.
+Cancellation preserves continuity; unregister/re-register or a runtime epoch
+change returns `timer_registration_changed`, even after counters grow beyond
+their previous values. Saturated fields, including the u64 maximum sentinel,
+cannot yield exact deltas. Missing rows never become zero. Completed sample
+counts do not establish starts, trapped work, callback frequency or billed cost.
+
+The comparison always retains incomplete-transfer, unqualified aggregate timer
+callbacks and unattributed execution/message/storage limitations. A zero
 grant-adjusted decrease is a result for the recorded terms, not proof of zero
-consumption. Complete transfer attribution and callback frequency remain open
-until their source owners provide the missing evidence.
+consumption. Complete transfer attribution and callback frequency remain open.
 
 ## Store inventory
 

@@ -276,8 +276,7 @@ impl PublicMetricsOps {
         };
         for row in &mut rows {
             row.observed_at_ns = now;
-            // Timers expose lifetime summaries without a per-registration reset identity.
-            // Keep these raw observations out of counter delta/rate calculations.
+            // Preserve source-owned timer registrations; aggregate timer events remain gauges.
             let counter = (family == PublicMetricFamily::Operations
                 && !row.name.starts_with("cycles_funding.icp_refill.")
                 && !row.name.starts_with("timer."))
@@ -413,7 +412,11 @@ fn operation_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
 }
 
 fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
-    metrics::bounded_performance_entries(MAX_PUBLIC_METRICS / 2 + 1)?
+    let inventory = ic_timers::timer_inventory().ok();
+    let timers = inventory
+        .as_ref()
+        .map_or(&[][..], |inventory| inventory.timers());
+    metrics::bounded_performance_entries(MAX_PUBLIC_METRICS / 2 + 1, timers)?
         .into_iter()
         .take(MAX_PUBLIC_METRICS / 2 + 1)
         .map(|row| {
@@ -421,6 +424,19 @@ fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                 return Ok(Vec::new());
             };
             let name = metric_name(&row.labels, 6)?;
+            let registration = timers.iter().find_map(|timer| {
+                let identity = timer.identity();
+                let labels = &row.labels;
+                let matches = labels.len() == 6
+                    && labels[..5].iter().map(String::as_str).eq([
+                        "perf",
+                        "timer",
+                        identity.owner(),
+                        identity.subsystem(),
+                        identity.name(),
+                    ]);
+                matches.then(|| timer.registration_id())
+            });
             Ok(vec![
                 PublicMetricSample {
                     name: format!("{name}.calls"),
@@ -428,7 +444,7 @@ fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                     value: u128::from(count),
                     unit: "count".into(),
                     observed_at_ns: 0,
-                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
+                    kind: timer_measurement_kind(registration, count),
                 },
                 PublicMetricSample {
                     name,
@@ -436,12 +452,28 @@ fn performance_metrics() -> Result<Vec<PublicMetricSample>, InternalError> {
                     value: u128::from(value_u64),
                     unit: "instructions".into(),
                     observed_at_ns: 0,
-                    kind: crate::domain::public_metrics::PublicMetricKind::Gauge,
+                    kind: timer_measurement_kind(registration, value_u64),
                 },
             ])
         })
         .collect::<Result<Vec<_>, InternalError>>()
         .map(|rows| rows.into_iter().flatten().collect())
+}
+
+fn timer_measurement_kind(
+    registration: Option<ic_timers::TimerRegistrationId>,
+    value: u64,
+) -> PublicMetricKind {
+    registration.map_or(PublicMetricKind::Gauge, |id| {
+        PublicMetricKind::TimerCounter {
+            registration: crate::domain::public_metrics::TimerMetricRegistration {
+                canister_version: id.epoch().canister_version(),
+                started_at_ns: id.epoch().started_at_ns(),
+                sequence: id.sequence(),
+            },
+            saturated: value == u64::MAX,
+        }
+    })
 }
 
 #[cfg(feature = "sharding")]
@@ -551,6 +583,37 @@ mod tests {
             PublicMetricsCache::snapshot(family).unwrap().sampled_at_ns,
             10
         );
+    }
+
+    #[test]
+    fn public_timer_measurements_preserve_registration_without_synthesizing_history_rates() {
+        let kind = PublicMetricKind::TimerCounter {
+            registration: crate::domain::public_metrics::TimerMetricRegistration {
+                canister_version: 1,
+                started_at_ns: 5,
+                sequence: 9,
+            },
+            saturated: false,
+        };
+        let family = PublicMetricFamily::Performance;
+        let mut row = sample(7);
+        row.kind = kind;
+        publish(family, 10, vec![row]).unwrap();
+        let snapshot = PublicMetricsOps::project(request(family), &BTreeSet::from([family]), 10);
+        assert_eq!(snapshot.metrics.entries[0].kind, kind);
+        let before = crate::model::public_metrics::PublicHistorySample {
+            slot: 1,
+            observed_at_ns: 10,
+            value: 7,
+            kind,
+        };
+        let after = crate::model::public_metrics::PublicHistorySample {
+            slot: 2,
+            observed_at_ns: 20,
+            value: 12,
+            kind,
+        };
+        assert_eq!(counter_delta(&before, &after), None);
     }
 
     #[test]

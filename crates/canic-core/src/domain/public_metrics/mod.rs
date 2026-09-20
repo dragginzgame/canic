@@ -28,5 +28,20 @@ pub enum PublicMetricFamily {
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum PublicMetricKind {
     Gauge,
-    Counter { window_id: u64, saturated: bool },
+    Counter {
+        window_id: u64,
+        saturated: bool,
+    },
+    TimerCounter {
+        registration: TimerMetricRegistration,
+        saturated: bool,
+    },
+}
+
+/// Source-owned counter lifetime, scoped to one canister's observed runtime history.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct TimerMetricRegistration {
+    pub canister_version: u64,
+    pub started_at_ns: u64,
+    pub sequence: u64,
 }

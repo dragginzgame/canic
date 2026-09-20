@@ -9,7 +9,9 @@ use crate::dto::{
     prelude::*,
 };
 
-pub use crate::domain::public_metrics::{PublicMetricFamily, PublicMetricKind};
+pub use crate::domain::public_metrics::{
+    PublicMetricFamily, PublicMetricKind, TimerMetricRegistration,
+};
 
 /// Public query responsiveness; no runtime diagnostics or Fleet readiness assessment.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]

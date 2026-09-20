@@ -145,7 +145,7 @@ dependencies = [
 
 [[package]]
 name = "canic"
-version = "0.110.29"
+version = "0.110.32"
 dependencies = [
  "candid",
  "canic-core",
@@ -165,14 +165,14 @@ dependencies = [
 
 [[package]]
 name = "canic-core"
-version = "0.110.29"
+version = "0.110.32"
 dependencies = [
  "async-trait",
  "candid",
  "ciborium",
  "ic-cdk",
  "ic-memory",
- "ic-timers",
+ "ic-timers 0.8.0",
  "proc-macro2",
  "quote",
  "remain",
@@ -186,7 +186,7 @@ dependencies = [
 
 [[package]]
 name = "canic-macros"
-version = "0.110.29"
+version = "0.110.32"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -608,6 +608,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-timers"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1474fd7c9bcc237404173c2689c4175e61ef2c9670bccf539ca10ccd193d132"
+dependencies = [
+ "ic-cdk-timers",
+ "ic0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ic0"
 version = "1.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -669,7 +680,7 @@ dependencies = [
  "candid",
  "ic-cdk",
  "ic-memory",
- "ic-timers",
+ "ic-timers 0.7.1",
  "icydb-core",
  "icydb-diagnostic-code",
  "icydb-model",

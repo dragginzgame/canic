@@ -268,7 +268,7 @@ fn cost_collection_is_bounded_partial_private_and_marks_restarts() {
     assert!(
         costs
             .limitations
-            .contains(&CostEvidenceLimitation::TimerRegistrationResetUnobservable)
+            .contains(&CostEvidenceLimitation::AggregateTimerCallbacksUnqualified)
     );
     let mut private = snapshot();
     private.roles = vec![role];

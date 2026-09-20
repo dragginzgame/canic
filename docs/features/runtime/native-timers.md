@@ -18,20 +18,26 @@ package identity:
 
 ```toml
 [dependencies]
-ic-timers = "=0.7.1"
+ic-timers = "=0.8.0"
 ```
 
 Check the composed graph, not only each direct manifest:
 
 ```text
 cargo tree -d
-cargo tree -i ic-timers@0.7.1
+cargo tree -i ic-timers@0.8.0
 ```
 
 Two resolved versions contain two independent sets of library statics and
 therefore two inventories. Do not combine a direct `ic-cdk-timers` consumer
 with this design without separately inventorying and qualifying that second
 provider path.
+
+The published IcyDB 0.259.6 composition fixtures still resolve `ic-timers 0.7.1`
+alongside Canic's 0.8.0. Their shared-inventory qualification remains pending
+an IcyDB release using the same timer package; they are not evidence of a
+working composed timer runtime with this pin. The maintainer accepts this
+temporary test-only dependency mismatch; it does not block the Canic update.
 
 ## Replace the Removed Canic Facade
 
@@ -111,7 +117,7 @@ Use the policy that matches the failure boundary:
   synchronous work. Use it only when that stronger recovery protocol is
   required.
 
-`ic-timers 0.7` gives Watchdog lifecycle reconstruction its own
+`ic-timers 0.8` gives Watchdog lifecycle reconstruction its own
 `WatchdogReconcileState`. Use `ScheduledImmediately`,
 `ensure_scheduled_immediately()` or `WatchdogDecision::ContinueImmediately`
 only when durable authority proves actionable work should continue without a
