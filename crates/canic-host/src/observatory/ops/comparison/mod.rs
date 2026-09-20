@@ -6,6 +6,7 @@
 mod source;
 #[cfg(test)]
 mod tests;
+mod timer;
 
 use crate::observatory::{
     ObservatoryError,
@@ -92,8 +93,9 @@ fn compare_role(
         incoming_grants: result(incoming.map(counter_movement)),
         outgoing_grants: result(outgoing.map(counter_movement)),
         known_grant_adjusted_decrease: result(adjusted),
+        timer_measurements: result(timer::compare(before, after)),
         limitations: vec![
-            CostEvidenceLimitation::TimerRegistrationResetUnobservable,
+            CostEvidenceLimitation::AggregateTimerCallbacksUnqualified,
             CostEvidenceLimitation::TransferCoverageIncomplete,
             CostEvidenceLimitation::UnattributedExecutionMessageStorage,
         ],

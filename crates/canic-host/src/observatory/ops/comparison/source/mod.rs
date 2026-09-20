@@ -125,13 +125,15 @@ fn required(value: Option<&str>) -> Result<&str, CostComparisonFailure> {
         .ok_or(CostComparisonFailure::BindingUnavailable)
 }
 
-fn evidence(role: &ObservatoryRoleView) -> Result<&RoleCostEvidenceView, CostComparisonFailure> {
+pub(super) fn evidence(
+    role: &ObservatoryRoleView,
+) -> Result<&RoleCostEvidenceView, CostComparisonFailure> {
     role.costs
         .as_ref()
         .ok_or(CostComparisonFailure::MissingCosts)
 }
 
-fn window(role: &ObservatoryRoleView) -> Result<&CostWindowView, CostComparisonFailure> {
+pub(super) fn window(role: &ObservatoryRoleView) -> Result<&CostWindowView, CostComparisonFailure> {
     let evidence = evidence(role)?;
     if evidence
         .limitations
@@ -159,7 +161,7 @@ fn window(role: &ObservatoryRoleView) -> Result<&CostWindowView, CostComparisonF
     Ok(value)
 }
 
-fn same_window(
+pub(super) fn same_window(
     before: &ObservatoryRoleView,
     after: &ObservatoryRoleView,
 ) -> Result<(), CostComparisonFailure> {
@@ -212,7 +214,7 @@ fn metric<'a>(
     Ok(row)
 }
 
-fn value(row: &CostMetricView) -> Result<u128, CostComparisonFailure> {
+pub(super) fn value(row: &CostMetricView) -> Result<u128, CostComparisonFailure> {
     if row.value.len() > 39 {
         return Err(CostComparisonFailure::InvalidMetric);
     }

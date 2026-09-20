@@ -550,7 +550,7 @@ dependencies = [
  "candid",
  "canic-core",
  "ic-cdk",
- "ic-timers",
+ "ic-timers 0.8.0",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -572,7 +572,7 @@ dependencies = [
  "ic-certification",
  "ic-memory",
  "ic-signature-verification",
- "ic-timers",
+ "ic-timers 0.8.0",
  "k256",
  "proc-macro2",
  "quote",
@@ -668,7 +668,7 @@ dependencies = [
  "ic-agent",
  "ic-memory",
  "ic-testkit",
- "ic-timers",
+ "ic-timers 0.8.0",
  "icydb",
  "serde",
  "serde_json",
@@ -685,7 +685,7 @@ dependencies = [
  "canic-icydb-lifecycle-schema",
  "ic-cdk",
  "ic-memory",
- "ic-timers",
+ "ic-timers 0.8.0",
  "icydb",
  "serde",
  "sha2 0.10.9",
@@ -770,7 +770,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-timers",
+ "ic-timers 0.8.0",
 ]
 
 [[package]]
@@ -2453,6 +2453,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "ic-timers"
+version = "0.8.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c1474fd7c9bcc237404173c2689c4175e61ef2c9670bccf539ca10ccd193d132"
+dependencies = [
+ "ic-cdk-timers",
+ "ic0",
+ "thiserror 2.0.18",
+]
+
+[[package]]
 name = "ic-transport-types"
 version = "0.49.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2654,7 +2665,7 @@ dependencies = [
  "candid",
  "ic-cdk",
  "ic-memory",
- "ic-timers",
+ "ic-timers 0.7.1",
  "icydb-core",
  "icydb-diagnostic-code",
  "icydb-model",
@@ -4012,7 +4023,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-timers",
+ "ic-timers 0.8.0",
 ]
 
 [[package]]

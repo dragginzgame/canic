@@ -76,7 +76,7 @@ fn role(id: u8, at: u64, balance: u128, grants: u128) -> ObservatoryRoleView {
             }),
             limitations: vec![
                 CostEvidenceLimitation::TransferCoverageIncomplete,
-                CostEvidenceLimitation::TimerRegistrationResetUnobservable,
+                CostEvidenceLimitation::AggregateTimerCallbacksUnqualified,
             ],
         }),
     }
@@ -136,6 +136,246 @@ fn data<T>(observation: &mut Observation<T>) -> &mut T {
         panic!("expected fixture observation");
     };
     value
+}
+
+fn with_timers() -> (ObservatorySnapshotView, ObservatorySnapshotView) {
+    let (mut before, mut after) = snapshots();
+    for (snapshot, at, amount) in [(&mut before, 100, 20), (&mut after, 200, 70)] {
+        let rows = [
+            ("perf.timer.app.jobs.tick.work", "instructions", amount),
+            ("perf.timer.app.jobs.tick.work.calls", "count", amount / 10),
+        ]
+        .into_iter()
+        .map(|(name, unit, amount)| CostMetricView {
+            name: name.into(),
+            canister_id: None,
+            value: amount.to_string(),
+            unit: unit.into(),
+            observed_at_ns: at,
+            measurement: CostMetricKind::TimerCounter {
+                registration: TimerRegistrationView {
+                    canister_version: 1,
+                    started_at_ns: 40,
+                    sequence: 3,
+                },
+                saturated: false,
+            },
+        })
+        .collect();
+        costs(snapshot, 1).timer_instructions = frame(at, rows);
+    }
+    (before, after)
+}
+
+fn timer_results(report: &ObservatoryComparisonView) -> &[TimerMetricComparisonView] {
+    let CostComparisonResult::Available { value } = &child(report).timer_measurements else {
+        panic!("expected qualified timer family");
+    };
+    value
+}
+
+#[test]
+fn timer_comparison_preserves_registration_units_and_independent_source_interval() {
+    let (before, mut after) = with_timers();
+    let timers = data(&mut costs(&mut after, 1).timer_instructions);
+    timers.sampled_at_ns = Some(210);
+    for row in &mut timers.rows {
+        row.observed_at_ns = 210;
+    }
+    let report = compare(&before, &after).unwrap();
+    let rows = timer_results(&report);
+    for (row, amount, unit) in [(&rows[0], "50", "instructions"), (&rows[1], "5", "count")] {
+        let CostComparisonResult::Available { value } = &row.movement else {
+            panic!("expected delta");
+        };
+        assert_eq!(value.amount, amount);
+        assert_eq!(value.unit, unit);
+        assert_eq!(
+            (value.start_ns, value.end_ns, value.elapsed_ns),
+            (100, 210, 110)
+        );
+        assert_eq!(value.registration.sequence, 3);
+    }
+    assert_eq!(cycles(&child(&report).balance_change), "-500");
+    assert_eq!(
+        serde_json::from_slice::<ObservatoryComparisonView>(&serde_json::to_vec(&report).unwrap())
+            .unwrap(),
+        report
+    );
+}
+
+#[test]
+fn timer_reset_and_regrowth_reject_even_when_values_increase() {
+    let (before, mut after) = with_timers();
+    let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[0];
+    let CostMetricKind::TimerCounter { registration, .. } = &mut row.measurement else {
+        panic!();
+    };
+    registration.sequence += 1;
+    let report = compare(&before, &after).unwrap();
+    assert_eq!(
+        timer_results(&report)[0].movement,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::TimerRegistrationChanged
+        }
+    );
+    assert!(matches!(
+        timer_results(&report)[1].movement,
+        CostComparisonResult::Available { .. }
+    ));
+    let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[0];
+    let CostMetricKind::TimerCounter { registration, .. } = &mut row.measurement else {
+        panic!();
+    };
+    registration.sequence = 3;
+    registration.started_at_ns += 1;
+    assert_eq!(
+        timer_results(&compare(&before, &after).unwrap())[0].movement,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::TimerRegistrationChanged
+        }
+    );
+}
+
+#[test]
+fn timer_saturation_decreases_and_malformed_values_never_become_deltas() {
+    for (value, reason) in [
+        (
+            u64::MAX.to_string(),
+            CostComparisonFailure::SaturatedCounter,
+        ),
+        (
+            (u128::from(u64::MAX) + 1).to_string(),
+            CostComparisonFailure::InvalidMetric,
+        ),
+        ("19".into(), CostComparisonFailure::CounterDecreased),
+        ("070".into(), CostComparisonFailure::InvalidMetric),
+    ] {
+        let (before, mut after) = with_timers();
+        data(&mut costs(&mut after, 1).timer_instructions).rows[0].value = value;
+        assert_eq!(
+            timer_results(&compare(&before, &after).unwrap())[0].movement,
+            CostComparisonResult::Unavailable { reason }
+        );
+    }
+    for opening in [false, true] {
+        let (mut before, mut after) = with_timers();
+        let snapshot = if opening { &mut before } else { &mut after };
+        let CostMetricKind::TimerCounter { saturated, .. } =
+            &mut data(&mut costs(snapshot, 1).timer_instructions).rows[0].measurement
+        else {
+            panic!();
+        };
+        *saturated = true;
+        assert_eq!(
+            timer_results(&compare(&before, &after).unwrap())[0].movement,
+            CostComparisonResult::Unavailable {
+                reason: CostComparisonFailure::SaturatedCounter
+            }
+        );
+    }
+}
+
+#[test]
+fn timer_missing_rows_and_repeated_source_samples_remain_unavailable() {
+    let (mut before, mut after) = with_timers();
+    for snapshot in [&mut before, &mut after] {
+        data(&mut costs(snapshot, 1).timer_instructions)
+            .rows
+            .clear();
+    }
+    assert_eq!(
+        child(&compare(&before, &after).unwrap()).timer_measurements,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::MissingMetric
+        }
+    );
+    let (before, mut after) = with_timers();
+    data(&mut costs(&mut after, 1).timer_instructions)
+        .rows
+        .remove(0);
+    assert_eq!(
+        timer_results(&compare(&before, &after).unwrap())[0].movement,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::MissingMetric
+        }
+    );
+    let (before, mut after) = with_timers();
+    costs(&mut after, 1).timer_instructions = before.roles[1]
+        .costs
+        .as_ref()
+        .unwrap()
+        .timer_instructions
+        .clone();
+    assert_eq!(
+        timer_results(&compare(&before, &after).unwrap())[0].movement,
+        CostComparisonResult::Unavailable {
+            reason: CostComparisonFailure::NonAdvancingWindow
+        }
+    );
+}
+
+#[test]
+fn timer_invalid_pages_fail_without_hiding_independent_balances() {
+    type Mutation = fn(&mut CostSamplesView);
+    let cases: &[(Mutation, CostComparisonFailure)] = &[
+        (
+            |page| page.state = CostSampleState::Stale,
+            CostComparisonFailure::StaleSample,
+        ),
+        (
+            |page| page.truncated = true,
+            CostComparisonFailure::TruncatedSample,
+        ),
+        (
+            |page| page.rows[0].observed_at_ns -= 1,
+            CostComparisonFailure::InvalidMetric,
+        ),
+        (
+            |page| page.rows[0].unit = "cycles".into(),
+            CostComparisonFailure::InvalidMetric,
+        ),
+        (
+            |page| page.rows.push(page.rows[0].clone()),
+            CostComparisonFailure::InvalidMetric,
+        ),
+        (
+            |page| page.rows[0].measurement = CostMetricKind::Gauge,
+            CostComparisonFailure::InvalidMetric,
+        ),
+        (
+            |page| {
+                let CostMetricKind::TimerCounter { registration, .. } =
+                    &mut page.rows[0].measurement
+                else {
+                    panic!();
+                };
+                registration.canister_version += 1;
+            },
+            CostComparisonFailure::SourceWindowChanged,
+        ),
+        (
+            |page| {
+                let CostMetricKind::TimerCounter { registration, .. } =
+                    &mut page.rows[0].measurement
+                else {
+                    panic!();
+                };
+                registration.sequence = 0;
+            },
+            CostComparisonFailure::InvalidMetric,
+        ),
+    ];
+    for (mutate, reason) in cases {
+        let (before, mut after) = with_timers();
+        mutate(data(&mut costs(&mut after, 1).timer_instructions));
+        let report = compare(&before, &after).unwrap();
+        assert_eq!(
+            child(&report).timer_measurements,
+            CostComparisonResult::Unavailable { reason: *reason }
+        );
+        assert_eq!(cycles(&child(&report).balance_change), "-500");
+    }
 }
 
 #[test]

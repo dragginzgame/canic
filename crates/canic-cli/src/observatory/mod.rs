@@ -167,6 +167,24 @@ mod tests {
         let unavailable = serde_json::json!({
             "state": "unavailable", "observed_at_unix_ms": at, "failure": {"kind": "unsupported"}
         });
+        let timer_instructions = serde_json::json!({
+            "state": "observed", "observed_at_unix_ms": at,
+            "source": "public_metric_cache", "value": {
+                "state": "fresh", "sampled_at_ns": at, "stale_after_ns": 500, "truncated": false,
+                "rows": [{"name": "perf.timer.app.jobs.tick.work", "canister_id": null,
+                    "value": at.to_string(), "unit": "instructions", "observed_at_ns": at,
+                    "measurement": {"kind": "timer_counter", "registration": {
+                        "canister_version": 1, "started_at_ns": 40, "sequence": 3
+                    }, "saturated": false}}]
+            }
+        });
+        let costs = serde_json::json!({
+            "balance": unavailable, "funding_and_callbacks": unavailable,
+            "timer_instructions": timer_instructions,
+            "window": {"state": "observed", "observed_at_unix_ms": at,
+                "source": "public_metric_cache", "value": {"canister_version": 1, "heap_started_at_ns": 50}},
+            "limitations": []
+        });
         serde_json::json!({
             "schema_version": 1, "environment": "local", "fleet": "demo",
             "collected_at_unix_ms": at, "freshness_secs": 30,
@@ -180,7 +198,7 @@ mod tests {
             "roles": [{"role": "root", "canister_id": candid::Principal::from_slice(&[1]).to_text(),
                 "parent_canister_id": null, "subnet_id": null, "release_identity": "release-a",
                 "expected_module_sha256": "a".repeat(64), "overview": unavailable,
-                "funding": unavailable, "estate": unavailable, "store": unavailable, "costs": null}]
+                "funding": unavailable, "estate": unavailable, "store": unavailable, "costs": costs}]
         })
     }
 
@@ -218,9 +236,22 @@ mod tests {
         assert!(matches!(
             report.roles[0].balance_change,
             canic_host::observatory::view::CostComparisonResult::Unavailable {
-                reason: canic_host::observatory::view::CostComparisonFailure::MissingCosts
+                reason: canic_host::observatory::view::CostComparisonFailure::SnapshotUnavailable
             }
         ));
+        let canic_host::observatory::view::CostComparisonResult::Available { value: timers } =
+            &report.roles[0].timer_measurements
+        else {
+            panic!("timer evidence must survive offline JSON");
+        };
+        let canic_host::observatory::view::CostComparisonResult::Available { value } =
+            &timers[0].movement
+        else {
+            panic!("timer delta must be available");
+        };
+        assert_eq!(value.amount, "100");
+        assert_eq!(value.unit, "instructions");
+        assert_eq!(value.registration.sequence, 3);
         assert!(
             matches!(run(arguments), Err(ObservatoryCommandError::Io(error)) if error.kind() == std::io::ErrorKind::AlreadyExists)
         );

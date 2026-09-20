@@ -292,13 +292,14 @@ budget excludes the independently bounded latest snapshots, query reply buffers
 and application-owned input allocation.
 
 Every point carries the original `observed_at_ns`, unit (on the series) and a
-`Gauge` or `Counter { window_id, saturated }` interpretation. A counter producer
+`Gauge`, `Counter { window_id, saturated }` or `TimerCounter` interpretation. A counter producer
 must change `window_id` on every reset, including two resets in one timestamp.
 `delta` is present only between adjacent slots with increasing observation time,
 the same counter window, no saturation and a nondecreasing value. It contains an
 exact amount and elapsed nanoseconds; consumers may calculate a rate from those
-fields. Gauge values, gaps and resets have no counter delta. Funding-record
-inventories and timer lifetime summaries without a reset identity remain gauges.
+fields. Gauge values, timer counters, gaps and resets have no public history
+delta. Timer counters retain the full registration metadata for qualified offline
+comparison. Funding-record inventories and aggregate timer events remain gauges.
 A window maximum is a gauge whose name must identify the window maximum; it is
 not an interval maximum or a cumulative counter.
 
@@ -366,7 +367,8 @@ maximum 64 registrations. These aggregates are gauges because cancellation and
 registration changes can reset individual source counters. Missing state rows
 mean no currently observed declaration in that state. They describe timer work,
 not every durable application intent. Timer inventory failure rejects only the
-operations sample.
+operations sample. Endpoint performance remains available without timer inventory;
+offline comparison reports missing timer evidence rather than inventing measurements.
 
 Timer performance uses `perf.timer.<owner>.<subsystem>.<name>.scheduler` and
 `.work`, in instructions, with a `.calls` row for each phase's completed
@@ -377,13 +379,16 @@ count starts across the current registry; starts need not equal completed
 measurement samples. Scheduler and work measurements cover the timer owner's
 measured envelopes, not all execution or billed cycles.
 
-All timer rows remain gauges. ic-timers 0.7.1 exposes a runtime epoch but no
-per-registration reset identity: unregistering and registering the same name
-can reset its totals without changing the epoch. Even increasing values do not
-prove continuity. Do not derive callback frequency or interval instruction
-deltas until the owner supplies that identity or an independently verified
-registration-continuity experiment. A full registry can exceed the existing
-public row budget; truncation remains explicit and missing rows are not zero.
+Timer performance rows use `PublicMetricKind::TimerCounter`: the source runtime
+epoch (canister version and start time), checked registration sequence and
+per-field saturation accompany each instruction total and completed-sample
+count from the same inventory observation. Cancellation preserves that identity;
+unregister/re-register changes it. Public history retains raw samples without
+deriving timer rates. Aggregate timer event and state rows remain gauges.
+The host's offline comparison admits timer deltas only for an unchanged
+registration, advancing exact source times and unsaturated fields. A full registry can
+exceed the existing public row budget; truncation remains explicit and missing
+rows are not zero.
 No extra sampler or polling schedule is introduced. The private
 [observatory cost evidence](../operations/fleet-observatory.md#cost-investigation)
 collects these values with balances, grants and source-window metadata.

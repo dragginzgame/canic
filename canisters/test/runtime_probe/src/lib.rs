@@ -24,6 +24,8 @@ thread_local! {
     static COMPANION_TIMER: RefCell<Option<ic_timers::OnceRegistration>> = const { RefCell::new(None) };
     static APPLICATION_INTERVAL_TIMER: RefCell<Option<ic_timers::AfterCompletionRegistration>> = const { RefCell::new(None) };
     static CAPACITY_TIMERS: RefCell<Vec<ic_timers::OnceRegistration>> = const { RefCell::new(Vec::new()) };
+    static COST_WATCHDOG: RefCell<Option<ic_timers::WatchdogRegistration>> = const { RefCell::new(None) };
+    static TRAP_COST_WATCHDOG: Cell<bool> = const { Cell::new(false) };
 }
 
 canic::start_local!(lifecycle_participant(
@@ -195,21 +197,56 @@ async fn begin_timer_probe_intent(resource_seed: u8, ttl_secs: Option<u64>) -> R
 /// Exercise distinct scheduler and work measurement envelopes in the existing timer fixture.
 #[canic_update(public)]
 async fn schedule_cost_probe_watchdog() -> Result<(), Error> {
-    let registration = ic_timers::register_watchdog(
-        application_timer_identity("cost-watchdog"),
-        ic_timers::TimerCadence::new(Duration::from_secs(10)).expect("cost probe cadence"),
-        ic_timers::DeclarationLifetime::Retained,
-        |_context| {
-            ic_timers::WatchdogRunResult::new(
-                ic_timers::TimerCompletion::success(1),
-                ic_timers::WatchdogDecision::Stop,
+    COST_WATCHDOG.with_borrow_mut(|current| {
+        let registration = current.get_or_insert_with(|| {
+            ic_timers::register_watchdog(
+                application_timer_identity("cost-watchdog"),
+                ic_timers::TimerCadence::new(Duration::from_secs(10)).expect("cost probe cadence"),
+                ic_timers::DeclarationLifetime::Retained,
+                |_context| {
+                    if TRAP_COST_WATCHDOG.get() {
+                        ic_cdk::trap("cost watchdog interruption probe");
+                    }
+                    ic_timers::WatchdogRunResult::new(
+                        ic_timers::TimerCompletion::success(1),
+                        ic_timers::WatchdogDecision::Stop,
+                    )
+                },
             )
-        },
-    )
-    .expect("register cost probe watchdog");
-    registration
-        .ensure_scheduled_immediately()
-        .expect("schedule cost probe watchdog");
+            .expect("register cost probe watchdog")
+        });
+        registration
+            .ensure_scheduled_immediately()
+            .expect("schedule cost probe watchdog");
+    });
+    Ok(())
+}
+
+/// Exercise cancellation and replacement without adding a second timer owner.
+#[canic_update(public)]
+async fn cancel_cost_probe_watchdog(unregister: bool) -> Result<(), Error> {
+    COST_WATCHDOG.with_borrow_mut(|current| {
+        if unregister {
+            current
+                .take()
+                .expect("cost probe registration")
+                .unregister()
+                .expect("unregister cost probe");
+        } else {
+            current
+                .as_ref()
+                .expect("cost probe registration")
+                .cancel()
+                .expect("cancel cost probe");
+        }
+    });
+    Ok(())
+}
+
+/// Select a real IC callback trap to verify that no completed sample is fabricated.
+#[canic_update(public)]
+async fn set_cost_probe_trap(enabled: bool) -> Result<(), Error> {
+    TRAP_COST_WATCHDOG.set(enabled);
     Ok(())
 }
 

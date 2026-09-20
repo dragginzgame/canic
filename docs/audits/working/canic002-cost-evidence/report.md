@@ -39,21 +39,26 @@ The comparison does not calculate callback rates or extrapolate daily burn.
 
 ## Owner gaps and return handoff
 
-ic-timers 0.7.1 owns both measurement phases, but its public `TimerSnapshot`
-does not expose registration continuity. `TimerEpoch` identifies the runtime,
-whereas unregister/re-register can replace a timer's counters within that same
-epoch. The callback `generation()` changes during ordinary scheduling and is
-not a registration token. Even nondecreasing sampled counters cannot exclude a
-reset followed by additional activity. Canic therefore retains gauges and
-explicitly declines callback-rate and interval-instruction calculations.
+Canic now pins published ic-timers 0.8.0. Its `TimerSnapshot::registration_id()`
+provides the requested source-owned runtime epoch and checked registration
+sequence. Cancellation preserves it; unregister/re-register changes it even
+within the same runtime epoch. The callback `generation()` remains unrelated
+to counter continuity. The upstream contract also defines saturation and
+completed-measurement limits; interrupted callbacks do not fabricate samples.
 
-The timer-owner follow-up is a source-owned registration identity available on
-each snapshot, changing on every registration/reset and distinct from callback
-generation, together with saturation and epoch semantics. Qualify cancellation,
-unregister/re-register with the same identity, reset followed by regrowth beyond
-the previous sample, interrupted callbacks and runtime restarts. This is a
-dependency API request, not authority to edit a sibling repository or add a
-parallel tracking owner in Canic.
+Canic now carries that identity alongside each cached timer performance total
+and completed-sample count. The same inventory observation supplies values and
+identity; four optional reads per role and the existing sampling cadence remain.
+Private snapshot projection preserves the fields, and offline comparison
+qualifies independent instruction/sample deltas by exact registration, source
+time, freshness, completeness, type and saturation. Reset followed by regrowth
+is rejected. Aggregate callback events remain gauges; completed samples do not
+account for interrupted callbacks or establish callback rates. No parallel
+tracking owner is introduced, and public history does not derive timer rates.
+IcyDB 0.259.6 still resolves ic-timers 0.7.1 in external composition fixtures;
+their shared-inventory qualification awaits a matching published IcyDB dependency.
+The maintainer explicitly accepts this temporary test-only mismatch and leaves
+the IcyDB pin unchanged; it is not a blocker for Canic's dependency update.
 
 Funding grant counters do not cover every balance-changing transfer. Safe
 consumption attribution additionally needs interval-aligned balances, complete
@@ -64,8 +69,8 @@ The private report keeps `transfer_coverage_incomplete` and
 `unattributed_execution_message_storage` visible instead of claiming burn.
 
 The source-evidence implementation can be reviewed independently. The entire
-CANIC-002 cycle-attribution extension remains open for timer-owner continuity,
-complete transfer evidence and downstream actual-balance verification. The
+CANIC-002 cycle-attribution extension remains open for complete transfer
+evidence and downstream actual-balance verification. The
 local comparison admits aligned source windows; it cannot manufacture alignment
 when independently cached measurements cover different intervals.
 An exact timer optimisation claim requires a controlled workload comparison.
@@ -77,7 +82,7 @@ bounded observability follow-up to the published Fleet surface in its current
 open patch instead of opening a new minor without the human closeout gate.
 This decision does not sequence an attribution redesign or a new minor.
 
-## Qualification
+## .32 source and comparison qualification
 
 All 81 focused native tests pass: 13 host observatory cases, the CLI private
 collection contract and 67 core metrics/public-cache cases. They cover private
@@ -129,3 +134,72 @@ changelog surfaces are ready for review; packages remain .31. The complete
 cycle-attribution batch is not yet push-ready: timer continuity, complete
 transfer evidence and downstream verification remain open. An unrun broad gate
 is not this blocker.
+
+## Published timer dependency qualification — 2026-09-20
+
+The maintainer confirms .32 publication and requests ic-timers 0.8.0. Both
+Canic lockfiles now resolve the published package with checksum
+`c1474fd7c9bcc237404173c2689c4175e61ef2c9670bccf539ca10ccd193d132`.
+The standalone lock also synchronizes existing Canic path-package versions to
+.32; no Canic package version is bumped. IcyDB's accepted test-only 0.7.1
+dependency remains unchanged.
+
+All 13 focused all-feature core timer regressions and all nine existing
+PocketIC timer-authority cases pass. The PocketIC target takes 138.37 seconds
+including rebuilt Wasm fixtures; the runner takes 239 seconds including native
+compilation. It exercises application cancellation/recurrence, runtime timer
+custody/restoration, identity/capacity rejection, scheduler/work measurements,
+protected observability and public sampling/history bounds. Logs are
+`.tmp/ic-timers08-core-tests.log` and `.tmp/ic-timers08-pocketic.log`.
+Diff checks pass. No Rust source adaptation was required.
+
+The complete dependency-update batch and both .33 changelog surfaces are ready
+for the maintainer-selected release flow. This qualifies the dependency under
+existing Canic behavior, not registration-aware comparison or full cycle
+attribution. No agent-started broad gate, release transaction, publication,
+deployment or sibling edit ran.
+
+## Registration-evidence integration qualification — 2026-09-20
+
+The maintainer accepts the source/host integration into the same .33 batch.
+Core projects `TimerCounter` values and source registration metadata from one
+inventory observation. Private schema-1 JSON retains this as `timer_counter`;
+comparison adds `roles[].timer_measurements` with exact decimal amounts, units
+and source intervals. Public history retains raw typed observations without
+timer deltas. Aggregate callback events remain gauges and receive the explicit
+`aggregate_timer_callbacks_unqualified` limitation. Scheduling and the four-read
+optional collection budget are unchanged. Endpoint performance remains available
+when timer inventory is unavailable; absent timer measurements remain unknown.
+
+All 59 focused native/contract checks pass: 28 core public-metric cases,
+28 host observatory cases, two CLI offline/private-output cases and canonical
+public-metric Candid equality. They cover complete registration equality,
+reset/regrowth, missing counters, repeated and mismatched source times,
+freshness/truncation, canonical full-width numbers, explicit and sentinel
+saturation, malformed rows, independent cycle results and JSON preservation.
+
+All nine existing PocketIC timer-authority cases pass in 148.19 seconds,
+including rebuilt Wasm fixtures (243-second runner including native compilation).
+The retained watchdog proves cancellation preserves registration and measurements;
+a real callback trap fabricates no completed work sample; unregister/re-register
+changes the sequence within the same runtime epoch even after counters exceed
+the prior sample. The target also retains same-release restoration, timer
+custody/capacity, protected observation and bounded public sampling/history.
+
+The final fixture reports a scheduled sampling maximum of 21,963,109 instructions,
+above the unchanged 20-million advisory reference. The full-history sample uses
+20,974,053 instructions; 287 points retain 5,277,144 reserved bytes under the
+8,388,608-byte cap. Registration metadata enlarges history points. These are
+current fixture observations, not a matched overhead benchmark, timer bill or
+downstream savings claim; no threshold or memory budget was raised.
+
+Warning-denied all-target/all-feature Clippy passes for core, host and CLI;
+scoped Clippy passes for the runtime-probe library and timer-authority test target.
+Changed-source formatting and diff checks pass. Logs are
+`.tmp/canic002-registration-{core,host,cli,candid,clippy,probe-clippy,test-clippy,pocketic}.log`.
+
+The complete expanded .33 batch and both changelog surfaces are ready for the
+maintainer-selected release flow. Canic versions remain .32; the accepted
+IcyDB test-only mismatch is unchanged. Complete transfer attribution and actual
+downstream balance verification remain open. No broad gate, version bump,
+Git publication, deployment or sibling edit ran.

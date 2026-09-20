@@ -59,7 +59,7 @@ fn grants_keep_precision_source_time_and_saturation_without_inventing_consumptio
 }
 
 #[test]
-fn timer_measurements_remain_gauges_and_keep_both_phases() {
+fn timer_measurements_keep_source_registration_and_both_phases() {
     let family = PublicMetricFamily::Performance;
     let mut reply = snapshot(
         family,
@@ -72,14 +72,30 @@ fn timer_measurements_remain_gauges_and_keep_both_phases() {
         ],
     );
     for row in &mut reply.metrics.entries {
-        row.kind = PublicMetricKind::Gauge;
+        row.kind = PublicMetricKind::TimerCounter {
+            registration: canic_core::dto::public_status::TimerMetricRegistration {
+                canister_version: 3,
+                started_at_ns: 10,
+                sequence: 7,
+            },
+            saturated: true,
+        };
     }
     let view = samples(reply, family).unwrap();
     assert_eq!(view.rows.len(), 4);
-    assert!(
-        view.rows
-            .iter()
-            .all(|row| row.measurement == CostMetricKind::Gauge)
+    assert!(view.rows.iter().all(|row| row.measurement
+        == CostMetricKind::TimerCounter {
+            registration: TimerRegistrationView {
+                canister_version: 3,
+                started_at_ns: 10,
+                sequence: 7
+            },
+            saturated: true,
+        }));
+    let json = serde_json::to_vec(&view).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<CostSamplesView>(&json).unwrap(),
+        view
     );
 }
 

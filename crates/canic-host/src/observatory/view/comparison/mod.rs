@@ -3,7 +3,9 @@
 //! Responsibility: passive private interval reports and typed missing evidence.
 //! Boundary: historical local evidence only, without billing or mutation authority.
 
-use crate::observatory::view::{CostEvidenceLimitation, Observation, ObservatoryAuthorityView};
+use crate::observatory::view::{
+    CostEvidenceLimitation, Observation, ObservatoryAuthorityView, TimerRegistrationView,
+};
 use serde::{Deserialize, Serialize};
 
 ///
@@ -50,6 +52,8 @@ pub enum CostComparisonFailure {
     StaleSample,
 
     TimeWindowsDiffer,
+
+    TimerRegistrationChanged,
 
     TruncatedSample,
 
@@ -102,7 +106,38 @@ pub struct RoleCostComparisonView {
     pub incoming_grants: CostComparisonResult<CycleMovementView>,
     pub outgoing_grants: CostComparisonResult<CycleMovementView>,
     pub known_grant_adjusted_decrease: CostComparisonResult<CycleMovementView>,
+    pub timer_measurements: CostComparisonResult<Vec<TimerMetricComparisonView>>,
     pub limitations: Vec<CostEvidenceLimitation>,
+}
+
+///
+/// TimerMetricComparisonView
+///
+/// One named timer phase total or completed-sample counter with an independent result.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimerMetricComparisonView {
+    pub name: String,
+    pub movement: CostComparisonResult<TimerMetricMovementView>,
+}
+
+///
+/// TimerMetricMovementView
+///
+/// Exact source interval and decimal counter delta; instructions and counts are not cycles.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct TimerMetricMovementView {
+    pub registration: TimerRegistrationView,
+    pub start_ns: u64,
+    pub end_ns: u64,
+    pub elapsed_ns: u64,
+    pub unit: String,
+    pub amount: String,
 }
 
 ///

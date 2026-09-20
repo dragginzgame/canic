@@ -20,6 +20,45 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## CANIC-002 registration-aware measurements complete — 2026-09-20
+
+After .32 publication, the maintainer requests ic-timers 0.8.0 and accepts
+registration-evidence propagation in the same .33 batch. Both lockfiles use
+the new dependency. Each cached timer instruction total and completed-sample
+count now carries the source runtime epoch, checked registration sequence and
+per-field saturation from one inventory observation. Public Candid gains the
+current-contract `TimerCounter` variant; private schema-1 reports preserve it.
+
+Offline comparison adds independently qualified `timer_measurements`, with
+decimal instruction/count deltas and actual source intervals. Changed
+registrations reject even after regrowth; saturation, missing rows,
+stale/truncated/malformed pages and nonadvancing windows remain typed failures.
+Aggregate callback events stay gauges, and public history derives no timer
+rates. Scheduling, sampling cadence and four optional cost reads per role stay
+unchanged. Complete transfer accounting and downstream actual-balance
+verification remain open; these measurements do not establish burn or savings.
+
+All 59 focused native/contract checks pass: 28 core, 28 host, two CLI and
+canonical public-metric Candid equality. All nine existing PocketIC
+timer-authority cases pass, including cancellation continuity, a real trapped
+callback without a fabricated completed sample, and unregister/re-register
+with regrowth in the same epoch. The target takes 148.19 seconds including
+Wasm preparation (243-second runner). Core/host/CLI all-target/all-feature
+Clippy, scoped fixture/test Clippy, changed-source formatting and diff checks pass.
+
+The final fixture records a 21,963,109-instruction sampling maximum, above the
+unchanged 20-million advisory reference. History reserves 5,277,144 bytes
+within its 8 MiB limit. These are fixture observations, not a matched cost
+comparison. Logs are `.tmp/canic002-registration-*.log`.
+
+The complete requested dependency and registration-evidence batch is ready to
+push through the maintainer-selected release flow. Both .33 changelog surfaces
+are ready; Canic versions remain .32. IcyDB 0.259.6's test-only timer mismatch
+remains explicitly accepted and does not block this batch. Keep the follow-up
+on .110 despite the cadence guideline; no minor transition is implied. No broad
+gate, version bump, Git publication, deployment or sibling edit ran.
+[Evidence and remaining work](../audits/working/canic002-cost-evidence/report.md).
+
 ## CANIC-002 source evidence and offline comparison; attribution remains open — 2026-09-20
 
 The maintainer accepts Toko Miner's cycle-attribution follow-up. Canic now
