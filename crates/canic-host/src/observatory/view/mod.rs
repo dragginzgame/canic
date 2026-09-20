@@ -1,6 +1,12 @@
 //! Read-only observed facts and the smaller public presentation contract.
 
+mod comparison;
+mod cost;
+
 use serde::{Deserialize, Serialize};
+
+pub use comparison::*;
+pub use cost::*;
 
 /// Stable failure classes never carry private tool output or free-form runtime errors.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -24,6 +30,7 @@ pub enum ObservationFailure {
 pub enum ObservationSource {
     LocalOperationJournal,
     PublicRoleOverview,
+    PublicMetricCache,
     ProtectedRoleStatus,
     RetainedTerminalReview,
 }
@@ -109,6 +116,8 @@ pub struct ObservatoryRoleView {
     pub expected_module_sha256: Option<String>,
     pub overview: Observation<RoleOverviewView>,
     pub funding: Observation<RoleFundingView>,
+    #[serde(deserialize_with = "Option::deserialize")]
+    pub costs: Option<RoleCostEvidenceView>,
     pub estate: Observation<RootEstateView>,
     pub store: Observation<StoreInventoryView>,
 }

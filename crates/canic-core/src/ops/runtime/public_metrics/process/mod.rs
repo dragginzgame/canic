@@ -84,6 +84,7 @@ fn timer_rows(timers: &[ic_timers::TimerSnapshot]) -> Vec<PublicMetricSample> {
         for (name, value) in [
             ("schedule_requests", counters.schedule_requests()),
             ("wakeups_armed", counters.wakeups_armed()),
+            ("scheduler_started", counters.scheduler_started()),
             ("work_started", counters.work_started()),
             ("work_completed", counters.work_completed()),
             ("retryable_failure", counters.retryable_failure()),

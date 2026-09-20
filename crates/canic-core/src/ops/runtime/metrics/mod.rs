@@ -615,22 +615,27 @@ fn perf_entries_from(
             }
         })
         .collect::<Vec<_>>();
-    entries.extend(timer_snapshots.iter().map(|snapshot| {
+    entries.extend(timer_snapshots.iter().flat_map(|snapshot| {
         let identity = snapshot.identity();
-        let work = snapshot.observability().performance().work_instructions();
-        MetricEntry {
+        let performance = snapshot.observability().performance();
+        [
+            ("scheduler", performance.scheduler_instructions()),
+            ("work", performance.work_instructions()),
+        ]
+        .map(|(phase, summary)| MetricEntry {
             labels: vec![
                 "timer".to_string(),
                 identity.owner().to_string(),
                 identity.subsystem().to_string(),
                 identity.name().to_string(),
+                phase.to_string(),
             ],
             principal: None,
             value: MetricValue::CountAndU64 {
-                count: work.samples(),
-                value_u64: work.total(),
+                count: summary.samples(),
+                value_u64: summary.total(),
             },
-        }
+        })
     }));
     entries
 }

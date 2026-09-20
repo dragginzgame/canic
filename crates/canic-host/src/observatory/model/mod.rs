@@ -1,5 +1,7 @@
 //! Explicit collection budgets and data-only renderer configuration.
 
+pub(super) mod cost;
+
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -7,6 +9,7 @@ use std::collections::BTreeMap;
 pub struct ObservatoryOptions {
     pub environment: String,
     pub fleet: String,
+    pub collect_costs: bool,
     pub maximum_canisters: usize,
     pub maximum_response_bytes: usize,
     pub freshness_secs: u32,

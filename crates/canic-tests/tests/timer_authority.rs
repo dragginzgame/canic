@@ -106,6 +106,15 @@ fn public_snapshots_preserve_observer_authority() {
         query(published, PublicMetricFamily::Application).state,
         PublicSnapshotState::Unavailable
     );
+    fixture.pic.advance_time(Duration::from_secs(11));
+    let scheduled: Result<(), Error> = fixture
+        .pic
+        .update_candid(published, "schedule_cost_probe_watchdog", ())
+        .unwrap();
+    scheduled.unwrap();
+    for _ in 0..20 {
+        fixture.pic.tick();
+    }
     let sampled: Result<(), Error> = fixture
         .pic
         .update_candid(published, "sample_public_metrics", ())
@@ -122,6 +131,16 @@ fn public_snapshots_preserve_observer_authority() {
     let cycles = query(published, PublicMetricFamily::Cycles);
     assert_eq!(cycles.state, PublicSnapshotState::Fresh);
     assert_eq!(cycles.metrics.entries[0].unit, "cycles");
+    let performance = query(published, PublicMetricFamily::Performance);
+    assert_timer_phase_measurements(&performance.metrics.entries);
+    let operations = query(published, PublicMetricFamily::Operations);
+    assert!(
+        operations
+            .metrics
+            .entries
+            .iter()
+            .any(|row| row.name == "timer.events.scheduler_started")
+    );
     for request in sensitive_observability_requests(false) {
         let denied: Result<RoleStatusResponse, Error> = fixture.pic.query_candid_as_or_panic(
             published,
@@ -139,6 +158,42 @@ fn public_snapshots_preserve_observer_authority() {
     assert_eq!(stale.state, PublicSnapshotState::Stale);
     assert_eq!(stale.sampled_at_ns, snapshot.sampled_at_ns);
     assert_eq!(stale.metrics.entries, snapshot.metrics.entries);
+}
+
+fn assert_timer_phase_measurements(rows: &[canic::dto::public_status::PublicMetric]) {
+    let timer_rows = rows
+        .iter()
+        .filter(|row| row.name.starts_with("perf.timer."))
+        .collect::<Vec<_>>();
+    assert!(!timer_rows.is_empty());
+    assert!(
+        timer_rows
+            .iter()
+            .all(|row| row.kind == canic::dto::public_status::PublicMetricKind::Gauge)
+    );
+    for phase in ["scheduler", "work"] {
+        let name = format!("perf.timer.runtime-probe.application.cost-watchdog.{phase}");
+        let instructions = timer_rows.iter().find(|row| row.name == name).unwrap();
+        let completions = timer_rows
+            .iter()
+            .find(|row| row.name == format!("{name}.calls"))
+            .unwrap();
+        assert_eq!(instructions.unit, "instructions");
+        assert!(instructions.value > 0);
+        assert!(completions.value > 0);
+    }
+    for timer in timer_rows
+        .iter()
+        .filter_map(|row| row.name.strip_suffix(".work"))
+    {
+        for suffix in [".scheduler", ".scheduler.calls", ".work.calls"] {
+            assert!(
+                timer_rows
+                    .iter()
+                    .any(|candidate| candidate.name == format!("{timer}{suffix}"))
+            );
+        }
+    }
 }
 
 #[derive(CandidType, Deserialize)]
@@ -779,7 +834,7 @@ fn timer_metric(entries: &[MetricEntry], label: &str) -> (u64, u64) {
     entries
         .iter()
         .find_map(|entry| {
-            (entry.labels == ["perf", "timer", "canic", subsystem, name]).then(|| {
+            (entry.labels == ["perf", "timer", "canic", subsystem, name, "work"]).then(|| {
                 match entry.value {
                     MetricValue::CountAndU64 { count, value_u64 } => (count, value_u64),
                     MetricValue::Count(_) | MetricValue::U128(_) => {

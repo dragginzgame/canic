@@ -19,6 +19,8 @@ pub enum ObservatoryError {
     Profile,
     #[error("Fleet authority changed during observation; collect a new snapshot")]
     AuthorityChanged,
+    #[error("cost comparison cannot use this evidence: {0:?}")]
+    Comparison(view::CostComparisonFailure),
     #[error(transparent)]
     Io(#[from] std::io::Error),
     #[error(transparent)]

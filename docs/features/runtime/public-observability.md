@@ -214,8 +214,9 @@ Collection bounds apply before formatting and sorting. Operations read at most
 257 entries from each of four counter owners and each of the three ICP-refill
 aggregate indexes. Each target entry yields at most two refill rows. Performance
 reads at most 129 recorded counters plus the upstream timer inventory, capped by
-ic-timers at 64 registrations with bounded identities; the performance path builds no protected intent or
-timer-diagnostic projection. Bounded operations aggregates are described below. Occupancy reads at most 129 bounded shard records
+ic-timers at 64 registrations with bounded identities. Each registration yields
+separate scheduler and work entries; the performance path builds no protected
+intent or timer-diagnostic projection. Bounded operations aggregates are described below. Occupancy reads at most 129 bounded shard records
 and no assignment keys. These ordered prefixes are independent of insertion
 order. Performance and occupancy emit two public rows per input; a sentinel row
 signals truncation. Each family retains the first 256 selected rows and sorts
@@ -359,13 +360,33 @@ window (`window_id = 0`); heap coverage and canister version delimit resets.
 The common 256-row snapshot and global history budgets still apply.
 
 `operations` also includes `timer.state.{disabled,idle,active,retrying,failed}`
-counts and `timer.events` scheduling, work, retryable/invariant failure,
+counts and `timer.events` scheduling, scheduler/work starts, work completion, retryable/invariant failure,
 unacknowledged and coalescing totals. Collection visits the existing inventory's
 maximum 64 registrations. These aggregates are gauges because cancellation and
 registration changes can reset individual source counters. Missing state rows
 mean no currently observed declaration in that state. They describe timer work,
 not every durable application intent. Timer inventory failure rejects only the
 operations sample.
+
+Timer performance uses `perf.timer.<owner>.<subsystem>.<name>.scheduler` and
+`.work`, in instructions, with a `.calls` row for each phase's completed
+measurement samples. This is a hard cut of the previous work-only metric name.
+The protected performance projection uses the same explicit phase labels.
+`timer.events.scheduler_started` and `timer.events.work_started` independently
+count starts across the current registry; starts need not equal completed
+measurement samples. Scheduler and work measurements cover the timer owner's
+measured envelopes, not all execution or billed cycles.
+
+All timer rows remain gauges. ic-timers 0.7.1 exposes a runtime epoch but no
+per-registration reset identity: unregistering and registering the same name
+can reset its totals without changing the epoch. Even increasing values do not
+prove continuity. Do not derive callback frequency or interval instruction
+deltas until the owner supplies that identity or an independently verified
+registration-continuity experiment. A full registry can exceed the existing
+public row budget; truncation remains explicit and missing rows are not zero.
+No extra sampler or polling schedule is introduced. The private
+[observatory cost evidence](../operations/fleet-observatory.md#cost-investigation)
+collects these values with balances, grants and source-window metadata.
 
 `performance` adds `memory.wasm_extent` and `memory.stable_extent`, both gauges
 in bytes, obtained from the executing canister's memory page counts. Wasm extent
