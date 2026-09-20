@@ -1,5 +1,7 @@
 //! Read retained authority, collect independent replies and project bounded views.
 
+pub mod comparison;
+mod cost;
 pub mod presentation;
 pub mod transport;
 
@@ -85,7 +87,7 @@ pub fn collect(
                 },
             );
             for entry in &source.registry.entries {
-                let mut role = collect_role(entry, transport);
+                let mut role = collect_role(entry, transport, options.collect_costs);
                 role.subnet_id = placement(source, entry);
                 snapshot.roles.push(role);
             }
@@ -101,6 +103,7 @@ pub fn collect(
 pub(super) fn collect_role(
     entry: &RegistryEntry,
     transport: &mut impl ObservatoryTransport,
+    collect_costs: bool,
 ) -> ObservatoryRoleView {
     ObservatoryRoleView {
         role: entry.role.clone().unwrap_or_else(|| "unknown".into()),
@@ -120,6 +123,7 @@ pub(super) fn collect_role(
             transport.funding(entry),
             ObservationSource::ProtectedRoleStatus,
         ),
+        costs: collect_costs.then(|| cost::collect(entry, transport)),
         estate: outcome(
             transport.estate(entry),
             ObservationSource::ProtectedRoleStatus,

@@ -7,10 +7,21 @@ use crate::{
         model::ObservatoryOptions,
         ops::{self, transport::IcpObservatoryTransport},
         policy,
-        view::ObservatorySnapshotView,
+        view::{ObservatoryComparisonView, ObservatorySnapshotView},
     },
 };
 use std::path::Path;
+
+/// Compare two bounded local private reports; this path has no transport or workspace discovery.
+pub fn compare_files(
+    before: &Path,
+    after: &Path,
+    maximum_bytes: usize,
+) -> Result<ObservatoryComparisonView, ObservatoryError> {
+    let before = ops::comparison::read_snapshot(before, maximum_bytes)?;
+    let after = ops::comparison::read_snapshot(after, maximum_bytes)?;
+    ops::comparison::compare(&before, &after)
+}
 
 /// Observe one selected Fleet without a mutation lock, retries or controller changes.
 pub fn snapshot(

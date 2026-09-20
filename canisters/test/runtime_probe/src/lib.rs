@@ -192,6 +192,27 @@ async fn begin_timer_probe_intent(resource_seed: u8, ttl_secs: Option<u64>) -> R
     .map(|intent_id| intent_id.0)
 }
 
+/// Exercise distinct scheduler and work measurement envelopes in the existing timer fixture.
+#[canic_update(public)]
+async fn schedule_cost_probe_watchdog() -> Result<(), Error> {
+    let registration = ic_timers::register_watchdog(
+        application_timer_identity("cost-watchdog"),
+        ic_timers::TimerCadence::new(Duration::from_secs(10)).expect("cost probe cadence"),
+        ic_timers::DeclarationLifetime::Retained,
+        |_context| {
+            ic_timers::WatchdogRunResult::new(
+                ic_timers::TimerCompletion::success(1),
+                ic_timers::WatchdogDecision::Stop,
+            )
+        },
+    )
+    .expect("register cost probe watchdog");
+    registration
+        .ensure_scheduled_immediately()
+        .expect("schedule cost probe watchdog");
+    Ok(())
+}
+
 /// Fill the shared timer registry until its typed capacity boundary rejects demand.
 #[canic_update(public)]
 async fn fill_timer_registry() -> Result<(u64, bool), Error> {

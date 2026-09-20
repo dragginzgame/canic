@@ -62,6 +62,101 @@ unsupported selectors remain explicit unavailable values. Funding balances are
 exact native cycle integers encoded as decimal strings; they are not Ledger
 balances or conservation receipts.
 
+## Cost investigation
+
+`canic observatory snapshot demo --costs --out costs.json` includes optional
+private `roles[].costs` evidence. The default is `null` and adds no queries.
+`--costs` conflicts with `--public`; library public projections also omit this
+evidence. The existing current schema remains version 1, with a required nullable
+`costs` field; this is a pre-1.0 hard cut of the private host JSON/Rust contract.
+
+Four bounded reads per selected role collect the existing cached Cycles,
+Operations and Performance families, then the Cycles history's heap-start and
+canister-version anchor. Each family reads at most 256 rows once, without
+pagination retries. Independent failures, source freshness, source timestamps,
+counter windows, saturation and incomplete pages remain visible. Source values
+use decimal strings. Missing, disabled or truncated rows never mean zero.
+These reads do not sample or update a canister and use the ordinary collection
+deadline. Unsupported roles or publication configurations remain explicit.
+
+The report separates balance, parent-owned total/per-child grants, callback
+starts, scheduler instructions and work instructions. Total and per-child grants
+are two views of the same funding; do not add them together. Timer `.calls` counts
+completed measurement samples, whereas Operations contains starts. The latter
+may include callbacks whose measurement has not completed. Timer values remain
+gauges: the timer owner lacks per-registration reset identity, so an apparently
+increasing total cannot establish a safe callback rate. Window anchors identify
+heap restarts only. A final anchor newer than a collected sample produces
+`source_window_changed`; missing heap metadata produces
+`source_window_unavailable`. Consumers must retain the exact role identity,
+source epoch and source times when comparing observations.
+
+This is measurement evidence, not an automatic consumption estimate. Structured
+limitations identify the single snapshot, unobservable timer registration
+resets, incomplete transfer coverage and unattributed execution/message/storage
+cost. Grant counters cover their funding owner, not every external deposit,
+creation, attached-cycle call or transfer. Instructions have no assumed cycle
+conversion. No per-timer bill or savings percentage is inferred.
+
+For a separately verified interval, the accounting equation is opening balance
+plus incoming transfers minus outgoing transfers minus closing balance. Align
+the actual source observation intervals, reconcile both sides of internal
+grants, establish external transfer coverage, reject saturated/reset/incomplete
+counters, and retain all omitted roles. A negative residual or missing evidence
+is not negative consumption. Whole-estate internal transfers cancel only for a
+closed, unchanged measured set. The source owner does not currently establish
+all these conditions, so the host leaves consumption unattributed. Downstream
+verification against actual balances and a controlled before/after workload is
+still required for a timer optimisation claim.
+
+### Comparing saved observations
+
+`canic observatory compare before.json after.json --out comparison.json` reads
+two private `--costs` reports locally. It does not resolve a workspace, launch
+ICP or contact a canister. Save snapshots far enough apart for the existing
+source sampler to advance; reading the same cached sample twice cannot produce
+an interval. Input files are bounded by `--maximum-snapshot-bytes` and output by
+`--maximum-report-bytes`, each defaulting to 1 MiB with a 1 KiB–16 MiB range.
+Output uses the same exclusive creation and private permissions as snapshots.
+
+The comparator requires the same recorded Fleet, environment, network, plan,
+registry revision, selected role identities, parent/subnet bindings, release
+and expected module. Duplicate identities, unsupported schemas, reversed
+collections and changed bindings reject the pair. The result retains the
+recorded Fleet authority and each role's parent identity for grant provenance.
+Saved JSON is local evidence, not an authenticated receipt or a fresh
+observation of deployed code.
+
+Each role retains independent available/unavailable results:
+
+| Field | Meaning |
+| --- | --- |
+| `balance_change` | Closing minus opening native balance; positive means growth |
+| `incoming_grants` | Movement of the recorded parent's exact grant counter for this child |
+| `outgoing_grants` | Movement of this role's total grant counter, without adding per-child counters again |
+| `known_grant_adjusted_decrease` | Opening plus known incoming grants minus known outgoing grants minus closing |
+
+Each available result carries actual source start/end times, elapsed nanoseconds
+and exact signed decimal cycles. Negative adjusted values remain negative;
+they can expose unobserved incoming transfers rather than implying negative
+burn. Full-width values use checked arithmetic without floating point or
+instruction conversion. No daily extrapolation is performed.
+
+Source frames must have been fresh when captured, complete and correctly typed.
+Each owner must retain the same heap/version and counter-reset window, with
+unsaturated nondecreasing counters. Missing counters and parents remain unknown.
+All three actual source intervals must agree exactly before grants adjust a
+balance; nominal five-minute slots or host receipt times cannot substitute for
+that alignment. A mismatched interval leaves the individual movements visible
+and makes the combined adjustment unavailable. Stale source frames, repeated
+cached samples, resets and truncation are also typed failures.
+
+The comparison always retains incomplete-transfer, unknown timer-registration
+continuity and unattributed execution/message/storage limitations. A zero
+grant-adjusted decrease is a result for the recorded terms, not proof of zero
+consumption. Complete transfer attribution and callback frequency remain open
+until their source owners provide the missing evidence.
+
 ## Store inventory
 
 The existing protected Store status now includes approved catalog-entry count,
@@ -114,7 +209,10 @@ truncating. The runner captures bounded streams before JSON/Candid decoding,
 kills and reaps its exact timed-out child, and excludes diagnostics from views.
 The collection deadline includes the bounded ICP version check and limits each
 remaining query. Local authority-file reads are outside the remote-query time
-budget. Each role uses at most three queries; unsupported selectors issue none.
+budget. Each role ordinarily uses at most three queries; unsupported protected
+selectors issue none. `--costs` adds at most four cached public queries per role
+within the same deadline, for a maximum of seven. It does not discover additional
+canisters or create a periodic collector.
 Candid decoding also has finite work/skipping quotas. Report serialization uses a finite writer.
 
 ## Qualification

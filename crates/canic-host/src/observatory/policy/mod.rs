@@ -1,5 +1,7 @@
 //! Pure collection budgets, profile validation and freshness decisions.
 
+pub(super) mod cost;
+
 use crate::observatory::{
     ObservatoryError,
     model::{ObservatoryOptions, ObservatoryProfile},

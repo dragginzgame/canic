@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.32` separates timer scheduler/work measurements and adds optional
+  private observatory cost snapshots and offline comparisons with explicit
+  source-window and attribution limits.
 - `0.110.31` makes deployment progress readable with compact live stages and
   plain milestones, and shares workspace evidence during fixture preparation.
 - `0.110.30` adds a breaking typed completed-replay diagnostic with fresh-plan

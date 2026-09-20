@@ -5,7 +5,8 @@ mod process;
 use crate::{
     icp::{IcpCli, IcpJsonResponseError, response_bytes},
     observatory::view::{
-        ObservationFailure, RoleFundingView, RoleOverviewView, RootEstateView, StoreInventoryView,
+        CostSamplesView, CostWindowView, ObservationFailure, RoleFundingView, RoleOverviewView,
+        RootEstateView, StoreInventoryView,
     },
     protocol_binding::resolve_registry_protocol_binding,
     registry::RegistryEntry,
@@ -20,7 +21,12 @@ use canic_control_plane::{
 };
 use canic_core::{
     dto::{
+        page::PageRequest,
         pool::{CanisterPoolResponse, CanisterPoolStatusRequest},
+        public_status::{
+            PublicHistoryRequest, PublicHistorySnapshot, PublicMetricFamily, PublicMetricsRequest,
+            PublicMetricsSnapshot,
+        },
         role::RoleOverviewResponse,
     },
     protocol,
@@ -33,6 +39,12 @@ pub trait ObservatoryTransport {
     fn funding(&mut self, entry: &RegistryEntry) -> Result<RoleFundingView, ObservationFailure>;
     fn estate(&mut self, entry: &RegistryEntry) -> Result<RootEstateView, ObservationFailure>;
     fn store(&mut self, entry: &RegistryEntry) -> Result<StoreInventoryView, ObservationFailure>;
+    fn cost_samples(
+        &mut self,
+        entry: &RegistryEntry,
+        family: PublicMetricFamily,
+    ) -> Result<CostSamplesView, ObservationFailure>;
+    fn cost_window(&mut self, entry: &RegistryEntry) -> Result<CostWindowView, ObservationFailure>;
     fn attempts(&self) -> u64;
 }
 
@@ -83,6 +95,18 @@ enum StoreRequest {
 #[derive(CandidType, Deserialize)]
 enum StoreResponse {
     Storage(WasmStoreStatusResponse),
+}
+
+#[derive(CandidType)]
+enum CostRequest {
+    Metrics(PublicMetricsRequest),
+    History(PublicHistoryRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum CostResponse {
+    Metrics(PublicMetricsSnapshot),
+    History(PublicHistorySnapshot),
 }
 
 impl IcpObservatoryTransport<'_> {
@@ -251,6 +275,57 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
             &StoreRequest::Storage,
         )?;
         Ok(store_inventory(reply))
+    }
+
+    fn cost_samples(
+        &mut self,
+        entry: &RegistryEntry,
+        family: PublicMetricFamily,
+    ) -> Result<CostSamplesView, ObservationFailure> {
+        let reply: CostResponse = self.query(
+            entry,
+            protocol::CANIC_PUBLIC_STATUS,
+            &CostRequest::Metrics(PublicMetricsRequest {
+                family,
+                page: PageRequest {
+                    limit: 256,
+                    offset: 0,
+                },
+            }),
+        )?;
+        let CostResponse::Metrics(reply) = reply else {
+            return Err(ObservationFailure::InvalidResponse);
+        };
+        crate::observatory::ops::cost::samples(reply, family)
+    }
+
+    fn cost_window(&mut self, entry: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
+        let reply: CostResponse = self.query(
+            entry,
+            protocol::CANIC_PUBLIC_STATUS,
+            &CostRequest::History(PublicHistoryRequest {
+                family: PublicMetricFamily::Cycles,
+                name: "balance".into(),
+                canister_id: Some(
+                    Principal::from_text(&entry.pid)
+                        .map_err(|_| ObservationFailure::InvalidResponse)?,
+                ),
+                page: PageRequest {
+                    limit: 1,
+                    offset: 0,
+                },
+            }),
+        )?;
+        let CostResponse::History(reply) = reply else {
+            return Err(ObservationFailure::InvalidResponse);
+        };
+        if reply.points.entries.len() > 1 {
+            return Err(ObservationFailure::InvalidResponse);
+        }
+        Ok(CostWindowView {
+            canister_version: reply.canister_version,
+            heap_started_at_ns: reply.heap_started_at_ns,
+        })
     }
 
     fn attempts(&self) -> u64 {

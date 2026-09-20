@@ -10,6 +10,7 @@ use super::{
     view::*,
 };
 use crate::registry::RegistryEntry;
+use canic_core::dto::public_status::PublicMetricFamily;
 use std::collections::BTreeMap;
 
 fn profile() -> ObservatoryProfile {
@@ -70,6 +71,7 @@ fn snapshot() -> ObservatorySnapshotView {
                     pending_operations: 1,
                 },
             },
+            costs: None,
             estate: Observation::Unavailable {
                 observed_at_unix_ms: 1000,
                 failure: ObservationFailure::Rejected { code: 42 },
@@ -162,6 +164,7 @@ fn options() -> ObservatoryOptions {
     ObservatoryOptions {
         environment: "local".into(),
         fleet: "demo".into(),
+        collect_costs: false,
         maximum_canisters: 16,
         maximum_response_bytes: 8192,
         freshness_secs: 30,
@@ -172,6 +175,16 @@ fn options() -> ObservatoryOptions {
 
 struct NoTransport;
 impl ObservatoryTransport for NoTransport {
+    fn cost_samples(
+        &mut self,
+        _: &RegistryEntry,
+        _: PublicMetricFamily,
+    ) -> Result<CostSamplesView, ObservationFailure> {
+        panic!("no authority, no calls")
+    }
+    fn cost_window(&mut self, _: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
+        panic!("no authority, no calls")
+    }
     fn overview(&mut self, _: &RegistryEntry) -> Result<RoleOverviewView, ObservationFailure> {
         panic!("no authority, no calls")
     }
@@ -208,8 +221,104 @@ fn missing_authority_does_not_contact_any_role_or_claim_an_empty_healthy_fleet()
     ));
 }
 
-struct PartialTransport;
+struct PartialTransport {
+    cost_calls: usize,
+}
+
+#[test]
+fn cost_collection_is_bounded_partial_private_and_marks_restarts() {
+    let mut transport = PartialTransport { cost_calls: 0 };
+    let entry = RegistryEntry {
+        pid: "healthy".into(),
+        role: Some("root".into()),
+        parent_pid: None,
+        module_hash: None,
+        protocol_binding: None,
+    };
+    let role = ops::collect_role(&entry, &mut transport, true);
+    assert_eq!(transport.cost_calls, 4);
+    let costs = role.costs.as_ref().unwrap();
+    assert!(matches!(
+        costs.balance,
+        Observation::Observed {
+            value: CostSamplesView {
+                state: CostSampleState::Stale,
+                ..
+            },
+            ..
+        }
+    ));
+    assert!(matches!(
+        costs.funding_and_callbacks,
+        Observation::Unavailable {
+            failure: ObservationFailure::TimedOut,
+            ..
+        }
+    ));
+    assert!(
+        costs
+            .limitations
+            .contains(&CostEvidenceLimitation::SourceWindowChanged)
+    );
+    assert!(
+        costs
+            .limitations
+            .contains(&CostEvidenceLimitation::TransferCoverageIncomplete)
+    );
+    assert!(
+        costs
+            .limitations
+            .contains(&CostEvidenceLimitation::TimerRegistrationResetUnobservable)
+    );
+    let mut private = snapshot();
+    private.roles = vec![role];
+    let bytes = json_bytes(&private, 16384).unwrap();
+    assert_eq!(
+        serde_json::from_slice::<ObservatorySnapshotView>(&bytes).unwrap(),
+        private
+    );
+    let public = http_response(&private, &profile(), "/snapshot.json", 2000, 16384).unwrap();
+    let text = String::from_utf8(public.body).unwrap();
+    for secret in [
+        "cost-private-canister",
+        "123456789123456789123456789",
+        "timer_instructions",
+    ] {
+        assert!(!text.contains(secret));
+    }
+}
 impl ObservatoryTransport for PartialTransport {
+    fn cost_samples(
+        &mut self,
+        _: &RegistryEntry,
+        family: PublicMetricFamily,
+    ) -> Result<CostSamplesView, ObservationFailure> {
+        self.cost_calls += 1;
+        if family == PublicMetricFamily::Operations {
+            return Err(ObservationFailure::TimedOut);
+        }
+        Ok(CostSamplesView {
+            state: CostSampleState::Stale,
+            sampled_at_ns: Some(1),
+            stale_after_ns: 2,
+            truncated: false,
+            rows: vec![CostMetricView {
+                name: "balance".into(),
+                canister_id: Some("cost-private-canister".into()),
+                value: "123456789123456789123456789".into(),
+                unit: "cycles".into(),
+                observed_at_ns: 1,
+                measurement: CostMetricKind::Gauge,
+            }],
+        })
+    }
+    fn cost_window(&mut self, _: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
+        self.cost_calls += 1;
+        Ok(CostWindowView {
+            canister_version: 9,
+            heap_started_at_ns: Some(3),
+        })
+    }
     fn overview(&mut self, entry: &RegistryEntry) -> Result<RoleOverviewView, ObservationFailure> {
         if entry.pid == "failed" {
             Err(ObservationFailure::TimedOut)
@@ -237,7 +346,7 @@ impl ObservatoryTransport for PartialTransport {
 
 #[test]
 fn role_failures_preserve_other_roles_and_independent_fields() {
-    let mut transport = PartialTransport;
+    let mut transport = PartialTransport { cost_calls: 0 };
     let mut entry = RegistryEntry {
         pid: "failed".into(),
         role: Some("root".into()),
@@ -245,9 +354,11 @@ fn role_failures_preserve_other_roles_and_independent_fields() {
         module_hash: None,
         protocol_binding: None,
     };
-    let failed = ops::collect_role(&entry, &mut transport);
+    let failed = ops::collect_role(&entry, &mut transport, false);
     entry.pid = "healthy".into();
-    let healthy = ops::collect_role(&entry, &mut transport);
+    let healthy = ops::collect_role(&entry, &mut transport, false);
+    assert_eq!(transport.cost_calls, 0);
+    assert!(healthy.costs.is_none());
     assert!(matches!(
         failed.overview,
         Observation::Unavailable {

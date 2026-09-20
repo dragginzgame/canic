@@ -20,6 +20,54 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## CANIC-002 source evidence and offline comparison; attribution remains open — 2026-09-20
+
+The maintainer accepts Toko Miner's cycle-attribution follow-up. Canic now
+publishes separate timer scheduler/work instruction totals and completed
+measurement counts, and adds scheduler starts to Operations. Timer rows stay
+gauges. The existing owner lacks a registration-reset identity, so even
+increasing samples cannot establish safe callback rates. Metric phase names
+are a pre-1.0 hard cut; no alias or second sampling owner is introduced.
+
+Optional private `observatory snapshot <fleet> --costs` collects cached
+balances, total/per-child grants and timer measurements, then a heap/version
+anchor. Four bounded reads per retained role share the existing deadline;
+ordinary snapshots add no queries. Reports preserve source freshness,
+truncation, saturation, failures and restart limitations. Public projections
+omit this evidence. Instructions and balance drops are not labelled as burn:
+complete transfer coverage and execution/message/storage attribution are absent.
+
+The continuation adds `observatory compare before.json after.json --out
+comparison.json`. Bounded local reports require exact recorded Fleet authority
+and role bindings. Each role preserves independent balance and known-grant
+movements; a signed grant-adjusted decrease requires identical actual source
+intervals. Resets, saturation, stale/truncated/malformed rows, missing counters
+and repeated cached points remain typed unavailable results. Reports retain
+recorded authority and parent provenance. This path does not discover a
+workspace or contact ICP; saved JSON is not an authenticated receipt.
+
+The source-measurement slice passed 81 focused native tests and nine PocketIC
+timer-authority cases. The final PocketIC rerun takes 28.40 seconds (32-second
+runner with cached fixtures) and proves positive scheduler/work observations
+through an actual watchdog.
+Core/host/CLI all-target/all-feature Clippy, scoped fixture Clippy, changed-file
+formatting and diff checks pass. Both .32 changelog surfaces are updated;
+packages remain .31 and the pre-existing Cargo.lock update is preserved.
+
+The offline comparison passes 25 focused host/CLI tests, including the earlier
+snapshot coverage, and both recursive CLI-help tests. This host-only
+continuation also passes final host/CLI all-target/all-feature Clippy, formatting
+and diff checks; it does not require a new PocketIC run. Qualification details
+and logs are retained in the evidence report.
+
+The source-evidence and local-comparison implementation is complete and
+reviewable. The complete cycle-attribution batch is not yet push-ready:
+timer-owner continuity, complete transfer evidence and downstream actual-balance
+verification remain open. Comparisons cannot manufacture alignment between
+independently cached source intervals. No broad gate, sibling edit, version bump,
+commit, push or live deployment ran.
+[Evidence and owner handoff](../audits/working/canic002-cost-evidence/report.md).
+
 ## CANIC-150 progress presentation complete — 2026-09-20
 
 The maintainer accepts Toko Miner's compact deployment-progress follow-up.
