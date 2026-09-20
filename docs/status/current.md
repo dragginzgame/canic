@@ -20,6 +20,22 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .30 preflight secret-scan repair — 2026-09-20
+
+The maintainer's release validation stops at sixteen Gitleaks findings in the
+IcyDB W1 source inventory. Each value is verified as the SHA-256 of its named
+file at source commit `e9e8277ddef6f8519d03a8ff50f658129a0fafc1`.
+The existing reviewed exception file now names only those exact
+commit/path/rule/line fingerprints. Built-in rules and full-history coverage
+remain unchanged; no audit evidence is removed or rewritten.
+
+Targeted `make gitleaks-scan` passes with zero findings; diff checks pass.
+Evidence: `.tmp/canic180-w1-gitleaks.log`. This repair joins the existing .30
+draft, and the complete replay/observation plus IcyDB attribution batch remains
+ready for the maintainer-selected release flow. The repair is uncommitted;
+the full release gate must resume against the committed correction. Package
+versions remain .29, with no versioning or Git publication performed here.
+
 ## ICYDB-033 six-subject return handoff — 2026-09-20
 
 The maintainer requests completion of IcyDB's 0.260 W1 prerequisite. The
