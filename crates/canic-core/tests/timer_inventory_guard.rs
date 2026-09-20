@@ -4,6 +4,7 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     fs,
     path::{Path, PathBuf},
+    process::Command,
 };
 use syn::{
     Expr, ExprCall, ExprMethodCall, ExprPath, ItemUse, Macro, UseTree, Visibility,
@@ -532,14 +533,44 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     let root = workspace_root();
     let lock = read_source(&root, "Cargo.lock");
 
-    assert_eq!(locked_package_versions(&lock, "ic-timers"), ["0.7.1"]);
     assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
 
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
+    let timer_version = dependency_version(&workspace_dependencies, "ic-timers")
+        .strip_prefix('=')
+        .filter(|version| !version.is_empty())
+        .expect("ic-timers must use an exact workspace version pin");
+    let mut command = Command::new(env!("CARGO"));
+    command.current_dir(&root).args([
+        "tree",
+        "--locked",
+        "--offline",
+        "--target",
+        "wasm32-unknown-unknown",
+        "--edges",
+        "normal",
+        "--all-features",
+        "--prefix",
+        "none",
+        "--format",
+        "{p}",
+    ]);
+    // External test composition may retain another timer version; deployed Canic must not.
+    for package in ["canic", "canic-core", "canic-control-plane", "canic-macros"] {
+        command.args(["-p", package]);
+    }
+    let output = command.output().expect("resolve Canic runtime timer graph");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let tree = String::from_utf8(output.stdout).expect("Cargo package identities are UTF-8");
     assert_eq!(
-        dependency_version(&workspace_dependencies, "ic-timers"),
-        "=0.7.1"
+        timer_package_identities(&tree),
+        BTreeSet::from([format!("ic-timers v{timer_version}").as_str()]),
+        "Canic's deployed runtime must resolve exactly the workspace timer package"
     );
     let icydb_version = dependency_version(&workspace_dependencies, "icydb")
         .strip_prefix('=')
@@ -582,6 +613,32 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     assert!(direct_icydb_model_consumers.is_empty());
     assert_eq!(timer_consumers, expected_timer_manifest_consumers());
     assert!(raw_provider_consumers.is_empty());
+}
+
+fn timer_package_identities(tree: &str) -> BTreeSet<&str> {
+    tree.lines()
+        .filter(|line| line.starts_with("ic-timers "))
+        .map(|line| line.strip_suffix(" (*)").unwrap_or(line))
+        .collect()
+}
+
+#[test]
+fn timer_graph_preserves_distinct_package_identities() {
+    assert_eq!(
+        timer_package_identities("ic-timers v0.8.0\nic-timers v0.8.0 (*)\nic-timers-extra v0.8.0"),
+        BTreeSet::from(["ic-timers v0.8.0"])
+    );
+    assert_eq!(
+        timer_package_identities(
+            "ic-timers v0.8.0\nic-timers v0.8.1\nic-timers v0.8.0 (/different/source)"
+        ),
+        BTreeSet::from([
+            "ic-timers v0.8.0",
+            "ic-timers v0.8.1",
+            "ic-timers v0.8.0 (/different/source)"
+        ])
+    );
+    assert!(timer_package_identities("canic-core v0.110.32").is_empty());
 }
 
 #[test]
