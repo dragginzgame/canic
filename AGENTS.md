@@ -24,6 +24,12 @@ with this file, the code is wrong.
   repository.
 
 ## CI, Git, and Deployment
+- Automated agents must never create or amend Git commits, including through
+  scripts, Make targets or release commands that commit indirectly. The
+  maintainer owns the commit flow; leave changes uncommitted for their review.
+  Push-readiness questions such as "push here?" request a readiness assessment,
+  not staging, committing or pushing. This restriction takes precedence over
+  broader Git and release authorization in the governance documents below.
 - Follow `docs/governance/ci-deployment.md`; it is the authoritative policy for
   commands, git boundaries, versioning, release, network selection, and
   automation language rules. Do not duplicate its rules here.
@@ -54,7 +60,8 @@ with this file, the code is wrong.
   effects; those boundaries retain their own rules.
 - An unambiguous maintainer instruction in the current conversation is the
   authority for the exact Git, version, release, publication or deployment
-  action it names. Ordinary language is sufficient; never require a magic
+  action it names, subject to the agent commit prohibition above. Ordinary
+  language is sufficient; never require a magic
   phrase, a second confirmation, or the maintainer to run the command by hand.
   Use the active repository, release and environment context when it identifies
   the target uniquely. Ask once only when the target or effect is genuinely
