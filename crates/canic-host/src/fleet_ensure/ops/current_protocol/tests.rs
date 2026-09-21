@@ -726,6 +726,18 @@ fn assert_activation_source_review(
     fs::create_dir_all(&temp).expect("source workspace");
     let source_wasm = temp.join("source-root.wasm");
     fs::write(&source_wasm, b"source module").expect("source artifact");
+    let mut source_root = canister(
+        "source-root",
+        DesiredCanisterKind::Root,
+        root.fleet_subnet_root,
+        None,
+        subnet(0),
+    );
+    source_root.wasm = Some(source_wasm.to_string_lossy().into_owned());
+    let mut source_desired = desired.clone();
+    source_desired.fleet = "source".to_string();
+    source_desired.canisters = vec![source_root];
+    source_desired.treasury = "source-root".to_string();
     let mut plan = serde_json::json!({
         "schema_version": 1, "scope": "full", "fleet": "source", "environment": "local",
         "operation_id": canic_core::cdk::utils::hash::hex_bytes([42; 32]),
@@ -733,11 +745,7 @@ fn assert_activation_source_review(
         "conservation": { "maximum_new_funding_cycles": "0", "maximum_operator_debit_cycles": "0",
             "maximum_unavoidable_fee_cycles": "0", "scheduled_transfer_cycles": "0", "maximum_execution_burn_cycles": "0" },
         "protocol_actions": crate::fleet_ensure::json::to_value(&actions).expect("actions"),
-        "reviewed_desired": { "desired": {
-            "operator": desired.operator, "cycles_ledger": desired.cycles_ledger,
-            "canisters": [{ "name": "source-root", "kind": "root", "principal": root.fleet_subnet_root.to_text(),
-                "wasm": source_wasm, "subnet": "aaaaa-aa", "controllers": [desired.operator], "controller_canisters": [] }],
-        } },
+        "reviewed_desired": { "desired": source_desired },
     });
     let mut journal = serde_json::json!({
         "schema_version": 1, "completion": "in_progress", "fleet": "source",
