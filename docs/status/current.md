@@ -20,6 +20,25 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Ordinary-test timing feature gate repaired — 2026-09-21
+
+The maintainer's broad validation stopped while compiling the ordinary
+`canic-testing-internal` library-test target: the new request timing emitter
+was unconditional even though its only callers require
+`governed-pocketic-tests`. Gate the emitter on that same feature. This corrects
+the test compilation boundary without suppressing dead-code diagnostics or
+changing deployment behavior; it is unrelated to the IcyDB update.
+
+The three timing tests pass in both the ordinary default-feature library-test
+configuration and with `governed-pocketic-tests` enabled. Package-scoped
+all-target/all-feature Clippy passes with warnings denied, as do targeted
+formatting and whitespace checks. Logs:
+`.tmp/timing-feature-gate-{ordinary,governed,clippy}.log`.
+The full workspace gate was not rerun. This repair remains in the existing .35
+batch and does not change its outstanding feedback-before-push conditions;
+changelog/version surfaces retain their existing state. Changes are uncommitted;
+no version, publication, deployment or sibling edits ran.
+
 ## IcyDB 0.261.2 follow-up — 2026-09-21
 
 The maintainer requests the new published IcyDB release. Workspace consumers
