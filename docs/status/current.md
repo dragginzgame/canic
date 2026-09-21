@@ -61,6 +61,15 @@ ledger reads, protected directory access and terminal replay in 58.03 seconds
 (149-second runner). Earlier RF2 receipt/lost-withdrawal and operator-CLI evidence
 remains retained. Logs: `.tmp/rf3-completion-{tests,clippy,pocketic}.log`.
 
+The maintainer's subsequent ordinary-test gate exposed four activation-source
+cases omitted by that targeted selection. Their shared fixture wrote only a
+partial desired-state record, which RF3 observation validation correctly
+rejected. The fixture now serializes the complete typed desired state; production
+admission remains unchanged. All four activation-source regressions pass,
+including exact-prefix rejection and receipt-only handoff. Log:
+`.tmp/rf3-activation-source-fix-tests.log`. The full gate has not been rerun;
+the fix and changelog update are uncommitted for the maintainer's commit flow.
+
 The complete RF3/guard-cleanup batch is ready for the maintainer-selected release
 flow; both `.34` changelog surfaces and operations guidance describe it. No broad
 gate, versioning, publication, deployment or sibling mutation ran. The .110
