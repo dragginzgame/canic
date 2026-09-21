@@ -939,10 +939,11 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(startup_root.child_grants_cycles, 0);
     assert_eq!(startup_root.shortfall_cycles, 0);
     assert_eq!(startup_root.components.len(), 1);
+    assert_eq!(startup_root.inventory, Err(crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::SelectedBuildNotInstalled));
     for (principal, reason) in [
         (
             &pool_one,
-            crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::ObservationFailed,
+            crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::SelectedBuildNotInstalled,
         ),
         (
             &pool_two,
@@ -1498,6 +1499,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &fresh_apply_paths,
         &FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
@@ -1785,6 +1787,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &retained_paths,
         &FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
@@ -4709,10 +4712,10 @@ fi
         }),
     ));
     write_inspection_reserve_responses(root, fleet_root, store, pool);
-    let script = format!(
+    let script = crate::test_support::tool_script(&format!(
         r#"#!/bin/sh
 if [ "$1" = "--version" ]; then
-  printf '%s\n' 'icp 1.5.0'
+  printf '%s\n' 'icp @ICP_VERSION@'
   exit 0
 fi
 while [ "$1" = "--project-root-override" ] || [ "$1" = "--identity-password-file" ]; do
@@ -4800,7 +4803,7 @@ exit 42
         root_start_count = root_start_count.display(),
         root_started = root_started.display(),
         reserve_root = root.display(),
-    );
+    ));
     fs::write(&executable, script).expect("write fake ICP executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
         .expect("make fake ICP executable runnable");

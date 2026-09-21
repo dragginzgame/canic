@@ -231,10 +231,10 @@ fn allocation_observation_is_query_only_and_skips_non_workloads() {
         observe(&icp, &candid, p(5), p(6), &CanisterPoolAssetStatus::Ready),
         Err(StartupUsageUnavailable::NotWorkload)
     );
-    let script = format!(
-        "#!/bin/sh\ncase \"$*\" in\n  --version) printf 'icp 1.5.0\\n' ;;\n  *canic_root_operation_status*--query*) cat '{}' ;;\n  *) exit 1 ;;\nesac\n",
+    let script = crate::test_support::tool_script(&format!(
+        "#!/bin/sh\ncase \"$*\" in\n  --version) printf 'icp @ICP_VERSION@\\n' ;;\n  *canic_root_operation_status*--query*) cat '{}' ;;\n  *) exit 1 ;;\nesac\n",
         response_file.display()
-    );
+    ));
     std::fs::write(&executable, script).unwrap();
     std::fs::set_permissions(&executable, std::fs::Permissions::from_mode(0o700)).unwrap();
     // Transport qualification uses Rust Candid encoding; this is not a sidecar equality proof.

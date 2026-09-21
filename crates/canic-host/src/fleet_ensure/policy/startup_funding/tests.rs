@@ -3,7 +3,7 @@ use canic_core::control_plane_support::config::ComponentDeploymentConfiguration;
 
 const T: u128 = 1_000_000_000_000;
 
-pub(super) fn funding_binding(
+pub(in crate::fleet_ensure) fn funding_binding(
     spec: &ComponentSpec,
 ) -> crate::fleet_ensure::view::startup_funding::StartupChildFundingBinding {
     use candid::Principal;
@@ -131,9 +131,12 @@ fn startup_grants_preserve_lifetime_caps_and_disabled_parent_shortfalls() {
     ));
 }
 
-pub(super) fn hub_config() -> ConfigModel {
-    toml::from_str(
-        r#"
+pub(in crate::fleet_ensure) fn hub_config() -> ConfigModel {
+    toml::from_str(hub_source()).unwrap()
+}
+
+pub(in crate::fleet_ensure) fn hub_source() -> &'static str {
+    r#"
 [app]
 name = "startup"
 [roles.hub]
@@ -173,9 +176,7 @@ initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
-"#,
-    )
-    .unwrap()
+"#
 }
 
 #[test]

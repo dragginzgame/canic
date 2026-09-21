@@ -8,6 +8,7 @@
 mod balance_observation;
 mod continuation;
 mod funding;
+pub mod funding_observation;
 #[cfg(test)]
 mod funding_tests;
 mod independent_effects;
@@ -138,6 +139,11 @@ pub enum EnsureWorkflowError<E>
 where
     E: std::error::Error + 'static,
 {
+    #[error(transparent)]
+    FundingObservation(
+        #[from] crate::fleet_ensure::model::funding_observation::FundingObservationError,
+    ),
+
     #[error(
         "operator conversion must be resolved or its unapproved review cancelled before Fleet effects continue: {review_sha256}; inspect with fleet ensure --operator-mint"
     )]
@@ -1206,6 +1212,7 @@ where
                 platform,
             )?;
             let journal = FleetEnsureJournalRecord {
+                funding_observations: BTreeMap::new(),
                 funding_reviews: Vec::new(),
                 successor_phases: Vec::new(),
                 completion: FleetEnsureCompletion::InProgress,
@@ -3294,12 +3301,17 @@ fn funding_plan<'a, E: std::error::Error + 'static>(
     plan: &'a FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
 ) -> Result<std::borrow::Cow<'a, FleetEnsurePlan>, EnsureWorkflowError<E>> {
-    if journal.funding_reviews.is_empty() {
+    if journal.funding_reviews.is_empty() && journal.funding_observations.is_empty() {
         return Ok(std::borrow::Cow::Borrowed(plan));
     }
+    funding_observation::verify(plan, journal)?;
     let mut funded = plan.clone();
     let (amount, fee) = funding::totals::<E>(journal, None)?;
     let conservation = &mut funded.conservation;
+    conservation.maximum_execution_burn_cycles = conservation
+        .maximum_execution_burn_cycles
+        .checked_add(funding_observation::total(journal)?)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
     conservation.maximum_operator_debit_cycles = conservation
         .maximum_operator_debit_cycles
         .checked_add(amount)
@@ -3872,6 +3884,7 @@ where
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
     funding::verify(plan, journal, state)?;
+    funding_observation::verify(plan, journal)?;
     operator_mint::verify(plan, journal)?;
     continuation::verify_records(plan, journal)?;
     let actions = continuation::actions(plan, journal);
@@ -4692,6 +4705,7 @@ mod tests {
             topology: BTreeMap::new(),
         };
         let journal = FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::ReplanRequired,

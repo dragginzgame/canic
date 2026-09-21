@@ -308,6 +308,7 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     // The released bug could retain an underfunded original intent. Current
     // fresh admission rejects it; reproduce that retained evidence explicitly.
     let journal = FleetEnsureJournalRecord {
+        funding_observations: BTreeMap::new(),
         funding_reviews: vec![],
         successor_phases: vec![],
         completion: FleetEnsureCompletion::InProgress,

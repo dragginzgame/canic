@@ -84,17 +84,9 @@ fn command_runner_rejects_unparseable_icp_cli_before_running_command() {
 
     assert!(matches!(
         err,
-        IcpCommandError::IncompatibleCliVersion { .. }
+        IcpCommandError::IncompatibleCliVersion { executable, found }
+            if executable == icp_path.to_string_lossy() && found == "icp development build"
     ));
-    assert!(err.to_string().contains("found: icp development build"));
-    assert!(
-        err.to_string()
-            .contains("required: icp-cli >=1.5.0, <2.0.0")
-    );
-    assert!(
-        err.to_string()
-            .contains("icp network update` updates the local network launcher")
-    );
 
     fs::remove_dir_all(root).expect("remove temp dir");
 }
@@ -363,7 +355,7 @@ fn successful_version_qualification_is_shared_only_within_one_context() {
     let root = unique_temp_dir("canic-icp-version-context");
     fs::create_dir_all(&root).unwrap();
     let executable = root.join("icp");
-    fs::write(&executable, "#!/bin/sh\nif [ \"$1\" = --version ]; then\n echo probe >> probes\n echo 'icp 1.5.0'\nelse\n echo identity\nfi\n").unwrap();
+    fs::write(&executable, crate::test_support::tool_script("#!/bin/sh\nif [ \"$1\" = --version ]; then\n echo probe >> probes\n echo 'icp @ICP_VERSION@'\nelse\n echo identity\nfi\n")).unwrap();
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
     let context = IcpCli::new(executable.to_string_lossy(), Some("local".into())).with_cwd(&root);
     context.compatible_version().unwrap();
@@ -411,7 +403,7 @@ fn failed_version_qualification_is_retried_without_running_the_command() {
     let root = unique_temp_dir("canic-icp-version-retry");
     fs::create_dir_all(&root).unwrap();
     let executable = root.join("icp");
-    fs::write(&executable, "#!/bin/sh\nif [ \"$1\" = --version ]; then\n if [ -f ready ]; then echo 'icp 1.5.0'; else echo 'icp 1.4.9'; fi\nelse\n echo effect >> effects\n echo identity\nfi\n").unwrap();
+    fs::write(&executable, crate::test_support::tool_script("#!/bin/sh\nif [ \"$1\" = --version ]; then\n if [ -f ready ]; then echo 'icp @ICP_VERSION@'; else echo 'icp 1.4.9'; fi\nelse\n echo effect >> effects\n echo identity\nfi\n")).unwrap();
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
     let context = IcpCli::new(executable.to_string_lossy(), Some("local".into())).with_cwd(&root);
     assert!(matches!(
@@ -487,4 +479,11 @@ fn incomplete_query_statistics_are_not_reported_as_zero() {
         }))
         .is_err()
     );
+}
+
+#[test]
+fn repository_icp_cli_pin_is_supported() {
+    let pinned = parse_icp_cli_version(crate::test_support::icp_cli_version())
+        .expect("repository ICP CLI pin is a version");
+    assert!(is_supported_icp_cli_version(pinned));
 }

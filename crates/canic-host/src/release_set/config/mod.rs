@@ -42,6 +42,7 @@ pub(super) use projection::{
 /// decision is derived from the same bytes on disk.
 #[derive(Debug)]
 pub struct AppConfigSnapshot {
+    source: String,
     path: PathBuf,
     config: ConfigModel,
     component_topology: ComponentTopology,
@@ -65,10 +66,16 @@ impl AppConfigSnapshot {
             })
             .map_err(|error| error.at_config_path(path))?;
         Ok(Self {
+            source,
             path: path.to_path_buf(),
             config,
             component_topology,
         })
+    }
+
+    /// Original validated source, retained when later restoration must recompile exact policy.
+    pub(crate) fn source(&self) -> &str {
+        &self.source
     }
 
     #[must_use]

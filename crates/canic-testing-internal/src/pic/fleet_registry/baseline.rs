@@ -30,6 +30,8 @@ mod tests {
     #[cfg(test)]
     mod funding_deadline;
     #[cfg(test)]
+    mod funding_inventory;
+    #[cfg(test)]
     mod native_funding;
     #[cfg(test)]
     mod operator_shortfall;
@@ -4429,6 +4431,22 @@ exec icp "$@"
         assert!(coverage.current.head.revision >= coverage.activation.head.revision);
         assert_eq!(coverage.current.committed_descendants, 1);
 
+        funding_inventory::assert_controller_directory(
+            &pic,
+            fixture.root_id,
+            Principal::anonymous(),
+            hub_binding,
+            child_binding,
+        );
+
+        funding_inventory::assert_recovery_observations(
+            &pic,
+            fixture.root_id,
+            Principal::anonymous(),
+            hub_binding,
+            child_binding,
+        );
+
         let replay_pool = root_pool_status(&pic, fixture.root_id);
         let CoordinatorCommandResponse::OperationAccepted(terminal_receipt) = coordinator_command(
             &pic,
@@ -6878,7 +6896,7 @@ exec icp "$@"
         })).unwrap();
         plan.plan_sha256 = policy::expected_plan_sha256(&plan);
         let journal = serde_json::from_value(serde_json::json!({
-            "funding_reviews": [], "successor_phases": [], "completion": "converged",
+            "funding_observations": {}, "funding_reviews": [], "successor_phases": [], "completion": "converged",
             "estate_funding_required": null, "effects": [], "fleet": "fixture",
             "initial_controlled_cycles": "0", "initial_estate_funding_cycles_by_root": {},
             "initial_operator_cycles": "0", "operation_id": plan.operation_id,
@@ -11158,6 +11176,7 @@ exec '{}' "$@"
         plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(plan);
         canic_host::fleet_ensure::ops::write_plan(&paths, plan).unwrap();
         let mut journal = canic_host::fleet_ensure::model::FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: canic_host::fleet_ensure::model::FleetEnsureCompletion::InProgress,

@@ -273,6 +273,7 @@ fn fixture_plan(source: FleetActivationSourceRecord) -> FleetEnsurePlan {
 
 fn fixture_journal(plan: &FleetEnsurePlan) -> FleetEnsureJournalRecord {
     FleetEnsureJournalRecord {
+        funding_observations: BTreeMap::new(),
         funding_reviews: Vec::new(),
         successor_phases: Vec::new(),
         completion: FleetEnsureCompletion::InProgress,

@@ -80,6 +80,8 @@ pub(in crate::fleet_ensure) fn operator_review(
 
 /// Validated native quote inputs mapped into the durable review by ops.
 pub(in crate::fleet_ensure) struct NativeFundingQuote<'a> {
+    pub observation_quote:
+        Option<crate::fleet_ensure::model::funding_observation::FundingQuoteSourceRecord>,
     pub plan: &'a FleetEnsurePlan,
     pub root: &'a str,
     pub root_principal: &'a str,
@@ -96,6 +98,7 @@ pub(in crate::fleet_ensure) fn native_pause(
     quote: NativeFundingQuote<'_>,
 ) -> NativeFundingRequiredRecord {
     NativeFundingRequiredRecord {
+        observation_quote: quote.observation_quote,
         available_cycles: quote.available_cycles,
         cycles_ledger: quote.cycles_ledger.into(),
         funding_margin_cycles: quote.funding_margin_cycles,

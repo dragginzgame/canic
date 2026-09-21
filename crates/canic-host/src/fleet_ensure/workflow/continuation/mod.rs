@@ -59,6 +59,7 @@ where
         .as_ref()
         .ok_or(EnsureWorkflowError::PlanIntegrity)?
         .desired();
+    let maximum_burn = execution_bound(plan, journal)?;
     let mut hashes = BTreeSet::new();
     let mut count = 0_usize;
     let mut previous_burn = 0;
@@ -82,7 +83,7 @@ where
         if record
             .execution_burn_before_phase
             .checked_add(burn)
-            .is_none_or(|total| total > plan.conservation.maximum_execution_burn_cycles)
+            .is_none_or(|total| total > maximum_burn)
         {
             return Err(EnsureWorkflowError::JournalIntegrity);
         }
@@ -275,10 +276,7 @@ pub(super) fn append<P: EnsurePlatform>(
             .last()
             .map_or(0, |phase| phase.execution_burn_before_phase),
     );
-    let remaining = plan
-        .conservation
-        .maximum_execution_burn_cycles
-        .saturating_sub(observed_debit);
+    let remaining = execution_bound::<P::Error>(plan, journal)?.saturating_sub(observed_debit);
     let phase = crate::fleet_ensure::policy::recovery::affordable_successor(
         desired,
         phase.clone(),
@@ -373,4 +371,15 @@ const fn review<E: std::error::Error + 'static>(
         reason,
         review: None,
     }
+}
+
+/// Consumed observation allowances travel with the operation into later retained phases.
+fn execution_bound<E: std::error::Error + 'static>(
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+) -> Result<u128, EnsureWorkflowError<E>> {
+    plan.conservation
+        .maximum_execution_burn_cycles
+        .checked_add(super::funding_observation::total(journal)?)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)
 }

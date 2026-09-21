@@ -3706,6 +3706,20 @@ pub fn directory_head(
 pub fn directory_page(
     request: ComponentDirectoryPageRequest,
 ) -> Result<ComponentDirectoryPageResponse, InternalError> {
+    read_directory_page(request, Some(IcOps::msg_caller()))
+}
+
+/// Read the same bounded directory through the controller-authenticated Root status lane.
+pub fn controller_directory_page(
+    request: ComponentDirectoryPageRequest,
+) -> Result<ComponentDirectoryPageResponse, InternalError> {
+    read_directory_page(request, None)
+}
+
+fn read_directory_page(
+    request: ComponentDirectoryPageRequest,
+    member_caller: Option<candid::Principal>,
+) -> Result<ComponentDirectoryPageResponse, InternalError> {
     if request.limit == 0 || request.limit > MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES {
         return Err(InternalError::invalid_input());
     }
@@ -3722,14 +3736,15 @@ pub fn directory_page(
         &topology,
         &partition,
     )?;
-    let caller = IcOps::msg_caller();
-    let (member, status) =
-        ComponentRegistryOps::registered_parent(component, caller)?.ok_or_else(|| {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
-        })?;
-    validate_directory_member(&authority.binding, &topology, &partition, &member)?;
-    if !component_directory_member_can_read(status) {
-        return Err(InternalError::unavailable());
+    if let Some(caller) = member_caller {
+        let (member, status) = ComponentRegistryOps::registered_parent(component, caller)?
+            .ok_or_else(|| {
+                InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
+            })?;
+        validate_directory_member(&authority.binding, &topology, &partition, &member)?;
+        if !component_directory_member_can_read(status) {
+            return Err(InternalError::unavailable());
+        }
     }
 
     let directory = component_directory_head(&partition);

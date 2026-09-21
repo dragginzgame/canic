@@ -34,17 +34,36 @@ definition_paths="$({
         printf '%s\n' "${definition#"$ROOT"/}"
     done
 } | sort)"
-fingerprinted_definition_paths="$(
-    awk '
-        /^## Active Definition Identities$/ { in_active = 1; next }
-        in_active && /^## / { exit }
-        in_active && /^\| `CANIC-/ {
-            split($0, fields, "|")
-            path = fields[5]
-            gsub(/^[[:space:]]*`|`[[:space:]]*$/, "", path)
-            print path
+# Parse record columns; headings, wrapping and table padding are editorial.
+table_records() {
+    local columns="$1"
+    local document="$2"
+    awk -F '|' -v columns="$columns" '
+        NF > 2 && (columns == 0 || NF == columns + 2) {
+            for (i = 2; i <= NF - 1; i++) {
+                gsub(/^[[:space:]]*`?|`?[[:space:]]*$/, "", $i)
+                printf "%s%s", $i, (i == NF - 1 ? "\n" : "\t")
+            }
         }
-    ' "$FINGERPRINTS" | sort
+    ' "$document"
+}
+
+method_field() {
+    local field="$1"
+    local document="$2"
+    awk -v field="$field" '
+        index($0, "- " field ":") == 1 {
+            value = substr($0, length(field) + 4)
+            gsub(/^[[:space:]]*`?|`?[[:space:]]*$/, "", value)
+            print value
+            count++
+        }
+        END { if (count != 1) exit 1 }
+    ' "$document"
+}
+
+fingerprinted_definition_paths="$(
+    table_records 4 "$FINGERPRINTS" | awk -F '\t' '$1 ~ /^CANIC-/ { print $4 }' | sort
 )"
 if [[ "$definition_paths" != "$fingerprinted_definition_paths" ]]; then
     echo "audit method catalog active definitions differ from the fingerprint manifest" >&2
@@ -54,40 +73,26 @@ if [[ "$definition_paths" != "$fingerprinted_definition_paths" ]]; then
     exit 1
 fi
 
-required_fields=(
-    '## Method Contract'
-    '- Audit ID: `CANIC-'
-    '- Method version:'
-    '- Disposition:'
-    '- Owner:'
-    '- Kind/profile:'
-    '- Trace mode:'
-    '- Cost/runtime:'
-    '- Prerequisites:'
-    '- False-positive boundary:'
-    '- Shared contract:'
-)
-
 for definition in "${definitions[@]}"; do
-    for field in "${required_fields[@]}"; do
-        if ! grep -Fq -- "$field" "$definition"; then
-            echo "${definition#"$ROOT"/}: missing method field: $field" >&2
-            exit 1
-        fi
-    done
-
-    basename="$(basename "$definition")"
-    if ! grep -Fq -- "| \`$basename\` |" "$CATALOG"; then
-        echo "${definition#"$ROOT"/}: not listed in docs/audits/METHODS.md" >&2
-        exit 1
-    fi
-
     relative_path="${definition#"$ROOT"/}"
-    audit_id="$(sed -n 's/^- Audit ID: `\([^`]*\)`.*/\1/p' "$definition")"
-    method_version="$(sed -n 's/^- Method version: `\([^`]*\)`.*/\1/p' "$definition")"
+    audit_id="$(method_field 'Audit ID' "$definition")"
+    method_version="$(method_field 'Method version' "$definition")"
+    [[ "$audit_id" =~ ^CANIC-[A-Z0-9-]+$ && "$method_version" =~ ^[0-9]+([.][0-9]+)*$ ]] || {
+        echo "$relative_path: invalid method identity" >&2
+        exit 1
+    }
+    basename="$(basename "$definition")"
+    catalog_matches="$(table_records 0 "$CATALOG" | awk -F '\t' \
+        -v name="$basename" \
+        '$1 == name { count++ } END { print count+0 }')"
+    [[ "$catalog_matches" -eq 1 ]] || {
+        echo "$relative_path: missing or duplicate catalog identity" >&2
+        exit 1
+    }
     content_hash="$(sha256sum "$definition" | awk '{print $1}')"
-    fingerprint_row="| \`$audit_id\` | \`$method_version\` | \`$content_hash\` | \`$relative_path\` |"
-    fingerprint_matches="$(grep -Fxc -- "$fingerprint_row" "$FINGERPRINTS" || true)"
+    fingerprint_matches="$(table_records 4 "$FINGERPRINTS" | awk -F '\t' \
+        -v id="$audit_id" -v version="$method_version" -v hash="$content_hash" -v path="$relative_path" \
+        '$1 == id && $2 == version && $3 == hash && $4 == path { count++ } END { print count+0 }')"
     if [[ "$fingerprint_matches" -ne 1 ]]; then
         echo "$relative_path: method fingerprint manifest is stale" >&2
         exit 1
@@ -117,18 +122,19 @@ fingerprinted_inputs=(
 )
 for relative_path in "${fingerprinted_inputs[@]}"; do
     content_hash="$(sha256sum "$ROOT/$relative_path" | awk '{print $1}')"
-    fingerprint_row="| \`$content_hash\` | \`$relative_path\` |"
-    fingerprint_matches="$(grep -Fxc -- "$fingerprint_row" "$FINGERPRINTS" || true)"
-    if [[ "$fingerprint_matches" -ne 1 ]]; then
-        echo "$relative_path: executable/governance fingerprint manifest is stale" >&2
+    if ! table_records 2 "$FINGERPRINTS" | awk -F '\t' \
+        -v hash="$content_hash" -v path="$relative_path" \
+        '$2 == path { count++; if ($1 != hash) invalid = 1 }
+         END { exit !(count == 1 && !invalid) }'; then
+        echo "$relative_path: executable/governance fingerprint must be unique and current" >&2
         exit 1
     fi
 done
 
 duplicate_ids="$(
-    sed -n 's/^- Audit ID: `\([^`]*\)`.*/\1/p' "${definitions[@]}" \
-        | sort \
-        | uniq -d
+    for definition in "${definitions[@]}"; do
+        method_field 'Audit ID' "$definition"
+    done | sort | uniq -d
 )"
 if [[ -n "$duplicate_ids" ]]; then
     echo "duplicate active audit method IDs:" >&2
@@ -136,41 +142,22 @@ if [[ -n "$duplicate_ids" ]]; then
     exit 1
 fi
 
-grep -Fq -- '## Holistic Coverage Ownership' "$CATALOG"
-grep -Fq -- 'CANIC-MANDATORY-TRACE-001/v1' "$CATALOG"
-grep -Fq -- '- Audit ID: `CANIC-MANDATORY-TRACE-001`' "$TRACE_PROTOCOL"
-grep -Fq -- '- Method version: `1`' "$TRACE_PROTOCOL"
-for trace_id in \
-    TRACE-DEPLOY-001 \
-    TRACE-AUTH-001 \
-    TRACE-CAPABILITY-001 \
-    TRACE-CYCLES-001 \
-    TRACE-INTENT-001 \
-    TRACE-CONTROL-001 \
-    TRACE-TOPOLOGY-001 \
-    TRACE-BLOB-001 \
-    TRACE-BACKUP-001 \
-    TRACE-LIFECYCLE-001; do
-    grep -Fq -- "$trace_id" "$TRACE_PROTOCOL"
-done
-grep -Fq -- 'snapshot_status:' "$FINGERPRINTS"
-grep -Fq -- 'result_validity:' "$HOWTO"
-grep -Fq -- '## Authority Precedence' "$META"
-grep -Fq -- 'METHOD_VERSION="3"' "$ROOT/scripts/ci/instruction-audit-report.sh"
-grep -Fq -- 'candidate_method_fingerprint' "$ROOT/scripts/ci/instruction-audit-report.sh"
-grep -Fq -- '"$candidate_method_fingerprint" != "$METHOD_FINGERPRINT"' "$ROOT/scripts/ci/instruction-audit-report.sh"
-grep -Fq -- 'BASELINE_REPORT="N/A"' "$ROOT/scripts/ci/instruction-audit-report.sh"
-grep -Fq -- 'evidence-manifest.yml' "$ROOT/scripts/ci/instruction-audit-report.sh"
-grep -Fq -- 'METHOD_VERSION="6"' "$ROOT/scripts/ci/wasm-audit-report.sh"
-grep -Fq -- 'disposable linked Git worktree' "$ROOT/scripts/ci/wasm-audit-report.sh"
-grep -Fq -- 'CARGO_NET_OFFLINE="true"' "$ROOT/scripts/ci/wasm-audit-report.sh"
-grep -Fq -- 'root_independent_composite' "$ROOT/scripts/ci/wasm-audit-report.sh"
-grep -Fq -- 'candidate_method_fingerprint' "$ROOT/scripts/ci/wasm-audit-report.sh"
-grep -Fq -- 'build_artifact' "$ROOT/scripts/ci/wasm-audit-report.sh"
-if grep -Fq -- 'cargo build --target wasm32-unknown-unknown' "$ROOT/scripts/ci/wasm-audit-report.sh"; then
-    echo "Wasm audit runner must not restore direct Cargo Wasm compilation" >&2
+# Fingerprints bind the reviewed definitions and executable inputs. Do not
+# infer behavior from comments, shell spelling or explanatory document prose.
+trace_id="$(method_field 'Audit ID' "$TRACE_PROTOCOL")"
+trace_version="$(method_field 'Method version' "$TRACE_PROTOCOL")"
+[[ "$trace_id" == CANIC-MANDATORY-TRACE-001 && "$trace_version" =~ ^[0-9]+([.][0-9]+)*$ ]] || {
+    echo "invalid mandatory trace method identity" >&2
     exit 1
-fi
-grep -Fq -- 'evidence-manifest.yml' "$ROOT/scripts/ci/wasm-audit-report.sh"
+}
+rg -q '\([^)]*mandatory-trace-protocol\.md\)' "$CATALOG" || {
+    echo "audit catalog does not link the mandatory trace protocol" >&2
+    exit 1
+}
+trace_ids="$(table_records 2 "$TRACE_PROTOCOL" | awk -F '\t' '$1 ~ /^TRACE-/ { print $1 }')"
+[[ -n "$trace_ids" && -z "$(printf '%s\n' "$trace_ids" | sort | uniq -d)" ]] || {
+    echo "mandatory trace identities must be nonempty and unique" >&2
+    exit 1
+}
 
 echo "audit method catalog guard passed"

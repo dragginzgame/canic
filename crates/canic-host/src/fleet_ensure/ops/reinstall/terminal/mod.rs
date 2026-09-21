@@ -83,6 +83,21 @@ pub(in crate::fleet_ensure) fn read(
     {
         return Err(invalid());
     }
+    let allowance = crate::fleet_ensure::ops::funding_observation::validation::source_allowance(
+        &crate::fleet_ensure::ops::funding_observation::resolved_from_state(
+            source.reviewed_desired.desired(),
+            &state,
+        ),
+        &source.documents.operation_id,
+        &source.documents.plan_sha256,
+        &source.journal.funding_observations,
+    )
+    .map_err(|_| invalid())?;
+    source.conservation.maximum_execution_burn_cycles = source
+        .conservation
+        .maximum_execution_burn_cycles
+        .checked_add(allowance)
+        .ok_or_else(invalid)?;
     phases(paths, &raw, &mut source)?;
     receipts(&source)?;
     Ok(source)

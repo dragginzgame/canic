@@ -104,8 +104,9 @@ mod tests {
         let executable = root.join("icp");
         fs::write(
             &executable,
-            r#"#!/bin/sh
-if [ "$1" = --version ]; then echo 'icp 1.5.0'; exit 0; fi
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 while [ "$1" = --project-root-override ] || [ "$1" = --identity-password-file ]; do shift 2; done
 if [ "$1 $2" = 'identity default' ]; then cat selected; exit 0; fi
 selected=$(cat selected)
@@ -115,6 +116,7 @@ for arg do
 done
 printf '%s\n' "$selected"
 "#,
+            ),
         )
         .unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();

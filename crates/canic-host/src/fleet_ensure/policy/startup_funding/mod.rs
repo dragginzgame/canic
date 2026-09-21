@@ -8,11 +8,15 @@ pub(in crate::fleet_ensure) mod allowance;
 pub(in crate::fleet_ensure) mod live_binding;
 pub(in crate::fleet_ensure) mod local_demand;
 pub(super) mod planning;
+pub(in crate::fleet_ensure) mod recursive;
+pub(in crate::fleet_ensure) mod relay_quote;
 #[cfg(test)]
 mod tests;
 
 #[cfg(test)]
 pub(in crate::fleet_ensure) use planning::tests::{qualify, qualify_creation};
+#[cfg(test)]
+pub(in crate::fleet_ensure) use tests::{funding_binding, hub_config, hub_source};
 
 use super::{EnsurePolicyError, initial_role_instances};
 use crate::fleet_ensure::{

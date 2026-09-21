@@ -142,7 +142,9 @@ fn successful_ic_wasm_shrink_replaces_artifact() {
     fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.11.1\\n'; exit 0; fi\nprintf 'shrunk wasm' > \"$3\"\n",
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; exit 0; fi\nprintf 'shrunk wasm' > \"$3\"\n",
+        ),
     );
     let tool = crate::ic_wasm::resolve_test_ic_wasm(&command_path.display().to_string())
         .expect("admit fake pinned ic-wasm");
@@ -154,7 +156,10 @@ fn successful_ic_wasm_shrink_replaces_artifact() {
         fs::read(&wasm_path).expect("read shrunk wasm"),
         b"shrunk wasm"
     );
-    assert_eq!(transform.tool_version.as_deref(), Some("ic-wasm 0.11.1"));
+    assert_eq!(
+        transform.tool_version.as_deref(),
+        Some(crate::ic_wasm::IC_WASM_VERSION_IDENTITY)
+    );
     assert_eq!(transform.tool_sha256, None);
     assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
     fs::remove_dir_all(root).expect("remove temp root");
@@ -172,7 +177,9 @@ fn failed_ic_wasm_shrink_preserves_original_and_removes_partial_output() {
     fs::write(&wasm_path, b"original wasm").expect("write wasm placeholder");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.11.1\\n'; exit 0; fi\nprintf 'partial wasm' > \"$3\"\nprintf 'shrink failed' >&2\nexit 23\n",
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; exit 0; fi\nprintf 'partial wasm' > \"$3\"\nprintf 'shrink failed' >&2\nexit 23\n",
+        ),
     );
     let tool = crate::ic_wasm::resolve_test_ic_wasm(&command_path.display().to_string())
         .expect("admit fake pinned ic-wasm");
@@ -257,7 +264,9 @@ fn successful_ic_wasm_metadata_records_tool_identity() {
     fs::write(&did_path, b"service : {}").expect("write did placeholder");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.11.1\\n'; fi\n",
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; fi\n",
+        ),
     );
     let tool = crate::ic_wasm::resolve_test_ic_wasm(&command_path.display().to_string())
         .expect("admit fake pinned ic-wasm");
@@ -266,7 +275,10 @@ fn successful_ic_wasm_metadata_records_tool_identity() {
         embed_candid_metadata(&tool, &wasm_path, &did_path).expect("successful metadata transform");
 
     assert_eq!(transform.transform, ArtifactTransformKind::CandidMetadata);
-    assert_eq!(transform.tool_version.as_deref(), Some("ic-wasm 0.11.1"));
+    assert_eq!(
+        transform.tool_version.as_deref(),
+        Some(crate::ic_wasm::IC_WASM_VERSION_IDENTITY)
+    );
     assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
 
     fs::remove_dir_all(root).expect("remove temp dir");
@@ -284,7 +296,9 @@ fn failed_ic_wasm_metadata_is_rejected() {
     fs::write(&did_path, b"service : {}").expect("write did placeholder");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'ic-wasm 0.11.1\\n'; exit 0; fi\nexit 23\n",
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@IC_WASM_IDENTITY@\\n'; exit 0; fi\nexit 23\n",
+        ),
     );
     let tool = crate::ic_wasm::resolve_test_ic_wasm(&command_path.display().to_string())
         .expect("admit fake pinned ic-wasm");
@@ -379,7 +393,9 @@ fn release_wasm_optimization_records_metrics_and_preserves_contract() {
     fs::write(&wasm_path, &original).expect("write Wasm fixture");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 132 (version_132)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-mutable-globals --enable-nontrapping-float-to-int --enable-bulk-memory --enable-sign-ext --enable-bulk-memory-opt; exit 0;; esac\n[ \"$2\" = \"-o\" ] || exit 91\n[ \"$4\" = \"-Oz\" ] || exit 92\ncase \" $* \" in *\" --enable-mutable-globals \"*) ;; *) exit 93;; esac\ncase \" $* \" in *\" --enable-bulk-memory-opt \"*) ;; *) exit 94;; esac\ncp \"$1\" \"$3\"\n",
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@BINARYEN_IDENTITY@\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-mutable-globals --enable-nontrapping-float-to-int --enable-bulk-memory --enable-sign-ext --enable-bulk-memory-opt; exit 0;; esac\n[ \"$2\" = \"-o\" ] || exit 91\n[ \"$4\" = \"-Oz\" ] || exit 92\ncase \" $* \" in *\" --enable-mutable-globals \"*) ;; *) exit 93;; esac\ncase \" $* \" in *\" --enable-bulk-memory-opt \"*) ;; *) exit 94;; esac\ncp \"$1\" \"$3\"\n",
+        ),
     );
 
     let transform = optimize_release_wasm_artifact_with_command(
@@ -394,7 +410,7 @@ fn release_wasm_optimization_records_metrics_and_preserves_contract() {
     assert_eq!(transform.outcome, ArtifactTransformOutcome::Applied);
     assert_eq!(
         transform.tool_version.as_deref(),
-        Some("wasm-opt version 132 (version_132)")
+        Some(crate::binaryen::BINARYEN_VERSION_IDENTITY)
     );
     assert!(
         transform
@@ -436,10 +452,10 @@ fn release_wasm_optimization_rejects_export_or_candid_drift() {
         fs::write(&replacement_path, replacement).expect("write replacement Wasm fixture");
         write_executable(
             &command_path,
-            &format!(
-                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 132 (version_132)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int; exit 0;; esac\ncp '{}' \"$3\"\n",
+            &crate::test_support::tool_script(&format!(
+                "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@BINARYEN_IDENTITY@\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int; exit 0;; esac\ncp '{}' \"$3\"\n",
                 replacement_path.display()
-            ),
+            )),
         );
 
         let error = optimize_release_wasm_artifact_with_command(
@@ -467,7 +483,9 @@ fn release_wasm_optimization_rejects_required_feature_drift() {
     fs::write(&wasm_path, &original).expect("write Wasm fixture");
     write_executable(
         &command_path,
-        "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf 'wasm-opt version 132 (version_132)\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) case \"$1\" in *.optimized) printf '%s\\n' --enable-bulk-memory;; *) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int;; esac; exit 0;; esac\ncp \"$1\" \"$3\"\n",
+        &crate::test_support::tool_script(
+            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then printf '@BINARYEN_IDENTITY@\\n'; exit 0; fi\ncase \" $* \" in *\" --print-features \"*) case \"$1\" in *.optimized) printf '%s\\n' --enable-bulk-memory;; *) printf '%s\\n' --enable-sign-ext --enable-bulk-memory --enable-nontrapping-float-to-int;; esac; exit 0;; esac\ncp \"$1\" \"$3\"\n",
+        ),
     );
 
     let error = optimize_release_wasm_artifact_with_command(

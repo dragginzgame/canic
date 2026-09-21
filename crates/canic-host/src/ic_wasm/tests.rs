@@ -79,7 +79,10 @@ fn admitted_executable_records_absolute_path_and_exact_version() {
     let root = temp_root("admitted");
     fs::create_dir_all(&root).expect("create test root");
     let executable = root.join(IC_WASM_TOOL);
-    write_executable(&executable, "#!/bin/sh\nprintf 'ic-wasm 0.11.1\\n'\n");
+    write_executable(
+        &executable,
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@IC_WASM_IDENTITY@\\n'\n"),
+    );
 
     let admitted = admit_ic_wasm_executable(&executable).expect("admit exact tool");
 
@@ -107,7 +110,10 @@ fn canonical_install_precedes_a_path_wrapper() {
     fs::create_dir_all(canonical.parent().expect("canonical parent"))
         .expect("create canonical bin");
     fs::create_dir_all(&path_directory).expect("create PATH bin");
-    write_executable(&canonical, "#!/bin/sh\nprintf 'ic-wasm 0.11.1\\n'\n");
+    write_executable(
+        &canonical,
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@IC_WASM_IDENTITY@\\n'\n"),
+    );
     write_executable(&wrapper, "#!/bin/sh\nprintf 'ic-wasm 0.9.11\\n'\n");
 
     let output = std::process::Command::new(std::env::current_exe().expect("current test binary"))
@@ -135,7 +141,10 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let root = temp_root("staged-admission");
     fs::create_dir_all(&root).expect("create test root");
     let candidate = root.join("candidate-ic-wasm");
-    write_executable(&candidate, "#!/bin/sh\nprintf 'ic-wasm 0.11.1\\n'\n");
+    write_executable(
+        &candidate,
+        &crate::test_support::tool_script("#!/bin/sh\nprintf '@IC_WASM_IDENTITY@\\n'\n"),
+    );
     let destination = root.join("bin/ic-wasm");
 
     publish_executable(&candidate, &destination)

@@ -914,6 +914,13 @@ impl LifecycleApi {
         crate::workflow::component_registry::directory_page(request).map_err(Into::into)
     }
 
+    /// Read complete membership after the Root status endpoint authenticates its controller.
+    pub fn controller_component_directory_page(
+        request: ComponentDirectoryPageRequest,
+    ) -> Result<ComponentDirectoryPageResponse, canic_core::dto::error::Error> {
+        crate::workflow::component_registry::controller_directory_page(request).map_err(Into::into)
+    }
+
     pub async fn prepare_fleet_activation()
     -> Result<FleetActivationStatusResponse, canic_core::dto::error::Error> {
         crate::workflow::runtime::fleet_activation::prepare_root()

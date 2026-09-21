@@ -223,6 +223,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
@@ -240,6 +241,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("retain in-progress journal");
     let mut options = EnsureOptions {
+        observe_funding: None,
         operator_mint: false,
         mint_cmc: "rkp4c-7iaaa-aaaaa-aaaca-cai".into(),
         mint_icp_ledger: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
@@ -901,6 +903,7 @@ fn native_funding_review_reports_destination_amount_and_approval() {
         },
         effect: None,
         pause: FundingPauseRecord::Native(NativeFundingRequiredRecord {
+            observation_quote: None,
             available_cycles: 10,
             cycles_ledger: "ledger".into(),
             funding_margin_cycles: 5,
@@ -978,4 +981,33 @@ fn json_workflow_errors_keep_machine_output_and_typed_source() {
     assert_eq!(json["event"], "fleet_ensure_error");
     assert_eq!(json["schema_version"], 1);
     assert_eq!(crate::cli_error_exit_code(&cli_error), 1);
+}
+
+#[test]
+fn funding_observation_options_require_an_explicit_root_and_separate_approval() {
+    let parse = |args: &[&str]| EnsureOptions::parse(args.iter().map(OsString::from));
+    let review = parse(&["ensure", "staging", "--observe-funding", "root-a"]).unwrap();
+    assert_eq!(review.observe_funding.as_deref(), Some("root-a"));
+    assert!(review.apply.is_none());
+    let digest = "31".repeat(32);
+    let approved = parse(&[
+        "ensure",
+        "staging",
+        "--observe-funding",
+        "root-a",
+        "--apply",
+        &digest,
+    ])
+    .unwrap();
+    assert_eq!(approved.apply.as_deref(), Some(digest.as_str()));
+    for flag in ["--operator-mint", "--reinstall"] {
+        assert!(matches!(
+            parse(&["ensure", "staging", "--observe-funding", "root-a", flag]),
+            Err(FleetCommandError::Usage(_))
+        ));
+    }
+    assert!(matches!(
+        parse(&["ensure", "staging", "--observe-funding"]),
+        Err(FleetCommandError::Usage(_))
+    ));
 }

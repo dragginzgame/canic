@@ -20,6 +20,246 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Current queue: RF3 complete; B1 attribution resumed — 2026-09-21
+
+The maintainer requests finishing RF3 and continuing the accepted queue. The
+complete RF3 recovery-funding outcome and the earlier guard cleanup are in the
+open `0.110.34` draft. Packages and the published base remain `0.110.33`.
+
+| Order | Outcome | State |
+| --- | --- | --- |
+| 1 | Current registry, complete inventory and bounded paid funding observations | Qualified |
+| 2 | Recursive demand, native recovery reserves and separate finite funding credits | Qualified |
+| 3 | RF3 interruption, conservation, source propagation, CLI and operations cleanup | Qualified |
+| 4 | B1 attribution: matched rows 8, 10 and 12; remaining controlled ablations, generic cohort and optimized artifact evidence | Active; human acceptance still required |
+| 5 | B2, B3, B4 and B5 | Gated on accepted B1 evidence |
+
+`fleet ensure --observe-funding ROOT` now reviews a complete pass; its own
+`--apply` digest authorizes collection. Each intent covers a child native status
+inspection and at most one parent-ledger relay. Exact current heads, selected
+code/controllers, placement and source policy bind every pass. Failed or lost
+replies remain consumed, including interruption between the two calls. Fresh
+infrastructure identities resolve through applied creation receipts. Exhausted
+replay makes no platform calls or journal writes.
+
+Settled observations drive recursive grants without double-counting nested
+transfers. Recovery retains the Root floor and reports uncovered lifetime demand,
+cooldowns and window constraints. Native credits distinguish baseline recovery,
+observation allowance and recursive recovery; all retain separate approval and
+receipt-safe reconciliation. Minimum recovery remains available before telemetry.
+The forecast is sequential evidence, not an atomic balance snapshot or reserved
+runtime window. Consumed observation allowances propagate through conservation,
+continuation phases and supported non-executable source retirement. The latter
+retains its existing restrictions on supplementary funding records.
+
+All 207 selected native regressions pass (166 host, 41 CLI; three existing host
+cases ignored), including staged quote authority, inspection/ledger interruption,
+creation receipts, current-head rejection, conservation and effect-free replay.
+Host/CLI/internal-fixture all-target/all-feature warning-denied Clippy passes.
+The exact initial-Shard PocketIC case passes real Root inspections, descendant
+ledger reads, protected directory access and terminal replay in 58.03 seconds
+(149-second runner). Earlier RF2 receipt/lost-withdrawal and operator-CLI evidence
+remains retained. Logs: `.tmp/rf3-completion-{tests,clippy,pocketic}.log`.
+
+The complete RF3/guard-cleanup batch is ready for the maintainer-selected release
+flow; both `.34` changelog surfaces and operations guidance describe it. No broad
+gate, versioning, publication, deployment or sibling mutation ran. The .110
+cadence exception continues the accepted recovery/contraction work; no minor
+transition is implied. Continue B1 from immutable `v0.110.5`, beginning with the
+already-qualified row 8 matched measurement, then rows 10 and 12. B1's remaining
+criteria and human acceptance still gate B2; RF3 completion does not close B1.
+
+### B1 matched measurement in progress
+
+Row 8 is running through the governed retained experiment, with two clean
+baseline and two clean variant repetitions across fourteen selected artifacts.
+The method/manifest preflight passes. The first three baseline artifacts have
+passed artifact validation; this is not yet a completed measurement or a savings
+claim. The runner uses frozen Rust 1.97.1 and a private Cargo target.
+
+- Isolated linked checkout: `.tmp/b1-continuation-20260921/product`
+- Source: `50f40171d6177c3d1e490b1fdb5f6163323b2cd5` (`v0.110.5`)
+- Run output: `.tmp/b1-continuation-20260921/row08/`
+- Progress log: `.tmp/b1-continuation-row08.log`
+- Tool process session: `65061`
+
+Check the existing runner before starting another measurement or touching its
+product checkout. It restores the source and emits determinism/metadata records
+on success. Retain and review the completed vectors before claiming row 8
+measured, then continue rows 10 and 12. Unregistered, uncompiled draft switches
+for rows 13, 14 and 16 are under `.tmp/b1-proposals-20260921/`; only their exact
+baseline applicability has been checked. They are not measurement authority or
+production changes. B1 remains incomplete and B2 remains gated.
+
+### Earlier RF3 implementation checkpoints
+
+The entries below preserve their original evidence and remaining-work statements.
+The current queue above owns readiness and next actions.
+
+### RF3 durable observation journal qualified
+
+The host library now retains one exact observation review per Root in the
+existing Ensure journal. Its digest binds the operation, plan, registry and
+Component heads, selected descendant edges, attempt allowance and native
+recovery floor. Unapproved reviews can refresh; approval or consumption freezes
+the pass. Collection rechecks current authority and native headroom, persists
+each consumed attempt before invoking the adapter, and retains typed outcomes.
+Failed calls and lost replies never replenish attempts. Restoring an unresolved
+intent records interruption without another call; exhausted replay performs no
+platform observation or effect. Retained ledger results remain diagnostic.
+
+Only consumed allowances enter the operation's conservation execution bound;
+an unused review adds no allowance or operator debit. Schema-1 journals now
+require `funding_observations`, with no compatibility default. Restoration checks
+identity, arithmetic and attempt order. Restricted reinstall-source readers
+reject records containing observation reviews until that propagation is complete.
+The production ICP adapter, CLI review/collection and recursive demand/recovery
+integration remain open; the generic library boundary alone does not enable
+operator collection or establish parent affordability.
+
+All 204 selected native tests pass (164 host, 40 CLI; three existing host cases
+ignored), including durable intent visibility, interruption, failure consumption,
+changed authority, underfunding, conservation and effect-free replay. Host, CLI
+and internal-fixture all-target/all-feature warning-denied Clippy passes. The
+exact PocketIC `operator_component_public_cli_uses_real_icp_and_exports_terminal_binding`
+case passes with the required journal field (146.95 seconds; 219-second runner
+including compilation). This qualifies existing operator-journal propagation,
+not live descendant collection. Changed-source formatting and diff checks pass.
+Logs: `.tmp/rf3-observation-journal-{tests,clippy,pocketic}.log`.
+
+Both `.34` changelog drafts and operations documentation describe this slice;
+package versions remain `.33`. The complete RF3/`.34` batch is not ready to push
+or publish. Next: connect production collection and its exact CLI approval, then
+finish recursive recovery, source propagation and interruption/conservation
+evidence. No broad gate, versioning, publication, deployment or sibling edit ran.
+
+### RF3 descendant observation quote qualified
+
+The no-effect preview now proposes one ledger read per exact descendant funding
+edge, sorted by parent and child. It requires qualified complete membership and
+selected placement/role bindings; Root-local queries are excluded. The proposed
+per-attempt allowance is the configured update plus observation bound, with
+checked totals and no retry allowance. The native requirement adds that total
+above the existing Root recovery floor, preserving its configured minimum,
+request threshold and deployment reserve. Only an observed balance establishes
+the shortfall. Unread descendant ledgers do not block the quote.
+
+The host view retains the exact request bindings and the CLI reports the quote
+and native requirement separately. This is neither an approved budget nor a
+replica-enforced cost limit. It does not establish parent affordability, reserve
+funds or change the reviewed plan. Generation still performs no paid relay.
+The next collector must bind approval to current authority and durably consume
+an attempt before calling; failures and lost replies cannot replenish it.
+
+All 40 targeted native tests pass (38 host, two CLI), including the generated
+estate journey, exact request ordering, missing-parent and changed-inventory
+rejection, zero bounds, threshold shortfalls, overflow and configured-balance
+rejection. Host/CLI all-target/all-feature warning-denied Clippy, changed-source
+formatting and diff checks pass. Logs: `.tmp/rf3-relay-quote-{tests,clippy}.log`.
+No IC-call or runtime path changed in this continuation; the preceding focused
+PocketIC evidence remains applicable. Both `.34` changelog drafts and operations
+docs are updated; packages remain `.33`.
+
+RF3 remains open for durable reviewed-budget collection, recursive recovery
+quotes and their interruption/conservation evidence. The complete `.34` batch
+is not ready to push or publish. No broad validation, versioning, Git publication,
+deployment or sibling mutation ran.
+
+### RF3 current registry and complete membership qualified
+
+Generation validates the selected installed Coordinator's canonical registry
+and binds allocation epochs to that independently observed authority. Its Active
+Root row must match selected placement, Spec admissions, topology digest,
+complete release set, limits and funding policy. Root's active mirror must
+match the Coordinator head before and after collection; a final Coordinator
+head query fences the invocation.
+
+Before reading Root-local ledgers, each Root's Workload count must equal the
+complete allocation set. Each Component requires one top-level member, current
+admission capacity, an Active unreserved partition and exact descendant edges
+from bounded unfiltered directory pages. Missing members, duplicate identities,
+partial pages and changed Component heads leave coverage unavailable. Partition
+and directory heads are rechecked after ledger reads. Failed qualification
+invalidates child bindings, usage, allowance and demand; missing evidence never
+becomes zero usage.
+
+Root status now exposes controller-only directory pages through the existing
+bounded member-directory reader. Public member authorization remains unchanged.
+The CLI reports `live_inventory` independently of ledger availability. All new
+reads are queries; complete membership does not establish an atomic snapshot of
+balances and accounting. Nested ledgers still require a separately budgeted
+relay, and minimum native Root recovery remains independent of telemetry.
+
+All 38 focused native tests pass (36 host, two CLI), including malformed-page
+rejection, current-head drift, query-only transport and generated-estate replay.
+The existing initial-Shard PocketIC case passes with controller/member access,
+outsider denial, stale-head/invalid-limit rejection, unchanged query cycle
+balance and terminal replay. An initial test used the Store controller for Root;
+correcting the fixture caller resolved that failure without changing auth.
+The final case takes 49.82 seconds (65-second runner with cached artifacts).
+All-target, all-feature warning-denied Clippy passes for `canic`, `canic-host`,
+`canic-cli`, `canic-control-plane` and `canic-testing-internal`. Changed-source
+formatting and diff checks pass.
+Logs: `.tmp/rf3-inventory-{tests,pocketic,clippy}.log`; earlier registry evidence
+remains in `.tmp/rf3-registry-{tests,clippy}.log`.
+
+Next: reviewed-budget descendant ledger collection, recursive demand and
+recovery-reserve integration, then the remaining RF3 interruption, underfunding,
+conservation and replay evidence. Complete RF3 and the expanded `.34` release
+batch remain unfinished; both changelog drafts describe the current work and
+package versions stay `.33`. No broad gate, versioning, Git publication,
+deployment or sibling edit ran.
+
+## Dependency and document guard cleanup complete — 2026-09-20
+
+The maintainer accepts the read-only review's brittle-test findings and requests
+their repair. The raw timer provider guard now checks one production Wasm
+package identity without pinning its transitive version. Successful ICP,
+ic-wasm and Binaryen executable fixtures use maintained tool authorities;
+version rejection and hash admission remain covered. ICP rejection tests assert
+typed fields instead of explanatory error wording.
+
+Audit guards parse identity/fingerprint records without freezing headings,
+table padding, comments or shell command spelling. Catalog membership, exact
+reviewed fingerprints, unique method/trace identities and required links remain
+enforced. The release document gate leaves command execution to the packaged
+proof, which now reads its Rust minimum from the workspace manifest. Regression
+fixtures accept editorial changes and reject stale hashes, duplicate identity
+fields, missing definitions, missing registrations and missing links. This does
+not change numerical audit methods or invalidate their measurement baselines.
+
+All 213 targeted Rust tests pass: 16 timer guards and 197 affected host cases.
+Two existing manual latency measurements remain ignored. Scoped core/host
+warning-denied Clippy, changed-source formatting, document guard regressions,
+ShellCheck and diff checks pass. A separate fake-ICP probe follows a changed
+tool pin, and the cargo-get Rust-minimum lookup is verified. Logs are
+`.tmp/brittle-{timer,host-tests,core-clippy,host-clippy,guards}.log`.
+
+The requested sanity review reproduced and fixed one remaining guard gap:
+a correct executable fingerprint could mask a second, conflicting row for the
+same input. Each checked input now requires exactly one current fingerprint.
+Negative fixtures refresh hashes before testing duplicate identity fields and
+trace IDs, and require rejection exit 1 rather than accepting arbitrary command
+failures. Conflicting fingerprint coverage fails before the fix and passes after
+it. Document regressions, both affected guards, ShellCheck, formatting and diff
+checks pass. The fresh native sanity run passes 16 timer and 95 tool/transport
+tests; logs are `.tmp/brittle-sanity-{timer,tools}.log`. No Rust source changed
+during this review, so the prior scoped Clippy evidence still applies.
+
+During this work, the maintainer explicitly requested publication with
+`--allow-dirty` after the original flow stopped at canic-host. Canic-host and
+canic-cli 0.110.33 were published with that override and all seven package
+versions were observed on crates.io. The original release-candidate preflight
+was retained; manifest-boundary and Cargo package verification passed. Logs:
+`target/publication-runs/allow-dirty-0.110.33.k2pPGk/`. The dirty host changes
+included in that publication are test-only; runtime behavior is unchanged.
+
+The complete guard-cleanup batch is ready for the maintainer-selected release
+flow. Both .34 changelog drafts are ready; package versions remain .33. Keep
+this bounded release-validation follow-up on .110 despite the cadence guideline;
+no minor transition is implied. No broad gate, PocketIC suite, version bump,
+Git publication, deployment or sibling edit ran for this cleanup.
+
 ## CANIC-002 timer dependency guard repair — 2026-09-20
 
 The maintainer's .33 release validation found one failing ordinary target:

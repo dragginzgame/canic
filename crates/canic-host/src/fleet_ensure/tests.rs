@@ -1523,6 +1523,7 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
     crate::fleet_ensure::ops::write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
@@ -2517,6 +2518,7 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
     crate::fleet_ensure::ops::write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
             completion: FleetEnsureCompletion::InProgress,
@@ -2846,6 +2848,7 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
     plan.canisters = planned;
     plan.protocol_actions.clear();
     let mut journal = FleetEnsureJournalRecord {
+        funding_observations: BTreeMap::new(),
         funding_reviews: Vec::new(),
         successor_phases: Vec::new(),
         completion: FleetEnsureCompletion::InProgress,
@@ -7434,6 +7437,7 @@ fn terminal_retirement_fixture() -> (
         })
         .collect();
     let journal = FleetEnsureJournalRecord {
+        funding_observations: BTreeMap::new(),
         funding_reviews: Vec::new(),
         successor_phases: vec![FleetEnsureSuccessorPhaseRecord {
             execution_burn_before_phase: 0,

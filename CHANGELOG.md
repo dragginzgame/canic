@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.34` adds reviewed funding observations and recursive recovery quotes,
+  extends conservation and potentially breaking Root/journal contracts, and
+  removes duplicated tool-version fixtures and wording-sensitive guards.
 - `0.110.33` updates ic-timers to 0.8.0 and carries registration identities into
   cached measurements and offline timer comparisons that reject counter resets.
 - `0.110.32` separates timer scheduler/work measurements and adds optional

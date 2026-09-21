@@ -118,7 +118,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `4ff697d1ed68db19bca8810f609ea40547486a2174e81271312828ef034ca7c8` | `docs/audits/scripts/measure-complexity-v2.sh` |
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
-| `82a9247dd34694903cac42171786eb02b943ce72c4ff04d1acbde1a42c2658ab` | `scripts/ci/check-audit-method-catalog.sh` |
+| `429d994c26a87ed9d0d8a2525ece3f265db37a4a73d7242f0cd0897d4fe63b74` | `scripts/ci/check-audit-method-catalog.sh` |
 | `b6890c680167d19bc7fb6ea59ec12ed7ae882f186535bab72f758579c2765508` | `scripts/ci/check-release-integrity-contract.sh` |
 | `eee02a45e2fd6512b2641209c12ad33e08b9d1659114bf9a828face730a044cc` | `scripts/ci/instruction-audit-report.sh` |
 | `93ac1f3c77d9d58009cae84c4570e51306a077a207262c9316aea6f2fdae122c` | `scripts/ci/run-layering-guards.sh` |

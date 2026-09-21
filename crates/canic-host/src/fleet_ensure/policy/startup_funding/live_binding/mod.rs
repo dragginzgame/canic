@@ -9,7 +9,10 @@ mod tests;
 
 use crate::fleet_ensure::{
     model::DesiredFleet,
-    view::startup_funding::{StartupChildFundingBinding, StartupUsageUnavailable},
+    view::startup_funding::{
+        StartupChildFundingBinding, StartupFundingPlacement, StartupFundingRegistry,
+        StartupUsageUnavailable,
+    },
 };
 use candid::Principal;
 use canic_core::{
@@ -35,6 +38,45 @@ struct FundingEdge<'a> {
     parent: Principal,
     child: Principal,
     role: &'a CanisterRole,
+}
+
+/// Bind an allocation to independently observed current authority and selected Root policy.
+pub(in crate::fleet_ensure) fn current(
+    desired: &DesiredFleet,
+    root_name: &str,
+    binding: &StartupChildFundingBinding,
+    registry: &StartupFundingRegistry,
+) -> Result<(), StartupUsageUnavailable> {
+    selected(desired, root_name, binding)?;
+    let invalid = StartupUsageUnavailable::AuthorityMismatch;
+    if binding.component.authority != registry.authority {
+        return Err(invalid);
+    }
+    let placement = registry
+        .roots
+        .get(&binding.component.fleet_subnet_root)
+        .ok_or(invalid)?;
+    let root = desired
+        .bootstrap
+        .as_ref()
+        .ok_or(invalid)?
+        .roots
+        .iter()
+        .find(|root| root.root == root_name)
+        .ok_or(invalid)?;
+    let expected = StartupFundingPlacement {
+        active: true,
+        placement_subnet: root.placement_subnet,
+        release_set: binding.release_set,
+        component_admissions: root.component_admissions.clone(),
+        component_topology_digest: root.component_topology_digest,
+        limits: root.limits.clone(),
+        funding: root.funding.clone(),
+    };
+    if *placement != expected {
+        return Err(StartupUsageUnavailable::PolicyTransition);
+    }
+    Ok(())
 }
 
 /// Match the selected Fleet and Root placement before interpreting an allocation response.

@@ -68,3 +68,28 @@ pub fn create_fifo(path: &Path) {
         .expect("run mkfifo");
     assert!(status.success(), "mkfifo failed with {status}");
 }
+
+/// Fill fake executable responses from the maintained tool authorities.
+pub fn tool_script(template: &str) -> String {
+    template
+        .replace("@ICP_VERSION@", icp_cli_version())
+        .replace(
+            "@IC_WASM_IDENTITY@",
+            crate::ic_wasm::IC_WASM_VERSION_IDENTITY,
+        )
+        .replace(
+            "@BINARYEN_IDENTITY@",
+            crate::binaryen::BINARYEN_VERSION_IDENTITY,
+        )
+}
+
+/// Read the repository's installed ICP version for unrelated command fixtures.
+pub fn icp_cli_version() -> &'static str {
+    include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tool-versions.env"
+    ))
+    .lines()
+    .find_map(|line| line.strip_prefix("export CANIC_ICP_CLI_VERSION="))
+    .expect("repository ICP CLI pin")
+}

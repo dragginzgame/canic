@@ -3,6 +3,9 @@
 //! Responsibility: review one Root credit within an issued provisioning operation.
 //! Boundary: existing Ledger withdrawal adapter owns effects; starting balances stay fixed.
 
+#[cfg(test)]
+pub(super) mod tests;
+
 use crate::fleet_ensure::{
     model::{
         CurrentFleetProtocolAction, DesiredCanisterKind, DesiredPresence, EffectState,
@@ -23,6 +26,59 @@ pub(super) fn applicable(plan: &FleetEnsurePlan, journal: &FleetEnsureJournalRec
             .funding_reviews
             .iter()
             .any(|review| matches!(review.pause, FundingPauseRecord::Native(_)))
+}
+
+fn observation_source(
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+    root: &str,
+) -> Option<crate::fleet_ensure::model::funding_observation::FundingQuoteSourceRecord> {
+    use crate::fleet_ensure::model::funding_observation::{
+        FundingQuoteSourceRecord, FundingQuoteStage,
+    };
+    let record = journal.funding_observations.get(root)?;
+    let stage =
+        if crate::fleet_ensure::ops::funding_observation::demand(plan, journal, record).is_ok() {
+            FundingQuoteStage::Recovery
+        } else {
+            FundingQuoteStage::Observation
+        };
+    Some(FundingQuoteSourceRecord {
+        review_sha256: record.review_sha256.clone(),
+        stage,
+    })
+}
+
+fn observation_minimum<E: std::error::Error + 'static>(
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+    root: &str,
+    source: Option<&crate::fleet_ensure::model::funding_observation::FundingQuoteSourceRecord>,
+    base: u128,
+) -> Result<u128, EnsureWorkflowError<E>> {
+    use crate::fleet_ensure::model::funding_observation::FundingQuoteStage;
+    let Some(source) = source else {
+        return Ok(base);
+    };
+    let record = journal
+        .funding_observations
+        .get(root)
+        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    if source.review_sha256 != record.review_sha256 {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+    let minimum = match source.stage {
+        FundingQuoteStage::Observation => record
+            .body
+            .recovery_floor_cycles
+            .checked_add(record.body.maximum_cycles)
+            .ok_or(EnsureWorkflowError::JournalIntegrity)?,
+        FundingQuoteStage::Recovery => {
+            crate::fleet_ensure::ops::funding_observation::demand(plan, journal, record)?
+                .minimum_native_cycles
+        }
+    };
+    Ok(base.max(minimum))
 }
 
 fn issued_provisioning<'a>(
@@ -87,7 +143,14 @@ pub(super) fn verify<E: std::error::Error + 'static>(
         else {
             return Err(EnsureWorkflowError::JournalIntegrity);
         };
-        let (minimum, margin, ledger, fee) = bounds(plan, &pause.root)?;
+        let (base, margin, ledger, fee) = bounds(plan, &pause.root)?;
+        let minimum = observation_minimum(
+            plan,
+            journal,
+            &pause.root,
+            pause.observation_quote.as_ref(),
+            base,
+        )?;
         let root = plan
             .conservation
             .estate_funding_domains
@@ -120,7 +183,11 @@ pub(super) fn verify<E: std::error::Error + 'static>(
         if !exact
             || created_at_time == 0
             || effect.state == EffectState::Intent
-            || !identities.insert((&pause.root, &pause.provisioning_action_sha256))
+            || !identities.insert((
+                &pause.root,
+                &pause.provisioning_action_sha256,
+                &pause.observation_quote,
+            ))
         {
             return Err(EnsureWorkflowError::JournalIntegrity);
         }
@@ -317,9 +384,11 @@ pub(super) fn prepare<P: EnsurePlatform>(
     };
     let action_hash = action_sha256(action);
     for domain in &plan.conservation.estate_funding_domains {
+        let observation_quote = observation_source(plan, journal, &domain.root);
         if journal.funding_reviews.iter().any(|review| {
             matches!(&review.pause, FundingPauseRecord::Native(pause)
-            if pause.root == domain.root && pause.provisioning_action_sha256 == action_hash)
+            if pause.root == domain.root && pause.provisioning_action_sha256 == action_hash
+                && pause.observation_quote == observation_quote)
         }) {
             continue;
         }
@@ -329,7 +398,14 @@ pub(super) fn prepare<P: EnsurePlatform>(
         if !selects_root(action, principal) {
             continue;
         }
-        let (minimum, margin, ledger, fee) = bounds(plan, &domain.root)?;
+        let (base, margin, ledger, fee) = bounds(plan, &domain.root)?;
+        let minimum = observation_minimum(
+            plan,
+            journal,
+            &domain.root,
+            observation_quote.as_ref(),
+            base,
+        )?;
         let Some(observation) = platform
             .observe_native_funding(&domain.root, state)
             .map_err(EnsureWorkflowError::Platform)?
@@ -347,6 +423,7 @@ pub(super) fn prepare<P: EnsurePlatform>(
             .checked_add(margin)
             .ok_or(EnsureWorkflowError::JournalIntegrity)?;
         let pause = records::native_pause(records::NativeFundingQuote {
+            observation_quote,
             plan,
             root: &domain.root,
             root_principal: principal,
