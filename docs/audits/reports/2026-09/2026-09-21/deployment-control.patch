@@ -1,0 +1,22 @@
+--- a/crates/canic-host/src/fleet_ensure/ops/platform.rs
++++ b/crates/canic-host/src/fleet_ensure/ops/platform.rs
+@@ -3308,17 +3308,10 @@
+ 
+     fn with_preparation_observations<T>(
+         &mut self,
+-        action: &EnsureAction,
++        _action: &EnsureAction,
+         observe: impl FnOnce(&mut Self) -> Result<T, Self::Error>,
+     ) -> Result<T, Self::Error> {
+-        if matches!(action, EnsureAction::Install { .. }) {
+-            // A single fresh status supplies balance and version before intent. Even
+-            // an enclosing scope must not carry older authority into preparation.
+-            self.observation_snapshot.take();
+-            self.with_observation_snapshot(observe)
+-        } else {
+-            observe(self)
+-        }
++        observe(self)
+     }
+ 
+     fn report_progress(&mut self, progress: FleetEnsureProgress) {

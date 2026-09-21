@@ -25,6 +25,62 @@ fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
 }
 
 #[test]
+fn fleet_identity_is_explicit_for_generation_readiness_and_all_ensure_paths() {
+    let release = "01".repeat(32);
+    let generation = GenerateOptions::parse(
+        [
+            "generate",
+            "staging",
+            "--app-config",
+            "canic.toml",
+            "--release-build",
+            &release,
+            "--identity",
+            "operator-a",
+        ]
+        .into_iter()
+        .map(OsString::from),
+    )
+    .unwrap();
+    assert_eq!(generation.identity.as_deref(), Some("operator-a"));
+    for extra in [
+        vec![],
+        vec!["--operator-mint"],
+        vec!["--observe-funding", "root"],
+    ] {
+        let mut args = vec!["ensure", "staging", "--identity", "operator-b"];
+        args.extend(extra);
+        let options = EnsureOptions::parse(args.into_iter().map(OsString::from)).unwrap();
+        assert_eq!(options.identity.as_deref(), Some("operator-b"));
+    }
+    let readiness = parse_matches(
+        readiness::command(),
+        [
+            "staging",
+            "--operator",
+            "aaaaa-aa",
+            "--identity",
+            "operator-c",
+        ]
+        .into_iter()
+        .map(OsString::from),
+    )
+    .unwrap();
+    assert_eq!(
+        string_option(&readiness, "identity").as_deref(),
+        Some("operator-c")
+    );
+    assert!(matches!(
+        EnsureOptions::parse(
+            ["ensure", "staging", "--identity", ""]
+                .into_iter()
+                .map(OsString::from)
+        ),
+        Err(FleetCommandError::Usage(_))
+    ));
+}
+
+#[test]
 fn operator_mint_options_separate_review_payment_and_cancellation() {
     let parse = |args: &[&str]| EnsureOptions::parse(args.iter().map(OsString::from));
     let review = parse(&["ensure", "staging", "--operator-mint"]).unwrap();
@@ -252,6 +308,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         environment: Some("local".to_string()),
         fleet: "retained".to_string(),
         icp: "icp".to_string(),
+        identity: None,
         json: false,
     };
 
@@ -863,13 +920,16 @@ fn continuation_forecast_preserves_funding_precision_without_granting_authority(
 #[test]
 fn observation_timing_is_informational_and_preserves_failed_call_counts() {
     let timing = canic_host::fleet_ensure::dto::FleetObservationTiming {
+        span_id: 1,
+        parent_span_id: None,
+        identity_lookup_millis: 0,
         stage: canic_host::fleet_ensure::dto::FleetObservationStage::ConfiguredCanisters,
         parent_stage: Some(canic_host::fleet_ensure::dto::FleetObservationStage::FleetSnapshot),
         elapsed_millis: 111,
         remote_call_attempts: 4,
         identity_lookup_attempts: 2,
         cached_read_hits: 7,
-        succeeded: false,
+        succeeded: Some(false),
     };
     let json: serde_json::Value =
         serde_json::from_str(&render_observation_timing(&timing, true)).unwrap();
@@ -1010,4 +1070,43 @@ fn funding_observation_options_require_an_explicit_root_and_separate_approval() 
         parse(&["ensure", "staging", "--observe-funding"]),
         Err(FleetCommandError::Usage(_))
     ));
+}
+
+#[test]
+fn timing_outcome_retains_exact_plan_scope_and_never_promotes_prerequisite_success() {
+    let root = std::env::temp_dir().join(format!("canic-receipt-outcome-{}", std::process::id()));
+    let mut report = cycle_quantity_report("aaaaa-aa");
+    report.terminal = false;
+    let session = progress::ProgressSession::new(true);
+    session.retain_receipt(
+        &root,
+        &progress::receipt::Invocation {
+            command: progress::receipt::CommandKind::Ensure,
+            fleet: "fleet",
+            environment: "local",
+            desired_sha256: Some("desired"),
+            applied_plan_sha256: Some(&report.plan.plan_sha256),
+            reinstall: false,
+            next_review_command: "review",
+        },
+    );
+    session.finish(Some(&report));
+    drop(session);
+    let path = fs::read_dir(root.join(".canic/diagnostics/fleet"))
+        .unwrap()
+        .next()
+        .unwrap()
+        .unwrap()
+        .path();
+    let text = fs::read_to_string(path).unwrap();
+    let outcome: serde_json::Value = serde_json::from_str(text.lines().last().unwrap()).unwrap();
+    assert_eq!(outcome["data"]["state"], "completed");
+    assert_eq!(outcome["data"]["terminal"], false);
+    assert_eq!(outcome["data"]["operation_id"], report.plan.operation_id);
+    assert_eq!(outcome["data"]["plan_sha256"], report.plan.plan_sha256);
+    assert_eq!(
+        outcome["data"]["plan_scope"],
+        serde_json::to_value(report.plan.scope).unwrap()
+    );
+    fs::remove_dir_all(root).unwrap();
 }

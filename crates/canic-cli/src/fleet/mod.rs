@@ -150,6 +150,7 @@ struct GenerateOptions {
     fleet: String,
     fresh: bool,
     icp: String,
+    identity: Option<String>,
     management_creation_fee_cycles: Option<u128>,
     output: PathBuf,
     release_build: ReleaseBuildId,
@@ -201,6 +202,7 @@ impl GenerateOptions {
             fleet: fleet.clone(),
             fresh,
             icp: string_option_or_else(generate, "icp", default_icp),
+            identity: string_option(generate, "identity"),
             management_creation_fee_cycles,
             output: string_option(generate, "output").map_or_else(
                 || PathBuf::from("fleets").join(format!("{fleet}.toml")),
@@ -236,6 +238,7 @@ struct EnsureOptions {
     environment: Option<String>,
     fleet: String,
     icp: String,
+    identity: Option<String>,
     json: bool,
 }
 
@@ -266,6 +269,7 @@ impl EnsureOptions {
             environment: string_option(ensure, "environment"),
             fleet,
             icp: string_option_or_else(ensure, "icp", default_icp),
+            identity: string_option(ensure, "identity"),
             json: ensure.get_flag("json"),
         })
     }
@@ -281,6 +285,16 @@ fn fleet_command() -> Command {
         .subcommand(generate_command())
         .subcommand(readiness::command())
         .after_help(FLEET_HELP_AFTER)
+}
+
+fn identity_arg() -> clap::Arg {
+    value_arg("identity")
+        .long("identity")
+        .value_name("NAME")
+        .value_parser(clap::builder::NonEmptyStringValueParser::new())
+        .help(
+            "Signing identity; preserves ICP's global default and verifies the operator Principal",
+        )
 }
 
 fn generate_command() -> Command {
@@ -353,6 +367,7 @@ fn generate_command() -> Command {
         )
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
+        .arg(identity_arg())
 }
 
 fn ensure_command() -> Command {
@@ -410,6 +425,7 @@ fn ensure_command() -> Command {
             .help("Cancel an unapproved conversion review by its exact digest"))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
+        .arg(identity_arg())
 }
 
 /// Run the current Fleet command group.
@@ -464,18 +480,26 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
         return operator_mint::run(&root, &loaded, &options);
     }
     let json_progress = options.json;
-    let next_review = format!(
-        "canic fleet ensure {} --environment {} --desired {} --icp {}",
-        quote_review_argument(&options.fleet),
-        quote_review_argument(&loaded.desired.environment),
-        quote_review_argument(&desired_path.to_string_lossy()),
-        quote_review_argument(&options.icp)
-    );
+    let next_review = next_review_command(&options, &loaded.desired.environment, &desired_path);
     let progress_review = next_review.clone();
     let progress_session = progress::ProgressSession::new(json_progress);
+    progress_session.retain_receipt(
+        &root,
+        &progress::receipt::Invocation {
+            command: progress::receipt::CommandKind::Ensure,
+            fleet: &options.fleet,
+            environment: &loaded.desired.environment,
+            desired_sha256: Some(&loaded.sha256),
+            applied_plan_sha256: options.apply.as_deref(),
+            reinstall: options.reinstall,
+            next_review_command: &next_review,
+        },
+    );
     let progress_sink = progress_session.sink();
     let observation_sink = progress_session.sink();
+    let request_sink = progress_session.sink();
     let platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
+        .with_identity(options.identity.as_deref())
         .with_progress_handler(move |mut progress| {
             if let FleetEnsureProgressState::ReviewRequired {
                 review: Some(review),
@@ -486,11 +510,14 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
             }
             progress_sink.progress(progress);
         });
-    let mut platform = platform.with_observation_handler(move |timing| {
-        observation_sink.observation(timing);
-    });
-    let report = if let Some(digest) = &options.apply {
-        apply(
+    let mut platform = platform
+        .with_observation_handler(move |timing| {
+            observation_sink.observation(timing);
+        })
+        .with_request_timing_handler(move |timing| request_sink.request(timing));
+    let result = (|| -> Result<_, FleetCommandError> {
+        let report = if let Some(digest) = &options.apply {
+            apply(
             &root,
             &loaded.desired,
             &loaded.sha256,
@@ -501,26 +528,30 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
             if let canic_host::fleet_ensure::workflow::EnsureWorkflowError::SuccessorReviewRequired { review: Some(review), .. } = &mut error { review.next_review_command = next_review; }
             error
         })?
-    } else if options.reinstall {
-        plan_reinstall(
-            &root,
-            &loaded.desired,
-            &loaded.sha256,
-            &options.fleet,
-            now_nanoseconds()?,
-            &mut platform,
-        )?
-    } else {
-        plan(
-            &root,
-            &loaded.desired,
-            &loaded.sha256,
-            &options.fleet,
-            now_nanoseconds()?,
-            &mut platform,
-        )?
-    };
+        } else if options.reinstall {
+            plan_reinstall(
+                &root,
+                &loaded.desired,
+                &loaded.sha256,
+                &options.fleet,
+                now_nanoseconds()?,
+                &mut platform,
+            )?
+        } else {
+            plan(
+                &root,
+                &loaded.desired,
+                &loaded.sha256,
+                &options.fleet,
+                now_nanoseconds()?,
+                &mut platform,
+            )?
+        };
+        Ok(report)
+    })();
+    progress_session.finish(result.as_ref().ok());
     drop(progress_session);
+    let report = result?;
     if options.apply.is_some() && !options.json {
         output::write_text(None, &render_apply_report(&report))
     } else {
@@ -542,6 +573,25 @@ fn render_apply_report(report: &FleetEnsureReport) -> String {
     } else {
         render_text_report(report)
     }
+}
+
+fn next_review_command(
+    options: &EnsureOptions,
+    environment: &str,
+    desired_path: &std::path::Path,
+) -> String {
+    let mut command = format!(
+        "canic --environment {} --icp {} fleet ensure {} --desired {}",
+        quote_review_argument(environment),
+        quote_review_argument(&options.icp),
+        quote_review_argument(&options.fleet),
+        quote_review_argument(&desired_path.to_string_lossy())
+    );
+    if let Some(identity) = &options.identity {
+        command.push_str(" --identity ");
+        command.push_str(&quote_review_argument(identity));
+    }
+    command
 }
 
 fn quote_review_argument(value: &str) -> String {
@@ -621,34 +671,58 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
             source: &source,
         })?;
     }
-    let generated = generate_desired_fleet(&FleetGenerateRequest {
-        catalog_progress: Some(&subnet_catalog::print_progress),
-        app_config: &resolve_from_root(&root, &options.app_config),
-        environment,
-        fleet: &options.fleet,
-        icp_executable: &options.icp,
-        release_build_id: options.release_build,
-        root: &root,
-        seed: &seed,
-        source: &source,
-    })?;
-    let output = resolve_from_root(&root, &options.output);
-    let bytes = toml::to_string_pretty(&generated.desired)?.into_bytes();
-    publish_generated(&output, &bytes, options.replace.as_deref())?;
-    println!("fleet: {}", options.fleet);
-    println!("release_build: {}", generated.release_build_id);
-    println!("observed_canisters: {}", generated.observed_canisters);
-    println!(
-        "observed_controlled_cycles: {}",
-        format_cycles(generated.observed_controlled_cycles)
+    let timing = progress::ProgressSession::new(false);
+    timing.retain_receipt(
+        &root,
+        &progress::receipt::Invocation {
+            command: progress::receipt::CommandKind::Generate,
+            fleet: &options.fleet,
+            environment,
+            desired_sha256: None,
+            applied_plan_sha256: None,
+            reinstall: false,
+            next_review_command: "",
+        },
     );
-    println!("desired: {}", output.display());
-    print!(
-        "{}",
-        subnet_catalog::render(generated.subnet_catalog.as_ref())
-    );
-    print!("{}", startup_funding::render(&generated.startup_funding));
-    Ok(())
+    let catalog_sink = timing.sink();
+    let catalog_progress =
+        |event: &canic_host::subnet_catalog::view::CatalogAcquisitionProgress| {
+            catalog_sink.catalog(event);
+        };
+    let result = (|| -> Result<(), FleetCommandError> {
+        let generated = generate_desired_fleet(&FleetGenerateRequest {
+            catalog_progress: Some(&catalog_progress),
+            app_config: &resolve_from_root(&root, &options.app_config),
+            environment,
+            fleet: &options.fleet,
+            icp_executable: &options.icp,
+            signing_identity: options.identity.as_deref(),
+            release_build_id: options.release_build,
+            root: &root,
+            seed: &seed,
+            source: &source,
+        })?;
+        let output = resolve_from_root(&root, &options.output);
+        let bytes = toml::to_string_pretty(&generated.desired)?.into_bytes();
+        publish_generated(&output, &bytes, options.replace.as_deref())?;
+        println!("fleet: {}", options.fleet);
+        println!("release_build: {}", generated.release_build_id);
+        println!("observed_canisters: {}", generated.observed_canisters);
+        println!(
+            "observed_controlled_cycles: {}",
+            format_cycles(generated.observed_controlled_cycles)
+        );
+        println!("desired: {}", output.display());
+        print!(
+            "{}",
+            subnet_catalog::render(generated.subnet_catalog.as_ref())
+        );
+        print!("{}", startup_funding::render(&generated.startup_funding));
+        Ok(())
+    })();
+    timing.finish_generation(result.is_ok());
+    drop(timing);
+    result
 }
 
 fn resolve_from_root(root: &std::path::Path, path: &std::path::Path) -> PathBuf {
@@ -713,7 +787,11 @@ fn render_observation_timing(
             timing
                 .parent_stage
                 .map_or_else(String::new, |parent| format!(", within {parent:?}")),
-            if timing.succeeded { "" } else { ", failed" }
+            match timing.succeeded {
+                Some(true) => "",
+                Some(false) => ", failed",
+                None => ", started",
+            }
         )
     }
 }

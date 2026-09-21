@@ -16,8 +16,14 @@ individual verdicts or establish a month-wide validation result.
 - September 15: [ICP CLI 1.5.0 integration assessment](2026-09-15/summary.md),
   including the build-environment defect, config inspection and prioritized
   adoption recommendations with disposable CLI evidence.
+- September 21: [CANIC-148 sampler investigation](2026-09-21/summary.md),
+  retaining exploratory history-write/page-cost attribution. The optimization
+  and exact downstream qualification remain open.
 
 Open follow-up remains with the accepted B1 work and current Fleet correction
 batch. The Fleet review additionally identifies exact whole-release reuse,
 build-pass reduction and bounded concurrency as sequenced improvement inputs.
 It does not accept B1, open a later minor, or establish deployment readiness.
+
+- September 21: [deployment timing and preparation qualification](2026-09-21/deployment-timing.md),
+  including bounded receipts and controlled IPC/build-reuse measurements.

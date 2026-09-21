@@ -144,10 +144,17 @@ and out of exported evidence: possession of both key and tags permits guessing
 values. These tags are diagnostic metadata, not credentials or cache authority.
 
 Value attribution covers at most 256 environment entries and safe names of at
-most 80 ASCII alphanumeric/underscore characters. Above that bound, or when the
-key is missing, corrupt, linked, not owner-only, changed between builds or the
-platform cannot safely store it, value attribution is unavailable. Builds and
-verified cache hits remain usable; an existing unsafe key is never overwritten.
+most 80 ASCII alphanumeric/underscore characters. When attribution is unavailable,
+the miss report now identifies whether the current or previous build could not
+capture evidence because the local private key was unavailable or the input
+count exceeded the bound. A key can be unavailable because it is missing,
+unreadable, corrupt, linked, not owner-only, or unsupported by the platform's
+private-storage checks. Separate reasons identify different comparison keys
+between builds and oversized retained evidence. Missing or invalid prior
+diagnostic records remain distinct from an unavailable per-value comparison.
+Builds and verified cache hits remain usable; an existing unsafe key is never
+overwritten. A relocated checkout can have a different local key even when
+diagnostic records were copied; this explains lost attribution, not cache identity.
 Removing the key loses comparison continuity. Every inherited build-environment
 entry still participates in the real cache identity after the explicit build
 environment normalization below.

@@ -16,7 +16,8 @@ pub(super) fn run(
     root: &str,
 ) -> Result<(), FleetCommandError> {
     let paths = EnsurePaths::under(workspace, &loaded.desired.environment, &options.fleet);
-    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, workspace);
+    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, workspace)
+        .with_identity(options.identity.as_deref());
     if let Some(digest) = &options.apply {
         funding_observation::collect(&paths, root, digest, &mut platform)?;
     } else {

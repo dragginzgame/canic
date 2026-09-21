@@ -90,16 +90,24 @@ impl IcpCli {
         I: CandidType,
         O: CandidType + DeserializeOwned,
     {
-        let argument = candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
-        let agent = self.authenticated_agent()?;
-        self.record_remote_call();
-        let response = call_management_update(
-            &LiveAgentUpdateBoundary { agent: &agent },
-            effective_canister_id,
-            MANAGEMENT_CANISTER_STATUS,
-            argument,
-        )?;
-        candid::decode_one(&response).map_err(IcpManagementCallError::CandidResponse)
+        self.measure_request(
+            crate::icp::IcpRequestKind::ManagementStatus,
+            Some(&effective_canister_id.to_text()),
+            Some(MANAGEMENT_CANISTER_STATUS),
+            || {
+                let argument =
+                    candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
+                let agent = self.authenticated_agent()?;
+                self.record_remote_call();
+                let response = call_management_update(
+                    &LiveAgentUpdateBoundary { agent: &agent },
+                    effective_canister_id,
+                    MANAGEMENT_CANISTER_STATUS,
+                    argument,
+                )?;
+                candid::decode_one(&response).map_err(IcpManagementCallError::CandidResponse)
+            },
+        )
     }
 
     /// Resolve an agent bound to the selected ICP environment and verified active identity.

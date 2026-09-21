@@ -102,6 +102,7 @@ esac
         environment: "ic",
         fleet: &retained.fleet,
         icp_executable: wrapper.to_str().unwrap(),
+        signing_identity: None,
         release_build_id: bootstrap.release_build_id,
         root: workspace,
         seed: &seed,

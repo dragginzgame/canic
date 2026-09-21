@@ -4,6 +4,7 @@
 //! Does not own: polling, reconciliation, effects, errors or review decisions.
 //! Boundary: the animation clock only redraws retained informational observations.
 
+pub(super) mod receipt;
 pub(super) mod render;
 mod terminal;
 #[cfg(test)]
@@ -90,6 +91,7 @@ enum Transport {
 
 /// Retained display state shared by callbacks and the local repaint clock.
 struct Display {
+    receipt: Option<receipt::Receipt>,
     transport: Transport,
     disabled: bool,
     planning_reported: bool,
@@ -102,6 +104,9 @@ struct Display {
 
 impl Display {
     fn progress(&mut self, progress: FleetEnsureProgress, now: Instant) -> io::Result<()> {
+        if let Some(receipt) = &mut self.receipt {
+            receipt.progress(&progress);
+        }
         if self.disabled {
             return Ok(());
         }
@@ -161,6 +166,9 @@ impl Display {
     }
 
     fn observation(&mut self, timing: FleetObservationTiming) -> io::Result<()> {
+        if let Some(receipt) = &mut self.receipt {
+            receipt.observation(&timing);
+        }
         if self.disabled {
             return Ok(());
         }
@@ -171,13 +179,16 @@ impl Display {
                 render_observation_timing(&timing, true)
             );
         }
+        if timing.succeeded.is_none() {
+            return Ok(());
+        }
         let summary = timing.stage == FleetObservationStage::Planning
             && timing.parent_stage.is_none()
             && !self.planning_reported;
-        if !timing.succeeded || summary {
+        if timing.succeeded == Some(false) || summary {
             self.painter
                 .clear(&mut io::stderr().lock(), terminal::size())?;
-            if timing.succeeded {
+            if timing.succeeded == Some(true) {
                 self.planning_reported = true;
                 writeln!(
                     io::stderr().lock(),
@@ -211,6 +222,28 @@ impl ProgressSink {
         self.update(|display| display.observation(timing));
     }
 
+    pub(super) fn request(&self, timing: canic_host::icp::IcpRequestTiming) {
+        self.update(|display| {
+            if let Some(receipt) = &mut display.receipt {
+                receipt.request(&timing);
+            }
+            Ok(())
+        });
+    }
+
+    pub(super) fn catalog(
+        &self,
+        progress: &canic_host::subnet_catalog::view::CatalogAcquisitionProgress,
+    ) {
+        self.update(|display| {
+            if let Some(receipt) = &mut display.receipt {
+                receipt.record("subnet_catalog_progress", progress);
+            }
+            crate::fleet::subnet_catalog::print_progress(progress);
+            Ok(())
+        });
+    }
+
     fn update(&self, update: impl FnOnce(&mut Display) -> io::Result<()>) {
         if let Ok(mut display) = self.0.lock()
             && update(&mut display).is_err()
@@ -237,6 +270,7 @@ impl ProgressSession {
         ) && !json;
         let now = Instant::now();
         let sink = ProgressSink(Arc::new(Mutex::new(Display {
+            receipt: None,
             transport: if json {
                 Transport::Json
             } else if live {
@@ -265,6 +299,56 @@ impl ProgressSession {
             })
         });
         Self { sink, stop, worker }
+    }
+
+    pub(super) fn retain_receipt(
+        &self,
+        root: &std::path::Path,
+        invocation: &receipt::Invocation<'_>,
+    ) {
+        match receipt::Receipt::create(root, invocation) {
+            Ok((receipt, path)) => {
+                self.sink.update(|display| {
+                    display.receipt = Some(receipt);
+                    display.painter.clear(&mut io::stderr().lock(), terminal::size())?;
+                    if display.transport == Transport::Json {
+                        writeln!(io::stderr().lock(), "{}", serde_json::json!({
+                            "event": "fleet_ensure_timing_receipt", "schema_version": 1, "path": path,
+                        }))
+                    } else {
+                        writeln!(io::stderr().lock(), "Fleet timing receipt: {}", path.display())
+                    }
+                });
+            }
+            Err(_) => {
+                let _ = writeln!(
+                    io::stderr().lock(),
+                    "{}",
+                    serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "creation", "incomplete": true})
+                );
+            }
+        }
+    }
+
+    pub(super) fn finish(
+        &self,
+        report: Option<&canic_host::fleet_ensure::model::FleetEnsureReport>,
+    ) {
+        self.sink.update(|display| {
+            if let Some(receipt) = &mut display.receipt {
+                receipt.finish(report);
+            }
+            Ok(())
+        });
+    }
+
+    pub(super) fn finish_generation(&self, succeeded: bool) {
+        self.sink.update(|display| {
+            if let Some(receipt) = &mut display.receipt {
+                receipt.close(if succeeded { "completed" } else { "failed" }, None);
+            }
+            Ok(())
+        });
     }
 
     pub(super) fn sink(&self) -> ProgressSink {

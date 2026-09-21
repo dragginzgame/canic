@@ -23,6 +23,7 @@ fn render_progress(progress: &CatalogAcquisitionProgress) -> String {
             endpoint,
             registry_version,
             query_calls,
+            ..
         } => format!(
             "collected {endpoint}: Registry {registry_version}, {query_calls} queries; agreement pending"
         ),
@@ -120,6 +121,7 @@ mod tests {
             completed_endpoints: 0,
             active_endpoints: Vec::new(),
             registry: Vec::new(),
+            elapsed_micros: 0,
             elapsed_seconds: 10,
             deadline_seconds: 600,
         };
@@ -132,6 +134,7 @@ mod tests {
             endpoint: "https://ic0.app".into(),
             registry_version: 123,
             query_calls: 158,
+            elapsed_micros: 1000,
         };
         assert!(render_progress(&progress).contains("agreement pending"));
         progress.stage = CatalogAcquisitionStage::Complete {
@@ -170,6 +173,7 @@ mod tests {
                     },
                 },
             ],
+            elapsed_micros: 0,
             elapsed_seconds: 10,
             deadline_seconds: 600,
         };

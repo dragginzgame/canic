@@ -195,6 +195,30 @@ pub trait EnsurePlatform {
         observe(self)
     }
 
+    /// Share fresh pre-intent reads for one action; never retain them across submission.
+    fn with_preparation_observations<T>(
+        &mut self,
+        _action: &EnsureAction,
+        observe: impl FnOnce(&mut Self) -> Result<T, Self::Error>,
+    ) -> Result<T, Self::Error>
+    where
+        Self: Sized,
+    {
+        observe(self)
+    }
+
+    /// Measure an existing activity without changing its result or owning its effects.
+    fn with_activity<T, E>(
+        &mut self,
+        _stage: crate::fleet_ensure::dto::FleetObservationStage,
+        activity: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E>
+    where
+        Self: Sized,
+    {
+        activity(self)
+    }
+
     /// Report informational progress without changing operation authority or effects.
     fn report_progress(&mut self, _progress: crate::fleet_ensure::dto::FleetEnsureProgress) {}
 

@@ -38,8 +38,16 @@ impl IcpCli {
     pub fn identity_principal_text(&self) -> Result<String, IcpCommandError> {
         self.identity_lookups
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let started = std::time::Instant::now();
         let mut command = self.identity_principal_command();
-        run_output(&mut command, self)
+        let result = self.measure_request(super::IcpRequestKind::Identity, None, None, || {
+            run_output(&mut command, self)
+        });
+        self.identity_lookup_millis.fetch_add(
+            u64::try_from(started.elapsed().as_millis()).unwrap_or(u64::MAX),
+            std::sync::atomic::Ordering::Relaxed,
+        );
+        result
     }
 
     /// Return the selected identity's exact default account in the requested ledger format.
@@ -93,6 +101,66 @@ impl IcpIdentityAccountFormat {
 mod tests {
     use super::*;
     use crate::icp::command::command_display;
+
+    #[cfg(unix)]
+    #[test]
+    fn explicit_identities_keep_concurrent_contexts_independent_without_default_access() {
+        use std::{fs, os::unix::fs::PermissionsExt};
+
+        let root = crate::test_support::temp_dir("explicit-icp-identities");
+        fs::create_dir_all(&root).unwrap();
+        let executable = root.join("icp");
+        fs::write(
+            &executable,
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
+while [ "$1" = --project-root-override ] || [ "$1" = --identity-password-file ]; do shift 2; done
+if [ "$1 $2" = 'identity default' ]; then touch default-accessed; exit 91; fi
+for arg do
+  if [ "$previous" = --identity ]; then selected=$arg; fi
+  previous=$arg
+done
+test -n "$selected" || exit 92
+printf '%s\n' "$selected"
+"#,
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
+        fs::write(root.join("selected"), b"unrelated-default\n").unwrap();
+        let base = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
+        std::thread::scope(|scope| {
+            for name in ["operator-a", "operator-b"] {
+                let context = base.clone().with_identity(Some(name));
+                scope.spawn(move || {
+                    context.bind_selected_identity().unwrap();
+                    let clone = context.clone();
+                    assert_eq!(clone.selected_identity_name().unwrap(), name);
+                    assert_eq!(clone.identity_principal_text().unwrap(), name);
+                    assert_eq!(
+                        clone
+                            .identity_account_id_text(IcpIdentityAccountFormat::Icrc1)
+                            .unwrap(),
+                        name
+                    );
+                    assert_eq!(
+                        clone
+                            .canister_metadata_output("canister", "candid:service")
+                            .unwrap(),
+                        name
+                    );
+                });
+            }
+        });
+        assert!(base.selected_identity.get().is_none());
+        assert!(!root.join("default-accessed").exists());
+        assert_eq!(
+            fs::read(root.join("selected")).unwrap(),
+            b"unrelated-default\n"
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
 
     #[cfg(unix)]
     #[test]

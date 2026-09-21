@@ -36,6 +36,7 @@ pub(super) fn observe_children(
         return;
     };
     let icp = IcpCli::new(request.icp_executable, Some(request.environment.to_owned()))
+        .with_identity(request.signing_identity)
         .with_cwd(request.root.to_path_buf())
         .with_local_replica(local_replica.cloned());
     let identity_matches = icp.bind_selected_identity().is_ok()
@@ -390,6 +391,7 @@ pub(super) fn observe_usage(
         return unavailable(StartupUsageUnavailable::AuthorityMismatch);
     }
     let icp = IcpCli::new(request.icp_executable, Some(request.environment.to_owned()))
+        .with_identity(request.signing_identity)
         .with_cwd(request.root.to_path_buf())
         .with_local_replica(local_replica.cloned());
     if icp.bind_selected_identity().is_err()

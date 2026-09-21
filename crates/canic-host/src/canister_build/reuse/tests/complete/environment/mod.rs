@@ -107,7 +107,7 @@ fn invoke_environment(
 ) -> serde_json::Value {
     let mut command = Command::new(env::current_exe().unwrap());
     command
-        .args(["--exact", test_name])
+        .args(["--exact", test_name, "--include-ignored"])
         .env(CHILD_ROOT, root)
         .env(BUILD_INPUT, input)
         .env("CODEX_BUILD_FIXTURE_INPUT", input)
@@ -180,18 +180,23 @@ pub extern "C" fn fixture_value() -> u8 {
 
 fn observe_build_environment(root: &Path) {
     let context = infrastructure_build_context(root.join("app"));
+    let started = std::time::Instant::now();
     let before = prepared_reuse(&context)
         .load()
         .unwrap()
         .map(|hit| hit.release_build_id);
     // Cargo/build.rs and rustc assert credentials/session IDs are absent. This real
     // compiler output is measured separately from the synthetic sealed manifest.
+    let lookup_micros = started.elapsed().as_micros();
+    let compile_started = std::time::Instant::now();
     compile_infrastructure_fixture(&context);
+    let cargo_micros = compile_started.elapsed().as_micros();
+    let sealing_started = std::time::Instant::now();
     let reuse = prepared_reuse(&context);
     let hit = reuse.load().unwrap();
     assert_eq!(before, hit.as_ref().map(|hit| hit.release_build_id));
     let reused = hit.is_some();
-    let miss_reason = reuse.miss_reason();
+    let miss_reason = (!reused).then(|| reuse.miss_reason());
     let release = hit.map_or_else(
         || {
             let release = finalize_fixture(&context);
@@ -226,6 +231,10 @@ fn observe_build_environment(root: &Path) {
     fs::write(
         root.join("build-observation.json"),
         serde_json::to_vec(&serde_json::json!({
+            "lookup_micros": lookup_micros,
+            "cargo_probe_micros": cargo_micros,
+            "synthetic_sealing_micros": sealing_started.elapsed().as_micros(),
+            "elapsed_micros": started.elapsed().as_micros(),
             "inputs": reuse.inputs.digest(),
             "release": release,
             "reused": reused,
@@ -235,4 +244,81 @@ fn observe_build_environment(root: &Path) {
         .unwrap(),
     )
     .unwrap();
+}
+
+#[test]
+#[ignore = "opt-in isolated real-Cargo reuse matrix; synthetic release sealing"]
+fn frozen_relocated_and_changed_tree_measurement() {
+    if let Some(root) = env::var_os(CHILD_ROOT) {
+        observe_build_environment(Path::new(&root));
+        return;
+    }
+    let (root, context) = infrastructure_build_fixture();
+    write_environment_probe(&context);
+    let thread = std::thread::current();
+    let observe = |root: &Path, label: &str| {
+        let result =
+            invoke_environment(root, thread.name().unwrap(), None, "alpha", Some("1"), None);
+        eprintln!(
+            "[CANIC-BUILD-MATRIX] {}",
+            serde_json::json!({"case": label, "measurement": result})
+        );
+        result
+    };
+    let cold = observe(&root, "original_cold");
+    let warm = observe(&root, "unchanged_warm");
+    assert_eq!(cold["reused"], false);
+    assert_eq!(warm["reused"], true);
+    assert_eq!(cold["inputs"], warm["inputs"]);
+    assert_eq!(cold["wasm"], warm["wasm"]);
+    let relocated = crate::test_support::temp_dir("reuse-relocated-frozen");
+    copy_frozen(&root, &relocated);
+    let moved = observe(&relocated, "relocated_frozen_cold");
+    assert_eq!(moved["reused"], false);
+    assert_ne!(moved["inputs"], cold["inputs"]);
+    assert_eq!(observe(&relocated, "relocated_frozen_warm")["reused"], true);
+    fs::create_dir_all(context.workspace_root.join("docs")).unwrap();
+    fs::write(
+        context.workspace_root.join("docs/qualification.md"),
+        b"local qualification evidence\n",
+    )
+    .unwrap();
+    let qualification = observe(&root, "qualification_only");
+    // Package trees are deliberately complete inputs: a build script may read any file.
+    assert_eq!(qualification["reused"], false);
+    assert_eq!(qualification["wasm"], warm["wasm"]);
+    let source = context.workspace_root.join("src/lib.rs");
+    let original = fs::read_to_string(&source).unwrap();
+    fs::write(
+        &source,
+        original.replace("+ canic::value()", "+ canic::value() + 1"),
+    )
+    .unwrap();
+    let runtime = observe(&root, "runtime_source");
+    assert_eq!(runtime["reused"], false);
+    assert_ne!(runtime["wasm"], qualification["wasm"]);
+    let dependency = root.join("upstream/canic/src/lib.rs");
+    let original = fs::read_to_string(&dependency).unwrap();
+    fs::write(&dependency, original.replace("{ 1 }", "{ 2 }")).unwrap();
+    let changed_dependency = observe(&root, "dependency_source");
+    assert_eq!(changed_dependency["reused"], false);
+    assert_ne!(changed_dependency["wasm"], runtime["wasm"]);
+    fs::remove_dir_all(root).unwrap();
+    fs::remove_dir_all(relocated).unwrap();
+}
+
+fn copy_frozen(source: &Path, target: &Path) {
+    fs::create_dir_all(target).unwrap();
+    for entry in fs::read_dir(source).unwrap() {
+        let entry = entry.unwrap();
+        if entry.file_name() == "target" {
+            continue;
+        }
+        let destination = target.join(entry.file_name());
+        if entry.file_type().unwrap().is_dir() {
+            copy_frozen(&entry.path(), &destination);
+        } else {
+            fs::copy(entry.path(), destination).unwrap();
+        }
+    }
 }

@@ -25,6 +25,9 @@ from the App configuration.
 
 See [public status and protected observability](public-observability.md) for
 caller access, optional aggregate publication and cached snapshot semantics.
+See [application update payload limits](update-payload-limits.md) before setting
+client request budgets: ordinary managed updates inherit a 16 KiB encoded
+argument limit, including bare CDK update endpoints.
 
 ## Boundary
 

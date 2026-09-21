@@ -57,15 +57,23 @@ impl IcpCli {
         method: &str,
         input: &I,
     ) -> Result<O, IcpQueryError> {
-        let argument = candid::encode_one(input).map_err(IcpQueryError::Encode)?;
-        let agent = self
-            .authenticated_agent_with_response_limit(RESPONSE_BYTES)
-            .map_err(|error| IcpQueryError::Authority(Box::new(error)))?;
-        let bytes = query_bytes(self, &agent, canister, method, &argument)?;
-        let mut config = candid::de::DecoderConfig::new();
-        config.set_decoding_quota(RESPONSE_BYTES * 64);
-        config.set_skipping_quota(RESPONSE_BYTES);
-        candid::utils::decode_one_with_config(&bytes, &config).map_err(IcpQueryError::Decode)
+        self.measure_request(
+            crate::icp::IcpRequestKind::AgentQuery,
+            Some(&canister.to_text()),
+            Some(method),
+            || {
+                let argument = candid::encode_one(input).map_err(IcpQueryError::Encode)?;
+                let agent = self
+                    .authenticated_agent_with_response_limit(RESPONSE_BYTES)
+                    .map_err(|error| IcpQueryError::Authority(Box::new(error)))?;
+                let bytes = query_bytes(self, &agent, canister, method, &argument)?;
+                let mut config = candid::de::DecoderConfig::new();
+                config.set_decoding_quota(RESPONSE_BYTES * 64);
+                config.set_skipping_quota(RESPONSE_BYTES);
+                candid::utils::decode_one_with_config(&bytes, &config)
+                    .map_err(IcpQueryError::Decode)
+            },
+        )
     }
 }
 

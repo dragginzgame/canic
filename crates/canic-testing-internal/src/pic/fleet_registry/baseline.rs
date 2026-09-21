@@ -2090,6 +2090,7 @@ exec icp "$@"
                 environment: &initial.environment,
                 fleet: "development",
                 icp_executable: icp.to_str().unwrap(),
+                signing_identity: None,
                 release_build_id: artifacts.release_build_id,
                 root: &directory,
                 seed: &seed,
@@ -10310,6 +10311,7 @@ exec '{}' "$@"
             environment: "local",
             fleet: &input.desired.fleet,
             icp_executable: generator.to_str().unwrap(),
+            signing_identity: None,
             release_build_id: replacement,
             root,
             seed: &seed,
@@ -10919,6 +10921,7 @@ exec '{}' "$@"
         let platform = IcpEnsurePlatform::new(desired.clone(), wrapper.to_str().unwrap(), root)
             .with_local_replica(replica)
             .with_observation_handler(crate::pic::timing::observation)
+            .with_request_timing_handler(crate::pic::timing::request)
             .with_progress_handler(|progress| {
                 let unix_ms = std::time::SystemTime::now()
                     .duration_since(std::time::UNIX_EPOCH)
@@ -11257,6 +11260,7 @@ exec '{}' "$@"
             )
             .with_local_replica(input.local_replica.clone())
             .with_observation_handler(crate::pic::timing::observation)
+            .with_request_timing_handler(crate::pic::timing::request)
         };
         assert_eq!(
             ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
@@ -12100,6 +12104,7 @@ esac
             environment: "local",
             fleet: "canic-121-literal-zero-estate",
             icp_executable: generator_icp.to_str().expect("generator wrapper path"),
+            signing_identity: None,
             release_build_id: input.release_build_id,
             root,
             seed: &seed,

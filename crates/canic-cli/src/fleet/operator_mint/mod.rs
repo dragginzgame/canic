@@ -37,7 +37,9 @@ pub(super) fn run(
             ));
         }
         let transport = OperatorMintTransport::from_icp(
-            &IcpCli::new(&options.icp, Some(loaded.desired.environment.clone())).with_cwd(root),
+            &IcpCli::new(&options.icp, Some(loaded.desired.environment.clone()))
+                .with_identity(options.identity.as_deref())
+                .with_cwd(root),
         )?;
         let quote = operator_mint::quote_fresh(
             &paths,
@@ -94,7 +96,9 @@ pub(super) fn run(
         }
         if review.receipt.is_none() {
             let transport = OperatorMintTransport::from_icp(
-                &IcpCli::new(&options.icp, Some(loaded.desired.environment.clone())).with_cwd(root),
+                &IcpCli::new(&options.icp, Some(loaded.desired.environment.clone()))
+                    .with_identity(options.identity.as_deref())
+                    .with_cwd(root),
             )?;
             review = operator_mint::execution::apply_blocking(
                 &paths,
@@ -250,7 +254,8 @@ fn prepare_review(
     options: &EnsureOptions,
     paths: &EnsurePaths,
 ) -> Result<(OperatorMintReviewRecord, OperatorMintRateQuote), FleetCommandError> {
-    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, root);
+    let mut platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, root)
+        .with_identity(options.identity.as_deref());
     let report = plan(
         root,
         &loaded.desired,
@@ -265,7 +270,9 @@ fn prepare_review(
         )
     })?;
     let transport = OperatorMintTransport::from_icp(
-        &IcpCli::new(&options.icp, Some(loaded.desired.environment.clone())).with_cwd(root),
+        &IcpCli::new(&options.icp, Some(loaded.desired.environment.clone()))
+            .with_identity(options.identity.as_deref())
+            .with_cwd(root),
     )?;
     let icp_ledger = principal(&options.mint_icp_ledger)?;
     let cmc = principal(&options.mint_cmc)?;

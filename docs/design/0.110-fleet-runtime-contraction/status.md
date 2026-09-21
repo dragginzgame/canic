@@ -1,5 +1,45 @@
 # Canic 0.110 Implementation Status
 
+## Expanded .35 deployment qualification — 2026-09-21
+
+The maintainer includes timing and performance in the feedback batch. Canic now
+retains bounded private invocation receipts, paired stage/request attribution,
+interruption evidence and truthful retry-origin diagnostics. Install preparation
+shares one fresh status within the pre-intent step and expires it on either
+outcome. Native qualification, scoped warning-denied Clippy and both matched
+PocketIC control/candidate journeys pass; all 24 selected payload hashes match.
+Preparation removes three reads (80 to 77). Comparable deployment phases total
+309.594 versus 308.228 seconds, which does not establish a material overall
+speedup. A real-Cargo input-change matrix explains cache behavior without
+weakening source authority. See the
+[performance report](../../audits/reports/2026-09/2026-09-21/deployment-timing.md)
+for retained measurements and their limits.
+
+This expanded Canic batch is locally qualified, and both .35 changelog surfaces
+are current. Full feedback-before-push readiness remains open for downstream
+live acceptance and fuller early native-funding readiness. Upstream timing
+subphases remain partially opaque; the history-layout idea stays parked.
+Packages remain .34 and changes remain uncommitted. No broad gate, release or
+deployment ran. B1 acceptance remains independent.
+
+## Toko feedback corrections after .34 — bounded checkpoint, 2026-09-21
+
+The maintainer requests feedback review before .35 and parks the grouped-history
+idea. The current .35 draft adds explicit Fleet signer selection, preserves
+Principal admission across generation/readiness/funding/apply, repairs the next
+review command, explains unavailable environment comparison, and documents
+application payload limits and early-readiness limits. Host request literals
+and internal fixtures follow the new optional signing-identity field.
+
+The [current handoff](../../status/current.md#toko-feedback-before-35--2026-09-21)
+records focused host/CLI/fixture validation and the per-finding disposition.
+These bounded corrections are qualified. The expanded checkpoint above now
+qualifies timing receipts and matched local deployment/cache measurements;
+richer pre-build native funding evidence and downstream adoption remain open. This is not full Toko feedback closure or a
+push recommendation under the maintainer's latest condition. Packages remain
+.34, changes are uncommitted, and no broad gate or release flow ran. B1 remains
+independently incomplete; no later minor or B2 acceptance is implied.
+
 ## Current execution queue — 2026-09-21
 
 The maintainer requests RF3 completion and continuation. The complete RF3

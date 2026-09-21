@@ -11,6 +11,7 @@ fn request(root: &Path) -> FleetReadinessRequest<'_> {
         environment: "local",
         fleet: "fleet",
         icp_executable: "must-not-run",
+        signing_identity: None,
         operator: Principal::management_canister(),
         cycles_ledger: Principal::management_canister(),
         estimated_required_cycles: None,

@@ -18,6 +18,7 @@ Supporting implementation evidence does not belong here.
 - `immutable-test-checkout-lease/`
 - `inspect-message-admission/`
 - `operator-funding-conversion-authority/`
+- [Public metric history locality](public-metric-history-locality/design.md)
 - `role-specific-stable-initialization/`
 - `standalone-blob-service-extraction/`
 
