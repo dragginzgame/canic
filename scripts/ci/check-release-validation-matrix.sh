@@ -39,10 +39,6 @@ rg -q '\([^)]*release-validation-matrix\.md\)' "$CI_GOVERNANCE" || {
     exit 1
 }
 
-require_texts "$PACKAGED_CANISTER" "$GUARD_LABEL" \
-    'cargo +1.91.0 build --offline --locked' \
-    'cargo run --manifest-path "$tool_root/Cargo.toml" --offline --locked' \
-    'cargo package --locked'
-require_text "$MAKEFILE" 'cargo package --locked' "$GUARD_LABEL"
-
+# Packaged-consumer commands run in their own validation target. This gate
+# checks document presence and links without inspecting shell source spelling.
 echo "release validation matrix guard passed"

@@ -32,14 +32,18 @@ prepare_fake_blob_storage_icp() {
     local fake_icp="$1"
     local fake_icp_state="$2"
 
+    local repository_root
+    repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    # shellcheck source=/dev/null
+    source "$repository_root/tool-versions.env"
     printf 'unused\n' > "$fake_icp_state"
-    cat > "$fake_icp" <<'EOF'
-#!/usr/bin/env bash
+    printf '#!/usr/bin/env bash\nfixture_icp_version=%q\n' "$CANIC_ICP_CLI_VERSION" > "$fake_icp"
+    cat >> "$fake_icp" <<'EOF'
 set -euo pipefail
 
 for arg in "$@"; do
     if [ "$arg" = "--version" ]; then
-        echo "icp-cli 1.5.0"
+        echo "icp-cli $fixture_icp_version"
         exit 0
     fi
 done

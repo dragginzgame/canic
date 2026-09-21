@@ -913,6 +913,7 @@ fn generate(
         &desired,
         &observed,
         &root_artifact.wasm_sha256_hex,
+        &coordinator_artifact.wasm_sha256_hex,
         local_replica,
         &mut startup_funding,
     );

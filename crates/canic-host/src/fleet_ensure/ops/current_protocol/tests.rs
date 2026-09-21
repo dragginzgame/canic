@@ -74,10 +74,11 @@ impl AuthorityReadsFixture {
         let executable = root.join("icp");
         fs::write(
             &executable,
-            r#"#!/bin/sh
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
 set -eu
 case " $* " in
-  *" --version "*) echo 'icp 1.5.0'; exit 0;;
+  *" --version "*) echo 'icp @ICP_VERSION@'; exit 0;;
   *" --query "*) ;;
   *) exit 2;;
 esac
@@ -108,6 +109,7 @@ case "$method" in
 esac
 cat "$id.json"
 "#,
+            ),
         )
         .unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
@@ -300,10 +302,11 @@ impl StoreStagingFixture {
         let executable = root.join("icp");
         fs::write(
             &executable,
-            r#"#!/bin/sh
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
 set -eu
 case " $* " in
-  *" --version "*) echo 'icp 1.5.0'; exit 0;;
+  *" --version "*) echo 'icp @ICP_VERSION@'; exit 0;;
   *" canic_wasm_store_catalog "*" --query "*)
     printf 'query\n' >> calls
     if [ -e fail ]; then exit 1; fi
@@ -311,6 +314,7 @@ case " $* " in
   *) exit 2;;
 esac
 "#,
+            ),
         )
         .unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
@@ -740,7 +744,7 @@ fn assert_activation_source_review(
         "operation_id": plan["operation_id"], "plan_sha256": digest,
         "initial_controlled_cycles": "0", "initial_operator_cycles": "0",
         "initial_estate_funding_cycles_by_root": {}, "stalled_observations": 0,
-        "successor_phases": [], "funding_reviews": [], "estate_funding_required": null,
+        "successor_phases": [], "funding_observations": {}, "funding_reviews": [], "estate_funding_required": null,
         "effects": actions[..=completed_prefix].iter().enumerate().map(|(index, action)| serde_json::json!({
             "action_sha256": crate::fleet_ensure::ops::action_sha256(action),
             "state": if index < completed_prefix { "applied" } else { "issued" },

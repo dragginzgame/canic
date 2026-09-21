@@ -32,7 +32,8 @@ pub(in crate::fleet_ensure) fn read(
     let mut plan: Value = serde_json::from_slice(&plan_bytes).map_err(|_| invalid())?;
     let journal: Value = serde_json::from_slice(&journal_bytes).map_err(|_| invalid())?;
     plan_content::hydrate(paths, &mut plan)?;
-    let mut source = inspect(&plan, &journal, environment, fleet)?;
+    let state = crate::fleet_ensure::ops::read_state(paths, fleet)?;
+    let mut source = inspect(&plan, &journal, &state, environment, fleet)?;
     source.infrastructure = infrastructure(paths, &plan, fleet)?;
     source.plan_document_sha256 = sha256_hex(&plan_bytes);
     source.journal_document_sha256 = sha256_hex(&journal_bytes);
@@ -47,6 +48,7 @@ pub(in crate::fleet_ensure) fn read(
 fn inspect(
     plan: &Value,
     journal: &Value,
+    state: &crate::fleet_ensure::model::FleetEnsureStateRecord,
     environment: &str,
     fleet: &str,
 ) -> Result<FleetActivationSourceRecord, EnsureStateError> {
@@ -103,6 +105,27 @@ fn inspect(
     {
         return Err(invalid());
     }
+    let observations = serde_json::from_value(
+        journal
+            .get("funding_observations")
+            .cloned()
+            .ok_or_else(invalid)?,
+    )
+    .map_err(|_| invalid())?;
+    let observation_allowance =
+        crate::fleet_ensure::ops::funding_observation::validation::source_allowance(
+            &crate::fleet_ensure::ops::funding_observation::resolved_from_state(
+                &serde_json::from_value(desired.clone()).map_err(|_| invalid())?,
+                state,
+            ),
+            operation_id,
+            plan_sha256,
+            &observations,
+        )
+        .map_err(|_| invalid())?;
+    let maximum_execution_burn_cycles = amount(conservation, "maximum_execution_burn_cycles")?
+        .checked_add(observation_allowance)
+        .ok_or_else(invalid)?;
     let canisters = array(plan, "canisters")?;
     if canisters.is_empty()
         || canisters.len() > crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS
@@ -205,7 +228,7 @@ fn inspect(
         operator: string(desired, "operator")?.to_string(),
         cycles_ledger: string(desired, "cycles_ledger")?.to_string(),
         initial_controlled_cycles: amount(journal, "initial_controlled_cycles")?,
-        maximum_execution_burn_cycles: amount(conservation, "maximum_execution_burn_cycles")?,
+        maximum_execution_burn_cycles,
         initial_estate_funding_cycles_by_root,
         operation_id: operation_id.to_string(),
         plan_sha256: plan_sha256.to_string(),

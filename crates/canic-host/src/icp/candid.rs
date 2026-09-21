@@ -157,8 +157,9 @@ mod tests {
         let executable = root.join("icp");
         fs::write(
             &executable,
-            r#"#!/bin/sh
-if [ "$1" = --version ]; then echo 'icp 1.5.0'; exit 0; fi
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 query=false
 while [ "$#" -gt 0 ]; do
   case "$1" in
@@ -173,6 +174,7 @@ cp "$argument" received || exit 91
 cat response
 exit "$(cat exit-code)"
 "#,
+            ),
         )
         .unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();

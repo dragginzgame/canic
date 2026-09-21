@@ -60,6 +60,7 @@ fn render_usage(text: &mut String, usage: &StartupCoordinatorUsage) {
                     "policy differs or rotation is in progress"
                 }
                 StartupUsageUnavailable::InvalidAccounting => "invalid accounting",
+                StartupUsageUnavailable::InventoryIncomplete => "live inventory is incomplete",
             };
             writeln!(
                 text,
@@ -90,8 +91,45 @@ fn render_usage(text: &mut String, usage: &StartupCoordinatorUsage) {
     }
 }
 
+fn render_inventory(text: &mut String, root: &StartupRootFunding) {
+    match root.inventory {
+        Ok(coverage) => writeln!(
+            text,
+            "    live_inventory: complete; components={}; descendants={}",
+            coverage.components, coverage.descendants
+        ),
+        Err(reason) => writeln!(text, "    live_inventory: unavailable ({reason:?})"),
+    }
+    .unwrap();
+}
+
+fn render_relay_quote(text: &mut String, root: &StartupRootFunding) {
+    match &root.relay_quote {
+        Ok(quote) => {
+            writeln!(text, "    funding_observation_quote: attempts={}; proposed_burn_allowance={} cycles; per_attempt={} cycles", quote.requests.len(), quote.proposed_burn_allowance_cycles, quote.per_attempt_burn_allowance_cycles).unwrap();
+            writeln!(text, "    observation_native_requirement: recovery_floor={}; required={}; observed={}; shortfall={} cycles", quote.minimum_recovery_cycles, quote.required_native_cycles, quote.observed_native_cycles, quote.native_shortfall_cycles).unwrap();
+            writeln!(text, "    observation_quote_scope: one attempt per edge; excludes retries; requires separate review and durable spending authority").unwrap();
+        }
+        Err(reason) => writeln!(
+            text,
+            "    funding_observation_quote: unavailable ({reason:?})"
+        )
+        .unwrap(),
+    }
+}
+
+fn render_recovery(text: &mut String, root: &StartupRootFunding) {
+    match &root.recovery_demand {
+        Ok(demand) => writeln!(text, "    live_recovery: root_grants={}; minimum_native={}; shortfall={}; uncovered={} cycles; exceeds_root_window={}", demand.root_grants_cycles, demand.minimum_native_cycles, demand.shortfall_cycles, demand.uncovered_cycles, demand.exceeds_root_window_budget),
+        Err(reason) => writeln!(text, "    live_recovery: unavailable ({reason:?})"),
+    }.unwrap();
+}
+
 fn render_root(text: &mut String, root: &StartupRootFunding) {
     writeln!(text, "  root: {}", root.root).unwrap();
+    render_inventory(text, root);
+    render_relay_quote(text, root);
+    render_recovery(text, root);
     for child in &root.child_usage {
         if let Some(binding) = &child.binding {
             writeln!(
@@ -239,6 +277,11 @@ mod tests {
             coordinator_reserve_cycles: 1,
             coordinator_spendable_cycles: 0,
             roots: vec![StartupRootFunding {
+                recovery_demand: Err(StartupDemandUnavailable::BalanceNotObserved),
+                relay_quote: Err(StartupDemandUnavailable::Usage(
+                    StartupUsageUnavailable::NotObserved,
+                )),
+                inventory: Err(StartupUsageUnavailable::NotObserved),
                 child_usage: Vec::new(),
                 balance: StartupNativeBalance::ConfiguredCreation(10_000_000_000_000),
                 child_grants_cycles: 0,

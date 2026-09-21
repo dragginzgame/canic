@@ -4,6 +4,7 @@
 //! Does not own: transport parsing, policy decisions, persistence, or IC effects.
 //! Boundary: workflow persists these records before and after every effect.
 
+pub mod funding_observation;
 pub mod operator_mint;
 mod retirement;
 mod serialization;
@@ -1441,6 +1442,7 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
+    pub funding_observations: BTreeMap<String, funding_observation::FundingObservationReviewRecord>,
     pub funding_reviews: Vec<FundingReviewRecord>,
     pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
     pub completion: FleetEnsureCompletion,
@@ -1607,6 +1609,8 @@ impl FundingPauseRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct NativeFundingRequiredRecord {
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub observation_quote: Option<funding_observation::FundingQuoteSourceRecord>,
     #[serde(with = "u128_text")]
     pub available_cycles: u128,
     pub cycles_ledger: String,

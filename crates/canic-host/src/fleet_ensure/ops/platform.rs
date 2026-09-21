@@ -618,6 +618,11 @@ enum RejectionCode {
 
 #[derive(Debug, ThisError)]
 pub enum IcpEnsurePlatformError {
+    #[error(transparent)]
+    FundingObservation(
+        #[from] crate::fleet_ensure::model::funding_observation::FundingObservationError,
+    ),
+
     #[error("mainnet Subnet Catalog observation failed: {0}")]
     SubnetCatalog(#[source] Box<ic_query::subnet_catalog::SubnetCatalogLoadFailure>),
 
@@ -871,8 +876,8 @@ struct ObservationCounters {
 
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
-    desired: DesiredFleet,
-    icp: IcpCli,
+    pub(super) desired: DesiredFleet,
+    pub(super) icp: IcpCli,
     initial_observation_delay: Duration,
     maximum_observation_delay: Duration,
     observation_snapshot: RefCell<Option<FleetObservationSnapshot>>,
@@ -881,7 +886,7 @@ pub struct IcpEnsurePlatform {
     progress_handler: Option<Box<dyn FnMut(FleetEnsureProgress)>>,
     observation_handler: Option<Box<dyn FnMut(FleetObservationTiming)>>,
     estate_observations: BTreeMap<String, EstateFundingDomainObservation>,
-    root: PathBuf,
+    pub(super) root: PathBuf,
 }
 
 const INITIAL_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_millis(250);
@@ -1052,7 +1057,7 @@ impl IcpEnsurePlatform {
             .set(self.cached_reads.get().saturating_add(1));
     }
 
-    fn require_operator(&self) -> Result<(), IcpEnsurePlatformError> {
+    pub(super) fn require_operator(&self) -> Result<(), IcpEnsurePlatformError> {
         self.icp.bind_selected_identity()?;
         let actual = self.icp.identity_principal_text()?;
         if actual != self.desired.operator {
@@ -1286,7 +1291,7 @@ impl IcpEnsurePlatform {
         inventory.finish(root_name).map(Some)
     }
 
-    fn query_estate_pool_page(
+    pub(super) fn query_estate_pool_page(
         &self,
         candid: &Path,
         root: Principal,
@@ -1648,7 +1653,7 @@ impl IcpEnsurePlatform {
         Ok(observed)
     }
 
-    fn read_status_optional(
+    pub(super) fn read_status_optional(
         &self,
         principal: &str,
     ) -> Result<Option<LiveCanister>, IcpEnsurePlatformError> {
@@ -5213,13 +5218,15 @@ mod tests {
         let mut fixture = ProtocolOwnersFixture::new();
         std::fs::write(
             fixture.root.join("icp"),
-            r#"#!/bin/sh
-if [ "$1" = --version ]; then echo 'icp 1.5.0'; exit 0; fi
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 while [ "$1" = --project-root-override ] || [ "$1" = --identity-password-file ]; do shift 2; done
 if [ "$1 $2" = 'identity default' ]; then echo selected; exit 0; fi
 if [ "$1 $2" = 'identity principal' ]; then cat principal; exit 0; fi
 echo effect >> effects
 "#,
+            ),
         )
         .unwrap();
         std::fs::write(fixture.root.join("principal"), "operator").unwrap();
@@ -5524,10 +5531,10 @@ echo effect >> effects
         fixture.platform.desired.canisters[1].principal = Some(root.to_text());
         std::fs::write(
             fixture.root.join("icp"),
-            format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\ncat '{}'/balance.json\n",
+            crate::test_support::tool_script(&format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\ncat '{}'/balance.json\n",
                 fixture.root.display(),
-            ),
+            )),
         )
         .unwrap();
         let pause = canic_core::dto::component_provisioning::RootEstateFundingRequired {
@@ -5666,10 +5673,10 @@ echo effect >> effects
             fs::create_dir_all(&root).unwrap();
             fs::write(root.join("owner.wasm"), b"current-owner-module").unwrap();
             let executable = root.join("icp");
-            fs::write(&executable, format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != status ]; do shift; done\nshift\nprintf '%s\\n' \"$1\" >> '{}'/calls\ncat '{}'/\"$1\".json\n",
+            fs::write(&executable, crate::test_support::tool_script(&format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != status ]; do shift; done\nshift\nprintf '%s\\n' \"$1\" >> '{}'/calls\ncat '{}'/\"$1\".json\n",
                 root.display(), root.display(),
-            )).unwrap();
+            ))).unwrap();
             fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
             let canisters = ["coordinator", "root", "store"].map(|name| {
                 serde_json::json!({
@@ -5715,9 +5722,9 @@ echo effect >> effects
             let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
             std::fs::write(
                 fixture.root.join("icp"),
-                format!(
+                crate::test_support::tool_script(&format!(
                     r#"#!/bin/sh
-if [ "$1" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi
+if [ "$1" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 while [ "$#" -gt 0 ] && [ "$1" != status ]; do shift; done
 shift
 cd '{}'
@@ -5743,7 +5750,7 @@ printf 'finish:%s\n' "$1" >> events
 cat "$1.json"
 "#,
                     fixture.root.display()
-                ),
+                )),
             )
             .unwrap();
             fixture
@@ -5804,10 +5811,10 @@ cat "$1.json"
                 )
                 .unwrap();
             }
-            std::fs::write(owners.root.join("icp"), format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ] && [ \"$1\" != identity ]; do shift; done\ncase \"$1\" in\nidentity) cat '{}'/operator;;\ncanister) shift; case \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) if [ -e '{}'/fail ]; then exit 1; fi; cat '{}'/inspection.json;;\n*) exit 1;;\nesac;;\n*) exit 1;;\nesac\n",
+            std::fs::write(owners.root.join("icp"), crate::test_support::tool_script(&format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ] && [ \"$1\" != identity ]; do shift; done\ncase \"$1\" in\nidentity) cat '{}'/operator;;\ncanister) shift; case \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) if [ -e '{}'/fail ]; then exit 1; fi; cat '{}'/inspection.json;;\n*) exit 1;;\nesac;;\n*) exit 1;;\nesac\n",
                 owners.root.display(), owners.root.display(), owners.root.display(), owners.root.display(),
-            )).unwrap();
+            ))).unwrap();
             let script = std::fs::read_to_string(owners.root.join("icp")).unwrap();
             let reserve_route = format!(
                 r#"call) if [ "$3" = canic_observability ]; then
@@ -7569,9 +7576,9 @@ printf 'finish\n' >> events
             ));
             fs::write(fixture.root.join("pool.json"), serde_json::json!({"response_bytes": hex_bytes(candid::encode_one(response).unwrap())}).to_string()).unwrap();
             let executable = fixture.root.join("icp");
-            fs::write(&executable, format!(
-                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ]; do shift; done\nshift\nsleep 0.05\ncase \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) cat '{}'/pool.json;;\n*) exit 1;;\nesac\n",
-                fixture.root.display(), fixture.root.display())).unwrap();
+            fs::write(&executable, crate::test_support::tool_script(&format!(
+                "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\nwhile [ \"$#\" -gt 0 ] && [ \"$1\" != canister ]; do shift; done\nshift\nsleep 0.05\ncase \"$1\" in\nstatus) shift; cat '{}'/\"$1\".json;;\ncall) cat '{}'/pool.json;;\n*) exit 1;;\nesac\n",
+                fixture.root.display(), fixture.root.display()))).unwrap();
             fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
             let timings = Arc::new(Mutex::new(Vec::new()));
             let sink = Arc::clone(&timings);
@@ -7656,8 +7663,8 @@ printf 'finish\n' >> events
     fn reinstall_authority_pass_reads_statuses_and_refreshes_after_failure() {
         let mut fixture = ProtocolOwnersFixture::new();
         let path = &fixture.root;
-        std::fs::write(path.join("icp"), r#"#!/bin/sh
-if [ "$1" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi
+        std::fs::write(path.join("icp"), crate::test_support::tool_script(r#"#!/bin/sh
+if [ "$1" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 while [ "$#" -gt 0 ] && [ "$1" != canister ] && [ "$1" != identity ] && [ "$1" != cycles ]; do shift; done
 case "$1" in
 identity) echo operator;;
@@ -7665,7 +7672,7 @@ cycles) echo '{"balance":"1000000000000 cycles"}';;
 canister) shift; [ "$1" = status ] || exit 1; shift; printf '%s\n' "$1" >> calls; cat "$1.json";;
 *) exit 1;;
 esac
-"#).unwrap();
+"#)).unwrap();
         for name in ["root", "coordinator", "store"] {
             let file = path.join(format!("{name}.json"));
             let mut status: serde_json::Value =
@@ -8035,10 +8042,10 @@ esac
             .to_string()
         };
         fs::write(&response, status(1_000)).expect("write initial live balance");
-        fs::write(&executable, format!(
-            "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp 1.5.0'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\ncat '{}'\n",
+        fs::write(&executable, crate::test_support::tool_script(&format!(
+            "#!/bin/sh\nif [ \"$1\" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\nprintf '%s\\n' \"$*\" >> '{}'\ncat '{}'\n",
             commands.display(), response.display(),
-        )).expect("write observation transport");
+        ))).expect("write observation transport");
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
             .expect("make observation transport executable");
         let desired = DesiredFleet {
@@ -8183,13 +8190,13 @@ esac
         fs::create_dir_all(&root).expect("create public status fixture");
         let executable = root.join("icp");
         let commands = root.join("commands.log");
-        let script = format!(
+        let script = crate::test_support::tool_script(&format!(
             "#!/bin/sh\n\
-             if [ \"$1\" = \"--version\" ]; then echo 'icp 1.5.0'; exit 0; fi\n\
+             if [ \"$1\" = \"--version\" ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\n\
              printf '%s\\n' \"$*\" >> '{}'\n\
              printf '%s\\n' '{{\"id\":\"{canister}\",\"controllers\":[\"rdmx6-jaaaa-aaaaa-aaadq-cai\"],\"module_hash\":null}}'\n",
             commands.display(),
-        );
+        ));
         fs::write(&executable, script).expect("write fake ICP 1.5.0");
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
             .expect("make fake ICP executable");
@@ -8252,9 +8259,9 @@ esac
             module_hash: Some(vec![0x22; 32]),
         })
         .expect("encode independently modelled management status");
-        let script = format!(
+        let script = crate::test_support::tool_script(&format!(
             "#!/bin/sh\n\
-             if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp 1.5.0'; exit 0; fi\n\
+             if [ \"$1\" = \"--version\" ]; then printf '%s\\n' 'icp @ICP_VERSION@'; exit 0; fi\n\
              printf '%s\\n' \"$*\" >> '{}'\n\
              case \"$*\" in\n\
                *\"canister status {canister}\"*) printf '%s\\n' '{}' ;;\n\
@@ -8262,7 +8269,7 @@ esac
              esac\n",
             commands.display(),
             status_json,
-        );
+        ));
         fs::write(&executable, script).expect("write fake ICP 1.5.0");
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
             .expect("make fake ICP executable");
@@ -8293,7 +8300,7 @@ esac
 
         fs::write(
             &executable,
-            "#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp 1.5.0'; exit 0; fi\necho '{\"not_response_bytes\":true}'\n",
+            crate::test_support::tool_script("#!/bin/sh\nif [ \"$1\" = \"--version\" ]; then echo 'icp @ICP_VERSION@'; exit 0; fi\necho '{\"not_response_bytes\":true}'\n"),
         )
         .expect("replace unavailable management fixture");
         let error = exact_install_canister_status_with(canister, None, None, |_| {

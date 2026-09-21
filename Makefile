@@ -344,6 +344,7 @@ ci-security:
 
 audit-method-catalog-gate:
 	bash scripts/ci/check-audit-method-catalog.sh
+	bash scripts/ci/test-document-guards.sh
 
 current-document-semantics-gate:
 	bash scripts/ci/check-current-document-semantics.sh

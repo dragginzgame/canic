@@ -4,6 +4,7 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod funding_observation;
 mod operator_mint;
 mod progress;
 mod readiness;
@@ -67,6 +68,8 @@ const DEFAULT_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 #[derive(Debug, ThisError)]
 pub enum FleetCommandError {
+    #[error(transparent)]
+    FundingObservationStatus(Box<EnsureWorkflowError<io::Error>>),
     #[error(transparent)]
     Readiness(Box<canic_host::fleet_ensure::workflow::readiness::FleetReadinessError>),
     #[error("early Fleet readiness checks found blockers; preserve retained work and resolve the reported conditions")]
@@ -222,6 +225,7 @@ impl GenerateOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct EnsureOptions {
+    observe_funding: Option<String>,
     operator_mint: bool,
     mint_cmc: String,
     mint_icp_ledger: String,
@@ -251,6 +255,7 @@ impl EnsureOptions {
             PathBuf::from,
         );
         Ok(Self {
+            observe_funding: string_option(ensure, "observe-funding"),
             reinstall: ensure.get_flag("reinstall"),
             operator_mint: ensure.get_flag("operator-mint"),
             mint_cmc: required_string(ensure, "mint-cmc"),
@@ -355,6 +360,9 @@ fn ensure_command() -> Command {
         .bin_name("canic fleet ensure")
         .about("Plan or apply one idempotent Fleet convergence")
         .disable_help_flag(true)
+        .arg(value_arg("observe-funding").long("observe-funding").value_name("ROOT")
+            .conflicts_with_all(["operator-mint", "reinstall", "cancel-mint"])
+            .help("Review bounded live funding observations for a retained Root; --apply approves their exact digest"))
         .arg(
             value_arg("fleet")
                 .value_name("fleet")
@@ -449,6 +457,9 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
         root.join(&options.desired)
     };
     let loaded = load_ensure_authority(&root, &desired_path, &options)?;
+    if let Some(root_name) = &options.observe_funding {
+        return funding_observation::run(&root, &loaded, &options, root_name);
+    }
     if options.operator_mint {
         return operator_mint::run(&root, &loaded, &options);
     }
@@ -828,6 +839,20 @@ fn append_funding_review(lines: &mut Vec<String>, report: &FleetEnsureReport) {
                 "conversion_review: repeat ensure with --operator-mint".into(),
             ]);
             return;
+        }
+        if let canic_host::fleet_ensure::model::FundingPauseRecord::Native(pause) = &review.pause
+            && let Some(source) = &pause.observation_quote
+        {
+            use canic_host::fleet_ensure::model::funding_observation::FundingQuoteStage;
+            let stage = match source.stage {
+                FundingQuoteStage::Observation => "observation",
+                FundingQuoteStage::Recovery => "recovery",
+            };
+            lines.push(format!("funding_quote_stage: {stage}"));
+            lines.push(format!(
+                "funding_observation_review: {}",
+                source.review_sha256
+            ));
         }
         lines.extend([
             format!("funding_review_sha256: {}", review.review_sha256),

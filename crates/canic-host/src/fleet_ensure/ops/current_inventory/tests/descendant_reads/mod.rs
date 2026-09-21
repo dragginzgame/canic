@@ -17,7 +17,7 @@ impl ReceiptTransport {
         fs::create_dir_all(&root).unwrap();
         fs::write(root.join("root.did"), "service : {}").unwrap();
         let executable = root.join("icp");
-        fs::write(&executable, SCRIPT).unwrap();
+        fs::write(&executable, crate::test_support::tool_script(SCRIPT)).unwrap();
         fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
         Self {
             icp: IcpCli::new(executable.to_str().unwrap(), None).with_cwd(root.clone()),
@@ -64,7 +64,7 @@ impl Drop for ReceiptTransport {
 // later batches cannot start until every issued request in the previous one exits.
 const SCRIPT: &str = r#"#!/bin/sh
 set -eu
-if [ "$1" = --version ]; then echo 'icp 1.5.0'; exit 0; fi
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 case " $* " in
   *" canic_root_operation_status "*" --query "*) ;;
   *) touch unexpected; exit 2;;

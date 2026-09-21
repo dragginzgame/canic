@@ -113,17 +113,17 @@ enum RootInventoryStatusResponse {
     Pool(Box<CanisterPoolResponse>),
 }
 
-struct ProtocolCatalog {
+pub(super) struct ProtocolCatalog {
     by_role: BTreeMap<CanisterRole, ProtocolEntry>,
-    coordinator: ProtocolEntry,
-    root: ProtocolEntry,
+    pub(super) coordinator: ProtocolEntry,
+    pub(super) root: ProtocolEntry,
 }
 
-struct ProtocolEntry {
+pub(super) struct ProtocolEntry {
     binding: RegistryProtocolBinding,
-    candid_path: PathBuf,
-    installed_module_hash: String,
-    raw_module_hash: String,
+    pub(super) candid_path: PathBuf,
+    pub(super) installed_module_hash: String,
+    pub(super) raw_module_hash: String,
 }
 
 struct ComponentPartitionAuthority<'a> {
@@ -225,7 +225,7 @@ pub(super) fn terminal_inventory(
         root,
         &config_path,
         &config,
-        release_set,
+        release_set.release_build_id,
         &coordinator_candid,
         &root_candid,
         &store_candid,
@@ -247,16 +247,15 @@ pub(super) fn terminal_inventory(
 }
 
 impl ProtocolCatalog {
-    fn load(
+    pub(super) fn load(
         root: &Path,
         config_path: &Path,
         config: &AppConfigSnapshot,
-        release_set: FleetSubnetRootReleaseSet,
+        release_build_id: canic_core::ids::ReleaseBuildId,
         coordinator_candid: &Path,
         root_candid: &Path,
         store_candid: &Path,
     ) -> Result<Self, CurrentProtocolError> {
-        let release_build_id = release_set.release_build_id;
         let infrastructure =
             load_persisted_canic_infrastructure_artifact_manifest(root, release_build_id)
                 .map_err(|error| inventory_error(error.to_string()))?;
@@ -345,7 +344,7 @@ impl ProtocolCatalog {
         })
     }
 
-    fn child(&self, role: &CanisterRole) -> Option<&ProtocolEntry> {
+    pub(super) fn child(&self, role: &CanisterRole) -> Option<&ProtocolEntry> {
         self.by_role.get(role)
     }
 }

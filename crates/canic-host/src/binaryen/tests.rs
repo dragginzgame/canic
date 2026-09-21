@@ -62,7 +62,7 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     let executable = root.join("wasm-opt");
     fs::write(
         &executable,
-        "#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf 'wasm-opt version 132 (version_132)\\n'\n",
+        crate::test_support::tool_script("#!/bin/sh\nprintf 'this must not execute' > execution-marker\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
     )
     .expect("write fake executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
@@ -90,7 +90,7 @@ fn admitted_executable_records_exact_path_version_and_digest() {
     let executable = root.join("wasm-opt");
     fs::write(
         &executable,
-        "#!/bin/sh\nprintf 'wasm-opt version 132 (version_132)\\n'\n",
+        crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
     )
     .expect("write fake executable");
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
@@ -154,7 +154,7 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let candidate = root.join("candidate-wasm-opt");
     fs::write(
         &candidate,
-        "#!/bin/sh\nprintf 'wasm-opt version 132 (version_132)\\n'\n",
+        crate::test_support::tool_script("#!/bin/sh\nprintf '@BINARYEN_IDENTITY@\\n'\n"),
     )
     .expect("write fake optimizer candidate");
     fs::set_permissions(&candidate, fs::Permissions::from_mode(0o755))

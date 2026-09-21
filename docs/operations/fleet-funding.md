@@ -57,27 +57,30 @@ comes from the exact selected Root; missing or duplicate bootstrap authority and
 overflow reject before effects. Without bootstrap authority, the configured
 minimum and deployment reserve still apply. This is not a forecast of the initial grant wave
 or a claim that low balance explains every provisioning failure. Only a Root
-selected by the issued provisioning action is eligible, once per action.
+selected by the issued provisioning action is eligible. Baseline recovery is
+bounded to one credit per action; the observation and recursive recovery stages
+below can each authorize one additional, separately reviewed credit.
 
 An unapproved quote can be refreshed by repeating review if the Root balance
 moves beyond its margin; the old digest then stops authorizing funding. If the
 Root is already funded, that unapproved quote is removed. Once an intent exists,
 the exact amount and timestamp are retained through every retry.
 
-The operator must already have sufficient cycles. New operator mint credits
-remain unsupported in this retained-operation path and unexplained balance
-changes reject. Do not edit starting balances or withdraw out of band. A lost
+The operator must have sufficient cycles before withdrawal. If needed, use the
+separate `--operator-mint` review to retain exact conversion receipts; unexplained
+balance changes still reject. Starting balances remain fixed. A lost
 withdrawal response reuses the same timestamp; a retained receipt resumes with
 observations. A review cannot issue another credit for a persistently failing
-Root under the same provisioning action.
+Root under the same provisioning action and quote stage.
 
 The host review/accounting passes focused native, CLI and composed IC withdrawal
 qualification, including lost replies, receipt recovery, conservation and replay.
 A combined local IC case also recovers the same E163 initial-child claim through
 one reviewed withdrawal and two lost responses. It uses the existing Ledger stub
 with zero fees; it does not establish mainnet Ledger or Toko workload qualification.
-Operator mint receipts and live child-grant/recovery-quote accounting remain
-CANIC-172/174 work. Generation now observes Coordinator accounting as described below. Disposable fixture balances are not sizing recommendations.
+Receipt-bound operator minting and reviewed recursive recovery observations are
+available in the retained operation. Generation observes Coordinator accounting
+as described below. Disposable fixture balances are not sizing recommendations.
 
 ## Inspection reserve failures
 
@@ -196,13 +199,44 @@ or grant eligibility. Generation obtains child identities from its seeded invent
 Allocation projections retain the complete Component binding, including Fleet
 authority, epoch, Component identity and placement. Before reading Root-local
 charges, generation matches the selected Fleet/Coordinator/Root placement, Root
-Spec admission, selected release and declared role edge. Observed descendants
-must join to an observed parent with the same Component binding and release set,
-and the expected parent role. Missing parents produce `ParentNotObserved` for
-allowance and demand; duplicate Principals, cycles and inconsistent joins reject
+Spec admission, selected release and declared role edge. It also reads the
+selected installed Coordinator's complete canonical registry, validates its
+topology and admission records, and binds each allocation to that independently
+observed epoch. The current Root row must be Active and match the selected
+placement, admissions, topology digest, complete release set, limits and funding
+policy. Missing or conflicting evidence leaves usage unavailable.
+
+Root's active registry mirror must match that Coordinator head before and after
+its child observations. Generation rechecks the Coordinator head after the
+collection; a changed authority, revision or content hash discards qualified
+child bindings and usage with `PolicyTransition`. A failed head read discards
+them with `ObservationFailed`. This adds one registry snapshot and one head
+query per invocation and at most two inventory-summary queries per retained
+Root with the selected module. It adds no paid update. The underlying ledger
+query remains available while Prepared, but automatic preview qualification
+requires an Active registry mirror; native recovery remains independent.
+
+Observed descendants must join to an observed parent with the same Component
+binding and release set, and the expected parent role. Missing parents produce
+`ParentNotObserved` for allowance and demand; duplicate Principals, cycles and inconsistent joins reject
 qualification. The iterative walk shares completed results across branches.
-These checks establish consistency of observed allocations, not a complete live
-inventory or independent freshness proof for the advertised registry epoch.
+
+Before reading ledgers, generation also requires Root's Workload count to match
+the complete allocation set. Each Component must have exactly one top-level
+member within the current placement's admission limits. Its current partition
+must be Active, have no pending descendant reservations and match the selected
+binding and release. Unfiltered directory pages must contain every exact child
+and funding-parent edge once, within the Spec's registry bounds. Partial pages,
+missing members and duplicate identities never establish complete coverage.
+
+The controller-only `canic_root_status(ComponentDirectoryPage(...))` query
+uses the same bounded reader as registered members' public directory queries.
+Generation reads at most 100 entries per page and requires progress on every
+continuation. It rechecks each partition and directory head after ledger reads;
+changes invalidate the collection. The CLI's `live_inventory` line reports
+complete membership separately from ledger availability. These query-only reads
+do not establish an atomic snapshot of balances and accounting, nor do they
+authorize a paid relay or funding effect.
 
 Charged usage includes a grant before its transfer completes; a failed transfer
 restores that charge. Consequently it is not always a settled-success total.
@@ -211,8 +245,8 @@ never zero. An unresolved response may remain pending after its cost reservation
 settles. Do not subtract reservations again from observed native balances or
 assume all charged cycles have arrived at the child. Unavailable observations
 remain explicitly unavailable. Current ledger coverage is limited to seeded
-Root-funded Workloads. Nested parent attribution is available, while descendant
-ledger collection and complete live placement matching remain open.
+Root-funded Workloads. Nested parent attribution and complete live membership
+qualification are available; descendant ledger collection remains open.
 
 For observed usage matching the selected release build and Component Spec hash,
 the preview also reports `child_grant_allowance`: the lifetime limit, remaining
@@ -244,7 +278,71 @@ This local projection excludes outgoing descendant grants, execution burn,
 parent liquidity, funding enablement and window admission. Balance and ledger
 are separate observations, not an atomic snapshot. It adds no calls or spending
 authority and does not replace the fresh-child scenario or the recovery quote.
-Recursive live demand and budgeted descendant collection remain RF3 work.
+For complete current membership, `funding_observation_quote` proposes one attempt
+per exact funding edge, including Root-funded Component members. Each attempt
+covers one Root-mediated native inspection and at most one descendant ledger
+relay to the immediate parent. Top-level accounting uses a Root-local query.
+The configured per-attempt allowance is twice the sum of the update and
+observation bounds. Checked multiplication bounds the entire pass; paid
+attempts require nonzero bounds. Generation performs no paid relay.
+
+`observation_native_requirement` keeps the existing Root recovery floor,
+including the configured minimum, request threshold and deployment reserve,
+separate from the additional observation allowance. Its shortfall uses an
+observed native balance. Missing membership, bindings, balances or valid bounds
+leave the quote unavailable. Minimum native recovery remains available before
+telemetry can succeed.
+
+Review and collect within an existing in-progress Ensure operation:
+
+```sh
+canic fleet ensure staging --environment local --observe-funding root-a
+canic fleet ensure staging --environment local --observe-funding root-a --apply <observation-review-sha256>
+```
+
+Use the same desired-file and ICP selectors as the retained operation when they
+are not the defaults. `--json` returns the retained review, typed attempt
+outcomes and the reconstructed recovery forecast. Without `--apply`, the command
+retains a review using read-only membership/status calls. It performs no paid
+Root relay or funding transfer. Collection approval is separate from approval
+of a native funding credit.
+
+The review binds operation and plan identity, selected configuration, current
+Fleet and Component heads, exact edges and the finite allowance. Collection
+rechecks selected artifacts, controller authority, current membership and native
+headroom. Newly created infrastructure resolves through applied creation
+receipts. The journal records approval and consumes the whole attempt before
+either paid call. Failure or a lost reply in either step cannot restore that
+allowance. An unresolved intent becomes interrupted on resume and is never
+reissued; remaining requests can proceed only under unchanged authority.
+Approved or funding-referenced reviews cannot refresh into another pass.
+Exhausted replay performs no platform reads, effects or journal rewrites.
+
+A complete settled pass computes demand from leaves to Root using each child's
+observed balance, charged lifetime usage, grant increment and selected runtime
+policy. Pending grants or unknown accounting remain unavailable. Root demand
+counts only Root-to-Component grants; their nested transfers are already
+included. The native requirement retains the recovery floor above that demand.
+The report preserves uncovered child demand, cooldowns and configured window
+limits. These observations are sequential, not an atomic snapshot; the forecast
+does not reserve runtime windows or guarantee immediate parent affordability.
+
+Repeat ordinary `fleet ensure` review to obtain any required native credit,
+then approve that credit's own digest. The retained operation admits distinct,
+finite credits for the baseline recovery floor, the reviewed observation
+allowance and the completed recursive recovery requirement. Each credit binds
+its evidence and stage; none can be repeated to fund an indefinitely failing
+operation. Existing Ledger receipt reconciliation and operator-debit checks
+continue to govern withdrawals. After observation failure, minimum recovery
+remains available but a complete recursive forecast is unavailable.
+
+Only consumed attempts extend the conservation execution bound, including
+later continuation phases and supported source-retirement records. An unused
+review adds no debit allowance. Observation records do not themselves authorize
+withdrawals. Schema-1 journals require the current observation fields and native
+quote provenance; this is a pre-1.0 hard cut. Restricted source readers validate
+observation records while retaining their existing restrictions on supplementary
+funding records.
 
 Do not add these internal transfers to computation burn or new operator
 funding. The generation estimate leaves creation amounts, desired state,

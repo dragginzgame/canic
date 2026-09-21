@@ -67,6 +67,7 @@ pub(in crate::fleet_ensure) fn adopt(
         || !journal.effects.is_empty()
         || !journal.successor_phases.is_empty()
         || !journal.funding_reviews.is_empty()
+        || !journal.funding_observations.is_empty()
         || journal.estate_funding_required.is_some()
     {
         return Err(conflict());

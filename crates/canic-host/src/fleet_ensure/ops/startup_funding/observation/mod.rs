@@ -4,6 +4,8 @@
 //! Boundary: exact selected code and policy are required; unavailable evidence is never zero usage.
 
 pub mod binding;
+pub mod inventory;
+pub mod registry;
 #[cfg(test)]
 mod tests;
 
@@ -54,7 +56,7 @@ pub fn observe_child(
     project_child(value, parent, child)
 }
 
-fn project_child(
+pub(in crate::fleet_ensure) fn project_child(
     value: canic_core::dto::observability::ChildFundingUsage,
     parent: Principal,
     child: Principal,

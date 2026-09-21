@@ -1,5 +1,37 @@
 # Canic 0.110 Implementation Status
 
+## Current execution queue — 2026-09-21
+
+The maintainer requests RF3 completion and continuation. The complete RF3
+recovery-funding batch is now qualified in the open `.34` draft on published
+`.33`, together with the earlier guard cleanup. The
+[current handoff](../../status/current.md) owns the exact evidence and queue.
+
+The CLI connects explicit observation review and collection to current registry,
+complete inventory, selected artifacts/controllers and durable attempt authority.
+Each attempt covers a child native inspection and at most one parent-ledger relay.
+Recursive settled demand retains the Root recovery floor without double-counting
+nested transfers. Native funding credits bind separate baseline, observation and
+recovery stages. Failed/interrupted attempts cannot replenish authority; consumed
+allowances travel through conservation, continuation and supported source readers.
+Fresh infrastructure uses applied creation receipts. Sequential evidence does not
+reserve runtime window capacity or guarantee immediate affordability.
+
+The batch passes 207 selected native regressions, scoped host/CLI/internal-fixture
+warning-denied Clippy, and the exact initial-Shard PocketIC case with real Root
+inspections, descendant accounting, protected inventory reads and terminal replay.
+The case takes 58.03 seconds (149-second runner). Operations and both changelog
+surfaces describe the completed behavior; package versions remain `.33`.
+The complete RF3/guard-cleanup batch is ready for the maintainer-selected release
+flow. No broad gate, versioning, publication or deployment ran.
+
+RF2 and the .29 upload/pool batching work remain complete. B1 attribution and
+artifact evidence is the next accepted batch: measure rows 8, 10 and 12 against
+immutable `v0.110.5`, then finish the remaining controlled ablations, generic and
+optimized-artifact evidence. Human acceptance of complete B1 still gates B2
+through B5. CANIC-002 full cycle attribution remains a separate follow-up.
+The dated checkpoints below are historical evidence, not competing queue entries.
+
 ## Post-.32 timer registration evidence — 2026-09-20
 
 The maintainer confirms .32 publication and requests ic-timers 0.8.0. Retain
@@ -2286,30 +2318,15 @@ Current canonical-role evidence:
 
 ## Next Authorized Action
 
-The .16 release is complete. The later September 14 CANIC-139 correction above
-is complete in the open .17 draft; downstream adoption remains outstanding.
-Keep downstream adoption, installed-state measurements and authorized staging
-recovery separate from Canic source completion. The maintainer's continuation
-keeps the contraction sequence below active in 0.110; faster tests and the
-published memory consolidation do not complete its attribution evidence.
+Continue RF3 according to the [current queue](../../status/current.md).
+Ordinary preview remains query-only; paid descendant observations require a
+reviewed budget and minimum native Root recovery must work without them.
+Keep missing or stale evidence explicitly unknown. Complete the accepted batch's
+recovery evidence and propagation before calling `.34` ready.
 
-The focused authorization-persistence source review confirms separate
-feature-selected stores and restore paths, with no new defect found. It adds
-no runtime parity or B2 remeasurement evidence and authorizes no other state
-family. Row 8 endpoint-declaration construction is now fully build-qualified.
-
-The latest downstream refresh remains CANIC-175. The selected .17 correction
-batch is ready as defined above, including positive-credit reset interruption,
-native withdrawal and grant/deadline qualification. Release execution remains
-maintainer-directed. Follow-up RF2/RF3 preserve the remaining receipt-conversion
-and complete live funding-preview criteria. The original identity-prompt cause
-and exact staging rejection remain unproven; auth/E9 stays parked.
-
-After RF2/RF3, continue B1 from immutable `v0.110.5` with retained matched measurements for
-ready rows 8, 10 and 12; row 6's retained measurement is complete. Then
-complete the remaining controlled ablations,
-optimized generated-
-surface absence, generic cohort and accepted allowances and obtain compatible
-predecessor evidence where required. The source generated-surface and complete
-allocation/destruction inventories are retained. Do not begin the remaining B2
-or B3 scope until the maintainer accepts the complete B1 evidence.
+After RF3, continue B1 from immutable `v0.110.5`. Rows 8, 10 and 12 still need
+retained matched measurements; row 6's retained measurement is complete.
+Complete the remaining controlled ablations, optimized generated-surface
+absence, generic cohort and accepted allowances. Human acceptance of complete
+B1 evidence precedes the remaining B2/B3 scope. Minor closeout remains a
+separate human-owned gate.

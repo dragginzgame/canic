@@ -4,9 +4,57 @@
 //! Does not own: runtime grant history, burn forecasts, plan authority or funding effects.
 //! Boundary: live Coordinator usage does not turn fresh-child demand into a funding quotation.
 
+use candid::Principal;
 use canic_core::ids::{
-    CanisterRole, ComponentBinding, ComponentSpecId, CyclesFundingBudget, FleetSubnetRootReleaseSet,
+    CanisterRole, ComponentBinding, ComponentSpecAdmission, ComponentSpecId,
+    ComponentTopologyDigest, CyclesFundingBudget, FleetRegistryAuthority,
+    FleetSubnetRootFundingAuthority, FleetSubnetRootLimits, FleetSubnetRootReleaseSet, SubnetId,
 };
+use std::collections::BTreeMap;
+
+/// Retained observation status and recomputed diagnostic demand; neither approves funding.
+#[derive(Clone, Debug, serde::Serialize)]
+pub struct FundingObservationReport {
+    pub review: crate::fleet_ensure::model::funding_observation::FundingObservationReviewRecord,
+    pub recovery_demand: Result<
+        StartupRecoveryDemand,
+        crate::fleet_ensure::model::funding_observation::FundingObservationError,
+    >,
+}
+
+/// Validated current Coordinator registry evidence, local to one preview invocation.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::fleet_ensure) struct StartupFundingRegistry {
+    pub authority: FleetRegistryAuthority,
+    pub revision: u64,
+    pub content_hash: [u8; 32],
+    pub roots: BTreeMap<Principal, StartupFundingPlacement>,
+}
+
+/// Current registry placement and policy used to qualify an allocation's funding edge.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub(in crate::fleet_ensure) struct StartupFundingPlacement {
+    pub active: bool,
+    pub placement_subnet: SubnetId,
+    pub release_set: FleetSubnetRootReleaseSet,
+    pub component_admissions: Vec<ComponentSpecAdmission>,
+    pub component_topology_digest: ComponentTopologyDigest,
+    pub limits: FleetSubnetRootLimits,
+    pub funding: FleetSubnetRootFundingAuthority,
+}
+
+/// Root's independently observed number of current Workload canisters.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub(in crate::fleet_ensure) struct StartupRootInventory {
+    pub workloads: u32,
+}
+
+/// Complete current membership qualified independently of funding-ledger availability.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct StartupInventoryCoverage {
+    pub components: usize,
+    pub descendants: usize,
+}
 
 /// Native balance evidence used for the startup scenario.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -54,6 +102,7 @@ pub enum StartupUsageUnavailable {
     AuthorityMismatch,
     PolicyTransition,
     InvalidAccounting,
+    InventoryIncomplete,
 }
 
 /// One current protected status response; window allowance is not spendable native funding.
@@ -75,6 +124,9 @@ pub struct StartupCoordinatorAccounting {
 /// Root-local demand; descendant transfers are already included through their parents.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct StartupRootFunding {
+    pub recovery_demand: Result<StartupRecoveryDemand, StartupDemandUnavailable>,
+    pub relay_quote: Result<StartupRelayQuote, StartupDemandUnavailable>,
+    pub inventory: Result<StartupInventoryCoverage, StartupUsageUnavailable>,
     pub child_usage: Vec<StartupChildFundingUsage>,
     pub balance: StartupNativeBalance,
     pub child_grants_cycles: u128,
@@ -115,7 +167,42 @@ pub enum StartupDemandUnavailable {
     Usage(StartupUsageUnavailable),
     BalanceNotObserved,
     PendingGrant,
+    InvalidObservationBounds,
     ArithmeticOverflow,
+}
+
+/// Live recursive demand, excluding execution burn and never itself authorizing a transfer.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+pub struct StartupRecoveryDemand {
+    /// Aggregate Root transfers exceed one configured window even before existing usage.
+    pub exceeds_root_window_budget: bool,
+    /// Only Root-to-Component edges contribute here; nested transfers are not added twice.
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub root_grants_cycles: u128,
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub minimum_native_cycles: u128,
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub shortfall_cycles: u128,
+    /// Required funding that automatic per-child policy cannot supply.
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub uncovered_cycles: u128,
+    pub children: Vec<StartupRecursiveChildDemand>,
+}
+
+/// One exact edge's grant requirement after counting its children's transfers.
+#[derive(Clone, Debug, Eq, PartialEq, serde::Serialize)]
+pub struct StartupRecursiveChildDemand {
+    /// Aggregate Component transfers exceed one configured window even before existing usage.
+    pub exceeds_component_window_budget: bool,
+    pub child: Principal,
+    pub parent: Principal,
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub outgoing_cycles: u128,
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub parent_grants_cycles: u128,
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub uncovered_cycles: u128,
+    pub cooldown_remaining_secs: u64,
 }
 
 /// Complete allocation identity and its funding edge, independent of physical pool custody.
@@ -176,4 +263,23 @@ pub struct StartupRoleFunding {
     pub role: CanisterRole,
     pub threshold_cycles: Option<u128>,
     pub unfunded_per_instance_cycles: u128,
+}
+
+/// Proposed single-pass relay allowance, owned by preview policy and never executable authority.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct StartupRelayQuote {
+    /// Exact funding edges; each requests ChildFunding(child) from its immediate parent via Root.
+    pub requests: Vec<StartupChildFundingBinding>,
+    pub per_attempt_burn_allowance_cycles: u128,
+    pub proposed_burn_allowance_cycles: u128,
+    pub minimum_recovery_cycles: u128,
+    pub required_native_cycles: u128,
+    pub observed_native_cycles: u128,
+    pub native_shortfall_cycles: u128,
+}
+
+/// Shared policy bounds for preview quotation and retained observation review validation.
+pub(in crate::fleet_ensure) struct StartupObservationBounds {
+    pub per_attempt_cycles: u128,
+    pub recovery_floor_cycles: u128,
 }

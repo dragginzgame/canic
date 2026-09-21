@@ -6,6 +6,9 @@
 mod native;
 mod operator;
 
+#[cfg(test)]
+pub(in crate::fleet_ensure) use native::tests::qualify_observation_quotes;
+
 use crate::fleet_ensure::{
     model::{
         EffectState, EnsureAction, EstateFundingRequiredRecord, FleetEnsureCompletion,

@@ -2,6 +2,7 @@
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
+MSRV="$(cargo get --entry "$ROOT" workspace.package.rust_version)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-packaged-downstream-wasm-store.XXXXXX")"
 HOST_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
 HOST_RUSTUP_HOME="${RUSTUP_HOME:-$HOME/.rustup}"
@@ -61,13 +62,13 @@ prepare_lockfile() {
             CARGO_HOME="$HOST_CARGO_HOME" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            cargo +1.91.0 generate-lockfile --offline >/dev/null
+            cargo "+$MSRV" generate-lockfile --offline >/dev/null
         if [ -n "$filter_platform" ]; then
             HOME="$PROOF_HOME" \
                 CARGO_HOME="$HOST_CARGO_HOME" \
                 RUSTUP_HOME="$HOST_RUSTUP_HOME" \
                 TMPDIR="$PROOF_TMPDIR" \
-                cargo +1.91.0 metadata --offline --format-version=1 \
+                cargo "+$MSRV" metadata --offline --format-version=1 \
                     --filter-platform "$filter_platform" >/dev/null
         fi
     )
@@ -161,7 +162,7 @@ prepare_downstream_root() {
 name = "canic-packaged-downstream-probe"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "$MSRV"
 publish = false
 build = "build.rs"
 
@@ -240,7 +241,7 @@ prepare_testing_consumer() {
 name = "canic-packaged-testing-consumer"
 version = "0.0.0"
 edition = "2024"
-rust-version = "1.91.0"
+rust-version = "$MSRV"
 publish = false
 
 [dependencies]
@@ -309,7 +310,7 @@ enable_and_resolve_packaged_testing_consumer() {
             RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            cargo +1.91.0 check --offline >/dev/null
+            cargo "+$MSRV" check --offline >/dev/null
     )
 }
 
@@ -326,7 +327,7 @@ run_packaged_testing_consumer() {
             RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            cargo +1.91.0 check --offline --locked >/dev/null
+            cargo "+$MSRV" check --offline --locked >/dev/null
     )
 }
 
@@ -354,7 +355,7 @@ run_packaged_canister_probe() {
             RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            cargo +1.91.0 build --offline --locked --target wasm32-unknown-unknown >/dev/null
+            cargo "+$MSRV" build --offline --locked --target wasm32-unknown-unknown >/dev/null
     )
     candid-extractor "$wasm_path" >"$local_did"
     grep -Fq 'packaged_probe' "$local_did" || {
@@ -372,7 +373,7 @@ run_packaged_canister_probe() {
             RUSTFLAGS="${RUSTFLAGS:+$RUSTFLAGS }-D warnings" \
             RUSTUP_HOME="$HOST_RUSTUP_HOME" \
             TMPDIR="$PROOF_TMPDIR" \
-            cargo +1.91.0 build --offline --locked --target wasm32-unknown-unknown >/dev/null
+            cargo "+$MSRV" build --offline --locked --target wasm32-unknown-unknown >/dev/null
     )
     if candid-extractor "$wasm_path" >"$ic_did" 2>/dev/null &&
         grep -Fq 'packaged_probe' "$ic_did"; then

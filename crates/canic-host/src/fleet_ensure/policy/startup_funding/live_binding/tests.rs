@@ -163,6 +163,10 @@ pub(in crate::fleet_ensure) fn qualify_selected(desired: &DesiredFleet) {
         coordinator: principal(&bootstrap.coordinator),
     };
     assert_eq!(selected(desired, &root.root, &binding), Ok(()));
+    qualify_current(desired, &root.root, &binding);
+    crate::fleet_ensure::policy::startup_funding::relay_quote::qualify(
+        desired, &root.root, &binding,
+    );
     let mut withdrawn = desired.clone();
     withdrawn.bootstrap.as_mut().unwrap().roots[0]
         .component_admissions
@@ -181,6 +185,60 @@ pub(in crate::fleet_ensure) fn qualify_selected(desired: &DesiredFleet) {
         assert_eq!(
             selected(desired, &root.root, &variant),
             Err(StartupUsageUnavailable::AuthorityMismatch)
+        );
+    }
+}
+
+fn qualify_current(desired: &DesiredFleet, root_name: &str, binding: &StartupChildFundingBinding) {
+    let root = &desired.bootstrap.as_ref().unwrap().roots[0];
+    let registry = StartupFundingRegistry {
+        authority: binding.component.authority.clone(),
+        revision: 4,
+        content_hash: [55; 32],
+        roots: BTreeMap::from([(
+            binding.component.fleet_subnet_root,
+            StartupFundingPlacement {
+                active: true,
+                placement_subnet: root.placement_subnet,
+                release_set: binding.release_set,
+                component_admissions: root.component_admissions.clone(),
+                component_topology_digest: root.component_topology_digest,
+                limits: root.limits.clone(),
+                funding: root.funding.clone(),
+            },
+        )]),
+    };
+    assert_eq!(current(desired, root_name, binding, &registry), Ok(()));
+    let mut newer = registry.clone();
+    newer.authority.epoch += 1;
+    assert_eq!(
+        current(desired, root_name, binding, &newer),
+        Err(StartupUsageUnavailable::AuthorityMismatch)
+    );
+    let mut removed = registry.clone();
+    removed.roots.clear();
+    assert_eq!(
+        current(desired, root_name, binding, &removed),
+        Err(StartupUsageUnavailable::AuthorityMismatch)
+    );
+    let mut variants = vec![registry; 6];
+    for (index, registry) in variants.iter_mut().enumerate() {
+        let placement = registry
+            .roots
+            .get_mut(&binding.component.fleet_subnet_root)
+            .unwrap();
+        match index {
+            0 => placement.active = false,
+            1 => placement.component_admissions.clear(),
+            2 => placement.placement_subnet = Principal::from_slice(&[99]).into(),
+            3 => placement.release_set.manifest_digest = ReleaseSetDigest::from_bytes([99; 32]),
+            4 => placement.limits.maximum_component_instances += 1,
+            5 => placement.funding.root_funding.maximum_automatic_grants += 1,
+            _ => unreachable!(),
+        }
+        assert_eq!(
+            current(desired, root_name, binding, registry),
+            Err(StartupUsageUnavailable::PolicyTransition)
         );
     }
 }

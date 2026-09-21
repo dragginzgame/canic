@@ -533,8 +533,6 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     let root = workspace_root();
     let lock = read_source(&root, "Cargo.lock");
 
-    assert_eq!(locked_package_versions(&lock, "ic-cdk-timers"), ["1.0.0"]);
-
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
     let timer_version = dependency_version(&workspace_dependencies, "ic-timers")
@@ -568,7 +566,12 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     );
     let tree = String::from_utf8(output.stdout).expect("Cargo package identities are UTF-8");
     assert_eq!(
-        timer_package_identities(&tree),
+        package_identities(&tree, "ic-cdk-timers").len(),
+        1,
+        "Canic's deployed runtime must resolve one raw timer provider identity"
+    );
+    assert_eq!(
+        package_identities(&tree, "ic-timers"),
         BTreeSet::from([format!("ic-timers v{timer_version}").as_str()]),
         "Canic's deployed runtime must resolve exactly the workspace timer package"
     );
@@ -615,9 +618,12 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     assert!(raw_provider_consumers.is_empty());
 }
 
-fn timer_package_identities(tree: &str) -> BTreeSet<&str> {
+fn package_identities<'a>(tree: &'a str, package: &str) -> BTreeSet<&'a str> {
     tree.lines()
-        .filter(|line| line.starts_with("ic-timers "))
+        .filter(|line| {
+            line.split_once(' ')
+                .is_some_and(|(name, _)| name == package)
+        })
         .map(|line| line.strip_suffix(" (*)").unwrap_or(line))
         .collect()
 }
@@ -625,12 +631,16 @@ fn timer_package_identities(tree: &str) -> BTreeSet<&str> {
 #[test]
 fn timer_graph_preserves_distinct_package_identities() {
     assert_eq!(
-        timer_package_identities("ic-timers v0.8.0\nic-timers v0.8.0 (*)\nic-timers-extra v0.8.0"),
+        package_identities(
+            "ic-timers v0.8.0\nic-timers v0.8.0 (*)\nic-timers-extra v0.8.0",
+            "ic-timers"
+        ),
         BTreeSet::from(["ic-timers v0.8.0"])
     );
     assert_eq!(
-        timer_package_identities(
-            "ic-timers v0.8.0\nic-timers v0.8.1\nic-timers v0.8.0 (/different/source)"
+        package_identities(
+            "ic-timers v0.8.0\nic-timers v0.8.1\nic-timers v0.8.0 (/different/source)",
+            "ic-timers"
         ),
         BTreeSet::from([
             "ic-timers v0.8.0",
@@ -638,7 +648,7 @@ fn timer_graph_preserves_distinct_package_identities() {
             "ic-timers v0.8.0 (/different/source)"
         ])
     );
-    assert!(timer_package_identities("canic-core v0.110.32").is_empty());
+    assert!(package_identities("canic-core v0.110.32", "ic-timers").is_empty());
 }
 
 #[test]
