@@ -32,7 +32,8 @@ pub(super) fn command() -> Command {
         .arg(value_arg("json").long("json").action(ArgAction::SetTrue).num_args(0))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
-        .after_help("Example:\n  canic fleet readiness staging --environment staging --operator <principal> --estimated-cycles 90T\n\nNo build or payment occurs. A selected plan and fresh admission are still required.")
+        .arg(super::identity_arg())
+        .after_help("Example:\n  canic --environment staging fleet readiness staging --identity staging-operator --operator <principal> --estimated-cycles 90T\n\nNo build or payment occurs. A selected plan and fresh admission are still required.")
 }
 
 pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
@@ -61,6 +62,7 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
         environment: &environment,
         fleet: &required_string(&matches, "fleet"),
         icp_executable: &string_option_or_else(&matches, "icp", default_icp),
+        signing_identity: string_option(&matches, "identity").as_deref(),
         operator: parse_principal("operator")?,
         cycles_ledger: parse_principal("cycles-ledger")?,
         estimated_required_cycles,

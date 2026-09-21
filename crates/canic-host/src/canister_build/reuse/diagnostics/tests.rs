@@ -50,10 +50,9 @@ fn isolated_invocations_report_a_synthetic_environment_change_and_repeat_exactly
     assert_eq!(candidate.environment, repeat.environment);
     assert_eq!(candidate.environment_keys, repeat.environment_keys);
     let changed_value = invoke(Some("changed-synthetic-build-setting"));
-    assert!(
-        changed_value
-            .compare(&candidate)
-            .contains("changed-value keys, up to 8: CANIC_TEST_SYNTHETIC_BUILD_INPUT")
+    assert_eq!(
+        changed_value.changed_environment_keys(&candidate),
+        Ok(vec![INPUT_KEY.into()])
     );
     fs::remove_dir_all(root).unwrap();
 }
@@ -69,10 +68,39 @@ fn evidence(environment: &[(&str, &str)]) -> InputDiagnostics {
         schema_version: 1,
         environment,
         environment_keys,
-        value_comparison: None,
+        value_comparison: Err(environment::CaptureFailure::LocalKeyUnavailable),
         source: "source".into(),
         configuration: "configuration".into(),
     }
+}
+
+#[test]
+fn retained_capture_failures_identify_the_unavailable_build() {
+    let root = temp_dir("reuse-diagnostics-capture-failure");
+    InputDiagnostics::prepare(&root);
+    let mut current = evidence(&[("SAFE_KEY", "new")]);
+    current.value_comparison =
+        environment::EnvironmentComparison::capture(&root, &[("SAFE_KEY".into(), "new".into())]);
+    for cause in [
+        environment::CaptureFailure::LocalKeyUnavailable,
+        environment::CaptureFailure::InputLimitExceeded,
+    ] {
+        let mut previous = evidence(&[("SAFE_KEY", "old")]);
+        previous.value_comparison = Err(cause);
+        previous.retain(&root);
+        let retained: InputDiagnostics =
+            serde_json::from_slice(&fs::read(root.join("last-input-diagnostics.json")).unwrap())
+                .unwrap();
+        assert_eq!(
+            current.changed_environment_keys(&retained),
+            Err(environment::ComparisonFailure::PreviousCapture(cause))
+        );
+        assert_eq!(
+            retained.changed_environment_keys(&current),
+            Err(environment::ComparisonFailure::CurrentCapture(cause))
+        );
+    }
+    fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -92,10 +120,11 @@ fn environment_comparison_names_added_keys_without_storing_values() {
     assert!(!bytes.contains("synthetic-value"));
     assert!(!bytes.contains("synthetic-path"));
     let value_changed = evidence(&[("PATH", "another-path")]);
-    assert!(
-        value_changed
-            .compare(&baseline)
-            .contains("key attribution unavailable")
+    assert_eq!(
+        value_changed.changed_environment_keys(&baseline),
+        Err(environment::ComparisonFailure::CurrentCapture(
+            environment::CaptureFailure::LocalKeyUnavailable
+        ))
     );
     assert_ne!(value_changed.environment, baseline.environment);
     assert_eq!(

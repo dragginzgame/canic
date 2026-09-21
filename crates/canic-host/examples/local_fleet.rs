@@ -166,6 +166,7 @@ fn execute(
                 environment: &environment,
                 fleet: &fleet,
                 icp_executable: icp,
+                signing_identity: None,
                 release_build_id: release.parse()?,
                 root,
                 seed: &root.join(seed),

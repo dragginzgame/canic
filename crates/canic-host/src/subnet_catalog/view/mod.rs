@@ -23,6 +23,8 @@ pub enum CatalogAcquisitionStage {
         endpoint: String,
         registry_version: u64,
         query_calls: u64,
+        /// Endpoint collection including certification; not pure remote wait.
+        elapsed_micros: u128,
     },
     Complete {
         cache_disposition: String,
@@ -42,6 +44,7 @@ pub struct CatalogAcquisitionProgress {
     pub active_endpoints: Vec<String>,
     pub registry: Vec<RegistryCollectionProgress>,
     pub elapsed_seconds: u64,
+    pub elapsed_micros: u128,
     pub deadline_seconds: u64,
 }
 

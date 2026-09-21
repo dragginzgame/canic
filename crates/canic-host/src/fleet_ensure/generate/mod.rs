@@ -101,6 +101,7 @@ pub struct FleetGenerateRequest<'a> {
     pub environment: &'a str,
     pub fleet: &'a str,
     pub icp_executable: &'a str,
+    pub signing_identity: Option<&'a str>,
     pub release_build_id: ReleaseBuildId,
     pub root: &'a Path,
     pub seed: &'a Path,
@@ -939,6 +940,7 @@ fn validate_generation_authority(
         request.icp_executable,
         Some(request.environment.to_string()),
     )
+    .with_identity(request.signing_identity)
     .with_cwd(request.root.to_path_buf())
     .with_local_replica(local_replica.cloned());
     let active = icp
@@ -1321,6 +1323,7 @@ fn observe_ledger_fee(
         request.icp_executable,
         Some(request.environment.to_string()),
     )
+    .with_identity(request.signing_identity)
     .with_cwd(request.root.to_path_buf())
     .with_local_replica(local_replica.cloned());
     let value: Nat = icp
@@ -1361,6 +1364,7 @@ fn observe_estate(
         request.icp_executable,
         Some(request.environment.to_string()),
     )
+    .with_identity(request.signing_identity)
     .with_cwd(request.root.to_path_buf())
     .with_local_replica(local_replica.cloned());
     let mut expected = BTreeMap::new();

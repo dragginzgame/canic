@@ -550,7 +550,7 @@ dependencies = [
  "candid",
  "canic-core",
  "ic-cdk",
- "ic-timers 0.8.0",
+ "ic-timers",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -572,7 +572,7 @@ dependencies = [
  "ic-certification",
  "ic-memory",
  "ic-signature-verification",
- "ic-timers 0.8.0",
+ "ic-timers",
  "k256",
  "proc-macro2",
  "quote",
@@ -668,7 +668,7 @@ dependencies = [
  "ic-agent",
  "ic-memory",
  "ic-testkit",
- "ic-timers 0.8.0",
+ "ic-timers",
  "icydb",
  "serde",
  "serde_json",
@@ -685,7 +685,7 @@ dependencies = [
  "canic-icydb-lifecycle-schema",
  "ic-cdk",
  "ic-memory",
- "ic-timers 0.8.0",
+ "ic-timers",
  "icydb",
  "serde",
  "sha2 0.10.9",
@@ -770,7 +770,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-timers 0.8.0",
+ "ic-timers",
 ]
 
 [[package]]
@@ -2443,17 +2443,6 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.7.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9297d531bcd29ddbc95cd5c3d491f85daed599e191573ba82dba07ca6e2e254b"
-dependencies = [
- "ic-cdk-timers",
- "ic0",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "ic-timers"
 version = "0.8.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c1474fd7c9bcc237404173c2689c4175e61ef2c9670bccf539ca10ccd193d132"
@@ -2658,14 +2647,14 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.259.6"
+version = "0.261.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7c694a301042f5268cbd8884936c0d24d8e9eb064d1ce88a8b99c43fdd0119e8"
+checksum = "a014e6f042573cd701bc5f063c62089d8f58e3ea79ffa659ebd63c76629ca3a9"
 dependencies = [
  "candid",
  "ic-cdk",
  "ic-memory",
- "ic-timers 0.7.1",
+ "ic-timers",
  "icydb-core",
  "icydb-diagnostic-code",
  "icydb-model",
@@ -2676,9 +2665,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.259.6"
+version = "0.261.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7ff68a387d84a7aa9ce02f5dfd0271f682f5c5b0640b19802c5fab241764deca"
+checksum = "11c10f4bf955baf51a91c0ff95f69db29e2c21c80da8deeef4f40474a279364b"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2701,18 +2690,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.259.6"
+version = "0.261.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03df4da0b058f61dcf85382ca1225077fa2c1c8c726468ced0642338860bf676"
+checksum = "b0545fb3ec880a9edd2607ffa08776ce56c8f402341a7b4ca303f8e31f465e7b"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.259.6"
+version = "0.261.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9ba81e337ba9b50069efe5c53ffb8e02245265f6d7ba7283ee131f7f3d3cd737"
+checksum = "b81a65912e1349c69efe852264a86ee2c87df68f39df640be26af33b2a874b93"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2732,9 +2721,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.259.6"
+version = "0.261.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03787b8cdecba52de79b3679327782abdc2c886038a78f4803c86a9d2bbd280f"
+checksum = "39781a6c150d07226ff599f3ef7fa159f337b8f7071d1b25f17e89d491a7e737"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2749,9 +2738,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.259.6"
+version = "0.261.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6af767e090cee841880663be9b0d8c8fc8c3f9cfa2ccbd5a67ed4b6d93091a7c"
+checksum = "a9c7497b22bfefdf0ff41329b51cfabbfada9856328b36b26c92506398818549"
 dependencies = [
  "candid",
  "derive_more",
@@ -4023,7 +4012,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-timers 0.8.0",
+ "ic-timers",
 ]
 
 [[package]]

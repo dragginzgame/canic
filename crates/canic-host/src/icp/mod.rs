@@ -13,7 +13,9 @@ mod replica;
 mod response;
 mod run;
 mod snapshot;
+mod timing;
 mod version;
+pub use timing::{IcpRequestKind, IcpRequestTiming};
 
 pub use balance::IcpBalanceError;
 pub use candid::IcpCandidCallError;

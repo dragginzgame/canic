@@ -20,6 +20,165 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## IcyDB 0.261.2 follow-up — 2026-09-21
+
+The maintainer requests the new published IcyDB release. Workspace consumers
+and the standalone composed audit fixture now pin 0.261.2, superseding the
+0.261.1 dependency checkpoint below. Both lockfiles align all six IcyDB packages
+and still contain only ic-timers 0.8.0. No Canic source adaptation was needed.
+The .35 draft and timer-composition guidance reflect the new pin; Canic package
+versions remain 0.110.34.
+
+The exact timer dependency guard passes. All twelve cases in the targeted
+`icydb_lifecycle_composition` PocketIC suite pass, including shared timer custody,
+row/checkpoint commits, memory admission and interruption recovery: 126.68 seconds
+for tests, 203 seconds for the runner. The standalone composed audit fixture's
+locked all-feature native compile also passes. Logs:
+`.tmp/icydb-02612-{timer-guard,lifecycle,audit-native-check}.log`.
+An editor-owned check briefly occupied the shared target; the waiting agent
+check was stopped and rerun after that owner finished.
+
+This dependency update is qualified and its changelog surfaces are ready for
+the maintainer's release flow. It does not close the remaining feedback-before-
+push conditions recorded below or requalify the earlier deployment performance
+measurements against this new lockfile. No broad validation, Git mutation,
+version bump, publication, deployment or sibling edit ran; changes remain
+uncommitted. The history-layout idea stays parked.
+
+## Expanded .35 deployment qualification — complete locally, 2026-09-21
+
+The maintainer explicitly includes deployment timing and performance work in .35.
+The bounded diagnostics below remain accepted and qualified. The expanded Canic
+batch now retains private bounded invocation receipts, attributes preparation,
+submission, reconciliation and waits, and qualifies one fresh status shared
+within install preparation. The history-layout idea stays parked. Toko remains
+read-only; local qualification is not a live Toko deployment result.
+
+Native qualification passes: 387 Fleet, 62 ICP-selected, 10 catalog and 51 CLI
+cases, the opt-in real-Cargo matrix and affected three-package warning-denied
+Clippy. A real process-kill regression preserves incomplete receipts and
+separate continuation evidence. Final CLI tests and Clippy also pass after the
+retry display correction: typed origin is retained and the deadline stays
+explicitly unavailable; the display does not presume Root owns every retry.
+
+Both matched nineteen-Workload/five-Ready PocketIC journeys pass, with all 24
+selected artifact hashes identical. Preparation uses 77 calls instead of 80
+and takes 16.001 instead of 16.577 seconds. The five comparable deployment
+phases total 308.228 versus 309.594 seconds: this single local pair does not
+establish a material overall speedup. Whole journeys take 383.895 versus
+655.055 seconds, dominated by warmer Cargo compilation in the candidate;
+runner durations are 466 and 826 seconds. Lost responses, authority rejection,
+convergence, application state, conservation and effect-free replay pass in
+both. Independent-batch failure/drain/recovery is covered by native regressions.
+
+The [performance report](../audits/reports/2026-09/2026-09-21/deployment-timing.md)
+and its structured measurements retain phase/request attribution, matched
+payload hashes, selected source/lock identities and the exact control patch.
+Full logs remain under `.tmp/toko35-performance/`. The real-Cargo matrix
+qualifies unchanged, relocated, documentation, runtime and dependency input
+changes without weakening cache authority. It is not Toko's eight-artifact
+build profile. Upstream CPU/HTTP and Registry subphase costs remain partially
+opaque; collection timing includes certification.
+
+The expanded Canic diagnostics/performance batch is complete and qualified
+locally, with both .35 changelog surfaces updated. Package versions remain .34.
+The broader feedback-before-push condition remains open: live downstream
+acceptance and fuller pre-build native funding readiness are unfinished;
+the sampler proposal remains parked. No broad suite, commit, version bump,
+push, release, deployment or sibling edit ran. B1 acceptance remains independent.
+
+## Toko feedback before .35 — 2026-09-21
+
+The maintainer parks the history-layout idea and asks to finish the Toko feedback
+before assessing a push. The latest read-only review covers all September 21
+entries in Toko's `docs/upstream/canic.md`, including the new explicit-identity
+follow-up and its deployment-owner implementation report. The bounded Canic
+corrections below are implemented and qualified. Full downstream feedback is
+not closed. The expanded qualification above supersedes this bounded checkpoint
+for timing and performance; fuller funding readiness remains unfinished.
+
+| Feedback | Current disposition | Remaining evidence or work |
+| --- | --- | --- |
+| CANIC-170 explicit signer | Fleet generate/readiness/ensure accept `--identity`; observations, forecasts, funding review/conversion and apply carry it without selecting the global default | Toko adoption and live qualification remain downstream; unrelated Canic command groups do not acquire this option |
+| CANIC-176 unavailable attribution | Typed reasons distinguish current/prior key or input-limit failure, different local keys and excessive retained evidence; no raw values or comparison tags are printed | Local relocated/changed-tree matrix qualified above; actual Toko artifact profiling remains downstream, with no new reuse-speedup claim |
+| CANIC-181 payload discovery | Runtime and macro guidance explain the 16 KiB encoded limit, bare CDK inheritance, explicit/exported-name limits and inter-canister coverage | Complete generated per-method metadata remains an optional proposal, not an implemented inventory |
+| CANIC-150 handoff and timing | Successor-review command now places global flags correctly and retains explicit signer selection | Bounded receipts, activity/advancement distinction and process-kill qualification complete above; live downstream acceptance remains |
+| CANIC-160 deployment latency | Existing batching/reuse retained; successful downstream deployment is acknowledged | Matched local measurements, endpoint timing and typed origin diagnostics complete above; upstream subphases and live latency remain unqualified |
+| CANIC-172 early readiness | Existing pre-build route and its operator-Ledger/estimate limits are now explicit in guidance; RF3 remains qualified separately | Root native headroom, full reserve/conversion breakdown and freshness-bound pre-build evidence remain open; a funded operator alone proves none of these |
+| CANIC-148 sampler cost | Investigation retained; grouped-history design parked at the maintainer's request | Real producer still exceeds Toko's unchanged gate; no optimization or IcyDB-regression claim |
+
+Targeted checks pass: 33 build-reuse regressions, 36 host tests selected by
+identity, 45 Fleet CLI tests, 20 generation/forecast tests, four readiness tests
+and both recursive-help integration cases. Selections overlap; these are not a
+unique aggregate coverage count. Warning-denied all-target/all-feature Clippy
+passes for host, CLI and internal fixtures. Logs:
+`.tmp/toko-feedback35-{tests,identity-host,cli,generate,readiness,help,clippy}.log`.
+Concurrent explicit-signing contexts never read or change the fake ICP default;
+the production platform's Principal-mismatch path still rejects before effects.
+These are host/CLI proofs, not new live deployment or canister-runtime evidence.
+
+Both .35 changelog surfaces cover this batch and the earlier qualified IcyDB
+update. Package versions remain .34. The public host generation/readiness Rust
+request structs add a required `signing_identity: Option<&str>` field; in-repo
+callers and fixtures are updated. The bounded corrections are ready for review,
+but the maintainer's broader feedback-before-push condition remains open unless
+the remaining work is explicitly assigned a later batch. No broad validation,
+commit, version bump, push, publication, deployment or sibling edit ran. B1 and
+its human acceptance remain independently incomplete.
+
+## CANIC-148 sampler investigation — 2026-09-21
+
+The subsequent requested design review recommends
+[small grouped history rings](../design/ideas/public-metric-history-locality/design.md):
+start with eight series sharing contiguous slot rows, retain direct per-series
+reads and the existing public request/response and chart semantics, then compare
+widths four/eight/sixteen using both sampling and query costs. This refines the
+earlier timestamp-batch suggestion to avoid scattering a chart across hundreds
+of buffers. Allocation, missing/lagged observations and position reuse are part
+of the proposal. The maintainer subsequently parked it; it is not implemented or
+assigned a new release position.
+
+The requested Toko follow-up identifies scattered per-series history writes as
+a Canic sampler hotspot. In real Wasm synthetic-provider probes, history took
+58.6% of a full-window 100-row sample and 66.2% at 211 rows. Ring costs include
+exact 80,000-instruction increments matching the pinned IC page meter. Repeating
+the sample in one message reduced 211 application-row ring writes from 9,228,454
+to 91,996 instructions; this is diagnostic evidence, not production savings.
+
+The [report and retained evidence](../audits/reports/2026-09/2026-09-21/sampler-cost-investigation.md)
+describe three targeted runs, each with 10 passing tests, and their limits.
+All temporary probes were restored/removed. No sampler implementation change
+remains. Toko's real-provider 20,289,111 result and its unchanged hard gate remain
+unresolved; the comparison with its prior artifact does not isolate IcyDB.
+Next proposed correction: improve history write locality while preserving all
+retention, identity, source-time, capacity and recovery semantics, then measure
+matched artifacts. This investigation does not reorder accepted B1 work or
+advance B2. The IcyDB dependency batch below remains ready for the maintainer's
+release flow; no sampler fix is ready to publish. No commits were made.
+
+## Requested IcyDB update after .34 — 2026-09-21
+
+The maintainer requests the latest published IcyDB. Workspace test consumers and
+the standalone composed audit fixture now pin 0.261.1; both lockfiles align all
+six IcyDB packages and retain only ic-timers 0.8.0. This removes the temporary
+test-only timer mismatch recorded in earlier checkpoints. No Canic Rust source
+adaptation was needed. Package versions remain 0.110.34; both changelog surfaces
+open the 0.110.35 draft for this update.
+
+All twelve cases in the focused `icydb_lifecycle_composition` target pass,
+including shared timer custody, lifecycle restoration, memory admission,
+row/checkpoint commits and interruption recovery. Runtime was 197.82 seconds
+(345-second runner). Log: `.tmp/icydb-02611-lifecycle.log`.
+The exact timer dependency guard and all-feature standalone native compile also
+pass. Logs: `.tmp/icydb-02611-timer-guard.log` and
+`.tmp/icydb-02611-audit-native-check.log`. A direct Cargo Wasm audit check was
+rejected by the governed build-entrypoint guard; the PocketIC target above owns
+this update's real Wasm lifecycle evidence. The dependency batch and changelog
+surfaces are ready for the maintainer's release flow. Changes remain uncommitted;
+no broad validation, version bump, publication or deployment ran.
+B1 remains the next accepted implementation work and still gates B2 through B5;
+this dependency update does not advance the minor boundary.
+
 ## Current queue: RF3 complete; B1 attribution resumed — 2026-09-21
 
 The maintainer requests finishing RF3 and continuing the accepted queue. The

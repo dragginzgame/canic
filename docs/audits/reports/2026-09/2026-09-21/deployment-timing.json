@@ -1,0 +1,1627 @@
+{
+  "schema_version": 1,
+  "scope": "local IPC and real Cargo with synthetic release sealing; not a Toko deployment benchmark",
+  "preparation": [
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4527,
+      "pair": 0,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2271,
+      "pair": 0,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2148,
+      "pair": 1,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4494,
+      "pair": 1,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4189,
+      "pair": 2,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2526,
+      "pair": 2,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2165,
+      "pair": 3,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4432,
+      "pair": 3,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4703,
+      "pair": 4,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2730,
+      "pair": 4,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2152,
+      "pair": 5,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4876,
+      "pair": 5,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4421,
+      "pair": 6,
+      "shared": false,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2231,
+      "pair": 6,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 1,
+      "cycles": "1000000000000",
+      "elapsed_micros": 2226,
+      "pair": 7,
+      "shared": true,
+      "version": 7
+    },
+    {
+      "calls": 2,
+      "cycles": "1000000000000",
+      "elapsed_micros": 4350,
+      "pair": 7,
+      "shared": false,
+      "version": 7
+    }
+  ],
+  "build_matrix": [
+    {
+      "case": "original_cold",
+      "measurement": {
+        "cargo_probe_micros": 305094,
+        "elapsed_micros": 2294599,
+        "inputs": "b143b66fdf61a388ae401cf77c2450249b58ad50b1788bab150d74db91e87af7",
+        "lookup_micros": 832073,
+        "miss_reason": "no comparable prior input evidence",
+        "release": "5684643c6b92c7c9e7cf7ed7ce7f2e08d124561d3c4e6739c727873b53a68844",
+        "reused": false,
+        "synthetic_sealing_micros": 1157431,
+        "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+      }
+    },
+    {
+      "case": "unchanged_warm",
+      "measurement": {
+        "cargo_probe_micros": 86419,
+        "elapsed_micros": 1139558,
+        "inputs": "b143b66fdf61a388ae401cf77c2450249b58ad50b1788bab150d74db91e87af7",
+        "lookup_micros": 528825,
+        "miss_reason": null,
+        "release": "5684643c6b92c7c9e7cf7ed7ce7f2e08d124561d3c4e6739c727873b53a68844",
+        "reused": true,
+        "synthetic_sealing_micros": 524312,
+        "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+      }
+    },
+    {
+      "case": "relocated_frozen_cold",
+      "measurement": {
+        "cargo_probe_micros": 314955,
+        "elapsed_micros": 2107362,
+        "inputs": "679e30b35d521fad0dd9597a487fcdfd950b785a0ac0c79dc7c72ffa76a68021",
+        "lookup_micros": 617876,
+        "miss_reason": "source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CANIC_TEST_BUILD_ENVIRONMENT_ROOT, CARGO_TARGET_DIR) (compared with last recorded successful build)",
+        "release": "75f458c0591b0d179125d4e12fdb84df2c670b0535e81cc6b354dd112ef1c461",
+        "reused": false,
+        "synthetic_sealing_micros": 1174529,
+        "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+      }
+    },
+    {
+      "case": "relocated_frozen_warm",
+      "measurement": {
+        "cargo_probe_micros": 86253,
+        "elapsed_micros": 1141576,
+        "inputs": "679e30b35d521fad0dd9597a487fcdfd950b785a0ac0c79dc7c72ffa76a68021",
+        "lookup_micros": 530199,
+        "miss_reason": null,
+        "release": "75f458c0591b0d179125d4e12fdb84df2c670b0535e81cc6b354dd112ef1c461",
+        "reused": true,
+        "synthetic_sealing_micros": 525122,
+        "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+      }
+    },
+    {
+      "case": "qualification_only",
+      "measurement": {
+        "cargo_probe_micros": 80621,
+        "elapsed_micros": 1698904,
+        "inputs": "f5d25ba9c043d7a0c76b977c89adee3506b48fdfb64cf9597f288449c94276d3",
+        "lookup_micros": 518468,
+        "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+        "release": "1785bfc9197d8924941f24e367a7a217455f8b654ee0a9286982409472db86e8",
+        "reused": false,
+        "synthetic_sealing_micros": 1099813,
+        "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+      }
+    },
+    {
+      "case": "runtime_source",
+      "measurement": {
+        "cargo_probe_micros": 153986,
+        "elapsed_micros": 1755551,
+        "inputs": "b0c689ddfdeba8e70b1eda98593a0fe46c349d2a584641769f08e7766316e134",
+        "lookup_micros": 522152,
+        "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+        "release": "b6d8fa626d1bce5500a56ee961ba64c221aed45147c0fef6d6c4d74772247037",
+        "reused": false,
+        "synthetic_sealing_micros": 1079411,
+        "wasm": "ad10c990e3c5d07ad5e0815ba752c424653a116e2a8f77b30acc70f4ab5297ca"
+      }
+    },
+    {
+      "case": "dependency_source",
+      "measurement": {
+        "cargo_probe_micros": 186438,
+        "elapsed_micros": 1773292,
+        "inputs": "a944fb720888dadba9f2189c7108d8729b9ffa6a41f405d871498db22f8f6dc3",
+        "lookup_micros": 517986,
+        "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+        "release": "63ecd378b992eabfc4f0070807d412e007542741b57f981d1998fa316940126c",
+        "reused": false,
+        "synthetic_sealing_micros": 1068867,
+        "wasm": "f34e5a3831ddf2423285b20530ca72e4247d1ec988c062df73735c9f2d44fc15"
+      }
+    }
+  ],
+  "preparation_log_sha256": "dbd8926cd209dd9db2881b7cb1875dca35a62c00634b1dea73378e9a7df8ec29",
+  "build_matrix_log_sha256": "a8539bddd31f8340c1bcc46f83419d01287225e8b3779ff94b578f37e7687f20",
+  "paired_pocketic": {
+    "inputs": {
+      "case": "pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet",
+      "candidate_platform_sha256": "766e91cb739b6cb78d0ed24898473480e1bc3e33ae00d29a22d0c9d92f6811ee",
+      "control_platform_sha256": "ab17c2d786571b8d9b4e06e3a3f5e91a843eed334eca6523d5c9ba91bd8352f2",
+      "cargo_lock_sha256": "f931c31254dfc4bf5d6741a3cc97d05ffd3faa485dec2b61c9a68a27231c5987",
+      "git_base": "c2e1c5bb5ef27d5e13b65b8ad9dd042ff2c158c7",
+      "only_control_change": "Disable one-action pre-intent install-status sharing; retain instrumentation and all safety tests."
+    },
+    "interpretation": "Single sequential local pair, same topology and payload hashes; unequal Cargo warmth. Inclusive stage/request totals overlap and must not be added as critical-path wall time.",
+    "control": {
+      "passed": true,
+      "phases": [
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 2,
+          "parent_id": 1,
+          "name": "source_and_fixture_recipe",
+          "state": "completed",
+          "elapsed_us": 2040
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 5,
+          "parent_id": 4,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 7154759
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 6,
+          "parent_id": 4,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1040990
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 8,
+          "parent_id": 7,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 275476156
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 9,
+          "parent_id": 7,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 197286
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 7,
+          "parent_id": 4,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 275680211
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 10,
+          "parent_id": 4,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1719692
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 11,
+          "parent_id": 4,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 10747
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 4,
+          "parent_id": 3,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 285606638
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 3,
+          "parent_id": 1,
+          "name": "initial_artifacts",
+          "state": "completed",
+          "elapsed_us": 288651763
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 12,
+          "parent_id": 1,
+          "name": "replica_and_transport_setup",
+          "state": "completed",
+          "elapsed_us": 827685
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 14,
+          "parent_id": 13,
+          "name": "prepare_infrastructure_creates",
+          "state": "completed",
+          "elapsed_us": 2947463
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 16,
+          "parent_id": 15,
+          "name": "prepare_infrastructure_install",
+          "state": "completed",
+          "elapsed_us": 1670920
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 17,
+          "parent_id": 15,
+          "name": "prepare_infrastructure_install",
+          "state": "completed",
+          "elapsed_us": 3262773
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 18,
+          "parent_id": 15,
+          "name": "prepare_infrastructure_install",
+          "state": "completed",
+          "elapsed_us": 1215220
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 15,
+          "parent_id": 13,
+          "name": "prepare_infrastructure_installs",
+          "state": "completed",
+          "elapsed_us": 6149079
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 19,
+          "parent_id": 13,
+          "name": "prepare_infrastructure_controllers",
+          "state": "completed",
+          "elapsed_us": 252276
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 13,
+          "parent_id": 1,
+          "name": "generation_and_initial_review",
+          "state": "completed",
+          "elapsed_us": 11034326
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 20,
+          "parent_id": 1,
+          "name": "initial_working_fleet",
+          "state": "completed",
+          "elapsed_us": 90632587
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 24,
+          "parent_id": 23,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 3291128
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 25,
+          "parent_id": 23,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1029363
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 27,
+          "parent_id": 26,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 34337766
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 28,
+          "parent_id": 26,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 152389
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 26,
+          "parent_id": 23,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 34500740
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 29,
+          "parent_id": 23,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1064696
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 30,
+          "parent_id": 23,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 3882
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 23,
+          "parent_id": 22,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 39890021
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 22,
+          "parent_id": 21,
+          "name": "replacement_artifacts_and_generation",
+          "state": "completed",
+          "elapsed_us": 44842828
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 31,
+          "parent_id": 21,
+          "name": "root_reinstall_review_and_authority_rejection",
+          "state": "completed",
+          "elapsed_us": 5463863
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 32,
+          "parent_id": 21,
+          "name": "root_reinstall_lost_response_and_recovery",
+          "state": "completed",
+          "elapsed_us": 11926871
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 33,
+          "parent_id": 21,
+          "name": "successor_reviews_and_convergence",
+          "state": "completed",
+          "elapsed_us": 167431144
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 34,
+          "parent_id": 21,
+          "name": "retained_estate_state_and_replay",
+          "state": "completed",
+          "elapsed_us": 34139413
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 21,
+          "parent_id": 1,
+          "name": "retained_estate_reinstall",
+          "state": "completed",
+          "elapsed_us": 263805448
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 35,
+          "parent_id": 1,
+          "name": "cleanup",
+          "state": "completed",
+          "elapsed_us": 100659
+        },
+        {
+          "schema_version": 1,
+          "process_id": 54925,
+          "span_id": 1,
+          "parent_id": null,
+          "name": "production_adapter_journey",
+          "state": "completed",
+          "elapsed_us": 655054930
+        }
+      ],
+      "observation_stages": {
+        "root_management": {
+          "boundaries": 19,
+          "elapsed_millis_inclusive": 5355,
+          "calls_inclusive": 31,
+          "identity_millis_inclusive": 834,
+          "cache_hits": 0
+        },
+        "configured_canisters": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 31670,
+          "calls_inclusive": 375,
+          "identity_millis_inclusive": 4365,
+          "cache_hits": 1230
+        },
+        "estate_funding": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 1154,
+          "calls_inclusive": 23,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 46
+        },
+        "pool_balances": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 792,
+          "calls_inclusive": 0,
+          "identity_millis_inclusive": 779,
+          "cache_hits": 180
+        },
+        "protocol_readiness": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 0,
+          "calls_inclusive": 0,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "ledger_fee": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 1291,
+          "calls_inclusive": 24,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "operator_balance": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 1071,
+          "calls_inclusive": 24,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "fleet_snapshot": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 36721,
+          "calls_inclusive": 446,
+          "identity_millis_inclusive": 5660,
+          "cache_hits": 1456
+        },
+        "protocol_actions": {
+          "boundaries": 18,
+          "elapsed_millis_inclusive": 11053,
+          "calls_inclusive": 162,
+          "identity_millis_inclusive": 983,
+          "cache_hits": 36
+        },
+        "planning": {
+          "boundaries": 15,
+          "elapsed_millis_inclusive": 34312,
+          "calls_inclusive": 407,
+          "identity_millis_inclusive": 3677,
+          "cache_hits": 791
+        },
+        "effect_submission": {
+          "boundaries": 62,
+          "elapsed_millis_inclusive": 25781,
+          "calls_inclusive": 62,
+          "identity_millis_inclusive": 1336,
+          "cache_hits": 0
+        },
+        "effect_preparation": {
+          "boundaries": 59,
+          "elapsed_millis_inclusive": 16577,
+          "calls_inclusive": 80,
+          "identity_millis_inclusive": 1463,
+          "cache_hits": 0
+        },
+        "effect_reconciliation": {
+          "boundaries": 400,
+          "elapsed_millis_inclusive": 61596,
+          "calls_inclusive": 436,
+          "identity_millis_inclusive": 7074,
+          "cache_hits": 0
+        },
+        "backoff": {
+          "boundaries": 277,
+          "elapsed_millis_inclusive": 6925,
+          "calls_inclusive": 0,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "terminal_inventory": {
+          "boundaries": 7,
+          "elapsed_millis_inclusive": 35413,
+          "calls_inclusive": 441,
+          "identity_millis_inclusive": 146,
+          "cache_hits": 0
+        },
+        "independent_submission": {
+          "boundaries": 6,
+          "elapsed_millis_inclusive": 5924,
+          "calls_inclusive": 24,
+          "identity_millis_inclusive": 126,
+          "cache_hits": 0
+        }
+      },
+      "request_kinds": {
+        "identity": {
+          "requests": 1182,
+          "elapsed_micros_inclusive": 26043980,
+          "failed": 0
+        },
+        "query": {
+          "requests": 758,
+          "elapsed_micros_inclusive": 59210414,
+          "failed": 0
+        },
+        "update": {
+          "requests": 370,
+          "elapsed_micros_inclusive": 156463983,
+          "failed": 2
+        },
+        "management_status": {
+          "requests": 561,
+          "elapsed_micros_inclusive": 142924179,
+          "failed": 0
+        },
+        "agent_query": {
+          "requests": 314,
+          "elapsed_micros_inclusive": 46049024,
+          "failed": 0
+        },
+        "stop": {
+          "requests": 1,
+          "elapsed_micros_inclusive": 256196,
+          "failed": 0
+        },
+        "install": {
+          "requests": 3,
+          "elapsed_micros_inclusive": 13580642,
+          "failed": 1
+        },
+        "start": {
+          "requests": 1,
+          "elapsed_micros_inclusive": 261956,
+          "failed": 0
+        }
+      },
+      "request_purposes_and_targets": [
+        {
+          "kind": "identity",
+          "target": null,
+          "method": null,
+          "requests": 1182,
+          "elapsed_micros_inclusive": 26043980,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "icrc1_fee",
+          "requests": 28,
+          "elapsed_micros_inclusive": 1537189,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "create_canister",
+          "requests": 27,
+          "elapsed_micros_inclusive": 2341026,
+          "failed": 0
+        },
+        {
+          "kind": "management_status",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canister_status",
+          "requests": 184,
+          "elapsed_micros_inclusive": 42105321,
+          "failed": 0
+        },
+        {
+          "kind": "management_status",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canister_status",
+          "requests": 331,
+          "elapsed_micros_inclusive": 90898723,
+          "failed": 0
+        },
+        {
+          "kind": "management_status",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canister_status",
+          "requests": 46,
+          "elapsed_micros_inclusive": 9920135,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_root_status",
+          "requests": 269,
+          "elapsed_micros_inclusive": 21530364,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "icrc1_balance_of",
+          "requests": 27,
+          "elapsed_micros_inclusive": 1365875,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canic_coordinator_registry",
+          "requests": 37,
+          "elapsed_micros_inclusive": 1861462,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canic_wasm_store_status",
+          "requests": 19,
+          "elapsed_micros_inclusive": 915130,
+          "failed": 0
+        },
+        {
+          "kind": "agent_query",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canic_coordinator_operation_status",
+          "requests": 314,
+          "elapsed_micros_inclusive": 46049024,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canic_wasm_store_catalog",
+          "requests": 32,
+          "elapsed_micros_inclusive": 1833489,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_root_operation_status",
+          "requests": 57,
+          "elapsed_micros_inclusive": 3481133,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canic_wasm_store_publish_chunk",
+          "requests": 4,
+          "elapsed_micros_inclusive": 851215,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_root_command",
+          "requests": 321,
+          "elapsed_micros_inclusive": 149866764,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canic_coordinator_command",
+          "requests": 8,
+          "elapsed_micros_inclusive": 1754824,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_observability",
+          "requests": 289,
+          "elapsed_micros_inclusive": 26685772,
+          "failed": 0
+        },
+        {
+          "kind": "stop",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 256196,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "withdraw",
+          "requests": 10,
+          "elapsed_micros_inclusive": 1650154,
+          "failed": 2
+        },
+        {
+          "kind": "install",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 6120325,
+          "failed": 1
+        },
+        {
+          "kind": "start",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 261956,
+          "failed": 0
+        },
+        {
+          "kind": "install",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 4124687,
+          "failed": 0
+        },
+        {
+          "kind": "install",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 3335630,
+          "failed": 0
+        }
+      ],
+      "maximum_outer_requests_in_flight": 4,
+      "selected_artifacts": {
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/app/app.did": "a61863b38f6c1a113ff2a88c68f66a8ec9e4f18f36038b4f91e0dee3e921117c",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/app/app.wasm": "8959a45b89370455ccc950676a7a2f7b97ea8db4100c852b516e45dba52bcb44",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/app/app.wasm.gz": "0aad8cc8014e302d6a6956d59563a62531e07d9c0cd624b40662d149ed0cc7f1",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/fleet_coordinator/fleet_coordinator.did": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/fleet_coordinator/fleet_coordinator.wasm": "a3dca030024876e42b9b0ed3043f6e93fb5a504e22efa57d677deb882ca15370",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/fleet_coordinator/fleet_coordinator.wasm.gz": "090b14f472533c9ab3be1bb9d74391f1141172b862c314fcf10d1f23c5c5427f",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/root/root.did": "01934a328cf87a6467d85de85a17e4b60e0c6dd144da1c127b727e6fb38a124e",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/root/root.wasm": "2a66e5bc1a0883a4632a7acef753ffa29e22896c82f5097a36917626b50f421f",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/root/root.wasm.gz": "249dafc95240faf57444e8ee8fbbccb1f63dedf756e53b5e0f5c10a39fe0d6e5",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/wasm_store/wasm_store.did": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/wasm_store/wasm_store.wasm": "1f69144f8fcbc6ca45e0993190e0ee6bd4f7428fcaf606361de950f0d9978d49",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/wasm_store/wasm_store.wasm.gz": "0b42dda8be781cbcb997376873696e08a7824249e3ada9dc909248246b986747",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/app/app.did": "a61863b38f6c1a113ff2a88c68f66a8ec9e4f18f36038b4f91e0dee3e921117c",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/app/app.wasm": "8a3da4dee510121e81c783f568a7afc616f1d82f8d658daa8cd9d06bf5d421ba",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/app/app.wasm.gz": "d9007d19d254ec3013525e388325bdc1ad227cf95834ebab6a7c26548d84e063",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.did": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.wasm": "3f8fa2038e4b9751c361749ec4624d3448dd0cf787a143eda2731306004ef761",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.wasm.gz": "ba60fd0c9ba71d0d6e8a2e66ce2aca60d09f1aa0256715ff89a295535788f7b6",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.did": "01934a328cf87a6467d85de85a17e4b60e0c6dd144da1c127b727e6fb38a124e",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm": "d23e624b69ae517c7eda1a2ce9253cd6fd5d50f5b1ae850cbce5a5dcb50238d1",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm.gz": "4a4083cb174c9cace880a69751779fa0c01eebb23d869691f921c7a5c875b4bd",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.did": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm": "71e08605429da4d3e6d8c9c399145f8e37b68889f1476b6c14ce66b71a30e23f",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm.gz": "95f927198981469cf1ee1fdc80a06a9dcf716c27f35537ed18116c90b4da8b1e"
+      },
+      "log_sha256": "84dd85e1b9e0ee8325b7d1c15c86678bb257d8fd3b0d51c2476a62e53dc1002c"
+    },
+    "candidate": {
+      "passed": true,
+      "phases": [
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 2,
+          "parent_id": 1,
+          "name": "source_and_fixture_recipe",
+          "state": "completed",
+          "elapsed_us": 1404
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 5,
+          "parent_id": 4,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 3096709
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 6,
+          "parent_id": 4,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 977240
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 8,
+          "parent_id": 7,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 23494154
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 9,
+          "parent_id": 7,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 205493
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 7,
+          "parent_id": 4,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 23702103
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 10,
+          "parent_id": 4,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1355223
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 11,
+          "parent_id": 4,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 7452
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 4,
+          "parent_id": 3,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 29138935
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 3,
+          "parent_id": 1,
+          "name": "initial_artifacts",
+          "state": "completed",
+          "elapsed_us": 29699421
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 12,
+          "parent_id": 1,
+          "name": "replica_and_transport_setup",
+          "state": "completed",
+          "elapsed_us": 736960
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 14,
+          "parent_id": 13,
+          "name": "prepare_infrastructure_creates",
+          "state": "completed",
+          "elapsed_us": 2974096
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 16,
+          "parent_id": 15,
+          "name": "prepare_infrastructure_install",
+          "state": "completed",
+          "elapsed_us": 1651303
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 17,
+          "parent_id": 15,
+          "name": "prepare_infrastructure_install",
+          "state": "completed",
+          "elapsed_us": 3435528
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 18,
+          "parent_id": 15,
+          "name": "prepare_infrastructure_install",
+          "state": "completed",
+          "elapsed_us": 1223925
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 15,
+          "parent_id": 13,
+          "name": "prepare_infrastructure_installs",
+          "state": "completed",
+          "elapsed_us": 6310957
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 19,
+          "parent_id": 13,
+          "name": "prepare_infrastructure_controllers",
+          "state": "completed",
+          "elapsed_us": 265499
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 13,
+          "parent_id": 1,
+          "name": "generation_and_initial_review",
+          "state": "completed",
+          "elapsed_us": 11317837
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 20,
+          "parent_id": 1,
+          "name": "initial_working_fleet",
+          "state": "completed",
+          "elapsed_us": 92849933
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 24,
+          "parent_id": 23,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 3172849
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 25,
+          "parent_id": 23,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1001852
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 27,
+          "parent_id": 26,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 23388020
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 28,
+          "parent_id": 26,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 150882
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 26,
+          "parent_id": 23,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 23541302
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 29,
+          "parent_id": 23,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1143393
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 30,
+          "parent_id": 23,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 5556
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 23,
+          "parent_id": 22,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 28865206
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 22,
+          "parent_id": 21,
+          "name": "replacement_artifacts_and_generation",
+          "state": "completed",
+          "elapsed_us": 33798772
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 31,
+          "parent_id": 21,
+          "name": "root_reinstall_review_and_authority_rejection",
+          "state": "completed",
+          "elapsed_us": 5053767
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 32,
+          "parent_id": 21,
+          "name": "root_reinstall_lost_response_and_recovery",
+          "state": "completed",
+          "elapsed_us": 11732516
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 33,
+          "parent_id": 21,
+          "name": "successor_reviews_and_convergence",
+          "state": "completed",
+          "elapsed_us": 166535164
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 34,
+          "parent_id": 21,
+          "name": "retained_estate_state_and_replay",
+          "state": "completed",
+          "elapsed_us": 32055831
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 21,
+          "parent_id": 1,
+          "name": "retained_estate_reinstall",
+          "state": "completed",
+          "elapsed_us": 249176958
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 35,
+          "parent_id": 1,
+          "name": "cleanup",
+          "state": "completed",
+          "elapsed_us": 112161
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4120,
+          "span_id": 1,
+          "parent_id": null,
+          "name": "production_adapter_journey",
+          "state": "completed",
+          "elapsed_us": 383895091
+        }
+      ],
+      "observation_stages": {
+        "root_management": {
+          "boundaries": 19,
+          "elapsed_millis_inclusive": 4970,
+          "calls_inclusive": 31,
+          "identity_millis_inclusive": 798,
+          "cache_hits": 0
+        },
+        "configured_canisters": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 31619,
+          "calls_inclusive": 375,
+          "identity_millis_inclusive": 4345,
+          "cache_hits": 1230
+        },
+        "estate_funding": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 1223,
+          "calls_inclusive": 23,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 46
+        },
+        "pool_balances": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 781,
+          "calls_inclusive": 0,
+          "identity_millis_inclusive": 764,
+          "cache_hits": 180
+        },
+        "protocol_readiness": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 0,
+          "calls_inclusive": 0,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "ledger_fee": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 1279,
+          "calls_inclusive": 24,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "operator_balance": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 1067,
+          "calls_inclusive": 24,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "fleet_snapshot": {
+          "boundaries": 24,
+          "elapsed_millis_inclusive": 36713,
+          "calls_inclusive": 446,
+          "identity_millis_inclusive": 5628,
+          "cache_hits": 1456
+        },
+        "protocol_actions": {
+          "boundaries": 18,
+          "elapsed_millis_inclusive": 9802,
+          "calls_inclusive": 162,
+          "identity_millis_inclusive": 816,
+          "cache_hits": 36
+        },
+        "planning": {
+          "boundaries": 15,
+          "elapsed_millis_inclusive": 32389,
+          "calls_inclusive": 407,
+          "identity_millis_inclusive": 3529,
+          "cache_hits": 791
+        },
+        "effect_submission": {
+          "boundaries": 62,
+          "elapsed_millis_inclusive": 25702,
+          "calls_inclusive": 62,
+          "identity_millis_inclusive": 1388,
+          "cache_hits": 0
+        },
+        "effect_preparation": {
+          "boundaries": 59,
+          "elapsed_millis_inclusive": 16001,
+          "calls_inclusive": 77,
+          "identity_millis_inclusive": 1389,
+          "cache_hits": 3
+        },
+        "effect_reconciliation": {
+          "boundaries": 411,
+          "elapsed_millis_inclusive": 54017,
+          "calls_inclusive": 447,
+          "identity_millis_inclusive": 7258,
+          "cache_hits": 0
+        },
+        "backoff": {
+          "boundaries": 288,
+          "elapsed_millis_inclusive": 7200,
+          "calls_inclusive": 0,
+          "identity_millis_inclusive": 0,
+          "cache_hits": 0
+        },
+        "terminal_inventory": {
+          "boundaries": 7,
+          "elapsed_millis_inclusive": 37159,
+          "calls_inclusive": 441,
+          "identity_millis_inclusive": 150,
+          "cache_hits": 0
+        },
+        "independent_submission": {
+          "boundaries": 6,
+          "elapsed_millis_inclusive": 5839,
+          "calls_inclusive": 24,
+          "identity_millis_inclusive": 129,
+          "cache_hits": 0
+        }
+      },
+      "request_kinds": {
+        "identity": {
+          "requests": 1201,
+          "elapsed_micros_inclusive": 26216476,
+          "failed": 0
+        },
+        "query": {
+          "requests": 758,
+          "elapsed_micros_inclusive": 56853769,
+          "failed": 0
+        },
+        "update": {
+          "requests": 370,
+          "elapsed_micros_inclusive": 155852117,
+          "failed": 2
+        },
+        "management_status": {
+          "requests": 569,
+          "elapsed_micros_inclusive": 148649391,
+          "failed": 0
+        },
+        "agent_query": {
+          "requests": 325,
+          "elapsed_micros_inclusive": 38007643,
+          "failed": 0
+        },
+        "stop": {
+          "requests": 1,
+          "elapsed_micros_inclusive": 155680,
+          "failed": 0
+        },
+        "install": {
+          "requests": 3,
+          "elapsed_micros_inclusive": 13585905,
+          "failed": 1
+        },
+        "start": {
+          "requests": 1,
+          "elapsed_micros_inclusive": 156324,
+          "failed": 0
+        }
+      },
+      "request_purposes_and_targets": [
+        {
+          "kind": "identity",
+          "target": null,
+          "method": null,
+          "requests": 1201,
+          "elapsed_micros_inclusive": 26216476,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "icrc1_fee",
+          "requests": 28,
+          "elapsed_micros_inclusive": 1534732,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "create_canister",
+          "requests": 27,
+          "elapsed_micros_inclusive": 2373690,
+          "failed": 0
+        },
+        {
+          "kind": "management_status",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canister_status",
+          "requests": 183,
+          "elapsed_micros_inclusive": 42231955,
+          "failed": 0
+        },
+        {
+          "kind": "management_status",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canister_status",
+          "requests": 45,
+          "elapsed_micros_inclusive": 9461439,
+          "failed": 0
+        },
+        {
+          "kind": "management_status",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canister_status",
+          "requests": 341,
+          "elapsed_micros_inclusive": 96955997,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_root_status",
+          "requests": 269,
+          "elapsed_micros_inclusive": 20035297,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "icrc1_balance_of",
+          "requests": 27,
+          "elapsed_micros_inclusive": 1410923,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canic_coordinator_registry",
+          "requests": 37,
+          "elapsed_micros_inclusive": 1803987,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canic_wasm_store_status",
+          "requests": 19,
+          "elapsed_micros_inclusive": 895783,
+          "failed": 0
+        },
+        {
+          "kind": "agent_query",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canic_coordinator_operation_status",
+          "requests": 325,
+          "elapsed_micros_inclusive": 38007643,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canic_wasm_store_catalog",
+          "requests": 32,
+          "elapsed_micros_inclusive": 1680491,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_root_operation_status",
+          "requests": 57,
+          "elapsed_micros_inclusive": 3160322,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": "canic_wasm_store_publish_chunk",
+          "requests": 4,
+          "elapsed_micros_inclusive": 850859,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_root_command",
+          "requests": 321,
+          "elapsed_micros_inclusive": 149330888,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": "canic_coordinator_command",
+          "requests": 8,
+          "elapsed_micros_inclusive": 1678974,
+          "failed": 0
+        },
+        {
+          "kind": "query",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": "canic_observability",
+          "requests": 289,
+          "elapsed_micros_inclusive": 26332234,
+          "failed": 0
+        },
+        {
+          "kind": "stop",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 155680,
+          "failed": 0
+        },
+        {
+          "kind": "update",
+          "target": "um5iw-rqaaa-aaaaq-qaaba-cai",
+          "method": "withdraw",
+          "requests": 10,
+          "elapsed_micros_inclusive": 1617706,
+          "failed": 2
+        },
+        {
+          "kind": "install",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 6331904,
+          "failed": 1
+        },
+        {
+          "kind": "start",
+          "target": "pp254-cl777-77776-aaaaq-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 156324,
+          "failed": 0
+        },
+        {
+          "kind": "install",
+          "target": "pi33i-pt777-77776-aaaaa-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 4059563,
+          "failed": 0
+        },
+        {
+          "kind": "install",
+          "target": "pgzwa-ud777-77776-aaaba-cai",
+          "method": null,
+          "requests": 1,
+          "elapsed_micros_inclusive": 3194438,
+          "failed": 0
+        }
+      ],
+      "maximum_outer_requests_in_flight": 4,
+      "selected_artifacts": {
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/app/app.did": "a61863b38f6c1a113ff2a88c68f66a8ec9e4f18f36038b4f91e0dee3e921117c",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/app/app.wasm": "8959a45b89370455ccc950676a7a2f7b97ea8db4100c852b516e45dba52bcb44",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/app/app.wasm.gz": "0aad8cc8014e302d6a6956d59563a62531e07d9c0cd624b40662d149ed0cc7f1",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/fleet_coordinator/fleet_coordinator.did": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/fleet_coordinator/fleet_coordinator.wasm": "a3dca030024876e42b9b0ed3043f6e93fb5a504e22efa57d677deb882ca15370",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/fleet_coordinator/fleet_coordinator.wasm.gz": "090b14f472533c9ab3be1bb9d74391f1141172b862c314fcf10d1f23c5c5427f",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/root/root.did": "01934a328cf87a6467d85de85a17e4b60e0c6dd144da1c127b727e6fb38a124e",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/root/root.wasm": "2a66e5bc1a0883a4632a7acef753ffa29e22896c82f5097a36917626b50f421f",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/root/root.wasm.gz": "249dafc95240faf57444e8ee8fbbccb1f63dedf756e53b5e0f5c10a39fe0d6e5",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/wasm_store/wasm_store.did": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/wasm_store/wasm_store.wasm": "1f69144f8fcbc6ca45e0993190e0ee6bd4f7428fcaf606361de950f0d9978d49",
+        "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a/artifacts/wasm_store/wasm_store.wasm.gz": "0b42dda8be781cbcb997376873696e08a7824249e3ada9dc909248246b986747",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/app/app.did": "a61863b38f6c1a113ff2a88c68f66a8ec9e4f18f36038b4f91e0dee3e921117c",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/app/app.wasm": "8a3da4dee510121e81c783f568a7afc616f1d82f8d658daa8cd9d06bf5d421ba",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/app/app.wasm.gz": "d9007d19d254ec3013525e388325bdc1ad227cf95834ebab6a7c26548d84e063",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.did": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.wasm": "3f8fa2038e4b9751c361749ec4624d3448dd0cf787a143eda2731306004ef761",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/fleet_coordinator/fleet_coordinator.wasm.gz": "ba60fd0c9ba71d0d6e8a2e66ce2aca60d09f1aa0256715ff89a295535788f7b6",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.did": "01934a328cf87a6467d85de85a17e4b60e0c6dd144da1c127b727e6fb38a124e",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm": "d23e624b69ae517c7eda1a2ce9253cd6fd5d50f5b1ae850cbce5a5dcb50238d1",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/root/root.wasm.gz": "4a4083cb174c9cace880a69751779fa0c01eebb23d869691f921c7a5c875b4bd",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.did": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm": "71e08605429da4d3e6d8c9c399145f8e37b68889f1476b6c14ce66b71a30e23f",
+        "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae/artifacts/wasm_store/wasm_store.wasm.gz": "95f927198981469cf1ee1fdc80a06a9dcf716c27f35537ed18116c90b4da8b1e"
+      },
+      "log_sha256": "c0f86839268d7e317d8838248d56f3b3810b28f719cdff970e6835d02d7ce8e0"
+    }
+  }
+}

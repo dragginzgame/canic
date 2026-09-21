@@ -34,6 +34,8 @@ pub struct IcpRawOutput {
 
 #[derive(Clone, Debug)]
 pub struct IcpCli {
+    pub(super) timing: std::sync::Arc<super::timing::Timing>,
+    pub(super) identity_lookup_millis: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) identity_lookups: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) remote_calls: std::sync::Arc<std::sync::atomic::AtomicU64>,
     pub(super) executable: String,

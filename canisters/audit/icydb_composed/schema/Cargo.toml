@@ -5,7 +5,7 @@ edition = "2024"
 publish = false
 
 [dependencies]
-icydb = { version = "=0.259.6", default-features = false }
+icydb = { version = "=0.261.2", default-features = false }
 
 [features]
 default = []

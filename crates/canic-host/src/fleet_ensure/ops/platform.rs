@@ -871,6 +871,7 @@ enum StatusCacheEntry {
 struct ObservationCounters {
     remote_calls: u64,
     identity_lookups: u64,
+    identity_lookup_millis: u64,
     cached_reads: u64,
 }
 
@@ -882,12 +883,14 @@ pub struct IcpEnsurePlatform {
     maximum_observation_delay: Duration,
     observation_snapshot: RefCell<Option<FleetObservationSnapshot>>,
     cached_reads: Cell<u64>,
-    observation_stages: Vec<FleetObservationStage>,
+    observation_stages: Vec<(u64, FleetObservationStage)>,
     progress_handler: Option<Box<dyn FnMut(FleetEnsureProgress)>>,
     observation_handler: Option<Box<dyn FnMut(FleetObservationTiming)>>,
     estate_observations: BTreeMap<String, EstateFundingDomainObservation>,
     pub(super) root: PathBuf,
 }
+
+static NEXT_SPAN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
 const INITIAL_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_millis(250);
 const MAXIMUM_PROTOCOL_OBSERVATION_DELAY: Duration = Duration::from_secs(5);
@@ -926,6 +929,13 @@ impl IcpEnsurePlatform {
         }
     }
 
+    /// Select the signer before the operation's existing Principal admission check.
+    #[must_use]
+    pub fn with_identity(mut self, identity: Option<&str>) -> Self {
+        self.icp = self.icp.with_identity(identity);
+        self
+    }
+
     /// Attach an informational progress sink to this operation.
     #[must_use]
     pub fn with_progress_handler(
@@ -946,31 +956,14 @@ impl IcpEnsurePlatform {
         self
     }
 
-    fn finish_observation_timing(
-        &mut self,
-        stage: FleetObservationStage,
-        started: std::time::Instant,
-        before: ObservationCounters,
-        succeeded: bool,
-    ) {
-        let timing = FleetObservationTiming {
-            stage,
-            parent_stage: self.observation_stages.last().copied(),
-            elapsed_millis: started.elapsed().as_millis(),
-            remote_call_attempts: self
-                .icp
-                .remote_call_count()
-                .saturating_sub(before.remote_calls),
-            identity_lookup_attempts: self
-                .icp
-                .identity_lookup_count()
-                .saturating_sub(before.identity_lookups),
-            cached_read_hits: self.cached_reads.get().saturating_sub(before.cached_reads),
-            succeeded,
-        };
-        if let Some(handler) = &mut self.observation_handler {
-            handler(timing);
-        }
+    /// Attach request timing to the same transport used by all worker clones.
+    #[must_use]
+    pub fn with_request_timing_handler(
+        mut self,
+        handler: impl Fn(crate::icp::IcpRequestTiming) + Send + Sync + 'static,
+    ) -> Self {
+        self.icp = self.icp.with_timing_handler(handler);
+        self
     }
 
     fn timed_observation<T>(
@@ -987,15 +980,50 @@ impl IcpEnsurePlatform {
         observe: impl FnOnce(&mut Self) -> Result<T, E>,
     ) -> Result<T, E> {
         let started = std::time::Instant::now();
-        let calls = ObservationCounters {
+        let before = ObservationCounters {
             remote_calls: self.icp.remote_call_count(),
             identity_lookups: self.icp.identity_lookup_count(),
+            identity_lookup_millis: self.icp.identity_lookup_millis(),
             cached_reads: self.cached_reads.get(),
         };
-        self.observation_stages.push(stage);
+        let span_id = NEXT_SPAN.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let parent = self.observation_stages.last().copied();
+        let mut timing = FleetObservationTiming {
+            span_id,
+            parent_span_id: parent.map(|entry| entry.0),
+            stage,
+            parent_stage: parent.map(|entry| entry.1),
+            elapsed_millis: 0,
+            remote_call_attempts: 0,
+            identity_lookup_attempts: 0,
+            identity_lookup_millis: 0,
+            cached_read_hits: 0,
+            succeeded: None,
+        };
+        if let Some(handler) = &mut self.observation_handler {
+            handler(timing.clone());
+        }
+        self.observation_stages.push((span_id, stage));
         let result = observe(self);
         self.observation_stages.pop();
-        self.finish_observation_timing(stage, started, calls, result.is_ok());
+        timing.elapsed_millis = started.elapsed().as_millis();
+        timing.remote_call_attempts = self
+            .icp
+            .remote_call_count()
+            .saturating_sub(before.remote_calls);
+        timing.identity_lookup_attempts = self
+            .icp
+            .identity_lookup_count()
+            .saturating_sub(before.identity_lookups);
+        timing.identity_lookup_millis = self
+            .icp
+            .identity_lookup_millis()
+            .saturating_sub(before.identity_lookup_millis);
+        timing.cached_read_hits = self.cached_reads.get().saturating_sub(before.cached_reads);
+        timing.succeeded = Some(result.is_ok());
+        if let Some(handler) = &mut self.observation_handler {
+            handler(timing);
+        }
         result
     }
 
@@ -2793,7 +2821,16 @@ impl IcpEnsurePlatform {
             None
         };
         self.icp.add_target_args(&mut command);
-        let result = run_status(&mut command).map_err(IcpEnsurePlatformError::from);
+        self.icp.record_remote_call();
+        let result = self
+            .icp
+            .measure_request(
+                crate::icp::IcpRequestKind::Install,
+                Some(principal),
+                None,
+                || run_status(&mut command),
+            )
+            .map_err(IcpEnsurePlatformError::from);
         if let Some(path) = generated_init {
             std::fs::remove_file(&path)
                 .map_err(|_| IcpEnsurePlatformError::ArtifactUnavailable(path))?;
@@ -2820,7 +2857,13 @@ impl IcpEnsurePlatform {
             command.args(["--add-controller", controller]);
         }
         self.icp.add_target_args(&mut command);
-        run_status(&mut command)?;
+        self.icp.record_remote_call();
+        self.icp.measure_request(
+            crate::icp::IcpRequestKind::SetControllers,
+            Some(principal),
+            None,
+            || run_status(&mut command),
+        )?;
         Ok(empty_outcome())
     }
 
@@ -3263,6 +3306,21 @@ impl EnsurePlatform for IcpEnsurePlatform {
         })
     }
 
+    fn with_preparation_observations<T>(
+        &mut self,
+        action: &EnsureAction,
+        observe: impl FnOnce(&mut Self) -> Result<T, Self::Error>,
+    ) -> Result<T, Self::Error> {
+        if matches!(action, EnsureAction::Install { .. }) {
+            // A single fresh status supplies balance and version before intent. Even
+            // an enclosing scope must not carry older authority into preparation.
+            self.observation_snapshot.take();
+            self.with_observation_snapshot(observe)
+        } else {
+            observe(self)
+        }
+    }
+
     fn report_progress(&mut self, progress: FleetEnsureProgress) {
         if let Some(handler) = self.progress_handler.as_mut() {
             handler(progress);
@@ -3300,17 +3358,29 @@ impl EnsurePlatform for IcpEnsurePlatform {
         Ok(())
     }
 
+    fn with_activity<T, E>(
+        &mut self,
+        stage: FleetObservationStage,
+        activity: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        self.measure_observation(stage, activity)
+    }
+
     fn pace_effect_observation(
         &mut self,
         _action: &EnsureAction,
         consecutive_unchanged_observations: u32,
     ) {
         self.invalidate_observation_snapshot();
-        thread::sleep(protocol_observation_delay(
-            consecutive_unchanged_observations,
-            self.initial_observation_delay,
-            self.maximum_observation_delay,
-        ));
+        let _: Result<(), std::convert::Infallible> =
+            self.measure_observation(FleetObservationStage::Backoff, |platform| {
+                thread::sleep(protocol_observation_delay(
+                    consecutive_unchanged_observations,
+                    platform.initial_observation_delay,
+                    platform.maximum_observation_delay,
+                ));
+                Ok(())
+            });
     }
 
     fn pace_root_owned_observation(
@@ -3319,11 +3389,15 @@ impl EnsurePlatform for IcpEnsurePlatform {
         consecutive_retained_observations: u32,
     ) {
         self.invalidate_observation_snapshot();
-        thread::sleep(protocol_observation_delay(
-            consecutive_retained_observations,
-            self.initial_observation_delay,
-            self.maximum_observation_delay,
-        ));
+        let _: Result<(), std::convert::Infallible> =
+            self.measure_observation(FleetObservationStage::Backoff, |platform| {
+                thread::sleep(protocol_observation_delay(
+                    consecutive_retained_observations,
+                    platform.initial_observation_delay,
+                    platform.maximum_observation_delay,
+                ));
+                Ok(())
+            });
     }
 
     fn authority_sealed(
@@ -3980,8 +4054,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
+        self.measure_observation(FleetObservationStage::EffectReconciliation, |platform| {
         if matches!(action, EnsureAction::SealAuthority { .. }) {
-            return super::authority_seal::observe(&self.icp, &self.root, operation_id, action)
+            return super::authority_seal::observe(&platform.icp, &platform.root, operation_id, action)
                 .map_err(Into::into);
         }
         let mut retry = EffectRetry::None;
@@ -3997,7 +4072,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             } => {
                 let (live_cycles, deferred) =
                     if record.created_principal.is_some() && record.receipt.is_some() {
-                        self.created_canister_cycles(
+                        platform.created_canister_cycles(
                             name,
                             record
                                 .created_principal
@@ -4010,7 +4085,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     };
                 post_cycles = live_cycles;
                 let maximum_observation_burn_cycles =
-                    super::maximum_creation_observation_burn(&self.desired).ok_or(
+                    super::maximum_creation_observation_burn(&platform.desired).ok_or(
                         IcpEnsurePlatformError::Arithmetic("Create execution and observation burn"),
                     )?;
                 let applied = create_balance_is_terminal(
@@ -4032,7 +4107,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 )
             }
             EnsureAction::Delete { principal, .. } => {
-                let live = self.status_optional(Self::action_principal(state, principal)?)?;
+                let live = platform.status_optional(Self::action_principal(state, principal)?)?;
                 (live.is_none(), format!("delete:{live:?}"))
             }
             EnsureAction::Fund {
@@ -4042,7 +4117,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 funding_margin_cycles,
                 ..
             } => {
-                let live_cycles = self.action_cycles(action, state)?;
+                let live_cycles = platform.action_cycles(action, state)?;
                 post_cycles = live_cycles;
                 let observation = NativeFundingObservation {
                     amount: *amount,
@@ -4067,12 +4142,12 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 principal,
                 ..
             } => {
-                let source_cycles = self
+                let source_cycles = platform
                     .icp
                     .identity_cycles_balance()
                     .map_err(|error| IcpEnsurePlatformError::LedgerTransfer(error.to_string()))?;
                 let target = Self::action_principal(state, principal)?;
-                let destination_cycles = self.cycles_ledger_balance(target)?;
+                let destination_cycles = platform.cycles_ledger_balance(target)?;
                 post_cycles = Some(source_cycles);
                 (
                     record.receipt.is_some()
@@ -4099,9 +4174,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 ..
             } => {
                 let live =
-                    self.install_status_optional(Self::action_principal(state, principal)?)?;
+                    platform.install_status_optional(Self::action_principal(state, principal)?)?;
                 let applied = if let Some(witness) = reinstall_witness {
-                    let current = self.reinstall_authorities(state)?;
+                    let current = platform.reinstall_authorities(state)?;
                     let authority = current
                         .as_ref()
                         .and_then(|a| a.get(&witness.authority.name))
@@ -4131,10 +4206,10 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         }
                     })?;
                     let history = super::install_history::observe(
-                        &self.icp,
-                        &self.root,
+                        &platform.icp,
+                        &platform.root,
                         &history_authority,
-                        parse_principal("operator", &self.desired.operator)?,
+                        parse_principal("operator", &platform.desired.operator)?,
                         before,
                         live,
                     )?;
@@ -4179,7 +4254,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 action: current_action,
                 ..
             } => {
-                let mut observation = match current_protocol::observe(&self.icp, &self.root, action)
+                let mut observation = match current_protocol::observe(&platform.icp, &platform.root, action)
                 {
                     Ok(observation) => observation,
                     Err(error)
@@ -4201,15 +4276,15 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     }
                     Err(error) => return Err(error.into()),
                 };
-                self.refresh_estate_funding_observation(&mut observation, state)?;
+                platform.refresh_estate_funding_observation(&mut observation, state)?;
                 return Ok(observation);
             }
             EnsureAction::Protocol { .. } => {
                 let observation = protocol::observe(
-                    &self.icp,
-                    &self.root,
+                    &platform.icp,
+                    &platform.root,
                     operation_id,
-                    &self.protocol_principals(state),
+                    &platform.protocol_principals(state),
                     &resolved_protocol_action(action, state)?,
                 )?;
                 (observation.applied, observation.progress_identity)
@@ -4222,9 +4297,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 ..
             } => {
                 let expected =
-                    self.resolved_controllers(state, controllers, controller_canisters)?;
+                    platform.resolved_controllers(state, controllers, controller_canisters)?;
                 let principal = Self::action_principal(state, principal)?;
-                let configured = self
+                let configured = platform
                     .desired
                     .canisters
                     .iter()
@@ -4232,7 +4307,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 let mut observed_controllers = if let Some(configured) =
                     configured.filter(|configured| configured.kind == DesiredCanisterKind::Pool)
                 {
-                    self.inspect_root_owned_canister(configured, principal, state)?
+                    platform.inspect_root_owned_canister(configured, principal, state)?
                         .map(|response| {
                             response
                                 .settings
@@ -4242,7 +4317,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                                 .collect::<Vec<_>>()
                         })
                 } else {
-                    self.status_optional(principal)?
+                    platform.status_optional(principal)?
                         .map(|live| live.controllers)
                 };
                 if let Some(controllers) = &mut observed_controllers {
@@ -4255,7 +4330,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 )
             }
             EnsureAction::Start { principal, .. } => {
-                let live = self.status_optional(Self::action_principal(state, principal)?)?;
+                let live = platform.status_optional(Self::action_principal(state, principal)?)?;
                 (
                     live.as_ref()
                         .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
@@ -4263,7 +4338,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 )
             }
             EnsureAction::Stop { principal, .. } => {
-                let live = self.status_optional(Self::action_principal(state, principal)?)?;
+                let live = platform.status_optional(Self::action_principal(state, principal)?)?;
                 (
                     live.as_ref()
                         .is_some_and(|live| live.status == CanisterRuntimeStatus::Stopped),
@@ -4278,15 +4353,15 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 destination,
                 ..
             } => {
-                let source = self
+                let source = platform
                     .status_optional(Self::action_principal(state, principal)?)?
                     .map(|live| live.cycles)
                     .ok_or_else(|| IcpEnsurePlatformError::MissingTransferBalance {
                         canister: name.clone(),
                         side: "live source",
                     })?;
-                let destination = self
-                    .status_optional(self.current_principal(state, destination).ok_or_else(
+                let destination = platform
+                    .status_optional(platform.current_principal(state, destination).ok_or_else(
                         || IcpEnsurePlatformError::UnresolvedCreated(destination.clone()),
                     )?)?
                     .map(|live| live.cycles)
@@ -4359,6 +4434,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             progress_identity,
             retry,
         })
+            })
     }
 
     fn apply_independent_effects(
@@ -4367,14 +4443,16 @@ impl EnsurePlatform for IcpEnsurePlatform {
         uploads: &[super::independent_effects::IndependentEffect<'_>],
         _state: &FleetEnsureStateRecord,
     ) -> Result<Vec<Result<EffectOutcome, Self::Error>>, Self::Error> {
-        self.observation_snapshot.take();
-        self.require_operator()?;
-        Ok(
-            super::independent_effects::apply(&self.icp, &self.root, uploads)?
-                .into_iter()
-                .map(|result| result.map_err(Into::into))
-                .collect(),
-        )
+        self.measure_observation(FleetObservationStage::IndependentSubmission, |platform| {
+            platform.observation_snapshot.take();
+            platform.require_operator()?;
+            Ok(
+                super::independent_effects::apply(&platform.icp, &platform.root, uploads)?
+                    .into_iter()
+                    .map(|result| result.map_err(Into::into))
+                    .collect(),
+            )
+        })
     }
 
     #[expect(
@@ -4388,162 +4466,174 @@ impl EnsurePlatform for IcpEnsurePlatform {
         _record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectOutcome, Self::Error> {
-        self.observation_snapshot.take();
-        self.require_operator()?;
-        match action {
-            EnsureAction::SealAuthority { .. } => {
-                super::authority_seal::apply(&self.icp, &self.root, operation_id, action)
-                    .map_err(Into::into)
-            }
-            EnsureAction::Create {
-                controller_canisters,
-                controllers,
-                created_at_time,
-                ledger,
-                requested_initial_cycles,
-                subnet,
-                ..
-            } => self.apply_create(
-                CreateCanisterAuthority {
+        self.measure_observation(FleetObservationStage::EffectSubmission, |platform| {
+            platform.observation_snapshot.take();
+            platform.require_operator()?;
+            match action {
+                EnsureAction::SealAuthority { .. } => super::authority_seal::apply(
+                    &platform.icp,
+                    &platform.root,
+                    operation_id,
+                    action,
+                )
+                .map_err(Into::into),
+                EnsureAction::Create {
                     controller_canisters,
                     controllers,
-                    created_at_time: *created_at_time,
+                    created_at_time,
                     ledger,
-                    requested_initial_cycles: *requested_initial_cycles,
+                    requested_initial_cycles,
                     subnet,
-                },
-                state,
-            ),
-            EnsureAction::Delete {
-                maximum_remaining_cycles,
-                principal,
-                ..
-            } => {
-                let principal = Self::action_principal(state, principal)?;
-                if let Some(live) = self.status_optional(principal)? {
-                    if live.cycles > *maximum_remaining_cycles {
-                        return Err(IcpEnsurePlatformError::MaterialCycles {
-                            actual: live.cycles,
-                            canister: principal.to_string(),
-                            maximum: *maximum_remaining_cycles,
-                        });
+                    ..
+                } => platform.apply_create(
+                    CreateCanisterAuthority {
+                        controller_canisters,
+                        controllers,
+                        created_at_time: *created_at_time,
+                        ledger,
+                        requested_initial_cycles: *requested_initial_cycles,
+                        subnet,
+                    },
+                    state,
+                ),
+                EnsureAction::Delete {
+                    maximum_remaining_cycles,
+                    principal,
+                    ..
+                } => {
+                    let principal = Self::action_principal(state, principal)?;
+                    if let Some(live) = platform.status_optional(principal)? {
+                        if live.cycles > *maximum_remaining_cycles {
+                            return Err(IcpEnsurePlatformError::MaterialCycles {
+                                actual: live.cycles,
+                                canister: principal.to_string(),
+                                maximum: *maximum_remaining_cycles,
+                            });
+                        }
+                        if live.status != CanisterRuntimeStatus::Stopped {
+                            return Err(IcpEnsurePlatformError::NotStopped {
+                                canister: principal.to_string(),
+                            });
+                        }
+                        platform
+                            .icp
+                            .delete_canister_without_cycle_recovery(principal)?;
                     }
-                    if live.status != CanisterRuntimeStatus::Stopped {
-                        return Err(IcpEnsurePlatformError::NotStopped {
-                            canister: principal.to_string(),
-                        });
-                    }
-                    self.icp.delete_canister_without_cycle_recovery(principal)?;
+                    Ok(empty_outcome())
                 }
-                Ok(empty_outcome())
-            }
-            EnsureAction::Fund {
-                amount,
-                created_at_time,
-                ledger,
-                principal,
-                ..
-            } => self.apply_fund(
-                *amount,
-                *created_at_time,
-                ledger,
-                Self::action_principal(state, principal)?,
-            ),
-            EnsureAction::FundEstate {
-                amount,
-                created_at_time,
-                ledger,
-                ledger_fee_cycles,
-                principal,
-                ..
-            } => self.apply_estate_fund(
-                *amount,
-                *created_at_time,
-                ledger,
-                Self::action_principal(state, principal)?,
-                *ledger_fee_cycles,
-            ),
-            EnsureAction::Install {
-                canic_init,
-                init_arg,
-                init_arg_sha256,
-                init_candid,
-                init_candid_sha256,
-                mode,
-                principal,
-                wasm,
-                wasm_sha256,
-                ..
-            } => self.apply_install(
-                operation_id,
-                &self.protocol_principals(state),
-                canic_init.as_ref(),
-                init_arg.as_deref(),
-                init_arg_sha256.as_deref(),
-                init_candid.as_deref(),
-                init_candid_sha256.as_deref(),
-                *mode,
-                Self::action_principal(state, principal)?,
-                wasm,
-                wasm_sha256,
-            ),
-            EnsureAction::FleetProtocol { .. } => {
-                current_protocol::apply(&self.icp, &self.root, action).map_err(Into::into)
-            }
-            EnsureAction::Protocol { .. } => {
-                let action = resolved_protocol_action(action, state)?;
-                protocol::apply(
-                    &self.icp,
-                    &self.root,
+                EnsureAction::Fund {
+                    amount,
+                    created_at_time,
+                    ledger,
+                    principal,
+                    ..
+                } => platform.apply_fund(
+                    *amount,
+                    *created_at_time,
+                    ledger,
+                    Self::action_principal(state, principal)?,
+                ),
+                EnsureAction::FundEstate {
+                    amount,
+                    created_at_time,
+                    ledger,
+                    ledger_fee_cycles,
+                    principal,
+                    ..
+                } => platform.apply_estate_fund(
+                    *amount,
+                    *created_at_time,
+                    ledger,
+                    Self::action_principal(state, principal)?,
+                    *ledger_fee_cycles,
+                ),
+                EnsureAction::Install {
+                    canic_init,
+                    init_arg,
+                    init_arg_sha256,
+                    init_candid,
+                    init_candid_sha256,
+                    mode,
+                    principal,
+                    wasm,
+                    wasm_sha256,
+                    ..
+                } => platform.apply_install(
                     operation_id,
-                    &self.protocol_principals(state),
-                    &action,
-                )?;
-                Ok(EffectOutcome {
-                    created_principal: None,
-                    post_cycles: None,
-                    receipt: Some(operation_id.to_string()),
-                })
+                    &platform.protocol_principals(state),
+                    canic_init.as_ref(),
+                    init_arg.as_deref(),
+                    init_arg_sha256.as_deref(),
+                    init_candid.as_deref(),
+                    init_candid_sha256.as_deref(),
+                    *mode,
+                    Self::action_principal(state, principal)?,
+                    wasm,
+                    wasm_sha256,
+                ),
+                EnsureAction::FleetProtocol { .. } => {
+                    current_protocol::apply(&platform.icp, &platform.root, action)
+                        .map_err(Into::into)
+                }
+                EnsureAction::Protocol { .. } => {
+                    let action = resolved_protocol_action(action, state)?;
+                    protocol::apply(
+                        &platform.icp,
+                        &platform.root,
+                        operation_id,
+                        &platform.protocol_principals(state),
+                        &action,
+                    )?;
+                    Ok(EffectOutcome {
+                        created_principal: None,
+                        post_cycles: None,
+                        receipt: Some(operation_id.to_string()),
+                    })
+                }
+                EnsureAction::SetControllers {
+                    controller_canisters,
+                    controllers,
+                    principal,
+                    ..
+                } => platform.apply_controllers(
+                    Self::action_principal(state, principal)?,
+                    &platform.resolved_controllers(state, controllers, controller_canisters)?,
+                ),
+                EnsureAction::Start { principal, .. } => {
+                    platform
+                        .icp
+                        .start_canister(Self::action_principal(state, principal)?)?;
+                    Ok(empty_outcome())
+                }
+                EnsureAction::Stop { principal, .. } => {
+                    platform
+                        .icp
+                        .stop_canister(Self::action_principal(state, principal)?)?;
+                    Ok(empty_outcome())
+                }
+                EnsureAction::Transfer {
+                    amount,
+                    candid,
+                    candid_sha256,
+                    destination,
+                    method,
+                    principal,
+                    ..
+                } => platform.apply_transfer(
+                    *amount,
+                    candid,
+                    candid_sha256,
+                    platform
+                        .current_principal(state, destination)
+                        .ok_or_else(|| {
+                            IcpEnsurePlatformError::UnresolvedCreated(destination.clone())
+                        })?,
+                    method,
+                    operation_id,
+                    Self::action_principal(state, principal)?,
+                ),
             }
-            EnsureAction::SetControllers {
-                controller_canisters,
-                controllers,
-                principal,
-                ..
-            } => self.apply_controllers(
-                Self::action_principal(state, principal)?,
-                &self.resolved_controllers(state, controllers, controller_canisters)?,
-            ),
-            EnsureAction::Start { principal, .. } => {
-                self.icp
-                    .start_canister(Self::action_principal(state, principal)?)?;
-                Ok(empty_outcome())
-            }
-            EnsureAction::Stop { principal, .. } => {
-                self.icp
-                    .stop_canister(Self::action_principal(state, principal)?)?;
-                Ok(empty_outcome())
-            }
-            EnsureAction::Transfer {
-                amount,
-                candid,
-                candid_sha256,
-                destination,
-                method,
-                principal,
-                ..
-            } => self.apply_transfer(
-                *amount,
-                candid,
-                candid_sha256,
-                self.current_principal(state, destination).ok_or_else(|| {
-                    IcpEnsurePlatformError::UnresolvedCreated(destination.clone())
-                })?,
-                method,
-                operation_id,
-                Self::action_principal(state, principal)?,
-            ),
-        }
+        })
     }
 
     fn action_cycles(
@@ -5216,13 +5306,14 @@ mod tests {
     #[test]
     fn identity_binding_keeps_operator_fence_before_effects() {
         let mut fixture = ProtocolOwnersFixture::new();
+        fixture.platform = fixture.platform.with_identity(Some("reviewed"));
         std::fs::write(
             fixture.root.join("icp"),
             crate::test_support::tool_script(
                 r#"#!/bin/sh
 if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
 while [ "$1" = --project-root-override ] || [ "$1" = --identity-password-file ]; do shift 2; done
-if [ "$1 $2" = 'identity default' ]; then echo selected; exit 0; fi
+if [ "$1 $2" = 'identity default' ]; then touch default-accessed; exit 91; fi
 if [ "$1 $2" = 'identity principal' ]; then cat principal; exit 0; fi
 echo effect >> effects
 "#,
@@ -5231,6 +5322,7 @@ echo effect >> effects
         .unwrap();
         std::fs::write(fixture.root.join("principal"), "operator").unwrap();
         fixture.platform.require_operator().unwrap();
+        assert!(!fixture.root.join("default-accessed").exists());
         std::fs::write(fixture.root.join("principal"), "changed-principal").unwrap();
         let action = EnsureAction::Start {
             name: "root".into(),
@@ -5772,6 +5864,144 @@ cat "$1.json"
             )
             .unwrap();
         }
+    }
+
+    #[cfg(unix)]
+    fn install_preparation_action() -> EnsureAction {
+        EnsureAction::Install {
+            canic_init: None,
+            reinstall_witness: None,
+            init_arg: None,
+            init_arg_sha256: None,
+            init_candid: None,
+            init_candid_sha256: None,
+            mode: InstallMode::Install,
+            name: "root".into(),
+            principal: "root".into(),
+            wasm: "owner.wasm".into(),
+            wasm_sha256: "ff".repeat(32),
+        }
+    }
+
+    #[cfg(unix)]
+    fn preparation_status(fixture: &ProtocolOwnersFixture, version: u64) {
+        let path = fixture.root.join("root.json");
+        let mut status: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+        status["version"] = serde_json::json!(version);
+        std::fs::write(path, serde_json::to_vec(&status).unwrap()).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn install_preparation_shares_one_fresh_status_and_expires_on_success_and_failure() {
+        use std::sync::{Arc, Mutex};
+        let mut fixture = ProtocolOwnersFixture::new();
+        let action = install_preparation_action();
+        preparation_status(&fixture, 7);
+        let events = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&events);
+        fixture.platform = fixture
+            .platform
+            .with_observation_handler(move |event| sink.lock().unwrap().push(event));
+        let prepared = super::super::effect_preparation::prepare_effect(
+            &mut fixture.platform,
+            "op",
+            &action,
+            &fixture.state,
+        )
+        .unwrap();
+        assert_eq!(prepared.record.pre_cycles, Some(1_000_000_000_000));
+        assert_eq!(prepared.record.pre_canister_version, Some(7));
+        assert_eq!(fixture.platform.icp.remote_call_count(), 1);
+        assert!(fixture.platform.observation_snapshot.borrow().is_none());
+        let measured = events.lock().unwrap();
+        let start = measured.first().unwrap();
+        let end = measured.last().unwrap();
+        assert_eq!(start.succeeded, None);
+        assert_eq!(end.succeeded, Some(true));
+        assert_eq!(start.span_id, end.span_id);
+        assert_eq!(end.remote_call_attempts, 1);
+        assert_eq!(end.cached_read_hits, 1);
+        drop(measured);
+        preparation_status(&fixture, 8);
+        let next = super::super::effect_preparation::prepare_effect(
+            &mut fixture.platform,
+            "op",
+            &action,
+            &fixture.state,
+        )
+        .unwrap();
+        assert_eq!(next.record.pre_canister_version, Some(8));
+        assert_eq!(fixture.platform.icp.remote_call_count(), 2);
+        let status = std::fs::read(fixture.root.join("root.json")).unwrap();
+        std::fs::write(fixture.root.join("root.json"), b"{}").unwrap();
+        assert!(matches!(
+            super::super::effect_preparation::prepare_effect(
+                &mut fixture.platform,
+                "op",
+                &action,
+                &fixture.state
+            ),
+            Err(IcpEnsurePlatformError::Icp(_))
+        ));
+        assert!(fixture.platform.observation_snapshot.borrow().is_none());
+        std::fs::write(fixture.root.join("root.json"), status).unwrap();
+        assert!(
+            super::super::effect_preparation::prepare_effect(
+                &mut fixture.platform,
+                "op",
+                &action,
+                &fixture.state
+            )
+            .is_ok()
+        );
+        assert_eq!(fixture.platform.icp.remote_call_count(), 4);
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    #[ignore = "opt-in matched local IPC measurement; no live IC timing claim"]
+    fn install_preparation_matched_measurement() {
+        let mut fixture = ProtocolOwnersFixture::new();
+        preparation_status(&fixture, 7);
+        let action = install_preparation_action();
+        // Prime tool compatibility identically; this measures warm IPC, not first CLI launch.
+        fixture.platform.status_optional("root").unwrap();
+        for pair in 0..8 {
+            for shared in if pair % 2 == 0 {
+                [false, true]
+            } else {
+                [true, false]
+            } {
+                let before = fixture.platform.icp.remote_call_count();
+                let started = std::time::Instant::now();
+                let read = |platform: &mut IcpEnsurePlatform| -> Result<_, IcpEnsurePlatformError> {
+                    Ok((
+                        platform.action_cycles(&action, &fixture.state)?,
+                        platform.action_canister_version(&action, &fixture.state)?,
+                    ))
+                };
+                let result = if shared {
+                    fixture
+                        .platform
+                        .with_preparation_observations(&action, read)
+                } else {
+                    read(&mut fixture.platform)
+                }
+                .unwrap();
+                let elapsed = started.elapsed().as_micros();
+                let calls = fixture.platform.icp.remote_call_count() - before;
+                assert_eq!(result, (Some(1_000_000_000_000), Some(7)));
+                assert_eq!(calls, if shared { 1 } else { 2 });
+                eprintln!(
+                    "[CANIC-PREPARATION] {}",
+                    serde_json::json!({"pair": pair, "shared": shared, "elapsed_micros": elapsed, "calls": calls, "cycles": result.0.map(|v| v.to_string()), "version": result.1})
+                );
+            }
+        }
+        std::fs::remove_dir_all(fixture.root).unwrap();
     }
 
     #[cfg(unix)]
@@ -6533,7 +6763,11 @@ printf 'finish\n' >> events
         fixture.owners.platform = fixture
             .owners
             .platform
-            .with_observation_handler(move |event| sink.lock().unwrap().push(event))
+            .with_observation_handler(move |event| {
+                if event.succeeded.is_some() {
+                    sink.lock().unwrap().push(event);
+                }
+            })
             .with_observation_delay_bounds(Duration::ZERO, Duration::ZERO);
         let platform = &mut fixture.owners.platform;
         let state = &fixture.owners.state;
@@ -6610,7 +6844,11 @@ printf 'finish\n' >> events
         fixture.owners.platform = fixture
             .owners
             .platform
-            .with_observation_handler(move |timing| sink.lock().unwrap().push(timing));
+            .with_observation_handler(move |timing| {
+                if timing.succeeded.is_some() {
+                    sink.lock().unwrap().push(timing);
+                }
+            });
         let platform = &mut fixture.owners.platform;
         let root = fixture.root_id.to_text();
         platform
@@ -6656,7 +6894,7 @@ printf 'finish\n' >> events
             Err(IcpEnsurePlatformError::OperatorMismatch { .. })
         ));
         let recorded = timings.lock().unwrap();
-        assert!(!recorded[2].succeeded);
+        assert_eq!(recorded[2].succeeded, Some(false));
         assert_eq!(recorded[2].identity_lookup_attempts, 1);
         assert_eq!(recorded[2].remote_call_attempts, 1);
         drop(recorded);
@@ -7582,9 +7820,11 @@ printf 'finish\n' >> events
             fs::set_permissions(&executable, fs::Permissions::from_mode(0o755)).unwrap();
             let timings = Arc::new(Mutex::new(Vec::new()));
             let sink = Arc::clone(&timings);
-            fixture.platform = fixture
-                .platform
-                .with_observation_handler(move |timing| sink.lock().unwrap().push(timing));
+            fixture.platform = fixture.platform.with_observation_handler(move |timing| {
+                if timing.succeeded.is_some() {
+                    sink.lock().unwrap().push(timing);
+                }
+            });
             let observed = fixture
                 .platform
                 .with_observation_snapshot(|platform| {
@@ -7602,7 +7842,7 @@ printf 'finish\n' >> events
             );
             let timing = timings.lock().unwrap().pop().unwrap();
             assert_eq!(timing.remote_call_attempts, 3 + u64::from(pool_count > 0));
-            assert!(timing.succeeded);
+            assert_eq!(timing.succeeded, Some(true));
             println!(
                 "configured_observation pool_assets={pool_count} elapsed_ms={} calls={}",
                 timing.elapsed_millis, timing.remote_call_attempts
@@ -7621,9 +7861,11 @@ printf 'finish\n' >> events
         let mut fixture = ProtocolOwnersFixture::new();
         let timings = Arc::new(Mutex::new(Vec::new()));
         let sink = Arc::clone(&timings);
-        fixture.platform = fixture
-            .platform
-            .with_observation_handler(move |timing| sink.lock().unwrap().push(timing));
+        fixture.platform = fixture.platform.with_observation_handler(move |timing| {
+            if timing.succeeded.is_some() {
+                sink.lock().unwrap().push(timing);
+            }
+        });
         let mut first: serde_json::Value =
             serde_json::from_slice(&fs::read(fixture.root.join("coordinator.json")).unwrap())
                 .unwrap();
@@ -7639,7 +7881,7 @@ printf 'finish\n' >> events
             matches!(failure, Err(IcpEnsurePlatformError::StatusIdentityMismatch { expected, .. }) if expected == "coordinator")
         );
         let timing = timings.lock().unwrap().pop().unwrap();
-        assert!(!timing.succeeded);
+        assert_eq!(timing.succeeded, Some(false));
         assert_eq!(timing.remote_call_attempts, 3);
         assert!(fixture.platform.observation_snapshot.borrow().is_none());
         fixture.status("coordinator", "Running", true);

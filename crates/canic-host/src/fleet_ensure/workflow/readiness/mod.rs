@@ -30,6 +30,7 @@ pub struct FleetReadinessRequest<'a> {
     pub environment: &'a str,
     pub fleet: &'a str,
     pub icp_executable: &'a str,
+    pub signing_identity: Option<&'a str>,
     pub operator: Principal,
     pub cycles_ledger: Principal,
     pub estimated_required_cycles: Option<u128>,
@@ -69,6 +70,7 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
         resolve_canonical_network_id_from_root(request.workspace, request.environment)?;
     let transport = OperatorMintTransport::from_icp(
         &IcpCli::new(request.icp_executable, Some(request.environment.into()))
+            .with_identity(request.signing_identity)
             .with_cwd(request.workspace),
     )?;
     verify_authority(

@@ -51,7 +51,12 @@ impl IcpCli {
             CanisterCallMode::Update,
         );
         self.record_remote_call();
-        run_output(&mut command, self)
+        self.measure_request(
+            super::IcpRequestKind::Update,
+            Some(canister),
+            Some(method),
+            || run_output(&mut command, self),
+        )
     }
 
     /// Query one canister method with raw binary Candid arguments from a file.
@@ -72,7 +77,12 @@ impl IcpCli {
             CanisterCallMode::Query,
         );
         self.record_remote_call();
-        run_output(&mut command, self)
+        self.measure_request(
+            super::IcpRequestKind::Query,
+            Some(canister),
+            Some(method),
+            || run_output(&mut command, self),
+        )
     }
 
     fn canister_binary_args_command(
@@ -117,7 +127,12 @@ impl IcpCli {
             CanisterCallMode::Update,
         );
         self.record_remote_call();
-        run_output(&mut command, self)
+        self.measure_request(
+            super::IcpRequestKind::Update,
+            Some(canister),
+            Some(method),
+            || run_output(&mut command, self),
+        )
     }
 
     /// Query one canister method with no arguments, optional local Candid, and optional JSON output.
@@ -137,7 +152,12 @@ impl IcpCli {
             CanisterCallMode::Query,
         );
         self.record_remote_call();
-        run_output(&mut command, self)
+        self.measure_request(
+            super::IcpRequestKind::Query,
+            Some(canister),
+            Some(method),
+            || run_output(&mut command, self),
+        )
     }
 
     /// Query one canister method with an explicit Candid argument, optional local Candid, and optional JSON output.
@@ -158,7 +178,12 @@ impl IcpCli {
             CanisterCallMode::Query,
         );
         self.record_remote_call();
-        run_output(&mut command, self)
+        self.measure_request(
+            super::IcpRequestKind::Query,
+            Some(canister),
+            Some(method),
+            || run_output(&mut command, self),
+        )
     }
 
     fn canister_text_args_command(
@@ -194,7 +219,12 @@ impl IcpCli {
         command.args(["metadata", canister, metadata_name]);
         self.add_target_args(&mut command);
         self.record_remote_call();
-        run_output(&mut command, self)
+        self.measure_request(
+            super::IcpRequestKind::Metadata,
+            Some(canister),
+            Some(metadata_name),
+            || run_output(&mut command, self),
+        )
     }
 
     /// Top up one canister with cycles.
@@ -221,7 +251,9 @@ impl IcpCli {
         command.arg("--json");
         self.add_target_args(&mut command);
         self.record_remote_call();
-        run_json(&mut command, self)
+        self.measure_request(super::IcpRequestKind::Status, Some(canister), None, || {
+            run_json(&mut command, self)
+        })
     }
 
     /// Stop one canister.
@@ -229,7 +261,10 @@ impl IcpCli {
         let mut command = self.canister_command();
         command.args(["stop", canister]);
         self.add_target_args(&mut command);
-        run_status(&mut command)
+        self.record_remote_call();
+        self.measure_request(super::IcpRequestKind::Stop, Some(canister), None, || {
+            run_status(&mut command)
+        })
     }
 
     /// Delete one stopped canister without installing ICP CLI's cycle-recovery shim.
@@ -238,7 +273,10 @@ impl IcpCli {
         canister: &str,
     ) -> Result<(), IcpCommandError> {
         let mut command = self.delete_canister_without_cycle_recovery_command(canister);
-        run_status(&mut command)
+        self.record_remote_call();
+        self.measure_request(super::IcpRequestKind::Delete, Some(canister), None, || {
+            run_status(&mut command)
+        })
     }
 
     #[cfg(test)]
@@ -261,7 +299,10 @@ impl IcpCli {
         let mut command = self.canister_command();
         command.args(["start", canister]);
         self.add_target_args(&mut command);
-        run_status(&mut command)
+        self.record_remote_call();
+        self.measure_request(super::IcpRequestKind::Start, Some(canister), None, || {
+            run_status(&mut command)
+        })
     }
 
     /// Render a dry-run top-up command.

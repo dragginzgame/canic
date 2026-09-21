@@ -9,9 +9,32 @@ use hmac::{Hmac, KeyInit, Mac};
 use serde::{Deserialize, Serialize};
 use sha2_host::Sha256;
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
+use thiserror::Error;
 
 const KEY_PATH: &str = ".canic/local-secrets/build-environment.key";
 const MAX_KEYS: usize = 256;
+
+/// Why optional local environment evidence could not be captured.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, Error, PartialEq, Serialize)]
+pub(super) enum CaptureFailure {
+    #[error("local private comparison key is missing, unreadable or unsafe")]
+    LocalKeyUnavailable,
+    #[error("environment input count exceeds the comparison limit")]
+    InputLimitExceeded,
+}
+
+/// Why two diagnostic captures cannot attribute changed values safely.
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub(super) enum ComparisonFailure {
+    #[error("current build: {0}")]
+    CurrentCapture(CaptureFailure),
+    #[error("previous build: {0}")]
+    PreviousCapture(CaptureFailure),
+    #[error("builds use different local comparison keys")]
+    DifferentLocalKeys,
+    #[error("retained comparison evidence exceeds the key limit")]
+    EvidenceLimitExceeded,
+}
 
 ///
 /// EnvironmentComparison
@@ -40,16 +63,20 @@ pub(super) fn prepare_key(root: &Path) {
 }
 
 impl EnvironmentComparison {
-    pub(super) fn capture(root: &Path, inputs: &[(OsString, OsString)]) -> Option<Self> {
-        let mut key = read_private_bytes::<32>(&root.join(KEY_PATH))?;
+    pub(super) fn capture(
+        root: &Path,
+        inputs: &[(OsString, OsString)],
+    ) -> Result<Self, CaptureFailure> {
+        let mut key = read_private_bytes::<32>(&root.join(KEY_PATH))
+            .ok_or(CaptureFailure::LocalKeyUnavailable)?;
         let result = Self::with_key(&key, inputs);
         key.fill(0);
         result
     }
 
-    fn with_key(key: &[u8; 32], inputs: &[(OsString, OsString)]) -> Option<Self> {
+    fn with_key(key: &[u8; 32], inputs: &[(OsString, OsString)]) -> Result<Self, CaptureFailure> {
         if inputs.len() > MAX_KEYS {
-            return None;
+            return Err(CaptureFailure::InputLimitExceeded);
         }
         let mut tags = BTreeMap::new();
         for (name, value) in inputs {
@@ -64,30 +91,28 @@ impl EnvironmentComparison {
                 );
             }
         }
-        Some(Self {
+        Ok(Self {
             key_id: tag(key, b"environment-key-id", &[]),
             tags,
         })
     }
 
-    pub(super) fn changed_keys(&self, previous: &Self) -> Option<Vec<String>> {
-        if self.key_id != previous.key_id
-            || self.tags.len() > MAX_KEYS
-            || previous.tags.len() > MAX_KEYS
-        {
-            return None;
+    pub(super) fn changed_keys(&self, previous: &Self) -> Result<Vec<String>, ComparisonFailure> {
+        if self.tags.len() > MAX_KEYS || previous.tags.len() > MAX_KEYS {
+            return Err(ComparisonFailure::EvidenceLimitExceeded);
         }
-        Some(
-            self.tags
-                .iter()
-                .filter(|(name, value)| {
-                    super::safe_key(name)
-                        && previous.tags.get(*name).is_some_and(|old| old != *value)
-                })
-                .take(8)
-                .map(|(name, _)| name.clone())
-                .collect(),
-        )
+        if self.key_id != previous.key_id {
+            return Err(ComparisonFailure::DifferentLocalKeys);
+        }
+        Ok(self
+            .tags
+            .iter()
+            .filter(|(name, value)| {
+                super::safe_key(name) && previous.tags.get(*name).is_some_and(|old| old != *value)
+            })
+            .take(8)
+            .map(|(name, _)| name.clone())
+            .collect())
     }
 }
 

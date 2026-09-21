@@ -5,13 +5,16 @@ use canic_host::fleet_ensure::dto::FleetObservationStage;
 fn observation_failure_retains_attempts_duration_and_current_phase() {
     let span = Span::start("review");
     let timing = FleetObservationTiming {
+        span_id: 1,
+        parent_span_id: None,
+        identity_lookup_millis: 0,
         stage: FleetObservationStage::TerminalInventory,
         parent_stage: None,
         elapsed_millis: 17,
         remote_call_attempts: 3,
         identity_lookup_attempts: 2,
         cached_read_hits: 4,
-        succeeded: false,
+        succeeded: Some(false),
     };
     let event = ObservationEvent::new(timing.clone());
     assert_eq!(event.parent_id, Some(span.id));

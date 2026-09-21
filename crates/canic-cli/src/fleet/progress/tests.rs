@@ -251,7 +251,7 @@ fn reported_retry_is_distinct_from_waiting_and_keeps_root_evidence_in_json() {
     {
         detail.pending_root_failure = Some(failure);
     }
-    assert!(render::plain(&event).contains("reported retry for Root 2vxsx-fae"));
+    assert!(render::plain(&event).contains(&failure.fleet_subnet_root.to_text()));
     let json: serde_json::Value = serde_json::from_str(&render_progress(&event, true)).unwrap();
     assert_eq!(
         json["progress"]["state"]["provisioning"]["pending_root_failure"]["diagnostic_code"],
@@ -369,6 +369,9 @@ fn replay_callbacks(mode: &str) {
         FleetObservationStage::Planning,
     ] {
         sink.observation(FleetObservationTiming {
+            span_id: 1,
+            parent_span_id: None,
+            identity_lookup_millis: 0,
             stage,
             parent_stage: if stage == FleetObservationStage::Planning {
                 None
@@ -379,7 +382,7 @@ fn replay_callbacks(mode: &str) {
             remote_call_attempts: 25,
             identity_lookup_attempts: 1,
             cached_read_hits: 2,
-            succeeded: true,
+            succeeded: Some(true),
         });
     }
     let mut event = activating();

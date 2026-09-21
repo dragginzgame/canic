@@ -31,6 +31,8 @@ impl IcpCli {
     #[must_use]
     pub fn new(executable: impl Into<String>, environment: Option<String>) -> Self {
         Self {
+            timing: std::sync::Arc::default(),
+            identity_lookup_millis: std::sync::Arc::default(),
             identity_lookups: std::sync::Arc::default(),
             remote_calls: std::sync::Arc::default(),
             executable: executable.into(),
@@ -57,7 +59,12 @@ impl IcpCli {
             .load(std::sync::atomic::Ordering::Relaxed)
     }
 
-    pub(super) fn record_remote_call(&self) {
+    pub(crate) fn identity_lookup_millis(&self) -> u64 {
+        self.identity_lookup_millis
+            .load(std::sync::atomic::Ordering::Relaxed)
+    }
+
+    pub(crate) fn record_remote_call(&self) {
         self.remote_calls
             .fetch_add(1, std::sync::atomic::Ordering::Relaxed);
     }
@@ -91,6 +98,17 @@ impl IcpCli {
     #[must_use]
     pub fn with_identity_password_file(mut self, path: impl Into<PathBuf>) -> Self {
         self.identity_password_file = Some(path.into());
+        self
+    }
+
+    /// Select an identity for this context without reading or changing ICP's default.
+    /// Clones retain the selection; the caller still verifies its expected Principal.
+    #[must_use]
+    pub fn with_identity(mut self, identity: Option<&str>) -> Self {
+        if let Some(identity) = identity {
+            self.selected_identity =
+                std::sync::Arc::new(std::sync::OnceLock::from(identity.to_owned()));
+        }
         self
     }
 

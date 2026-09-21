@@ -41,7 +41,7 @@ pub(super) struct InputDiagnostics {
     schema_version: u8,
     environment: String,
     environment_keys: BTreeSet<String>,
-    value_comparison: Option<environment::EnvironmentComparison>,
+    value_comparison: Result<environment::EnvironmentComparison, environment::CaptureFailure>,
     source: String,
     configuration: String,
 }
@@ -146,21 +146,19 @@ impl InputDiagnostics {
                 .take(8)
                 .cloned()
                 .collect::<Vec<_>>();
-            let changed = self
-                .value_comparison
-                .as_ref()
-                .zip(previous.value_comparison.as_ref())
-                .and_then(|(current, previous)| current.changed_keys(previous));
+            let changed = self.changed_environment_keys(previous);
             let mut detail = Vec::new();
             if !keys.is_empty() {
                 detail.push(format!("added/removed keys, up to 8: {}", keys.join(", ")));
             }
             match changed {
-                Some(keys) if !keys.is_empty() => {
+                Ok(keys) if !keys.is_empty() => {
                     detail.push(format!("changed-value keys, up to 8: {}", keys.join(", ")));
                 }
-                Some(_) => detail.push("no changed values among comparable safe keys".into()),
-                None => detail.push("changed-value key attribution unavailable".into()),
+                Ok(_) => detail.push("no changed values among comparable safe keys".into()),
+                Err(reason) => detail.push(format!(
+                    "changed-value key attribution unavailable: {reason}"
+                )),
             }
             reasons.push(format!("environment changed ({})", detail.join("; ")));
         }
@@ -171,6 +169,21 @@ impl InputDiagnostics {
             "{} (compared with last recorded successful build)",
             reasons.join("; ")
         )
+    }
+
+    fn changed_environment_keys(
+        &self,
+        previous: &Self,
+    ) -> Result<Vec<String>, environment::ComparisonFailure> {
+        let current = self
+            .value_comparison
+            .as_ref()
+            .map_err(|reason| environment::ComparisonFailure::CurrentCapture(*reason))?;
+        let previous = previous
+            .value_comparison
+            .as_ref()
+            .map_err(|reason| environment::ComparisonFailure::PreviousCapture(*reason))?;
+        current.changed_keys(previous)
     }
 }
 

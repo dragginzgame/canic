@@ -78,6 +78,10 @@ pub(super) fn observation(timing: FleetObservationTiming) {
     emit("CANIC-OBSERVATION", &ObservationEvent::new(timing));
 }
 
+pub(super) fn request(timing: canic_host::icp::IcpRequestTiming) {
+    emit("CANIC-REQUEST", &timing);
+}
+
 impl Span {
     pub(super) fn start(name: &'static str) -> Self {
         let id = NEXT_ID.fetch_add(1, Ordering::Relaxed);

@@ -14,11 +14,11 @@ fn keyed_comparison_names_changes_without_retaining_values_or_unkeyed_hashes() {
     let value = "synthetic-comparison-value";
     let baseline = EnvironmentComparison::with_key(&key, &inputs(value)).unwrap();
     let repeat = EnvironmentComparison::with_key(&key, &inputs(value)).unwrap();
-    assert_eq!(repeat.changed_keys(&baseline), Some(vec![]));
+    assert_eq!(repeat.changed_keys(&baseline), Ok(vec![]));
     let changed = EnvironmentComparison::with_key(&key, &inputs("another-setting")).unwrap();
     assert_eq!(
         changed.changed_keys(&baseline),
-        Some(vec!["CANIC_TEST_BUILD_INPUT".into()])
+        Ok(vec!["CANIC_TEST_BUILD_INPUT".into()])
     );
     let bytes = serde_json::to_string(&baseline).unwrap();
     assert!(!bytes.contains(value));
@@ -28,7 +28,10 @@ fn keyed_comparison_names_changes_without_retaining_values_or_unkeyed_hashes() {
     assert!(!bytes.contains(&serde_json::to_string(&key).unwrap()));
     key[0] ^= 1;
     let rotated = EnvironmentComparison::with_key(&key, &inputs(value)).unwrap();
-    assert!(rotated.changed_keys(&baseline).is_none());
+    assert_eq!(
+        rotated.changed_keys(&baseline),
+        Err(ComparisonFailure::DifferentLocalKeys)
+    );
 }
 
 #[test]
@@ -59,9 +62,28 @@ fn comparison_is_order_independent_bounded_and_names_only_safe_keys() {
             .len(),
         8
     );
-    assert!(
+    assert_eq!(
         EnvironmentComparison::with_key(&key, &vec![("SAFE".into(), "value".into()); MAX_KEYS + 1])
-            .is_none()
+            .err(),
+        Some(CaptureFailure::InputLimitExceeded)
+    );
+}
+
+#[test]
+fn oversized_retained_evidence_is_rejected_before_value_comparison() {
+    let key = [7; 32];
+    let baseline = EnvironmentComparison::with_key(&key, &inputs("old")).unwrap();
+    let mut oversized = EnvironmentComparison::with_key(&key, &inputs("new")).unwrap();
+    oversized.tags = (0..=MAX_KEYS)
+        .map(|index| (format!("KEY_{index}"), [0; 32]))
+        .collect();
+    assert_eq!(
+        baseline.changed_keys(&oversized),
+        Err(ComparisonFailure::EvidenceLimitExceeded)
+    );
+    assert_eq!(
+        oversized.changed_keys(&baseline),
+        Err(ComparisonFailure::EvidenceLimitExceeded)
     );
 }
 
@@ -72,7 +94,10 @@ fn missing_corrupt_shared_and_linked_keys_disable_comparison_without_replacement
     let root = temp_dir("environment-comparison-key");
     let path = root.join(KEY_PATH);
     let values = inputs("synthetic-value");
-    assert!(EnvironmentComparison::capture(&root, &values).is_none());
+    assert_eq!(
+        EnvironmentComparison::capture(&root, &values).err(),
+        Some(CaptureFailure::LocalKeyUnavailable)
+    );
     prepare_key(&root);
     let original = fs::read(&path).unwrap();
     assert_eq!(
@@ -86,22 +111,31 @@ fn missing_corrupt_shared_and_linked_keys_disable_comparison_without_replacement
         EnvironmentComparison::capture(&root, &values)
             .unwrap()
             .changed_keys(&baseline),
-        Some(vec![])
+        Ok(vec![])
     );
     fs::set_permissions(&path, fs::Permissions::from_mode(0o644)).unwrap();
     prepare_key(&root);
-    assert!(EnvironmentComparison::capture(&root, &values).is_none());
+    assert_eq!(
+        EnvironmentComparison::capture(&root, &values).err(),
+        Some(CaptureFailure::LocalKeyUnavailable)
+    );
     fs::set_permissions(&path, fs::Permissions::from_mode(0o600)).unwrap();
     fs::write(&path, b"truncated").unwrap();
     prepare_key(&root);
-    assert!(EnvironmentComparison::capture(&root, &values).is_none());
+    assert_eq!(
+        EnvironmentComparison::capture(&root, &values).err(),
+        Some(CaptureFailure::LocalKeyUnavailable)
+    );
     assert_eq!(fs::read(&path).unwrap(), b"truncated");
     fs::remove_file(&path).unwrap();
     let target = root.join("private-target");
     create_private_bytes_with_parents(&target, &original).unwrap();
     symlink(&target, &path).unwrap();
     prepare_key(&root);
-    assert!(EnvironmentComparison::capture(&root, &values).is_none());
+    assert_eq!(
+        EnvironmentComparison::capture(&root, &values).err(),
+        Some(CaptureFailure::LocalKeyUnavailable)
+    );
     assert!(
         fs::symlink_metadata(&path)
             .unwrap()
@@ -110,7 +144,10 @@ fn missing_corrupt_shared_and_linked_keys_disable_comparison_without_replacement
     );
     fs::remove_file(&path).unwrap();
     fs::hard_link(&target, &path).unwrap();
-    assert!(EnvironmentComparison::capture(&root, &values).is_none());
+    assert_eq!(
+        EnvironmentComparison::capture(&root, &values).err(),
+        Some(CaptureFailure::LocalKeyUnavailable)
+    );
     fs::remove_dir_all(root).unwrap();
 }
 

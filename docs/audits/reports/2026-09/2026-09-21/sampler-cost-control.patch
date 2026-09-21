@@ -1,0 +1,269 @@
+diff --git a/canisters/test/runtime_probe/src/lib.rs b/canisters/test/runtime_probe/src/lib.rs
+index c8b58e510..76b794413 100644
+--- a/canisters/test/runtime_probe/src/lib.rs
++++ b/canisters/test/runtime_probe/src/lib.rs
+@@ -1,6 +1,7 @@
+ #![expect(clippy::unused_async)]
+ 
+ mod process_fixture;
++mod sampling_audit;
+ 
+ use canic::{
+     Error,
+@@ -429,4 +430,9 @@ async fn suspend_public_sampler_fixture() -> Result<(), Error> {
+     Ok(())
+ }
+ 
++#[canic_update(requires(caller::is_controller()))]
++async fn sampler_cost_investigation(rows: u16) -> Result<sampling_audit::SamplingCost, Error> {
++    sampling_audit::run(rows)
++}
++
+ canic::finish!();
+diff --git a/crates/canic-core/src/api/public_status/mod.rs b/crates/canic-core/src/api/public_status/mod.rs
+index c6dc0b73b..745c2a875 100644
+--- a/crates/canic-core/src/api/public_status/mod.rs
++++ b/crates/canic-core/src/api/public_status/mod.rs
+@@ -47,3 +47,6 @@ impl PublicStatusApi {
+         PublicMetricsWorkflow::record_application(metrics).map_err(Into::into)
+     }
+ }
++
++// Temporary measurement accessors, removed after the investigation.
++pub use crate::model::public_metrics::{audit_finish, audit_start};
+diff --git a/crates/canic-core/src/model/public_metrics/history/mod.rs b/crates/canic-core/src/model/public_metrics/history/mod.rs
+index 439af9636..d247f4226 100644
+--- a/crates/canic-core/src/model/public_metrics/history/mod.rs
++++ b/crates/canic-core/src/model/public_metrics/history/mod.rs
+@@ -92,7 +92,10 @@ impl PublicHistoryCache {
+     pub fn record(family: PublicMetricFamily, now_ns: u64, metrics: &[PublicMetricSample]) {
+         Self::expire(now_ns);
+         HISTORY.with_borrow_mut(|history| {
++            let mut lookup = 0;
++            let mut ring = 0;
+             for metric in metrics {
++                let lookup_start = crate::perf::perf_counter();
+                 let slot = metric.observed_at_ns / PUBLIC_METRICS_CADENCE_NS;
+                 let now_slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
+                 if now_slot.saturating_sub(slot) >= PUBLIC_HISTORY_SLOTS as u64 {
+@@ -142,6 +145,8 @@ impl PublicHistoryCache {
+                         entry.into_mut()
+                     }
+                 };
++                lookup += crate::perf::perf_counter().saturating_sub(lookup_start);
++                let ring_start = crate::perf::perf_counter();
+                 let point = PublicHistorySample {
+                     slot,
+                     observed_at_ns: metric.observed_at_ns,
+@@ -163,8 +168,16 @@ impl PublicHistoryCache {
+                     series.slots.push_back(point);
+                 }
+                 series.latest_observed_at_ns = metric.observed_at_ns;
++                ring += crate::perf::perf_counter().saturating_sub(ring_start);
+             }
++            let shrink_start = crate::perf::perf_counter();
+             history.series.shrink_to_fit();
++            crate::model::public_metrics::audit_phase(
++                format!("{family:?}.history.shrink"),
++                shrink_start,
++            );
++            crate::model::public_metrics::audit_value(format!("{family:?}.history.lookup"), lookup);
++            crate::model::public_metrics::audit_value(format!("{family:?}.history.ring"), ring);
+         });
+     }
+ 
+diff --git a/crates/canic-core/src/model/public_metrics/mod.rs b/crates/canic-core/src/model/public_metrics/mod.rs
+index 7db660aca..c911f3810 100644
+--- a/crates/canic-core/src/model/public_metrics/mod.rs
++++ b/crates/canic-core/src/model/public_metrics/mod.rs
+@@ -61,6 +61,7 @@ impl PublicMetricsCache {
+         sampled_at_ns: u64,
+         metrics: impl IntoIterator<Item = PublicMetricSample>,
+     ) -> Result<(), crate::InternalError> {
++        let audit_started = crate::perf::perf_counter();
+         let mut metrics: Vec<_> = metrics.into_iter().take(MAX_PUBLIC_METRICS + 1).collect();
+         let truncated = metrics.len() > MAX_PUBLIC_METRICS;
+         metrics.truncate(MAX_PUBLIC_METRICS);
+@@ -107,7 +108,13 @@ impl PublicMetricsCache {
+         if invalid_source {
+             return Err(crate::InternalError::invalid_input());
+         }
++        audit_phase(
++            format!("{family:?}.validation.rows={}", metrics.len()),
++            audit_started,
++        );
++        let audit_history = crate::perf::perf_counter();
+         PublicHistoryCache::record(family, sampled_at_ns, &metrics);
++        audit_phase(format!("{family:?}.history"), audit_history);
+         let sampled_at_ns = metrics
+             .iter()
+             .map(|row| row.observed_at_ns)
+@@ -137,3 +144,30 @@ fn sample_order(left: &PublicMetricSample, right: &PublicMetricSample) -> std::c
+         .cmp(&right.name)
+         .then(left.canister_id.cmp(&right.canister_id))
+ }
++
++// Temporary investigation counters; removed after retained evidence is collected.
++thread_local! {
++    static AUDIT_PHASES: RefCell<Option<Vec<(String, u64)>>> = const { RefCell::new(None) };
++}
++pub fn audit_start() {
++    AUDIT_PHASES.with_borrow_mut(|phases| *phases = Some(Vec::new()));
++}
++pub fn audit_finish() -> Vec<(String, u64)> {
++    AUDIT_PHASES.with_borrow_mut(|phases| phases.take().unwrap_or_default())
++}
++pub fn audit_phase(label: impl Into<String>, start: u64) {
++    let elapsed = crate::perf::perf_counter().saturating_sub(start);
++    AUDIT_PHASES.with_borrow_mut(|phases| {
++        if let Some(phases) = phases {
++            phases.push((label.into(), elapsed));
++        }
++    });
++}
++
++pub fn audit_value(label: impl Into<String>, value: u64) {
++    AUDIT_PHASES.with_borrow_mut(|phases| {
++        if let Some(phases) = phases {
++            phases.push((label.into(), value));
++        }
++    });
++}
+diff --git a/crates/canic-core/src/ops/runtime/public_metrics/mod.rs b/crates/canic-core/src/ops/runtime/public_metrics/mod.rs
+index 644eee83c..d057ef447 100644
+--- a/crates/canic-core/src/ops/runtime/public_metrics/mod.rs
++++ b/crates/canic-core/src/ops/runtime/public_metrics/mod.rs
+@@ -246,10 +246,12 @@ impl PublicMetricsOps {
+     }
+ 
+     pub fn sample_family(family: PublicMetricFamily, now: u64) -> Result<(), InternalError> {
++        let audit_start = crate::perf::perf_counter();
+         let mut rows = match family {
+             PublicMetricFamily::Application => {
+                 if let Some(sample) = APPLICATION_SAMPLER.get() {
+                     let metrics = (sample.collect)().map_err(|_| InternalError::invalid_input())?;
++                    crate::model::public_metrics::audit_phase("Application.provider", audit_start);
+                     return Self::record_application(metrics);
+                 }
+                 return Ok(());
+@@ -294,9 +296,18 @@ impl PublicMetricsOps {
+                 };
+             }
+         }
++        crate::model::public_metrics::audit_phase(
++            format!("{family:?}.native_collection"),
++            audit_start,
++        );
+         if family == PublicMetricFamily::Performance {
++            let audit_memory = crate::perf::perf_counter();
+             // Allocation rows own their source times, including retained values on failure.
+             rows.splice(0..0, memory::sample(now));
++            crate::model::public_metrics::audit_phase(
++                "Performance.memory_collection",
++                audit_memory,
++            );
+         }
+         PublicMetricsCache::replace(family, now, rows)
+     }
+diff --git a/crates/canic-core/src/workflow/metrics/publication/mod.rs b/crates/canic-core/src/workflow/metrics/publication/mod.rs
+index 2ef932211..9aa415221 100644
+--- a/crates/canic-core/src/workflow/metrics/publication/mod.rs
++++ b/crates/canic-core/src/workflow/metrics/publication/mod.rs
+@@ -48,6 +48,7 @@ impl PublicMetricsWorkflow {
+         let start = crate::perf::perf_counter();
+         let now = IcOps::now_nanos();
+         PublicMetricsOps::expire_history(now);
++        crate::model::public_metrics::audit_phase("history_expiration", start);
+         let result = Self::sample_selected(families, now);
+         crate::perf::record_checkpoint(
+             "canic",
+diff --git a/crates/canic-tests/tests/timer_authority.rs b/crates/canic-tests/tests/timer_authority.rs
+index bf8d6391c..d16f4d5e6 100644
+--- a/crates/canic-tests/tests/timer_authority.rs
++++ b/crates/canic-tests/tests/timer_authority.rs
+@@ -1257,3 +1257,28 @@ fn assert_public_process_projection(
+         allocation("known_binding") + allocation("unknown_binding")
+     );
+ }
++
++#[derive(CandidType, Deserialize, Debug)]
++struct SamplingCost {
++    total: u64,
++    phases: Vec<(String, u64)>,
++}
++#[test]
++fn sampler_cost_investigation() {
++    let fixture = install_lifecycle_boundary_fixture();
++    for rows in [0_u16, 100, 211] {
++        let canister = fixture.install_runtime_probe_canister();
++        for period in 0..3 {
++            fixture.pic.advance_time(Duration::from_secs(301));
++            let sample: Result<SamplingCost, Error> = fixture
++                .pic
++                .update_candid(canister, "sampler_cost_investigation", (rows,))
++                .unwrap();
++            let sample = sample.unwrap();
++            assert!(sample.total > 0);
++            if period < 3 || period == 299 {
++                println!("SAMPLER_AUDIT rows={rows} period={period} {sample:?}");
++            }
++        }
++    }
++}
+diff --git a/canisters/test/runtime_probe/src/sampling_audit/mod.rs b/canisters/test/runtime_probe/src/sampling_audit/mod.rs
+new file mode 100644
+index 000000000..fb6244f60
+--- /dev/null
++++ b/canisters/test/runtime_probe/src/sampling_audit/mod.rs
+@@ -0,0 +1,51 @@
++//! Temporary controlled sampler attribution fixture.
++use canic::{
++    Error,
++    api::public_status::{ApplicationMetricsSampler, PublicStatusApi},
++    dto::public_status::{PublicMetric, PublicMetricKind},
++};
++use std::cell::Cell;
++thread_local! { static ROWS: Cell<u16> = const { Cell::new(0) }; }
++#[derive(candid::CandidType)]
++pub(super) struct SamplingCost {
++    total: u64,
++    phases: Vec<(String, u64)>,
++}
++pub(super) fn run(rows: u16) -> Result<SamplingCost, Error> {
++    assert!(rows <= 256);
++    ROWS.set(rows);
++    PublicStatusApi::set_application_sampler(Some(ApplicationMetricsSampler::new(provider)));
++    canic::__internal::core::api::public_status::audit_start();
++    let start = ic_cdk::api::performance_counter(0);
++    let result = PublicStatusApi::sample_metrics();
++    let total = ic_cdk::api::performance_counter(0) - start;
++    let mut phases = canic::__internal::core::api::public_status::audit_finish();
++    result?;
++    canic::__internal::core::api::public_status::audit_start();
++    let second_start = ic_cdk::api::performance_counter(0);
++    let second = PublicStatusApi::sample_metrics();
++    let second_total = ic_cdk::api::performance_counter(0) - second_start;
++    phases.extend(
++        canic::__internal::core::api::public_status::audit_finish()
++            .into_iter()
++            .map(|(key, value)| (format!("same_message.{key}"), value)),
++    );
++    phases.push(("same_message.total".into(), second_total));
++    second?;
++    Ok(SamplingCost { total, phases })
++}
++fn provider() -> Result<Vec<PublicMetric>, Error> {
++    let now = ic_cdk::api::time();
++    Ok((0..ROWS.get())
++        .map(|index| PublicMetric {
++            name: format!(
++                "icydb.entity.synthetic_qualified_entity_path_{index:04}.instructions_total"
++            ),
++            unit: "instructions".into(),
++            value: u128::from(index),
++            canister_id: None,
++            observed_at_ns: now,
++            kind: PublicMetricKind::Gauge,
++        })
++        .collect())
++}

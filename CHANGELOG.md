@@ -14,6 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.35` adds explicit Fleet signer selection with potentially breaking
+  host request changes, retained deployment timing, fewer install-preparation
+  reads, clearer cache/ingress guidance, and IcyDB 0.261.2 test consumers sharing
+  Canic's timer provider. Timing DTO/event changes are potentially breaking.
 - `0.110.34` adds reviewed funding observations and recursive recovery quotes,
   extends conservation and potentially breaking Root/journal contracts, and
   removes duplicated tool-version fixtures and wording-sensitive guards.

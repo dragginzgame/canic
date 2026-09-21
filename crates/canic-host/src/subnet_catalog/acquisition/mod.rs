@@ -183,6 +183,7 @@ impl TrackedSource<'_> {
                 .cloned()
                 .collect(),
             elapsed_seconds: self.started.elapsed().as_secs(),
+            elapsed_micros: self.started.elapsed().as_micros(),
             deadline_seconds: self.budget.as_secs(),
         }
     }
@@ -224,6 +225,7 @@ impl SubnetCatalogSource for TrackedSource<'_> {
             self.set_stage(CatalogAcquisitionStage::Collecting {
                 endpoint: request.endpoint.clone(),
             });
+            let started = Instant::now();
             let result = self.source.fetch_catalog_detailed(request).await;
             self.state
                 .lock()
@@ -239,6 +241,7 @@ impl SubnetCatalogSource for TrackedSource<'_> {
                     endpoint: request.endpoint.clone(),
                     registry_version: raw.provenance.registry_version,
                     query_calls: raw.provenance.registry_query_call_count,
+                    elapsed_micros: started.elapsed().as_micros(),
                 });
             }
             result

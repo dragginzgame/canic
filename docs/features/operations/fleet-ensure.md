@@ -5,6 +5,59 @@ convergence workflow. It reads one current desired-state document, observes the
 configured controlled estate, and either writes a reviewed plan or applies the
 exact retained plan digest.
 
+Use `--identity <name>` on `fleet generate`, `fleet readiness` and `fleet ensure`
+to select the ICP signing identity without reading or changing ICP's global
+default. For example:
+
+```bash
+canic --environment staging fleet ensure staging --identity staging-operator
+```
+
+`--environment` and `--icp` are top-level options; `--identity` belongs to the
+Fleet subcommand. The selected identity is carried through observations,
+generation forecasts, apply, funding-observation collection and operator-mint
+recovery. Every existing expected-operator Principal check remains required;
+an explicit name does not override the plan's operator or authorize spending.
+An unknown identity fails through ICP rather than selecting another identity.
+Password-file handling is unchanged. Pass the same selection when reviewing or
+resuming an operation; generated successor-review commands retain it. Without
+the option, the existing default-selection behavior applies. This option does
+not select an identity for unrelated Canic command groups.
+
+Normal `fleet ensure` review/apply and `fleet generate` commands print a timing
+receipt path under `.canic/diagnostics/fleet/` before measured work. `--json`
+Ensure output emits a `fleet_ensure_timing_receipt` event with that path. These
+private JSONL diagnostics supplement the retained plan and journal; they never
+prove deployment completion or authorize continuation. Funding-observation and
+operator-mint subcommands retain their existing output owners.
+
+Each line has UTC Unix milliseconds and monotonic elapsed microseconds. Existing
+progress DTOs bind operation, plan and phase; stage and request identifiers link
+start/end pairs and inclusive parents. An observation's `succeeded: null` is a
+start, `true` is successful completion of that boundary and `false` is failure.
+A successful submission is not verified remote convergence. Do not sum a parent
+with its children, or concurrent request durations as critical-path wall time.
+Request times include local startup/IPC and remote response/confirmation; pure
+CPU, internal IC calls and remote-wait components remain unavailable.
+
+Receipts distinguish confirmed increases in applied receipts or provisioning
+counts from repeated polls and local activity. They retain the exact next
+no-effect review command and available originating retry owner/cause. A missing
+origin or runtime retry deadline stays unknown. The final diagnostic workflow outcome
+includes the plan scope and `terminal` flag; the plan/journal remain the execution
+authority. An 8 MiB per-invocation cap reserves room for an outcome and an omitted
+count. A partial final line, absent outcome, omitted events or diagnostic I/O
+error means incomplete evidence. Interrupted files are retained; continuation
+creates a new file. Keep both when reporting a deployment issue. No automatic
+cross-invocation pruning is performed.
+
+Generation retains catalog progress and endpoint collection durations. Endpoint
+collection includes certification; final acquisition completion includes the
+upstream agreement, cache validation and publication boundary. Existing validated
+cache reuse and freshness/assurance rules remain unchanged. See the
+[qualification report](../../audits/reports/2026-09/2026-09-21/deployment-timing.md)
+for measured costs and coverage limits.
+
 Before compiling a release, run `canic --environment staging fleet readiness
 staging --operator <principal>` from the workspace. This read-only command checks
 the selected signer against the explicit operator, verifies the enrolled network
@@ -26,6 +79,15 @@ Downstream deployment orchestration should call readiness before `canic build`.
 Offline artifact-only builds do not acquire a Fleet identity or make Ledger
 queries automatically. Readiness does not predict complete managed lifecycle
 convergence, validate application hooks, authorize payment or approve reset scope.
+
+The early command observes the operator's Cycles Ledger balance. It does not
+measure Root native balances, quote ICP conversion/fees, derive the complete
+startup reserve or promise future affordability. In particular, a funded operator
+can coexist with an underfunded Root. Treat these as unresolved inputs until
+the current generation forecast and exact plan-bound funding checks establish
+them; `--estimated-cycles` cannot turn them into verified native headroom.
+The readiness JSON is an invocation snapshot, without a retained funding quote
+or freshness deadline. Applications still need later fresh plan admission.
 
 After convergence, `canic admission plan`, `apply` and `status` use the selected
 release retained in the terminal Fleet plan to locate Coordinator and Root Candid

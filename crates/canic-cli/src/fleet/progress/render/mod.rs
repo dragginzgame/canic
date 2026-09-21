@@ -45,11 +45,7 @@ pub(in crate::fleet) fn plain(progress: &FleetEnsureProgress) -> String {
                 detail.component_count
             );
             if let Some(retry) = detail.pending_root_failure {
-                let _ = write!(
-                    line,
-                    "; reported retry for Root {} ({:?}, code {})",
-                    retry.fleet_subnet_root, retry.stage, retry.diagnostic_code
-                );
+                let _ = write!(line, "; {}", pending_retry(retry));
             }
         } else {
             line.push_str("; readiness detail unavailable");
@@ -117,10 +113,7 @@ pub(super) fn panel(
             lines.extend(stages(detail));
             lines.push("Final checks                     Pending".into());
             if let Some(retry) = detail.pending_root_failure {
-                lines.push(format!(
-                    "Reported retry: {:?}, code {}",
-                    retry.stage, retry.diagnostic_code
-                ));
+                lines.push(pending_retry(retry));
             }
             lines.push(format!(
                 "{elapsed_seconds}s awaiting this effect here; Components in scope: {}",
@@ -292,4 +285,20 @@ fn safe_text(value: &str) -> String {
         .chars()
         .map(|ch| if ch.is_control() { '?' } else { ch })
         .collect()
+}
+
+fn pending_retry(
+    retry: canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure,
+) -> String {
+    if let Some(origin) = retry.origin {
+        format!(
+            "Pending owner {}: {:?}, code {}, {:?}; retry deadline unavailable",
+            origin.target, origin.stage, origin.diagnostic_code, origin.retry_category
+        )
+    } else {
+        format!(
+            "Root {}: {:?}, code {}; originating owner unavailable; retry deadline unavailable",
+            retry.fleet_subnet_root, retry.stage, retry.diagnostic_code
+        )
+    }
 }
