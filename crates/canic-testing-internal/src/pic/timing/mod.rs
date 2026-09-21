@@ -78,6 +78,7 @@ pub(super) fn observation(timing: FleetObservationTiming) {
     emit("CANIC-OBSERVATION", &ObservationEvent::new(timing));
 }
 
+#[cfg(feature = "governed-pocketic-tests")]
 pub(super) fn request(timing: canic_host::icp::IcpRequestTiming) {
     emit("CANIC-REQUEST", &timing);
 }
