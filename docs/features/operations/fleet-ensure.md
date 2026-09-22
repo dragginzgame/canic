@@ -1207,6 +1207,25 @@ transfers, missing assets and unrelated operator balance changes reject this
 bounded path. Receipt inspection verifies the retained completion evidence; it
 does not independently fetch historical Ledger blocks.
 
+A completed source with no operator payments may explicitly review one external
+Cycles Ledger withdrawal using `--reinstall --retirement-debit-block <BLOCK>`.
+This is limited to a default operator account and a currently operator-controlled
+destination outside the source Fleet. The block must postdate the source review;
+its exact amount plus fee must explain the entire independent balance change.
+No source document or bound changes. Sources with operator payments, unexplained
+movement, refunds or a destination inside the source estate reject this lane.
+
+The host fetches that single block through a replicated query and verifies the
+destination with controller-only management status. The record binds the Ledger,
+operator, destination, network root key, block hash/index, timestamp, amount and
+fee. A burn receipt proves the debit only: it neither proves successful delivery
+nor authorises retrying a withdrawal. The receipt is retained separately from
+source conservation in the new reviewed plan. Apply takes only that plan's digest,
+re-reads the receipt and live balances, and rejects changes before source adoption
+or authority sealing. Response size, decoding work and observation time are bounded;
+archived or unsupported receipt shapes fail closed. Existing source archive,
+interruption and effect-free replay owners remain unchanged.
+
 The separate preparation review exposes those measured values under
 `reinstall.source.terminal_retirement.conservation`, together with exact raw
 source document hashes. Review the full reset scope and selected target artifacts.

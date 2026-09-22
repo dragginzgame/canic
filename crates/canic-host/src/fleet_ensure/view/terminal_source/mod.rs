@@ -13,6 +13,7 @@ use crate::fleet_ensure::model::{
 #[derive(Clone, Debug)]
 pub struct TerminalSourceView {
     pub documents: FleetTerminalSourceRecord,
+    pub planned_at_time: u64,
     pub reviewed_desired: ReviewedDesiredFleetRecord,
     pub conservation: CycleConservation,
     pub journal: TerminalJournalView,

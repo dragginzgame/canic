@@ -20,6 +20,33 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Completed-source external debit recovery — 2026-09-22
+
+Toko Miner authorised this sibling implementation after its frontend top-up
+changed the operator balance before retiring a completed Fleet operation.
+Published .37 correctly rejects that unexplained debit; the new explicit
+`--retirement-debit-block` review accounts for one authenticated external
+withdrawal without changing source evidence or source payment bounds. The
+[operation owner](../features/operations/fleet-ensure.md) defines the zero-payment
+source restriction, exact receipt/control binding and pre-apply re-observation.
+
+Seventeen focused retirement tests pass, including typed receipt rejection,
+net-balance/refund rejection and interrupted evidence handoff; one opt-in
+workspace inspector remains skipped. All 27 scoped Fleet CLI tests, strict
+host/CLI Clippy across all targets, formatting and whitespace checks pass. A separate live read authenticates the existing Ledger burn
+and confirms the destination's controller; this is not a candidate deployment
+review or a successful withdrawal-delivery proof. Existing seal execution is
+unchanged and no new PocketIC execution has run.
+
+This adds one explicit recovery input and one separate accounting record under
+the existing retirement owner, with no new journal, payment/retry path, schema
+generation or executable predecessor reader. Existing immutable historical
+accounting remains solely conservation evidence. The maintainer explicitly authorised an isolated recovery release and use of
+its immutable host CLI to deploy the unchanged Toko Miner 0.3.8 artefacts.
+The complete release gate is next; unrelated B1 work remains outside this release.
+
+
+
 ## .37 secret-scan correction — 2026-09-22
 
 The maintainer's release validation finds four `generic-api-key` candidates in

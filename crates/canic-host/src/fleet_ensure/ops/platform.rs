@@ -619,6 +619,8 @@ enum RejectionCode {
 #[derive(Debug, ThisError)]
 pub enum IcpEnsurePlatformError {
     #[error(transparent)]
+    RetirementDebit(#[from] crate::fleet_ensure::ops::reinstall::debit::RetirementDebitError),
+    #[error(transparent)]
     FundingObservation(
         #[from] crate::fleet_ensure::model::funding_observation::FundingObservationError,
     ),
@@ -877,6 +879,7 @@ struct ObservationCounters {
 
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
+    retirement_debit_block: Option<u64>,
     pub(super) desired: DesiredFleet,
     pub(super) icp: IcpCli,
     initial_observation_delay: Duration,
@@ -917,6 +920,7 @@ impl IcpEnsurePlatform {
         Self {
             desired,
             icp,
+            retirement_debit_block: None,
             initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
             observation_snapshot: RefCell::new(None),
@@ -927,6 +931,13 @@ impl IcpEnsurePlatform {
             estate_observations: BTreeMap::new(),
             root: root.to_path_buf(),
         }
+    }
+
+    /// Select one external debit for a fresh source retirement review, never an apply override.
+    #[must_use]
+    pub const fn with_retirement_debit(mut self, block: Option<u64>) -> Self {
+        self.retirement_debit_block = block;
+        self
     }
 
     /// Select the signer before the operation's existing Principal admission check.
@@ -3310,6 +3321,22 @@ impl IcpEnsurePlatform {
 
 impl EnsurePlatform for IcpEnsurePlatform {
     type Error = IcpEnsurePlatformError;
+
+    fn retirement_debit_block(&self) -> Option<u64> {
+        self.retirement_debit_block
+    }
+
+    fn observe_retirement_debit(
+        &mut self,
+        block: u64,
+    ) -> Result<Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>, Self::Error> {
+        Ok(Some(crate::fleet_ensure::ops::reinstall::debit::observe(
+            &self.icp,
+            &self.desired.cycles_ledger,
+            &self.desired.operator,
+            block,
+        )?))
+    }
 
     fn with_planning_observations<T, E>(
         &mut self,
