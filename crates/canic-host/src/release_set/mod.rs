@@ -2,6 +2,7 @@
 
 mod application;
 mod artifact;
+mod candid;
 mod config;
 mod current;
 pub mod fixture;
@@ -17,6 +18,7 @@ pub use application::{
     load_persisted_application_artifact_union,
 };
 pub(crate) use artifact::validate_release_artifact_relative_path;
+pub use candid::{BuiltCandid, BuiltCandidError, load_built_candid};
 pub use config::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
     AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,

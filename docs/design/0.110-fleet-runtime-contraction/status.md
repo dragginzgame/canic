@@ -1,5 +1,67 @@
 # Canic 0.110 Implementation Status
 
+## .37 feedback extension — 2026-09-22
+
+The requested upstream scan confirms Toko's .36 adoption and one new CANIC-181
+lookup defect. Endpoint inspection now accepts an exact release-build selector,
+verifies finalized managed declarations and reports provenance. Native artifact,
+CLI/help and scoped lint checks pass; the candidate inspects the exact Toko
+Game Shard and Root build evidence offline without local sidecar aliases. The
+[qualification report](../../audits/reports/2026-09/2026-09-22/endpoint-discovery.md)
+separates this correction from remaining downstream live/performance acceptance.
+
+Keep this correction with the completed observation optimizations in open .37;
+both changelog surfaces are ready for the maintainer's release flow and packages
+remain .36. The final narrow fixture rerun passes. No broad gate, Git mutation, publication,
+deployment or sibling mutation ran. B1 and human closeout gates remain unchanged.
+
+
+## .37 bounded observation batch — complete locally, 2026-09-22
+
+The maintainer accepts and the implementation completes fresh reconciliation
+balance reuse and bounded independent reinstall-authority reads. The
+[qualification report](../../audits/working/0.110-validation-throughput/report.md)
+retains 56 passing native regressions, scoped lint, both complete recovery cases,
+payload equality and a 39.021-second reduction outside artifact resolution in one
+mixed-topology comparison. Whole-case status requests remain unchanged because
+additional provisioning polls offset the removed Install-region reads. No
+full-validation timing or broad-suite qualification is claimed.
+
+The requested batch and both .37 changelog drafts are ready for the maintainer's
+release flow; packages remain .36 and changes are uncommitted. Reassess the
+twelve-release guideline explicitly: keep these shared host/recovery performance
+follow-ups together on the affected .110 line, as one batch rather than separate
+releases for each optimization or test. Further terminal-catalog profiling is
+follow-up, not an implemented cache change. B1 remains the structural queue;
+human acceptance and the exact minor-closeout gate are unchanged.
+
+## Post-.36 validation investigation — complete, 2026-09-22
+
+The [throughput report](../../audits/working/0.110-validation-throughput/report.md)
+now attributes the warm recovery cost and retains one passing unchanged-source
+mixed-topology probe. The next bounded implementation is equivalent balance-read
+reuse within effect reconciliation, retaining Pool authority and fresh subsequent
+attempts; then evaluate bounded infrastructure observations and profile local
+terminal-catalog work. Explicit backoff is a small part of the measured duration.
+The probe's cold builds are separated from live execution; no speedup is claimed.
+Runtime, fixtures, case membership and budgets are unchanged. The performance
+batch remains open, with no .37 draft or push-readiness claim. B1 acceptance and
+the human minor-closeout gate remain unchanged.
+
+## After published .36 — validation speed priority, 2026-09-22
+
+The maintainer confirms .36 publication and selects Canic validation time next.
+The [current handoff](../../status/current.md) records retained measurements and
+the read-only Toko review. Internal PocketIC accounts for 2,329 of 2,669 seconds
+in the latest successful test run; mixed-topology recovery and generated reinstall
+account for 895 seconds. Target their repeated execution while preserving the
+required topology, deliberate resets, interruption recovery and conservation.
+Artifact setup is mostly warm in this run; no new cache saving is established.
+This is the selected investigation, not a completed implementation or .37 draft.
+
+RF3 and the .36 feedback batch are complete. B1 remains the structural queue;
+its human acceptance and the separate minor-closeout gate are unchanged.
+
 ## .36 upstream feedback follow-up — complete locally, 2026-09-22
 
 The maintainer's accepted CANIC-166/172/181 work extends the same open .36 batch:
@@ -2396,13 +2458,12 @@ Current canonical-role evidence:
 
 ## Next Authorized Action
 
-Continue RF3 according to the [current queue](../../status/current.md).
-Ordinary preview remains query-only; paid descendant observations require a
-reviewed budget and minimum native Root recovery must work without them.
-Keep missing or stale evidence explicitly unknown. Complete the accepted batch's
-recovery evidence and propagation before calling `.34` ready.
+Continue the selected validation-throughput investigation in the
+[current queue](../../status/current.md), using the retained .36 timings and
+targeted recovery cases. RF3 and the .36 feedback corrections are complete;
+do not reopen them merely because the dated checkpoints above predate publication.
 
-After RF3, continue B1 from immutable `v0.110.5`. Rows 8, 10 and 12 still need
+Then continue B1 from immutable `v0.110.5`. Rows 8, 10 and 12 still need
 retained matched measurements; row 6's retained measurement is complete.
 Complete the remaining controlled ablations, optimized generated-surface
 absence, generic cohort and accepted allowances. Human acceptance of complete

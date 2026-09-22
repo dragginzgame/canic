@@ -20,6 +20,118 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .37 upstream feedback correction — 2026-09-22
+
+Toko's .36 adoption passes full CI and confirms fast-profile same-checkout reuse
+in 2.00 seconds. Its new CANIC-181 follow-up identifies a real post-build endpoint
+lookup gap. Explicit `info endpoints --release-build <sha256>` now resolves the
+selected declaration through finalized managed artifact manifests, verifies its
+hash and reports source/build identity. It stays offline and rejects drift
+without substituting live or local metadata. Normal sidecar lookup honors the
+selected environment. See the
+[qualification report](../audits/reports/2026-09/2026-09-22/endpoint-discovery.md).
+
+The targeted host, CLI and help checks plus scoped Clippy pass. The candidate
+also reads Toko's exact .36 Game Shard and Root build evidence from a Canic-owned
+copy, with no ICP sidecars or installed Fleet. The Game Shard's 49,152-byte
+explicit limit and 16,384-byte default are reproduced. Sibling repositories and
+the original diagnostic inputs remain read-only. Live acceptance, matched
+application cost measurements and release-profile/relocation reuse remain open;
+this scan establishes no additional Canic defect for those items.
+
+This extends the completed observation-performance work in the same open .37
+batch. Both changelog drafts are maintained; package versions remain .36 and no
+broad gate, Git mutation, publication or deployment ran. The complete accepted
+batch is ready for the maintainer's release flow; the final narrow fixture rerun
+also passes. B1 and the human minor-closeout gate remain unchanged.
+
+
+## .37 observation optimization — complete locally, 2026-09-22
+
+The maintainer-authorized two-change batch is implemented and qualified. Direct
+reconciliation reuses its status balance while configured Pools retain protected
+Root observation. Reinstall authority reads overlap in bounded batches after
+Root prerequisites, with configured-order failures, full batch drainage and fresh
+subsequent attempts. See the
+[throughput report](../audits/working/0.110-validation-throughput/report.md).
+
+All 56 focused platform tests and scoped warning-denied Clippy pass. Both exact
+mixed-topology and generated-reinstall PocketIC cases pass, retaining all recovery,
+conservation and replay checks. The mixed case takes 463.134 seconds outside
+artifact resolution versus 502.155 in the control; all 48 payload output pairs
+match. This one local pair is 39.021 seconds shorter, not a full-validation result.
+Twenty fewer status reads in Install regions are offset by more provisioning
+polls, leaving the whole-case status count at 726. Evidence and limits are in the
+report and `.tmp/validation37/`.
+
+The complete requested batch and both .37 changelog drafts are ready for the
+maintainer's release flow. Package versions remain .36, the broad gate was not
+rerun, and changes are uncommitted. No Git mutation, release, deployment or sibling
+edit ran. Local catalog attribution remains a separate follow-up; no catalog or
+authority cache lifetime changed. B1 and the human minor-closeout gate remain open.
+
+## Post-.36 validation profile — investigation complete, 2026-09-22
+
+The [throughput report](../audits/working/0.110-validation-throughput/report.md)
+records the completed investigation and bounded implementation sequence. In the
+retained warm mixed-topology case, 723 management-status requests account for
+187.626 request-seconds; terminal inventory takes 104.219 seconds over 21 passes,
+while explicit backoff takes only 12.359 seconds. Nested and concurrent timings
+are not additive savings.
+
+First remove equivalent duplicate balance reads during effect reconciliation,
+preserving protected Pool inspection and freshness across attempts. Then evaluate
+bounded independent reinstall-authority reads and attribute local catalog costs
+before changing their lifetime. Retain both deliberate resets, exact recovery,
+conservation, state and terminal replay checks.
+
+The unchanged exact mixed-topology case passes in 1,098.78 seconds (1,296.57
+seconds for the command). Cold artifact resolution accounts for 596.491 seconds;
+initial recovery is 123.364 seconds versus the retained 124.020. CPU sampling
+shows both computation and waiting. This is a baseline, not a speedup. Logs and
+samples: `.tmp/validation37/`; hashes are in the report's qualification record.
+No runtime source changed and no full suite ran. Implementation and its complete
+performance batch remain pending; no .37 changelog/version or push readiness is
+claimed. No Git mutation, release or sibling edit ran.
+
+## After .36 — validation speed selected, 2026-09-22
+
+The maintainer confirms .36 publication and selects Canic validation time as the
+next speed priority. The generated .36 receipt above supersedes the earlier
+development-readiness statements below. No .37 implementation or speedup is
+claimed by this read-only triage.
+
+The latest retained successful test run takes 2,669 seconds: ordinary tests 94,
+internal PocketIC 2,329, host PocketIC 21, runtime integrations 197, blob storage
+20 and payload limits 7, plus runner overhead. The mixed-topology recovery case
+takes 530.876 seconds and generated reinstall 364.150 seconds. Instrumented
+artifact resolution totals only 100.691 seconds across fifteen calls, including
+65.710 seconds of recipe construction; these are nested costs, not additional
+wall time. Source: `target/validation-runs/20260922T104803Z-16570.vxC9Xr/0.log`.
+
+Next bounded validation batch: profile repeated preparation, observations and
+reconciliation in those two recovery cases; qualify any reduction with unchanged
+topology, both deliberate mixed-topology resets, interruption/retry assertions,
+application-state checks, conservation and terminal replay. Preserve .36's early
+recovery ordering and failure barriers. Do not repeat the already-rejected slower
+backoff experiment or infer a speedup from warmer compilation. Use focused case
+runs and existing structured timings; the complete gate remains maintainer-owned.
+
+Toko Miner was inspected read-only. Its current manifest still selects Canic
+0.110.35 and IcyDB 0.261.5; .36 adoption and real sampler improvement are not yet
+recorded. The latest feedback retains CANIC-160/176 deployment/build acceptance,
+with no new issue beyond CANIC-181. Its local receipts include successful 72-effect
+and 42-effect runs of 289.249 and 234.655 seconds; these are different operations,
+not a matched speed comparison. The latter contains 199 status requests and 148
+identity lookups; nested request timings must not be added to wall time. Receipt:
+`.canic/diagnostics/fleet/1790069060443-8140-1.jsonl` in the Toko workspace.
+
+RF3 and the .36 feedback batch are complete. B1's remaining immutable rows 8/10/12,
+other ablations, optimized-artifact and generic evidence remain the accepted
+structural queue after this validation priority. Human B1 acceptance still gates
+B2/B3, and minor closeout remains human-owned. No tests, compilation, sibling
+mutation, Git mutation or release action ran during this triage.
+
 ## .36 PocketIC clock race and failure turnaround — complete locally, 2026-09-22
 
 The activation-reset recovery fixture manually advanced time while the live

@@ -14,6 +14,11 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.37` reuses fresh reconciliation balances and overlaps independent
+  reinstall-authority observations, retaining protected Pool checks and recovery
+  qualification while reducing host observation work. Fix selected-build endpoint
+  discovery with exact artifact verification and explicit report provenance;
+  endpoint JSON additions may affect strict consumers.
 - `0.110.36` improves metric history locality and Fleet recovery, adds early funding
   readiness and compiled payload-limit reporting, and updates IcyDB test consumers
   to 0.261.4. Host report additions are potentially breaking. Fix a PocketIC clock

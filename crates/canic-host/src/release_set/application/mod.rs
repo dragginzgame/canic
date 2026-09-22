@@ -35,6 +35,8 @@ use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
+pub(super) use persistence::load_retained_application_artifact_union;
+
 pub use persistence::{
     ApplicationArtifactFileBuildOutput, ApplicationArtifactUnionPersistenceError,
     PersistedApplicationArtifactUnion, compile_and_persist_application_artifact_union,
@@ -233,8 +235,8 @@ impl ApplicationArtifactUnion {
 
     /// Validate the canonical persisted shape without requiring caller-workspace topology.
     ///
-    /// Recovery uses this only after a Fleet plan has bound the exact canonical union digest.
-    /// Normal compilation and loading must continue to use [`Self::validate_against`].
+    /// Offline inspection binds these bytes to a finalized release manifest.
+    /// Compilation and topology-bound loading also use [`Self::validate_against`].
     pub(crate) fn validate_retained_shape(&self) -> Result<(), ApplicationReleaseSetError> {
         if self.entries.is_empty() {
             return Err(ApplicationReleaseSetError::EmptyArtifactUnion);

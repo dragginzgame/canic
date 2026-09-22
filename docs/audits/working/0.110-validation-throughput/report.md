@@ -1,5 +1,153 @@
 # Release-test throughput qualification
 
+## Post-.36 observation optimization — qualified locally, 2026-09-22
+
+The maintainer authorizes the first two bounded changes from the investigation
+below. Both are implemented in `canic-host`, on base
+`0bd466121725a4d5dc823cb4567fab173209fac6`. Candidate source and log hashes are
+retained under `post_36_observation_optimization` in `qualification.json`.
+
+Direct Install, Start, Stop and SetControllers reconciliation now returns the
+cycle balance from its status response. The workflow's existing balance path
+consumes that observation. Configured Pool actions still require their protected
+Root path, even when a direct response contains cycles. No observation survives
+into a subsequent attempt. Native tests distinguish direct and protected balances,
+change balances/controllers/module/status between attempts, reject typed identity
+and Pool-authority failures, and recover with fresh evidence after failure.
+
+Reinstall authority observation finishes Root prerequisites before issuing
+independent infrastructure reads in batches of at most four. Each batch drains
+before configured-order consumption; an error stops later batches. Module,
+version, controller and subnet evidence retains its existing checks. Tests force
+overlap and out-of-order completion, retain first-input error precedence, prevent
+later-batch issuance, reject a failed Root before independent reads and observe
+changed Root and Coordinator versions on retry.
+
+All 56 focused platform tests pass; two existing opt-in measurement tests remain
+ignored. Scoped host all-target/all-feature warning-denied Clippy passes. Both
+exact PocketIC cases pass with their existing topology, resets, lost-response
+recovery, application-state, conservation and terminal replay checks:
+
+| Case | Test time | Artifact resolution included in test |
+| --- | ---: | ---: |
+| Mixed topology and Ready reserve | 558.59 s | 95.323 s |
+| Generated reinstall | 467.02 s | 149.723 s |
+
+The mixed-topology comparison uses the unchanged-source control recorded below.
+All 48 named Wasm, compressed Wasm and Candid outputs across the two release sets
+match by directly calculated SHA-256 and byte length. Cache manifest digests are
+separately retained; they use the cache's labeled digest contract, not raw SHA-256.
+
+| Mixed-topology measurement | Control | Candidate |
+| --- | ---: | ---: |
+| Journey outside the two artifact-resolution spans | 502.155 s | 463.134 s |
+| Initial recovery | 123.364 s | 116.208 s |
+| First deliberate wipe, recovery and replay | 185.940 s | 172.934 s |
+| Second deliberate wipe, recovery and replay | 147.083 s | 136.527 s |
+| Management-status requests, whole journey | 726 | 726 |
+| Status requests while progress reports Install | 115 | 95 |
+| Status requests while progress reports component provisioning | 114 | 134 |
+
+The observed non-artifact reduction is 39.021 seconds (7.77%) in this one local
+pair. Individual phase rows overlap the journey row. Timing and polling vary:
+twenty additional Coordinator agent queries accompany the provisioning-region
+increase, offsetting the twenty fewer status reads in Install regions. Region
+counts use the last structured progress event, not a newly instrumented call-site
+counter. Native tests independently establish balance reuse and bounded overlap.
+There is no whole-journey request reduction or full-validation speed claim.
+
+Cold artifact work differs substantially between the runs, so total test/command
+times are not used as optimization savings. Host-only source changed; runtime
+payload equality is verified. Active sibling workloads, OS caches and transport
+variation still prevent attributing every elapsed-time difference to these two
+changes. The generated reinstall run is recovery qualification, not another
+matched benchmark. No test budget, delay policy or case membership changed.
+
+Evidence is under `.tmp/validation37/`: `host-platform-tests.log`,
+`host-clippy.log`, both `*-candidate.log` files, command resource records,
+`mixed-comparison.json`, and the control/candidate artifact inventories and parity
+record. No broad suite ran. The requested two-change batch is complete and both
+.37 changelog views are prepared; package versions remain .36. Local terminal-
+catalog attribution remains follow-up, with no cache-lifetime change included.
+No Git mutation, publication, deployment or sibling edit ran.
+
+## Post-.36 validation investigation — 2026-09-22
+
+Investigation on published source `0bd466121725a4d5dc823cb4567fab173209fac6`.
+Runtime, fixtures, budgets and case membership are unchanged. This is a profile,
+not an implemented speedup or a completed .37 release batch.
+
+The retained successful validation test command takes 2,669 seconds, including
+2,329 seconds of internal PocketIC. Its two largest recovery cases are mixed
+topology (530.876 seconds) and generated reinstall (364.150 seconds). The retained
+log is `target/validation-runs/20260922T104803Z-16570.vxC9Xr/0.log`.
+
+The mixed-topology trace narrows the next work:
+
+| Observation | Retained measurement | Interpretation |
+| --- | ---: | --- |
+| Management status | 723 requests; 187.626 request-seconds | Repeated live reads dominate the request inventory. |
+| Terminal inventory | 21 passes; 104.219 elapsed seconds | Inspect remote reads and repeated local catalog work separately. |
+| Effect reconciliation | 324 observations; 70.601 elapsed seconds | Remove equivalent duplicate balance reads within one attempt. |
+| Explicit observation backoff | 99 waits; 12.359 seconds | Shorter retry delays cannot explain away the overall duration. |
+| Artifact resolution | Two calls; 15.307 seconds | This retained case already has warm artifact setup. |
+
+Request durations can overlap, identity timings are nested, and observation
+stages can contain other stages. These rows must not be added or presented as
+predicted savings. Status-request median is 228.777 ms and p90 is 285.998 ms.
+The 483 instrumented terminal-inventory requests total 72.707 request-seconds;
+at least 31.512 seconds of that stage therefore lies outside those request
+intervals. This residual includes local preparation, process scheduling and any
+unattributed work; it is not a measurement of Cargo metadata alone.
+
+Source inspection confirms three bounded follow-ups, in order:
+
+1. `IcpEnsurePlatform::observe_effect` reads status for Install, Start, Stop and
+   SetControllers but leaves `post_cycles` absent. Both ordinary and independent
+   effect reconciliation then call `action_cycles`, requesting another balance.
+   Reuse the fresh balance only after equivalent authority checks. The configured
+   Pool path performs protected Root inspection and must retain that validation;
+   a blanket substitution or cross-attempt cache would be incorrect. Regressions
+   must cover request reduction, changed next-attempt state, missing canisters,
+   typed failures and Pool authority, plus the unchanged recovery journeys.
+2. `reinstall_authorities` already reuses this pass's Root observation but reads
+   remaining infrastructure owners sequentially. Evaluate the existing bounded
+   collector for independent reads, retaining Root prerequisites, exact bindings,
+   deterministic error selection and drainage of every issued batch. Several
+   other observation paths already overlap four reads; increasing whole-suite
+   concurrency is not the first proposed change.
+3. `ProtocolCatalog::load` reloads finalized artifact bindings and resolves fresh
+   role contracts for every terminal inventory. Measure those local substeps
+   before changing their lifetime. Preserve changed-source/configuration
+   rejection and artifact hashes. No stale catalog or authority cache is approved
+   by this investigation.
+
+One exact mixed-topology PocketIC case was rerun, with unchanged source. It
+passes both deliberate resets, lost-response recovery, application-state checks,
+conservation, terminal replay and public-memory qualification. Test time is
+1,098.78 seconds; the complete command takes 1,296.57 seconds, including native
+compilation. Artifact resolution now takes 596.491 seconds, including 576.233
+seconds building and sealing the two release sets after the version change.
+Initial recovery itself takes 123.364 seconds versus the retained 124.020.
+The cold and warm totals are not a matched performance comparison.
+
+Read-only `/proc` sampling at five-second intervals covers the test subprocess
+tree and its exclusive PocketIC server tree (100 clock ticks/second). Within
+the second reset, a 95.270-second window consumes 54.080 combined CPU-seconds;
+initial recovery consumes 105.070 CPU-seconds over a 120.278-second window.
+Execution has both CPU and waiting costs; these samples do not identify a
+particular transport, cryptographic routine or scheduler as their cause. Sibling
+workloads were active, and the shared compiler-cache worker is outside these
+process trees. Do not use compilation samples or aggregate `time` CPU totals as
+a complete compiler profile. Kernel-specific `perf` tooling was unavailable.
+
+Logs, resource output, process samples and derived summaries are under
+`.tmp/validation37/`. Their hashes and selected measurements are recorded in
+`qualification.json` under `post_36_investigation`. Only this single case ran;
+there was no broad validation, downstream mutation, Git mutation or version
+change. The next implementation remains observation reuse and its adversarial
+qualification. No changelog patch is allocated for this investigation alone.
+
 ## Post-.30 artifact preparation qualification — 2026-09-20
 
 Base: `1345f990b` (`v0.110.30`). The maintainer accepts a targeted preparation

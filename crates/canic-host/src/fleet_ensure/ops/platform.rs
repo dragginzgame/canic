@@ -1984,6 +1984,20 @@ impl IcpEnsurePlatform {
         Ok(live)
     }
 
+    // A direct response can also supply the reconciliation balance, except where
+    // action_cycles must establish the configured Pool's protected Root authority.
+    fn direct_reconciliation_cycles(
+        &self,
+        name: &str,
+        live: Option<&LiveCanister>,
+    ) -> Option<u128> {
+        let configured = self.desired.canisters.iter().find(|c| c.name == name);
+        if configured.is_some_and(|c| c.kind == DesiredCanisterKind::Pool) {
+            return None;
+        }
+        live.map(|live| live.cycles)
+    }
+
     fn observe_configured_canister(
         &self,
         configured: &crate::fleet_ensure::model::DesiredCanister,
@@ -3487,42 +3501,62 @@ impl EnsurePlatform for IcpEnsurePlatform {
             .ok_or_else(|| {
                 IcpEnsurePlatformError::RootManagement("missing Root authority".to_string())
             })?;
-        for configured in &self.desired.canisters {
-            if configured.kind == DesiredCanisterKind::Pool {
-                continue;
-            }
-            let principal = self
-                .current_principal(state, &configured.name)
-                .ok_or_else(|| {
-                    IcpEnsurePlatformError::UnresolvedCreated(configured.name.clone())
-                })?;
-            // Reuse only this pass's Root observation; a subsequent guard starts fresh.
-            let live = if let Some(root) = roots.roots.get(&configured.name) {
-                self.complete_install_status(principal, root.live.clone())?
-            } else {
-                self.install_status_optional(principal)?.ok_or_else(|| {
-                    IcpEnsurePlatformError::RootManagement("missing infrastructure".to_string())
-                })?
-            };
-            let subnet = if let Some(root) = roots.roots.get(&configured.name) {
-                root.subnet.clone()
-            } else if let Some(catalog) = &catalog {
-                catalog
-                    .catalog
-                    .resolve_canister_route(principal)
-                    .map(|route| route.subnet.to_text())
-                    .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?
-            } else {
-                configured.subnet.clone()
-            };
-            authorities.insert(
-                configured.name.clone(),
-                RootManagementCanisterObservation {
-                    live,
-                    name: configured.name.clone(),
-                    subnet,
-                },
+        let configured = self
+            .desired
+            .canisters
+            .iter()
+            .filter(|c| c.kind != DesiredCanisterKind::Pool)
+            .collect::<Vec<_>>();
+        for batch in configured.chunks(super::bounded_observations::MAX_IN_FLIGHT) {
+            // Root prerequisites finish first. Drain this batch, then consume its
+            // outcomes in configured order before issuing any later batch.
+            let mut statuses = self.read_status_batch(
+                batch
+                    .iter()
+                    .filter(|c| !roots.roots.contains_key(&c.name))
+                    .filter_map(|c| self.current_principal(state, &c.name)),
             );
+            for configured in batch {
+                let principal =
+                    self.current_principal(state, &configured.name)
+                        .ok_or_else(|| {
+                            IcpEnsurePlatformError::UnresolvedCreated(configured.name.clone())
+                        })?;
+                // Reuse only this pass's Root observation; a subsequent guard starts fresh.
+                let live = if let Some(root) = roots.roots.get(&configured.name) {
+                    self.complete_install_status(principal, root.live.clone())?
+                } else {
+                    let live = self
+                        .status_batch_response(&mut statuses, principal)?
+                        .ok_or_else(|| {
+                            IcpEnsurePlatformError::RootManagement(
+                                "missing infrastructure".to_string(),
+                            )
+                        })?;
+                    self.complete_install_status(principal, live)?
+                };
+                let subnet = if let Some(root) = roots.roots.get(&configured.name) {
+                    root.subnet.clone()
+                } else if let Some(catalog) = &catalog {
+                    catalog
+                        .catalog
+                        .resolve_canister_route(principal)
+                        .map(|route| route.subnet.to_text())
+                        .map_err(|error| {
+                            IcpEnsurePlatformError::RootManagement(error.to_string())
+                        })?
+                } else {
+                    configured.subnet.clone()
+                };
+                authorities.insert(
+                    configured.name.clone(),
+                    RootManagementCanisterObservation {
+                        live,
+                        name: configured.name.clone(),
+                        subnet,
+                    },
+                );
+            }
         }
         Ok(Some(authorities))
     }
@@ -4175,6 +4209,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             } => {
                 let live =
                     platform.install_status_optional(Self::action_principal(state, principal)?)?;
+                post_cycles = platform.direct_reconciliation_cycles(action.name(), live.as_ref());
                 let applied = if let Some(witness) = reinstall_witness {
                     let current = platform.reinstall_authorities(state)?;
                     let authority = current
@@ -4318,7 +4353,10 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         })
                 } else {
                     platform.status_optional(principal)?
-                        .map(|live| live.controllers)
+                        .map(|live| {
+                            post_cycles = platform.direct_reconciliation_cycles(name, Some(&live));
+                            live.controllers
+                        })
                 };
                 if let Some(controllers) = &mut observed_controllers {
                     controllers.sort();
@@ -4331,6 +4369,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             }
             EnsureAction::Start { principal, .. } => {
                 let live = platform.status_optional(Self::action_principal(state, principal)?)?;
+                post_cycles = platform.direct_reconciliation_cycles(action.name(), live.as_ref());
                 (
                     live.as_ref()
                         .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
@@ -4339,6 +4378,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             }
             EnsureAction::Stop { principal, .. } => {
                 let live = platform.status_optional(Self::action_principal(state, principal)?)?;
+                post_cycles = platform.direct_reconciliation_cycles(action.name(), live.as_ref());
                 (
                     live.as_ref()
                         .is_some_and(|live| live.status == CanisterRuntimeStatus::Stopped),
@@ -5803,6 +5843,14 @@ echo effect >> effects
         }
 
         fn synchronized_owners(count: usize) -> Self {
+            Self::synchronized_owner_reads(count, false)
+        }
+
+        fn synchronized_reinstall_owners(independent: usize) -> Self {
+            Self::synchronized_owner_reads(independent + 1, true)
+        }
+
+        fn synchronized_owner_reads(count: usize, roots_first: bool) -> Self {
             let mut fixture = Self::new();
             for index in fixture.platform.desired.canisters.len()..count {
                 let mut root = fixture.platform.desired.canisters[1].clone();
@@ -5811,19 +5859,45 @@ echo effect >> effects
                 fixture.status(&root.name, "Running", true);
                 fixture.platform.desired.canisters.push(root);
             }
+            if roots_first {
+                let root = fixture.platform.desired.canisters.remove(1);
+                for owner in &mut fixture.platform.desired.canisters {
+                    owner.kind = DesiredCanisterKind::Coordinator;
+                }
+                fixture.platform.desired.canisters.push(root);
+                for owner in &fixture.platform.desired.canisters {
+                    let file = fixture.root.join(format!("{}.json", owner.name));
+                    let mut status: serde_json::Value =
+                        serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+                    status["version"] = serde_json::json!(7);
+                    std::fs::write(file, serde_json::to_vec(&status).unwrap()).unwrap();
+                }
+            }
+            let parallel_count = count - usize::from(roots_first);
+            let delay_peer = if roots_first { "store" } else { "root" };
             let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
             std::fs::write(
                 fixture.root.join("icp"),
                 crate::test_support::tool_script(&format!(
                     r#"#!/bin/sh
 if [ "$1" = '--version' ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
-while [ "$#" -gt 0 ] && [ "$1" != status ]; do shift; done
-shift
+while [ "$#" -gt 0 ] && [ "$1" != status ] && [ "$1" != identity ] && [ "$1" != cycles ]; do shift; done
+case "$1" in
+identity) echo operator; exit;;
+cycles) echo '{{"balance":"1000000000000 cycles"}}'; exit;;
+status) shift;;
+*) exit 1;;
+esac
 cd '{}'
+if [ '{roots_first}' = true ] && [ "$1" = root ]; then
+    printf 'root\n' >> prerequisites
+    cat root.json
+    exit
+fi
 printf 'start:%s\n' "$1" >> events
 started=$(grep -c '^start:' events)
 goal=$(( (started + {bound} - 1) / {bound} * {bound} ))
-[ "$goal" -le {count} ] || goal={count}
+[ "$goal" -le {parallel_count} ] || goal={parallel_count}
 attempts=0
 while [ "$(grep -c '^start:' events)" -lt "$goal" ]; do
     attempts=$((attempts + 1))
@@ -5832,7 +5906,7 @@ while [ "$(grep -c '^start:' events)" -lt "$goal" ]; do
 done
 if [ -e "$1.delay" ]; then
     attempts=0
-    while ! grep -q '^finish:root$' events; do
+    while ! grep -q '^finish:{delay_peer}$' events; do
         attempts=$((attempts + 1))
         [ "$attempts" -lt 500 ] || exit 1
         sleep 0.01
@@ -5890,6 +5964,190 @@ cat "$1.json"
             serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
         status["version"] = serde_json::json!(version);
         std::fs::write(path, serde_json::to_vec(&status).unwrap()).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reconciliation_reuses_direct_balance_and_refreshes_state_after_failure() {
+        let mut install = install_preparation_action();
+        let mut fixture = ProtocolOwnersFixture::new();
+        if let EnsureAction::Install { wasm_sha256, .. } = &mut install {
+            *wasm_sha256 = artifact_hash(&fixture.root.join("owner.wasm")).unwrap();
+        }
+        let actions = [
+            install,
+            EnsureAction::Start {
+                name: "root".into(),
+                principal: "root".into(),
+            },
+            EnsureAction::Stop {
+                name: "root".into(),
+                principal: "root".into(),
+            },
+            EnsureAction::SetControllers {
+                name: "root".into(),
+                principal: "root".into(),
+                controllers: vec![],
+                controller_canisters: vec![],
+            },
+        ];
+        for action in actions {
+            fixture.status("root", "Running", true);
+            preparation_status(&fixture, 7);
+            let prepared = super::super::effect_preparation::prepare_effect(
+                &mut fixture.platform,
+                "op",
+                &action,
+                &fixture.state,
+            )
+            .unwrap();
+            let before = fixture.platform.icp.remote_call_count();
+            let observed = fixture
+                .platform
+                .observe_effect("op", &action, &prepared.record, &fixture.state)
+                .unwrap();
+            assert_eq!(observed.post_cycles, Some(1_000_000_000_000));
+            assert_eq!(fixture.platform.icp.remote_call_count() - before, 1);
+            assert_eq!(
+                observed.applied,
+                !matches!(action, EnsureAction::Stop { .. })
+            );
+
+            let file = fixture.root.join("root.json");
+            let mut status: serde_json::Value =
+                serde_json::from_slice(&std::fs::read(&file).unwrap()).unwrap();
+            status["cycles"] = serde_json::json!("123");
+            status["status"] = serde_json::json!("Stopped");
+            status["module_hash"] = serde_json::json!("ab".repeat(32));
+            status["settings"]["controllers"] = serde_json::json!(["other"]);
+            std::fs::write(&file, serde_json::to_vec(&status).unwrap()).unwrap();
+            let changed = fixture
+                .platform
+                .observe_effect("op", &action, &prepared.record, &fixture.state)
+                .unwrap();
+            assert_eq!(changed.post_cycles, Some(123));
+            assert_eq!(changed.applied, matches!(action, EnsureAction::Stop { .. }));
+
+            status["id"] = serde_json::json!("wrong");
+            std::fs::write(&file, serde_json::to_vec(&status).unwrap()).unwrap();
+            assert!(matches!(
+                fixture
+                    .platform
+                    .observe_effect("op", &action, &prepared.record, &fixture.state,),
+                Err(IcpEnsurePlatformError::StatusIdentityMismatch { .. })
+            ));
+            status["id"] = serde_json::json!("root");
+            status["cycles"] = serde_json::json!("456");
+            std::fs::write(&file, serde_json::to_vec(&status).unwrap()).unwrap();
+            let retried = fixture
+                .platform
+                .observe_effect("op", &action, &prepared.record, &fixture.state)
+                .unwrap();
+            assert_eq!(retried.post_cycles, Some(456));
+            assert_eq!(fixture.platform.icp.remote_call_count() - before, 4);
+        }
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reconciliation_keeps_protected_pool_balance_authority() {
+        let mut fixture = PoolInspectionFixture::fresh(1);
+        let principal = fixture.target.to_text();
+        std::fs::write(
+            fixture.owners.root.join(format!("{principal}.json")),
+            serde_json::json!({
+                "id": principal, "version": 7, "status": "Running",
+                "settings": { "controllers": [fixture.root_id.to_text()] },
+                "module_hash": null, "cycles": "9999",
+            })
+            .to_string(),
+        )
+        .unwrap();
+        let mut install = install_preparation_action();
+        if let EnsureAction::Install {
+            name,
+            principal: target,
+            ..
+        } = &mut install
+        {
+            *name = "pool-000".into();
+            *target = principal.clone();
+        }
+        let actions = [
+            install,
+            EnsureAction::Start {
+                name: "pool-000".into(),
+                principal: principal.clone(),
+            },
+            EnsureAction::Stop {
+                name: "pool-000".into(),
+                principal: principal.clone(),
+            },
+            EnsureAction::SetControllers {
+                name: "pool-000".into(),
+                principal,
+                controllers: vec![fixture.root_id.to_text()],
+                controller_canisters: vec![],
+            },
+        ];
+        for action in actions {
+            PoolInspectionFixture::fresh_response(
+                &fixture.owners.root,
+                vec![fixture.root_id],
+                None,
+                1000,
+            );
+            let prepared = super::super::effect_preparation::prepare_effect(
+                &mut fixture.owners.platform,
+                "op",
+                &action,
+                &fixture.owners.state,
+            )
+            .unwrap();
+            let observed = fixture
+                .owners
+                .platform
+                .observe_effect("op", &action, &prepared.record, &fixture.owners.state)
+                .unwrap();
+            assert_eq!(observed.post_cycles, None);
+            assert_eq!(
+                fixture
+                    .owners
+                    .platform
+                    .action_cycles(&action, &fixture.owners.state)
+                    .unwrap(),
+                Some(1000)
+            );
+            PoolInspectionFixture::fresh_response(
+                &fixture.owners.root,
+                vec![fixture.root_id],
+                None,
+                900,
+            );
+            assert_eq!(
+                fixture
+                    .owners
+                    .platform
+                    .action_cycles(&action, &fixture.owners.state)
+                    .unwrap(),
+                Some(900)
+            );
+            PoolInspectionFixture::fresh_response(
+                &fixture.owners.root,
+                vec![Principal::anonymous()],
+                None,
+                900,
+            );
+            assert!(matches!(
+                fixture
+                    .owners
+                    .platform
+                    .action_cycles(&action, &fixture.owners.state),
+                Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. })
+            ));
+        }
+        std::fs::remove_dir_all(fixture.owners.root).unwrap();
     }
 
     #[cfg(unix)]
@@ -7902,6 +8160,132 @@ printf 'finish\n' >> events
 
     #[cfg(unix)]
     #[test]
+    fn reinstall_authorities_overlap_after_root_and_drain_partial_batches() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let independent = bound * 2 + 1;
+        let mut fixture = ProtocolOwnersFixture::synchronized_reinstall_owners(independent);
+        let observed = fixture
+            .platform
+            .reinstall_authorities(&fixture.state)
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed.len(), independent + 1);
+        assert!(
+            observed
+                .values()
+                .all(|a| a.live.canister_version == Some(7))
+        );
+        let (mut active, mut maximum, mut finished) = (0, 0, 0);
+        for event in std::fs::read_to_string(fixture.root.join("events"))
+            .unwrap()
+            .lines()
+        {
+            let (kind, _) = event.split_once(':').unwrap();
+            match kind {
+                "start" => {
+                    active += 1;
+                    maximum = maximum.max(active);
+                }
+                "finish" => {
+                    assert!(active > 0);
+                    active -= 1;
+                    finished += 1;
+                }
+                _ => panic!("unknown observation event"),
+            }
+            assert!(active <= bound);
+        }
+        assert_eq!((active, maximum, finished), (0, bound, independent));
+        assert_eq!(
+            fixture.platform.icp.remote_call_count(),
+            u64::try_from(independent + 2).unwrap()
+        );
+        assert_eq!(
+            std::fs::read_to_string(fixture.root.join("prerequisites"))
+                .unwrap()
+                .lines()
+                .collect::<Vec<_>>(),
+            ["root"]
+        );
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn reinstall_authorities_drain_failed_batch_keep_error_order_and_retry_fresh() {
+        let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
+        let mut fixture = ProtocolOwnersFixture::synchronized_reinstall_owners(bound + 1);
+        let original = std::fs::read(fixture.root.join("coordinator.json")).unwrap();
+        std::fs::copy(
+            fixture.root.join("store.json"),
+            fixture.root.join("coordinator.json"),
+        )
+        .unwrap();
+        std::fs::rename(
+            fixture.root.join("store.json"),
+            fixture.root.join("store.saved"),
+        )
+        .unwrap();
+        std::fs::write(fixture.root.join("coordinator.delay"), []).unwrap();
+        assert!(
+            matches!(fixture.platform.reinstall_authorities(&fixture.state),
+            Err(IcpEnsurePlatformError::StatusIdentityMismatch { expected, .. }) if expected == "coordinator")
+        );
+        let events = std::fs::read_to_string(fixture.root.join("events")).unwrap();
+        let finished = events
+            .lines()
+            .filter_map(|line| line.strip_prefix("finish:"))
+            .collect::<Vec<_>>();
+        assert_eq!(finished.len(), bound);
+        assert!(!finished.contains(&"owner-05"));
+        assert!(
+            finished.iter().position(|name| *name == "store").unwrap()
+                < finished
+                    .iter()
+                    .position(|name| *name == "coordinator")
+                    .unwrap()
+        );
+        assert_eq!(
+            fixture.platform.icp.remote_call_count(),
+            u64::try_from(bound + 2).unwrap()
+        );
+
+        let mut changed: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        changed["version"] = serde_json::json!(9);
+        std::fs::write(
+            fixture.root.join("coordinator.json"),
+            serde_json::to_vec(&changed).unwrap(),
+        )
+        .unwrap();
+        std::fs::rename(
+            fixture.root.join("store.saved"),
+            fixture.root.join("store.json"),
+        )
+        .unwrap();
+        std::fs::remove_file(fixture.root.join("events")).unwrap();
+        preparation_status(&fixture, 8);
+        let observed = fixture
+            .platform
+            .reinstall_authorities(&fixture.state)
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed["root"].live.canister_version, Some(8));
+        assert_eq!(observed["coordinator"].live.canister_version, Some(9));
+        assert_eq!(observed.len(), bound + 2);
+        assert!(fixture.platform.observation_snapshot.borrow().is_none());
+
+        std::fs::remove_file(fixture.root.join("events")).unwrap();
+        std::fs::remove_file(fixture.root.join("root.json")).unwrap();
+        assert!(matches!(
+            fixture.platform.reinstall_authorities(&fixture.state),
+            Err(IcpEnsurePlatformError::Icp(_))
+        ));
+        assert!(!fixture.root.join("events").exists());
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
     fn reinstall_authority_pass_reads_statuses_and_refreshes_after_failure() {
         let mut fixture = ProtocolOwnersFixture::new();
         let path = &fixture.root;
@@ -7938,7 +8322,10 @@ esac
             "reinstall authority status calls: {calls:?}; remote calls: {}",
             fixture.platform.icp.remote_call_count()
         );
-        assert_eq!(calls, "root\ncoordinator\nstore\n");
+        let mut calls = calls.lines().collect::<Vec<_>>();
+        assert_eq!(calls.first(), Some(&"root"));
+        calls.sort_unstable();
+        assert_eq!(calls, ["coordinator", "root", "store"]);
         assert_eq!(fixture.platform.icp.remote_call_count(), 4);
         let file = path.join("root.json");
         let mut status: serde_json::Value =

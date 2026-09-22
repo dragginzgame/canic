@@ -1,0 +1,238 @@
+{
+  "schema_version": 1,
+  "recorded_utc": "2026-09-22T14:10:09.314238+00:00",
+  "issue": "CANIC-181",
+  "status": "implemented_and_qualified_locally",
+  "open_batch": "0.110.37",
+  "package_version": "0.110.36",
+  "base_commit": "0bd466121725a4d5dc823cb4567fab173209fac6",
+  "feedback": {
+    "path": "/home/adam/projects/toko-miner/docs/upstream/canic.md",
+    "sha256": "faebf92c188fda27e559d7aeb2de05d1f8b14805c7575e47d656d4a21c241e2e"
+  },
+  "source_sha256": {
+    "crates/canic-cli/src/endpoints/mod.rs": "0e9773db8d1f08de2d789b48436cccbbe1913d98c26f2250e897f70657dc9b18",
+    "crates/canic-cli/src/endpoints/model.rs": "eb6b6ebc2d2a5fd2f49bbcb011d5dcea0c03442f9efd2a0d656446d1b419dc8b",
+    "crates/canic-cli/src/endpoints/tests.rs": "9ecca7ebe0d8484862a92e37496c5c3ca106514004a10c78f6c89a1e19fec2ef",
+    "crates/canic-cli/src/endpoints/transport.rs": "6dab911f0fc6d0131336df23717081826bf1479f7b8a1ad32c7caca876d78de5",
+    "crates/canic-host/src/release_set/mod.rs": "245aac66365be0a052b8ab7b62531b0c257a8d92f2bc2ca9a83e3cf805bc7e4e",
+    "crates/canic-host/src/release_set/application/mod.rs": "3d7b9b4f7cc7b2e2e953214372f50ab61d6e550ca81fc64ecd7f218654813b1b",
+    "crates/canic-host/src/release_set/application/persistence/mod.rs": "8d32a6f7961a19f3853846f786d6d9079b7150ea1882cb313daeb04366d4287e",
+    "crates/canic-host/src/release_set/candid/mod.rs": "c53e449450da3e919d37cff59631358a70f26df61110e2762931a841440d4dab",
+    "crates/canic-host/src/release_set/candid/tests.rs": "1a57027b61013728085ac3690be2776cadc17c9ad4bdefa0e9ab9e5240bc0bfb"
+  },
+  "checks": [
+    {
+      "command": "cargo test --locked -p canic-host --lib release_set:: -- --test-threads=4",
+      "passed": 77
+    },
+    {
+      "command": "cargo test --locked -p canic-cli --lib endpoints::",
+      "passed": 4
+    },
+    {
+      "command": "cargo test --locked -p canic-cli --test subcommand_order",
+      "passed": 2
+    },
+    {
+      "command": "cargo clippy --locked -p canic-host -p canic-cli --all-targets --all-features -- -D warnings",
+      "exit_code": 0
+    },
+    {
+      "command": "cargo test --locked -p canic-host --lib release_set::candid::",
+      "passed": 4,
+      "purpose": "repeat after splitting fixture for lint"
+    }
+  ],
+  "diagnostic_inputs": {
+    "source": "/tmp/toko-miner-canic-011036-qualification",
+    "copy": "/home/adam/projects/canic/.tmp/feedback37/toko-build",
+    "files": [
+      {
+        "path": "apps/toko_miner/canic.toml",
+        "sha256": "b34957b58f6243d9f4b31097605906573259706d58331b677dae3df3e8682196",
+        "bytes": 2699
+      },
+      {
+        "path": "icp.yaml",
+        "sha256": "eee451789a1f046894b7520d156353cf8a687cdea9609386052ea9fc4a38bcf5",
+        "bytes": 2257
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/plan.cbor",
+        "sha256": "178718df3fdd6f916e21e1b85d685a0492723da2894dc8a5147f4a0f7f06f908",
+        "bytes": 125
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/current-release-set-manifest.json",
+        "sha256": "0613bdcc26c0eb133efa112785e4b2b72ca83182c726ae1d63e66c0b22958b09",
+        "bytes": 590
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/application-artifact-union.json",
+        "sha256": "6c951494b58a07f8210f7eb9f466a813f80eb672d69c8f8e1513f8efdd81279d",
+        "bytes": 5004
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/infrastructure-artifact-manifest.json",
+        "sha256": "d259702f270e427e86440d23dc5f1314995753e1598e7ce6818b865e518566c0",
+        "bytes": 3317
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/wasm_store/wasm_store.did",
+        "sha256": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "bytes": 20875
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/user_hub/user_hub.did",
+        "sha256": "a3377bf8078e470f1abed5ebe71b5fd37c2d29f071ab547128b472d31dcab9b2",
+        "bytes": 48531
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/root/root.did",
+        "sha256": "f652b8b8b7d57c1a4480dd9818e7e17267ebd50ca3c0ccad6c2de6f5fb82d92d",
+        "bytes": 101033
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/game_hub/game_hub.did",
+        "sha256": "4b2557617c668ed6e78f789e6c54c71f186508ea579b976c8f3e0148f040976a",
+        "bytes": 41665
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/game_shard/game_shard.did",
+        "sha256": "84a02bd477d39afdc730e6f644c322eb5b3efe58fece6eee169c06bbb915b63b",
+        "bytes": 92618
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/fleet_coordinator/fleet_coordinator.did",
+        "sha256": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "bytes": 47466
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/translation/translation.did",
+        "sha256": "63a44ff53e6d8b2f4b60a6e35270974792508deef55481f81213dbde7137fc8b",
+        "bytes": 45282
+      },
+      {
+        "path": ".canic/release-builds/8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3/artifacts/user_shard/user_shard.did",
+        "sha256": "a86436edfd68ddbe109081e10ccffc201f004d51655cd5236290de5a5de1d2d6",
+        "bytes": 46394
+      }
+    ]
+  },
+  "candidate_inspection": [
+    {
+      "role": "game_shard",
+      "command": [
+        "/home/adam/projects/canic/target/debug/canic",
+        "--environment",
+        "toko_miner",
+        "--icp",
+        "/nonexistent-offline-proof",
+        "info",
+        "endpoints",
+        "toko-miner-local",
+        "game_shard",
+        "--release-build",
+        "8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3",
+        "--json"
+      ],
+      "exit_code": 0,
+      "source_kind": "built",
+      "release_build_id": "8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3",
+      "method_count": 29,
+      "output_sha256": "f9e9c95371e6fd19fe0dfea4cb5690b32dd9da97e14e162c7400e8250f05408b"
+    },
+    {
+      "role": "root",
+      "command": [
+        "/home/adam/projects/canic/target/debug/canic",
+        "--environment",
+        "toko_miner",
+        "--icp",
+        "/nonexistent-offline-proof",
+        "info",
+        "endpoints",
+        "toko-miner-local",
+        "root",
+        "--release-build",
+        "8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3",
+        "--json"
+      ],
+      "exit_code": 0,
+      "source_kind": "built",
+      "release_build_id": "8e60e7f14b3a091780f3eb0aa9260504fd4e9f78ac5c72d0f33a7bb39e837ab3",
+      "method_count": 7,
+      "output_sha256": "2e733e9fd79215b249046372a452ebcb10e293ba164b91f3300c5e491f6199fa"
+    }
+  ],
+  "payload_limits": {
+    "bootstrap_user": {
+      "ingress_max_bytes": 16384,
+      "update_guard_max_bytes": null,
+      "ingress_basis": "managed_default"
+    },
+    "execute_actions": {
+      "ingress_max_bytes": 49152,
+      "update_guard_max_bytes": 49152,
+      "ingress_basis": "explicit_override"
+    }
+  },
+  "logs": {
+    ".tmp/feedback37/host-tests.log": {
+      "sha256": "069a31311b7e435d4400ce91acfe5d97f90623bd1adfcd64b4e056c5b8fad06a",
+      "bytes": 8588
+    },
+    ".tmp/feedback37/cli-library-tests.log": {
+      "sha256": "7970376f02bf9db3feef4eb943eec54f30b5c6ae83bd6238a5f431eba0d304e9",
+      "bytes": 651
+    },
+    ".tmp/feedback37/help-tests.log": {
+      "sha256": "cefac4666488dd1d0b958dacef74996197d930bfb114d45956f459a973c4e462",
+      "bytes": 534
+    },
+    ".tmp/feedback37/clippy.log": {
+      "sha256": "f78952c468c221a0135bbf96b73a5becb60dc5c6ea97ba4ad7e8bb8cf36b8ebb",
+      "bytes": 229
+    },
+    ".tmp/feedback37/candid-final-tests.log": {
+      "sha256": "dc89f5c64c7869ceaeee3dcea1185474ad617667a2c794469a750254e6467a36",
+      "bytes": 784
+    },
+    ".tmp/feedback37/toko-inputs.json": {
+      "sha256": "c609a8fb4b797ae208cc494c5203b16d5b7e26e84276fc49d69d6f3b7c529bc9",
+      "bytes": 3505
+    },
+    ".tmp/feedback37/toko-inspection.json": {
+      "sha256": "c639b3a2f7d7276cc1f0b9ffd233da283702f17dade2811501ca37f74234c3dd",
+      "bytes": 1294
+    },
+    ".tmp/feedback37/game_shard-endpoints.json": {
+      "sha256": "f9e9c95371e6fd19fe0dfea4cb5690b32dd9da97e14e162c7400e8250f05408b",
+      "bytes": 10690282
+    },
+    ".tmp/feedback37/root-endpoints.json": {
+      "sha256": "2e733e9fd79215b249046372a452ebcb10e293ba164b91f3300c5e491f6199fa",
+      "bytes": 4469275
+    },
+    ".tmp/feedback37/clippy-initial.log": {
+      "sha256": "bbd18f1060e8a6a6530a6b708c86d20e97b771c563665ef61cf42f0e4f08f602",
+      "bytes": 2024
+    },
+    ".tmp/feedback37/cli-tests.log": {
+      "sha256": "8842bd4fafb203fc50cb74307ad7011860aec355c143d8ef31ab51fb99ce2bd9",
+      "bytes": 872
+    }
+  },
+  "initial_checks": {
+    "clippy": "visibility and fixture-size findings corrected without suppressions",
+    "cli_binary_test_target": "zero tests; replaced by actual library test target"
+  },
+  "limits": [
+    "No broad workspace suite",
+    "No downstream CLI adoption or live deployment",
+    "No new matched performance claim",
+    "No sibling mutation or Git mutation",
+    "Explicit release-build selector required; no latest-build heuristic"
+  ]
+}
