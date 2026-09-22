@@ -20,6 +20,27 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .36 IcyDB lockfile correction — complete locally, 2026-09-22
+
+The manifest requested IcyDB 0.261.4 while the committed lockfile still resolved
+0.261.3, blocking the dependency-risk and Wasm crypto-closure gates at their
+locked dependency fetch. Refresh only the six IcyDB package versions/checksums
+to 0.261.4; retain the manifest, standalone audit fixture pin and locked guards.
+
+Both exact gates now pass: zero known vulnerabilities, two reviewed transitive
+warnings, and the expected crypto closure for all 12 canonical roles. A locked
+all-target/all-feature compile also passes for the three direct consumers:
+`canic-tests`, `canic_icydb_lifecycle_probe` and `canic-icydb-lifecycle-schema`.
+Logs: `.tmp/feedback36-lock/{gates,consumers-check}.log`.
+
+This completes the known validation follow-up in the accepted .36 batch; the
+batch and both changelog drafts remain ready for the maintainer's release flow.
+Package versions remain .35. The complete release gate was not rerun, and these
+checks do not requalify lifecycle behavior or runtime performance on IcyDB
+0.261.4. This lockfile/documentation correction is uncommitted; earlier handoff
+entries retain their original source context. No Git mutation, version change,
+publication, deployment or sibling edit ran.
+
 ## .36 validation guard corrections — complete locally, 2026-09-22
 
 The maintainer's ordinary validation found two omitted guard updates. The new
