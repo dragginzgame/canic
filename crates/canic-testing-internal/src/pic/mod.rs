@@ -55,7 +55,7 @@ pub use audit::{
 pub use canic::{
     CanicPicExt, install_standalone_canister, install_standalone_canister_on_pic,
     managed_test_init_identity, report_canister_diagnostics, report_canister_diagnostics_batch,
-    standalone_canister_wasm, wait_until_ready,
+    standalone_canister_candid, standalone_canister_wasm, wait_until_ready,
 };
 pub use delegation::{
     create_user_shard, issue_delegated_token_from_active_proof,

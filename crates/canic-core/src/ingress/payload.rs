@@ -41,6 +41,29 @@ fn update_limit_for(method: &str) -> Result<Option<usize>, DuplicateUpdatePayloa
     unique_limit_for(&limits, method)
 }
 
+/// Read the exact registered declarations without collecting runtime state.
+pub(super) fn declaration_limits() -> Vec<super::payload_contract::UpdatePayloadDescriptor> {
+    let limits = UPDATE_LIMITS
+        .lock()
+        .expect("update payload limit registry poisoned");
+    let mut result: Vec<_> = limits
+        .iter()
+        .map(|limit| super::payload_contract::UpdatePayloadDescriptor {
+            method: limit.method.into(),
+            max_bytes: limit.max_bytes as u64,
+        })
+        .collect();
+    drop(limits);
+    result.sort_by(|left, right| left.method.cmp(&right.method));
+    assert!(
+        result
+            .windows(2)
+            .all(|pair| pair[0].method != pair[1].method),
+        "duplicate update payload declarations"
+    );
+    result
+}
+
 /// Inspect the current ingress update and accept it only when within limit.
 ///
 /// # Panics

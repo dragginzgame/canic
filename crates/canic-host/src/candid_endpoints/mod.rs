@@ -1,3 +1,5 @@
+mod payload;
+
 use candid::{
     TypeEnv,
     types::{FuncMode, Function, Label, Type, TypeInner},
@@ -5,6 +7,8 @@ use candid::{
 use candid_parser::utils::CandidSource;
 use serde::Serialize;
 use thiserror::Error as ThisError;
+
+pub use payload::{EndpointPayloadLimits, IngressPayloadBasis};
 
 ///
 /// CandidEndpointError
@@ -14,6 +18,9 @@ use thiserror::Error as ThisError;
 pub enum CandidEndpointError {
     #[error("canister interface did not contain a service block")]
     MissingService,
+
+    #[error("compiled payload contract metadata is invalid or conflicts with the Candid service")]
+    InvalidPayloadContract,
 
     #[error("failed to parse Candid interface: {0}")]
     InvalidCandid(String),
@@ -30,6 +37,7 @@ pub struct EndpointEntry {
     pub modes: Vec<EndpointMode>,
     pub arguments: Vec<EndpointType>,
     pub returns: Vec<EndpointType>,
+    pub payload_limits: Option<EndpointPayloadLimits>,
 }
 
 ///
@@ -149,10 +157,12 @@ pub fn parse_candid_service_endpoints(
     let service = env
         .as_service(&actor)
         .map_err(|_| CandidEndpointError::MissingService)?;
-    service
+    let mut endpoints = service
         .iter()
         .map(|(name, ty)| endpoint_entry(&env, name, ty))
-        .collect()
+        .collect::<Result<Vec<_>, _>>()?;
+    payload::attach(candid, &mut endpoints)?;
+    Ok(endpoints)
 }
 
 fn endpoint_entry(
@@ -169,6 +179,7 @@ fn endpoint_entry(
         modes: endpoint_modes(function),
         arguments: endpoint_types(env, &function.args),
         returns: endpoint_types(env, &function.rets),
+        payload_limits: None,
     })
 }
 

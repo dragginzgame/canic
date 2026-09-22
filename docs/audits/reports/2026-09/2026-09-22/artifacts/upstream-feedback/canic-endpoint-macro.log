@@ -1,0 +1,41 @@
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+   Compiling generic-array v0.14.9
+   Compiling syn v3.0.6
+   Compiling psm v0.1.32
+   Compiling crypto-common v0.1.6
+   Compiling block-buffer v0.10.4
+   Compiling stacker v0.1.25
+   Compiling digest v0.10.7
+   Compiling sha2 v0.10.9
+   Compiling serde_derive v1.0.229
+   Compiling async-trait v0.1.92
+   Compiling remain v0.2.16
+   Compiling canic-macros v0.110.35 (/home/adam/projects/canic/crates/canic-macros)
+   Compiling serde v1.0.229
+   Compiling num-bigint v0.4.8
+   Compiling ic_principal v0.1.5
+   Compiling ic-error-types v0.2.0
+   Compiling serde_spanned v0.6.9
+   Compiling ciborium v0.2.2
+   Compiling toml_datetime v0.6.11
+   Compiling handlebars v6.4.4
+   Compiling ic-stable-structures v0.7.2
+   Compiling toml_edit v0.22.27
+   Compiling ic-memory v0.14.3
+   Compiling candid v0.10.35
+   Compiling toml v0.8.23
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling ic-cdk-macros v0.20.3
+   Compiling ic-cdk v0.20.3
+   Compiling candid_parser v0.4.1
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 03s
+     Running tests/endpoint_macro.rs (target/debug/deps/endpoint_macro-af231a6fc8a4d2aa)
+
+running 2 tests
+test canic_query_accepts_composite_marker ... ok
+test canic_update_accepts_protected_service_authority_guard ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.2pg9qV

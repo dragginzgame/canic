@@ -227,7 +227,7 @@ fn failed_collection_keeps_source_time_and_history_then_recovers() {
         None,
     )
     .unwrap();
-    assert_eq!(history.latest_observed_at_ns, 10);
+    assert_eq!(history.slots.last().unwrap().observed_at_ns, 10);
     let recovered = collect(true, true, now + 1, || Ok(source));
     assert_eq!(value(&recovered, "state"), 1);
     assert!(recovered.iter().all(|row| row.observed_at_ns == now + 1));

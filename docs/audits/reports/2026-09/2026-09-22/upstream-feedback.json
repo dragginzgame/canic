@@ -1,0 +1,192 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-22",
+  "published_base": "a99a8fe821c0d54b8591acca8aa98fa51aa5c13e",
+  "findings": [
+    "CANIC-166",
+    "CANIC-172",
+    "CANIC-181"
+  ],
+  "qualification": "targeted-local",
+  "concurrent_dependency_update": {
+    "icydb": "0.261.3",
+    "preserved": true,
+    "current_lock_native_regressions": "native-final",
+    "interrupted_wasm_log": "artifacts/upstream-feedback/payload-pocketic-input-drift.log"
+  },
+  "broad_gate_run": false,
+  "downstream_mutated": false,
+  "live_actions_run": false,
+  "source_sha256": {
+    "Cargo.lock": "3671e01c13ac1860d659e04fb0b19327dc2e88046e6390401a5d46a9ae60054d",
+    "Cargo.toml": "8e1f20bcdc96c578d052ec14a2419d50dba93281afeea068c042997bb1069041",
+    "canisters/test/payload_limit_probe/src/lib.rs": "d8b561fc4c5061c8d3aef6bb9167bcbb831e61600745b36f4e316d3655e9ef15",
+    "canisters/test/runtime_probe/src/history_cost/mod.rs": "529173a5a6865f41ac54489b2cdfea6a59dfd4d20cf1a3b907748511dc637e81",
+    "canisters/test/runtime_probe/src/lib.rs": "7c1b323a43b3640a3e007dddda329bff7b9ee9f04586adad7dc4fad3a1408cfa",
+    "crates/canic-cli/src/endpoints/render.rs": "cc1efeaf0387dc872b1dce205cf7a43d0ff115a4f07e2df69cf517306f99c757",
+    "crates/canic-cli/src/endpoints/tests.rs": "21e463b010bb425164affe92d3efc39adaf82e149ea86104b2cb60970b00e828",
+    "crates/canic-cli/src/fleet/readiness/mod.rs": "2860a8e3ef3fec20f99da2acf2c81b0722a369491e5cb3a148d0fef1ef06d83e",
+    "crates/canic-core/src/ingress/mod.rs": "75ca0a0ba595b54307c48bc2d1c15abcef16ad220e587f51f0c3709dc1c3d7d9",
+    "crates/canic-core/src/ingress/payload.rs": "aae79dc92eb22eac995c2d242031bbe2e71145959d7b9d235bca9ff93804b8a3",
+    "crates/canic-core/src/ingress/payload_contract/mod.rs": "da0f2d337a7aa1f02f89effd7f84f4075f63e5f36c08c6393fc8c86dc89b710a",
+    "crates/canic-core/src/ingress/payload_contract/tests.rs": "83f3fc170adc25ac60d3384d5b0459a74de1f3b635adb3d04acbef91eaf6b840",
+    "crates/canic-core/src/model/public_metrics/history/mod.rs": "4217ded9119ef8f6bb56d41d8e33dfd6b0bf8ce5195f83f02c60db864b26ecb8",
+    "crates/canic-core/src/model/public_metrics/history/tests.rs": "64e87b91549df01a493ef332f9258bbb30874b327365002015b0564e43bd77ae",
+    "crates/canic-core/src/ops/runtime/public_metrics/memory/tests.rs": "dec5d9328fd2ea7f6a73723a32758c6021c3188ca466da8795a5a8c06da89024",
+    "crates/canic-core/src/ops/runtime/public_metrics/mod.rs": "b599d212d78c7762cd6d9a2f0d865bc59f46c8374388769c280e868ef3e02e72",
+    "crates/canic-core/src/view/mod.rs": "1f080df30d036334fc81947cf04d915e3a4d9daeba519a8d38721c17ce8b23ac",
+    "crates/canic-core/src/view/public_metrics/mod.rs": "932c15e5a38efd5819ce99fa074e8167cd75de32e2e700996bd0defc49bd479d",
+    "crates/canic-host/src/candid_endpoints/mod.rs": "e634047be7bc4a06c500233b04839cb5e34cec6e634a8f56f401e1b966055702",
+    "crates/canic-host/src/candid_endpoints/payload/mod.rs": "6e8ca82150bd9bbd46a202fac922298d4f568d169494e94764fb7f768e67a3b9",
+    "crates/canic-host/src/candid_endpoints/tests.rs": "4aaeee2a6bd91c4647b11a98daac6887b29f3bc6257a0039f2adeb4a60fc3015",
+    "crates/canic-host/src/canister_build/candid.rs": "209d8a52e406d8e9251c199fb19a8c24eb496e0dda6aece7ba63afd14c106818",
+    "crates/canic-host/src/canister_build/mod.rs": "62502362f32fff05e1390a30d24645e1e9a0149a1d8ab9de837d1cac046e5de1",
+    "crates/canic-host/src/fleet_ensure/ops/continuation/mod.rs": "f286db21cf544d8258c0303f1659fae216fafec7dbc9dc56c4b1d0df183ee4f2",
+    "crates/canic-host/src/fleet_ensure/ops/mod.rs": "947dfbd4540a2c646d908e94b193bb7c9c7b4d0c63a7d995a5af1cb79d9fea51",
+    "crates/canic-host/src/fleet_ensure/ops/readiness/mod.rs": "07d27ca440e3028e9473d74155c631d58eac8dd4a97c0086bab9f465adbddd0f",
+    "crates/canic-host/src/fleet_ensure/ops/readiness/tests.rs": "96f5acb0831be50d8203dc9405ddf712fde419f204b3f939b39fcbb563e6bd45",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/mod.rs": "ceafbf3b766ec27f98c20c0d4c1676167b3859f9b950b4e85dacb2a501b892c7",
+    "crates/canic-host/src/fleet_ensure/tests.rs": "2cdc2f4116e956a74457dbc394239e223690c88bc53e85596fbbcfb902cb084a",
+    "crates/canic-host/src/fleet_ensure/view/readiness/mod.rs": "1af32077d757e8468fd9878533fdf6da6c19787a17850c7cf019750bd819a083",
+    "crates/canic-host/src/fleet_ensure/view/terminal_source/mod.rs": "4f8135596c033cca44f674512a4ad9860883d595f8e8e97e1f1a196a9fec5bc8",
+    "crates/canic-host/src/fleet_ensure/workflow/readiness/mod.rs": "dd1338acf4e25e4ba390034099b500a022ae5dd0b2604c82d052aeac82b5ae76",
+    "crates/canic-host/src/fleet_ensure/workflow/readiness/tests.rs": "b53a78b1eb58af9d1302228a385082ad8e2da26bfb1a07bd315abe98339bc39f",
+    "crates/canic-host/src/fleet_ensure/workflow/reinstall/mod.rs": "0a4de0e4d447253fc786595fc34c02dc6e22bf649e70cbac6c4c7dcf13ebb863",
+    "crates/canic-testing-internal/src/pic/canic.rs": "cc7e790a2cd2da89374bc243a8d09c3924fee811c26a3e51b081f9cc44a0e92f",
+    "crates/canic-testing-internal/src/pic/mod.rs": "767dea02f078a84059f77cf907dd29645a9fcc38ff8a9017bdbb907161a83fd7",
+    "crates/canic-tests/Cargo.toml": "0e94e4f8ab8b60c92871c51f4241ed77c8cacc40d4c5b69d0ae5a26dcff336f9",
+    "crates/canic-tests/tests/pic_ingress_payload_limits.rs": "7532bb6909b46d5717d01f1e9b1fff1cfaae14dea3bd93f4f4f25fb195bccd8c",
+    "crates/canic-tests/tests/timer_authority.rs": "ba82d9b2d855cdca943f5104855556fd30c248d537f53787edce6a979b378751",
+    "crates/canic/src/macros/start.rs": "a9bb06558d7a4e2efadf5cc089514ab428d228dc79d5ac9419775474238d4265"
+  },
+  "checks": [
+    {
+      "check": "terminal-tests",
+      "log": "artifacts/upstream-feedback/terminal-tests.log",
+      "sha256": "c494fe46f09733eb2c81aa970f96e54d4f10ef0aa64dc99f77fb61278dc9d871",
+      "results": [
+        "test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 925 filtered out; finished in 0.22s"
+      ]
+    },
+    {
+      "check": "terminal-toko-source",
+      "log": "artifacts/upstream-feedback/terminal-toko-source.log",
+      "sha256": "914523daf60b1feff7ae8bcd89c1e327e943855fb95e100190c68004502659ea",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 933 filtered out; finished in 1.51s"
+      ]
+    },
+    {
+      "check": "readiness-tests",
+      "log": "artifacts/upstream-feedback/readiness-tests.log",
+      "sha256": "41d4ca22666893dc5d428a67fdbf321d24f13ff32d2caaff693392cf71191e45",
+      "results": [
+        "test result: ok. 10 passed; 0 failed; 2 ignored; 0 measured; 922 filtered out; finished in 0.05s"
+      ]
+    },
+    {
+      "check": "readiness-toko-config",
+      "log": "artifacts/upstream-feedback/readiness-toko-config.log",
+      "sha256": "d49bd4862674c63d32761e9e146238b4e8d39532310ca8e24cb4574500cd7a48",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 933 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "payload-native",
+      "log": "artifacts/upstream-feedback/payload-native.log",
+      "sha256": "063dc5edef4535b510bb921c929b491c7e3c80f32cc21ed7834948af0ffb2cf3",
+      "results": [
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1311 filtered out; finished in 0.00s",
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 932 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "candid-endpoints",
+      "log": "artifacts/upstream-feedback/candid-endpoints.log",
+      "sha256": "6a8b7ab76bcf16e4c2620891b1fd85bf31801763c638bb6ee3c91ec8d0598223",
+      "results": [
+        "test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 927 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "cli-endpoints",
+      "log": "artifacts/upstream-feedback/cli-endpoints.log",
+      "sha256": "b38cbc3bec2cb37bc29d7b4bfe337855b918772938c9e97bafc656a25dc68385",
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 517 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "cli-fleet",
+      "log": "artifacts/upstream-feedback/cli-fleet.log",
+      "sha256": "f14a92da0158f89443046bf57d6cb501c346356fdbe74371a26c41757e134c0a",
+      "results": [
+        "test result: ok. 51 passed; 0 failed; 0 ignored; 0 measured; 469 filtered out; finished in 0.05s"
+      ]
+    },
+    {
+      "check": "cli-help",
+      "log": "artifacts/upstream-feedback/cli-help.log",
+      "sha256": "22faa102b1be330ef68852e19c924b3323771b44c85c60eb1375079696bea2b7",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s"
+      ]
+    },
+    {
+      "check": "canic-endpoint-macro",
+      "log": "artifacts/upstream-feedback/canic-endpoint-macro.log",
+      "sha256": "6b45d56f1d68430de87a5058c2ad4b423493c50df051c7fabefe569ab91428ec",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.00s"
+      ]
+    },
+    {
+      "check": "canic-build-cfg",
+      "log": "artifacts/upstream-feedback/canic-build-cfg.log",
+      "sha256": "1cee7b6c9f7bf564328291b6664c494d1afd7c73eb2ed7e0aa744a2dc8eee737",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s"
+      ]
+    },
+    {
+      "check": "native-final",
+      "log": "artifacts/upstream-feedback/native-final.log",
+      "sha256": "ef3677a4eb53f2aca715fa7ebe225d9e9bfaedfa3c08b9679a7ee75dc4a43c94",
+      "results": [
+        "test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 518 filtered out; finished in 0.00s",
+        "test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1366 filtered out; finished in 0.00s",
+        "test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 909 filtered out; finished in 0.25s"
+      ]
+    },
+    {
+      "check": "payload-pocketic",
+      "log": "artifacts/upstream-feedback/payload-pocketic.log",
+      "sha256": "4e3ed6727448978515d54740dadb81f6714d893509104b13deeb88242d4792c2",
+      "results": [
+        "test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.66s"
+      ]
+    },
+    {
+      "check": "clippy",
+      "log": "artifacts/upstream-feedback/clippy.log",
+      "sha256": "80e0c44db207acb931df87df036b755837700d26a33dc96c427311d013ce28bf",
+      "results": []
+    }
+  ],
+  "toko_source": {
+    "plan_sha256": "aa2fac2340528bddaaf0b5415c1318d70129d1b24aa1ce2bb60fe9342e924ad2",
+    "journal_sha256": "1e34489b06b40bc157ae0577e383fef3c5580f3c05313ff7894034e7d8eb6778",
+    "state_sha256": "83cf24343ef89b8766ebb018c8cf584d5d2e2fea92a820170f5261af7f953108",
+    "effects": 49,
+    "successor_phases": 2
+  },
+  "toko_configuration": {
+    "desired_sha256": "ef8fe4bd5ee8f26ca899578e693cdef018837201e414ad2f15eec5f3558e2f9a",
+    "app_config_sha256": "b34957b58f6243d9f4b31097605906573259706d58331b677dae3df3e8682196",
+    "startup_minimum_cycles": "100000000000001",
+    "per_step_execution_allowance_cycles": "2000000000000",
+    "native_balance_observed": false,
+    "total_execution_reserve_known": false
+  }
+}

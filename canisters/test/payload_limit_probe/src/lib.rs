@@ -3,7 +3,6 @@ use candid::Principal;
 use canic::{Error, prelude::*};
 
 canic::start_local!();
-canic::finish!();
 
 // Provide an empty setup hook so `start!` can schedule user lifecycle work.
 async fn canic_setup() {}
@@ -40,3 +39,11 @@ fn explicit_echo(payload: String) -> Result<usize, Error> {
 fn named_echo(payload: String) -> Result<usize, Error> {
     Ok(payload.len())
 }
+
+/// Bare CDK updates still inherit the managed ingress inspector default.
+#[ic_cdk::update]
+fn bare_echo(payload: String) -> usize {
+    payload.len()
+}
+
+canic::finish!();

@@ -1257,3 +1257,85 @@ fn assert_public_process_projection(
         allocation("known_binding") + allocation("unknown_binding")
     );
 }
+
+#[derive(CandidType, Debug, Deserialize)]
+struct HistoryCost {
+    instructions: u64,
+    points: u64,
+    total: u64,
+    reserved_bytes: u64,
+    values_valid: bool,
+}
+
+#[test]
+fn public_history_costs_cover_sampling_and_independent_chart_queries() {
+    let fixture = install_lifecycle_boundary_fixture();
+    for rows in [1_u16, 100, 211, 256] {
+        let canister = fixture.install_runtime_probe_canister();
+        let mut maximum = 0;
+        for period in 0..300 {
+            fixture.pic.advance_time(Duration::from_secs(301));
+            let sampled: Result<u64, Error> = fixture
+                .pic
+                .update_candid(canister, "qualify_history_sampling_cost", (rows,))
+                .unwrap();
+            let instructions = sampled.unwrap();
+            assert!(instructions > 0);
+            maximum = maximum.max(instructions);
+            if period < 3 || period == 299 {
+                println!(
+                    "HISTORY_COST sample rows={rows} period={period} instructions={instructions}"
+                );
+                for limit in [1_u64, 12, 288] {
+                    let cost: Result<HistoryCost, Error> = fixture
+                        .pic
+                        .query_candid_as(
+                            canister,
+                            Principal::anonymous(),
+                            "qualify_history_query_cost",
+                            (limit,),
+                        )
+                        .unwrap();
+                    let cost = cost.unwrap();
+                    assert!(cost.instructions > 0);
+                    assert!(cost.values_valid);
+                    assert!(cost.total > 0 && cost.total <= 288);
+                    assert_eq!(cost.points, cost.total.min(limit));
+                    assert!(cost.reserved_bytes <= 8 * 1024 * 1024);
+                    println!(
+                        "HISTORY_COST query rows={rows} period={period} limit={limit} {cost:?}"
+                    );
+                }
+            }
+        }
+        println!("HISTORY_COST maximum rows={rows} instructions={maximum}");
+        // A fresh sparse history followed by a large in-window gap exercises lazy
+        // initialisation; the final jump exercises complete expiry and reuse.
+        let sparse = fixture.install_runtime_probe_canister();
+        for (gap, expected_points) in [(0_u64, 1), (200, 2), (0, 2), (1000, 1)] {
+            fixture.pic.advance_time(Duration::from_secs(gap * 300));
+            let sampled: Result<u64, Error> = fixture
+                .pic
+                .update_candid(sparse, "qualify_history_sampling_cost", (rows,))
+                .unwrap();
+            let instructions = sampled.unwrap();
+            assert!(instructions > 0);
+            let cost: Result<HistoryCost, Error> = fixture
+                .pic
+                .query_candid_as(
+                    sparse,
+                    Principal::anonymous(),
+                    "qualify_history_query_cost",
+                    (288_u64,),
+                )
+                .unwrap();
+            let cost = cost.unwrap();
+            assert!(cost.values_valid);
+            assert!(cost.reserved_bytes <= 8 * 1024 * 1024);
+            assert_eq!(cost.total, expected_points);
+            println!(
+                "HISTORY_COST gap rows={rows} slots={gap} instructions={instructions} {cost:?}"
+            );
+        }
+    }
+}

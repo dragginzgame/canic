@@ -49,8 +49,22 @@ pub fn plan_reinstall<P: EnsurePlatform>(
         Err(EnsureStateError::InvalidActivationSource) => {}
         Err(error) => return Err(error.into()),
     }
-    let journal = retained_plan::journal(&paths, &desired.environment, requested_fleet)?
-        .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+    let journal = match retained_plan::journal(&paths, &desired.environment, requested_fleet) {
+        Ok(Some(journal)) => journal,
+        Ok(None) => return Err(EnsureWorkflowError::JournalIntegrity),
+        Err(EnsureWorkflowError::RetainedTerminalReviewRequired { .. }) => {
+            return terminal::plan_preparation(
+                root,
+                &paths,
+                desired,
+                desired_sha256,
+                created_at_time,
+                &state,
+                platform,
+            );
+        }
+        Err(error) => return Err(error),
+    };
     let prior = match read_plan(&paths) {
         Ok(Some(plan)) => verified_plan(plan)?,
         Ok(None) => return Err(EnsureWorkflowError::PlanMissing),

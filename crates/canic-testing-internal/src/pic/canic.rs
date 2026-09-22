@@ -741,6 +741,28 @@ pub fn standalone_canister_wasm(crate_name: &str, profile: CanicWasmBuildProfile
         .clone()
 }
 
+/// Extract the exact compiled declaration using the governed fixture build owner.
+///
+/// # Panics
+/// Panics when declaration compilation, extraction or UTF-8 decoding fails.
+#[must_use]
+pub fn standalone_canister_candid(crate_name: &str, profile: CanicWasmBuildProfile) -> String {
+    let workspace = workspace_root();
+    let target = test_target_dir(&workspace, &format!("declaration-{crate_name}"));
+    let artifacts = super::artifacts::build_internal_test_wasm_canisters_with_env(
+        &workspace,
+        &target,
+        &[crate_name],
+        profile,
+        &[(canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV, "1")],
+    );
+    String::from_utf8(
+        canic_host::canister_build::extract_candid_bytes(artifacts.path(crate_name))
+            .expect("extract compiled fixture declaration"),
+    )
+    .expect("Candid is UTF-8")
+}
+
 fn local_init_args() -> Vec<u8> {
     encode_one(None::<Vec<u8>>).expect("encode standalone-local init args")
 }

@@ -48,11 +48,28 @@ log. Inspect the endpoint's declaration and the inherited default first.
 
 ## Client contract review
 
-Candid describes argument types; it does not expose these Canic byte limits.
-Current artifact tooling does not emit a complete per-method payload-limit
-inventory. Review the compiled endpoint declaration alongside its exported
-Candid name and document the limit with the client contract. There is no new
-discovery endpoint or manually maintained runtime registry to keep in sync.
+Run `canic --environment staging info endpoints <fleet> <canister> --json`
+to inspect the selected declaration. Each update's `payload_limits` reports
+`ingress_max_bytes`, `update_guard_max_bytes` and `ingress_basis`. The basis is
+`managed_default`, `explicit_override` or `variant_dependent`. Queries have no
+update payload contract. Plain output also shows these limits beside the method
+inventory.
+
+The declaration build emits a version-1 typed CBOR record in the dedicated
+`// canic:payload-contract ` Candid comment field, encoded as hexadecimal. It
+reads the compiled inspector's default and the same macro registrations used by
+runtime inspection, including renamed and feature-selected endpoints. The
+existing artifact hash covers the record; the Candid service schema is unchanged.
+No extra network endpoint or manually synchronized limit inventory is required.
+Declarations without this field report unknown limits. Malformed or duplicate
+records reject contract inspection rather than silently supplying a default.
+
+Built-in commands can select a smaller limit after decoding their request
+variant. Those methods report a variant-dependent ingress limit rather than
+promising that every request accepts the raw adapter's frame ceiling. An explicit
+`update_guard_max_bytes` describes the pre-decode adapter; authentication and any
+additional endpoint checks still apply. These fields describe encoded argument
+bytes, not decoded values or platform message limits.
 
 Measure the fully encoded Candid argument tuple in client tests. Keep the client
 budget within the endpoint ceiling, including encoding overhead. For a larger
@@ -61,6 +78,7 @@ encoded boundary and the first byte beyond it in real Wasm. If inter-canister
 callers use the method, qualify that path separately as well.
 
 The existing `payload_limit_probe` and `pic_ingress_payload_limits` integration
-target demonstrate default, explicit, exported-name and inter-canister behavior.
+target demonstrate default, explicit, bare-CDK, exported-name and inter-canister
+behavior, and compare compiled metadata against exact and first-excess boundaries.
 They exercise the owned inspector and generated adapter; no bypass or default
 increase is needed.

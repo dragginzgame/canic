@@ -1,0 +1,62 @@
+   Compiling pest v2.9.2
+   Compiling hyper-rustls v0.27.10
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling reqwest v0.13.5
+   Compiling handlebars v6.4.4
+   Compiling ic-agent v0.49.2
+   Compiling pocket-ic v16.0.0
+   Compiling candid_parser v0.4.1
+   Compiling ic-query v0.43.1
+   Compiling canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling ic-testkit v0.10.0
+   Compiling canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.35 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 57s
+     Running unittests src/lib.rs (target/debug/deps/canic_cli-a9221eef7ed431bd)
+
+running 2 tests
+test endpoints::tests::parses_endpoint_options ... ok
+test endpoints::tests::renders_plain_endpoint_signatures_as_table ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 518 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_core-f871bcb6c2583c7c)
+
+running 1 test
+test ingress::payload_contract::tests::declaration_carries_current_inspector_policy_without_altering_service ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 1366 filtered out; finished in 0.00s
+
+     Running unittests src/lib.rs (target/debug/deps/canic_host-4d671a6638ddfd40)
+
+running 25 tests
+test candid_endpoints::tests::parses_candid_service_endpoints ... ok
+test candid_endpoints::tests::ignores_service_named_record_fields ... ok
+test candid_endpoints::tests::parses_multiple_endpoint_arguments ... ok
+test candid_endpoints::tests::parses_multiline_endpoint_arguments ... ok
+test candid_endpoints::tests::payload_contract_rejects_duplicate_malformed_and_trailing_records ... ok
+test candid_endpoints::tests::payload_contract_distinguishes_defaults_overrides_query_and_variant_methods ... ok
+test fleet_ensure::ops::readiness::tests::readiness_inspects_selected_configuration_without_building ... ignored, read-only configuration inspection of an explicitly selected workspace
+test candid_endpoints::tests::serializes_structured_endpoint_json ... ok
+test fleet_ensure::tests::terminal_retirement_inspects_selected_workspace_without_mutation ... ignored, read-only inspection of an explicitly selected retained workspace
+test fleet_ensure::ops::readiness::tests::native_readiness_requires_exact_identity_controllers_and_real_balance ... ok
+test fleet_ensure::workflow::readiness::tests::readiness_requires_exact_signer_and_network_without_anonymous_authority ... ok
+test fleet_ensure::workflow::readiness::tests::conversion_keeps_mint_amount_fees_and_unknown_requirements_separate ... ok
+test fleet_ensure::workflow::readiness::tests::unknown_funding_is_not_claimed_sufficient_and_estimates_never_grant_authority ... ok
+test fleet_ensure::workflow::readiness::tests::unsafe_paths_and_unreadable_retained_evidence_fail_before_signer_or_network_access ... ok
+test fleet_ensure::ops::readiness::tests::root_floor_is_reported_without_artifacts_or_assumed_execution_reserve ... ok
+test fleet_ensure::tests::terminal_retirement_preserves_every_root_account_and_pool_identity ... ok
+test fleet_ensure::tests::terminal_retirement_requires_exact_paid_debit_and_bounded_live_conservation ... ok
+test fleet_ensure::tests::terminal_retirement_reads_receipts_without_making_source_executable ... ok
+test fleet_ensure::tests::terminal_retirement_requires_the_retained_continuation_action_bound ... ok
+test fleet_ensure::tests::terminal_retirement_missing_observations_cannot_add_allowance_or_hide_invalid_evidence ... ok
+test fleet_ensure::workflow::readiness::tests::terminal_evidence_reports_required_review_without_mutation_or_network_access ... ok
+test fleet_ensure::workflow::readiness::tests::retained_work_is_reported_without_rewriting_evidence_or_opening_a_lock ... ok
+test fleet_ensure::tests::terminal_retirement_review_binds_fresh_inventory_and_rechecks_before_apply ... ok
+test fleet_ensure::tests::terminal_retirement_rejects_incomplete_or_changed_receipts_and_phases ... ok
+test fleet_ensure::tests::terminal_retirement_archives_phases_and_recovers_every_handoff_boundary ... ok
+
+test result: ok. 23 passed; 0 failed; 2 ignored; 0 measured; 909 filtered out; finished in 0.25s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.Bs2SFX

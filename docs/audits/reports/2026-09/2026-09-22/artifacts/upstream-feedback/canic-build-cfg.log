@@ -1,0 +1,12 @@
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1.06s
+     Running tests/build_cfg_surface.rs (target/debug/deps/build_cfg_surface-d865de6590618e03)
+
+running 2 tests
+test custom_cfg_catalog_is_exact_and_singly_owned ... ok
+test build_macro_tracks_config_without_tracking_neighboring_artifacts ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 1.07s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.UQcW5Q

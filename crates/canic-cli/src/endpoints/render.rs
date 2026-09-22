@@ -1,5 +1,9 @@
+use std::fmt::Write;
+
 use canic_host::{
-    candid_endpoints::{EndpointEntry, EndpointMode, EndpointType, render_candid_method_name},
+    candid_endpoints::{
+        EndpointEntry, EndpointMode, EndpointType, IngressPayloadBasis, render_candid_method_name,
+    },
     table::{ColumnAlign, render_table},
 };
 
@@ -17,7 +21,44 @@ pub(super) fn render_plain_endpoints(endpoints: &[EndpointEntry]) -> String {
         })
         .collect::<Vec<_>>();
 
-    render_table(&HEADERS, &rows, &ALIGNMENTS)
+    let mut table = render_table(&HEADERS, &rows, &ALIGNMENTS);
+    for endpoint in endpoints.iter().filter(|endpoint| {
+        !endpoint
+            .modes
+            .iter()
+            .any(|mode| matches!(mode, EndpointMode::Query | EndpointMode::CompositeQuery))
+    }) {
+        let limits = endpoint.payload_limits.as_ref();
+        let ingress = limits
+            .and_then(|limits| limits.ingress_max_bytes)
+            .map_or_else(
+                || match limits.map(|limits| limits.ingress_basis) {
+                    Some(IngressPayloadBasis::VariantDependent) => "variant-dependent".into(),
+                    _ => "unknown".into(),
+                },
+                |bytes| format!("{bytes} bytes"),
+            );
+        let guard = limits
+            .and_then(|limits| limits.update_guard_max_bytes)
+            .map_or_else(
+                || {
+                    if limits.is_some() {
+                        "not declared"
+                    } else {
+                        "unknown"
+                    }
+                    .into()
+                },
+                |bytes| format!("{bytes} bytes"),
+            );
+        write!(
+            table,
+            "\n{}: ingress={ingress}; update argument guard={guard}",
+            render_candid_method_name(&endpoint.name)
+        )
+        .expect("format endpoint limits");
+    }
+    table
 }
 
 fn render_endpoint_type_list(types: &[EndpointType]) -> String {

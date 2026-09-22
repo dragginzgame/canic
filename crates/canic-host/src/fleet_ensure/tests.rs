@@ -7339,7 +7339,7 @@ fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
     clippy::too_many_lines,
     reason = "one completed-source fixture binds its plan, immutable phase and paid receipts"
 )]
-fn terminal_retirement_fixture() -> (
+pub(super) fn terminal_retirement_fixture() -> (
     Fixture,
     crate::fleet_ensure::ops::EnsurePaths,
     FleetEnsurePlan,
@@ -7624,6 +7624,13 @@ fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
         policy::expected_plan_sha256,
     };
     let (fixture, paths, mut replacement) = terminal_retirement_fixture();
+    let mut journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    journal
+        .as_object_mut()
+        .unwrap()
+        .remove("funding_observations");
+    fs::write(&paths.journal, serde_json::to_vec(&journal).unwrap()).unwrap();
     let source = terminal::read(&paths, "local", "test-fleet").unwrap();
     replacement.operation_id = sha256_hex(b"new reviewed operation");
     replacement.scope = FleetEnsurePlanScope::ReinstallPreparation;
@@ -7667,6 +7674,13 @@ fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
 fn terminal_retirement_review_binds_fresh_inventory_and_rechecks_before_apply() {
     use crate::fleet_ensure::{model::*, ops};
     let (mut fixture, paths, phase) = terminal_retirement_fixture();
+    let mut journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    journal
+        .as_object_mut()
+        .unwrap()
+        .remove("funding_observations");
+    fs::write(&paths.journal, serde_json::to_vec(&journal).unwrap()).unwrap();
     let mut state = ops::read_state(&paths, "test-fleet").unwrap();
     state.principals.insert("treasury".into(), TREASURY.into());
     state.topology.insert(
@@ -8193,4 +8207,82 @@ fn store_chunks_stall_bound_reports_the_failed_chunk_after_draining() {
         );
     }
     fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_retirement_missing_observations_cannot_add_allowance_or_hide_invalid_evidence() {
+    use crate::fleet_ensure::ops::{self, reinstall::terminal};
+    let (mut fixture, paths, _) = terminal_retirement_fixture();
+    let mut raw: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    raw.as_object_mut().unwrap().remove("funding_observations");
+    let original = serde_json::to_vec(&raw).unwrap();
+    fs::write(&paths.journal, &original).unwrap();
+    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
+    assert_eq!(source.conservation.maximum_execution_burn_cycles, 200);
+    assert_eq!(
+        source.documents.journal_document_sha256,
+        sha256_hex(&original)
+    );
+    assert!(matches!(
+        ops::read_journal(&paths),
+        Err(ops::EnsureStateError::Decode { .. })
+    ));
+    assert!(matches!(
+        workflow::plan(
+            &fixture.root,
+            &fixture.desired,
+            "target",
+            "test-fleet",
+            2,
+            &mut fixture.platform
+        ),
+        Err(workflow::EnsureWorkflowError::RetainedTerminalReviewRequired { .. })
+    ));
+    assert_eq!(fs::read(&paths.journal).unwrap(), original);
+    assert!(fixture.platform.mutations.is_empty());
+    for (field, value) in [
+        ("funding_observations", serde_json::Value::Null),
+        ("funding_observations", serde_json::json!({"root": {}})),
+        ("unreviewed_payment", serde_json::json!({"cycles": "1"})),
+        ("schema_version", serde_json::json!(2)),
+        ("completion", serde_json::json!("in_progress")),
+        ("initial_controlled_cycles", serde_json::Value::Null),
+    ] {
+        let mut changed = raw.clone();
+        changed[field] = value;
+        fs::write(&paths.journal, serde_json::to_vec(&changed).unwrap()).unwrap();
+        assert!(matches!(
+            terminal::read(&paths, "local", "test-fleet"),
+            Err(ops::EnsureStateError::InvalidTerminalSource)
+        ));
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+#[ignore = "read-only inspection of an explicitly selected retained workspace"]
+fn terminal_retirement_inspects_selected_workspace_without_mutation() {
+    use crate::fleet_ensure::ops::{self, reinstall::terminal};
+    let root = PathBuf::from(
+        std::env::var_os("CANIC_RETAINED_REVIEW_WORKSPACE").expect("selected workspace"),
+    );
+    let environment =
+        std::env::var("CANIC_RETAINED_REVIEW_ENVIRONMENT").expect("selected environment");
+    let fleet = std::env::var("CANIC_RETAINED_REVIEW_FLEET").expect("selected Fleet");
+    let paths = ops::EnsurePaths::under(&root, &environment, &fleet);
+    let original = [&paths.plan, &paths.journal, &paths.state].map(|path| fs::read(path).unwrap());
+    let source = terminal::read(&paths, &environment, &fleet).unwrap();
+    println!(
+        "source={:?}; effects={}; phases={}",
+        source.documents,
+        source.actions.len(),
+        source.journal.successor_phases.len()
+    );
+    for (path, before) in [&paths.plan, &paths.journal, &paths.state]
+        .into_iter()
+        .zip(original)
+    {
+        assert_eq!(fs::read(path).unwrap(), before);
+    }
 }

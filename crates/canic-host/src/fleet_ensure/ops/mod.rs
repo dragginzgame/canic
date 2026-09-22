@@ -20,6 +20,7 @@ mod plan_content;
 mod platform;
 pub(super) mod progress;
 mod protocol;
+pub(super) mod readiness;
 pub(super) mod recovery;
 pub(super) mod reinstall;
 pub(super) mod startup_funding;
@@ -582,7 +583,7 @@ pub fn read_journal(
 ) -> Result<Option<FleetEnsureJournalRecord>, EnsureStateError> {
     let mut value: Option<FleetEnsureJournalRecord> = read_current(&paths.journal)?;
     if let Some(journal) = &mut value {
-        continuation::hydrate_phases(paths, journal)?;
+        continuation::hydrate_phases(paths, &mut journal.successor_phases)?;
     }
     validate_schema(value, &paths.journal, |record| record.schema_version)
 }

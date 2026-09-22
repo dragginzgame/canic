@@ -15,7 +15,9 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::cdk::types::Cycles;
-use canic_host::fleet_ensure::workflow::readiness::{FleetReadinessRequest, inspect};
+use canic_host::fleet_ensure::workflow::readiness::{
+    FleetReadinessRequest, ReadinessConversionRequest, inspect,
+};
 use canic_host::icp_config::resolve_current_canic_icp_root;
 use clap::{ArgAction, Command};
 use std::ffi::OsString;
@@ -29,11 +31,15 @@ pub(super) fn command() -> Command {
         .arg(value_arg("operator").long("operator").required(true).help("Expected operator Principal"))
         .arg(value_arg("cycles-ledger").long("cycles-ledger").default_value(DEFAULT_CYCLES_LEDGER).help("Exact Cycles Ledger to query"))
         .arg(value_arg("estimated-cycles").long("estimated-cycles").help("Optional operator debit estimate, such as 90T; never spending approval"))
+        .arg(value_arg("desired").long("desired").help("Desired Fleet input for pre-build Root native headroom; no artifacts are loaded"))
+        .arg(value_arg("quote-conversion").long("quote-conversion").action(ArgAction::SetTrue).num_args(0).help("Observe advisory ICP conversion rate and fees"))
+        .arg(value_arg("icp-ledger").long("icp-ledger").default_value("ryjl3-tyaaa-aaaaa-aaaba-cai").help("ICP Ledger for the advisory conversion quote"))
+        .arg(value_arg("cmc").long("cmc").default_value("rkp4c-7iaaa-aaaaa-aaaca-cai").help("CMC for the advisory conversion quote"))
         .arg(value_arg("json").long("json").action(ArgAction::SetTrue).num_args(0))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .arg(super::identity_arg())
-        .after_help("Example:\n  canic --environment staging fleet readiness staging --identity staging-operator --operator <principal> --estimated-cycles 90T\n\nNo build or payment occurs. A selected plan and fresh admission are still required.")
+        .after_help("Example:\n  canic --environment staging fleet readiness staging --identity staging-operator --operator <principal> --desired fleets/staging.toml --quote-conversion\n\nNo build or payment occurs. A selected plan and fresh admission are still required.")
 }
 
 pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
@@ -57,6 +63,18 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
                 .map_err(|_| FleetCommandError::Usage("invalid estimated cycle amount".into()))
         })
         .transpose()?;
+    let desired = string_option(&matches, "desired")
+        .map(|path| canic_host::fleet_ensure::load_desired_fleet(&root.join(path)))
+        .transpose()?;
+    let conversion = matches
+        .get_flag("quote-conversion")
+        .then(|| {
+            Ok::<_, FleetCommandError>(ReadinessConversionRequest {
+                icp_ledger: parse_principal("icp-ledger")?,
+                cmc: parse_principal("cmc")?,
+            })
+        })
+        .transpose()?;
     let report = inspect(&FleetReadinessRequest {
         workspace: &root,
         environment: &environment,
@@ -66,6 +84,8 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
         operator: parse_principal("operator")?,
         cycles_ledger: parse_principal("cycles-ledger")?,
         estimated_required_cycles,
+        desired: desired.as_ref(),
+        conversion,
     })
     .map_err(|error| FleetCommandError::Readiness(Box::new(error)))?;
     if matches.get_flag("json") {
@@ -77,31 +97,88 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
             }))?
         );
     } else {
-        println!(
-            "fleet: {}\nenvironment: {}\noperator: {}\nnetwork: {}\navailable_cycles: {}\nfunding_requirement: {}\nblockers: {:?}",
-            report.fleet,
-            report.environment,
-            report.operator,
-            report.network_identity,
-            format_cycles(report.available_cycles),
-            report.estimated_required_cycles.map_or_else(
-                || "unknown until planning".into(),
-                |amount| format!("{} (caller estimate)", format_cycles(amount))
-            ),
-            report.blockers
-        );
-        if let Some(operation) = &report.retained_operation {
-            println!(
-                "retained_operation: {} {:?}; plan={}",
-                operation.operation_id, operation.completion, operation.plan_sha256
-            );
-        }
-        println!(
-            "Read-only snapshot. Resume retained work through Fleet ensure; preserve its plan, journal and selected build. Exact funding and authority are checked again before effects."
-        );
+        print_report(&report);
     }
     if !report.blockers.is_empty() {
         return Err(FleetCommandError::ReadinessBlocked);
     }
     Ok(())
+}
+
+fn print_report(report: &canic_host::fleet_ensure::view::readiness::FleetReadiness) {
+    println!(
+        "fleet: {}\nenvironment: {}\noperator: {}\nnetwork: {}\navailable_cycles: {}\nfunding_requirement: {}\nblockers: {:?}",
+        report.fleet,
+        report.environment,
+        report.operator,
+        report.network_identity,
+        format_cycles(report.available_cycles),
+        report.estimated_required_cycles.map_or_else(
+            || "unknown until planning".into(),
+            |amount| format!("{} (caller estimate)", format_cycles(amount))
+        ),
+        report.blockers
+    );
+    if let Some(operation) = &report.retained_operation {
+        println!(
+            "retained_operation: {} {:?}; plan={}",
+            operation.operation_id, operation.completion, operation.plan_sha256
+        );
+    }
+    println!(
+        "observation_window_unix_ms: {}..{}",
+        report.observed_at_unix_ms, report.completed_at_unix_ms
+    );
+    for root in &report.funding.roots {
+        println!(
+            "root {}: native={} floor_excluding_execution={} shortfall={} unavailable={:?}",
+            root.root,
+            root.available_native_cycles
+                .map_or_else(|| "unknown".into(), format_cycles),
+            format_cycles(root.required_native_floor_cycles),
+            root.floor_shortfall_cycles
+                .map_or_else(|| "unknown".into(), format_cycles),
+            root.unavailable
+        );
+    }
+    println!(
+        "execution_reserve: unknown until artifact-bound planning; per_step_allowance={}",
+        report
+            .funding
+            .per_step_execution_allowance_cycles
+            .map_or_else(|| "unknown".into(), format_cycles)
+    );
+    for root in &report.funding.roots {
+        println!(
+            "root {}: configured_minimum={} startup_minimum={} unfunded_role={:?}",
+            root.root,
+            format_cycles(root.configured_minimum_cycles),
+            root.startup_minimum_cycles
+                .map_or_else(|| "unknown".into(), format_cycles),
+            root.unfunded_role
+        );
+    }
+    if let Some(quote) = &report.funding.conversion {
+        println!(
+            "conversion: mint_e8s={:?} transfer_fee_e8s={} deposit_fee_cycles={} total_icp_debit_e8s={:?} rate_timestamp_seconds={}",
+            quote.estimated_mint_e8s,
+            quote.rate.transfer_fee_e8s,
+            format_cycles(quote.rate.estimated_deposit_fee_cycles),
+            quote.estimated_total_icp_debit_e8s,
+            quote.rate.rate_timestamp_seconds
+        );
+    }
+    println!("unresolved: {:?}", report.funding.unresolved);
+    if report
+        .retained_operation
+        .as_ref()
+        .is_some_and(|operation| operation.terminal_review_required)
+    {
+        println!(
+            "Completed source needs a separate Fleet ensure --reinstall review without --apply; preserve all retained evidence."
+        );
+    }
+    println!(
+        "Read-only snapshot. Resume retained work through Fleet ensure; preserve its plan, journal and selected build. Exact funding and authority are checked again before effects."
+    );
 }

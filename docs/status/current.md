@@ -20,6 +20,68 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .36 upstream feedback follow-up — complete locally, 2026-09-22
+
+The accepted CANIC-166/172/181 batch is implemented and locally qualified in the
+same .36 draft as the completed metrics work. See the
+[qualification report](../audits/reports/2026-09/2026-09-22/upstream-feedback.md)
+and its structured source/log evidence.
+
+Completed-source review handles the exact retained Toko journal without importing
+it into a current executable journal or adding an allowance for absent funding
+observations. Existing conservation, fresh inventory, source hashing and recovery
+boundaries remain required. Readiness now reports the necessary terminal review.
+
+Pre-build readiness accepts desired configuration, observes exact Root native
+balances, itemises startup floors and optional advisory conversion fees, and
+retains observation times, source hashes and unresolved artifact-dependent costs.
+The selected Toko configuration loads without artifacts; no live balance or
+whole-plan affordability was claimed. Contract tooling reads compiled payload
+metadata from existing Candid artifacts and distinguishes inherited defaults,
+explicit guards, variant-dependent methods and unknown declarations.
+
+Targeted native regressions, macro/build and CLI/help checks, all three payload
+PocketIC cases and scoped all-target/all-feature warning-denied Clippy pass.
+Exact Toko journal/configuration inspections were read-only. A concurrent workspace
+IcyDB 0.261.3/dependency refresh was preserved; the interrupted Wasm source-drift
+check was followed by successful focused checks against the settled lockfile.
+The separate composed IcyDB lifecycle and real Toko sampler savings are not
+qualified by this report. No broad suite or live review/apply ran.
+
+The complete accepted feedback/metrics batch is ready for the maintainer's release
+flow and both .36 changelog drafts are current; package versions remain .35.
+Changes remain uncommitted. No Git mutation, release, deployment or sibling edit
+ran. Downstream adoption and live terminal review/convergence remain follow-up;
+B1 and the human minor-closeout gate remain independent.
+
+## Post-.35 metrics history batch — complete locally, 2026-09-21
+
+The maintainer confirms .35 is pushed and explicitly authorises both the Toko
+Miner advisory-threshold correction and the Canic grouped-history optimisation.
+Both requested implementations and their targeted qualification are complete.
+The accepted design now lives in
+[the .110 tracker](../design/0.110-fleet-runtime-contraction/metrics-history-locality.md),
+with [matched evidence](../audits/reports/2026-09/2026-09-21/history-locality.md).
+
+Eight-series groups reduce mature synthetic sampling by 27–31% and mature full
+chart reads by 8–39%. Some small/sparse reads and first writes after long gaps
+cost more; the report retains those tradeoffs. API, display usage, retention,
+source-time and reset semantics remain unchanged. Thirty focused native tests,
+all ten targeted timer-authority PocketIC cases and scoped warning-denied Clippy
+pass. Controls and width comparisons also pass; no broad suite ran.
+
+Toko Miner's exact managed metrics test passes with the unchanged 20,062,824
+maximum reported as advisory, using retained artifacts. Scoped User Hub Clippy
+passes. Its current checkout retains the correction. This is not a rebuilt
+candidate or staging result: real Toko sampler savings remain unmeasured until
+adoption. No dependency pin, Git mutation or deployment was performed here.
+
+The complete bounded Canic batch is ready for the maintainer's release flow;
+both .36 changelog draft surfaces are current, and package versions remain .35.
+Changes remain uncommitted. The above downstream performance follow-up does not
+block this local implementation qualification. B1, broader funding-readiness
+work and human minor-closeout acceptance remain independently incomplete.
+
 ## Ordinary-test timing feature gate repaired — 2026-09-21
 
 The maintainer's broad validation stopped while compiling the ordinary
@@ -148,7 +210,7 @@ its human acceptance remain independently incomplete.
 ## CANIC-148 sampler investigation — 2026-09-21
 
 The subsequent requested design review recommends
-[small grouped history rings](../design/ideas/public-metric-history-locality/design.md):
+[small grouped history rings](../design/0.110-fleet-runtime-contraction/metrics-history-locality.md):
 start with eight series sharing contiguous slot rows, retain direct per-series
 reads and the existing public request/response and chart semantics, then compare
 widths four/eight/sixteen using both sampling and query costs. This refines the

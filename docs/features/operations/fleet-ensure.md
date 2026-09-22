@@ -58,36 +58,57 @@ cache reuse and freshness/assurance rules remain unchanged. See the
 [qualification report](../../audits/reports/2026-09/2026-09-21/deployment-timing.md)
 for measured costs and coverage limits.
 
-Before compiling a release, run `canic --environment staging fleet readiness
-staging --operator <principal>` from the workspace. This read-only command checks
-the selected signer against the explicit operator, verifies the enrolled network
-trust identity, reads that operator's Cycles Ledger balance and reports retained
-Fleet work. Use `--cycles-ledger <principal>` to select a different Ledger and
-`--json` for structured output. It neither opens the operation lock nor creates
-or changes a plan, journal or payment intent.
+Before compiling a release, run the early check from the workspace:
 
-An optional `--estimated-cycles 90T` reports an estimated shortfall and exits
-unsuccessfully if it is positive. This is a caller estimate, not a selected plan's
-spending authority. Without an estimate the requirement remains unknown;
-success only means the available early checks passed. Non-converged retained
-work blocks starting a new operation: preserve its plan, journal and selected
-build and use the existing recovery flow. Unreadable or inconsistent retained
-evidence fails closed. All facts can change after this snapshot; exact plan and
+```sh
+canic --environment staging fleet readiness staging --identity staging-operator \
+  --operator <principal> --desired fleets/staging.toml \
+  --estimated-cycles 90T --quote-conversion --json
+```
+
+This read-only command verifies the selected signer and enrolled network trust,
+reads the operator's Cycles Ledger balance and reports retained Fleet work.
+`--desired` additionally reads the application configuration and observes selected
+Root native balances under exact Principal/controller bindings. It does not load
+Wasm artifacts, open an operation lock, compile a release or create payment state.
+Use `--cycles-ledger`, `--icp-ledger` and `--cmc` to select exact quote providers;
+the latter two are queried only with `--quote-conversion`.
+
+The report keeps these amounts separate:
+
+- Operator Ledger availability, optional caller-estimated debit and shortfall.
+- Each Root's native balance, configured minimum and configuration-derived startup
+  floor. The effective floor is their maximum; a positive observed shortfall or
+  an unfunded startup role blocks the early check. An unavailable balance is
+  `null` with a typed reason, never zero or a claim of sufficiency.
+- Configured execution allowance per step. The total execution reserve depends
+  on artifact-bound planning and remains unknown before that work exists.
+- Optional advisory ICP conversion for the caller's operator-Ledger shortfall,
+  with mint amount, transfer fee, estimated deposit fee, total ICP debit and rate
+  timestamp. This is not a Root native top-up quotation. Missing estimates or
+  failed observations leave the amount unknown; no ICP payment is issued.
+
+`--estimated-cycles` is a caller estimate, never selected-plan spending authority.
+The JSON includes the observation start/end times, selected desired/configuration
+hashes and explicit unresolved inputs, including pool/current grant usage,
+artifact execution reserve, actual plan debit, operator ICP balance and fresh
+admission. Configuration and retained identity changes during Root collection
+reject the snapshot. Observations are sequential and have no retained freshness
+lease; every fact can change immediately afterward. Success means the known early
+checks passed, not that deployment is affordable or approved.
+
+Non-converged retained work blocks a new operation. Preserve its plan, journal
+and selected build and use the existing recovery flow. A supported completed
+source whose current journal cannot decode reports `retained_terminal_review`
+and requires the separate `fleet ensure --reinstall` review without `--apply`.
+Other unreadable or inconsistent evidence fails closed. Do not patch missing
+journal fields or delete retained evidence.
+
+Downstream orchestration should call readiness before `canic build`. Offline
+artifact-only builds do not acquire a Fleet identity or query Ledgers
+automatically. Readiness does not predict full lifecycle convergence, validate
+application hooks, authorize payment or approve reset scope. Exact plan and
 funding admission still run immediately before effects.
-
-Downstream deployment orchestration should call readiness before `canic build`.
-Offline artifact-only builds do not acquire a Fleet identity or make Ledger
-queries automatically. Readiness does not predict complete managed lifecycle
-convergence, validate application hooks, authorize payment or approve reset scope.
-
-The early command observes the operator's Cycles Ledger balance. It does not
-measure Root native balances, quote ICP conversion/fees, derive the complete
-startup reserve or promise future affordability. In particular, a funded operator
-can coexist with an underfunded Root. Treat these as unresolved inputs until
-the current generation forecast and exact plan-bound funding checks establish
-them; `--estimated-cycles` cannot turn them into verified native headroom.
-The readiness JSON is an invocation snapshot, without a retained funding quote
-or freshness deadline. Applications still need later fresh plan admission.
 
 After convergence, `canic admission plan`, `apply` and `status` use the selected
 release retained in the terminal Fleet plan to locate Coordinator and Root Candid
@@ -1105,6 +1126,15 @@ content objects, release artifacts, desired inputs, estate seed and paid-effect
 receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
+
+The completed-source retirement inspector reads an immutable evidence projection,
+not an executable current journal. For a proven converged supported source,
+missing `funding_observations` contributes no additional execution allowance.
+Present observations must validate; null/malformed observations, unknown paid-work
+fields, unfinished effects and inconsistent source identities reject review.
+Original document hashes bind the existing terminal inventory, conservation,
+archive and handoff checks. This permits a separate review without importing the
+source state into a current execution contract or rewriting source bytes.
 
 This boundary also applies to read-only commands such as `canic info env`.
 A working frontend does not prove that the retained operation completed, and

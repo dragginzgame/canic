@@ -1,0 +1,24 @@
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 00s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-1465c0d76e6faf2f)
+
+running 12 tests
+test fleet_ensure::ops::platform::tests::protocol_owner_readiness_matched_latency_measurement ... ignored, manual matched host-readiness latency measurement
+test fleet_ensure::ops::readiness::tests::readiness_inspects_selected_configuration_without_building ... ignored, read-only configuration inspection of an explicitly selected workspace
+test fleet_ensure::generate::tests::fresh_pool_creation_funding_preserves_configured_readiness_floor ... ok
+test fleet_ensure::ops::readiness::tests::native_readiness_requires_exact_identity_controllers_and_real_balance ... ok
+test fleet_ensure::workflow::readiness::tests::readiness_requires_exact_signer_and_network_without_anonymous_authority ... ok
+test fleet_ensure::workflow::readiness::tests::conversion_keeps_mint_amount_fees_and_unknown_requirements_separate ... ok
+test fleet_ensure::workflow::readiness::tests::unknown_funding_is_not_claimed_sufficient_and_estimates_never_grant_authority ... ok
+test fleet_ensure::workflow::readiness::tests::unsafe_paths_and_unreadable_retained_evidence_fail_before_signer_or_network_access ... ok
+test icp_config::tests::readiness_reports_roles_excluded_by_the_app_environment ... ok
+test fleet_ensure::ops::readiness::tests::root_floor_is_reported_without_artifacts_or_assumed_execution_reserve ... ok
+test fleet_ensure::workflow::readiness::tests::terminal_evidence_reports_required_review_without_mutation_or_network_access ... ok
+test fleet_ensure::workflow::readiness::tests::retained_work_is_reported_without_rewriting_evidence_or_opening_a_lock ... ok
+
+test result: ok. 10 passed; 0 failed; 2 ignored; 0 measured; 922 filtered out; finished in 0.05s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.Yr9rm3

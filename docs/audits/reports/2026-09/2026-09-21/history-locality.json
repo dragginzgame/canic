@@ -1,0 +1,3926 @@
+{
+  "date": "2026-09-21",
+  "base": "a99a8fe821c0d54b8591acca8aa98fa51aa5c13e",
+  "selected_variant": "final8",
+  "command": "make test-pocketic-case CASE=timer_authority",
+  "profile": "fast",
+  "pocket_ic": "16.0.0",
+  "variants": [
+    {
+      "variant": "control",
+      "records": [
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 0,
+          "instructions": 7216932
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 95096,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 95096,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 95096,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 1,
+          "instructions": 6874536
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 95868,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 96614,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 96614,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 2,
+          "instructions": 6873025
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 96564,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 97975,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 97975,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1649076
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 299,
+          "instructions": 6728100
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 666309,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 1401452
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 672287,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 1401452
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 978429,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 1401452
+        },
+        {
+          "kind": "maximum",
+          "rows": 1,
+          "instructions": 7216932
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6712302,
+          "query_instructions": 94876,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1401484
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 200,
+          "instructions": 6747105,
+          "query_instructions": 96737,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1483972
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6831230,
+          "query_instructions": 96618,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1483972
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 1000,
+          "instructions": 6720505,
+          "query_instructions": 15097,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1401452
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 0,
+          "instructions": 12370021
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 175291,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3445240
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 175291,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3445240
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 175291,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3445240
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 1,
+          "instructions": 12715654
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 175867,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 3527728
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 176752,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3527728
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 176752,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3527728
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 2,
+          "instructions": 12767052
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 256673,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 3527728
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 258037,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3527728
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 258037,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3527728
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 299,
+          "instructions": 12167194
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 744976,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 3445208
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 751013,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 3445208
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 897173,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 3445208
+        },
+        {
+          "kind": "maximum",
+          "rows": 100,
+          "instructions": 12768940
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 12865064,
+          "query_instructions": 175144,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3569124
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 200,
+          "instructions": 13049179,
+          "query_instructions": 176619,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3692832
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 12868413,
+          "query_instructions": 176770,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3692832
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 1000,
+          "instructions": 13613266,
+          "query_instructions": 95090,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3445208
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 0,
+          "instructions": 17939780
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 174937,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 174937,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 174937,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 1,
+          "instructions": 18504315
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 95950,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 96658,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 96658,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 2,
+          "instructions": 18159786
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 96640,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 98011,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 98011,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 299,
+          "instructions": 18234217
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 504580,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 511014,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 737100,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "maximum",
+          "rows": 211,
+          "instructions": 18571927
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 17939524,
+          "query_instructions": 174937,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 200,
+          "instructions": 18424499,
+          "query_instructions": 176825,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 18552845,
+          "query_instructions": 176646,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5282961
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 1000,
+          "instructions": 19675639,
+          "query_instructions": 335169,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5282957
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 0,
+          "instructions": 18449488
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 335120,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 335120,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 335120,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 1,
+          "instructions": 19244438
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 256124,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 256941,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 256941,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 2,
+          "instructions": 19147192
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 176751,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 178103,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 178103,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 299,
+          "instructions": 19211119
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 585893,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 672278,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 737865,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "maximum",
+          "rows": 256,
+          "instructions": 19478032
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 18617277,
+          "query_instructions": 255154,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 200,
+          "instructions": 19249687,
+          "query_instructions": 256850,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 19071453,
+          "query_instructions": 256885,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5284864
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 1000,
+          "instructions": 20274906,
+          "query_instructions": 175149,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5284864
+        }
+      ],
+      "source_sha256": {
+        "crates/canic-core/src/ops/runtime/public_metrics/mod.rs": "e5eaa5038932cb5036acbf4aa9e3ddd76f438027155695a10f18b4ece4618585",
+        "crates/canic-core/src/view/public_metrics/mod.rs": "932c15e5a38efd5819ce99fa074e8167cd75de32e2e700996bd0defc49bd479d",
+        "Cargo.lock": "af937e5258a6c58270a99fd005c5335845edcebdf2cac0d8ee58258b9f427237",
+        "crates/canic-core/src/model/public_metrics/history/mod.rs": "59b6cea54caa727df3e92f0999b3ee272a55e7f7c3941460248d504e724a470f",
+        "crates/canic-core/src/view/mod.rs": "7abb0c9dc18eb667b3494e87a5662236ebc47f620fb40b9e03dd0a431e258118",
+        "canisters/test/runtime_probe/src/lib.rs": "7c1b323a43b3640a3e007dddda329bff7b9ee9f04586adad7dc4fad3a1408cfa",
+        "canisters/test/runtime_probe/src/history_cost/mod.rs": "529173a5a6865f41ac54489b2cdfea6a59dfd4d20cf1a3b907748511dc637e81",
+        "crates/canic-tests/tests/timer_authority.rs": "ba82d9b2d855cdca943f5104855556fd30c248d537f53787edce6a979b378751",
+        "target/pic-runtime-wasm/wasm32-unknown-unknown/fast/runtime_probe.wasm": "5efc28c09f0bc5f23914c6b6a629bcfc1f9316eb79ca81268ca7b07c35978ac2"
+      },
+      "log_sha256": "71aaa6d7fd4b51bd6d0a786eb1e28c9415fa7278bb70049ab504ed3f27883e9a",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 90.53s"
+      ],
+      "log": "artifacts/history-locality/control.log"
+    },
+    {
+      "variant": "width4",
+      "records": [
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 0,
+          "instructions": 7339210
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 92678,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 92678,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 92678,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 1,
+          "instructions": 6290171
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 93149,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 93872,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 93872,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 2,
+          "instructions": 6288554
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 93637,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 94918,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 94918,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1653652
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 299,
+          "instructions": 6119017
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 615326,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 1553076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 701707,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 1553076
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 767472,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 1553076
+        },
+        {
+          "kind": "maximum",
+          "rows": 1,
+          "instructions": 7339210
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6976636,
+          "query_instructions": 92781,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1405604
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 200,
+          "instructions": 8310004,
+          "query_instructions": 94016,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1488244
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6088460,
+          "query_instructions": 174072,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1488244
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 1000,
+          "instructions": 6620678,
+          "query_instructions": 12800,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1405572
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 0,
+          "instructions": 12699974
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 172831,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3471560
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 172831,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3471560
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 172831,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3471560
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 1,
+          "instructions": 12312364
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 173157,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 3554200
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 173985,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3554200
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 173985,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3554200
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 2,
+          "instructions": 12583890
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 173558,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 3554200
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 175015,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3554200
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 175015,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3554200
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 299,
+          "instructions": 12083419
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 615006,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 3545280
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 701162,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 3545280
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 766932,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 3545280
+        },
+        {
+          "kind": "maximum",
+          "rows": 100,
+          "instructions": 12699974
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 13093734,
+          "query_instructions": 252690,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3632548
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 200,
+          "instructions": 16720715,
+          "query_instructions": 254076,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3719608
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 11962621,
+          "query_instructions": 254132,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3719608
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 1000,
+          "instructions": 13280305,
+          "query_instructions": 172657,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3471528
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 0,
+          "instructions": 18547664
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 412749,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 412749,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 412749,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 1,
+          "instructions": 17520338
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 413149,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 413877,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 413877,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 2,
+          "instructions": 17411143
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 413612,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 415009,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 415009,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 299,
+          "instructions": 17317874
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 775007,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 781267,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 926932,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "maximum",
+          "rows": 211,
+          "instructions": 18547664
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 18547536,
+          "query_instructions": 412749,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 200,
+          "instructions": 23697991,
+          "query_instructions": 414116,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 18287018,
+          "query_instructions": 333852,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294225
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 1000,
+          "instructions": 19786723,
+          "query_instructions": 252806,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294221
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 0,
+          "instructions": 19377529
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 332668,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 332668,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 332668,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 1,
+          "instructions": 18180524
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 413099,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 414028,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 414028,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 2,
+          "instructions": 18395371
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 333555,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 335004,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 335004,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 299,
+          "instructions": 17900138
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 695472,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 781781,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 927438,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "maximum",
+          "rows": 256,
+          "instructions": 19377529
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 19086812,
+          "query_instructions": 412687,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 200,
+          "instructions": 24209259,
+          "query_instructions": 493968,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 18868196,
+          "query_instructions": 413971,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5296128
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 1000,
+          "instructions": 21705425,
+          "query_instructions": 252635,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5296128
+        }
+      ],
+      "source_sha256": {
+        "crates/canic-core/src/ops/runtime/public_metrics/mod.rs": "b599d212d78c7762cd6d9a2f0d865bc59f46c8374388769c280e868ef3e02e72",
+        "crates/canic-core/src/view/public_metrics/mod.rs": "932c15e5a38efd5819ce99fa074e8167cd75de32e2e700996bd0defc49bd479d",
+        "Cargo.lock": "af937e5258a6c58270a99fd005c5335845edcebdf2cac0d8ee58258b9f427237",
+        "crates/canic-core/src/model/public_metrics/history/mod.rs": "d5df4d1f3ada1989e1cf0b2ee03a81f45455c6261c02cc2597b9a8cf00d47cb4",
+        "crates/canic-core/src/view/mod.rs": "1f080df30d036334fc81947cf04d915e3a4d9daeba519a8d38721c17ce8b23ac",
+        "canisters/test/runtime_probe/src/lib.rs": "7c1b323a43b3640a3e007dddda329bff7b9ee9f04586adad7dc4fad3a1408cfa",
+        "canisters/test/runtime_probe/src/history_cost/mod.rs": "529173a5a6865f41ac54489b2cdfea6a59dfd4d20cf1a3b907748511dc637e81",
+        "crates/canic-tests/tests/timer_authority.rs": "ba82d9b2d855cdca943f5104855556fd30c248d537f53787edce6a979b378751",
+        "target/pic-runtime-wasm/wasm32-unknown-unknown/fast/runtime_probe.wasm": "161d6c9a0021f0ed4b3d3f6eafe54e0e1deb23211b6e5dd9c6f63ca00c9d08e4"
+      },
+      "log_sha256": "535314d1f151783d2bad212c4596f341853535c52c36d507e983ad29fe962e5f",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 194.35s"
+      ],
+      "log": "artifacts/history-locality/width4.log"
+    },
+    {
+      "variant": "width16",
+      "records": [
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 0,
+          "instructions": 5389860
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 92776,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 92776,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 92776,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 1,
+          "instructions": 4352367
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 93239,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 94028,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 94028,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 2,
+          "instructions": 4356379
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 93602,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 95008,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 95008,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1652140
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 299,
+          "instructions": 4189127
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 854986,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 1625316
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 781327,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 1625316
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 926910,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 1625316
+        },
+        {
+          "kind": "maximum",
+          "rows": 1,
+          "instructions": 5389860
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 5177528,
+          "query_instructions": 92833,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1625348
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 200,
+          "instructions": 8348865,
+          "query_instructions": 174046,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1634236
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 5368029,
+          "query_instructions": 173960,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1634236
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 1000,
+          "instructions": 4974733,
+          "query_instructions": 92692,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1625316
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 0,
+          "instructions": 8922780
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 172755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3617120
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 172755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3617120
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 172755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3617120
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 1,
+          "instructions": 7640825
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 93220,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 3626008
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 173986,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3626008
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 173986,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3626008
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 2,
+          "instructions": 7507693
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 173587,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 3626008
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 95039,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3626008
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 95039,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3626008
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 299,
+          "instructions": 6929393
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 695407,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 3617088
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 701485,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 3617088
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 927327,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 3617088
+        },
+        {
+          "kind": "maximum",
+          "rows": 100,
+          "instructions": 8922780
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 8999389,
+          "query_instructions": 252666,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3630604
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 200,
+          "instructions": 15594743,
+          "query_instructions": 253897,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3938848
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 8740235,
+          "query_instructions": 253883,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3938848
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 1000,
+          "instructions": 8289713,
+          "query_instructions": 172722,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3617088
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 0,
+          "instructions": 12240893
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 412794,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 412794,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 412794,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 1,
+          "instructions": 10474704
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 413148,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 413936,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 413936,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 2,
+          "instructions": 10366949
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 413544,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 415240,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 415240,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 299,
+          "instructions": 10758835
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 1014959,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 1021091,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 1166925,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "maximum",
+          "rows": 211,
+          "instructions": 12240893
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 12240765,
+          "query_instructions": 412794,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 200,
+          "instructions": 22904802,
+          "query_instructions": 494064,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 11721065,
+          "query_instructions": 493979,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5291921
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 1000,
+          "instructions": 12835906,
+          "query_instructions": 172672,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5291917
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 0,
+          "instructions": 13391648
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 332862,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 332862,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 332862,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 1,
+          "instructions": 11372040
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 413216,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 334133,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 334133,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 2,
+          "instructions": 10792062
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 333567,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 334885,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 334885,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 299,
+          "instructions": 10944587
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 935374,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 1101579,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 1167293,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "maximum",
+          "rows": 256,
+          "instructions": 13391648
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 13575682,
+          "query_instructions": 412687,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 200,
+          "instructions": 22601878,
+          "query_instructions": 414115,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 12468015,
+          "query_instructions": 494115,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5293824
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 1000,
+          "instructions": 13773473,
+          "query_instructions": 332690,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5293824
+        }
+      ],
+      "source_sha256": {
+        "crates/canic-core/src/ops/runtime/public_metrics/mod.rs": "b599d212d78c7762cd6d9a2f0d865bc59f46c8374388769c280e868ef3e02e72",
+        "crates/canic-core/src/view/public_metrics/mod.rs": "932c15e5a38efd5819ce99fa074e8167cd75de32e2e700996bd0defc49bd479d",
+        "Cargo.lock": "af937e5258a6c58270a99fd005c5335845edcebdf2cac0d8ee58258b9f427237",
+        "crates/canic-core/src/model/public_metrics/history/mod.rs": "925c50add9b8b952d328e7f4deaadfbda46768632d61eaf84b35fad2e2c90984",
+        "crates/canic-core/src/view/mod.rs": "1f080df30d036334fc81947cf04d915e3a4d9daeba519a8d38721c17ce8b23ac",
+        "canisters/test/runtime_probe/src/lib.rs": "7c1b323a43b3640a3e007dddda329bff7b9ee9f04586adad7dc4fad3a1408cfa",
+        "canisters/test/runtime_probe/src/history_cost/mod.rs": "529173a5a6865f41ac54489b2cdfea6a59dfd4d20cf1a3b907748511dc637e81",
+        "crates/canic-tests/tests/timer_authority.rs": "ba82d9b2d855cdca943f5104855556fd30c248d537f53787edce6a979b378751",
+        "target/pic-runtime-wasm/wasm32-unknown-unknown/fast/runtime_probe.wasm": "25b95b58af8ef7ae51a97b2ebfa5f7a20d0046824901e8d1c284a97d5948800c"
+      },
+      "log_sha256": "60131af692d95fec4abc37a2987723e87783356445427c79d01ecb01752f6df8",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 182.39s"
+      ],
+      "log": "artifacts/history-locality/width16.log"
+    },
+    {
+      "variant": "width8-read",
+      "records": [
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 0,
+          "instructions": 6250828
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 92609,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 92609,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 92609,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 1,
+          "instructions": 4977112
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 93242,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 93942,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 93942,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 2,
+          "instructions": 4894423
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 93532,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 95049,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 95049,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 299,
+          "instructions": 5210600
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 615180,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 1625820
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 701519,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 1625820
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 767105,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 1625820
+        },
+        {
+          "kind": "maximum",
+          "rows": 1,
+          "instructions": 6250828
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6204378,
+          "query_instructions": 92922,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1478372
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 200,
+          "instructions": 8065522,
+          "query_instructions": 93874,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1487260
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6138235,
+          "query_instructions": 94113,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1487260
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 1000,
+          "instructions": 5604801,
+          "query_instructions": 92684,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1478340
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 0,
+          "instructions": 10327240
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 172755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470288
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 172755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470288
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 172755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470288
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 1,
+          "instructions": 8995663
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 173005,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 173879,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 173879,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 2,
+          "instructions": 8703374
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 173661,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 175105,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 175105,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 299,
+          "instructions": 8925713
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 534967,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 3617736
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 621102,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 3617736
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 767439,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 3617736
+        },
+        {
+          "kind": "maximum",
+          "rows": 100,
+          "instructions": 10870450
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 11035534,
+          "query_instructions": 252668,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3631252
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 200,
+          "instructions": 16560136,
+          "query_instructions": 253942,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3792040
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 10003279,
+          "query_instructions": 173939,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3792040
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 1000,
+          "instructions": 9375619,
+          "query_instructions": 92725,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470256
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 0,
+          "instructions": 15162645
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 412755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 412755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 412755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 1,
+          "instructions": 12578212
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 413079,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 413875,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 413875,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 2,
+          "instructions": 12476968
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 413613,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 414929,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 414929,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 299,
+          "instructions": 12542985
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 615414,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 621521,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 847256,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "maximum",
+          "rows": 211,
+          "instructions": 15162645
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 15162517,
+          "query_instructions": 412755,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 200,
+          "instructions": 23137177,
+          "query_instructions": 333882,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 14625079,
+          "query_instructions": 413936,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 1000,
+          "instructions": 15124639,
+          "query_instructions": 172744,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292685
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 0,
+          "instructions": 15676099
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 332804,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 332804,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 332804,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 1,
+          "instructions": 13242858
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 333125,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 333933,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 333933,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 2,
+          "instructions": 13298010
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 333534,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 334992,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 334992,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 299,
+          "instructions": 13294863
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 775279,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 781661,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 927169,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "maximum",
+          "rows": 256,
+          "instructions": 15716621
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 16021074,
+          "query_instructions": 412668,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 200,
+          "instructions": 23651298,
+          "query_instructions": 413924,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 14331212,
+          "query_instructions": 493853,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 1000,
+          "instructions": 16226951,
+          "query_instructions": 172727,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        }
+      ],
+      "source_sha256": {
+        "crates/canic-core/src/ops/runtime/public_metrics/mod.rs": "b599d212d78c7762cd6d9a2f0d865bc59f46c8374388769c280e868ef3e02e72",
+        "crates/canic-core/src/view/public_metrics/mod.rs": "932c15e5a38efd5819ce99fa074e8167cd75de32e2e700996bd0defc49bd479d",
+        "Cargo.lock": "af937e5258a6c58270a99fd005c5335845edcebdf2cac0d8ee58258b9f427237",
+        "crates/canic-core/src/model/public_metrics/history/mod.rs": "3606ea6798716a3a119daf265978b936846728d8fd7a76897840770a850b755d",
+        "crates/canic-core/src/view/mod.rs": "1f080df30d036334fc81947cf04d915e3a4d9daeba519a8d38721c17ce8b23ac",
+        "canisters/test/runtime_probe/src/lib.rs": "7c1b323a43b3640a3e007dddda329bff7b9ee9f04586adad7dc4fad3a1408cfa",
+        "canisters/test/runtime_probe/src/history_cost/mod.rs": "529173a5a6865f41ac54489b2cdfea6a59dfd4d20cf1a3b907748511dc637e81",
+        "crates/canic-tests/tests/timer_authority.rs": "ba82d9b2d855cdca943f5104855556fd30c248d537f53787edce6a979b378751",
+        "target/pic-runtime-wasm/wasm32-unknown-unknown/fast/runtime_probe.wasm": "da5f09009ae69f1df5d775978e2ee9c1216bdfabf053cfde230ee26f9f446b73"
+      },
+      "log_sha256": "2e9d3413b6e16a6827ca26f44a75613a36d1a45f6fc919772c1b30d72ba522a5",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 174.06s"
+      ],
+      "log": "artifacts/history-locality/width8-read.log"
+    },
+    {
+      "variant": "final8",
+      "records": [
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 0,
+          "instructions": 6257827
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 92878,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 92878,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 92878,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 1,
+          "instructions": 5057332
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 93307,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 94038,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 94038,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 2,
+          "instructions": 4898152
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 93736,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 175228,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 175228,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 1652644
+        },
+        {
+          "kind": "sample",
+          "rows": 1,
+          "period": 299,
+          "instructions": 4729007
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 448026,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 1625820
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 454377,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 1625820
+        },
+        {
+          "kind": "query",
+          "rows": 1,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 599950,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 1625820
+        },
+        {
+          "kind": "maximum",
+          "rows": 1,
+          "instructions": 6257827
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 6214985,
+          "query_instructions": 92869,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1478372
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 200,
+          "instructions": 8153828,
+          "query_instructions": 174423,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1487260
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 0,
+          "instructions": 5821129,
+          "query_instructions": 94226,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 1487260
+        },
+        {
+          "kind": "gap",
+          "rows": 1,
+          "slots": 1000,
+          "instructions": 5529887,
+          "query_instructions": 253095,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 1478340
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 0,
+          "instructions": 10513294
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 252997,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470288
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 252997,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470288
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 252997,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470288
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 1,
+          "instructions": 8993213
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 253382,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 254214,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 254214,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 2,
+          "instructions": 8541890
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 253784,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 255274,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 255274,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 3626656
+        },
+        {
+          "kind": "sample",
+          "rows": 100,
+          "period": 299,
+          "instructions": 8844655
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 447854,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 3617736
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 454023,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 3617736
+        },
+        {
+          "kind": "query",
+          "rows": 100,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 599950,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 3617736
+        },
+        {
+          "kind": "maximum",
+          "rows": 100,
+          "instructions": 10865260
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 11054918,
+          "query_instructions": 252811,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3631252
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 200,
+          "instructions": 16564568,
+          "query_instructions": 334112,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3792040
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 0,
+          "instructions": 10087343,
+          "query_instructions": 254199,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 3792040
+        },
+        {
+          "kind": "gap",
+          "rows": 100,
+          "slots": 1000,
+          "instructions": 9390704,
+          "query_instructions": 93070,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 3470256
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 0,
+          "instructions": 15197628
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 253310,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 253310,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 253310,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 1,
+          "instructions": 12581697
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 253327,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 254107,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 254107,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 2,
+          "instructions": 12317824
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 253738,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 255144,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 255144,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "sample",
+          "rows": 211,
+          "period": 299,
+          "instructions": 12625610
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 528083,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 534089,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "query",
+          "rows": 211,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 679929,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "maximum",
+          "rows": 211,
+          "instructions": 15197628
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 15197372,
+          "query_instructions": 253310,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 200,
+          "instructions": 23141008,
+          "query_instructions": 254232,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 0,
+          "instructions": 13665825,
+          "query_instructions": 254234,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5292689
+        },
+        {
+          "kind": "gap",
+          "rows": 211,
+          "slots": 1000,
+          "instructions": 15306207,
+          "query_instructions": 172932,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5292685
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 0,
+          "instructions": 15713322
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 1,
+          "query_instructions": 253020,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 12,
+          "query_instructions": 253020,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 0,
+          "limit": 288,
+          "query_instructions": 253020,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 1,
+          "instructions": 13079155
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 1,
+          "query_instructions": 333335,
+          "points": 1,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 12,
+          "query_instructions": 334202,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 1,
+          "limit": 288,
+          "query_instructions": 334202,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 2,
+          "instructions": 13134852
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 1,
+          "query_instructions": 253783,
+          "points": 1,
+          "total": 3,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 12,
+          "query_instructions": 255138,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 2,
+          "limit": 288,
+          "query_instructions": 255138,
+          "points": 3,
+          "total": 3,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "sample",
+          "rows": 256,
+          "period": 299,
+          "instructions": 13288289
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 1,
+          "query_instructions": 368455,
+          "points": 1,
+          "total": 287,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 12,
+          "query_instructions": 374642,
+          "points": 12,
+          "total": 287,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "query",
+          "rows": 256,
+          "period": 299,
+          "limit": 288,
+          "query_instructions": 680469,
+          "points": 287,
+          "total": 287,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "maximum",
+          "rows": 256,
+          "instructions": 15713322
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 16046007,
+          "query_instructions": 252915,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 200,
+          "instructions": 23646537,
+          "query_instructions": 254167,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 0,
+          "instructions": 14408611,
+          "query_instructions": 254302,
+          "points": 2,
+          "total": 2,
+          "reserved_bytes": 5294592
+        },
+        {
+          "kind": "gap",
+          "rows": 256,
+          "slots": 1000,
+          "instructions": 15932476,
+          "query_instructions": 172979,
+          "points": 1,
+          "total": 1,
+          "reserved_bytes": 5294592
+        }
+      ],
+      "source_sha256": {
+        "crates/canic-core/src/ops/runtime/public_metrics/mod.rs": "b599d212d78c7762cd6d9a2f0d865bc59f46c8374388769c280e868ef3e02e72",
+        "crates/canic-core/src/view/public_metrics/mod.rs": "932c15e5a38efd5819ce99fa074e8167cd75de32e2e700996bd0defc49bd479d",
+        "Cargo.lock": "af937e5258a6c58270a99fd005c5335845edcebdf2cac0d8ee58258b9f427237",
+        "crates/canic-core/src/model/public_metrics/history/mod.rs": "4217ded9119ef8f6bb56d41d8e33dfd6b0bf8ce5195f83f02c60db864b26ecb8",
+        "crates/canic-core/src/view/mod.rs": "1f080df30d036334fc81947cf04d915e3a4d9daeba519a8d38721c17ce8b23ac",
+        "canisters/test/runtime_probe/src/lib.rs": "7c1b323a43b3640a3e007dddda329bff7b9ee9f04586adad7dc4fad3a1408cfa",
+        "canisters/test/runtime_probe/src/history_cost/mod.rs": "529173a5a6865f41ac54489b2cdfea6a59dfd4d20cf1a3b907748511dc637e81",
+        "crates/canic-tests/tests/timer_authority.rs": "ba82d9b2d855cdca943f5104855556fd30c248d537f53787edce6a979b378751",
+        "target/pic-runtime-wasm/wasm32-unknown-unknown/fast/runtime_probe.wasm": "d35569aaa2b47ac46fb208db123342d68a78a7e0d39b89dabbc8c95cec9a0325"
+      },
+      "log_sha256": "0ece2f0d53551365ae24f93e426f5a530119203ef12b922cace49202f61e3ee2",
+      "test_results": [
+        "test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 169.52s"
+      ],
+      "log": "artifacts/history-locality/final8.log"
+    }
+  ],
+  "checks": {
+    "native-final": {
+      "log": "artifacts/history-locality/native-final.log",
+      "sha256": "33501058c27af51885413d51fc493c3fa4b2b0df1837b34044044c6edbf5b960"
+    },
+    "clippy-final": {
+      "log": "artifacts/history-locality/clippy-final.log",
+      "sha256": "431d167a9e4f2e493c6bbc470f57ea9f20a8d48053576696f12ea0ac8a0665e8"
+    }
+  },
+  "toko_checks": {
+    "toko-miner-sampler-advisory": {
+      "log": "/tmp/toko-miner-sampler-advisory.log",
+      "sha256": "beb3399f7e96fc8a0f6501b94b6832d54aa5f416a8deedbf95dbbbdd9190658f"
+    },
+    "toko-miner-sampler-advisory-clippy": {
+      "log": "/tmp/toko-miner-sampler-advisory-clippy.log",
+      "sha256": "aacf5b28b5b45ec3b7678fa83ea5e686d8fdabf08b28814ff0b57dd45e978717"
+    }
+  },
+  "experiment_patch_sha256": {
+    "control": "fc2a5ccbb4bac0c0075c79c6f37ae5417bfdb77ec7d08edcb23338e1c1dfc39c",
+    "width4": "545f8c4c6f8bdcb915677afa202d962fa21b97cd8baac1e620b1474c3c35f4c6",
+    "width16": "1ef1e367b3a56d0f7550b84f28971d1be697376c7a6549a2bceea4276420b3f1",
+    "width8-read": "dca0bd451615fc49334684ec4e27514da0ae46206a9d26d535fa29213c70d590",
+    "final8": null
+  },
+  "supporting_source_sha256": {
+    "crates/canic-core/src/model/public_metrics/history/tests.rs": "64e87b91549df01a493ef332f9258bbb30874b327365002015b0564e43bd77ae",
+    "crates/canic-core/src/ops/runtime/public_metrics/memory/tests.rs": "dec5d9328fd2ea7f6a73723a32758c6021c3188ca466da8795a5a8c06da89024"
+  }
+}
