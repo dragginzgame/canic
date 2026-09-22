@@ -20,6 +20,30 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .36 validation guard corrections — complete locally, 2026-09-22
+
+The maintainer's ordinary validation found two omitted guard updates. The new
+bare-CDK payload endpoint is now admitted only at its exact unpublished fixture
+path, name, update kind and empty CDK options. Negative cases reject other paths,
+names, query/export/guard options and duplicate exports. Production endpoint
+restrictions remain enforced.
+
+The timer inventory no longer imposes an exact IcyDB manifest version pin or
+duplicates Cargo's dependency resolution. It retains locked/offline graph checks,
+Canic's exact shared timer provider identity, raw-provider singleton and manifest
+consumer/feature checks. The maintainer's IcyDB 0.261.3 requirement is unchanged.
+
+Both failed targets pass together: 10 `canic/managed_endpoint_gate` tests and 16
+`canic-core/timer_inventory_guard` tests. Scoped Clippy for those exact targets
+with all features and warnings denied also passes, as do formatting and whitespace
+checks. Logs: `.tmp/feedback36-guards/{tests,clippy}.log`. The full workspace gate
+and its skipped serial suites were not rerun; no runtime source changed here.
+
+These corrections complete the known validation follow-up in the existing .36
+batch. The accepted implementation batch and both changelog drafts are ready for
+the maintainer's release flow; package versions remain .35. These corrections
+are uncommitted. No Git mutation, release, deployment or sibling edit ran.
+
 ## .36 upstream feedback follow-up — complete locally, 2026-09-22
 
 The accepted CANIC-166/172/181 batch is implemented and locally qualified in the
