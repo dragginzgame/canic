@@ -20,7 +20,9 @@ const PREPAID_POOL_ASSET_COUNT: usize = 10;
 const PREPAID_POOL_ASSET_CYCLES: u128 = 6_000_000_000_000;
 
 #[cfg(test)]
-pub(in crate::pic) use tests::{governed_fleet_journey_cases, governed_pocketic_cases};
+pub(in crate::pic) use tests::{
+    governed_fleet_journey_cases, governed_pocketic_cases, governed_recovery_cases,
+};
 
 mod tests {
     #[cfg(test)]
@@ -19019,12 +19021,16 @@ cycles = "80T"
     }
 
     #[cfg(test)]
+    pub fn governed_recovery_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![(
+            "source-bound activation reset recovers and replays",
+            activation_reset::source_bound_activation_reset_recovers_and_replays,
+        )]
+    }
+
+    #[cfg(test)]
     pub fn governed_fleet_journey_cases() -> Vec<crate::pic::GovernedTestCase> {
         vec![
-            (
-                "source-bound activation reset recovers and replays",
-                activation_reset::source_bound_activation_reset_recovers_and_replays,
-            ),
             (
                 "generated reinstall recovers and converges",
                 generated_reinstall_recovers_lost_install_and_reaches_working_fleet,

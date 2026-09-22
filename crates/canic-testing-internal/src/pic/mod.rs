@@ -155,7 +155,12 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
             "{TARGET_GOVERNED_CASE_ENV} must name exactly one governed case"
         );
     }
-    let mut failures = Vec::new();
+    run_selected_governed_test_cases(cases);
+}
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+fn run_selected_governed_test_cases(cases: Vec<GovernedTestCase>) {
+    let mut failure = None;
     let mut timings = Vec::new();
     for (name, test) in cases {
         let started_at = Instant::now();
@@ -175,15 +180,15 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
                 name,
                 started_at.elapsed(),
             );
-            failures.push(name);
-        } else {
-            progress::timed(
-                "SUITE",
-                progress::ProgressStatus::Pass,
-                name,
-                started_at.elapsed(),
-            );
+            failure = Some(name);
+            break;
         }
+        progress::timed(
+            "SUITE",
+            progress::ProgressStatus::Pass,
+            name,
+            started_at.elapsed(),
+        );
     }
 
     timings.sort_by(|left, right| right.1.total_cmp(&left.1));
@@ -201,11 +206,9 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
         );
     }
 
-    assert!(
-        failures.is_empty(),
-        "governed internal test failures: {}",
-        failures.join(", ")
-    );
+    if let Some(name) = failure {
+        panic!("governed internal test failed: {name}");
+    }
 }
 
 // -----------------------------------------------------------------------------
@@ -215,6 +218,7 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod governed_suite {
     use super::*;
+    use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
     #[ignore = "the workspace runner supplies one shared PocketIC server and serial process"]
@@ -226,26 +230,35 @@ mod governed_suite {
     }
 
     fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
-        let mut cases = fleet_registry::governed_pocketic_cases();
+        let mut cases = fleet_registry::governed_recovery_cases();
+        cases.extend(fleet_registry::governed_pocketic_cases());
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());
-        // Retain one process and its caches, but expose short regressions before
-        // the complete Fleet provisioning and recovery journeys.
+        // Exercise recovery first, then retain one process and its caches for
+        // short regressions and the remaining complete provisioning journeys.
         cases.extend(fleet_registry::governed_fleet_journey_cases());
         cases
     }
 
     #[test]
-    fn governed_pocketic_inventory_preserves_baseline_order_and_journey_suffix() {
+    fn governed_pocketic_inventory_preserves_recovery_prefix_and_journey_suffix() {
         assert_governed_pocketic_inventory();
     }
 
     fn assert_governed_pocketic_inventory() {
         let cases = ordered_governed_pocketic_cases();
+        let recovery = fleet_registry::governed_recovery_cases();
         let journeys = fleet_registry::governed_fleet_journey_cases();
+        assert!(!recovery.is_empty());
         assert!(!journeys.is_empty());
         let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        assert!(names.starts_with(&["Fleet deployment restore", "autonomous Root removal"]));
+        let recovery_names = recovery.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        assert!(recovery_names.contains(&"source-bound activation reset recovers and replays"));
+        assert!(names.starts_with(&recovery_names));
+        assert!(
+            names[recovery.len()..]
+                .starts_with(&["Fleet deployment restore", "autonomous Root removal"])
+        );
         let journey_names = journeys.iter().map(|(name, _)| *name).collect::<Vec<_>>();
         assert!(names.ends_with(&journey_names));
         for required in [
@@ -262,6 +275,41 @@ mod governed_suite {
         }
         assert!(names.len() > journey_names.len());
         assert_unique_governed_case_names(&cases);
+    }
+
+    #[test]
+    fn governed_runner_stops_after_failure() {
+        static EXECUTED: AtomicUsize = AtomicUsize::new(0);
+        let result = std::panic::catch_unwind(|| {
+            run_selected_governed_test_cases(vec![
+                ("first", || {
+                    EXECUTED.fetch_add(1, Ordering::SeqCst);
+                }),
+                ("failing", || {
+                    EXECUTED.fetch_add(1, Ordering::SeqCst);
+                    panic!("injected case failure");
+                }),
+                ("must not run", || {
+                    EXECUTED.fetch_add(1, Ordering::SeqCst);
+                }),
+            ]);
+        });
+        assert!(result.is_err());
+        assert_eq!(EXECUTED.load(Ordering::SeqCst), 2);
+    }
+
+    #[test]
+    fn governed_runner_runs_every_successful_case_in_order() {
+        static EXECUTED: AtomicUsize = AtomicUsize::new(0);
+        run_selected_governed_test_cases(vec![
+            ("first", || {
+                assert_eq!(EXECUTED.fetch_add(1, Ordering::SeqCst), 0);
+            }),
+            ("second", || {
+                assert_eq!(EXECUTED.fetch_add(1, Ordering::SeqCst), 1);
+            }),
+        ]);
+        assert_eq!(EXECUTED.load(Ordering::SeqCst), 2);
     }
 
     fn assert_unique_governed_case_names(cases: &[GovernedTestCase]) {

@@ -188,18 +188,20 @@ concurrent suite execution. When Make selects `sccache`, the runner reports
 request/hit/miss deltas, retains the server through the complete two-hour test
 envelope and uses a 40 GiB local cache; a reset is reported rather than
 silently presenting zero requests as cache evidence.
-Cargo continues across independently selected test binaries inside each cost
-tier, and the workspace runner records every failed suite before returning one
-nonzero result. A failed ordinary tier is a hard barrier in the combined local
+Cargo continues across independently selected ordinary test binaries and records
+their failures before returning one nonzero result. Serial PocketIC commands
+stop after a failed binary, and a failed suite skips all remaining serial suites
+while retaining failure logs, timing summaries and invocation cleanup.
+A failed ordinary tier is a hard barrier in the combined local
 runner: it reports all ordinary failures and skips the serial PocketIC tier.
 Plan-only inventory resolution still enumerates both tiers, and the explicit
 PocketIC-only mode remains independently runnable. In CI, one ignored governed
 `canic-testing-internal` harness calls every internal PocketIC case in explicit
-order inside one Rust process. Fleet deployment restore and autonomous Root
-removal are the first two cases. Short internal regressions run before the
-complete Fleet provisioning and recovery journeys, retaining every registered
-case and the same process-local caches. The harness reports each result immediately,
-prints the ten slowest cases, catches failures through the suite boundary and
+order inside one Rust process. Source-bound activation-reset recovery runs first,
+followed by Fleet deployment restore and autonomous Root removal. Short internal
+regressions then run before the remaining complete Fleet journeys, retaining
+every registered case and the same process-local caches. The harness reports each result immediately,
+prints the ten slowest executed cases, stops after the first failed case and
 retains the process-local Fleet
 baseline and artifact owners. The restore proof uses that baseline, while the
 destructive Root-removal case uses an exclusive fresh instance because canister
