@@ -13,6 +13,7 @@ use crate::{
     endpoints::{render::render_plain_endpoints, transport::endpoint_report},
     version_text,
 };
+use canic_core::ids::ReleaseBuildId;
 #[cfg(test)]
 use canic_host::candid_endpoints::{
     EndpointCardinality, EndpointEntry, EndpointMode, EndpointType,
@@ -26,7 +27,7 @@ const CANDID_SERVICE_METADATA: &str = "candid:service";
 const INFO_HELP_AFTER: &str = "\
 Examples:
   canic info endpoints demo-local app
-  canic info endpoints demo-local scale_hub --json
+  canic info endpoints demo-local scale_hub --release-build <sha256> --json
   canic info endpoints demo-local tl4x7-vh777-77776-aaacq-cai";
 
 ///
@@ -39,6 +40,9 @@ pub enum EndpointsCommandError {
     Usage(String),
 
     #[error(transparent)]
+    BuiltCandid(#[from] canic_host::release_set::BuiltCandidError),
+
+    #[error(transparent)]
     CandidEndpoint(#[from] CandidEndpointError),
 
     #[error(
@@ -46,7 +50,9 @@ pub enum EndpointsCommandError {
     )]
     NoInterfaceArtifact { fleet: String, canister: String },
 
-    #[error("local Candid artifact not found for role {role}: {path}")]
+    #[error(
+        "local Candid artifact not found for role {role}: {path}; to inspect a managed build, pass --release-build <sha256> using the ID emitted by canic build"
+    )]
     MissingRoleArtifact { role: String, path: String },
 
     #[error(transparent)]
@@ -73,6 +79,7 @@ struct EndpointsOptions {
     environment: Option<String>,
     icp: String,
     json: bool,
+    release_build: Option<ReleaseBuildId>,
 }
 
 impl EndpointsOptions {
@@ -100,6 +107,7 @@ impl EndpointsOptions {
             environment: string_option(&matches, "environment"),
             icp: string_option_or_else(&matches, "icp", default_icp),
             json: matches.get_flag("json"),
+            release_build: matches.get_one::<ReleaseBuildId>("release-build").copied(),
         })
     }
 }
@@ -123,7 +131,11 @@ fn run_options(options: &EndpointsOptions) -> Result<(), EndpointsCommandError> 
     if options.json {
         println!("{}", serde_json::to_string_pretty(&report)?);
     } else {
-        println!("{}", render_plain_endpoints(&report.endpoints));
+        println!(
+            "Source: {}\n{}",
+            report.source,
+            render_plain_endpoints(&report.endpoints)
+        );
     }
     Ok(())
 }
@@ -132,7 +144,7 @@ fn info_command() -> ClapCommand {
     endpoint_command(
         "canic info endpoints",
         "fleet",
-        "Installed Fleet name to inspect",
+        "Fleet name for live lookup; unused with --release-build",
         INFO_HELP_AFTER,
     )
 }
@@ -158,6 +170,15 @@ fn endpoint_command(
                 .value_name("canister-or-role")
                 .required(true)
                 .help("Canister principal or role name to inspect"),
+        )
+        .arg(
+            value_arg("release-build")
+                .long("release-build")
+                .value_name("sha256")
+                .value_parser(clap::value_parser!(ReleaseBuildId))
+                .help(
+                    "Inspect a finalized build role offline, using the ID emitted by canic build",
+                ),
         )
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())

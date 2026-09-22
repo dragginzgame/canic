@@ -2,7 +2,7 @@ use crate::{
     cli::defaults::local_environment,
     endpoints::{
         CANDID_SERVICE_METADATA, EndpointsCommandError, EndpointsOptions,
-        model::{EndpointReport, EndpointTarget},
+        model::{EndpointReport, EndpointSourceKind, EndpointTarget},
     },
 };
 use canic_host::{
@@ -11,6 +11,7 @@ use canic_host::{
     icp::{IcpCli, local_canister_candid_path},
     icp_config::resolve_current_canic_icp_root,
     registry::RegistryEntry,
+    release_set::load_built_candid,
 };
 use std::{
     fs,
@@ -20,12 +21,31 @@ use std::{
 pub(super) fn endpoint_report(
     options: &EndpointsOptions,
 ) -> Result<EndpointReport, EndpointsCommandError> {
+    let root = resolve_current_canic_icp_root()?;
+    endpoint_report_at(&root, options)
+}
+
+pub(super) fn endpoint_report_at(
+    root: &Path,
+    options: &EndpointsOptions,
+) -> Result<EndpointReport, EndpointsCommandError> {
+    if let Some(release_build_id) = options.release_build {
+        let built = load_built_candid(root, release_build_id, &options.canister)?;
+        return Ok(EndpointReport {
+            source: built.path.display().to_string(),
+            source_kind: EndpointSourceKind::Built,
+            release_build_id: Some(built.release_build_id),
+            endpoints: parse_candid_service_endpoints(&built.candid)?,
+        });
+    }
     let target = resolve_endpoint_target(options);
     if let Ok(target) = &target
         && let Ok(candid) = read_live_candid(options, target)
     {
         return Ok(EndpointReport {
             source: format!("{} metadata", options.canister),
+            source_kind: EndpointSourceKind::Live,
+            release_build_id: None,
             endpoints: parse_candid_service_endpoints(&candid)?,
         });
     }
@@ -40,10 +60,12 @@ pub(super) fn endpoint_report(
             canister: options.canister.clone(),
         });
     };
-    let path = resolve_role_did(&role)?;
+    let path = resolve_role_did(root, &state_environment(options), &role)?;
     let candid = read_did(&path)?;
     Ok(EndpointReport {
         source: path.display().to_string(),
+        source_kind: EndpointSourceKind::Local,
+        release_build_id: None,
         endpoints: parse_candid_service_endpoints(&candid)?,
     })
 }
@@ -102,9 +124,12 @@ fn load_fleet_registry(
     )
 }
 
-fn resolve_role_did(role: &str) -> Result<PathBuf, EndpointsCommandError> {
-    let root = resolve_current_canic_icp_root()?;
-    let path = local_canister_candid_path(&root, &local_environment(), role);
+pub(super) fn resolve_role_did(
+    root: &Path,
+    environment: &str,
+    role: &str,
+) -> Result<PathBuf, EndpointsCommandError> {
+    let path = local_canister_candid_path(root, environment, role);
     if path.is_file() {
         return Ok(path);
     }

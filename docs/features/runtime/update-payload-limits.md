@@ -48,8 +48,28 @@ log. Inspect the endpoint's declaration and the inherited default first.
 
 ## Client contract review
 
-Run `canic --environment staging info endpoints <fleet> <canister> --json`
-to inspect the selected declaration. Each update's `payload_limits` reports
+After `canic build`, use its emitted release-build ID to inspect a role offline:
+
+```sh
+canic info endpoints <fleet> <role> --release-build <sha256> --json
+```
+
+The Fleet argument does not select live state when `--release-build` is present.
+The existing managed artifact owner verifies finalization, canonical child
+manifest digests and the selected declaration hash. The command reads the
+verified bytes directly, without an installed Fleet or a copied ICP sidecar.
+It does not infer a latest build or substitute live/local metadata when selected
+build verification fails. Current source/config edits do not replace the sealed
+build's contract. This checks the declaration, not deployed Wasm or live admission.
+
+Without `--release-build`,
+`canic --environment staging info endpoints <fleet> <canister> --json` inspects
+live metadata when available, otherwise the selected environment's local sidecar.
+JSON identifies `source_kind` (`built`, `live` or `local`), `source`, and nullable
+`release_build_id`; plain output identifies the source path or live metadata.
+A local sidecar alone does not prove a selected build's identity.
+
+Each update's `payload_limits` reports
 `ingress_max_bytes`, `update_guard_max_bytes` and `ingress_basis`. The basis is
 `managed_default`, `explicit_override` or `variant_dependent`. Queries have no
 update payload contract. Plain output also shows these limits beside the method

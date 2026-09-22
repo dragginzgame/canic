@@ -4532,5 +4532,507 @@
     "composition": "qualified: lifecycle, protected allocations, memory/timer guards and scoped lint",
     "timings_remeasured": false,
     "evidence": "../../reports/2026-09/2026-09-10/canic162-memory.md"
+  },
+  "post_36_investigation": {
+    "date": "2026-09-22",
+    "status": "investigation_complete_implementation_pending",
+    "source": "0bd466121725a4d5dc823cb4567fab173209fac6",
+    "runtime_changed": false,
+    "speedup_claim": false,
+    "broad_gate_run": false,
+    "log_sha256": {
+      "target/validation-runs/20260922T104803Z-16570.vxC9Xr/0.log": "8a58471c641738788c0c7ec2fc79ca83dbc5cb6c1e3b32f3c6e84c487610aaec",
+      ".tmp/validation37/mixed-control.log": "3b4a61d94fef61768b19af662c85b3b4bb9403cf9610ecf9f753b9cc872494ea",
+      ".tmp/validation37/mixed-control-resource.txt": "c6a0918190773fcf8b283fcfe8166771b8803ee48e579611379c26ba72fe706a",
+      ".tmp/validation37/process-samples.jsonl": "e3e366d26baf68e54a02e4bc811dc62ed72857450cceaa71b1db068e62bd9bdd"
+    },
+    "source_sha256": {
+      "Cargo.lock": "86f6a2843b1a617096579428edbdc7bda2caff16f29127b468ae5fdbc6e74124",
+      "crates/canic-host/src/fleet_ensure/ops/platform.rs": "766e91cb739b6cb78d0ed24898473480e1bc3e33ae00d29a22d0c9d92f6811ee",
+      "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "8908c08c62d07f2ae5ea1d1749aea6e2ccefa4ba1a0ddb8ada2c20835afcda81",
+      "crates/canic-host/src/fleet_ensure/ops/current_inventory/mod.rs": "ee6d0ec23d7ee37b9c879ddb3f7abbb5e24f5238e61e24b622cb96466ca4ebe4",
+      "crates/canic-host/src/icp/management.rs": "a802082d167377690b49790872cb2612717fd705279dfc711f4d21e3edc2617e"
+    },
+    "retained_test_command_seconds": 2669,
+    "retained_internal_pocketic_seconds": 2329,
+    "retained_cases": [
+      {
+        "name": "generated mixed topology and Ready reserve retain one reviewed operation",
+        "seconds": 530.876045,
+        "requests": [
+          {
+            "name": "management_status:canister_status",
+            "count": 723,
+            "seconds": 187.62581599999987
+          },
+          {
+            "name": "update:canic_root_command",
+            "count": 283,
+            "seconds": 141.267365
+          },
+          {
+            "name": "install:null",
+            "count": 11,
+            "seconds": 36.757061
+          },
+          {
+            "name": "identity:null",
+            "count": 1216,
+            "seconds": 29.784152000000017
+          },
+          {
+            "name": "agent_query:canic_coordinator_operation_status",
+            "count": 169,
+            "seconds": 27.91104200000001
+          }
+        ],
+        "observations": [
+          {
+            "name": "terminal_inventory",
+            "count": 21,
+            "seconds": 104.21900000000001
+          },
+          {
+            "name": "planning",
+            "count": 23,
+            "seconds": 72.29
+          },
+          {
+            "name": "effect_reconciliation",
+            "count": 324,
+            "seconds": 70.60099999999993
+          },
+          {
+            "name": "effect_submission",
+            "count": 89,
+            "seconds": 63.45599999999999
+          },
+          {
+            "name": "fleet_snapshot",
+            "count": 40,
+            "seconds": 27.112000000000002
+          },
+          {
+            "name": "effect_preparation",
+            "count": 105,
+            "seconds": 26.765
+          }
+        ]
+      },
+      {
+        "name": "generated reinstall recovers and converges",
+        "seconds": 364.149745,
+        "requests": [
+          {
+            "name": "update:canic_root_command",
+            "count": 321,
+            "seconds": 157.58569799999998
+          },
+          {
+            "name": "management_status:canister_status",
+            "count": 542,
+            "seconds": 152.05155200000007
+          },
+          {
+            "name": "agent_query:canic_coordinator_operation_status",
+            "count": 298,
+            "seconds": 49.165498000000014
+          },
+          {
+            "name": "identity:null",
+            "count": 1147,
+            "seconds": 28.95598300000002
+          },
+          {
+            "name": "query:canic_observability",
+            "count": 289,
+            "seconds": 28.144823999999986
+          }
+        ],
+        "observations": [
+          {
+            "name": "effect_reconciliation",
+            "count": 384,
+            "seconds": 66.16900000000003
+          },
+          {
+            "name": "fleet_snapshot",
+            "count": 24,
+            "seconds": 40.993
+          },
+          {
+            "name": "terminal_inventory",
+            "count": 7,
+            "seconds": 38.956999999999994
+          },
+          {
+            "name": "planning",
+            "count": 15,
+            "seconds": 37.448
+          },
+          {
+            "name": "configured_canisters",
+            "count": 24,
+            "seconds": 35.274
+          },
+          {
+            "name": "effect_submission",
+            "count": 62,
+            "seconds": 27.295000000000005
+          }
+        ]
+      }
+    ],
+    "mixed_terminal_inventory": {
+      "passes": 21,
+      "elapsed_seconds": 104.219,
+      "top_level_instrumented_requests": 483,
+      "summed_request_seconds": 72.706917,
+      "minimum_time_outside_request_intervals_seconds": 31.512083,
+      "not_attributed_to_metadata_alone": true
+    },
+    "targeted_probe": {
+      "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+      "exit_code": 0,
+      "test_seconds": 1098.78,
+      "command_seconds": 1296.57,
+      "artifact_resolution_seconds": 596.4911099999999,
+      "build_and_seal_seconds": 576.233206,
+      "initial_recovery_seconds": 123.36387,
+      "reset_recovery_seconds": 234.71116,
+      "deliberate_resets": 2,
+      "clock_ticks_per_second": 100,
+      "cpu_sampling_interval_seconds": 5,
+      "cpu_windows": [
+        {
+          "span": 14,
+          "name": "initial_recovery_and_convergence",
+          "samples": 25,
+          "elapsedSeconds": 120.278,
+          "cpuSeconds": [
+            {
+              "root": 42805,
+              "seconds": 32.49
+            },
+            {
+              "root": 31947,
+              "seconds": 72.58
+            }
+          ]
+        },
+        {
+          "span": 15,
+          "name": "initial_terminal_replay",
+          "samples": 5,
+          "elapsedSeconds": 20.045,
+          "cpuSeconds": [
+            {
+              "root": 42805,
+              "seconds": 14.72
+            },
+            {
+              "root": 31947,
+              "seconds": 2.8
+            }
+          ]
+        },
+        {
+          "span": 29,
+          "name": "reset_interruptions_and_recovery",
+          "samples": 27,
+          "elapsedSeconds": 130.383,
+          "cpuSeconds": [
+            {
+              "root": 42805,
+              "seconds": 41.89
+            },
+            {
+              "root": 31947,
+              "seconds": 74.7
+            }
+          ]
+        },
+        {
+          "span": 31,
+          "name": "reset_terminal_replay",
+          "samples": 5,
+          "elapsedSeconds": 20.053,
+          "cpuSeconds": [
+            {
+              "root": 42805,
+              "seconds": 14.88
+            },
+            {
+              "root": 31947,
+              "seconds": 3.19
+            }
+          ]
+        },
+        {
+          "span": 36,
+          "name": "reset_interruptions_and_recovery",
+          "samples": 20,
+          "elapsedSeconds": 95.27,
+          "cpuSeconds": [
+            {
+              "root": 42805,
+              "seconds": 32.41
+            },
+            {
+              "root": 31947,
+              "seconds": 21.67
+            }
+          ]
+        },
+        {
+          "span": 38,
+          "name": "reset_terminal_replay",
+          "samples": 6,
+          "elapsedSeconds": 25.087,
+          "cpuSeconds": [
+            {
+              "root": 42805,
+              "seconds": 17.38
+            },
+            {
+              "root": 31947,
+              "seconds": 4.06
+            }
+          ]
+        }
+      ]
+    },
+    "next_work": [
+      "Reuse equivalent freshly observed cycle balances during reconciliation; preserve protected Pool authority and fresh subsequent attempts.",
+      "Evaluate bounded independent reinstall-authority reads with deterministic failures and complete batch drainage.",
+      "Attribute terminal-catalog local costs before changing freshness or caching boundaries."
+    ],
+    "limits": [
+      "Request and nested-stage durations are not additive wall-time savings.",
+      "Cold artifact builds and active sibling workloads prevent a matched whole-case speed comparison.",
+      "CPU samples do not identify specific transport, cryptographic or scheduling causes.",
+      "Shared compiler-cache workers are outside the sampled process trees; compilation CPU is not completely attributed.",
+      "Local diagnostic logs are not immutable release-validation receipts."
+    ]
+  },
+  "post_36_observation_optimization": {
+    "date": "2026-09-22",
+    "status": "qualified_locally",
+    "base_source": "0bd466121725a4d5dc823cb4567fab173209fac6",
+    "package_version": "0.110.36",
+    "changelog_draft": "0.110.37",
+    "complete_requested_batch": true,
+    "broad_gate_run": false,
+    "source_sha256": {
+      "crates/canic-host/src/fleet_ensure/ops/platform.rs": "e19f04d68f4560ac03240e885869dbadd54dc6a618eb559901a47e1f61741f25",
+      "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "8908c08c62d07f2ae5ea1d1749aea6e2ccefa4ba1a0ddb8ada2c20835afcda81",
+      "crates/canic-host/src/fleet_ensure/workflow/independent_effects/mod.rs": "0fd2c3cb2072f22c4ac868cad7bc16c62f475a819f93077500be8b95b473e369",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "383d2d889e8e387cf4ad2608f83f14972adb3f78d0d464b06d5228412cfe7db6",
+      "Cargo.toml": "8bbd671ccabeda4a60ad3d04df1c17a626d5f1d799ad779bd8cdbce7067c284a",
+      "Cargo.lock": "86f6a2843b1a617096579428edbdc7bda2caff16f29127b468ae5fdbc6e74124"
+    },
+    "evidence_sha256": {
+      ".tmp/validation37/host-platform-tests.log": "f839f77e5ed98421e68788792c25fc4dbf464dbb30db77ba8562233a7ee1b156",
+      ".tmp/validation37/host-clippy.log": "cb04d11563fe1123386d1e3d9b628509b95a97f91f87de47c8a39c36800477c9",
+      ".tmp/validation37/mixed-control.log": "3b4a61d94fef61768b19af662c85b3b4bb9403cf9610ecf9f753b9cc872494ea",
+      ".tmp/validation37/mixed-candidate.log": "dedb00a6ee618fca365b9bb9df7ef790938daa42949ecceebe11f09de35078c9",
+      ".tmp/validation37/mixed-candidate-resource.txt": "c9aa210c46ea28d2920d449180dbee5cbe45328396fc01e2b4f598ab925d67a1",
+      ".tmp/validation37/reinstall-candidate.log": "4cb0eb40d55c8eee88dd9d2444baad20d13f4c8b757d012311348c626c67b960",
+      ".tmp/validation37/reinstall-candidate-resource.txt": "22ce09f278207fbd97a5c4c976cda003bc8f1327b34448c7969c319aabf1ec3f",
+      ".tmp/validation37/mixed-comparison.json": "051ff4c7976e6474f851fbe5a09e07aafb855cbac112eb53cabceb471b8a7fe0",
+      ".tmp/validation37/control-artifacts.json": "50299b20a4cd5c945770e3e07caefb996c3d9aca2099a78f074c1a672b3d4081",
+      ".tmp/validation37/candidate-artifacts.json": "f42bb70ecd6c61c81a89744424e9d5777149faa662d6c35dead93ece13141d24",
+      ".tmp/validation37/artifact-parity.json": "b41a3632750ee542a03004a827667afb4d125ae5a650f88a18beacf2f9d24a43"
+    },
+    "checks": {
+      "native": {
+        "command": "cargo test --locked -p canic-host --lib fleet_ensure::ops::platform::tests -- --test-threads=4",
+        "passed": 56,
+        "failed": 0,
+        "ignored_existing_opt_in_measurements": 2
+      },
+      "clippy": {
+        "command": "cargo clippy --locked -p canic-host --all-targets --all-features -- -D warnings",
+        "exit_code": 0
+      },
+      "mixed_topology": {
+        "case": "pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+        "exit_code": 0,
+        "test_seconds": 558.59
+      },
+      "generated_reinstall": {
+        "case": "pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet",
+        "exit_code": 0,
+        "test_seconds": 467.02,
+        "phases": {
+          "source_and_fixture_recipe": 0.00792,
+          "artifact_recipe": 9.590654,
+          "artifact_cache_lookup": 2.0993690000000003,
+          "app_artifacts_build": 135.229602,
+          "seal_release_manifests": 0.31884100000000004,
+          "artifact_build_and_seal": 135.55348,
+          "artifact_cache_commit": 2.464467,
+          "artifact_load": 0.014941,
+          "release_artifact_resolution": 149.72340200000002,
+          "initial_artifacts": 109.679592,
+          "replica_and_transport_setup": 0.626828,
+          "prepare_infrastructure_creates": 2.939,
+          "prepare_infrastructure_install": 6.123708,
+          "prepare_infrastructure_installs": 6.12386,
+          "prepare_infrastructure_controllers": 0.196756,
+          "generation_and_initial_review": 10.933368,
+          "initial_working_fleet": 88.689338,
+          "replacement_artifacts_and_generation": 45.809379,
+          "root_reinstall_review_and_authority_rejection": 4.778208,
+          "root_reinstall_lost_response_and_recovery": 10.685829,
+          "successor_reviews_and_convergence": 164.008787,
+          "retained_estate_state_and_replay": 31.657627,
+          "retained_estate_reinstall": 256.940812,
+          "cleanup": 0.03032,
+          "production_adapter_journey": 466.908514
+        }
+      }
+    },
+    "mixed_comparison": {
+      "control_non_artifact_seconds": 502.1550930000001,
+      "candidate_non_artifact_seconds": 463.134058,
+      "observed_reduction_seconds": 39.0210350000001,
+      "observed_reduction_percent": 7.770713778262942,
+      "whole_validation_speedup_claim": false,
+      "control_requests": {
+        "identity": {
+          "count": 1222,
+          "seconds": 29.012305000000023
+        },
+        "query": {
+          "count": 1106,
+          "seconds": 66.32427499999989
+        },
+        "update": {
+          "count": 338,
+          "seconds": 147.789975
+        },
+        "management_status": {
+          "count": 726,
+          "seconds": 175.13614299999986
+        },
+        "install": {
+          "count": 11,
+          "seconds": 36.787297
+        },
+        "set_controllers": {
+          "count": 6,
+          "seconds": 1.321057
+        },
+        "agent_query": {
+          "count": 172,
+          "seconds": 33.21522000000001
+        }
+      },
+      "candidate_requests": {
+        "identity": {
+          "count": 1242,
+          "seconds": 26.113753999999975
+        },
+        "query": {
+          "count": 1106,
+          "seconds": 63.412667999999975
+        },
+        "update": {
+          "count": 338,
+          "seconds": 145.54761099999988
+        },
+        "management_status": {
+          "count": 726,
+          "seconds": 163.54391000000018
+        },
+        "install": {
+          "count": 11,
+          "seconds": 35.378907999999996
+        },
+        "set_controllers": {
+          "count": 6,
+          "seconds": 1.132076
+        },
+        "agent_query": {
+          "count": 192,
+          "seconds": 25.91884000000001
+        }
+      },
+      "control_status_regions": {
+        "create": 9,
+        "install": 115,
+        "set_controllers": 48,
+        "terminal_verification": 81,
+        "reconcile_pool_asset": 57,
+        "publish_store_chunk": 75,
+        "adopt_store": 9,
+        "prepare_store_fixture": 9,
+        "publish_store_fixture_chunk": 9,
+        "bootstrap_store": 9,
+        "join_root": 9,
+        "synchronize_registry": 9,
+        "activate_registry": 9,
+        "activate_registry_mirror": 6,
+        "prepare_component_registry": 9,
+        "provision_components": 114,
+        "observe_pool_readiness": 6,
+        "complete": 54,
+        "seal_authority": 24,
+        "infrastructure": 45,
+        "fund": 20
+      },
+      "candidate_status_regions": {
+        "create": 9,
+        "install": 95,
+        "set_controllers": 48,
+        "terminal_verification": 81,
+        "reconcile_pool_asset": 57,
+        "publish_store_chunk": 75,
+        "adopt_store": 9,
+        "prepare_store_fixture": 9,
+        "publish_store_fixture_chunk": 9,
+        "bootstrap_store": 9,
+        "join_root": 9,
+        "synchronize_registry": 9,
+        "activate_registry": 9,
+        "activate_registry_mirror": 6,
+        "prepare_component_registry": 9,
+        "provision_components": 134,
+        "observe_pool_readiness": 6,
+        "complete": 54,
+        "seal_authority": 24,
+        "infrastructure": 45,
+        "fund": 20
+      }
+    },
+    "artifact_parity": [
+      {
+        "release_build_id": "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
+        "control_key": "381c79993d3375fb19a09e258df4e555715f62db662cd93365d5326e4e33eb6f",
+        "candidate_key": "12fd919c4d2d882b6a360ce93dfcc3341348fad4777e8957f8dd4b02675f4ea3",
+        "outputs": 24,
+        "equal": true,
+        "stored_bytes_verified": true
+      },
+      {
+        "release_build_id": "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a",
+        "control_key": "0d9d841648f665d7fe36455f2ca0f4a1bbb0afe6267b24c9760cabe5baddba03",
+        "candidate_key": "f2fd795c61a9154763b804824c22a2fcf47ce270b99c629f7a2b26c88f488057",
+        "outputs": 24,
+        "equal": true,
+        "stored_bytes_verified": true
+      }
+    ],
+    "limits": [
+      "One local before/after pair; active sibling workloads, OS caches and transport variance remain.",
+      "Artifact resolution is excluded from the elapsed comparison; cold build savings are not optimization savings.",
+      "Whole-case management-status counts are equal: fewer Install-region requests are offset by additional provisioning polls.",
+      "Request regions use the last structured progress event, not a call-site counter.",
+      "Phase timings overlap; elapsed improvement cannot be wholly attributed to these changes.",
+      "Generated reinstall is correctness qualification, not a matched benchmark.",
+      "Local evidence is not an immutable release-validation receipt."
+    ],
+    "follow_up": "Profile terminal-catalog local work before proposing any change to cache lifetime."
   }
 }

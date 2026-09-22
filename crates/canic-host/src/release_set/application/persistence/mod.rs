@@ -222,8 +222,18 @@ pub fn load_persisted_application_artifact_union(
     topology: &ComponentTopology,
     release_build_id: ReleaseBuildId,
 ) -> Result<PersistedApplicationArtifactUnion, ApplicationArtifactUnionPersistenceError> {
+    let retained = load_retained_application_artifact_union(root, release_build_id)?;
+    retained.union.validate_against(topology)?;
+    Ok(retained)
+}
+
+/// Read canonical retained evidence; the caller must bind its digest to a finalized release.
+pub(in crate::release_set) fn load_retained_application_artifact_union(
+    root: &Path,
+    release_build_id: ReleaseBuildId,
+) -> Result<PersistedApplicationArtifactUnion, ApplicationArtifactUnionPersistenceError> {
     let path = application_artifact_union_path(root, release_build_id);
-    load_optional_persisted_union(&path, topology, release_build_id)?
+    load_optional_retained_union(&path, release_build_id)?
         .ok_or(ApplicationArtifactUnionPersistenceError::MissingUnion { path })
 }
 
@@ -333,6 +343,17 @@ fn load_optional_persisted_union(
     topology: &ComponentTopology,
     release_build_id: ReleaseBuildId,
 ) -> Result<Option<PersistedApplicationArtifactUnion>, ApplicationArtifactUnionPersistenceError> {
+    let retained = load_optional_retained_union(path, release_build_id)?;
+    if let Some(retained) = &retained {
+        retained.union.validate_against(topology)?;
+    }
+    Ok(retained)
+}
+
+fn load_optional_retained_union(
+    path: &Path,
+    release_build_id: ReleaseBuildId,
+) -> Result<Option<PersistedApplicationArtifactUnion>, ApplicationArtifactUnionPersistenceError> {
     let bytes = match read_optional_regular_bytes(path) {
         Ok(bytes) => bytes,
         Err(RegularFileReadError::NotRegular) => {
@@ -378,7 +399,9 @@ fn load_optional_persisted_union(
             },
         );
     }
-    let canonical = union.canonical_bytes(topology)?;
+    union.validate_retained_shape()?;
+    let canonical =
+        serde_json::to_vec(&union).map_err(ApplicationReleaseSetError::Serialization)?;
     if canonical != bytes {
         return Err(
             ApplicationArtifactUnionPersistenceError::InvalidUnionDocument {
