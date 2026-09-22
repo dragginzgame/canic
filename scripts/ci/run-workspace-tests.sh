@@ -318,7 +318,10 @@ run_test() {
     fi
     echo "==> $label"
     if [ "$PLAN_ONLY" -eq 1 ]; then
-        printf '==> plan: cargo test --locked --no-fail-fast'
+        printf '==> plan: cargo test --locked'
+        if [[ "$execution" = "parallel" ]]; then
+            printf ' --no-fail-fast'
+        fi
         printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
@@ -358,7 +361,7 @@ run_test() {
             fi
             ;;
         pocketic-serial)
-            cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --test-threads=1 --nocapture \
+            cargo test --locked "${cargo_args[@]}" -- --test-threads=1 --nocapture \
                 "${libtest_args[@]}" || status=$?
             ;;
         *)
@@ -384,6 +387,11 @@ run_test() {
         report_owned_pocketic_server_output
     fi
     append_step_summary "$summary_execution" "$elapsed" "$label" "FAIL ($status)"
+    if [[ "$execution" = "pocketic-serial" ]]; then
+        echo "POCKETIC TEST BARRIER FAILED: skipping the remaining serial suites." >&2
+        finish_test_run
+        exit 1
+    fi
     return 0
 }
 
@@ -627,8 +635,8 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
 fi
 
 # One governed harness calls every internal PocketIC scenario in explicit
-# order, reports each result immediately and catches failures until the suite
-# boundary. Keeping one Rust process preserves its process-local artifact and
+# order, reports each result immediately and stops after the first failed case.
+# Keeping one Rust process preserves its process-local artifact and
 # baseline pools. Scenario order remains owned by the fixture catalogue rather
 # than test display-name assertions.
 run_serial_pocketic_test \

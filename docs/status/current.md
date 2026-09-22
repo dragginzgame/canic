@@ -20,6 +20,39 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .36 PocketIC clock race and failure turnaround — complete locally, 2026-09-22
+
+The activation-reset recovery fixture manually advanced time while the live
+gateway also advanced it automatically. PocketIC rejected the resulting stale
+clock write with `SettingTimeIntoPast`. Pause automatic progress around the
+manual observation loop and restore it before production recovery; assert both
+clock modes and retain all recovery, conservation and replay checks.
+
+The maintainer also requested shorter failure turnaround. The retained internal
+case timings put this failure about 30 minutes into the suite, followed by another
+42 minutes of case execution. Activation-reset recovery now leads the registered
+catalogue, followed by the existing baseline order, short regressions and other
+complete journeys. Stop the internal harness after its first failed case, and
+stop the serial pipeline after a failed suite/binary. Preserve diagnostics,
+timings, invocation cleanup, every case on successful runs and the ordinary-test
+failure collection/barrier. No passing-result cache or skipped qualification is
+introduced.
+
+The exact real-PocketIC activation-reset test passes in 111 seconds (135 seconds
+including runner/build overhead). Three focused harness tests pass, including
+case ordering and injected failure; the full ignored harness was not run.
+An isolated shell simulation verifies failure at every suite boundary, complete
+success, ordinary failure preventing server startup, and server cleanup after
+every serial outcome. It is wired into the existing validation-runner gate.
+Scoped all-target/all-feature warning-denied Clippy, ShellCheck, formatting,
+plan-only runner resolution and whitespace checks pass. Logs are under
+`.tmp/feedback36-clock/`.
+
+The accepted .36 batch and both changelog drafts are ready for the maintainer's
+release flow with this known failure corrected. Package versions remain .35;
+the full release gate has not been rerun. Changes remain uncommitted. No Git
+mutation, version change, publication, deployment or sibling edit ran.
+
 ## .36 IcyDB lockfile correction — complete locally, 2026-09-22
 
 The manifest requested IcyDB 0.261.4 while the committed lockfile still resolved

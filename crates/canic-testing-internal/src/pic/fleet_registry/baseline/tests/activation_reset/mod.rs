@@ -185,6 +185,11 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
             }
         })
         .unwrap();
+    // Manual clock advancement reads then writes time. Pause the live gateway's
+    // automatic progress until the retained activation state has been observed.
+    assert!(input.pic.auto_progress_enabled());
+    input.pic.stop_progress();
+    assert!(!input.pic.auto_progress_enabled());
     for attempt in 0..240 {
         let response: Result<RootStatusResponseFragment, Error> = input
             .pic
@@ -210,6 +215,8 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
             );
             let journal = read_journal(&paths).unwrap().unwrap();
             assert_eq!(journal.effects.last().unwrap().state, EffectState::Issued);
+            input.pic.auto_progress();
+            assert!(input.pic.auto_progress_enabled());
             return source;
         }
         assert!(attempt < 239, "published Components with an inactive Root");

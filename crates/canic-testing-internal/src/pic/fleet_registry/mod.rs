@@ -13,4 +13,6 @@ pub use baseline::{
     setup_fresh_active_component_registry,
 };
 #[cfg(test)]
-pub(super) use baseline::{governed_fleet_journey_cases, governed_pocketic_cases};
+pub(super) use baseline::{
+    governed_fleet_journey_cases, governed_pocketic_cases, governed_recovery_cases,
+};
