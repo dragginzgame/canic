@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.38` adds receipt-bound external debit review for completed-source
+  retirement, preserving original evidence and exact balance checks.
+
 - `0.110.37` reuses fresh reconciliation balances and overlaps independent
   reinstall-authority observations, retaining protected Pool checks and recovery
   qualification while reducing host observation work. Fix selected-build endpoint

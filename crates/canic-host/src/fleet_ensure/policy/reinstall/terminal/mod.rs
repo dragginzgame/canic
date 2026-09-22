@@ -160,3 +160,68 @@ pub(in crate::fleet_ensure) fn inventory_matches(
         expected == observed
     })
 }
+
+/// Admit exactly one authenticated external debit on a source with no operator payments.
+/// Its destination must stay outside this Fleet's accounting, preventing double credit.
+pub(in crate::fleet_ensure) fn external_debit_conservation(
+    source: &TerminalSourceView,
+    observation: &FleetObservation,
+    controlled_cycles: u128,
+    state: &FleetEnsureStateRecord,
+    debit: &crate::fleet_ensure::model::RetirementWithdrawalRecord,
+) -> Option<ActualCycleConservation> {
+    let desired = source.reviewed_desired.desired();
+    let external = debit.amount_cycles.checked_add(debit.fee_cycles)?;
+    let source_has_payment = source
+        .actions
+        .iter()
+        .any(|action| matches!(action, EnsureAction::Fund { .. }));
+    let binding_matches =
+        (&debit.ledger, &debit.operator) == (&desired.cycles_ledger, &desired.operator);
+    let outside_fleet = !contains_destination(state, observation, &debit.destination);
+    if !binding_matches
+        || !outside_fleet
+        || source_has_payment
+        || source.conservation.maximum_operator_debit_cycles != 0
+        || debit.timestamp_ns <= source.planned_at_time
+        || debit.amount_cycles == 0
+        || debit.fee_cycles == 0
+    {
+        return None;
+    }
+    // Only the comparison projection includes the exact independently verified debit.
+    // The retained journal, live observation and returned source accounting stay unchanged.
+    let mut accounted = observation.clone();
+    accounted.operator_cycles = accounted.operator_cycles.checked_add(external)?;
+    conservation(source, &accounted, controlled_cycles)
+}
+
+fn contains_destination(
+    state: &FleetEnsureStateRecord,
+    observation: &FleetObservation,
+    destination: &str,
+) -> bool {
+    let recorded = state
+        .principals
+        .values()
+        .chain(state.pending_principals.values())
+        .any(|id| id == destination)
+        || state.retained_cycles_by_principal.contains_key(destination);
+    let observed = observation
+        .additional_controlled_cycles
+        .contains_key(destination)
+        || observation
+            .canisters
+            .values()
+            .flatten()
+            .any(|live| live.principal == destination);
+    let estate = observation.estate_funding_domains.values().any(|domain| {
+        domain.root_principal.as_deref() == Some(destination)
+            || domain.pool.as_ref().is_some_and(|pool| {
+                pool.assets
+                    .iter()
+                    .any(|asset| asset.principal == destination)
+            })
+    });
+    recorded || observed || estate
+}

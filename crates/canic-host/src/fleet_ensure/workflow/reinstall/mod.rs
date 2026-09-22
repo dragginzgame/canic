@@ -19,6 +19,10 @@ use crate::fleet_ensure::{
 };
 
 /// Plan a new deliberate wipe selecting a build for the currently converged Fleet.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one entry point selects partial, terminal or current-source review before preparation"
+)]
 pub fn plan_reinstall<P: EnsurePlatform>(
     root: &Path,
     desired: &DesiredFleet,
@@ -35,6 +39,9 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     // current effect fields; the existing review still owns live reset admission.
     match capture::source::read(&paths, &desired.environment, requested_fleet) {
         Ok(source) => {
+            if platform.retirement_debit_block().is_some() {
+                return Err(EnsureWorkflowError::ReinstallConflict);
+            }
             return activation::plan_preparation(
                 root,
                 &paths,
@@ -81,6 +88,9 @@ pub fn plan_reinstall<P: EnsurePlatform>(
         }
         Err(error) => return Err(error.into()),
     };
+    if platform.retirement_debit_block().is_some() {
+        return Err(EnsureWorkflowError::ReinstallConflict);
+    }
     if journal.completion == FleetEnsureCompletion::InProgress {
         verify_journal_integrity(&journal, &prior, requested_fleet, &state)?;
         return Err(EnsureWorkflowError::RetainedOperationRecoveryRequired {

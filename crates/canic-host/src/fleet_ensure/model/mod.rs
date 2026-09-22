@@ -12,7 +12,9 @@ mod serialization;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
-pub use retirement::FleetRetirementConservationRecord;
+pub use retirement::{
+    FleetRetirementConservationRecord, RetirementExternalDebitRecord, RetirementWithdrawalRecord,
+};
 
 pub const FLEET_ENSURE_SCHEMA_VERSION: u16 = 1;
 pub const MAX_FLEET_ENSURE_CANISTERS: usize = 4_096;
