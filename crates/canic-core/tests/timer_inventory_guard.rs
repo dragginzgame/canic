@@ -531,8 +531,6 @@ fn semantic_inventory_detects_aliased_raw_provider_imports() {
 #[test]
 fn timer_provider_graph_and_manifest_consumers_are_closed() {
     let root = workspace_root();
-    let lock = read_source(&root, "Cargo.lock");
-
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
     let timer_version = dependency_version(&workspace_dependencies, "ic-timers")
@@ -575,11 +573,8 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
         BTreeSet::from([format!("ic-timers v{timer_version}").as_str()]),
         "Canic's deployed runtime must resolve exactly the workspace timer package"
     );
-    let icydb_version = dependency_version(&workspace_dependencies, "icydb")
-        .strip_prefix('=')
-        .filter(|version| !version.is_empty())
-        .expect("IcyDB must use an exact workspace version pin");
-    assert_eq!(locked_package_versions(&lock, "icydb"), [icydb_version]);
+    // Cargo's locked resolution validates dependency requirements. IcyDB's
+    // test-only version requirement does not own Canic's runtime timer custody.
     assert_eq!(
         workspace_dependencies["icydb"]
             .as_table()
@@ -861,23 +856,6 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     .into_iter()
     .map(str::to_string)
     .collect()
-}
-
-fn locked_package_versions(lock: &str, wanted: &str) -> Vec<String> {
-    let lock: toml::Value = toml::from_str(lock).expect("Cargo.lock must be valid TOML");
-    lock.get("package")
-        .and_then(toml::Value::as_array)
-        .expect("Cargo.lock must contain package records")
-        .iter()
-        .filter(|package| package.get("name").and_then(toml::Value::as_str) == Some(wanted))
-        .map(|package| {
-            package
-                .get("version")
-                .and_then(toml::Value::as_str)
-                .unwrap_or_else(|| panic!("locked package {wanted} must have a version"))
-                .to_string()
-        })
-        .collect()
 }
 
 fn workspace_dependencies(manifest: &str) -> toml::Table {

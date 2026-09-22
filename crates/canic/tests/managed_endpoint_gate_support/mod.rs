@@ -2,7 +2,7 @@
 //!
 //! Responsibility: qualify exact raw fixture instrumentation outside readiness dispatch.
 //! Does not own: application endpoints, authorization implementations or runtime behavior.
-//! Boundary: controller probes remain callable before readiness; one malformed peer tests codecs.
+//! Boundary: exact unpublished probes exercise readiness, codecs and bare-CDK ingress limits.
 
 use std::{
     collections::BTreeSet,
@@ -23,12 +23,22 @@ struct ReviewedEndpoint {
 }
 
 fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
-    let mut reviewed = vec![ReviewedEndpoint {
-        path: "apps/test/user_hub/src/fixture_importer/mod.rs".into(),
-        name: "test_release_fixture",
-        kind: "update",
-        guard: Some("require_controller"),
-    }];
+    let mut reviewed = vec![
+        ReviewedEndpoint {
+            path: "apps/test/user_hub/src/fixture_importer/mod.rs".into(),
+            name: "test_release_fixture",
+            kind: "update",
+            guard: Some("require_controller"),
+        },
+        // This standalone probe must use the bare CDK adapter to qualify the
+        // inherited inspector limit independently of Canic's update macro.
+        ReviewedEndpoint {
+            path: "canisters/test/payload_limit_probe/src/lib.rs".into(),
+            name: "bare_echo",
+            kind: "update",
+            guard: None,
+        },
+    ];
     for (file, name, kind, guard) in [
         (
             "lib.rs",
@@ -247,6 +257,23 @@ mod tests {
                 .is_empty()
             );
         }
+    }
+
+    #[test]
+    fn bare_payload_probe_exception_is_exact() {
+        let path = "canisters/test/payload_limit_probe/src/lib.rs";
+        let probe = "#[ic_cdk::update] fn bare_echo(payload: String) -> usize { payload.len() }";
+        assert!(check(probe, path).is_empty());
+        assert!(!check(probe, "apps/production/src/lib.rs").is_empty());
+        for source in [
+            "#[ic_cdk::update] fn another_update() {}",
+            "#[ic_cdk::query] fn bare_echo() {}",
+            r#"#[ic_cdk::update(name = "application_method")] fn bare_echo() {}"#,
+            r#"#[ic_cdk::update(guard = "different_guard")] fn bare_echo() {}"#,
+        ] {
+            assert!(!check(source, path).is_empty());
+        }
+        assert!(!check(&format!("{probe}\n{probe}"), path).is_empty());
     }
 
     #[test]
