@@ -5009,16 +5009,16 @@
     "artifact_parity": [
       {
         "release_build_id": "a4c128728412f11837b79ce8562e3115451db387e17361b79b4f15d02cbb36ae",
-        "control_key": "381c79993d3375fb19a09e258df4e555715f62db662cd93365d5326e4e33eb6f",
-        "candidate_key": "12fd919c4d2d882b6a360ce93dfcc3341348fad4777e8957f8dd4b02675f4ea3",
+        "control_cache_digest": "381c79993d3375fb19a09e258df4e555715f62db662cd93365d5326e4e33eb6f",
+        "candidate_cache_digest": "12fd919c4d2d882b6a360ce93dfcc3341348fad4777e8957f8dd4b02675f4ea3",
         "outputs": 24,
         "equal": true,
         "stored_bytes_verified": true
       },
       {
         "release_build_id": "33888cd229a38503c7d4d2ce3fd53c48e003dd5856473bef2165c5a67889010a",
-        "control_key": "0d9d841648f665d7fe36455f2ca0f4a1bbb0afe6267b24c9760cabe5baddba03",
-        "candidate_key": "f2fd795c61a9154763b804824c22a2fcf47ce270b99c629f7a2b26c88f488057",
+        "control_cache_digest": "0d9d841648f665d7fe36455f2ca0f4a1bbb0afe6267b24c9760cabe5baddba03",
+        "candidate_cache_digest": "f2fd795c61a9154763b804824c22a2fcf47ce270b99c629f7a2b26c88f488057",
         "outputs": 24,
         "equal": true,
         "stored_bytes_verified": true

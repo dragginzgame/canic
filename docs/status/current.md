@@ -20,6 +20,24 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .37 secret-scan correction — 2026-09-22
+
+The maintainer's release validation finds four `generic-api-key` candidates in
+committed throughput qualification evidence. All four are artifact-cache
+identifiers, each verified against the exact retained ic-testkit manifest header.
+The scanner matched `control_key` and `candidate_key` fields. Current evidence
+names them `control_cache_digest` and `candidate_cache_digest`; values and
+measurement results are unchanged. Four exact historical commit/path/rule/line
+fingerprints are reviewed in `.gitleaksignore`. Full-history scope, built-in
+rules and raw-report deletion remain unchanged.
+
+Both focused scans pass with zero findings: the governed full-history gate and
+a built-in-rules scan of the updated evidence without exemptions. Logs are in
+`.tmp/feedback37-secret/`. The complete .37 batch and changelog remain ready for
+the maintainer's release flow; versions remain .36. No broad validation, Git
+mutation or release ran.
+
+
 ## .37 upstream feedback correction — 2026-09-22
 
 Toko's .36 adoption passes full CI and confirms fast-profile same-checkout reuse

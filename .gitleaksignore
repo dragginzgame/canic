@@ -134,3 +134,12 @@ bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/
 45de79161ab18d20baa50202c353a440df83bf0d:docs/audits/working/icydb033-composed-wasm/source-manifest.json:generic-api-key:918
 45de79161ab18d20baa50202c353a440df83bf0d:docs/audits/working/icydb033-composed-wasm/source-manifest.json:generic-api-key:919
 45de79161ab18d20baa50202c353a440df83bf0d:docs/audits/working/icydb033-composed-wasm/source-manifest.json:generic-api-key:933
+
+# .37 validation-throughput evidence: each reviewed value matches the exact
+# identifier in its retained ic-testkit artifact-cache manifest, not a credential.
+# Current evidence fields name these cache digests explicitly; these exceptions
+# admit only the four original historical commit/path/rule/line occurrences.
+0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5012
+0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5013
+0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5020
+0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5021
