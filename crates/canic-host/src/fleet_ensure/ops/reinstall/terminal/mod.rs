@@ -11,11 +11,11 @@ use crate::fleet_ensure::{
         FleetTerminalSourceRecord, MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
     },
     ops::{
-        EnsurePaths, EnsureStateError, action_sha256, is_sha256, plan_content, read_document_bytes,
-        read_journal, read_state,
+        EnsurePaths, EnsureStateError, action_sha256, continuation, is_sha256, plan_content,
+        read_document_bytes, read_state,
     },
     policy::expected_plan_sha256,
-    view::terminal_source::TerminalSourceView,
+    view::terminal_source::{TerminalJournalView, TerminalSourceView},
 };
 use canic_core::cdk::utils::hash::sha256_hex;
 use serde::de::DeserializeOwned;
@@ -36,7 +36,8 @@ pub(in crate::fleet_ensure) fn read(
     let state_bytes = bytes(&paths.state)?;
     let mut raw: Value = serde_json::from_slice(&plan_bytes).map_err(|_| invalid())?;
     plan_content::hydrate(paths, &mut raw)?;
-    let journal = read_journal(paths)?.ok_or_else(invalid)?;
+    let journal: Value = serde_json::from_slice(&journal_bytes).map_err(|_| invalid())?;
+    validate_journal_fields(&journal)?;
     let state = read_state(paths, fleet)?;
     let operation_id: String = field(&raw, "operation_id")?;
     let plan_sha256: String = field(&raw, "plan_sha256")?;
@@ -45,16 +46,17 @@ pub(in crate::fleet_ensure) fn read(
         field::<String>(&raw, "scope")? == "full",
         field::<String>(&raw, "environment")? == environment,
         field::<String>(&raw, "fleet")? == fleet,
-        journal.fleet == fleet,
-        journal.operation_id == operation_id,
-        journal.plan_sha256 == plan_sha256,
-        journal.completion == FleetEnsureCompletion::Converged,
+        field::<String>(&journal, "fleet")? == fleet,
+        field::<u16>(&journal, "schema_version")? == 1,
+        field::<String>(&journal, "operation_id")? == operation_id,
+        field::<String>(&journal, "plan_sha256")? == plan_sha256,
+        field::<FleetEnsureCompletion>(&journal, "completion")? == FleetEnsureCompletion::Converged,
         is_sha256(&operation_id),
         is_sha256(&plan_sha256),
         state.active_registry.is_some(),
         state.pending_principals.is_empty(),
-        journal.funding_reviews.is_empty(),
-        journal.estate_funding_required.is_none(),
+        field::<Vec<Value>>(&journal, "funding_reviews")?.is_empty(),
+        journal.get("estate_funding_required") == Some(&Value::Null),
         raw.get("reinstall") == Some(&Value::Null),
         raw.get("root_start_authority") == Some(&Value::Null),
         raw.get("terminal_inventory_operation_id") == Some(&Value::Null),
@@ -76,23 +78,28 @@ pub(in crate::fleet_ensure) fn read(
         reviewed_desired: field(&raw, "reviewed_desired")?,
         conservation: field(&raw, "conservation")?,
         actions: initial_actions(&raw)?,
-        journal,
+        journal: journal_evidence(paths, &journal)?,
     };
     if source.reviewed_desired.desired().environment != environment
         || source.reviewed_desired.desired().fleet != fleet
     {
         return Err(invalid());
     }
-    let allowance = crate::fleet_ensure::ops::funding_observation::validation::source_allowance(
-        &crate::fleet_ensure::ops::funding_observation::resolved_from_state(
-            source.reviewed_desired.desired(),
-            &state,
-        ),
-        &source.documents.operation_id,
-        &source.documents.plan_sha256,
-        &source.journal.funding_observations,
-    )
-    .map_err(|_| invalid())?;
+    // Absence supplies no additional allowance. Present evidence must validate;
+    // null, malformed or unbound observations are never treated as absent.
+    let allowance = match journal.get("funding_observations") {
+        None => 0,
+        Some(value) => crate::fleet_ensure::ops::funding_observation::validation::source_allowance(
+            &crate::fleet_ensure::ops::funding_observation::resolved_from_state(
+                source.reviewed_desired.desired(),
+                &state,
+            ),
+            &source.documents.operation_id,
+            &source.documents.plan_sha256,
+            &serde_json::from_value(value.clone()).map_err(|_| invalid())?,
+        )
+        .map_err(|_| invalid())?,
+    };
     source.conservation.maximum_execution_burn_cycles = source
         .conservation
         .maximum_execution_burn_cycles
@@ -101,6 +108,59 @@ pub(in crate::fleet_ensure) fn read(
     phases(paths, &raw, &mut source)?;
     receipts(&source)?;
     Ok(source)
+}
+
+fn validate_journal_fields(journal: &Value) -> Result<(), EnsureStateError> {
+    // Unrecognised journal fields may describe paid work. Do not silently omit
+    // them from a terminal conservation assessment.
+    if journal.as_object().ok_or_else(invalid)?.keys().any(|key| {
+        !matches!(
+            key.as_str(),
+            "completion"
+                | "effects"
+                | "estate_funding_required"
+                | "fleet"
+                | "funding_observations"
+                | "funding_reviews"
+                | "initial_controlled_cycles"
+                | "initial_estate_funding_cycles_by_root"
+                | "initial_operator_cycles"
+                | "operation_id"
+                | "plan_sha256"
+                | "schema_version"
+                | "stalled_observations"
+                | "successor_phases"
+        )
+    }) {
+        return Err(invalid());
+    }
+    Ok(())
+}
+
+fn journal_evidence(
+    paths: &EnsurePaths,
+    raw: &Value,
+) -> Result<TerminalJournalView, EnsureStateError> {
+    let mut phases = field::<Vec<crate::fleet_ensure::model::FleetEnsureSuccessorPhaseRecord>>(
+        raw,
+        "successor_phases",
+    )?;
+    continuation::hydrate_phases(paths, &mut phases)?;
+    let balances: BTreeMap<String, String> = field(raw, "initial_estate_funding_cycles_by_root")?;
+    Ok(TerminalJournalView {
+        effects: field(raw, "effects")?,
+        successor_phases: phases,
+        initial_controlled_cycles: field::<String>(raw, "initial_controlled_cycles")?
+            .parse()
+            .map_err(|_| invalid())?,
+        initial_operator_cycles: field::<String>(raw, "initial_operator_cycles")?
+            .parse()
+            .map_err(|_| invalid())?,
+        initial_estate_funding_cycles_by_root: balances
+            .into_iter()
+            .map(|(root, amount)| Ok((root, amount.parse().map_err(|_| invalid())?)))
+            .collect::<Result<_, EnsureStateError>>()?,
+    })
 }
 
 fn initial_actions(raw: &Value) -> Result<Vec<EnsureAction>, EnsureStateError> {

@@ -14,7 +14,10 @@ use crate::{
             read_journal, read_plan,
         },
         policy::{EnsurePolicyError, validate_path_labels},
-        view::readiness::{FleetReadiness, ReadinessBlocker, RetainedReadinessOperation},
+        view::readiness::{
+            FleetReadiness, ReadinessBlocker, ReadinessConversionQuote, ReadinessUnresolved,
+            RetainedReadinessOperation,
+        },
     },
     icp::IcpCli,
     network::{NetworkIdentityError, resolve_canonical_network_id_from_root},
@@ -34,6 +37,20 @@ pub struct FleetReadinessRequest<'a> {
     pub operator: Principal,
     pub cycles_ledger: Principal,
     pub estimated_required_cycles: Option<u128>,
+    pub desired: Option<&'a crate::fleet_ensure::dto::LoadedDesiredFleet>,
+    pub conversion: Option<ReadinessConversionRequest>,
+}
+
+///
+/// ReadinessConversionRequest
+///
+/// Exact public quote providers selected for advisory conversion only.
+///
+
+#[derive(Clone, Copy)]
+pub struct ReadinessConversionRequest {
+    pub icp_ledger: Principal,
+    pub cmc: Principal,
 }
 
 /// Failure to establish even the read-only pre-build facts.
@@ -49,6 +66,8 @@ pub enum FleetReadinessError {
     Transport(Box<OperatorMintTransportError>),
     #[error("selected signer or network does not match readiness authority")]
     AuthorityMismatch,
+    #[error("readiness observation clock is unavailable")]
+    Clock,
     #[error(
         "retained Fleet evidence is inconsistent; preserve it and use the existing recovery flow"
     )]
@@ -63,16 +82,31 @@ impl From<OperatorMintTransportError> for FleetReadinessError {
 
 /// Observe current funding and local blockers without creating operator state.
 pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, FleetReadinessError> {
+    let started = now_ms()?;
     validate_path_labels(request.environment, request.fleet)?;
     let paths = EnsurePaths::under(request.workspace, request.environment, request.fleet);
     let retained_operation = retained(&paths, request)?;
     let expected_network =
         resolve_canonical_network_id_from_root(request.workspace, request.environment)?;
-    let transport = OperatorMintTransport::from_icp(
-        &IcpCli::new(request.icp_executable, Some(request.environment.into()))
-            .with_identity(request.signing_identity)
-            .with_cwd(request.workspace),
-    )?;
+    if let Some(selected) = request.desired {
+        let desired = &selected.desired;
+        crate::fleet_ensure::policy::validate_path_identity(desired, request.fleet)?;
+        let identity_matches = desired.environment == request.environment
+            && desired.operator == request.operator.to_text()
+            && desired.cycles_ledger == request.cycles_ledger.to_text();
+        let network_matches = desired
+            .bootstrap
+            .as_ref()
+            .is_none_or(|bootstrap| bootstrap.canonical_network_id == expected_network);
+        if !identity_matches || !network_matches {
+            return Err(FleetReadinessError::AuthorityMismatch);
+        }
+        crate::fleet_ensure::policy::validate_funding_policy(desired)?;
+    }
+    let icp = IcpCli::new(request.icp_executable, Some(request.environment.into()))
+        .with_identity(request.signing_identity)
+        .with_cwd(request.workspace);
+    let transport = OperatorMintTransport::from_icp(&icp)?;
     verify_authority(
         request.operator,
         transport.operator()?,
@@ -80,20 +114,66 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
         &transport.canonical_network_id()?,
     )?;
     let available = transport.operator_balance(request.cycles_ledger)?;
-    Ok(report(
+    let mut report = report(
         request,
         expected_network.to_string(),
         available,
         retained_operation,
-    ))
+    );
+    report.observed_at_unix_ms = started;
+    if let Some(selected) = request.desired {
+        report.funding =
+            crate::fleet_ensure::ops::readiness::roots(request.workspace, &selected.desired, &icp)?;
+        report.funding.desired_sha256 = Some(selected.sha256.clone());
+        if report
+            .funding
+            .roots
+            .iter()
+            .any(|root| root.floor_shortfall_cycles.is_some_and(|cycles| cycles > 0))
+        {
+            report.blockers.push(ReadinessBlocker::RootNativeShortfall);
+        }
+        if report
+            .funding
+            .roots
+            .iter()
+            .any(|root| root.unfunded_role.is_some())
+        {
+            report.blockers.push(ReadinessBlocker::StartupFundingPolicy);
+        }
+    }
+    if let Some(conversion) = request.conversion {
+        report.funding.unresolved.retain(|reason| *reason != crate::fleet_ensure::view::readiness::ReadinessUnresolved::ConversionNotRequested);
+        let quote =
+            transport.quote_blocking(conversion.icp_ledger, conversion.cmc, request.cycles_ledger);
+        apply_quote(&mut report, conversion, quote.ok(), now_ms()?);
+    }
+    report.completed_at_unix_ms = now_ms()?;
+    Ok(report)
 }
 
 fn retained(
     paths: &EnsurePaths,
     request: &FleetReadinessRequest<'_>,
 ) -> Result<Option<RetainedReadinessOperation>, FleetReadinessError> {
-    let Some(journal) = read_journal(paths)? else {
-        return Ok(None);
+    let journal = match read_journal(paths) {
+        Ok(Some(journal)) => journal,
+        Ok(None) => return Ok(None),
+        Err(error @ EnsureStateError::Decode { .. }) => {
+            let source = crate::fleet_ensure::ops::reinstall::terminal::read(
+                paths,
+                request.environment,
+                request.fleet,
+            )
+            .map_err(|_| FleetReadinessError::State(error))?;
+            return Ok(Some(RetainedReadinessOperation {
+                operation_id: source.documents.operation_id,
+                plan_sha256: source.documents.plan_sha256,
+                completion: FleetEnsureCompletion::Converged,
+                terminal_review_required: true,
+            }));
+        }
+        Err(error) => return Err(error.into()),
     };
     if journal.fleet != request.fleet {
         return Err(FleetReadinessError::RetainedEvidence);
@@ -112,6 +192,7 @@ fn retained(
         operation_id: journal.operation_id,
         plan_sha256: journal.plan_sha256,
         completion: journal.completion,
+        terminal_review_required: false,
     }))
 }
 
@@ -131,6 +212,12 @@ fn report(
     {
         blockers.push(ReadinessBlocker::RetainedOperation);
     }
+    if retained_operation
+        .as_ref()
+        .is_some_and(|operation| operation.terminal_review_required)
+    {
+        blockers.push(ReadinessBlocker::RetainedTerminalReview);
+    }
     if estimated_shortfall_cycles.is_some_and(|shortfall| shortfall > 0) {
         blockers.push(ReadinessBlocker::EstimatedFundingShortfall);
     }
@@ -145,6 +232,9 @@ fn report(
         estimated_shortfall_cycles,
         retained_operation,
         blockers,
+        observed_at_unix_ms: 0,
+        completed_at_unix_ms: 0,
+        funding: crate::fleet_ensure::ops::readiness::unknown(),
     }
 }
 
@@ -160,4 +250,60 @@ fn verify_authority(
     } else {
         Err(FleetReadinessError::AuthorityMismatch)
     }
+}
+
+fn now_ms() -> Result<u64, FleetReadinessError> {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .ok()
+        .and_then(|value| u64::try_from(value.as_millis()).ok())
+        .ok_or(FleetReadinessError::Clock)
+}
+
+fn apply_quote(
+    report: &mut FleetReadiness,
+    selected: ReadinessConversionRequest,
+    quote: Option<crate::fleet_ensure::view::operator_mint::OperatorMintRateQuote>,
+    observed_at_ms: u64,
+) {
+    let Some(rate) = quote.filter(|rate| {
+        rate.rate_timestamp_seconds <= observed_at_ms / 1000 && rate.xdr_permyriad_per_icp > 0
+    }) else {
+        report
+            .funding
+            .unresolved
+            .push(ReadinessUnresolved::ConversionObservationFailed);
+        return;
+    };
+    let amount = report.estimated_shortfall_cycles.and_then(|shortfall| {
+        if shortfall == 0 {
+            return Some(0);
+        }
+        crate::fleet_ensure::policy::operator_mint::quote::amount_e8s(
+            shortfall,
+            rate.estimated_deposit_fee_cycles,
+            rate.xdr_permyriad_per_icp,
+            rate.transfer_fee_e8s,
+        )
+    });
+    if amount.is_none() {
+        report
+            .funding
+            .unresolved
+            .push(ReadinessUnresolved::ConversionAmountUnavailable);
+    }
+    let debit = amount.and_then(|amount| {
+        if amount == 0 {
+            Some(0)
+        } else {
+            amount.checked_add(rate.transfer_fee_e8s)
+        }
+    });
+    report.funding.conversion = Some(ReadinessConversionQuote {
+        cmc: selected.cmc.to_text(),
+        icp_ledger: selected.icp_ledger.to_text(),
+        rate,
+        estimated_mint_e8s: amount,
+        estimated_total_icp_debit_e8s: debit,
+    });
 }

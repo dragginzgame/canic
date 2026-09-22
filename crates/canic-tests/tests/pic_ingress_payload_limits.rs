@@ -1,4 +1,5 @@
 use canic::{Error, ids::CanisterRole};
+use canic_host::candid_endpoints::{IngressPayloadBasis, parse_candid_service_endpoints};
 use canic_testing_internal::pic::{
     CanicWasmBuildProfile, install_standalone_canister, install_standalone_canister_on_pic,
 };
@@ -12,7 +13,7 @@ const PROBE_ROLE: CanisterRole = CanisterRole::new("test");
 const EXPLICIT_ECHO_MAX_BYTES: usize = 32 * 1024;
 const SNAPSHOT_RESTORE_MINIMUM_CYCLES: u128 = 10_000_000_000_000;
 
-// Both cases observe only the restored target; the relay created by one case is unrelated state.
+// Cases observe only the restored target; the relay created by one case is unrelated state.
 static PROBE_FIXTURES: CachedStandaloneCanisterFixturePool<1> =
     CachedStandaloneCanisterFixturePool::new().with_restore_funding(
         SnapshotRestoreFunding::TopUpTo {
@@ -115,4 +116,48 @@ fn string_len_for_wire_size(wire_size: usize) -> usize {
                 == wire_size
         })
         .expect("one nearby String length must encode to the requested wire size")
+}
+
+#[test]
+fn compiled_payload_contract_matches_actual_ingress_boundaries() {
+    let candid = canic_testing_internal::pic::standalone_canister_candid(
+        PROBE_CRATE,
+        CanicWasmBuildProfile::Fast,
+    );
+    let endpoints = parse_candid_service_endpoints(&candid).unwrap();
+    let fixture = acquire_probe_fixture();
+    for (method, limit, explicit) in [
+        ("default_echo", 16 * 1024, false),
+        ("explicit_echo", 32 * 1024, true),
+        ("wire_named_echo", 24 * 1024, true),
+        ("bare_echo", 16 * 1024, false),
+    ] {
+        let declaration = endpoints
+            .iter()
+            .find(|endpoint| endpoint.name == method)
+            .unwrap();
+        let limits = declaration.payload_limits.as_ref().unwrap();
+        assert_eq!(limits.ingress_max_bytes, Some(limit as u64));
+        assert_eq!(
+            limits.update_guard_max_bytes,
+            explicit.then_some(limit as u64)
+        );
+        assert_eq!(
+            limits.ingress_basis,
+            if explicit {
+                IngressPayloadBasis::ExplicitOverride
+            } else {
+                IngressPayloadBasis::ManagedDefault
+            }
+        );
+        let length = string_len_for_wire_size(limit);
+        if method == "bare_echo" {
+            let result: usize = fixture.update_candid_or_panic(method, (payload(length),));
+            assert_eq!(result, length);
+        } else {
+            assert_echo_ok(&fixture, method, length);
+        }
+        assert_rejected(&fixture, method, length + 1);
+    }
+    drop(fixture);
 }

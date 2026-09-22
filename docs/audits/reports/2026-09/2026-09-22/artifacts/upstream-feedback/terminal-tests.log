@@ -1,0 +1,18 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.33s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-1465c0d76e6faf2f)
+
+running 9 tests
+test fleet_ensure::tests::terminal_retirement_inspects_selected_workspace_without_mutation ... ignored, read-only inspection of an explicitly selected retained workspace
+test fleet_ensure::tests::terminal_retirement_preserves_every_root_account_and_pool_identity ... ok
+test fleet_ensure::tests::terminal_retirement_requires_exact_paid_debit_and_bounded_live_conservation ... ok
+test fleet_ensure::tests::terminal_retirement_requires_the_retained_continuation_action_bound ... ok
+test fleet_ensure::tests::terminal_retirement_reads_receipts_without_making_source_executable ... ok
+test fleet_ensure::tests::terminal_retirement_missing_observations_cannot_add_allowance_or_hide_invalid_evidence ... ok
+test fleet_ensure::tests::terminal_retirement_review_binds_fresh_inventory_and_rechecks_before_apply ... ok
+test fleet_ensure::tests::terminal_retirement_rejects_incomplete_or_changed_receipts_and_phases ... ok
+test fleet_ensure::tests::terminal_retirement_archives_phases_and_recovers_every_handoff_boundary ... ok
+
+test result: ok. 8 passed; 0 failed; 1 ignored; 0 measured; 925 filtered out; finished in 0.22s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.skdf2t

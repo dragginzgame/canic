@@ -1,6 +1,9 @@
 use super::*;
 use crate::{
-    fleet_ensure::ops::{write_journal, write_plan},
+    fleet_ensure::{
+        ops::{write_journal, write_plan},
+        view::{operator_mint::OperatorMintRateQuote, readiness::ReadinessUnresolved},
+    },
     test_support::temp_dir,
 };
 use std::fs;
@@ -15,6 +18,8 @@ fn request(root: &Path) -> FleetReadinessRequest<'_> {
         operator: Principal::management_canister(),
         cycles_ledger: Principal::management_canister(),
         estimated_required_cycles: None,
+        desired: None,
+        conversion: None,
     }
 }
 
@@ -116,4 +121,77 @@ fn readiness_requires_exact_signer_and_network_without_anonymous_authority() {
             Err(FleetReadinessError::AuthorityMismatch)
         ));
     }
+}
+
+#[test]
+fn terminal_evidence_reports_required_review_without_mutation_or_network_access() {
+    let (fixture, paths, _) = crate::fleet_ensure::tests::terminal_retirement_fixture();
+    let mut request = request(&fixture.root);
+    request.fleet = "test-fleet";
+    let mut journal: serde_json::Value =
+        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
+    journal
+        .as_object_mut()
+        .unwrap()
+        .remove("funding_observations");
+    let before = serde_json::to_vec(&journal).unwrap();
+    fs::write(&paths.journal, &before).unwrap();
+    let operation = retained(&paths, &request).unwrap().unwrap();
+    assert!(operation.terminal_review_required);
+    let report = report(&request, "network".into(), 1000, Some(operation));
+    assert_eq!(
+        report.blockers,
+        vec![ReadinessBlocker::RetainedTerminalReview]
+    );
+    assert_eq!(fs::read(&paths.journal).unwrap(), before);
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn conversion_keeps_mint_amount_fees_and_unknown_requirements_separate() {
+    let root = temp_dir("readiness-conversion");
+    let mut request = request(&root);
+    let selected = ReadinessConversionRequest {
+        icp_ledger: request.cycles_ledger,
+        cmc: request.cycles_ledger,
+    };
+    let rate = OperatorMintRateQuote {
+        rate_timestamp_seconds: 10,
+        xdr_permyriad_per_icp: 100,
+        transfer_fee_e8s: 3,
+        estimated_deposit_fee_cycles: 20,
+    };
+    let mut unknown = report(&request, "network".into(), 100, None);
+    apply_quote(&mut unknown, selected, Some(rate.clone()), 11_000);
+    assert!(
+        unknown
+            .funding
+            .conversion
+            .unwrap()
+            .estimated_mint_e8s
+            .is_none()
+    );
+    assert!(
+        unknown
+            .funding
+            .unresolved
+            .contains(&ReadinessUnresolved::ConversionAmountUnavailable)
+    );
+    request.estimated_required_cycles = Some(250);
+    let mut quote = report(&request, "network".into(), 100, None);
+    apply_quote(&mut quote, selected, Some(rate.clone()), 11_000);
+    let conversion = quote.funding.conversion.unwrap();
+    assert_eq!(conversion.estimated_mint_e8s, Some(2));
+    assert_eq!(conversion.estimated_total_icp_debit_e8s, Some(5));
+    assert_eq!(conversion.rate.estimated_deposit_fee_cycles, 20);
+    let mut future = report(&request, "network".into(), 100, None);
+    apply_quote(&mut future, selected, Some(rate), 9_000);
+    assert!(future.funding.conversion.is_none());
+    assert!(
+        future
+            .funding
+            .unresolved
+            .contains(&ReadinessUnresolved::ConversionObservationFailed)
+    );
+    assert!(!root.exists());
 }

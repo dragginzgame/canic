@@ -1,0 +1,145 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (40 targets: 30 parallel, 10 serial PocketIC)
+==> compiler cache start: requests=4965 hits=377 misses=1328
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.5.0)
+==> shared PocketIC server ready: http://127.0.0.1:37919/
+==> targeted canic-tests PocketIC integration proof
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.35 (/home/adam/projects/canic/crates/canic-testing-internal)
+   Compiling canic-tests v0.110.35 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 25s
+     Running tests/timer_authority.rs (target/debug/deps/timer_authority-001120c4a9175fb3)
+
+running 10 tests
+test application_timers_cancel_and_recur_only_after_completion ... [WASM]       RUN    canister_test (1/1)
+[WASM]       DONE   canister_test                                        42.54s
+[WASM]       RUN    intent_authority (1/2)
+[WASM]       RUN    runtime_probe (2/2)
+[WASM]       DONE   intent_authority                                     40.01s
+[WASM]       DONE   runtime_probe                                        39.55s
+[WASM]       DONE   batch: 2 built, 0 cached, 0 failed                   1m 19s
+runtime-probe timer inventory: declared=5 scheduled=2
+runtime-probe interval performance: scheduler_samples=0 work_samples=2 latest=Some(104032) maximum=Some(104032) total=207914 max_wasm_growth=Some(0) max_stable_growth=Some(0)
+ok
+test exact_cycles_and_runtime_metrics_require_controller ... [WASM]       RUN    canister_test (1/1)
+[WASM]       DONE   canister_test                                         5.68s
+ok
+test finite_intent_expiry_is_rebuilt_after_upgrade_without_arming_ttl_free_work ... ok
+test lifecycle_participant_reconstructs_native_timers_before_deferred_hooks ... ok
+test optional_sampling_is_bounded_and_rejected_performance_preserves_cycle_tracking ... public sampling first sample, 256 checkpoints: 14955282 instructions; advisory reference: 20000000; above reference: false
+public sampling repeat sample, 4096 checkpoints: 12593799 instructions; advisory reference: 20000000; above reference: false
+public sampling scheduled maximum: 13834814 instructions; advisory reference: 20000000; above reference: false
+ok
+test public_history_costs_cover_sampling_and_independent_chart_queries ... HISTORY_COST sample rows=1 period=0 instructions=5389860
+HISTORY_COST query rows=1 period=0 limit=1 HistoryCost { instructions: 92776, points: 1, total: 1, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST query rows=1 period=0 limit=12 HistoryCost { instructions: 92776, points: 1, total: 1, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST query rows=1 period=0 limit=288 HistoryCost { instructions: 92776, points: 1, total: 1, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST sample rows=1 period=1 instructions=4352367
+HISTORY_COST query rows=1 period=1 limit=1 HistoryCost { instructions: 93239, points: 1, total: 2, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST query rows=1 period=1 limit=12 HistoryCost { instructions: 94028, points: 2, total: 2, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST query rows=1 period=1 limit=288 HistoryCost { instructions: 94028, points: 2, total: 2, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST sample rows=1 period=2 instructions=4356379
+HISTORY_COST query rows=1 period=2 limit=1 HistoryCost { instructions: 93602, points: 1, total: 3, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST query rows=1 period=2 limit=12 HistoryCost { instructions: 95008, points: 3, total: 3, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST query rows=1 period=2 limit=288 HistoryCost { instructions: 95008, points: 3, total: 3, reserved_bytes: 1652140, values_valid: true }
+HISTORY_COST sample rows=1 period=299 instructions=4189127
+HISTORY_COST query rows=1 period=299 limit=1 HistoryCost { instructions: 854986, points: 1, total: 287, reserved_bytes: 1625316, values_valid: true }
+HISTORY_COST query rows=1 period=299 limit=12 HistoryCost { instructions: 781327, points: 12, total: 287, reserved_bytes: 1625316, values_valid: true }
+HISTORY_COST query rows=1 period=299 limit=288 HistoryCost { instructions: 926910, points: 287, total: 287, reserved_bytes: 1625316, values_valid: true }
+HISTORY_COST maximum rows=1 instructions=5389860
+HISTORY_COST gap rows=1 slots=0 instructions=5177528 HistoryCost { instructions: 92833, points: 1, total: 1, reserved_bytes: 1625348, values_valid: true }
+HISTORY_COST gap rows=1 slots=200 instructions=8348865 HistoryCost { instructions: 174046, points: 2, total: 2, reserved_bytes: 1634236, values_valid: true }
+HISTORY_COST gap rows=1 slots=0 instructions=5368029 HistoryCost { instructions: 173960, points: 2, total: 2, reserved_bytes: 1634236, values_valid: true }
+HISTORY_COST gap rows=1 slots=1000 instructions=4974733 HistoryCost { instructions: 92692, points: 1, total: 1, reserved_bytes: 1625316, values_valid: true }
+HISTORY_COST sample rows=100 period=0 instructions=8922780
+HISTORY_COST query rows=100 period=0 limit=1 HistoryCost { instructions: 172755, points: 1, total: 1, reserved_bytes: 3617120, values_valid: true }
+HISTORY_COST query rows=100 period=0 limit=12 HistoryCost { instructions: 172755, points: 1, total: 1, reserved_bytes: 3617120, values_valid: true }
+HISTORY_COST query rows=100 period=0 limit=288 HistoryCost { instructions: 172755, points: 1, total: 1, reserved_bytes: 3617120, values_valid: true }
+HISTORY_COST sample rows=100 period=1 instructions=7640825
+HISTORY_COST query rows=100 period=1 limit=1 HistoryCost { instructions: 93220, points: 1, total: 2, reserved_bytes: 3626008, values_valid: true }
+HISTORY_COST query rows=100 period=1 limit=12 HistoryCost { instructions: 173986, points: 2, total: 2, reserved_bytes: 3626008, values_valid: true }
+HISTORY_COST query rows=100 period=1 limit=288 HistoryCost { instructions: 173986, points: 2, total: 2, reserved_bytes: 3626008, values_valid: true }
+HISTORY_COST sample rows=100 period=2 instructions=7507693
+HISTORY_COST query rows=100 period=2 limit=1 HistoryCost { instructions: 173587, points: 1, total: 3, reserved_bytes: 3626008, values_valid: true }
+HISTORY_COST query rows=100 period=2 limit=12 HistoryCost { instructions: 95039, points: 3, total: 3, reserved_bytes: 3626008, values_valid: true }
+HISTORY_COST query rows=100 period=2 limit=288 HistoryCost { instructions: 95039, points: 3, total: 3, reserved_bytes: 3626008, values_valid: true }
+HISTORY_COST sample rows=100 period=299 instructions=6929393
+HISTORY_COST query rows=100 period=299 limit=1 HistoryCost { instructions: 695407, points: 1, total: 287, reserved_bytes: 3617088, values_valid: true }
+HISTORY_COST query rows=100 period=299 limit=12 HistoryCost { instructions: 701485, points: 12, total: 287, reserved_bytes: 3617088, values_valid: true }
+HISTORY_COST query rows=100 period=299 limit=288 HistoryCost { instructions: 927327, points: 287, total: 287, reserved_bytes: 3617088, values_valid: true }
+HISTORY_COST maximum rows=100 instructions=8922780
+HISTORY_COST gap rows=100 slots=0 instructions=8999389 HistoryCost { instructions: 252666, points: 1, total: 1, reserved_bytes: 3630604, values_valid: true }
+HISTORY_COST gap rows=100 slots=200 instructions=15594743 HistoryCost { instructions: 253897, points: 2, total: 2, reserved_bytes: 3938848, values_valid: true }
+HISTORY_COST gap rows=100 slots=0 instructions=8740235 HistoryCost { instructions: 253883, points: 2, total: 2, reserved_bytes: 3938848, values_valid: true }
+HISTORY_COST gap rows=100 slots=1000 instructions=8289713 HistoryCost { instructions: 172722, points: 1, total: 1, reserved_bytes: 3617088, values_valid: true }
+HISTORY_COST sample rows=211 period=0 instructions=12240893
+HISTORY_COST query rows=211 period=0 limit=1 HistoryCost { instructions: 412794, points: 1, total: 1, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=0 limit=12 HistoryCost { instructions: 412794, points: 1, total: 1, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=0 limit=288 HistoryCost { instructions: 412794, points: 1, total: 1, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST sample rows=211 period=1 instructions=10474704
+HISTORY_COST query rows=211 period=1 limit=1 HistoryCost { instructions: 413148, points: 1, total: 2, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=1 limit=12 HistoryCost { instructions: 413936, points: 2, total: 2, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=1 limit=288 HistoryCost { instructions: 413936, points: 2, total: 2, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST sample rows=211 period=2 instructions=10366949
+HISTORY_COST query rows=211 period=2 limit=1 HistoryCost { instructions: 413544, points: 1, total: 3, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=2 limit=12 HistoryCost { instructions: 415240, points: 3, total: 3, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=2 limit=288 HistoryCost { instructions: 415240, points: 3, total: 3, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST sample rows=211 period=299 instructions=10758835
+HISTORY_COST query rows=211 period=299 limit=1 HistoryCost { instructions: 1014959, points: 1, total: 287, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=299 limit=12 HistoryCost { instructions: 1021091, points: 12, total: 287, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST query rows=211 period=299 limit=288 HistoryCost { instructions: 1166925, points: 287, total: 287, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST maximum rows=211 instructions=12240893
+HISTORY_COST gap rows=211 slots=0 instructions=12240765 HistoryCost { instructions: 412794, points: 1, total: 1, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST gap rows=211 slots=200 instructions=22904802 HistoryCost { instructions: 494064, points: 2, total: 2, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST gap rows=211 slots=0 instructions=11721065 HistoryCost { instructions: 493979, points: 2, total: 2, reserved_bytes: 5291921, values_valid: true }
+HISTORY_COST gap rows=211 slots=1000 instructions=12835906 HistoryCost { instructions: 172672, points: 1, total: 1, reserved_bytes: 5291917, values_valid: true }
+HISTORY_COST sample rows=256 period=0 instructions=13391648
+HISTORY_COST query rows=256 period=0 limit=1 HistoryCost { instructions: 332862, points: 1, total: 1, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=0 limit=12 HistoryCost { instructions: 332862, points: 1, total: 1, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=0 limit=288 HistoryCost { instructions: 332862, points: 1, total: 1, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST sample rows=256 period=1 instructions=11372040
+HISTORY_COST query rows=256 period=1 limit=1 HistoryCost { instructions: 413216, points: 1, total: 2, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=1 limit=12 HistoryCost { instructions: 334133, points: 2, total: 2, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=1 limit=288 HistoryCost { instructions: 334133, points: 2, total: 2, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST sample rows=256 period=2 instructions=10792062
+HISTORY_COST query rows=256 period=2 limit=1 HistoryCost { instructions: 333567, points: 1, total: 3, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=2 limit=12 HistoryCost { instructions: 334885, points: 3, total: 3, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=2 limit=288 HistoryCost { instructions: 334885, points: 3, total: 3, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST sample rows=256 period=299 instructions=10944587
+HISTORY_COST query rows=256 period=299 limit=1 HistoryCost { instructions: 935374, points: 1, total: 287, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=299 limit=12 HistoryCost { instructions: 1101579, points: 12, total: 287, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST query rows=256 period=299 limit=288 HistoryCost { instructions: 1167293, points: 287, total: 287, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST maximum rows=256 instructions=13391648
+HISTORY_COST gap rows=256 slots=0 instructions=13575682 HistoryCost { instructions: 412687, points: 1, total: 1, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST gap rows=256 slots=200 instructions=22601878 HistoryCost { instructions: 414115, points: 2, total: 2, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST gap rows=256 slots=0 instructions=12468015 HistoryCost { instructions: 494115, points: 2, total: 2, reserved_bytes: 5293824, values_valid: true }
+HISTORY_COST gap rows=256 slots=1000 instructions=13773473 HistoryCost { instructions: 332690, points: 1, total: 1, reserved_bytes: 5293824, values_valid: true }
+ok
+test public_history_samples_without_readers_and_resets_after_restoration ... ok
+test public_memory_sampling_retains_bounded_history_at_the_source_ceiling ... CANIC164 history points=287 reserved_bytes=5286104 byte_limit=8388608 max_sample_instructions=15118567
+public sampling allocation summaries with full retained history: 15118567 instructions; advisory reference: 20000000; above reference: false
+ok
+test public_snapshots_preserve_observer_authority ... ok
+test timer_registration_capacity_and_invalid_identity_are_leak_free ... ok
+
+test result: ok. 10 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 182.39s
+
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=537304 kB high_water=544640 kB threads=19
+==> targeted canic-tests PocketIC integration proof done in 328s
+==> compiler cache delta: requests=21 hits=0 misses=14
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  328s     PASS   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 328s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.84dgS0

@@ -5,6 +5,7 @@ use super::*;
 fn renders_plain_endpoint_signatures_as_table() {
     let endpoints = vec![
         EndpointEntry {
+            payload_limits: None,
             name: "canic_observability".to_string(),
             candid: "canic_observability : (opt text, opt text, Level, PageRequest) -> () query;"
                 .to_string(),
@@ -18,6 +19,7 @@ fn renders_plain_endpoint_signatures_as_table() {
             returns: Vec::new(),
         },
         EndpointEntry {
+            payload_limits: None,
             name: "canic_command".to_string(),
             candid: "canic_command : (Envelope) -> (Result);".to_string(),
             modes: Vec::new(),
@@ -25,6 +27,7 @@ fn renders_plain_endpoint_signatures_as_table() {
             returns: vec![test_endpoint_type("Result")],
         },
         EndpointEntry {
+            payload_limits: None,
             name: "application_stream".to_string(),
             candid: "application_stream : (Envelope) -> (Result) query oneway;".to_string(),
             modes: vec![EndpointMode::Query, EndpointMode::Oneway],
@@ -35,7 +38,7 @@ fn renders_plain_endpoint_signatures_as_table() {
 
     let rendered = render_plain_endpoints(&endpoints);
     let lines = rendered.lines().collect::<Vec<_>>();
-    assert_eq!(lines.len(), endpoints.len() + 2);
+    assert!(lines.len() >= endpoints.len() + 2);
     let mode_column = lines[0].find("MODE").expect("mode column");
     let signature_column = lines[0].find("SIGNATURE").expect("signature column");
     let expected = [

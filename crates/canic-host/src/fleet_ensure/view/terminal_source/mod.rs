@@ -5,8 +5,8 @@
 //! Boundary: completed actions describe receipts; they never enter the effect driver.
 
 use crate::fleet_ensure::model::{
-    CycleConservation, EnsureAction, FleetEnsureJournalRecord, FleetTerminalSourceRecord,
-    ReviewedDesiredFleetRecord,
+    CycleConservation, EffectRecord, EnsureAction, FleetEnsureSuccessorPhaseRecord,
+    FleetTerminalSourceRecord, ReviewedDesiredFleetRecord,
 };
 
 /// Bounded, read-only evidence from a complete operation and its immutable phases.
@@ -15,6 +15,21 @@ pub struct TerminalSourceView {
     pub documents: FleetTerminalSourceRecord,
     pub reviewed_desired: ReviewedDesiredFleetRecord,
     pub conservation: CycleConservation,
-    pub journal: FleetEnsureJournalRecord,
+    pub journal: TerminalJournalView,
     pub actions: Vec<EnsureAction>,
+}
+
+///
+/// TerminalJournalView
+///
+/// Completed payment and phase evidence, never an executable or writable journal.
+///
+
+#[derive(Clone, Debug)]
+pub struct TerminalJournalView {
+    pub effects: Vec<EffectRecord>,
+    pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
+    pub initial_controlled_cycles: u128,
+    pub initial_operator_cycles: u128,
+    pub initial_estate_funding_cycles_by_root: std::collections::BTreeMap<String, u128>,
 }

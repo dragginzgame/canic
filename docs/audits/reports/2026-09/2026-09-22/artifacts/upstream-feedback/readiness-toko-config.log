@@ -1,0 +1,11 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.27s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-1465c0d76e6faf2f)
+
+running 1 test
+desired=ef8fe4bd5ee8f26ca899578e693cdef018837201e414ad2f15eec5f3558e2f9a; funding=PrebuildFundingReadiness { desired_sha256: None, app_config_sha256: Some("b34957b58f6243d9f4b31097605906573259706d58331b677dae3df3e8682196"), roots: [RootFundingReadiness { root: "root-0", principal: Some("2ydug-eaaaa-aaaab-qhfca-cai"), available_native_cycles: None, configured_minimum_cycles: 10000000000000, startup_minimum_cycles: Some(100000000000001), required_native_floor_cycles: 100000000000001, floor_shortfall_cycles: None, unfunded_role: None, unavailable: Some(ObservationFailed) }], per_step_execution_allowance_cycles: Some(2000000000000), conversion: None, unresolved: [ArtifactExecutionReserve, PoolAndCurrentGrantUsage, SelectedPlanOperatorDebit, ConversionNotRequested, OperatorIcpBalance, FreshPlanAdmission] }
+test fleet_ensure::ops::readiness::tests::readiness_inspects_selected_configuration_without_building ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 933 filtered out; finished in 0.00s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.7RbOns

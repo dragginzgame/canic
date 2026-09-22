@@ -1,0 +1,130 @@
+--- a/crates/canic-core/src/model/public_metrics/history/mod.rs
++++ b/crates/canic-core/src/model/public_metrics/history/mod.rs
+@@ -26,7 +26,7 @@
+ /// Maximum conservatively accounted history storage, including unused group positions.
+ pub const MAX_HISTORY_BYTES: usize = 8 * 1024 * 1024;
+ 
+-const GROUP_WIDTH: usize = 8;
++const GROUP_WIDTH: usize = 4;
+ const MAX_GROUPS: usize = MAX_HISTORY_SERIES / GROUP_WIDTH;
+ const VALID_WORDS: usize = PUBLIC_HISTORY_SLOTS.div_ceil(64);
+ const EMPTY_POINT: PublicHistorySample = PublicHistorySample {
+@@ -104,40 +104,8 @@
+                 .map(|word| word.count_ones() as usize)
+                 .sum(),
+         );
+-        // Start just after the newest modulo position: the retained window is
+-        // two ordered physical ranges, so no point sorting or rotation is needed.
+-        let window = PUBLIC_HISTORY_SLOTS as u64;
+-        let split =
+-            usize::try_from((latest_slot % window + 1 + window - self.origin % window) % window)
+-                .expect("history slot is below 288");
+-        self.append_range(series, split..PUBLIC_HISTORY_SLOTS, latest_slot, &mut slots);
+-        self.append_range(series, 0..split, latest_slot, &mut slots);
+-        PublicHistorySeries {
+-            unit: series.unit.clone(),
+-            slots,
+-        }
+-    }
+-
+-    fn append_range(
+-        &self,
+-        series: &StoredSeries,
+-        range: std::ops::Range<usize>,
+-        latest_slot: u64,
+-        slots: &mut Vec<PublicHistorySample>,
+-    ) {
+-        if range.is_empty() {
+-            return;
+-        }
+-        let first_word = range.start / 64;
+-        let last_word = (range.end - 1) / 64;
+-        for word_index in first_word..=last_word {
+-            let mut remaining = series.valid[word_index];
+-            if word_index == first_word {
+-                remaining &= u64::MAX << (range.start % 64);
+-            }
+-            if word_index == last_word {
+-                remaining &= u64::MAX >> (63 - (range.end - 1) % 64);
+-            }
++        for (word_index, word) in series.valid.iter().copied().enumerate() {
++            let mut remaining = word;
+             while remaining != 0 {
+                 let physical = word_index * 64 + remaining.trailing_zeros() as usize;
+                 remaining &= remaining - 1;
+@@ -147,36 +115,36 @@
+                 }
+             }
+         }
+-    }
+-}
+-
++        // Modulo positions form at most two chronological runs within this window.
++        // Rotate those runs instead of sorting or making a second sample copy.
++        let oldest = slots
++            .iter()
++            .enumerate()
++            .min_by_key(|(_, point)| point.slot)
++            .map_or(0, |(index, _)| index);
++        slots.rotate_left(oldest);
++        PublicHistorySeries {
++            unit: series.unit.clone(),
++            slots,
++        }
++    }
++}
++
++#[derive(Default)]
+ struct History {
+     // Admission follows validated input order; index iteration never decides publication.
+     series: HashMap<SeriesKey, StoredSeries>,
+-    groups: [Option<Group>; MAX_GROUPS],
++    groups: Vec<Option<Group>>,
+     heap_started_at_ns: Option<u64>,
+     reserved_bytes: usize,
+     truncated: bool,
+     last_expired_slot: Option<u64>,
+ }
+ 
+-impl Default for History {
+-    fn default() -> Self {
+-        Self {
+-            series: HashMap::new(),
+-            groups: [const { None }; MAX_GROUPS],
+-            heap_started_at_ns: None,
+-            reserved_bytes: 0,
+-            truncated: false,
+-            last_expired_slot: None,
+-        }
+-    }
+-}
+-
+ impl History {
+     fn recount(&mut self) {
+         if self.series.is_empty() {
+-            self.groups = [const { None }; MAX_GROUPS];
++            self.groups = Vec::new();
+             self.reserved_bytes = 0;
+             return;
+         }
+@@ -267,7 +235,7 @@
+ }
+ 
+ fn occupy(
+-    groups: &mut [Option<Group>],
++    groups: &mut Vec<Option<Group>>,
+     vacancy: Option<(usize, usize)>,
+     slot: u64,
+ ) -> (usize, usize) {
+@@ -275,7 +243,10 @@
+         let index = groups
+             .iter()
+             .position(Option::is_none)
+-            .expect("series admission leaves a free group position");
++            .unwrap_or(groups.len());
++        if index == groups.len() {
++            groups.push(None);
++        }
+         groups[index] = Some(Group::new(slot));
+         (index, 0)
+     });

@@ -160,17 +160,12 @@ impl PublicMetricsOps {
             .then(|| PublicHistoryCache::series(request.family, request.name, request.canister_id))
             .flatten();
         let slot = now_ns / PUBLIC_METRICS_CADENCE_NS;
-        let mut points: Vec<_> = series.as_ref().map_or_else(Vec::new, |series| {
-            series
-                .slots
-                .iter()
-                .filter(|point| {
-                    point.slot <= slot && slot - point.slot < PUBLIC_HISTORY_SLOTS as u64
-                })
-                .copied()
-                .collect()
-        });
-        points.sort_by_key(|point| point.slot);
+        let (unit, mut points) = series.map_or_else(
+            || (None, Vec::new()),
+            |series| (Some(series.unit), series.slots),
+        );
+        points
+            .retain(|point| point.slot <= slot && slot - point.slot < PUBLIC_HISTORY_SLOTS as u64);
         let state = if !selected {
             PublicSnapshotState::Disabled
         } else if let Some(point) = points.last() {
@@ -209,7 +204,7 @@ impl PublicMetricsOps {
             .collect();
         PublicHistorySnapshot {
             state,
-            unit: series.map(|series| series.unit),
+            unit,
             heap_started_at_ns: selected
                 .then(PublicHistoryCache::heap_started_at_ns)
                 .flatten(),

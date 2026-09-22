@@ -281,11 +281,14 @@ there is no interpolation or catch-up queue. Reads filter expired slots without
 mutating the cache. Update-side sampling releases fully expired series.
 
 The total history cap is 256 series and 8 MiB of conservatively accounted storage
-per canister, including full ring allocation and bounded names, units and node
-overhead. Admission stops at either cap and exposes `truncated`; latest family
+per canister, including full reserved group allocations, unused positions,
+validity/index metadata and bounded names, units and node overhead. Admission stops at either cap and exposes `truncated`; latest family
 snapshots still retain their independent 256-row cap. Admission follows selected
-family order and each family's sorted bounded rows. An admitted series retains
-its allocation until it expires; changing units starts new series coverage.
+family order and each family's sorted bounded rows. Eight series share each
+contiguous history allocation; vacant positions are reused and an allocation is
+released when its final series expires. Changing units starts new series
+coverage. The [layout qualification](../../audits/reports/2026-09/2026-09-21/history-locality.md)
+records sampling/read improvements and sparse/gap tradeoffs.
 The response reports limits, reserved bytes, coverage, cadence and staleness.
 Replies contain at most 288 points, regardless of the requested limit. The history
 budget excludes the independently bounded latest snapshots, query reply buffers

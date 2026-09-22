@@ -1,0 +1,85 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (40 targets: 30 parallel, 10 serial PocketIC)
+==> compiler cache start: requests=99 hits=0 misses=37
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.5.0)
+==> shared PocketIC server ready: http://127.0.0.1:43251/
+==> targeted canic-tests PocketIC integration proof
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-testing-internal v0.110.35 (/home/adam/projects/canic/crates/canic-testing-internal)
+   Compiling canic-tests v0.110.35 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 27s
+     Running tests/pic_ingress_payload_limits.rs (target/debug/deps/pic_ingress_payload_limits-05127e11393d4ac0)
+
+running 3 tests
+test compiled_payload_contract_matches_actual_ingress_boundaries ... [WASM]       RUN    payload_limit_probe (1/1)
+[CANIC-TEST:E001] [WASM]       FAIL   payload_limit_probe
+
+thread 'compiled_payload_contract_matches_actual_ingress_boundaries' (61927) panicked at crates/canic-testing-internal/src/pic/artifacts.rs:474:5:
+internal test Wasm builds failed:
+`payload_limit_probe` failed in ContentHashing after 37.714706808s: Wasm build inputs changed while Cargo was running: 35a5164e270d342de49e04b8aff968b0663cadb327abe8359a14f8f7c131617c -> fe86c1da6757d61b812a5841a4d00157a82b111e8b18a2cffd5b9ab482122c1f; partial timings: WasmBuildFailureTimings { exact_cache_coordination: 472.832µs, shared_target_coordination: Some(403.038µs), input_resolution: WasmInputResolutionTimings { tool_identity: 75.977045ms, cargo_metadata: 1.359456996s, input_discovery: 19.875026ms, content_hashing: 104.872098ms, total: 1.560181165s }, shared_target_maintenance: Some(316.65775ms), cargo_build: Some(35.794080477s), artifact_publication: Some(1.3555ms), exact_cache_maintenance: None, cleanup: Some(173.077µs), total: 37.714607951s }
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace
+FAILED
+test inspect_message_enforces_default_explicit_and_named_payload_limits ... [WASM]       RUN    payload_limit_probe (1/1)
+[CANIC-TEST:E001] [WASM]       FAIL   payload_limit_probe
+
+thread 'inspect_message_enforces_default_explicit_and_named_payload_limits' (65240) panicked at crates/canic-testing-internal/src/pic/artifacts.rs:474:5:
+internal test Wasm builds failed:
+`payload_limit_probe` failed in CargoMetadata after 4.185291844s: cargo metadata failed with exit status: 101
+stdout:
+
+stderr:
+    Blocking waiting for file lock on package cache
+    Updating crates.io index
+error: cannot update the lock file /home/adam/projects/canic/Cargo.lock because --locked was passed to prevent this
+help: to generate the lock file without accessing the network, remove the --locked flag and use --offline instead.
+; partial timings: WasmBuildFailureTimings { exact_cache_coordination: 598.428µs, shared_target_coordination: Some(13.691µs), input_resolution: WasmInputResolutionTimings { tool_identity: 71.696615ms, cargo_metadata: 3.028885754s, input_discovery: 10.107119ms, content_hashing: 42.42753ms, total: 3.153117018s }, shared_target_maintenance: Some(2.288937ms), cargo_build: Some(1.00775549s), artifact_publication: Some(7.754188ms), exact_cache_maintenance: None, cleanup: Some(181.849µs), total: 4.185195351s }
+FAILED
+test raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode ... [WASM]       RUN    payload_limit_probe (1/1)
+[WASM]       DONE   payload_limit_probe                                   1.33s
+[payload-limit-probe] cached standalone fixture rebuilt slot=0 reason=UnwindWhileLeased total=9.863593138s wait=2.404µs build=Some(9.863589243s) restore=None stale_teardown=None
+ok
+
+failures:
+
+failures:
+    compiled_payload_contract_matches_actual_ingress_boundaries
+    inspect_message_enforces_default_explicit_and_named_payload_limits
+
+test result: FAILED. 1 passed; 2 failed; 0 ignored; 0 measured; 0 filtered out; finished in 53.73s
+
+error: test failed, to rerun pass `-p canic-tests --test pic_ingress_payload_limits`
+error: 1 target failed:
+    `-p canic-tests --test pic_ingress_payload_limits`
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=265444 kB high_water=270296 kB threads=75
+==> targeted canic-tests PocketIC integration proof failed in 201s (exit 101)
+==> shared PocketIC server stderr (last 40 lines)
+2021-05-06 19:17:10.000000007 UTC: [Canister xp3jw-ot777-77777-aaaaa-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: test
+2021-05-06 19:17:10.000000007 UTC: [Canister xp3jw-ot777-77777-aaaaa-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000011 UTC: [Canister xp3jw-ot777-77777-aaaaa-cai] [34mINFO [0m|    test    | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000011 UTC: [Canister xp3jw-ot777-77777-aaaaa-cai] [34mINFO [0m|    test    | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000011 UTC: [Canister xp3jw-ot777-77777-aaaaa-cai] [34mINFO [0m|    test    | [Init] canister marked READY
+2021-05-06 19:17:10.000000018 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    ...     | [Init] 🏁 init: test
+2021-05-06 19:17:10.000000018 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    ...     | [Memory] 💾 memory.registry: bootstrapped
+2021-05-06 19:17:10.000000018 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    test    | [Init] bootstrap (nonroot): init start
+2021-05-06 19:17:10.000000018 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    test    | [Init] bootstrap (nonroot): init complete
+2021-05-06 19:17:10.000000018 UTC: [Canister xi2pc-dl777-77777-aaaaq-cai] [34mINFO [0m|    test    | [Init] canister marked READY
+==> shared PocketIC server stdout (last 40 lines)
+2026-09-22T07:51:40.621990Z  INFO pocket_ic_server: The PocketIC server is listening on port 43251
+==> compiler cache delta: requests=26 hits=0 misses=10
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  201s     FAIL   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 202s
+WORKSPACE TESTS FAILED: targeted canic-tests PocketIC integration proof
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.BWfhDr
+make: *** [Makefile:427: test-pocketic-case] Error 1

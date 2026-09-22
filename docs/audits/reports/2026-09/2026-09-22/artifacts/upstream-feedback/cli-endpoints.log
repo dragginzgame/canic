@@ -1,0 +1,17 @@
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic-backup v0.110.35 (/home/adam/projects/canic/crates/canic-backup)
+   Compiling canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+   Compiling canic-cli v0.110.35 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 03s
+     Running unittests src/lib.rs (target/debug/deps/canic_cli-93aae49253462443)
+
+running 3 tests
+test endpoints::tests::renders_plain_endpoint_signatures_as_table ... ok
+test endpoints::tests::parses_endpoint_options ... ok
+test fleet::subnet_catalog::tests::registry_progress_reports_both_endpoints_and_retry_details ... ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 517 filtered out; finished in 0.00s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.LzogdZ

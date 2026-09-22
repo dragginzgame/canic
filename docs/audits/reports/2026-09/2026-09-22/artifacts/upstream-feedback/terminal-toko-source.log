@@ -1,0 +1,11 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.30s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-1465c0d76e6faf2f)
+
+running 1 test
+source=FleetTerminalSourceRecord { operation_id: "37bf7411aeb054ba554ab0a8203f3aa84ed51d3f11f7418e67eaa1b4993c53c0", plan_sha256: "6f760a24f42fc33bd6aedcb71c1c47a3a1c2f3a003f7542c64a83102492491c2", plan_document_sha256: "aa2fac2340528bddaaf0b5415c1318d70129d1b24aa1ce2bb60fe9342e924ad2", journal_document_sha256: "1e34489b06b40bc157ae0577e383fef3c5580f3c05313ff7894034e7d8eb6778", state_document_sha256: "83cf24343ef89b8766ebb018c8cf584d5d2e2fea92a820170f5261af7f953108", phase_document_sha256: {"85db035a104262b3e5c4671538051a0888ad643ff0924032d57fcc035b0d63ea": "bfaf3912c7dcd591283f237fb3d62aa1694959e9592159f8ac79e84d6342fb9e", "89d78a94916e442eb3fc0c5343055cf870a52181fe8228715d08f3f1e629dff5": "363668ca288b4aed95f90b7a56e8aadc9a6f85f2351c2f5ebe7323c75a38f2a1"} }; effects=49; phases=2
+test fleet_ensure::tests::terminal_retirement_inspects_selected_workspace_without_mutation ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 933 filtered out; finished in 1.51s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.o2yZCO

@@ -205,12 +205,12 @@ pub(in crate::fleet_ensure) fn retain_phase(
 
 pub(super) fn hydrate_phases(
     paths: &EnsurePaths,
-    journal: &mut FleetEnsureJournalRecord,
+    phases: &mut [FleetEnsureSuccessorPhaseRecord],
 ) -> Result<(), EnsureStateError> {
-    if journal.successor_phases.len() > MAX_FLEET_ENSURE_PROTOCOL_STEPS {
+    if phases.len() > MAX_FLEET_ENSURE_PROTOCOL_STEPS {
         return Err(invalid("too many retained successor phases"));
     }
-    for phase in &mut journal.successor_phases {
+    for phase in phases {
         let paths = phase_paths(paths, &phase.plan_sha256)?;
         let plan = read_plan(&paths)?.ok_or_else(|| invalid("successor plan is missing"))?;
         if plan.plan_sha256 != phase.plan_sha256 || expected_plan_sha256(&plan) != phase.plan_sha256

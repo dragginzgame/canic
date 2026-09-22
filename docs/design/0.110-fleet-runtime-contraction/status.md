@@ -1,5 +1,43 @@
 # Canic 0.110 Implementation Status
 
+## .36 upstream feedback follow-up — complete locally, 2026-09-22
+
+The maintainer's accepted CANIC-166/172/181 work extends the same open .36 batch:
+completed-source recovery review, useful pre-build native funding facts and
+compiled payload-limit discovery. The
+[qualification report](../../audits/reports/2026-09/2026-09-22/upstream-feedback.md)
+retains native, exact read-only Toko and three-case real-Wasm evidence, plus
+scoped warning-denied lint. Source/configuration hashes and explicit unknowns
+preserve the boundary between early observations and plan-bound authority.
+
+The metrics work below remains included. Both .36 changelog drafts are ready for
+the maintainer's release flow; packages remain .35. The concurrent IcyDB dependency
+refresh was preserved and these focused checks use its settled lockfile; separate
+composed lifecycle qualification is not claimed. No live downstream recovery or
+sampler savings, broad validation, Git mutation, release or deployment is claimed.
+Continue necessary fixes on the affected .110 line under the already-recorded
+cadence exception. B1 acceptance and the human minor-closeout gate remain open.
+
+## Post-.35 history locality correction — complete locally, 2026-09-21
+
+The maintainer activates the formerly parked history optimisation and authorises
+Toko Miner's narrow advisory-test correction. The
+[design](metrics-history-locality.md) and
+[qualification report](../../audits/reports/2026-09/2026-09-21/history-locality.md)
+record eight-series storage, unchanged query/display contracts, matched sampling
+and independent chart costs, capacity/reuse evidence and explicit sparse/gap
+tradeoffs. Thirty native and ten final PocketIC cases pass; scoped Clippy passes.
+Toko's unchanged 20,062,824 result now passes under its corrected advisory policy.
+Real downstream savings still require adopted and rebuilt application artifacts.
+
+This complete observability follow-up forms the .36 draft on published .35.
+Retain it on the affected .110 line despite exceeding the twelve-release cadence
+guideline: it resolves an active operator qualification regression and its
+associated performance work as one coherent batch. It does not begin a new
+minor or substitute for the human closeout gate. Both changelog surfaces are
+ready for the maintainer's release flow; packages remain .35 and no commit,
+release or deployment ran. B1 acceptance and broader funding work remain open.
+
 ## Expanded .35 deployment qualification — 2026-09-21
 
 The maintainer includes timing and performance in the feedback batch. Canic now

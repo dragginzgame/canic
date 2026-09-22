@@ -1,0 +1,12 @@
+   Compiling canic-cli v0.110.35 (/home/adam/projects/canic/crates/canic-cli)
+    Finished `test` profile [optimized + debuginfo] target(s) in 15.28s
+     Running tests/subcommand_order.rs (target/debug/deps/subcommand_order-f87bf189ff8f2e44)
+
+running 2 tests
+test no_arguments_prints_help_successfully ... ok
+test command_help_is_ordered_and_concise ... ok
+
+test result: ok. 2 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.35s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.siI5HQ

@@ -663,6 +663,7 @@ dependencies = [
  "canic",
  "canic-control-plane",
  "canic-core",
+ "canic-host",
  "canic-testing-internal",
  "ciborium",
  "ic-agent",
@@ -2149,9 +2150,9 @@ dependencies = [
 
 [[package]]
 name = "hyper-rustls"
-version = "0.27.9"
+version = "0.27.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "33ca68d021ef39cf6463ab54c1d0f5daf03377b70561305bb89a8f83aab66e0f"
+checksum = "dfa8e654703247911e29c23fbeaa261834bd9bb74efba2f9acddc37bfb127f53"
 dependencies = [
  "http",
  "hyper",
@@ -2647,9 +2648,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.261.2"
+version = "0.261.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a014e6f042573cd701bc5f063c62089d8f58e3ea79ffa659ebd63c76629ca3a9"
+checksum = "0d90e78a4a914e568b5c3ce6ae706d65f356aaf9a2464eabf99f547d4711ea23"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2665,9 +2666,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.261.2"
+version = "0.261.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "11c10f4bf955baf51a91c0ff95f69db29e2c21c80da8deeef4f40474a279364b"
+checksum = "b4224048265c37387b636d6cacedd562c8712052f4b80ceb62b5f1e801502f1d"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2690,18 +2691,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.261.2"
+version = "0.261.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0545fb3ec880a9edd2607ffa08776ce56c8f402341a7b4ca303f8e31f465e7b"
+checksum = "20e1c5d6a43370d9b0841801d755e0e451242d61856756f00c765e47f1592336"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.261.2"
+version = "0.261.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b81a65912e1349c69efe852264a86ee2c87df68f39df640be26af33b2a874b93"
+checksum = "81085ad91aec85e005ad25767f705341ec4a9fe2df33d420c0a445c1bce8950e"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2721,9 +2722,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.261.2"
+version = "0.261.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39781a6c150d07226ff599f3ef7fa159f337b8f7071d1b25f17e89d491a7e737"
+checksum = "7840c5f3e50258342c910c43e4a1c834d7c61aa617664228ab01f787df79558b"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2738,9 +2739,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.261.2"
+version = "0.261.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9c7497b22bfefdf0ff41329b51cfabbfada9856328b36b26c92506398818549"
+checksum = "8246d1b7031494086523ee1bddefb578f715e0ad1d7bd2a85b224617be9618f2"
 dependencies = [
  "candid",
  "derive_more",
@@ -3029,9 +3030,9 @@ checksum = "b6d2cec3eae94f9f509c767b45932f1ada8350c4bdb85af2fcab4a3c14807981"
 
 [[package]]
 name = "libredox"
-version = "0.1.24"
+version = "0.1.25"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6480ccc157a1389bb2e4891b24751b0f798ba640d22386f23143fbcc89da195a"
+checksum = "61ff90caf6077a803a240f62fdbe88645a890bbca49ef8174c3cb0404362171d"
 dependencies = [
  "libc",
 ]
@@ -3447,9 +3448,9 @@ checksum = "9b4f627cb1b25917193a259e49bdad08f671f8d9708acfd5fe0a8c1455d87220"
 
 [[package]]
 name = "pest"
-version = "2.9.1"
+version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6d45aeb61b4bf818e12d4205f2466f8c4748f85f4fce0146d1c03d69d753f0ad"
+checksum = "45d3aca230fad2e6f6317ca0a72724338c4960cb97168a85cdee66df4a9a21a8"
 dependencies = [
  "memchr",
  "ucd-trie",
@@ -3457,9 +3458,9 @@ dependencies = [
 
 [[package]]
 name = "pest_derive"
-version = "2.9.1"
+version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "89cc5a242e25ed4e7704d0be240f2cfbe20a8c27e7e252d94835be93d92dc39f"
+checksum = "284b60557f2c4a2e72ad3f2d34d42685a2fa4a6a61d0d2a10c0ae2a5e916c2cf"
 dependencies = [
  "pest",
  "pest_generator",
@@ -3467,9 +3468,9 @@ dependencies = [
 
 [[package]]
 name = "pest_generator"
-version = "2.9.1"
+version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7abf21475cc3820fe4b2ca2dc2142902f67a02189f3b5b3a229f4febc01a43e5"
+checksum = "1d9d1f08a115309ee99268cf85e5228e0e56aa9caf8841ec12866b6be07c3109"
 dependencies = [
  "pest",
  "pest_meta",
@@ -3480,9 +3481,9 @@ dependencies = [
 
 [[package]]
 name = "pest_meta"
-version = "2.9.1"
+version = "2.9.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adba4db388f687393c18c51348d44a41d870ca9df71a2c98172ea3035dc6936e"
+checksum = "ed93ba1a9ffcca32130a5188701c81c0c49cf00d4b7c5007d5148951d743adcb"
 dependencies = [
  "pest",
 ]

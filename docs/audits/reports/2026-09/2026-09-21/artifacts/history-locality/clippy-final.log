@@ -1,0 +1,10 @@
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+    Checking canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling runtime_probe v0.110.35 (/home/adam/projects/canic/canisters/test/runtime_probe)
+    Checking canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+    Checking canic-testing-internal v0.110.35 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-tests v0.110.35 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 56.27s
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.gKZEOV

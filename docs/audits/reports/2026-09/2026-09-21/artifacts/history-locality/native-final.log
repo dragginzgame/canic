@@ -1,0 +1,40 @@
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 02s
+     Running unittests src/lib.rs (target/debug/deps/canic_core-0ae3695e80682fb5)
+
+running 30 tests
+test model::public_metrics::history::tests::expired_position_reuse_cannot_reveal_previous_series_cells ... ok
+test model::public_metrics::history::tests::grouped_history_keeps_lagging_neighbours_across_wrap_and_unit_changes ... ok
+test model::public_metrics::history::tests::history_cached_provider_data_cannot_be_restamped_or_create_new_slots ... ok
+test model::public_metrics::history::tests::history_accepts_distinct_counter_resets_at_the_same_source_time ... ok
+test model::public_metrics::history::tests::history_coalesces_slots_keeps_gaps_and_rejects_older_source_time ... ok
+test model::public_metrics::history::tests::history_counter_windows_and_unit_changes_are_explicit ... ok
+test model::public_metrics::history::tests::history_lookup_binds_family_name_and_canister ... ok
+test model::public_metrics::history::tests::history_ring_has_exact_retention_and_expiration_releases_budget ... ok
+test ops::runtime::public_metrics::counter_tests::public_metrics_counter_deltas_require_adjacent_unsaturated_same_window_observations ... ok
+test model::public_metrics::history::tests::group_accounting_covers_full_capacity_and_sparse_expiration ... ok
+test model::public_metrics::history::tests::older_reappearing_series_cannot_erase_retained_history_by_changing_units ... ok
+test ops::runtime::public_metrics::history_tests::history_reads_bound_pages_hide_disabled_data_and_expire_without_mutation ... ok
+test ops::runtime::public_metrics::memory::tests::first_collection_failure_has_no_fabricated_zero_measurements ... ok
+test model::public_metrics::history::tests::history_caps_total_series_bytes_and_preserves_latest_snapshot ... ok
+test ops::runtime::public_metrics::process::tests::public_process_rows_expose_only_bounded_outcome_aggregates ... ok
+test ops::runtime::public_metrics::memory::tests::disabled_and_unsupported_never_collect_or_retain_values ... ok
+test model::public_metrics::history::tests::history_expiration_releases_sparse_index_capacity ... ok
+test ops::runtime::public_metrics::memory::tests::failed_collection_keeps_source_time_and_history_then_recovers ... ok
+test ops::runtime::public_metrics::memory::tests::incomplete_or_inconsistent_reports_fail_each_conservation_partition ... ok
+test ops::runtime::public_metrics::memory::tests::unknown_binding_and_private_labels_do_not_change_public_label_inventory ... ok
+test ops::runtime::public_metrics::tests::publication_is_disabled_even_when_a_cached_snapshot_exists ... ok
+test ops::runtime::public_metrics::tests::public_timer_measurements_preserve_registration_without_synthesizing_history_rates ... ok
+test ops::runtime::public_metrics::tests::publication_selection_is_exact_and_pages_are_bounded ... ok
+test ops::runtime::public_metrics::tests::reads_preserve_sample_time_and_report_staleness_without_refresh ... ok
+test ops::runtime::public_metrics::tests::rejected_sample_preserves_previous_snapshot ... ok
+test ops::runtime::public_metrics::memory::tests::public_projection_conserves_independent_partitions_without_mutating_memory ... ok
+test ops::runtime::public_metrics::tests::cache_consumes_only_one_bounded_prefix_and_reports_truncation ... ok
+test model::public_metrics::history::tests::grouped_history_matches_source_slot_semantics_under_gaps_resets_and_churn ... ok
+test ops::runtime::public_metrics::tests::performance_sampling_is_bounded_and_independent_of_recording_order ... ok
+test ops::runtime::public_metrics::memory::tests::measured_nondefault_buckets_cover_every_usable_id_without_growth ... ok
+
+test result: ok. 30 passed; 0 failed; 0 ignored; 0 measured; 1281 filtered out; finished in 0.03s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.7Mg9vd

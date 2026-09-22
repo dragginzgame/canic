@@ -1,0 +1,16 @@
+    Finished `test` profile [optimized + debuginfo] target(s) in 0.28s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-1465c0d76e6faf2f)
+
+running 7 tests
+test candid_endpoints::tests::parses_multiple_endpoint_arguments ... ok
+test candid_endpoints::tests::parses_multiline_endpoint_arguments ... ok
+test candid_endpoints::tests::ignores_service_named_record_fields ... ok
+test candid_endpoints::tests::parses_candid_service_endpoints ... ok
+test candid_endpoints::tests::payload_contract_rejects_duplicate_malformed_and_trailing_records ... ok
+test candid_endpoints::tests::payload_contract_distinguishes_defaults_overrides_query_and_variant_methods ... ok
+test candid_endpoints::tests::serializes_structured_endpoint_json ... ok
+
+test result: ok. 7 passed; 0 failed; 0 ignored; 0 measured; 927 filtered out; finished in 0.00s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.rvKhZC

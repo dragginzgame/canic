@@ -19,7 +19,7 @@ pub use artifact::{
     copy_icp_wasm_output, prepare_workspace_infrastructure_packages,
 };
 pub use cache::canister_build_target_root;
-pub(crate) use candid::extract_candid_bytes;
+pub use candid::extract_candid_bytes;
 pub use context::{
     WorkspaceBuildContext, print_workspace_build_context_once, workspace_build_context_once,
 };

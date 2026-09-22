@@ -1,0 +1,53 @@
+ICP_ENVIRONMENT=local bash scripts/ci/run-with-test-scratch.sh \
+	bash scripts/ci/run-workspace-tests.sh targeted-pocketic "$CANIC_POCKETIC_CASE"
+workspace test inventory guard passed (40 targets: 30 parallel, 10 serial PocketIC)
+==> compiler cache start: requests=143 hits=0 misses=56
+PocketIC version alignment passed (16.0.0)
+==> using pinned PocketIC server binary: /home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic
+==> prefetching locked dependency graph for offline metadata checks
+==> native ICP CLI: /home/adam/.cargo/bin/icp (icp 1.5.0)
+==> shared PocketIC server ready: http://127.0.0.1:42149/
+==> targeted canic-tests PocketIC integration proof
+   Compiling icydb-diagnostic-code v0.261.3
+   Compiling icydb-schema v0.261.3
+   Compiling pocket-ic v16.0.0
+   Compiling ic-agent v0.49.2
+   Compiling icydb-model-macros v0.261.3
+   Compiling icydb-core v0.261.3
+   Compiling icydb-model v0.261.3
+   Compiling ic-query v0.43.1
+   Compiling ic-testkit v0.10.0
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+   Compiling icydb v0.261.3
+   Compiling canic-testing-internal v0.110.35 (/home/adam/projects/canic/crates/canic-testing-internal)
+   Compiling canic-tests v0.110.35 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `test` profile [optimized + debuginfo] target(s) in 1m 17s
+     Running tests/pic_ingress_payload_limits.rs (target/debug/deps/pic_ingress_payload_limits-dad1eb9dcb90d3fe)
+
+running 3 tests
+test compiled_payload_contract_matches_actual_ingress_boundaries ... [WASM]       RUN    payload_limit_probe (1/1)
+[WASM]       DONE   payload_limit_probe                                   2.53s
+[WASM]       RUN    payload_limit_probe (1/1)
+[WASM]       CACHE  payload_limit_probe                                   0.49s
+[payload-limit-probe] cached standalone fixture built slot=0 total=2.372710687s wait=12.729µs build=Some(2.372693461s) restore=None stale_teardown=None
+ok
+test inspect_message_enforces_default_explicit_and_named_payload_limits ... [payload-limit-probe] cached standalone fixture restored slot=0 total=11.618827ms wait=1.773µs build=None restore=Some(11.615992ms) stale_teardown=None
+ok
+test raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode ... [payload-limit-probe] cached standalone fixture restored slot=0 total=8.981899ms wait=1.692µs build=None restore=Some(8.978733ms) stale_teardown=None
+ok
+
+test result: ok. 3 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 6.66s
+
+==> shared PocketIC resources after targeted canic-tests PocketIC integration proof: rss=265760 kB high_water=267716 kB threads=75
+==> targeted canic-tests PocketIC integration proof done in 84s
+==> compiler cache delta: requests=20 hits=0 misses=14
+
+==> workspace timing summary
+kind             elapsed  result label
+----             -------  ------ -----
+pocketic-serial  84s      PASS   targeted canic-tests PocketIC integration proof
+workspace runner wall time: 86s
+WORKSPACE TESTS PASSED: all requested suites succeeded.
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.pxUH24

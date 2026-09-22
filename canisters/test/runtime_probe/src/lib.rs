@@ -1,5 +1,6 @@
 #![expect(clippy::unused_async)]
 
+mod history_cost;
 mod process_fixture;
 
 use canic::{
@@ -427,6 +428,18 @@ fn sample_application_counters() -> Result<Vec<canic::dto::public_status::Public
 async fn suspend_public_sampler_fixture() -> Result<(), Error> {
     canic::__internal::core::api::timer::TimerApi::restore_snapshot_suspension(true);
     Ok(())
+}
+
+/// Controlled input for matched history-layout cost measurements.
+#[canic_update(requires(caller::is_controller()))]
+async fn qualify_history_sampling_cost(rows: u16) -> Result<u64, Error> {
+    history_cost::sample(rows)
+}
+
+/// Read costs are measured in their own query message, without sampling first.
+#[canic_query(requires(caller::is_controller()))]
+async fn qualify_history_query_cost(limit: u64) -> Result<history_cost::HistoryCost, Error> {
+    Ok(history_cost::history(limit))
 }
 
 canic::finish!();

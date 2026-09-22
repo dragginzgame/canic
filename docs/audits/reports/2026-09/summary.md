@@ -17,8 +17,10 @@ individual verdicts or establish a month-wide validation result.
   including the build-environment defect, config inspection and prioritized
   adoption recommendations with disposable CLI evidence.
 - September 21: [CANIC-148 sampler investigation](2026-09-21/summary.md),
-  retaining exploratory history-write/page-cost attribution. The optimization
-  and exact downstream qualification remain open.
+  retaining exploratory history-write/page-cost attribution, followed by
+  [post-.35 locality qualification](2026-09-21/history-locality.md). Canic's
+  implementation and Toko's advisory correction are qualified; real downstream
+  optimization savings remain unmeasured.
 
 Open follow-up remains with the accepted B1 work and current Fleet correction
 batch. The Fleet review additionally identifies exact whole-release reuse,
@@ -27,3 +29,7 @@ It does not accept B1, open a later minor, or establish deployment readiness.
 
 - September 21: [deployment timing and preparation qualification](2026-09-21/deployment-timing.md),
   including bounded receipts and controlled IPC/build-reuse measurements.
+
+- September 22: [upstream feedback qualification](2026-09-22/summary.md), covering
+  CANIC-166/172/181 with retained source/configuration checks and real-Wasm payload
+  boundaries. Local implementation is qualified; live downstream adoption remains.

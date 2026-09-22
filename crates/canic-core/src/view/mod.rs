@@ -10,4 +10,5 @@ pub mod fleet_activation;
 pub mod icp_refill;
 pub mod intent;
 pub mod provisioning_failure;
+pub mod public_metrics;
 pub mod state_cascade;

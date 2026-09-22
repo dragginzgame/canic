@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.36` improves metric history locality, repairs completed-source recovery
+  review, adds pre-build native funding facts and exposes compiled payload limits.
+  Host readiness and endpoint report additions are potentially breaking.
 - `0.110.35` adds explicit Fleet signer selection with potentially breaking
   host request changes, retained deployment timing, fewer install-preparation
   reads, clearer cache/ingress guidance, and IcyDB 0.261.2 test consumers sharing

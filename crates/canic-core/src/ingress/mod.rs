@@ -5,3 +5,5 @@
 //! Boundary: exposes ingress-time guards and payload limit metadata.
 
 pub mod payload;
+
+pub mod payload_contract;

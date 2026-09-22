@@ -1,5 +1,6 @@
 use std::{fs, path::Path};
 
+/// Extract the compiled declaration through the canonical tool and normalize whitespace.
 pub fn extract_candid_bytes(debug_wasm_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     extract_candid_with_tool(debug_wasm_path, Path::new("candid-extractor"))
 }

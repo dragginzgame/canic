@@ -1,0 +1,14 @@
+   Compiling canic v0.110.35 (/home/adam/projects/canic/crates/canic)
+   Compiling canic-macros v0.110.35 (/home/adam/projects/canic/crates/canic-macros)
+   Compiling canic-core v0.110.35 (/home/adam/projects/canic/crates/canic-core)
+    Checking canic-backup v0.110.35 (/home/adam/projects/canic/crates/canic-backup)
+    Checking icydb-model v0.261.3
+    Checking icydb v0.261.3
+    Checking canic-control-plane v0.110.35 (/home/adam/projects/canic/crates/canic-control-plane)
+    Checking canic-host v0.110.35 (/home/adam/projects/canic/crates/canic-host)
+   Compiling runtime_probe v0.110.35 (/home/adam/projects/canic/canisters/test/runtime_probe)
+   Compiling payload_limit_probe v0.110.35 (/home/adam/projects/canic/canisters/test/payload_limit_probe)
+    Checking canic-testing-internal v0.110.35 (/home/adam/projects/canic/crates/canic-testing-internal)
+    Checking canic-cli v0.110.35 (/home/adam/projects/canic/crates/canic-cli)
+    Checking canic-tests v0.110.35 (/home/adam/projects/canic/crates/canic-tests)
+    Finished `dev` profile [optimized + debuginfo] target(s) in 1m 10s
