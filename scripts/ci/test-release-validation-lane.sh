@@ -5,9 +5,15 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-validation-lane.XXXXXX")"
 trap 'rm -rf "$FIXTURE"' EXIT
 
-mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci"
+mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci" "$FIXTURE/docs/changelog" "$FIXTURE/docs/status"
 cp "$ROOT/scripts/ci/run-release-validation-lane.sh" \
     "$FIXTURE/scripts/ci/run-release-validation-lane.sh"
+cp "$ROOT/scripts/ci/check-release-draft-ready.sh" \
+    "$FIXTURE/scripts/ci/check-release-draft-ready.sh"
+printf '## 1.2.4 - Unreleased\n' >"$FIXTURE/docs/changelog/1.2.md"
+printf '## 1.3.0 - Unreleased\n' >"$FIXTURE/docs/changelog/1.3.md"
+printf '## 2.0.0 - Unreleased\n' >"$FIXTURE/docs/changelog/2.0.md"
+touch "$FIXTURE/docs/status/current.md"
 
 printf '%s\n' \
     '#!/usr/bin/env bash' \
@@ -28,13 +34,18 @@ printf '%s\n' \
     'fi' >"$FIXTURE/bin/git"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
+    'printf "fast-eligibility\n" >>"$FIXTURE_EVENTS"' \
     'exit "${FAKE_FAST_STATUS:-0}"' \
     >"$FIXTURE/scripts/ci/check-fast-patch-eligibility.sh"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
-    'printf "draft-preflight\n" >>"$FIXTURE_EVENTS"' \
-    'exit "${FAKE_DRAFT_STATUS:-0}"' \
-    >"$FIXTURE/scripts/ci/check-release-draft-ready.sh"
+    'printf "1.2.3\n"' \
+    >"$FIXTURE/scripts/ci/read-workspace-version.sh"
+printf '%s\n' \
+    '#!/usr/bin/env bash' \
+    'printf "remote-preflight %s\n" "$*" >>"$FIXTURE_EVENTS"' \
+    'exit "${FAKE_REMOTE_STATUS:-0}"' \
+    >"$FIXTURE/scripts/ci/check-release-remote-state.sh"
 printf '%s\n' \
     '#!/usr/bin/env bash' \
     'printf "bump=%s validated=%s head=%s kind=%s\n" "$1" "${CANIC_RELEASE_VALIDATED:-}" "${CANIC_RELEASE_VALIDATED_HEAD:-}" "${CANIC_RELEASE_VALIDATION_KIND:-}" >>"$FIXTURE_EVENTS"' \
@@ -64,21 +75,39 @@ assert_no_bump() {
 
 assert_no_validation() {
     if [[ -f "$FIXTURE_EVENTS" ]] && rg -F 'make --no-print-directory validate' "$FIXTURE_EVENTS" >/dev/null; then
-        echo "release validation lane test failed: validation followed a failed draft preflight" >&2
+        echo "release validation lane test failed: unexpected validation after preflight or receipt reuse" >&2
         exit 1
     fi
 }
 
 reset_fixture
 status=0
-FAKE_DRAFT_STATUS=31 \
-    bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
-[[ "$status" -eq 31 ]] || {
+rm "$FIXTURE/docs/status/current.md"
+bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
+touch "$FIXTURE/docs/status/current.md"
+[[ "$status" -eq 1 ]] || {
     echo "release validation lane test failed: draft preflight failure status was $status" >&2
     exit 1
 }
 assert_no_validation
 assert_no_bump
+
+for lane in complete fast; do
+    reset_fixture
+    status=0
+    FAKE_REMOTE_STATUS=37 \
+        bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" "$lane" patch || status=$?
+    [[ "$status" -eq 37 ]] || {
+        echo "release validation lane test failed: remote preflight failure status was $status" >&2
+        exit 1
+    }
+    assert_no_validation
+    assert_no_bump
+    if [[ -d "$CANIC_RELEASE_RECEIPT_DIR" ]] || rg -Fxq fast-eligibility "$FIXTURE_EVENTS"; then
+        echo "release validation lane test failed: failed remote preflight reached eligibility or receipt creation" >&2
+        exit 1
+    fi
+done
 
 reset_fixture
 status=0
@@ -114,8 +143,27 @@ assert_no_bump
 
 reset_fixture
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
+rg -Fx 'remote-preflight before-version 2.0.0' "$FIXTURE_EVENTS" >/dev/null || {
+    echo "release validation lane test failed: remote preflight did not check the planned release" >&2
+    exit 1
+}
 rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENTS" >/dev/null || {
     echo "release validation lane test failed: successful complete gate did not bind its source" >&2
+    exit 1
+}
+
+reset_fixture
+status=0
+FAKE_REMOTE_STATUS=37 \
+    bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major || status=$?
+[[ "$status" -eq 37 ]] || {
+    echo "release validation lane test failed: retained receipt bypassed remote readiness" >&2
+    exit 1
+}
+assert_no_validation
+assert_no_bump
+[[ -f "$CANIC_RELEASE_RECEIPT_DIR/complete-validated-head.receipt" ]] || {
+    echo "release validation lane test failed: failed preflight discarded the retained receipt" >&2
     exit 1
 }
 

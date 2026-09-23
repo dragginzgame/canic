@@ -401,7 +401,10 @@ read-only `make release-cadence` advisory. The advisory reports when the next
 release would exceed the soft 12-release minor-line guideline but never blocks
 or expands the maintainer's release authority.
 The complete and fast Make version targets delegate to one fail-fast release
-validation owner. It checks source cleanliness before the gate, propagates any
+validation owner. Before the gate or receipt reuse, it checks source cleanliness,
+the planned release notes, freshly observed remote ancestry and availability of
+the planned release tag. Diverged branches, occupied tags and failed remote
+observations stop before compilation or PocketIC. It propagates any
 nonzero validation or eligibility result immediately, checks cleanliness again,
 and proves that `HEAD` is unchanged before granting version-mutation authority.
 The complete lane runs the same explicit `make validate` workflow. It does not
