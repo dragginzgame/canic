@@ -1,6 +1,6 @@
 //! Module: ops::runtime::memory
 //!
-//! Responsibility: bootstrap memory registry TLS and expose memory diagnostics.
+//! Responsibility: commit memory allocation declarations and expose memory diagnostics.
 //! Does not own: memory schema declarations, stable records, or DTO schema.
 //! Boundary: maps memory runtime diagnostics into ops query responses.
 
@@ -19,7 +19,7 @@ use crate::{
         MemoryCommitSlotResponse, MemoryLedgerGenerationEntry, MemoryLedgerMemoryEntry,
         MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemorySchemaMetadataEntry,
     },
-    memory::{self, ledger, registry::MemoryRegistryError, runtime::init_eager_tls},
+    memory::{self, ledger, registry::MemoryRegistryError},
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
@@ -86,11 +86,6 @@ impl MemoryRegistryOps {
             .map_err(Into::into)
     }
 
-    // Run eager TLS touches after the registry validates stable-memory slots.
-    pub fn init_eager_tls() {
-        init_eager_tls();
-    }
-
     // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<(), InternalError> {
         memory::bootstrap_default_memory_manager().map_err(MemoryRegistryOpsError::from)?;
@@ -99,9 +94,7 @@ impl MemoryRegistryOps {
 
     // Run the full synchronous Canic memory bootstrap and return the committed layout.
     pub fn bootstrap_registry() -> Result<(), InternalError> {
-        Self::init_registry()?;
-        Self::init_eager_tls();
-        Ok(())
+        Self::init_registry()
     }
 
     pub fn is_initialized() -> Result<bool, InternalError> {

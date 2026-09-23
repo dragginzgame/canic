@@ -15,7 +15,6 @@ use canic_core::{
         storable::Storable,
     },
     dto::fleet_subnet_root::FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES,
-    eager_static,
     role_contract::allocation::memory::control_plane::{
         ROOT_COMPONENT_ALLOCATIONS_ID, ROOT_COMPONENT_DRAINING_ID,
         ROOT_COMPONENT_PRINCIPAL_INDEX_ID, ROOT_COMPONENT_REGISTRY_ENTRIES_ID,
@@ -86,7 +85,7 @@ struct RootComponentSubtreeRemovalHistory;
 struct RootComponentDraining;
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_REGISTRY:
         RefCell<Cell<RootComponentRegistryStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
@@ -101,7 +100,7 @@ eager_static! {
 }
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_DRAINING: RefCell<
         StableBtreeMap<
             RootComponentDrainingKey,
@@ -119,7 +118,7 @@ eager_static! {
 }
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_SUBTREE_REMOVAL_HISTORY: RefCell<
         StableBtreeMap<
             RootComponentSubtreeRemovalHistoryKey,
@@ -137,7 +136,7 @@ eager_static! {
 }
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static COMPONENT_REGISTRY_ENTRIES: RefCell<
         StableBtreeMap<
             ComponentRegistryEntryKey,
@@ -155,7 +154,7 @@ eager_static! {
 }
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static COMPONENT_REGISTRY_PRINCIPAL_INDEX: RefCell<
         StableBtreeMap<
             ComponentRegistryPrincipalKey,
@@ -173,7 +172,7 @@ eager_static! {
 }
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_ALLOCATIONS: RefCell<
         StableBtreeMap<
             RootComponentAllocationOperationKey,

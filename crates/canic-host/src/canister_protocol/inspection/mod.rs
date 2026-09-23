@@ -144,6 +144,36 @@ mod tests {
     use super::*;
 
     #[test]
+    #[ignore = "opt-in local parsing measurement using an exact retained Candid artifact"]
+    fn retained_contract_parsing_measurement() {
+        let path = std::env::var_os("CANIC_BENCH_INSPECTION_CANDID")
+            .expect("set CANIC_BENCH_INSPECTION_CANDID to a retained Root Candid file");
+        let source = fs::read_to_string(&path).unwrap();
+        let expected = declares_inspection_reserve(&source).unwrap();
+        let mut samples = Vec::new();
+        for _ in 0..5 {
+            let started = std::time::Instant::now();
+            for _ in 0..33 {
+                let source = fs::read_to_string(&path).unwrap();
+                assert_eq!(
+                    declares_inspection_reserve(std::hint::black_box(&source)).unwrap(),
+                    expected
+                );
+            }
+            samples.push(started.elapsed().as_micros());
+        }
+        eprintln!(
+            "[CANIC-INSPECTION-PARSE] {}",
+            serde_json::json!({
+                "source_sha256": canic_core::cdk::utils::hash::sha256_hex(source.as_bytes()),
+                "source_bytes": source.len(),
+                "inspections_per_sample": 33,
+                "uncached_micros": samples,
+            })
+        );
+    }
+
+    #[test]
     fn inspection_preflight_uses_the_bound_selector_and_resolves_type_aliases() {
         let contract = r"
             type Target = principal;

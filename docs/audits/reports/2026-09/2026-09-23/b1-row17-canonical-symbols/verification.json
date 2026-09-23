@@ -1,0 +1,118 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "canonical_post_optimizer_symbol_correspondence",
+  "footprint_measurement": false,
+  "runtime_parity_claim": false,
+  "build_performance_claim": false,
+  "complete_width_membership": true,
+  "all_payload_lengths_and_hashes_verified": true,
+  "all_method_and_harness_hashes_verified": true,
+  "canonical_executable_sections_exact": true,
+  "canonical_data_difference": "equal-length invocation scratch-path characters only",
+  "all_named_to_canonical_functions_bijectively_matched": true,
+  "all_signatures_instructions_calls_and_export_table_import_bindings_preserved": true,
+  "named_to_rebuilt_canonical_non_code_sections_exact": true,
+  "clean_product_and_original_lock_restored": true,
+  "trace_inputs": [
+    {
+      "width": 1,
+      "link_map_sha256": "828fe1be5ede989aa387f00f49dde8cb5f022fc0e00b2dfe97681055bf6cafef",
+      "raw_wasm_sha256": "8a138fdb63357d67270dfe83bf1de0d72a627843b55c366a7082ec433be77500",
+      "raw_name_mapping_sha256": "3079e317cc8c968d6fa736ffa0f81e7f933ff6e1721eb39a5e904a38a8b2d9d8",
+      "raw_named_wasm_sha256": "5056863ebde3f741d350166725215cf4e935ff42f347dc739097a16787d1541c",
+      "preoptimizer_named_wasm_sha256": "0ef1b8917df311bfd184d4f6564710777e0f493d5a3205f2dc7be4751f5d0919",
+      "named_optimized_wasm_sha256": "0d7f379e7d44997d8ec22ab794d09054ed3602bbf155171fb9377f06eca83e81",
+      "optimizer_feature_flags": [
+        "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--enable-sign-ext",
+        "--enable-bulk-memory-opt"
+      ]
+    },
+    {
+      "width": 2,
+      "link_map_sha256": "7979e84d0ca9ef63aa6864e34988d9b5ddc936f62624cdff51b91bc1133c11c6",
+      "raw_wasm_sha256": "7407459c36080c142960720b9ff9db41bfe06fb0622f4f4c8ed80b291e71db12",
+      "raw_name_mapping_sha256": "f68e4be79a378d6036f520f3aebe77937cd138a46a8e72076bd4df1e1d780cfc",
+      "raw_named_wasm_sha256": "a6171e8a8dc43d7eed273b3ba0bdc797038cd01a099b1938dfce971ebbce00f8",
+      "preoptimizer_named_wasm_sha256": "a6f5e252da48f3e02dd49331ad2d7b63a1d1fe573f58f8cf5b37dd37fa227317",
+      "named_optimized_wasm_sha256": "bdcbce039aaff9c1c465e5a3fa9ce1d6bba27262875e05d4bd4f4729f18e0992",
+      "optimizer_feature_flags": [
+        "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--enable-sign-ext",
+        "--enable-bulk-memory-opt"
+      ]
+    },
+    {
+      "width": 3,
+      "link_map_sha256": "cbd8b97a26152f5f57ca97cf3d2873088bfc08dad95486c1f9a2eb5dc211a291",
+      "raw_wasm_sha256": "876903d67f45be936527a56c91ebe279237595bb23199df9cc9bf1be8705d97f",
+      "raw_name_mapping_sha256": "660a4a4e5b9449e15928e4e981764028b9befbdac84cbff23f8667effacd9d75",
+      "raw_named_wasm_sha256": "a1947fd94aeda2d039bc1f432a3c0e1168040561a79057abbf60ff3a86ddcc43",
+      "preoptimizer_named_wasm_sha256": "0caa5a902540bf5df5395050b8b846420a190c8dc5ce1a38a37decaf4697a525",
+      "named_optimized_wasm_sha256": "13a084c83c41a645f906d7b919a0d24ba80d4c628b91dd30447b74fc8dd865ad",
+      "optimizer_feature_flags": [
+        "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--enable-sign-ext",
+        "--enable-bulk-memory-opt"
+      ]
+    },
+    {
+      "width": 4,
+      "link_map_sha256": "2c0a59334e79b85e7fafa86d1e7398ed41a994da60ee0ab4711d4f3dd7c2c8c4",
+      "raw_wasm_sha256": "be17a42a9588340b7bbf565f3e0c4af256d45b6b4fd9c23d71b6ecec117ee3f8",
+      "raw_name_mapping_sha256": "9c5e5eca98efe3bdb1e2dc09889b45dc4bd514611b556ffdb6cfc48422ab412b",
+      "raw_named_wasm_sha256": "ef22743041b3eb7a493e2f91173f910f560aeb6ad4e4b43c0e74d2f5a808edd1",
+      "preoptimizer_named_wasm_sha256": "3e475565de95b58e82db62da34be7265a93d47858189d4657feb47be1bb0e8c6",
+      "named_optimized_wasm_sha256": "13cfa06d02487d0c7648abd16e602e6381844df1892376ad6ab259cd5dc30226",
+      "optimizer_feature_flags": [
+        "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--enable-sign-ext",
+        "--enable-bulk-memory-opt"
+      ]
+    },
+    {
+      "width": 5,
+      "link_map_sha256": "fa954a786554a09f492ec4838caf6ddd8143521ae0ae249ef24d57558fae5168",
+      "raw_wasm_sha256": "ffbcb3a03c815702ca826e1c7fa89daf1a9270795c6c3157bd5ef67b048d4a99",
+      "raw_name_mapping_sha256": "99dd29c561cf62bb32c643247f2816f1e6facb62e15f66a2be5908e91e718323",
+      "raw_named_wasm_sha256": "4976991899d61639c47975f62df5574a4eef4dc17a73146575fcf65ee7ef462d",
+      "preoptimizer_named_wasm_sha256": "cbb7dab71d6f70cb6ba8d52fa82aa0f70ba31305d1cb696f542e3b4a985bd1f0",
+      "named_optimized_wasm_sha256": "57e58cb9678df317dd18a4f2d9f73188ca7e885d0ac10551138ec51484f48005",
+      "optimizer_feature_flags": [
+        "--enable-mutable-globals",
+        "--enable-nontrapping-float-to-int",
+        "--enable-bulk-memory",
+        "--enable-sign-ext",
+        "--enable-bulk-memory-opt"
+      ]
+    }
+  ],
+  "tool_hashes": {
+    "ic-wasm": "ff4f9bd1d3734f7aa69078ecd4c5716dbfaf67d094c69d5082b00bac5b8bf936",
+    "wasm-opt": "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725",
+    "wasm2wat": "b1592938534292a48543fcb9161f666a2f6d5f37d47eb6a6d06f0ffe729c8a3e",
+    "c++filt": "2c11b66c0fad24afc649517f890eaa8a6a4d4dceb1d613c5631bb96ff09352b4"
+  },
+  "selected_function_counts": [
+    15,
+    18,
+    21,
+    24,
+    25
+  ],
+  "function_and_import_counts": [
+    4071,
+    4074,
+    4077,
+    4080,
+    4081
+  ]
+}

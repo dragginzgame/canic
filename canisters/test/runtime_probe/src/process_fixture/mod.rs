@@ -12,7 +12,7 @@ use canic::__internal::core::api::lifecycle::metrics::{
 pub fn record() {
     WasmStoreMetricsApi::record(
         WasmStoreMetricOperation::SourceResolve,
-        WasmStoreMetricSource::Bootstrap,
+        WasmStoreMetricSource::Store,
         WasmStoreMetricOutcome::Completed,
         WasmStoreMetricReason::Ok,
     );

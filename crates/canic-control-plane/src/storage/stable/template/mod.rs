@@ -6,9 +6,9 @@ pub mod manifest;
 pub use chunked::TemplateChunkRecord;
 #[cfg(feature = "wasm-store-canister")]
 pub use chunked::TemplateChunkSetEntryRecord;
-pub use chunked::{
-    TemplateChunkSetRecord, TemplateChunkSetStateStore, TemplateChunkSetsData, TemplateChunkStore,
-};
+pub use chunked::{TemplateChunkSetRecord, TemplateChunkSetsData};
+#[cfg(any(test, feature = "wasm-store-canister"))]
+pub use chunked::{TemplateChunkSetStateStore, TemplateChunkStore};
 #[cfg(feature = "wasm-store-canister")]
 pub use gc::WasmStoreGcStateStore;
 pub use gc::{WasmStoreGcStateData, WasmStoreGcStateRecord};

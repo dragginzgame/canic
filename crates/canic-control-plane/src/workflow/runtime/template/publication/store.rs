@@ -5,7 +5,6 @@ use crate::{
         WasmStoreGcTarget, WasmStoreStatusResponse,
     },
     ids::{TemplateId, TemplateVersion},
-    ops::storage::template::TemplateChunkedOps,
 };
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
@@ -102,14 +101,4 @@ pub(super) async fn store_chunk(
     WasmStoreInternalClient::new(store_pid)
         .chunk(template_id, version, chunk_index)
         .await
-}
-
-// Return deterministic chunk bytes from the current canister's local bootstrap source.
-pub(super) fn local_chunk(
-    template_id: &TemplateId,
-    version: &TemplateVersion,
-    chunk_index: u32,
-) -> Result<Vec<u8>, InternalError> {
-    let response = TemplateChunkedOps::chunk_response(template_id, version, chunk_index)?;
-    Ok(response.bytes)
 }

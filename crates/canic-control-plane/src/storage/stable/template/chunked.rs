@@ -1,14 +1,13 @@
 use crate::ids::{TemplateChunkKey, TemplateReleaseKey};
 use canic_core::CANIC_WASM_CHUNK_BYTES;
-#[cfg(any(test, feature = "wasm-store-canister"))]
-use canic_core::cdk::structures::Memory;
 use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{
-    DefaultMemoryImpl, Vec as StableVec,
+    DefaultMemoryImpl,
     memory::RuntimeMemory,
     storable::{Bound, Storable},
 };
-use canic_core::eager_static;
+#[cfg(any(test, feature = "wasm-store-canister"))]
+use canic_core::cdk::structures::{Memory, Vec as StableVec};
 use canic_core::impl_storable_unbounded;
 use canic_core::role_contract::allocation::memory::control_plane::{
     TEMPLATE_CHUNK_PAYLOADS_ID, TEMPLATE_CHUNK_REFS_ID, TEMPLATE_CHUNK_SETS_ID,
@@ -24,7 +23,7 @@ const _: () = assert!(CANIC_WASM_CHUNK_BYTES == TEMPLATE_CHUNK_PAYLOAD_MAX_BYTES
 struct TemplateChunkRefStore;
 struct TemplateChunkPayloadStore;
 
-eager_static! {
+std::thread_local! {
     static TEMPLATE_CHUNK_SETS: RefCell<
         StableBtreeMap<TemplateReleaseKey, TemplateChunkSetRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -32,11 +31,11 @@ eager_static! {
     );
 }
 
-eager_static! {
-    static TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES: RefCell<Option<u64>> = RefCell::new(None);
+std::thread_local! {
+    static TEMPLATE_CHUNK_SETS_OCCUPIED_BYTES: RefCell<Option<u64>> = const { RefCell::new(None) };
 }
 
-eager_static! {
+std::thread_local! {
     static TEMPLATE_CHUNK_REFS: RefCell<
         StableBtreeMap<TemplateChunkKey, TemplateChunkRefRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -44,18 +43,19 @@ eager_static! {
     );
 }
 
-eager_static! {
+std::thread_local! {
     static TEMPLATE_CHUNK_PAYLOADS_MEMORY: RuntimeMemory<DefaultMemoryImpl> =
         canic_core::ic_memory_key!(authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY, key = "canic.control_plane.template.chunk_payloads.v1", ty = TemplateChunkPayloadStore, id = TEMPLATE_CHUNK_PAYLOADS_ID);
 }
 
-eager_static! {
+#[cfg(any(test, feature = "wasm-store-canister"))]
+std::thread_local! {
     static TEMPLATE_CHUNK_PAYLOADS: RefCell<TemplateChunkPayloadVec> =
         RefCell::new(init_chunk_payloads());
 }
 
-eager_static! {
-    static TEMPLATE_CHUNKS_OCCUPIED_BYTES: RefCell<Option<u64>> = RefCell::new(None);
+std::thread_local! {
+    static TEMPLATE_CHUNKS_OCCUPIED_BYTES: RefCell<Option<u64>> = const { RefCell::new(None) };
 }
 
 ///
@@ -108,6 +108,7 @@ impl TemplateChunkSetsData {
 /// TemplateChunkRecord
 ///
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct TemplateChunkRecord {
     pub bytes: Vec<u8>,
@@ -201,6 +202,7 @@ impl Storable for TemplateChunkPayloadRecord {
     }
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 type TemplateChunkPayloadVec =
     StableVec<TemplateChunkPayloadRecord, RuntimeMemory<DefaultMemoryImpl>>;
 
@@ -285,6 +287,7 @@ impl TemplateChunkSetStateStore {
     }
 
     // Fetch one template chunk-set metadata record, if present.
+    #[cfg(any(test, feature = "wasm-store-canister"))]
     #[must_use]
     pub fn get(release: &TemplateReleaseKey) -> Option<TemplateChunkSetRecord> {
         TEMPLATE_CHUNK_SETS.with_borrow(|map| map.get(release))
@@ -354,8 +357,10 @@ impl TemplateChunkSetStateStore {
 /// TemplateChunkStore
 ///
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 pub struct TemplateChunkStore;
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 impl TemplateChunkStore {
     // Insert or replace one template chunk.
     #[cfg(any(test, feature = "wasm-store-canister"))]
@@ -558,6 +563,7 @@ fn chunk_set_entry_size(release: &TemplateReleaseKey, record: &TemplateChunkSetR
     (release.to_bytes().len() + record.to_bytes().len()) as u64
 }
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 fn init_chunk_payloads() -> TemplateChunkPayloadVec {
     TEMPLATE_CHUNK_PAYLOADS_MEMORY.with(|memory| StableVec::init(memory.clone()))
 }

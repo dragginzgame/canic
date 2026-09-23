@@ -1,0 +1,10 @@
+   Compiling canic-host v0.110.37 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 44.72s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-d2563dfeccaed975)
+
+running 1 test
+[CANIC-INSPECTION-PARSE] {"inspections_per_sample":33,"source_bytes":101033,"source_sha256":"f652b8b8b7d57c1a4480dd9818e7e17267ebd50ca3c0ccad6c2de6f5fb82d92d","uncached_micros":[96395,97066,95754,95531,95473]}
+test canister_protocol::inspection::tests::retained_contract_parsing_measurement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 947 filtered out; finished in 0.49s
+

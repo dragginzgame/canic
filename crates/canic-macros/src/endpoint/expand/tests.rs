@@ -250,3 +250,66 @@ fn attested_local_subnet_expands_to_the_local_proof_guard() {
     assert!(compact.contains("access::expr::auth::attested_local_subnet()"));
     assert!(compact.contains("let_=&attestation"));
 }
+
+#[test]
+fn access_reader_selection_follows_nested_declared_predicates() {
+    struct SelectedReader(Vec<bool>);
+    impl<'ast> syn::visit::Visit<'ast> for SelectedReader {
+        fn visit_expr_call(&mut self, call: &'ast syn::ExprCall) {
+            if let syn::Expr::Path(path) = call.func.as_ref()
+                && let Some(segment) = path.path.segments.last()
+                && segment.ident == "eval_access_selected"
+            {
+                let syn::PathArguments::AngleBracketed(args) = &segment.arguments else {
+                    panic!("selected evaluator requires a const selection");
+                };
+                let Some(syn::GenericArgument::Const(syn::Expr::Lit(lit))) = args.args.first()
+                else {
+                    panic!("selection must be a const boolean");
+                };
+                let syn::Lit::Bool(selected) = &lit.lit else {
+                    panic!("selection must be boolean");
+                };
+                self.0.push(selected.value);
+            }
+            syn::visit::visit_expr_call(self, call);
+        }
+    }
+    let ordinary = AccessExprAst::Pred(AccessPredicateAst::Builtin(
+        BuiltinPredicate::CallerIsParent,
+    ));
+    let admitted = AccessExprAst::Pred(AccessPredicateAst::Builtin(
+        BuiltinPredicate::CallerIsFleetAdmitted,
+    ));
+    let custom = AccessExprAst::Pred(AccessPredicateAst::Custom(quote!(custom_guard())));
+    let cases = [
+        (ordinary.clone(), false),
+        (custom, false),
+        (admitted.clone(), true),
+        (
+            AccessExprAst::All(vec![ordinary.clone(), admitted.clone()]),
+            true,
+        ),
+        (
+            AccessExprAst::Any(vec![
+                ordinary.clone(),
+                AccessExprAst::Not(Box::new(admitted)),
+            ]),
+            true,
+        ),
+        (
+            AccessExprAst::Not(Box::new(AccessExprAst::Any(vec![ordinary]))),
+            false,
+        ),
+    ];
+    for (expr, expected) in cases {
+        let args = make_args(vec![expr]);
+        let sig = syn::parse_quote!(fn probe() -> Result<(), ::canic::Error>);
+        let plan = build_access_plan(EndpointKind::Query, &args, &sig).unwrap();
+        let stage = access_stage(&plan, &format_ident!("call"));
+        let block: syn::Block = syn::parse2(quote!({ #stage })).unwrap();
+        let mut reader = SelectedReader(Vec::new());
+        syn::visit::Visit::visit_block(&mut reader, &block);
+        assert_eq!(reader.0, vec![expected]);
+    }
+}

@@ -18,7 +18,6 @@ use canic_core::{
         component_registry::ComponentRegistryHead,
         fleet_registry::FleetRegistryVersion,
     },
-    eager_static,
     ids::{
         ComponentBinding, ComponentDeploymentConfigurationDigest, ComponentGroupDeploymentId,
         ComponentGroupMemberPath, ComponentGroupPlacementId, ComponentGroupSpecId,
@@ -45,7 +44,7 @@ struct RootComponentProvisioningOperations;
 struct RootComponentProvisioningPlacements;
 struct RootComponentProvisioningState;
 
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_OPERATIONS: RefCell<
         StableBtreeMap<
             RootComponentOperationKey,
@@ -62,7 +61,7 @@ eager_static! {
     ));
 }
 
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_PLACEMENTS: RefCell<
         StableBtreeMap<
             RootComponentProvisioningPlacementKey,
@@ -79,7 +78,7 @@ eager_static! {
     ));
 }
 
-eager_static! {
+std::thread_local! {
     static ROOT_COMPONENT_PROVISIONING_STATE: RefCell<
         Cell<RootComponentProvisioningStateRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(Cell::init(

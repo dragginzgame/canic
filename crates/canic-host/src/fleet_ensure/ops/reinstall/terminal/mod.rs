@@ -67,6 +67,7 @@ pub(in crate::fleet_ensure) fn read(
         return Err(invalid());
     }
     let mut source = TerminalSourceView {
+        planned_at_time: field(&raw, "planned_at_time")?,
         documents: FleetTerminalSourceRecord {
             operation_id,
             plan_sha256,
@@ -348,4 +349,25 @@ fn bytes(path: &Path) -> Result<Vec<u8>, EnsureStateError> {
 }
 const fn invalid() -> EnsureStateError {
     EnsureStateError::InvalidTerminalSource
+}
+
+/// Bind independently authenticated debit evidence without editing the source documents.
+pub(in crate::fleet_ensure) fn capture_external_debit(
+    mut source: FleetReinstallSourceRecord,
+    debit: crate::fleet_ensure::model::RetirementWithdrawalRecord,
+) -> Result<FleetReinstallSourceRecord, EnsureStateError> {
+    use crate::fleet_ensure::model::{
+        FleetRetirementConservationRecord, RetirementExternalDebitRecord,
+    };
+    let retirement = source.terminal_retirement.as_mut().ok_or_else(invalid)?;
+    let FleetRetirementConservationRecord::NetBalance(conservation) = &retirement.conservation
+    else {
+        return Err(invalid());
+    };
+    retirement.conservation =
+        FleetRetirementConservationRecord::ExternalDebit(Box::new(RetirementExternalDebitRecord {
+            source_conservation: conservation.clone(),
+            external_debit: debit,
+        }));
+    Ok(source)
 }

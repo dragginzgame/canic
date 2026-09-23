@@ -1,0 +1,664 @@
+{
+  "date": "2026-09-23",
+  "slice": "statically selected synchronous Fleet admission reader",
+  "source_kind": "dirty working tree",
+  "source_files": [
+    {
+      "path": "crates/canic-core/src/access/auth/mod.rs",
+      "sha256": "651a4b0c0b3880b9ea262010d262644f0df447eac82968ca9968de2b80c6b2a9"
+    },
+    {
+      "path": "crates/canic-core/src/access/expr/mod.rs",
+      "sha256": "79443ecabd75211f6bb70bd6961239e0b1c3afae0f235164510894d8bbcdca0f"
+    },
+    {
+      "path": "crates/canic-core/src/access/expr/evaluators.rs",
+      "sha256": "65d11c46d142c3e3983ef1ababd3f94bb87b3326818fa239c7cd4a5bc4832e2d"
+    },
+    {
+      "path": "crates/canic-macros/src/endpoint/expand/access.rs",
+      "sha256": "40df7ef009a5baa79bf12749edc803f03fb3f121d5aab94257f67c00025b7406"
+    },
+    {
+      "path": "crates/canic-macros/src/endpoint/expand/tests.rs",
+      "sha256": "6bb8dee6e74c660ae36997bd1405d8ac1f8dd0cc965ec4076c6dcee89211f22f"
+    }
+  ],
+  "checks": [
+    {
+      "command": "cargo test --locked -p canic-core --lib access::",
+      "result": "passed",
+      "passed_tests": 28,
+      "log": ".tmp/b2-admission-reader-20260923/qualification/canic-b2-reader-core.log",
+      "log_sha256": "2a8e338c1cc2fd7729838d080843de7b3ac554ae3132680a41b6e94fb7589ae3"
+    },
+    {
+      "command": "cargo test --locked -p canic-macros --lib endpoint::expand::tests",
+      "result": "passed",
+      "passed_tests": 13,
+      "log": ".tmp/b2-admission-reader-20260923/qualification/canic-b2-reader-macros.log",
+      "log_sha256": "d7ad33a9811b120144e7f232362c4637aece8d31f29f1aeb7c6d95fc8e75f528"
+    },
+    {
+      "command": "cargo test --locked -p canic --test endpoint_macro",
+      "result": "passed",
+      "passed_tests": 2,
+      "log": ".tmp/b2-admission-reader-20260923/qualification/canic-b2-reader-endpoint.log",
+      "log_sha256": "caebc7845423a3418fc896a5baf58bfca975348eb238001a079820b785b52461"
+    },
+    {
+      "command": "cargo clippy --locked -p canic-core -p canic-macros --all-targets --all-features -- -D warnings",
+      "result": "passed",
+      "passed_tests": null,
+      "log": ".tmp/b2-admission-reader-20260923/qualification/canic-b2-reader-clippy.log",
+      "log_sha256": "d06b5bdad239090711d0878a6de0e7176ccff6abf018543ce11b8583721b64cd"
+    },
+    {
+      "command": "RUSTC_WRAPPER=\"\" make test-pocketic-case CASE=pic::lifecycle::tests::managed_projection_fences_then_opens_and_restores",
+      "result": "passed",
+      "passed_tests": 1,
+      "log": ".tmp/b2-admission-reader-20260923/qualification/canic-b2-reader-pocketic.log",
+      "log_sha256": "24d0434b5041086acac9aabeee95c0fc16b79a24352b685b169d5ffb15759fba"
+    }
+  ],
+  "diagnostic": {
+    "method_files": [
+      {
+        "path": ".tmp/b2-admission-reader-20260923/before.tar.gz",
+        "sha256": "09919d517e9495068fa63f6cf12b5aa3837d55d3504caf8ea08990abfedc7e0b"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/auth-before.rs",
+        "sha256": "51483854faf14ab61daedf4e73bb8ecced95e5aa43f8d734482a0fff74266884"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/candidate-source.tar.gz",
+        "sha256": "353c70f31bbf5fac06696c506bc59b1972d2772e11b35c6c90d8c06024478d51"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/run-diagnostic.sh",
+        "sha256": "9f63f71ab35d3217347da89f81e4f2401b8dd78902d0212e53313434fdcdfaed"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/summarize.py",
+        "sha256": "1acc85361368413049de5440168b0cec746e3055c2c8e1c8231969b9939222ba"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/probe/Cargo.toml",
+        "sha256": "ee6067e7ba92293cc084e5bf748da51f79c9383d92e12b55d8a27b151c324283"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/probe/src/lib.rs",
+        "sha256": "c4a8a70ae6da2f0b427f5a20cd8ad677d263e477856f39200f345dd5789d8c79"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/diagnostic-Cargo.lock",
+        "sha256": "9edde7944f86f3cd388e835e3defd1caed2d9027804d2c995394476ca4399832"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/diagnostic-results.json",
+        "sha256": "058a34a0466b59c19ca554ea121633715e1bd82710e7fbef62bf44b2a1b0548f"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/mixed-table-entries.json",
+        "sha256": "3acb5f4e4ef566c62a1f825b64d298405d773a76f7d8c8a6bbd2bfbc78b3080d"
+      }
+    ],
+    "artifacts": [
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/parent/raw.wasm",
+        "sha256": "f8fad03ad530f5a22e305754beafd6927670e8268c8590434df99eb5f763086f"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/parent/optimized.wasm",
+        "sha256": "545fcc0865629fb20ff42a41353c3ca1ed01e74d11b5382a87725c0344eed1a4"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/parent/build.log",
+        "sha256": "4afefac7d1e9c5b97d1dea3aa5c386eea6060cbf7e45a56640912dd338627683"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/parent/optimize.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/parent/sections.txt",
+        "sha256": "c684cb421ba024a15a0b9c0240de0b48b070332629ed291699001c53078820a4"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/admission/raw.wasm",
+        "sha256": "8f2c8e118b45cb9d42270ba80978a7da96f1ce9447c7eec2cf61b2f7aab5560f"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/admission/optimized.wasm",
+        "sha256": "ebfc3065b1d7df133ac9cf646f48c620d94efc19638b0e292e8011a2974bb61c"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/admission/build.log",
+        "sha256": "abc26a82b43ae546eca73c25fe983b892aa61fb0fa194292f801b566f18ba4f0"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/admission/optimize.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/admission/sections.txt",
+        "sha256": "c64deb01f405bb6ddd31b73b83a9f59c8820b35b1366bbe87d1fe1c685b8c0c5"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/mixed/raw.wasm",
+        "sha256": "38e1b19be35cd187ab1fdc9fd983167531f487376259b0ac9f430f049cfad442"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/mixed/optimized.wasm",
+        "sha256": "ba6dea6639f7cb220116e3639d0d64ede3fc196fc0fc6164c51b97fda90a404b"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/mixed/build.log",
+        "sha256": "071a23bb8c530a83042ab20a8df607158c6d1030942edef5ca8157e34e6de2ef"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/mixed/optimize.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/before/mixed/sections.txt",
+        "sha256": "d845aa7361a3007648b30779e10e1232940ce7536dfa710c32bd46fa3edda6c4"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/parent/raw.wasm",
+        "sha256": "4a8b5fb573789d9678c472fb0818492c9261603a8c8759dd5c08def6d867995a"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/parent/optimized.wasm",
+        "sha256": "6917ed85ff10d47c0cf80a532ebcd0b78d367971c6d0246617f9d4eef93b7c21"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/parent/build.log",
+        "sha256": "11831fb780e0e11723b1673605ff054861218ca8f1b8f9d27d30445744864711"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/parent/optimize.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/parent/sections.txt",
+        "sha256": "46544ffdeab6a919b833f4d0fd36e3aa1623b91bbccd690cbc688d541e3d7d93"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/admission/raw.wasm",
+        "sha256": "6b65353c2b8cb29f7f7d55841b99cabc12a3f17ed4541de010d1555133740054"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/admission/optimized.wasm",
+        "sha256": "234ea49e3b991eea1b937265f964f9fef40aefd39931d571d736fee3bdce4315"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/admission/build.log",
+        "sha256": "ead015c90a67f89817835160877023c30d330219a394a8d21e5bd5353bb45162"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/admission/optimize.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/admission/sections.txt",
+        "sha256": "3b0f129538ea836d5d56ff4e54abf0884b0fd614efcc01daec69f6aadc02ba3a"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/mixed/raw.wasm",
+        "sha256": "812489912168d53b94d0790118a6f93703aee666b9f004398a55a62946b735cd"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/mixed/optimized.wasm",
+        "sha256": "85b05d43a5698433a8df19a5a14e2edfb4cc9dab36e60e780e481f46f5696475"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/mixed/build.log",
+        "sha256": "80fbf9541bb00d3f3df2f63f82f41eaf3038e13c942c61a8c6a33b03a13951e6"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/mixed/optimize.log",
+        "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+      },
+      {
+        "path": ".tmp/b2-admission-reader-20260923/results/after/mixed/sections.txt",
+        "sha256": "be9f8f38578135965f11c3294495de3414fc31224b989ececf8b772bf9068d66"
+      }
+    ],
+    "measurements": {
+      "parent": {
+        "before": {
+          "sha256": "545fcc0865629fb20ff42a41353c3ca1ed01e74d11b5382a87725c0344eed1a4",
+          "raw_bytes": 2050706,
+          "gzip_bytes": 617837,
+          "code_section_bytes": 1178604,
+          "data_section_bytes": 136453,
+          "defined_functions": 2506,
+          "table_count": 1,
+          "table_slots": 487,
+          "tables": [
+            {
+              "reference_type": 112,
+              "initial": 487,
+              "maximum": 487
+            }
+          ],
+          "element_segments": 1,
+          "exports": [
+            {
+              "name": "canister_global_timer",
+              "kind": 0
+            },
+            {
+              "name": "canister_query reader_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_update <ic-cdk internal> timer_executor",
+              "kind": 0
+            },
+            {
+              "name": "memory",
+              "kind": 2
+            }
+          ],
+          "admission_named_functions": [
+            {
+              "index": 840,
+              "name": "_RNvNvNvNvNvNvNvNvNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection26FLEET_ADMISSION_PROJECTION27___rust_std_internal_init_fn1__1__42___canic_register_static_memory_declaration1__18___CTOR_PRIVATE_REF14___ctor_private"
+            },
+            {
+              "index": 1874,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueINtNtB4_6option6OptionNtNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEB15_"
+            },
+            {
+              "index": 1939,
+              "name": "_RNvMs0_NtCscIl3rcOqPrc_20ic_stable_structures4cellINtB5_4CellINtNtNtCs4fmlcGg0zfv_10canic_core3cdk12bounded_cell12BoundedValueINtNtCsknUcikIyyBm_4core6option6OptionNtNtNtNtB14_7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEINtNtNtCs7uogd4n9n1J_9ic_memory7runtime7backing13RuntimeMemoryNtNtB7_10ic0_memory15Ic0StableMemoryEE3newB14_"
+            },
+            {
+              "index": 2011,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNtNtNtCs4fmlcGg0zfv_10canic_core5model26fleet_admission_projection29FleetAdmissionProjectionStateEBH_"
+            },
+            {
+              "index": 2012,
+              "name": "_RNvNtNtCs4fmlcGg0zfv_10canic_core3ops22fleet_admission_policy45validate_installed_fleet_admission_projection"
+            }
+          ]
+        },
+        "after": {
+          "sha256": "6917ed85ff10d47c0cf80a532ebcd0b78d367971c6d0246617f9d4eef93b7c21",
+          "raw_bytes": 2022592,
+          "gzip_bytes": 611378,
+          "code_section_bytes": 1155078,
+          "data_section_bytes": 136177,
+          "defined_functions": 2483,
+          "table_count": 1,
+          "table_slots": 487,
+          "tables": [
+            {
+              "reference_type": 112,
+              "initial": 487,
+              "maximum": 487
+            }
+          ],
+          "element_segments": 1,
+          "exports": [
+            {
+              "name": "canister_global_timer",
+              "kind": 0
+            },
+            {
+              "name": "canister_query reader_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_update <ic-cdk internal> timer_executor",
+              "kind": 0
+            },
+            {
+              "name": "memory",
+              "kind": 2
+            }
+          ],
+          "admission_named_functions": [
+            {
+              "index": 979,
+              "name": "_RNvNvNvNvNvNvNvNvNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection26FLEET_ADMISSION_PROJECTION27___rust_std_internal_init_fn1__1__42___canic_register_static_memory_declaration1__18___CTOR_PRIVATE_REF14___ctor_private"
+            }
+          ]
+        },
+        "delta": {
+          "raw_bytes": -28114,
+          "gzip_bytes": -6459,
+          "code_section_bytes": -23526,
+          "data_section_bytes": -276,
+          "defined_functions": -23,
+          "table_count": 0,
+          "table_slots": 0,
+          "element_segments": 0
+        }
+      },
+      "admission": {
+        "before": {
+          "sha256": "ebfc3065b1d7df133ac9cf646f48c620d94efc19638b0e292e8011a2974bb61c",
+          "raw_bytes": 2050706,
+          "gzip_bytes": 617839,
+          "code_section_bytes": 1178604,
+          "data_section_bytes": 136453,
+          "defined_functions": 2506,
+          "table_count": 1,
+          "table_slots": 487,
+          "tables": [
+            {
+              "reference_type": 112,
+              "initial": 487,
+              "maximum": 487
+            }
+          ],
+          "element_segments": 1,
+          "exports": [
+            {
+              "name": "canister_global_timer",
+              "kind": 0
+            },
+            {
+              "name": "canister_query reader_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_update <ic-cdk internal> timer_executor",
+              "kind": 0
+            },
+            {
+              "name": "memory",
+              "kind": 2
+            }
+          ],
+          "admission_named_functions": [
+            {
+              "index": 840,
+              "name": "_RNvNvNvNvNvNvNvNvNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection26FLEET_ADMISSION_PROJECTION27___rust_std_internal_init_fn1__1__42___canic_register_static_memory_declaration1__18___CTOR_PRIVATE_REF14___ctor_private"
+            },
+            {
+              "index": 1874,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueINtNtB4_6option6OptionNtNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEB15_"
+            },
+            {
+              "index": 1939,
+              "name": "_RNvMs0_NtCscIl3rcOqPrc_20ic_stable_structures4cellINtB5_4CellINtNtNtCs4fmlcGg0zfv_10canic_core3cdk12bounded_cell12BoundedValueINtNtCsknUcikIyyBm_4core6option6OptionNtNtNtNtB14_7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEINtNtNtCs7uogd4n9n1J_9ic_memory7runtime7backing13RuntimeMemoryNtNtB7_10ic0_memory15Ic0StableMemoryEE3newB14_"
+            },
+            {
+              "index": 2011,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNtNtNtCs4fmlcGg0zfv_10canic_core5model26fleet_admission_projection29FleetAdmissionProjectionStateEBH_"
+            },
+            {
+              "index": 2012,
+              "name": "_RNvNtNtCs4fmlcGg0zfv_10canic_core3ops22fleet_admission_policy45validate_installed_fleet_admission_projection"
+            }
+          ]
+        },
+        "after": {
+          "sha256": "234ea49e3b991eea1b937265f964f9fef40aefd39931d571d736fee3bdce4315",
+          "raw_bytes": 2051026,
+          "gzip_bytes": 617991,
+          "code_section_bytes": 1178898,
+          "data_section_bytes": 136437,
+          "defined_functions": 2506,
+          "table_count": 1,
+          "table_slots": 487,
+          "tables": [
+            {
+              "reference_type": 112,
+              "initial": 487,
+              "maximum": 487
+            }
+          ],
+          "element_segments": 1,
+          "exports": [
+            {
+              "name": "canister_global_timer",
+              "kind": 0
+            },
+            {
+              "name": "canister_query reader_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_update <ic-cdk internal> timer_executor",
+              "kind": 0
+            },
+            {
+              "name": "memory",
+              "kind": 2
+            }
+          ],
+          "admission_named_functions": [
+            {
+              "index": 840,
+              "name": "_RNvNvNvNvNvNvNvNvNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection26FLEET_ADMISSION_PROJECTION27___rust_std_internal_init_fn1__1__42___canic_register_static_memory_declaration1__18___CTOR_PRIVATE_REF14___ctor_private"
+            },
+            {
+              "index": 1874,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueINtNtB4_6option6OptionNtNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEB15_"
+            },
+            {
+              "index": 1939,
+              "name": "_RNvMs0_NtCscIl3rcOqPrc_20ic_stable_structures4cellINtB5_4CellINtNtNtCs4fmlcGg0zfv_10canic_core3cdk12bounded_cell12BoundedValueINtNtCsknUcikIyyBm_4core6option6OptionNtNtNtNtB14_7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEINtNtNtCs7uogd4n9n1J_9ic_memory7runtime7backing13RuntimeMemoryNtNtB7_10ic0_memory15Ic0StableMemoryEE3newB14_"
+            },
+            {
+              "index": 2025,
+              "name": "_RNvNtNtCs4fmlcGg0zfv_10canic_core3ops22fleet_admission_policy45validate_installed_fleet_admission_projection"
+            },
+            {
+              "index": 2026,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNtNtNtCs4fmlcGg0zfv_10canic_core5model26fleet_admission_projection29FleetAdmissionProjectionStateEBH_"
+            }
+          ]
+        },
+        "delta": {
+          "raw_bytes": 320,
+          "gzip_bytes": 152,
+          "code_section_bytes": 294,
+          "data_section_bytes": -16,
+          "defined_functions": 0,
+          "table_count": 0,
+          "table_slots": 0,
+          "element_segments": 0
+        }
+      },
+      "mixed": {
+        "before": {
+          "sha256": "ba6dea6639f7cb220116e3639d0d64ede3fc196fc0fc6164c51b97fda90a404b",
+          "raw_bytes": 2053966,
+          "gzip_bytes": 618932,
+          "code_section_bytes": 1180295,
+          "data_section_bytes": 136517,
+          "defined_functions": 2516,
+          "table_count": 1,
+          "table_slots": 488,
+          "tables": [
+            {
+              "reference_type": 112,
+              "initial": 488,
+              "maximum": 488
+            }
+          ],
+          "element_segments": 1,
+          "exports": [
+            {
+              "name": "canister_global_timer",
+              "kind": 0
+            },
+            {
+              "name": "canister_query parent_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_query reader_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_update <ic-cdk internal> timer_executor",
+              "kind": 0
+            },
+            {
+              "name": "memory",
+              "kind": 2
+            }
+          ],
+          "admission_named_functions": [
+            {
+              "index": 846,
+              "name": "_RNvNvNvNvNvNvNvNvNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection26FLEET_ADMISSION_PROJECTION27___rust_std_internal_init_fn1__1__42___canic_register_static_memory_declaration1__18___CTOR_PRIVATE_REF14___ctor_private"
+            },
+            {
+              "index": 1883,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueINtNtB4_6option6OptionNtNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEB15_"
+            },
+            {
+              "index": 1948,
+              "name": "_RNvMs0_NtCscIl3rcOqPrc_20ic_stable_structures4cellINtB5_4CellINtNtNtCs4fmlcGg0zfv_10canic_core3cdk12bounded_cell12BoundedValueINtNtCsknUcikIyyBm_4core6option6OptionNtNtNtNtB14_7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEINtNtNtCs7uogd4n9n1J_9ic_memory7runtime7backing13RuntimeMemoryNtNtB7_10ic0_memory15Ic0StableMemoryEE3newB14_"
+            },
+            {
+              "index": 2020,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNtNtNtCs4fmlcGg0zfv_10canic_core5model26fleet_admission_projection29FleetAdmissionProjectionStateEBH_"
+            },
+            {
+              "index": 2021,
+              "name": "_RNvNtNtCs4fmlcGg0zfv_10canic_core3ops22fleet_admission_policy45validate_installed_fleet_admission_projection"
+            }
+          ]
+        },
+        "after": {
+          "sha256": "85b05d43a5698433a8df19a5a14e2edfb4cc9dab36e60e780e481f46f5696475",
+          "raw_bytes": 2061705,
+          "gzip_bytes": 621038,
+          "code_section_bytes": 1185679,
+          "data_section_bytes": 136517,
+          "defined_functions": 2538,
+          "table_count": 1,
+          "table_slots": 490,
+          "tables": [
+            {
+              "reference_type": 112,
+              "initial": 490,
+              "maximum": 490
+            }
+          ],
+          "element_segments": 1,
+          "exports": [
+            {
+              "name": "canister_global_timer",
+              "kind": 0
+            },
+            {
+              "name": "canister_query parent_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_query reader_probe",
+              "kind": 0
+            },
+            {
+              "name": "canister_update <ic-cdk internal> timer_executor",
+              "kind": 0
+            },
+            {
+              "name": "memory",
+              "kind": 2
+            }
+          ],
+          "admission_named_functions": [
+            {
+              "index": 866,
+              "name": "_RNvNvNvNvNvNvNvNvNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection26FLEET_ADMISSION_PROJECTION27___rust_std_internal_init_fn1__1__42___canic_register_static_memory_declaration1__18___CTOR_PRIVATE_REF14___ctor_private"
+            },
+            {
+              "index": 1902,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueINtNtB4_6option6OptionNtNtNtNtCs4fmlcGg0zfv_10canic_core7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEB15_"
+            },
+            {
+              "index": 1970,
+              "name": "_RNvMs0_NtCscIl3rcOqPrc_20ic_stable_structures4cellINtB5_4CellINtNtNtCs4fmlcGg0zfv_10canic_core3cdk12bounded_cell12BoundedValueINtNtCsknUcikIyyBm_4core6option6OptionNtNtNtNtB14_7storage6stable26fleet_admission_projection30FleetAdmissionProjectionRecordEEINtNtNtCs7uogd4n9n1J_9ic_memory7runtime7backing13RuntimeMemoryNtNtB7_10ic0_memory15Ic0StableMemoryEE3newB14_"
+            },
+            {
+              "index": 2055,
+              "name": "_RNvNtNtCs4fmlcGg0zfv_10canic_core3ops22fleet_admission_policy45validate_installed_fleet_admission_projection"
+            },
+            {
+              "index": 2056,
+              "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNtNtNtCs4fmlcGg0zfv_10canic_core5model26fleet_admission_projection29FleetAdmissionProjectionStateEBH_"
+            }
+          ]
+        },
+        "delta": {
+          "raw_bytes": 7739,
+          "gzip_bytes": 2106,
+          "code_section_bytes": 5384,
+          "data_section_bytes": 0,
+          "defined_functions": 22,
+          "table_count": 0,
+          "table_slots": 2,
+          "element_segments": 0
+        }
+      }
+    },
+    "mixed_table_attribution": {
+      "evaluator_entries": {
+        "before": [
+          {
+            "slot": 419,
+            "function": 2064,
+            "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNCNvNtNtCs4fmlcGg0zfv_10canic_core6access4expr17eval_access_inner0EBJ_"
+          },
+          {
+            "slot": 420,
+            "function": 2067,
+            "name": "_RNCNvNtNtCs4fmlcGg0zfv_10canic_core6access4expr17eval_access_inner0B7_"
+          }
+        ],
+        "after": [
+          {
+            "slot": 260,
+            "function": 70,
+            "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNCINvNtNtCs4fmlcGg0zfv_10canic_core6access4expr17eval_access_innerKb0_E0ECsc0k50IKFycF_25b2_admission_reader_probe"
+          },
+          {
+            "slot": 261,
+            "function": 80,
+            "name": "_RNCINvNtNtCs4fmlcGg0zfv_10canic_core6access4expr17eval_access_innerKb0_E0Csc0k50IKFycF_25b2_admission_reader_probe"
+          },
+          {
+            "slot": 374,
+            "function": 2035,
+            "name": "_RINvNtCsknUcikIyyBm_4core3ptr9drop_glueNCINvNtNtCs4fmlcGg0zfv_10canic_core6access4expr17eval_access_innerKb1_E0EBK_"
+          },
+          {
+            "slot": 375,
+            "function": 2038,
+            "name": "_RNCINvNtNtCs4fmlcGg0zfv_10canic_core6access4expr17eval_access_innerKb1_E0B8_"
+          }
+        ]
+      },
+      "other_entries_equal_after_numeric_suffix_removal": true
+    },
+    "toolchain": {
+      "rustc": "1.98.1 (48a229cea 2026-09-01)",
+      "binaryen": "132"
+    },
+    "baseline_repeat_matches_superseded_measurement": true
+  },
+  "canonical_optimized_footprint": null,
+  "maintained_workload_instructions": null,
+  "limitations": [
+    "Diagnostic preserves symbols and omits product shrink/Candid finalization; it is not a canonical artifact qualification.",
+    "Mixed predicate code grows by 5384 code bytes and two explained evaluator table slots.",
+    "No build-speed, peak-resource, instruction or complete B2 readiness claim."
+  ],
+  "excluded": [
+    "excluded-all-features: optimizer feature set unsuitable for section reader",
+    "excluded-stale-cargo: replaced sources retained old mtimes; Cargo reused baseline objects",
+    "superseded-async-selection: disabled async resume branch retained admission storage"
+  ]
+}

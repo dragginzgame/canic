@@ -9,6 +9,9 @@ EXPERIMENTS="$METHOD_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
 ARTIFACTS="$METHOD_ROOT/scripts/ci/wasm-ablation-artifacts.tsv"
 FUNCTION_COUNTER_SOURCE="$METHOD_ROOT/scripts/ci/wasm-replica-function-count.rs"
 BASELINE_SOURCE_COMMIT="50f40171d6177c3d1e490b1fdb5f6163323b2cd5"
+HISTORICAL_SOURCE_COMMIT="f9009d5ae7be78d4f9dd746431584368770e8364"
+HISTORICAL_PREPARATION="scripts/ci/wasm-ablation-patches/b1-18-historical-roster-preparation.patch"
+HISTORICAL_PREPARATION_SHA256="0afebd7cfd003bfabd5924e16ed44e28e5eca26daaf018fa6bd3541bccf42189"
 FROZEN_IC_VALIDATOR_COMMIT="2f8dc21e2e5c37a4cae7f65d2a4230ac8f143e5a"
 IC_REPLICA_MAX_DEFINED_FUNCTIONS=50000
 IC_REPLICA_REQUIRED_FUNCTION_RESERVE=2500
@@ -29,8 +32,10 @@ Usage:
     --output-root <directory>
 
 The runner builds each selected artifact twice through canic-host's release
-artifact authority, recreating one fixed Cargo target path before each clean
-repetition. Its repository-owned function counter implements the exact local-
+artifact authority, recreating one fixed measured Cargo target path before each
+clean repetition. The native driver is compiled once per source condition in a
+separate target and its executable digest is checked after each repetition.
+Its repository-owned function counter implements the exact local-
 function quantity limited by the frozen IC replica validator source.
 
 Smoke mode is development-only evidence. It builds the patched condition first
@@ -39,11 +44,15 @@ exact artifact ID is supplied, performs one repetition and uses the repository
 sccache wrapper when available. Smoke output is never retention-eligible and
 does not make a determinism claim.
 
-Qualification mode is also development-only. It accepts one `specified` patch,
-builds its variant once across every selected artifact, or one exact selected
-artifact when narrowed explicitly, and validates the exact artifacts and
-structured metrics. It emits no baseline or determinism claim and is never
-retention-eligible.
+Qualification mode is also development-only. It accepts one `specified` patch
+or prepared matrix/pair and validates artifacts and structured metrics across
+every selected artifact, or one exact artifact when narrowed explicitly. A patch
+qualifies its variant; matrices and pairs qualify all declared conditions. A prepared matrix applies the same hash-bound fixture patch
+at every width. A prepared pair applies common source before locking the build
+harness, then changes only its declared environment input. Qualification checks
+each condition once, claims no determinism and is never retention-eligible.
+The historical pair binds its own source anchor and common roster preparation
+before comparing the family removal under one unchanged dependency graph.
 EOF
 }
 
@@ -100,6 +109,7 @@ check_manifests() (
     local experiment_ids
     local source_repository
     local source_index
+    local canonical_role
 
     source_repository="$(git -C "$METHOD_ROOT" rev-parse --show-toplevel)" ||
         fail "the ablation method requires its source repository"
@@ -131,14 +141,28 @@ check_manifests() (
     awk -F '\t' '
         NR == 1 { next }
         { if (NF != 4 || seen[$1]++) exit 1 }
-        END { if (NR != 16) exit 1 }
-    ' "$ARTIFACTS" || fail "artifact manifest must contain fifteen unique artifacts"
+        END { if (NR < 2) exit 1 }
+    ' "$ARTIFACTS" || fail "artifact manifest must contain unique nonempty artifacts"
+
+    # B1 binds these deployed role identities, not an aggregate catalog count.
+    # Additional fixtures may be registered without changing a count sentinel.
+    for canonical_role in app index_hub test user_hub scale_hub index_child user_shard scale_replica root fleet_coordinator wasm_store; do
+        awk -F '\t' -v role="$canonical_role" '
+            $1 == "canonical_" role && $2 == "canonical" &&
+                $3 == "apps/test/canic.toml" && $4 == role { found = 1 }
+            END { exit !found }
+        ' "$ARTIFACTS" || fail "missing exact canonical role: $canonical_role"
+    done
 
     while IFS=$'\t' read -r artifact_id group config_path canister; do
         [[ "$artifact_id" == "artifact_id" ]] && continue
         [[ "$artifact_id" =~ ^[a-z0-9_]+$ ]] || fail "invalid artifact id: $artifact_id"
-        [[ "$group" == "canonical" || "$group" == "fixture" ]] ||
+        [[ "$group" == "canonical" || "$group" == "fixture" || "$group" == "historical" ]] ||
             fail "invalid artifact group for $artifact_id: $group"
+        if [[ "$group" == "historical" ]]; then
+            [[ "$artifact_id" == "historical_pool_ledger_recovery" && "$canister" == "pool_ledger_recovery" ]] ||
+                fail "unknown historical artifact: $artifact_id"
+        fi
         [[ "$canister" =~ ^[a-z0-9_]+$ ]] || fail "invalid canister name: $canister"
         [[ "$config_path" != /* && "$config_path" != ../* ]] ||
             fail "artifact config must remain repository-relative: $config_path"
@@ -151,15 +175,24 @@ check_manifests() (
         [[ "$sequence" == "sequence" ]] && continue
         [[ "$experiment" =~ ^b1-[0-9][0-9]-[a-z0-9-]+$ ]] ||
             fail "invalid experiment id: $experiment"
-        [[ "$state" == "ready" || "$state" == "specified" || "$state" == "planned" ]] ||
+        [[ "$state" == "ready" || "$state" == "specified" || "$state" == "planned" || "$state" == "source_satisfied" ]] ||
             fail "invalid state for $experiment: $state"
+        if [[ "$state" == "source_satisfied" ]]; then
+            [[ "$experiment" == "b1-07-exact-role-capability-expansion" &&
+                "$switch_kind" == "none" && "$switch_value" == "-" && "$switch_sha256" == "-" ]] ||
+                fail "unknown source-only disposition: $experiment"
+        fi
         case "$switch_kind" in
-            none|patch|env_matrix|cross_commit) ;;
+            none|patch|env_matrix|prepared_pair|historical_pair|cross_commit) ;;
             *) fail "invalid switch kind for $experiment: $switch_kind" ;;
         esac
         [[ -n "$instruction_evidence" ]] || fail "missing instruction disposition for $experiment"
         [[ -n "$(select_artifacts "$selectors")" ]] ||
             fail "artifact selectors resolve to an empty set for $experiment"
+        if [[ "$switch_kind" != "historical_pair" ]] &&
+            select_artifacts "$selectors" | awk -F '\t' '$2 == "historical" { found = 1 } END { exit !found }'; then
+            fail "historical artifact requires its exact historical pair: $experiment"
+        fi
         IFS=',' read -r -a selected_values <<<"$selectors"
         for selector in "${selected_values[@]}"; do
             awk -F '\t' -v selector="$selector" \
@@ -179,21 +212,42 @@ check_manifests() (
                 *) fail "unknown immediate baseline for $experiment: $immediate_baseline" ;;
             esac
         fi
-        if [[ ( "$state" == "ready" || "$state" == "specified" ) && "$switch_kind" == "patch" ]]; then
+        if [[ ( "$state" == "ready" || "$state" == "specified" ) &&
+            ( "$switch_kind" == "patch" || "$switch_kind" == "env_matrix" || "$switch_kind" == "prepared_pair" || "$switch_kind" == "historical_pair" ) ]]; then
             [[ -f "$METHOD_ROOT/$switch_value" ]] ||
                 fail "$state patch experiment lacks its switch: $switch_value"
             [[ "$switch_sha256" =~ ^[0-9a-f]{64}$ ]] ||
                 fail "$state patch experiment lacks an exact SHA-256: $experiment"
             [[ "$(file_hash "$METHOD_ROOT/$switch_value")" == "$switch_sha256" ]] ||
                 fail "$state patch experiment SHA-256 does not match: $experiment"
+            if [[ "$switch_kind" == "historical_pair" ]]; then
+                [[ "$experiment" == "b1-18-pool-ledger-hard-cut" ]] ||
+                    fail "unknown historical pair: $experiment"
+                [[ "$(file_hash "$METHOD_ROOT/$HISTORICAL_PREPARATION")" == "$HISTORICAL_PREPARATION_SHA256" ]] ||
+                    fail "historical preparation SHA-256 does not match"
+                git -C "$source_repository" read-tree "$HISTORICAL_SOURCE_COMMIT"
+                # The common roster and removed family own disjoint files, so
+                # check both against the same tree without writing Git objects.
+                git -C "$source_repository" apply --cached --check "$METHOD_ROOT/$HISTORICAL_PREPARATION" ||
+                    fail "historical preparation does not apply"
+                [[ -z "$(comm -12 \
+                    <(git -C "$source_repository" apply --numstat "$METHOD_ROOT/$HISTORICAL_PREPARATION" | cut -f3 | sort -u) \
+                    <(git -C "$source_repository" apply --numstat "$METHOD_ROOT/$switch_value" | cut -f3 | sort -u))" ]] ||
+                    fail "historical preparation and removal overlap"
+            fi
             git -C "$source_repository" apply --cached --check "$METHOD_ROOT/$switch_value" ||
-                fail "patch does not apply to frozen source $BASELINE_SOURCE_COMMIT: $switch_value"
+                fail "patch does not apply to its frozen source: $switch_value"
+            git -C "$source_repository" read-tree "$BASELINE_SOURCE_COMMIT"
         elif [[ "$switch_sha256" != "-" ]]; then
             fail "non-runnable or non-patch experiment has a switch SHA-256: $experiment"
         fi
+        if [[ "$switch_kind" == "prepared_pair" ]]; then
+            [[ "$experiment" == "b1-09-candid-type-documentation" ]] ||
+                fail "unknown prepared pair: $experiment"
+        fi
         if [[ "$switch_kind" == "env_matrix" ]]; then
-            [[ "$switch_value" == "CANIC_GENERIC_COHORT_WIDTH=1..5" ]] ||
-                fail "unexpected environment matrix for $experiment"
+            [[ "$experiment" == "b1-17-page-generic-cohort" ]] ||
+                fail "unknown prepared environment matrix: $experiment"
         fi
     done <"$EXPERIMENTS"
 
@@ -288,15 +342,20 @@ EXPERIMENT_ROW="$(awk -F '\t' -v experiment="$EXPERIMENT" 'NR > 1 && $2 == exper
 IFS=$'\t' read -r SEQUENCE _ STATE SWITCH_KIND SWITCH_VALUE SWITCH_SHA256 \
     ARTIFACT_SELECTORS IMMEDIATE_BASELINE INSTRUCTION_EVIDENCE SOURCE_OWNERS <<<"$EXPERIMENT_ROW"
 if [[ "$RUN_MODE" == "qualify" ]]; then
-    [[ "$STATE" == "specified" && "$SWITCH_KIND" == "patch" ]] ||
-        fail "qualification requires one specified patch experiment: $EXPERIMENT"
+    [[ "$STATE" == "specified" &&
+        ( "$SWITCH_KIND" == "patch" || "$SWITCH_KIND" == "env_matrix" || "$SWITCH_KIND" == "prepared_pair" || "$SWITCH_KIND" == "historical_pair" ) ]] ||
+        fail "qualification requires one specified patch or prepared matrix: $EXPERIMENT"
 else
     [[ "$STATE" == "ready" ]] ||
         fail "experiment is not runnable until its one-switch input exists: $EXPERIMENT"
 fi
 [[ "$SWITCH_KIND" != "cross_commit" ]] || fail "cross-commit comparison requires its separately frozen compatible pair"
-[[ "$(git -C "$METHOD_ROOT" rev-parse "$EXPECTED_SOURCE^{commit}")" == "$BASELINE_SOURCE_COMMIT" ]] ||
-    fail "experiment requires frozen source $BASELINE_SOURCE_COMMIT"
+EXPERIMENT_SOURCE_COMMIT="$BASELINE_SOURCE_COMMIT"
+if [[ "$SWITCH_KIND" == "historical_pair" ]]; then
+    EXPERIMENT_SOURCE_COMMIT="$HISTORICAL_SOURCE_COMMIT"
+fi
+[[ "$(git -C "$METHOD_ROOT" rev-parse "$EXPECTED_SOURCE^{commit}")" == "$EXPERIMENT_SOURCE_COMMIT" ]] ||
+    fail "experiment requires frozen source $EXPERIMENT_SOURCE_COMMIT"
 
 selected_run_artifacts() {
     local selected_artifacts
@@ -319,6 +378,15 @@ selected_run_artifacts() {
     [[ -n "$selected_override" ]] ||
         fail "artifact $ARTIFACT_OVERRIDE is not selected by $EXPERIMENT"
     printf '%s\n' "$selected_override"
+}
+
+selected_condition_artifacts() {
+    local condition="$1"
+    if [[ "$SWITCH_KIND" == "historical_pair" && "$condition" == "variant" ]]; then
+        selected_run_artifacts | awk -F '\t' '$2 != "historical"'
+    else
+        selected_run_artifacts
+    fi
 }
 
 require_command cargo
@@ -378,20 +446,74 @@ BUILD_HARNESS_SOURCE_SHA256="$(file_hash "$RUN_ROOT/method/wasm-ablation-build-a
 
 SCRATCH="$(mktemp -d "${TMPDIR:-/tmp}/canic-wasm-ablation.XXXXXX")"
 BUILD_TARGET_DIR="$SCRATCH/cargo-target"
+BUILD_HARNESS_TARGET_DIR="$SCRATCH/harness-target"
+BUILD_HARNESS_EXECUTABLES="$SCRATCH/harness-executables.tsv"
+: >"$BUILD_HARNESS_EXECUTABLES"
 BUILD_HARNESS_ROOT="$SCRATCH/build-harness"
 BUILD_HARNESS_MANIFEST="$BUILD_HARNESS_ROOT/Cargo.toml"
 BUILD_HARNESS_PRODUCT="$SCRATCH/product"
 PATCH_APPLIED="false"
 PATCH_PATH=""
+PREPARATION_APPLIED="false"
 cleanup() {
     rm -rf "$PRODUCT_ROOT/.icp"
     if [[ "$PATCH_APPLIED" == "true" ]]; then
         git -C "$PRODUCT_ROOT" apply --reverse "$PATCH_PATH" ||
             echo "warning: failed to reverse the measurement patch in $PRODUCT_ROOT" >&2
     fi
+    if [[ "$PREPARATION_APPLIED" == "true" ]]; then
+        git -C "$PRODUCT_ROOT" apply --reverse "$METHOD_ROOT/$HISTORICAL_PREPARATION" ||
+            echo "warning: failed to reverse historical preparation in $PRODUCT_ROOT" >&2
+    fi
     rm -rf "$SCRATCH"
 }
 trap cleanup EXIT
+
+PATCH_SHA256="NA"
+PATCH_DIFF_SHA256="NA"
+PATCH_EXPECTED_PATHS=""
+if [[ "$SWITCH_KIND" == "patch" || "$SWITCH_KIND" == "env_matrix" || "$SWITCH_KIND" == "prepared_pair" || "$SWITCH_KIND" == "historical_pair" ]]; then
+    PATCH_PATH="$METHOD_ROOT/$SWITCH_VALUE"
+    [[ -f "$PATCH_PATH" ]] || fail "missing measurement patch: $SWITCH_VALUE"
+    PATCH_SHA256="$(file_hash "$PATCH_PATH")"
+    [[ "$PATCH_SHA256" == "$SWITCH_SHA256" ]] ||
+        fail "measurement patch SHA-256 does not match its experiment record"
+    PATCH_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$PATCH_PATH" | cut -f3 | sort -u)"
+    [[ -n "$PATCH_EXPECTED_PATHS" ]] || fail "measurement patch has no paths: $SWITCH_VALUE"
+fi
+
+# Include added audit files: git diff alone does not describe untracked sources.
+prepared_source_hash() {
+    {
+        git -C "$PRODUCT_ROOT" diff --binary
+        while IFS= read -r path; do
+            if [[ -f "$PRODUCT_ROOT/$path" ]]; then
+                printf '%s\t%s\n' "$path" "$(file_hash "$PRODUCT_ROOT/$path")"
+            else
+                printf '%s\tdeleted\n' "$path"
+            fi
+        done <<<"$PATCH_EXPECTED_PATHS"
+    } | sha256sum | awk '{print $1}'
+}
+
+PREPARED_SOURCE_SHA256="NA"
+BASELINE_PREPARED_SOURCE_SHA256="NA"
+PREPARATION_EXPECTED_PATHS=""
+if [[ "$SWITCH_KIND" == "historical_pair" ]]; then
+    PREPARATION_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$METHOD_ROOT/$HISTORICAL_PREPARATION" | cut -f3 | sort -u)"
+    PATCH_EXPECTED_PATHS="$(printf '%s\n%s\n' "$PATCH_EXPECTED_PATHS" "$PREPARATION_EXPECTED_PATHS" | sort -u)"
+    git -C "$PRODUCT_ROOT" apply --check "$METHOD_ROOT/$HISTORICAL_PREPARATION"
+    git -C "$PRODUCT_ROOT" apply "$METHOD_ROOT/$HISTORICAL_PREPARATION"
+    PREPARATION_APPLIED="true"
+    BASELINE_PREPARED_SOURCE_SHA256="$(prepared_source_hash)"
+elif [[ "$SWITCH_KIND" == "prepared_pair" ]]; then
+    # Both conditions must resolve the same prepared graph before harness locking.
+    git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+    git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+    PATCH_APPLIED="true"
+    PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+    PREPARED_SOURCE_SHA256="$(prepared_source_hash)"
+fi
 
 mkdir -p "$BUILD_HARNESS_ROOT/src"
 ln -s "$PRODUCT_ROOT" "$BUILD_HARNESS_PRODUCT"
@@ -608,8 +730,19 @@ build_condition() {
     local artifact_index
     local build_started
     local repetitions=(a b)
+    local harness_executable="$BUILD_HARNESS_TARGET_DIR/fast/canic-wasm-ablation-build-artifact"
+    local harness_executable_sha256
+    local harness_log="$RUN_ROOT/logs/$condition-build-harness.log"
+    local condition_source_sha256
+    condition_source_sha256="$(prepared_source_hash)"
 
-    selected_artifacts="$(selected_run_artifacts)"
+    selected_artifacts="$(selected_condition_artifacts "$condition")"
+    # The deleted helper has only a control artifact; an exact helper-only
+    # qualification therefore has no variant build.
+    if [[ -z "$selected_artifacts" && "$SWITCH_KIND" == "historical_pair" && "$condition" == "variant" ]]; then
+        return
+    fi
+    [[ -n "$selected_artifacts" ]] || fail "condition selected no artifacts"
     artifact_count="$(printf '%s\n' "$selected_artifacts" | awk 'NF { count++ } END { print count + 0 }')"
     if [[ "$RUN_MODE" != "retained" ]]; then
         repetitions=(a)
@@ -627,6 +760,25 @@ build_condition() {
         [[ "$environment_name" =~ ^[A-Z][A-Z0-9_]*$ ]] || fail "invalid measurement environment name"
         environment_args+=("$environment_name=$environment_value")
     fi
+
+    # The driver is measurement tooling. Compile it once for this exact source
+    # condition; only measured artifact targets must be cold for each repetition.
+    # Keep conditions independent, including proc-macro environment inputs.
+    rm -rf "$BUILD_HARNESS_TARGET_DIR"
+    echo "preparing native driver for $EXPERIMENT $condition"
+    if ! env ICP_ENVIRONMENT=local CARGO_NET_OFFLINE=true CARGO_INCREMENTAL=0 \
+        CARGO_TARGET_DIR="$BUILD_HARNESS_TARGET_DIR" "${environment_args[@]}" \
+        cargo build --offline --locked -q --profile fast \
+            --manifest-path "$BUILD_HARNESS_MANIFEST" >"$harness_log" 2>&1; then
+        tail -n 80 "$harness_log" >&2
+        fail "native build driver failed for $condition"
+    fi
+    [[ "$(prepared_source_hash)" == "$condition_source_sha256" ]] ||
+        fail "source changed while building the native driver for $condition"
+    [[ -x "$harness_executable" ]] || fail "native build driver is missing"
+    harness_executable_sha256="$(file_hash "$harness_executable")"
+    printf 'build_harness_%s_executable_sha256\t%s\n' \
+        "$condition" "$harness_executable_sha256" >>"$BUILD_HARNESS_EXECUTABLES"
 
     for repetition in "${repetitions[@]}"; do
         target_dir="$BUILD_TARGET_DIR"
@@ -646,18 +798,20 @@ build_condition() {
                 cd "$PRODUCT_ROOT"
                 env ICP_ENVIRONMENT=local CARGO_NET_OFFLINE=true CARGO_INCREMENTAL=0 \
                     CARGO_TARGET_DIR="$target_dir" "${environment_args[@]}" \
-                    cargo run --offline --locked -q --profile fast \
-                        --manifest-path "$BUILD_HARNESS_MANIFEST" -- \
-                        "$canister" release "$PRODUCT_ROOT" "$PRODUCT_ROOT" \
+                    "$harness_executable" "$canister" release "$PRODUCT_ROOT" "$PRODUCT_ROOT" \
                         "$PRODUCT_ROOT/$config_path" "$transform_metrics_path"
             ) >"$log_path" 2>&1; then
                 tail -n 80 "$log_path" >&2
                 fail "release build failed for $artifact_id"
             fi
+            [[ "$(prepared_source_hash)" == "$condition_source_sha256" ]] ||
+                fail "source changed while building $condition $artifact_id"
             capture_artifact "$condition" "$repetition" "$artifact_id" "$canister" \
                 "$transform_metrics_path"
             echo "built $EXPERIMENT $condition-$repetition $artifact_id in $((SECONDS - build_started))s"
         done <<<"$selected_artifacts"
+        [[ "$(file_hash "$harness_executable")" == "$harness_executable_sha256" ]] ||
+            fail "native build driver changed during $condition repetition $repetition"
     done
 
     if [[ "$RUN_MODE" != "retained" ]]; then
@@ -682,26 +836,47 @@ build_condition() {
     done <<<"$selected_artifacts"
 }
 
-PATCH_SHA256="NA"
-PATCH_DIFF_SHA256="NA"
-PATCH_EXPECTED_PATHS=""
 case "$SWITCH_KIND" in
     none)
         build_condition baseline "" ""
         ;;
+    historical_pair)
+        [[ "$(prepared_source_hash)" == "$BASELINE_PREPARED_SOURCE_SHA256" ]] ||
+            fail "historical preparation changed during harness setup"
+        build_condition baseline "" ""
+        [[ "$(prepared_source_hash)" == "$BASELINE_PREPARED_SOURCE_SHA256" ]] ||
+            fail "historical source changed during control"
+        git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+        git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+        PATCH_APPLIED="true"
+        PREPARED_SOURCE_SHA256="$(prepared_source_hash)"
+        PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+        build_condition variant "" ""
+        [[ "$(prepared_source_hash)" == "$PREPARED_SOURCE_SHA256" ]] ||
+            fail "historical source changed during variant"
+        ;;
+    prepared_pair)
+        [[ "$(prepared_source_hash)" == "$PREPARED_SOURCE_SHA256" ]] ||
+            fail "prepared source changed during harness setup"
+        build_condition baseline CANIC_AUDIT_CANDID_TYPE_DOCS 1
+        [[ "$(prepared_source_hash)" == "$PREPARED_SOURCE_SHA256" ]] ||
+            fail "prepared source changed during documentation control"
+        build_condition variant CANIC_AUDIT_CANDID_TYPE_DOCS 0
+        [[ "$(prepared_source_hash)" == "$PREPARED_SOURCE_SHA256" ]] ||
+            fail "prepared source changed during documentation variant"
+        ;;
     env_matrix)
+        git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+        git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+        PATCH_APPLIED="true"
+        PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
         for width in 1 2 3 4 5; do
             build_condition "width-$width" CANIC_GENERIC_COHORT_WIDTH "$width"
+            [[ "$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')" == "$PATCH_DIFF_SHA256" ]] ||
+                fail "prepared matrix source changed during width $width"
         done
         ;;
     patch)
-        PATCH_PATH="$METHOD_ROOT/$SWITCH_VALUE"
-        [[ -f "$PATCH_PATH" ]] || fail "missing measurement patch: $SWITCH_VALUE"
-        PATCH_SHA256="$(file_hash "$PATCH_PATH")"
-        [[ "$PATCH_SHA256" == "$SWITCH_SHA256" ]] ||
-            fail "measurement patch SHA-256 does not match its experiment record"
-        PATCH_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$PATCH_PATH" | cut -f3 | sort -u)"
-        [[ -n "$PATCH_EXPECTED_PATHS" ]] || fail "measurement patch has no paths: $SWITCH_VALUE"
         if [[ "$RUN_MODE" == "smoke" ]]; then
             git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
             git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
@@ -734,7 +909,7 @@ case "$SWITCH_KIND" in
 esac
 
 SOURCE_STATUS_DURING="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=all | awk '$2 !~ /^\.icp\// { print }')"
-if [[ "$SWITCH_KIND" == "patch" ]]; then
+if [[ "$SWITCH_KIND" == "patch" || "$SWITCH_KIND" == "env_matrix" || "$SWITCH_KIND" == "prepared_pair" || "$SWITCH_KIND" == "historical_pair" ]]; then
     [[ -n "$SOURCE_STATUS_DURING" ]] || fail "measurement patch produced no source difference"
     PATCH_ACTUAL_PATHS="$(printf '%s\n' "$SOURCE_STATUS_DURING" | awk '{ print $2 }' | sort -u)"
     [[ "$PATCH_ACTUAL_PATHS" == "$PATCH_EXPECTED_PATHS" ]] ||
@@ -764,6 +939,19 @@ fi
     printf 'switch_value\t%s\n' "$SWITCH_VALUE"
     printf 'switch_sha256\t%s\n' "$PATCH_SHA256"
     printf 'switch_diff_sha256\t%s\n' "$PATCH_DIFF_SHA256"
+    if [[ "$SWITCH_KIND" == "prepared_pair" ]]; then
+        printf 'prepared_source_sha256\t%s\n' "$PREPARED_SOURCE_SHA256"
+        printf 'condition_environment_variable\tCANIC_AUDIT_CANDID_TYPE_DOCS\n'
+        printf 'baseline_environment_value\t1\n'
+        printf 'variant_environment_value\t0\n'
+    fi
+    if [[ "$SWITCH_KIND" == "historical_pair" ]]; then
+        printf 'preparation_patch\t%s\n' "$HISTORICAL_PREPARATION"
+        printf 'preparation_sha256\t%s\n' "$HISTORICAL_PREPARATION_SHA256"
+        printf 'baseline_prepared_source_sha256\t%s\n' "$BASELINE_PREPARED_SOURCE_SHA256"
+        printf 'variant_prepared_source_sha256\t%s\n' "$PREPARED_SOURCE_SHA256"
+        printf 'baseline_only_artifacts\t%s\n' "$(selected_run_artifacts | awk -F '\t' '$2 == "historical" { print $1 }' | paste -sd, -)"
+    fi
     printf 'immediate_baseline\t%s\n' "$IMMEDIATE_BASELINE"
     printf 'artifact_selectors\t%s\n' "$ARTIFACT_SELECTORS"
     printf 'measured_artifacts\t%s\n' "$(selected_run_artifacts | cut -f1 | paste -sd, -)"
@@ -772,6 +960,7 @@ fi
     printf 'runner_source_sha256\t%s\n' "$RUNNER_SOURCE_SHA256"
     printf 'build_harness_source_sha256\t%s\n' "$BUILD_HARNESS_SOURCE_SHA256"
     printf 'build_harness_cargo_lock_sha256\t%s\n' "$BUILD_HARNESS_CARGO_LOCK_SHA256"
+    cat "$BUILD_HARNESS_EXECUTABLES"
     printf 'replica_function_counter_identity\t%s\n' "$FUNCTION_COUNTER_IDENTITY"
     printf 'replica_function_counter_source_sha256\t%s\n' "$FUNCTION_COUNTER_SOURCE_SHA256"
     printf 'replica_function_counter_executable_sha256\t%s\n' "$FUNCTION_COUNTER_EXECUTABLE_SHA256"
@@ -799,6 +988,10 @@ fi
 if [[ "$PATCH_APPLIED" == "true" ]]; then
     git -C "$PRODUCT_ROOT" apply --reverse "$PATCH_PATH"
     PATCH_APPLIED="false"
+fi
+if [[ "$PREPARATION_APPLIED" == "true" ]]; then
+    git -C "$PRODUCT_ROOT" apply --reverse "$METHOD_ROOT/$HISTORICAL_PREPARATION"
+    PREPARATION_APPLIED="false"
 fi
 rm -rf "$PRODUCT_ROOT/.icp"
 SOURCE_STATUS_AFTER="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=all)"

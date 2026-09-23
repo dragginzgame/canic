@@ -1,0 +1,7 @@
+80e003f410afdfb54ce69f608c65bd458841c408c7d63aaab27af3ab6421949e  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/artifact-metrics.tsv
+2296c270af0681188ee5fd1338d279d1254b0505a046d8bcbf0bb811446bbec2  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/artifacts.tsv
+9f1aa4a2191374b1aa992f6115b0fb783da31495cf707698e111116a7c935218  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/determinism.tsv
+e303707d9b8652bd4a3ebe107e5fbb9f1cc9620d7b0e1fad1a485058f2b85131  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/experiments.tsv
+a39c06b2166b494e247cad9a8f3130fa339bf60bd6f48792693412be3a988cf7  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/run-metadata.tsv
+5418fa88621ddca4d3f6a8bc6ddd410574759b149e9d7d515f2a413ece314aa1  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/section-comparison.json
+bc1c13d66e8fad878a3b3d443a8a5c2d2d64bb45b8f7dfb894e004b93f5d0b62  docs/audits/reports/2026-09/2026-09-22/b1-row8-measurement/wasm-ablation-build-artifact.Cargo.lock

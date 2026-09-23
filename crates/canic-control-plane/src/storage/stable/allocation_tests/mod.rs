@@ -5,15 +5,19 @@
 //! Boundary: uses isolated memories with the pinned stable-structures implementation.
 
 use super::{
+    fixture_store::{FixtureStore, FixtureStoreData},
     fleet_admission::FleetAdmissionAuthorityRecord,
     template::chunked::{TemplateChunkPayloadRecord, TemplateChunkRefRecord},
 };
 use crate::ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey, TemplateVersion};
 use canic_core::{
+    api::{memory::MemoryQuery, runtime::MemoryRuntimeApi},
     cdk::bounded_cell::BoundedCell,
     cdk::structures::{
         BTreeMap, Memory, Storable, Vec as StableVec, VectorMemory, storable::Bound,
     },
+    dto::memory::MemoryAllocationBinding,
+    role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
 };
 use std::{borrow::Cow, cell::Cell, rc::Rc};
 
@@ -117,4 +121,44 @@ fn template_payload_layout_tradeoff_is_measured() {
             );
         }
     }
+}
+
+#[test]
+fn bootstrap_keeps_control_plane_stores_lazy_until_selected_access() {
+    MemoryRuntimeApi::bootstrap_registry().expect("commit control-plane declarations");
+    let before = MemoryQuery::allocations().unwrap();
+    let fixture = before
+        .memories
+        .iter()
+        .find(|entry| entry.memory_manager_id == FIXTURE_STORE_ID)
+        .expect("fixture allocation reserved");
+    assert!(matches!(
+        fixture.binding,
+        MemoryAllocationBinding::Current { .. }
+    ));
+    for entry in &before.memories {
+        if matches!(entry.binding, MemoryAllocationBinding::Current { .. }) {
+            assert_eq!(entry.virtual_extent.wasm_pages, 0);
+        }
+    }
+
+    let content = [7; 32];
+    let payload = vec![3, 1, 4];
+    FixtureStore::import(FixtureStoreData {
+        entries: vec![FixtureStore::chunk_entry(content, 0, payload.clone())],
+    });
+    assert_eq!(FixtureStore::chunk(content, 0), Some(payload));
+    let after = MemoryQuery::allocations().unwrap();
+    assert_eq!(before.current_generation, after.current_generation);
+    assert_eq!(before.memories.len(), after.memories.len());
+    for (prior, current) in before.memories.iter().zip(&after.memories) {
+        assert_eq!(prior.memory_manager_id, current.memory_manager_id);
+        assert_eq!(prior.binding, current.binding);
+        if current.memory_manager_id == FIXTURE_STORE_ID {
+            assert!(current.virtual_extent.wasm_pages > 0);
+        } else {
+            assert_eq!(prior.virtual_extent, current.virtual_extent);
+        }
+    }
+    assert_eq!(MemoryQuery::allocations().unwrap(), after);
 }

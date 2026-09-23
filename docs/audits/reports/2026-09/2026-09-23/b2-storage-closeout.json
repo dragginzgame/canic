@@ -1,0 +1,4863 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-23",
+  "scope": "B2 completed storage ownership and accepted cold-query tradeoff",
+  "complete_b2": true,
+  "decision": "Stop B2 at push readiness; evaluate residual B3 record/codec value separately before implementation.",
+  "build_speed_claim": false,
+  "clean_repeat_claim": false,
+  "broad_validation_run": false,
+  "previous_report": {
+    "file": "b2-canonical-measurements.json",
+    "sha256": "250e9e27e2a8f749614f49743e66c13262e67eb5ec9bd003f8cc67a8e3de372f"
+  },
+  "expected_artifacts": [
+    "app",
+    "test",
+    "root",
+    "fleet_coordinator",
+    "wasm_store",
+    "index_hub",
+    "index_child",
+    "user_hub",
+    "user_shard",
+    "scale_hub",
+    "scale_replica",
+    "runtime_probe",
+    "payload_limit_probe",
+    "blob_storage_probe",
+    "leaf_probe"
+  ],
+  "measured_artifacts": [
+    "app",
+    "test",
+    "root",
+    "fleet_coordinator",
+    "wasm_store",
+    "index_hub",
+    "index_child",
+    "user_hub",
+    "user_shard",
+    "scale_hub",
+    "scale_replica",
+    "runtime_probe",
+    "payload_limit_probe",
+    "blob_storage_probe",
+    "leaf_probe"
+  ],
+  "source_manifest_sha256": "cde37d89f0302d67f03867ab156e094104cd6e442c1ea08058a02ecadbb1d495",
+  "native_only_overlay": [
+    {
+      "path": "crates/canic-core/src/ops/runtime/metrics/tests.rs",
+      "build_source_sha256": "50ceacb7bb524fef616830fe9c19ba463ea2ec1984d3357a1ada870ceea0b334",
+      "qualified_native_source_sha256": "61cae6e1c740bdece10f658e8da65fb69b5d249ab4717c371320fa5fe945c37f",
+      "change": "expected Store metric label inside cfg(test) only"
+    },
+    {
+      "path": "crates/canic-core/src/workflow/metrics/query.rs",
+      "build_source_sha256": "664145864166d4a15265c8b3c588d6947b52846781e33ebfb2a4c30f7a64fa40",
+      "qualified_native_source_sha256": "c3a2fa61fc6a0cf347ecd0e3c0489c669a114f2190bc8b356470bbd0b5129d0e",
+      "change": "expected Store metric label inside cfg(test) only"
+    }
+  ],
+  "tools": {
+    "rustc": {
+      "path": "/home/adam/.cargo/bin/rustc",
+      "identity": "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "sha256": "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71"
+    },
+    "cargo": {
+      "path": "/home/adam/.cargo/bin/cargo",
+      "identity": "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+      "sha256": "dda7234360b7f578ca8b0ddcb80145646fa61a67c1720a5abc7051b35c9fcb71"
+    },
+    "wasm-opt": {
+      "path": "/home/adam/.local/bin/wasm-opt",
+      "identity": "wasm-opt version 132 (version_132)",
+      "sha256": "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725"
+    },
+    "ic-wasm": {
+      "path": "/home/adam/.local/bin/ic-wasm",
+      "identity": "ic-wasm 0.11.1",
+      "sha256": "ff4f9bd1d3734f7aa69078ecd4c5716dbfaf67d094c69d5082b00bac5b8bf936"
+    },
+    "wasm-validate": {
+      "path": "/usr/bin/wasm-validate",
+      "identity": "1.0.34",
+      "sha256": "e4e868752f2da2140bb09e370d0e070b1cbe39f62dbc3af6b79d995179f539b3"
+    },
+    "wasm2wat": {
+      "path": "/usr/bin/wasm2wat",
+      "identity": "1.0.34",
+      "sha256": "b1592938534292a48543fcb9161f666a2f6d5f37d47eb6a6d06f0ffe729c8a3e"
+    },
+    "didc": {
+      "path": "/home/adam/bin/didc",
+      "identity": "didc 0.5.4",
+      "sha256": "32693c76d9c6fe0f273f2c1ebf7e48ba3c383e925e5afd17dd264a06aed9fbcc"
+    },
+    "c++filt": {
+      "path": "/usr/bin/c++filt",
+      "identity": "GNU c++filt (GNU Binutils for Ubuntu) 2.42\nCopyright (C) 2024 Free Software Foundation, Inc.\nThis program is free software; you may redistribute it under the terms of\nthe GNU General Public License version 3 or (at your option) any later version.\nThis program has absolutely no warranty.",
+      "sha256": "2c11b66c0fad24afc649517f890eaa8a6a4d4dceb1d613c5631bb96ff09352b4"
+    },
+    "pocket-ic": {
+      "path": "/home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic",
+      "identity": "pocket-ic-server 16.0.0",
+      "sha256": "69e324bdb68d32d878b7a9504b1379f08f8d1921272bacb065b0fabb3d0f3792"
+    }
+  },
+  "frozen_limits": {
+    "code_bytes": 10485760,
+    "defined_functions": 50000,
+    "total_module_bytes": 104857600,
+    "required_code_reserve_bytes": 524288,
+    "required_function_reserve": 2500
+  },
+  "measurements": {
+    "app": {
+      "artifact": {
+        "id": "app",
+        "role": "app",
+        "package": "canister_app",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 974,
+        "sha256": "da9e8774e38327eb9b31242832a0cddbe2cc05732b80c9cfacf3d5562f4a35f8",
+        "raw_bytes": 2959810,
+        "gzip_bytes": 1061810,
+        "code_section_bytes": 2698747,
+        "data_section_bytes": 212055,
+        "defined_functions": 4744,
+        "table_count": 1,
+        "table_slots": 975,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 975,
+            "maximum": 975
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "fed9663b448a37ba0f127eaef146c87f6218224ba9dd719604377dac3356ce57",
+        "candid_bytes": 40092,
+        "candid_sha256": "66b0f2d1bd8ba7773371bd4064a73918737f518656ede2607b277471e70a01ed",
+        "code_reserve_bytes": 7787013,
+        "function_reserve": 45256,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 974,
+        "sha256": "5b4be13893917a3db16be71bbe71734121da16d89c8b289ced756bd95a0eefac",
+        "raw_bytes": 2959819,
+        "gzip_bytes": 1061794,
+        "code_section_bytes": 2698748,
+        "data_section_bytes": 212063,
+        "defined_functions": 4744,
+        "table_count": 1,
+        "table_slots": 975,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 975,
+            "maximum": 975
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "0a1ba0aefb7986a87678b8be2a9b84a44ccc28d7fb5cbc3d80948b864dca6831",
+        "candid_bytes": 40092,
+        "candid_sha256": "66b0f2d1bd8ba7773371bd4064a73918737f518656ede2607b277471e70a01ed",
+        "code_reserve_bytes": 7787012,
+        "function_reserve": 45256,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": -16,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "test": {
+      "artifact": {
+        "id": "test",
+        "role": "test",
+        "package": "canister_test",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 1036,
+        "sha256": "e6352f8d3d4cc9b422878278e9b71405b8dda4ee7870337695ca8b25755f7a69",
+        "raw_bytes": 3260804,
+        "gzip_bytes": 1160006,
+        "code_section_bytes": 2981671,
+        "data_section_bytes": 223470,
+        "defined_functions": 5271,
+        "table_count": 1,
+        "table_slots": 1037,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1037,
+            "maximum": 1037
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_admission_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_verify_delegated_token",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "62a83ec61cf9d59ea0587eb068fec687704717634df12c47d14a215096d4d5bc",
+        "candid_bytes": 45946,
+        "candid_sha256": "8e8aa9baaf1b3397c2c4588ef98b1b6b2a227f7960cd8020f9fb1ac5297e4fdf",
+        "code_reserve_bytes": 7504089,
+        "function_reserve": 44729,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_fleet_admission_projection",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 1036,
+        "sha256": "0c1dd733d8c13e0b7ec71794563eb4706ff97ade6389331d0050f60eaf32a8d9",
+        "raw_bytes": 3260813,
+        "gzip_bytes": 1160008,
+        "code_section_bytes": 2981672,
+        "data_section_bytes": 223478,
+        "defined_functions": 5271,
+        "table_count": 1,
+        "table_slots": 1037,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1037,
+            "maximum": 1037
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_admission_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_verify_delegated_token",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "d68469e72be8e8725ea4ac714c8f77bb74b6992fa124b90c5740703c2cf006e4",
+        "candid_bytes": 45946,
+        "candid_sha256": "8e8aa9baaf1b3397c2c4588ef98b1b6b2a227f7960cd8020f9fb1ac5297e4fdf",
+        "code_reserve_bytes": 7504088,
+        "function_reserve": 44729,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_fleet_admission_projection",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": 2,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "root": {
+      "artifact": {
+        "id": "root",
+        "role": "root",
+        "package": "canic-fleet-root",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 1731,
+        "sha256": "2b238b0bc7b51a94ab18619225e3c6c2f60b9d07b1bdf63e81182f64bdf024f9",
+        "raw_bytes": 7997045,
+        "gzip_bytes": 2828661,
+        "code_section_bytes": 7505625,
+        "data_section_bytes": 367830,
+        "defined_functions": 10112,
+        "table_count": 1,
+        "table_slots": 1732,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1732,
+            "maximum": 1732
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_composite_query canic_root_fixture_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_root_auth_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_root_operation_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_root_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_root_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "069816a26e148a6cabe4a38a4b9973ec2eca9ca64490f07a6057205b8890d262",
+        "candid_bytes": 107227,
+        "candid_sha256": "63152816c240c9076835f0a61a81b29ddf7a5cfc066242dfe9f28a3818a7c998",
+        "code_reserve_bytes": 2980135,
+        "function_reserve": 39888,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_role_attestation_signer",
+          "cargo:rustc-cfg=canic_capability_root",
+          "cargo:rustc-cfg=canic_capability_root_control_plane",
+          "cargo:rustc-cfg=canic_capability_root_delegation",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_is_root",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_platform",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "generated_manifest_sha256": "bf2b8660aee245b0522e260bce99317b284522f51b0d68a82360b092afdad349"
+      },
+      "after": {
+        "element_entries": 1729,
+        "sha256": "fb7e51c127255a0424dfc918946a823597908215b2b7ac0205aeccb9ffa917d1",
+        "raw_bytes": 7975739,
+        "gzip_bytes": 2819966,
+        "code_section_bytes": 7484879,
+        "data_section_bytes": 367302,
+        "defined_functions": 10083,
+        "table_count": 1,
+        "table_slots": 1730,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1730,
+            "maximum": 1730
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_composite_query canic_root_fixture_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_root_auth_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_root_operation_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_root_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_root_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "2a668e9ecaaa267cd4836d0e6ac3c1d1e123d63bbd7214974f41000dad23059c",
+        "candid_bytes": 107227,
+        "candid_sha256": "63152816c240c9076835f0a61a81b29ddf7a5cfc066242dfe9f28a3818a7c998",
+        "code_reserve_bytes": 3000881,
+        "function_reserve": 39917,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_role_attestation_signer",
+          "cargo:rustc-cfg=canic_capability_root",
+          "cargo:rustc-cfg=canic_capability_root_control_plane",
+          "cargo:rustc-cfg=canic_capability_root_delegation",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_is_root",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_platform",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "generated_manifest_sha256": "bf2b8660aee245b0522e260bce99317b284522f51b0d68a82360b092afdad349"
+      },
+      "delta": {
+        "raw_bytes": -21306,
+        "gzip_bytes": -8695,
+        "code_section_bytes": -20746,
+        "data_section_bytes": -528,
+        "defined_functions": -29,
+        "table_slots": -2,
+        "element_segments": 0,
+        "element_entries": -2
+      }
+    },
+    "fleet_coordinator": {
+      "artifact": {
+        "id": "fleet_coordinator",
+        "role": "fleet_coordinator",
+        "package": "canic-fleet-coordinator",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 991,
+        "sha256": "e88d6bd5878984cc1df78fe1538bf2bb6f6063da142f64b755a8eb4586274a96",
+        "raw_bytes": 4102504,
+        "gzip_bytes": 1421317,
+        "code_section_bytes": 3821562,
+        "data_section_bytes": 224232,
+        "defined_functions": 5204,
+        "table_count": 1,
+        "table_slots": 992,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 992,
+            "maximum": 992
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_coordinator_operation_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_coordinator_registry",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_coordinator_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "eb25ca5e69c2d76065ffa26362917ad10686c0a810e1db38e3a1124d7a289b9e",
+        "candid_bytes": 47466,
+        "candid_sha256": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "code_reserve_bytes": 6664198,
+        "function_reserve": 44796,
+        "role_cfgs": [],
+        "generated_manifest_sha256": "b7593aee5c08bef1fa8deedadcebd1763555adf7532a9db6d41691916b7ae4f9"
+      },
+      "after": {
+        "element_entries": 991,
+        "sha256": "e88d6bd5878984cc1df78fe1538bf2bb6f6063da142f64b755a8eb4586274a96",
+        "raw_bytes": 4102504,
+        "gzip_bytes": 1421317,
+        "code_section_bytes": 3821562,
+        "data_section_bytes": 224232,
+        "defined_functions": 5204,
+        "table_count": 1,
+        "table_slots": 992,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 992,
+            "maximum": 992
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_coordinator_operation_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_coordinator_registry",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_coordinator_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "eb25ca5e69c2d76065ffa26362917ad10686c0a810e1db38e3a1124d7a289b9e",
+        "candid_bytes": 47466,
+        "candid_sha256": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "code_reserve_bytes": 6664198,
+        "function_reserve": 44796,
+        "role_cfgs": [],
+        "generated_manifest_sha256": "b7593aee5c08bef1fa8deedadcebd1763555adf7532a9db6d41691916b7ae4f9"
+      },
+      "delta": {
+        "raw_bytes": 0,
+        "gzip_bytes": 0,
+        "code_section_bytes": 0,
+        "data_section_bytes": 0,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "wasm_store": {
+      "artifact": {
+        "id": "wasm_store",
+        "role": "wasm_store",
+        "package": "canic-fleet-wasm-store",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 925,
+        "sha256": "ecc1f79812dbba800d836053b2d9667acf4c82f8e6c9df8ddb965bf3472a714e",
+        "raw_bytes": 2866268,
+        "gzip_bytes": 1033398,
+        "code_section_bytes": 2630418,
+        "data_section_bytes": 205829,
+        "defined_functions": 4879,
+        "table_count": 1,
+        "table_slots": 926,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 926,
+            "maximum": 926
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_wasm_store_catalog",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_wasm_store_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_chunk",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_fixture_chunk",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_publish_chunk",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_publish_fixture",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "22cc7b6a11ab38bc2a9e794c53ca31ed7de07f9a2215385f36d288eca2385a21",
+        "candid_bytes": 20875,
+        "candid_sha256": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "code_reserve_bytes": 7855342,
+        "function_reserve": 45121,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_wasm_store",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "generated_manifest_sha256": "339b3eb28b03fe7da9ad164511a9c22d7f2a1b3046b1ccb1ccf01489c522c14d"
+      },
+      "after": {
+        "element_entries": 925,
+        "sha256": "fad539ad29bdb4d96cc3e3da6d7952c3a8a899af15a9ad518d2636def46e809d",
+        "raw_bytes": 2866269,
+        "gzip_bytes": 1033407,
+        "code_section_bytes": 2630419,
+        "data_section_bytes": 205829,
+        "defined_functions": 4879,
+        "table_count": 1,
+        "table_slots": 926,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 926,
+            "maximum": 926
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_wasm_store_catalog",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_wasm_store_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_chunk",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_fixture_chunk",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_publish_chunk",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_wasm_store_publish_fixture",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "39c837c60ae17bb721e0a5302d65fc59c4e49be36743140c00466ac8ce2829a5",
+        "candid_bytes": 20875,
+        "candid_sha256": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "code_reserve_bytes": 7855341,
+        "function_reserve": 45121,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_wasm_store",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "generated_manifest_sha256": "339b3eb28b03fe7da9ad164511a9c22d7f2a1b3046b1ccb1ccf01489c522c14d"
+      },
+      "delta": {
+        "raw_bytes": 1,
+        "gzip_bytes": 9,
+        "code_section_bytes": 1,
+        "data_section_bytes": 0,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "index_hub": {
+      "artifact": {
+        "id": "index_hub",
+        "role": "index_hub",
+        "package": "canister_index_hub",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 975,
+        "sha256": "f600050f251058982119611b6d460a139f0e902d3fe4ce77e5fedf3a6dc6b53e",
+        "raw_bytes": 3073269,
+        "gzip_bytes": 1099676,
+        "code_section_bytes": 2807249,
+        "data_section_bytes": 216382,
+        "defined_functions": 4944,
+        "table_count": 1,
+        "table_slots": 976,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 976,
+            "maximum": 976
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update resolve_item",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "6d5f607d4f59a783fb3be1c81f8e66384ef542ab054e501db59d47eaa4a6ce0c",
+        "candid_bytes": 40514,
+        "candid_sha256": "fab1afbf2439b1a10d5778a6c5b2e8275f06dd8f7b8d582d7e75dd05406a56a9",
+        "code_reserve_bytes": 7678511,
+        "function_reserve": 45056,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_index",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 975,
+        "sha256": "bce4cc53bd17cb5b57a962ece7dbea3d178b13fb712980038a62fd833c435620",
+        "raw_bytes": 3073279,
+        "gzip_bytes": 1099728,
+        "code_section_bytes": 2807250,
+        "data_section_bytes": 216391,
+        "defined_functions": 4944,
+        "table_count": 1,
+        "table_slots": 976,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 976,
+            "maximum": 976
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update resolve_item",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "17e4bc5219d2b5f1c0a327c51f4fa454a5dcd121f3a06c3539ef05f1788438b8",
+        "candid_bytes": 40514,
+        "candid_sha256": "fab1afbf2439b1a10d5778a6c5b2e8275f06dd8f7b8d582d7e75dd05406a56a9",
+        "code_reserve_bytes": 7678510,
+        "function_reserve": 45056,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_index",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 10,
+        "gzip_bytes": 52,
+        "code_section_bytes": 1,
+        "data_section_bytes": 9,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "index_child": {
+      "artifact": {
+        "id": "index_child",
+        "role": "index_child",
+        "package": "canister_index_child",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 962,
+        "sha256": "19289f00878b14b1ebf3286775075795887af8ae824f0629007902b7ba95db5f",
+        "raw_bytes": 2958813,
+        "gzip_bytes": 1061765,
+        "code_section_bytes": 2699633,
+        "data_section_bytes": 211442,
+        "defined_functions": 4739,
+        "table_count": 1,
+        "table_slots": 963,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 963,
+            "maximum": 963
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "f8aaf3a668b181089e8438027ffd9aa03bf491d092ecf177acecbb312ea86853",
+        "candid_bytes": 38851,
+        "candid_sha256": "9e8829c4c9344d479c6b773b8197fb91bce7152b96adff441c943dcc38fc68ce",
+        "code_reserve_bytes": 7786127,
+        "function_reserve": 45261,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 962,
+        "sha256": "a3f1a3b6187033bd5ed2c4a427ec6eecf7fd336dab95c37ff4eab6db1c71848f",
+        "raw_bytes": 2958822,
+        "gzip_bytes": 1061792,
+        "code_section_bytes": 2699634,
+        "data_section_bytes": 211450,
+        "defined_functions": 4739,
+        "table_count": 1,
+        "table_slots": 963,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 963,
+            "maximum": 963
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "086379a18698cfdb3f08a5e0b9a63a1e273800a3afbc711d10982f33178d8962",
+        "candid_bytes": 38851,
+        "candid_sha256": "9e8829c4c9344d479c6b773b8197fb91bce7152b96adff441c943dcc38fc68ce",
+        "code_reserve_bytes": 7786126,
+        "function_reserve": 45261,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": 27,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "user_hub": {
+      "artifact": {
+        "id": "user_hub",
+        "role": "user_hub",
+        "package": "canister_user_hub",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 1023,
+        "sha256": "846dad43565f74c971506dcc4cd871a1bd4c577132c75103b3ea3757ff4a8537",
+        "raw_bytes": 3199647,
+        "gzip_bytes": 1152418,
+        "code_section_bytes": 2925919,
+        "data_section_bytes": 220566,
+        "defined_functions": 5193,
+        "table_count": 1,
+        "table_slots": 1024,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1024,
+            "maximum": 1024
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query plan_create_account",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_user_rows",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update create_account",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_create_fixture_child",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_recovery_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_release_fixture",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_user_row",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "2b7a470f92acd9bd6b20d801b9d7d7dcf55561fc831d09cee268ba865ed190cd",
+        "candid_bytes": 43198,
+        "candid_sha256": "f6e91d524b5dafa890eb2d17ab96fee7f594599142b9c7e180bcf00719db3d8c",
+        "code_reserve_bytes": 7559841,
+        "function_reserve": 44807,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_sharding",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 1023,
+        "sha256": "16ed7319686ee62fdb9766419edf69e69ef7510b5e6c3731aeda722d9ead5e6a",
+        "raw_bytes": 3199656,
+        "gzip_bytes": 1152511,
+        "code_section_bytes": 2925920,
+        "data_section_bytes": 220574,
+        "defined_functions": 5193,
+        "table_count": 1,
+        "table_slots": 1024,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1024,
+            "maximum": 1024
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query plan_create_account",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_user_rows",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update create_account",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_create_fixture_child",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_recovery_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_release_fixture",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_user_row",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "a543d22ff23344c7f19fe3a2d8ab5c3a3b4be38c5b4d4e69d207c0c3198d700e",
+        "candid_bytes": 43198,
+        "candid_sha256": "f6e91d524b5dafa890eb2d17ab96fee7f594599142b9c7e180bcf00719db3d8c",
+        "code_reserve_bytes": 7559840,
+        "function_reserve": 44807,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_sharding",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": 93,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "user_shard": {
+      "artifact": {
+        "id": "user_shard",
+        "role": "user_shard",
+        "package": "canister_user_shard",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 1074,
+        "sha256": "ea54a1b590784b4cef6e5795aaff2ee05052c0edb4442dd7086a10f64e5636db",
+        "raw_bytes": 3459073,
+        "gzip_bytes": 1238061,
+        "code_section_bytes": 3174060,
+        "data_section_bytes": 227347,
+        "defined_functions": 5575,
+        "table_count": 1,
+        "table_slots": 1075,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1075,
+            "maximum": 1075
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_auth_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query hello",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_user_rows",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_recovery_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_user_row",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_collision",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_demand",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_exhaustion",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_request",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "8ce607c410e696fdf52fd9c5c60918d9432c455900fddab2fb3c977683423554",
+        "candid_bytes": 47094,
+        "candid_sha256": "d920381516f298a56f2ed22cd7aacbb125838a6bfe19d5459bd8d2ce6a7fcac3",
+        "code_reserve_bytes": 7311700,
+        "function_reserve": 44425,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_issuer",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 1074,
+        "sha256": "2de69002df102849e47410ec083133829be35d10d857dc14e53cdada3ed9fc08",
+        "raw_bytes": 3459074,
+        "gzip_bytes": 1238057,
+        "code_section_bytes": 3174061,
+        "data_section_bytes": 227347,
+        "defined_functions": 5575,
+        "table_count": 1,
+        "table_slots": 1075,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 1075,
+            "maximum": 1075
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_auth_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query hello",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_fleet_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_query test_user_rows",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_recovery_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_recovery_generation",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_set_user_row",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_collision",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_demand",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_exhaustion",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_topup_request",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "8bd50ffa67795ef42581e1d63db98009cc538252779c2613c41a86b4939a696f",
+        "candid_bytes": 47094,
+        "candid_sha256": "d920381516f298a56f2ed22cd7aacbb125838a6bfe19d5459bd8d2ce6a7fcac3",
+        "code_reserve_bytes": 7311699,
+        "function_reserve": 44425,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_issuer",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 1,
+        "gzip_bytes": -4,
+        "code_section_bytes": 1,
+        "data_section_bytes": 0,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "scale_hub": {
+      "artifact": {
+        "id": "scale_hub",
+        "role": "scale_hub",
+        "package": "canister_scale_hub",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 992,
+        "sha256": "0401b67244741ead6a49819e0fa0d148c26b9f261753596bf7f84d825bf3b66e",
+        "raw_bytes": 3055579,
+        "gzip_bytes": 1095085,
+        "code_section_bytes": 2787750,
+        "data_section_bytes": 216780,
+        "defined_functions": 4918,
+        "table_count": 1,
+        "table_slots": 993,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 993,
+            "maximum": 993
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query plan_create_worker",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update create_worker",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "12283b4939107b4b7d4576504da10545f3a9d3702ead14f3183054eb8367c42f",
+        "candid_bytes": 41836,
+        "candid_sha256": "bb1f480048160468aa2454234023d9daf03d7a287714085e9e20900539622639",
+        "code_reserve_bytes": 7698010,
+        "function_reserve": 45082,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_scaling",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 992,
+        "sha256": "cd059fb5e33ad4dfe3648c5240820c5abdc1063f0a5f7e7795847cfa520dda7e",
+        "raw_bytes": 3055588,
+        "gzip_bytes": 1095082,
+        "code_section_bytes": 2787751,
+        "data_section_bytes": 216788,
+        "defined_functions": 4918,
+        "table_count": 1,
+        "table_slots": 993,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 993,
+            "maximum": 993
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query plan_create_worker",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update create_worker",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "e222f3c87af98ec007f7b0a314c9bd870b0b8e4c74d4bd22559ecf931d9a0d60",
+        "candid_bytes": 41836,
+        "candid_sha256": "bb1f480048160468aa2454234023d9daf03d7a287714085e9e20900539622639",
+        "code_reserve_bytes": 7698009,
+        "function_reserve": 45082,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_scaling",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": -3,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "scale_replica": {
+      "artifact": {
+        "id": "scale_replica",
+        "role": "scale_replica",
+        "package": "canister_scale",
+        "config": "apps/test/canic.toml"
+      },
+      "before": {
+        "element_entries": 977,
+        "sha256": "6dd6c445171d11b6b68b676ca8de367007a9d38a63dd9273641105be0b0cb105",
+        "raw_bytes": 2969047,
+        "gzip_bytes": 1065863,
+        "code_section_bytes": 2706963,
+        "data_section_bytes": 212423,
+        "defined_functions": 4763,
+        "table_count": 1,
+        "table_slots": 978,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 978,
+            "maximum": 978
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update request_cycles_from_parent",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "a5f6f66e434d0453beb55bdd73c763da90a4d87e46517d0d98baa8c890389df3",
+        "candid_bytes": 40675,
+        "candid_sha256": "f792ced49b8db92082ca04d3c00b4bfa7dd93594c48a73bd7e7ce04dd0cce198",
+        "code_reserve_bytes": 7778797,
+        "function_reserve": 45237,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 977,
+        "sha256": "480de1c7d659b6a619c0f9bae7bcbd79c393751f4c12b9c417ba23fe5e7a925f",
+        "raw_bytes": 2969057,
+        "gzip_bytes": 1065854,
+        "code_section_bytes": 2706964,
+        "data_section_bytes": 212432,
+        "defined_functions": 4763,
+        "table_count": 1,
+        "table_slots": 978,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 978,
+            "maximum": 978
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "canister_update request_cycles_from_parent",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "81df30003a33c8ce037df1ac4c61f088ccba978fd6898f12f16d37e99f8e1b4e",
+        "candid_bytes": 40675,
+        "candid_sha256": "f792ced49b8db92082ca04d3c00b4bfa7dd93594c48a73bd7e7ce04dd0cce198",
+        "code_reserve_bytes": 7778796,
+        "function_reserve": 45237,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 10,
+        "gzip_bytes": -9,
+        "code_section_bytes": 1,
+        "data_section_bytes": 9,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "runtime_probe": {
+      "artifact": {
+        "id": "runtime_probe",
+        "role": "test",
+        "package": "runtime_probe",
+        "config": "canisters/test/runtime_probe/canic.toml"
+      },
+      "before": {
+        "element_entries": 952,
+        "sha256": "3429e10c913aa4fcb1dc1ccd95af6439bbd74475d8a677b56844ea3b1dbe4988",
+        "raw_bytes": 2747024,
+        "gzip_bytes": 984205,
+        "code_section_bytes": 2504454,
+        "data_section_bytes": 209149,
+        "defined_functions": 4826,
+        "table_count": 1,
+        "table_slots": 953,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 953,
+            "maximum": 953
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query qualify_history_query_cost",
+            "kind": 0
+          },
+          {
+            "name": "canister_query timer_probe_counts",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update begin_timer_probe_intent",
+            "kind": 0
+          },
+          {
+            "name": "canister_update cancel_cost_probe_watchdog",
+            "kind": 0
+          },
+          {
+            "name": "canister_update configure_public_sampler",
+            "kind": 0
+          },
+          {
+            "name": "canister_update fill_timer_registry",
+            "kind": 0
+          },
+          {
+            "name": "canister_update qualify_history_sampling_cost",
+            "kind": 0
+          },
+          {
+            "name": "canister_update qualify_public_metrics_sampling",
+            "kind": 0
+          },
+          {
+            "name": "canister_update reject_invalid_timer_identity",
+            "kind": 0
+          },
+          {
+            "name": "canister_update sample_public_metrics",
+            "kind": 0
+          },
+          {
+            "name": "canister_update schedule_cost_probe_watchdog",
+            "kind": 0
+          },
+          {
+            "name": "canister_update set_cost_probe_trap",
+            "kind": 0
+          },
+          {
+            "name": "canister_update suspend_public_sampler_fixture",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_verify_delegated_token",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "afb5ea4b1a54ac375ee36273239aaf50bb82e26f005837a2bf84d87cd6a9ad72",
+        "candid_bytes": 23865,
+        "candid_sha256": "1e44b40a272d936d043a7323cbd1007b8fff3d6ca80310bce11e59f39ef1b3e5",
+        "code_reserve_bytes": 7981306,
+        "function_reserve": 45174,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 952,
+        "sha256": "4be7e1feeeefe6536f6f48fe83bbd1e39c1448162971d2332c17868915000f2e",
+        "raw_bytes": 2747032,
+        "gzip_bytes": 984223,
+        "code_section_bytes": 2504458,
+        "data_section_bytes": 209153,
+        "defined_functions": 4826,
+        "table_count": 1,
+        "table_slots": 953,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 953,
+            "maximum": 953
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc21_canister_call_consent_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_query qualify_history_query_cost",
+            "kind": 0
+          },
+          {
+            "name": "canister_query timer_probe_counts",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update begin_timer_probe_intent",
+            "kind": 0
+          },
+          {
+            "name": "canister_update cancel_cost_probe_watchdog",
+            "kind": 0
+          },
+          {
+            "name": "canister_update configure_public_sampler",
+            "kind": 0
+          },
+          {
+            "name": "canister_update fill_timer_registry",
+            "kind": 0
+          },
+          {
+            "name": "canister_update qualify_history_sampling_cost",
+            "kind": 0
+          },
+          {
+            "name": "canister_update qualify_public_metrics_sampling",
+            "kind": 0
+          },
+          {
+            "name": "canister_update reject_invalid_timer_identity",
+            "kind": 0
+          },
+          {
+            "name": "canister_update sample_public_metrics",
+            "kind": 0
+          },
+          {
+            "name": "canister_update schedule_cost_probe_watchdog",
+            "kind": 0
+          },
+          {
+            "name": "canister_update set_cost_probe_trap",
+            "kind": 0
+          },
+          {
+            "name": "canister_update suspend_public_sampler_fixture",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test",
+            "kind": 0
+          },
+          {
+            "name": "canister_update test_verify_delegated_token",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "31718a80657aefab081ac0a5eff3aab17f3c4805bd4e301635f861dc5e6d8645",
+        "candid_bytes": 23865,
+        "candid_sha256": "1e44b40a272d936d043a7323cbd1007b8fff3d6ca80310bce11e59f39ef1b3e5",
+        "code_reserve_bytes": 7981302,
+        "function_reserve": 45174,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 8,
+        "gzip_bytes": 18,
+        "code_section_bytes": 4,
+        "data_section_bytes": 4,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "payload_limit_probe": {
+      "artifact": {
+        "id": "payload_limit_probe",
+        "role": "test",
+        "package": "payload_limit_probe",
+        "config": "canisters/test/payload_limit_probe/canic.toml"
+      },
+      "before": {
+        "element_entries": 786,
+        "sha256": "3d9692827f2d88fed8d99d66d646fb0f80935c1ee4083571e6512d4f22a24269",
+        "raw_bytes": 2092055,
+        "gzip_bytes": 763356,
+        "code_section_bytes": 1885559,
+        "data_section_bytes": 181447,
+        "defined_functions": 3653,
+        "table_count": 1,
+        "table_slots": 787,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 787,
+            "maximum": 787
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update bare_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update default_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update explicit_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update relay_explicit_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update wire_named_echo",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "0f18b2952aa5cf5f6a8710911fd69af28cc3c2f3bd22f253da153e3036c9ffe2",
+        "candid_bytes": 17683,
+        "candid_sha256": "33db70d1aa707d69a2202e3b120c1991079f5dcf76891b47e35fda5fbe187d74",
+        "code_reserve_bytes": 8600201,
+        "function_reserve": 46347,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 786,
+        "sha256": "e6b19d8ec68b3dd92116517fb261618e873d89de535edb53d685eafaea30447d",
+        "raw_bytes": 2092064,
+        "gzip_bytes": 763389,
+        "code_section_bytes": 1885560,
+        "data_section_bytes": 181455,
+        "defined_functions": 3653,
+        "table_count": 1,
+        "table_slots": 787,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 787,
+            "maximum": 787
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update bare_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update default_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update explicit_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update relay_explicit_echo",
+            "kind": 0
+          },
+          {
+            "name": "canister_update wire_named_echo",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "922fa88531749eb338ced36599f9146d8eb35412af75e9c96351ec7e12c6a46f",
+        "candid_bytes": 17683,
+        "candid_sha256": "33db70d1aa707d69a2202e3b120c1991079f5dcf76891b47e35fda5fbe187d74",
+        "code_reserve_bytes": 8600200,
+        "function_reserve": 46347,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": 33,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "blob_storage_probe": {
+      "artifact": {
+        "id": "blob_storage_probe",
+        "role": "test",
+        "package": "blob_storage_probe",
+        "config": "canisters/test/blob_storage_probe/canic.toml"
+      },
+      "before": {
+        "element_entries": 845,
+        "sha256": "24710f7106bee8a31bbad89f5f5b8618cce38b31b74c83a192ee1605bd5b0f27",
+        "raw_bytes": 2310498,
+        "gzip_bytes": 832964,
+        "code_section_bytes": 2089125,
+        "data_section_bytes": 189052,
+        "defined_functions": 3955,
+        "table_count": 1,
+        "table_slots": 846,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 846,
+            "maximum": 846
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query _immutableObjectStorageBlobsAreLive",
+            "kind": 0
+          },
+          {
+            "name": "canister_query _immutableObjectStorageBlobsToDelete",
+            "kind": 0
+          },
+          {
+            "name": "canister_query blob_storage_probe_counts",
+            "kind": 0
+          },
+          {
+            "name": "canister_query blob_storage_probe_is_live",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageConfirmBlobDeletion",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageCreateCertificate",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageFundFromProjectCycles",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageUpdateGatewayPrincipals",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_add_gateway",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_cashier_top_up",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_cashier_total_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_configure_billing",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_mark_pending_delete",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_remove_gateway",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_sync_gateways_from_cashier",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_sync_gateways_from_configured_cashier",
+            "kind": 0
+          },
+          {
+            "name": "canister_update get_blob_storage_status",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "0c8ee6c561b1eabe4cb44551ae670956961cf48a2ebc3503777b828f443824fd",
+        "candid_bytes": 23712,
+        "candid_sha256": "0e3ad41621d7147c4c24a5adcd870b90654644915dec80a59b38d59c9461a33e",
+        "code_reserve_bytes": 8396635,
+        "function_reserve": 46045,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 845,
+        "sha256": "61f813c1896454cc463c49180cc604542cfdc5332a0b34773edb81087f7592b0",
+        "raw_bytes": 2310499,
+        "gzip_bytes": 832940,
+        "code_section_bytes": 2089126,
+        "data_section_bytes": 189052,
+        "defined_functions": 3955,
+        "table_count": 1,
+        "table_slots": 846,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 846,
+            "maximum": 846
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query _immutableObjectStorageBlobsAreLive",
+            "kind": 0
+          },
+          {
+            "name": "canister_query _immutableObjectStorageBlobsToDelete",
+            "kind": 0
+          },
+          {
+            "name": "canister_query blob_storage_probe_counts",
+            "kind": 0
+          },
+          {
+            "name": "canister_query blob_storage_probe_is_live",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageConfirmBlobDeletion",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageCreateCertificate",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageFundFromProjectCycles",
+            "kind": 0
+          },
+          {
+            "name": "canister_update _immutableObjectStorageUpdateGatewayPrincipals",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_add_gateway",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_cashier_top_up",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_cashier_total_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_configure_billing",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_mark_pending_delete",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_remove_gateway",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_sync_gateways_from_cashier",
+            "kind": 0
+          },
+          {
+            "name": "canister_update blob_storage_probe_sync_gateways_from_configured_cashier",
+            "kind": 0
+          },
+          {
+            "name": "canister_update get_blob_storage_status",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "a446c279b1bb1dbcdc5a722d705b5beb61ce5395bc5184d5d3f09237126d178e",
+        "candid_bytes": 23712,
+        "candid_sha256": "0e3ad41621d7147c4c24a5adcd870b90654644915dec80a59b38d59c9461a33e",
+        "code_reserve_bytes": 8396634,
+        "function_reserve": 46045,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 1,
+        "gzip_bytes": -24,
+        "code_section_bytes": 1,
+        "data_section_bytes": 0,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    },
+    "leaf_probe": {
+      "artifact": {
+        "id": "leaf_probe",
+        "role": "app",
+        "package": "leaf_probe",
+        "config": "canisters/audit/leaf_probe/canic.toml"
+      },
+      "before": {
+        "element_entries": 983,
+        "sha256": "5f4332ac005e768c84e3f2bafe51bb3503820b67321e417900dc6476eaed0e88",
+        "raw_bytes": 2984654,
+        "gzip_bytes": 1070505,
+        "code_section_bytes": 2722688,
+        "data_section_bytes": 212466,
+        "defined_functions": 4783,
+        "table_count": 1,
+        "table_slots": 984,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 984,
+            "maximum": 984
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_env_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_frontend_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_log_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_page_generic_cohort",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_time_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update audit_recovery_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "094b0df7b595fcda1d53377c990e51e1c576f45a91901460115df0b011aaf4cb",
+        "candid_bytes": 40316,
+        "candid_sha256": "64e24fcba0c39b1a4b29763e253bfdb75b9b6cc9f9a14ec6592566e9a69bdc4a",
+        "code_reserve_bytes": 7763072,
+        "function_reserve": 45217,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "after": {
+        "element_entries": 983,
+        "sha256": "502bd6ac0eafb9d7e8c2f21ac17d1e69c488503461cb4b807362eb5160b4a460",
+        "raw_bytes": 2984663,
+        "gzip_bytes": 1070520,
+        "code_section_bytes": 2722689,
+        "data_section_bytes": 212474,
+        "defined_functions": 4783,
+        "table_count": 1,
+        "table_slots": 984,
+        "tables": [
+          {
+            "reference_type": 112,
+            "initial": 984,
+            "maximum": 984
+          }
+        ],
+        "element_segments": 1,
+        "exports": [
+          {
+            "name": "canister_global_timer",
+            "kind": 0
+          },
+          {
+            "name": "canister_init",
+            "kind": 0
+          },
+          {
+            "name": "canister_inspect_message",
+            "kind": 0
+          },
+          {
+            "name": "canister_post_upgrade",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_env_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_frontend_admission_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_log_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_page_generic_cohort",
+            "kind": 0
+          },
+          {
+            "name": "canister_query audit_time_probe",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_control_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_observability",
+            "kind": 0
+          },
+          {
+            "name": "canister_query canic_public_status",
+            "kind": 0
+          },
+          {
+            "name": "canister_query icrc10_supported_standards",
+            "kind": 0
+          },
+          {
+            "name": "canister_update <ic-cdk internal> timer_executor",
+            "kind": 0
+          },
+          {
+            "name": "canister_update audit_recovery_balance",
+            "kind": 0
+          },
+          {
+            "name": "canister_update canic_command",
+            "kind": 0
+          },
+          {
+            "name": "memory",
+            "kind": 2
+          }
+        ],
+        "admission_named_functions": [],
+        "gzip_sha256": "70c08633a1747688d4cb96dd60ae47158405c98393ad600b4f2127599b7a6123",
+        "candid_bytes": 40316,
+        "candid_sha256": "64e24fcba0c39b1a4b29763e253bfdb75b9b6cc9f9a14ec6592566e9a69bdc4a",
+        "code_reserve_bytes": 7763071,
+        "function_reserve": 45217,
+        "role_cfgs": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ]
+      },
+      "delta": {
+        "raw_bytes": 9,
+        "gzip_bytes": 15,
+        "code_section_bytes": 1,
+        "data_section_bytes": 8,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      }
+    }
+  },
+  "cumulative_b2_deltas": {
+    "app": {
+      "raw_bytes": -25876,
+      "gzip_bytes": -9681,
+      "code_section_bytes": -25609,
+      "data_section_bytes": -172,
+      "defined_functions": -51,
+      "table_slots": -22,
+      "element_segments": 0,
+      "element_entries": -22
+    },
+    "test": {
+      "raw_bytes": 3682,
+      "gzip_bytes": 2168,
+      "code_section_bytes": 3729,
+      "data_section_bytes": -1,
+      "defined_functions": -15,
+      "table_slots": -20,
+      "element_segments": 0,
+      "element_entries": -20
+    },
+    "root": {
+      "raw_bytes": -46497,
+      "gzip_bytes": -19590,
+      "code_section_bytes": -45651,
+      "data_section_bytes": -657,
+      "defined_functions": -94,
+      "table_slots": -48,
+      "element_segments": 0,
+      "element_entries": -48
+    },
+    "fleet_coordinator": {
+      "raw_bytes": -28012,
+      "gzip_bytes": -11404,
+      "code_section_bytes": -27684,
+      "data_section_bytes": -225,
+      "defined_functions": -53,
+      "table_slots": -25,
+      "element_segments": 0,
+      "element_entries": -25
+    },
+    "wasm_store": {
+      "raw_bytes": -25177,
+      "gzip_bytes": -9044,
+      "code_section_bytes": -24775,
+      "data_section_bytes": -276,
+      "defined_functions": -62,
+      "table_slots": -32,
+      "element_segments": 0,
+      "element_entries": -32
+    },
+    "index_hub": {
+      "raw_bytes": -25169,
+      "gzip_bytes": -8729,
+      "code_section_bytes": -24905,
+      "data_section_bytes": -172,
+      "defined_functions": -48,
+      "table_slots": -22,
+      "element_segments": 0,
+      "element_entries": -22
+    },
+    "index_child": {
+      "raw_bytes": 3277,
+      "gzip_bytes": 1760,
+      "code_section_bytes": 3325,
+      "data_section_bytes": -1,
+      "defined_functions": -16,
+      "table_slots": -20,
+      "element_segments": 0,
+      "element_entries": -20
+    },
+    "user_hub": {
+      "raw_bytes": 2851,
+      "gzip_bytes": 1460,
+      "code_section_bytes": 2896,
+      "data_section_bytes": 3,
+      "defined_functions": -15,
+      "table_slots": -21,
+      "element_segments": 0,
+      "element_entries": -21
+    },
+    "user_shard": {
+      "raw_bytes": 3266,
+      "gzip_bytes": 1212,
+      "code_section_bytes": 3296,
+      "data_section_bytes": 23,
+      "defined_functions": -22,
+      "table_slots": -20,
+      "element_segments": 0,
+      "element_entries": -20
+    },
+    "scale_hub": {
+      "raw_bytes": -26238,
+      "gzip_bytes": -10780,
+      "code_section_bytes": -25965,
+      "data_section_bytes": -180,
+      "defined_functions": -49,
+      "table_slots": -22,
+      "element_segments": 0,
+      "element_entries": -22
+    },
+    "scale_replica": {
+      "raw_bytes": -25876,
+      "gzip_bytes": -9124,
+      "code_section_bytes": -25609,
+      "data_section_bytes": -172,
+      "defined_functions": -51,
+      "table_slots": -22,
+      "element_segments": 0,
+      "element_entries": -22
+    },
+    "runtime_probe": {
+      "raw_bytes": -23438,
+      "gzip_bytes": -7473,
+      "code_section_bytes": -23036,
+      "data_section_bytes": -303,
+      "defined_functions": -54,
+      "table_slots": -22,
+      "element_segments": 0,
+      "element_entries": -22
+    },
+    "payload_limit_probe": {
+      "raw_bytes": -24185,
+      "gzip_bytes": -7950,
+      "code_section_bytes": -23778,
+      "data_section_bytes": -305,
+      "defined_functions": -58,
+      "table_slots": -22,
+      "element_segments": 0,
+      "element_entries": -22
+    },
+    "blob_storage_probe": {
+      "raw_bytes": -24142,
+      "gzip_bytes": -6373,
+      "code_section_bytes": -23722,
+      "data_section_bytes": -303,
+      "defined_functions": -63,
+      "table_slots": -26,
+      "element_segments": 0,
+      "element_entries": -26
+    },
+    "leaf_probe": {
+      "raw_bytes": 3266,
+      "gzip_bytes": 1524,
+      "code_section_bytes": 3314,
+      "data_section_bytes": -1,
+      "defined_functions": -16,
+      "table_slots": -20,
+      "element_segments": 0,
+      "element_entries": -20
+    }
+  },
+  "group_sums": {
+    "canonical": {
+      "last_cut": {
+        "raw_bytes": -21239,
+        "gzip_bytes": -8544,
+        "code_section_bytes": -20737,
+        "data_section_bytes": -470,
+        "defined_functions": -29,
+        "table_slots": -2,
+        "element_segments": 0,
+        "element_entries": -2
+      },
+      "cumulative_b2": {
+        "raw_bytes": -189769,
+        "gzip_bytes": -71752,
+        "code_section_bytes": -186952,
+        "data_section_bytes": -1830,
+        "defined_functions": -476,
+        "table_slots": -274,
+        "element_segments": 0,
+        "element_entries": -274
+      }
+    },
+    "fixtures": {
+      "last_cut": {
+        "raw_bytes": 27,
+        "gzip_bytes": 42,
+        "code_section_bytes": 7,
+        "data_section_bytes": 20,
+        "defined_functions": 0,
+        "table_slots": 0,
+        "element_segments": 0,
+        "element_entries": 0
+      },
+      "cumulative_b2": {
+        "raw_bytes": -68499,
+        "gzip_bytes": -20272,
+        "code_section_bytes": -67222,
+        "data_section_bytes": -912,
+        "defined_functions": -191,
+        "table_slots": -90,
+        "element_segments": 0,
+        "element_entries": -90
+      }
+    }
+  },
+  "canonical_traces": {
+    "app": {
+      "all_functions_bijective": 4782,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 10,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 15,
+        "canic_generic": 2364,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "a800d459c581cfc6b670ec67a4c1827f5d05554529a07daf15ffaf48f07eb579",
+        "canonical-function-map.json": "f54bebc84519d2c811b73a7d352d1a192216555f58dfff5c23d983f21d704db9",
+        "named.wat": "2fbbef80199c7b0b4432cf99ae4290d2755d5be12f291f0fa9fa439a2817c68b",
+        "link-map.txt": "97d0a3f0e704147814984dee60e66b8ffe2ff0124f60721d321150c8c707fe78",
+        "ic-wasm-info.txt": "476164ce7feb44514ba45f3ceec10963923932e1df6d24390e67200776adb2b7",
+        "raw.wasm": "026adda958958f6cd3c87abc213223b1cc137d0b580e46f668c9b7387fbf1789",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "a0770189977a1624282f16de014b8e26288c4cfc034419b68c390db36ffa37bc",
+        "body-extraction.log": "0f9ff34b4dd2d35f5774776d7a437a62e4c0db3699f92b6d132d0193df3d5933",
+        "canonical-bijection.json": "227f7690105f56c606747d61dff8278194511f77210919205eb873f961491a63",
+        "app.wasm": "5b4be13893917a3db16be71bbe71734121da16d89c8b289ced756bd95a0eefac",
+        "raw-with-names.wasm": "eafa4f7c82b7e502bc48c37a2def2c68f0e83c41747f1ea3df45c730cabb481d",
+        "build.log": "e00bc9d9636f8c9ccb690e91745875cf979e99b122e390418c8007cf8b0a1315",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "48f3befdebc9e6a7bbde26a25b057f0e45924c35901c41977d01ad5a731cd628",
+        "trace.log": "85f2819ca84cae144b8206d53bf6e15135890eca8f89e403f0360932f34032e7",
+        "canonical.wat": "81f4b62012403d5b601a6e2dd56943eabc95d46cad885efc53373465b6121eb3",
+        "role-build-output.txt": "94fd1c044d7f2386bb046e3517384b9da3da64176143c3b4b60c6b96b60888d3",
+        "defined-functions.txt": "bed87892cad828a95face5c7b006e8a9efbace9d6fc4291d12ff8c3bd94068c3",
+        "optimized-with-names.wasm": "ed1c77b802555460cfed08e8653b56d298972d29e1bdef11c5ee2ee84b4de076",
+        "app.did": "66b0f2d1bd8ba7773371bd4064a73918737f518656ede2607b277471e70a01ed",
+        "app.wasm.gz": "0a1ba0aefb7986a87678b8be2a9b84a44ccc28d7fb5cbc3d80948b864dca6831",
+        "canonical-storage-bodies.json": "4109d8ff6513c110a2ea0afbf09c451bdd9e951a7becbc65c1d0c1841eedbad6"
+      }
+    },
+    "test": {
+      "all_functions_bijective": 5309,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 15,
+        "admission_storage": 6,
+        "core_stable_auth": 0,
+        "access_evaluator": 12,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 16,
+        "canic_generic": 2418,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "34e755f53cdc56e27469d3ed7a5260c538c2c8183387fbcf1066b8b6e9bc428f",
+        "canonical-function-map.json": "aba3daae654b4d3388e6690fba49682c82ea2d1015d9ae608d2e965f8d0efadd",
+        "named.wat": "bc8e4cbdb41570a6fc1c3a8a1fd2d73c908953ed9c8a14a9592b4415a2769081",
+        "link-map.txt": "005a652e647a2f80d4c01158379254d7664052272dcc3400243173482a40516c",
+        "ic-wasm-info.txt": "c69fc1ca0c0fc790012fdb61777dbd81ef5b147c5bdd7175df895f0480795c08",
+        "raw.wasm": "d8b1eab300afe4b4db3b1be50e4fb10ef834c5bb6b286ca03db5a01b415073da",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "test.did": "8e8aa9baaf1b3397c2c4588ef98b1b6b2a227f7960cd8020f9fb1ac5297e4fdf",
+        "preopt-with-names.wasm": "140fc45e396c3d99cb0c103602c689be17d6e589dda0bf8c9063ed3330e185be",
+        "body-extraction.log": "11bc43d321aa9cfa9a5942b4cd62a03b42eb352eeb4e5917e7782f7496717672",
+        "canonical-bijection.json": "70a09957e4d2f1f7e2a9904c3ec26e83b154211bbd6a4aed4c2fb9b84f1bc9e0",
+        "raw-with-names.wasm": "2fa5106b8835d5426c80c09f2fa866498b6b5c729a80332eade66e794af87b5e",
+        "build.log": "78b7fe01d12d16ae4d5de6220451ba3dabcd975829767b7adf84770d79f9691f",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "94f47881372efe37da714cbd715abbc4bdc8dba12969381563bb8757f48493c6",
+        "trace.log": "428b0025ef3e26025beb61814fe0aa7d1f437032e3aa63e894f3b7ff9134a73d",
+        "canonical.wat": "c820799e9ddf423293d05655e42a5a4d5f06c613d807cc6977b6a9132a604b8d",
+        "role-build-output.txt": "60db97ad5630c28c5691fa0ae00730e34547a278e918ff2bb354dcc42f24c57b",
+        "defined-functions.txt": "fb93a2697fe6d3ca535e5d83523a2975b36fe114311a8023ef101d2560f2acbe",
+        "optimized-with-names.wasm": "a3fcccee2090f538aa00ca201aca83c24ece0948d0f365cbb01b070b148db819",
+        "test.wasm.gz": "d68469e72be8e8725ea4ac714c8f77bb74b6992fa124b90c5740703c2cf006e4",
+        "test.wasm": "0c1dd733d8c13e0b7ec71794563eb4706ff97ade6389331d0050f60eaf32a8d9",
+        "canonical-storage-bodies.json": "d4ad07e32ea16c23b9ac19508f6297c5eb33a2879ff0a4619d3bde8fd557d26f"
+      }
+    },
+    "root": {
+      "all_functions_bijective": 10129,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 3,
+        "admission_storage": 0,
+        "core_stable_auth": 53,
+        "access_evaluator": 14,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 19,
+        "control_plane_storage": 929,
+        "generic_page": 15,
+        "canic_generic": 6543,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "7a2e4dd4ca12337c7d26132bdc4dd1318dc70c96c98a388a07f93b94a5fcef91",
+        "canonical-function-map.json": "f6e1652de438cf20dda68a7a18041257f2fe9fbf2143919079de58a0c1461532",
+        "root.wasm": "fb7e51c127255a0424dfc918946a823597908215b2b7ac0205aeccb9ffa917d1",
+        "named.wat": "350e9e67d0a22fed92367853b8cb10e373423391d4b6ecb5fb1c4c3df0a56208",
+        "link-map.txt": "ec471879d6ce875bb20a70e60d0071cec1231c6e1d519a960b27d18541f1f29d",
+        "ic-wasm-info.txt": "425b7f5f4e171f458018780595e19286cf1d13828fdd5cbeec67961ee45ed2c3",
+        "raw.wasm": "c759cf584b9738e85104dc7f254ff8ea97e8194ff34e10990bcb7d180614f2f4",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "bfc91e6e1e974bfda1ac55d19324573efe447c686c518319778cbcd1d2ebb3cb",
+        "body-extraction.log": "9495091011672a20e5c754c3446f421af8d21d12e0cceaeafd1be9ec8aadc128",
+        "canonical-bijection.json": "72337318f22200801418a0d90f2a9fa038f27836fb2d2eb9c4c45e636ca14961",
+        "raw-with-names.wasm": "f9a59d990af72e3502285a5cde8652fb12ce6819bc507a757fa9d91de934d450",
+        "root.did": "63152816c240c9076835f0a61a81b29ddf7a5cfc066242dfe9f28a3818a7c998",
+        "build.log": "4161c7e312220ebb174c81e52aea229a2270797f3240a24cf6173bf30f137fbe",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "6802aedd607439d336e1680ebbab1a0549b6b193c9cf16fb31de580fd70dc1fa",
+        "trace.log": "f18c2258bb9a221b8ffb306ef48609475ac91d689ea9c53cb72611e4849f9f89",
+        "canonical.wat": "5df05039f23dfbd4e67ed7759302244e84e4193ca9d5bff020b644bbf5cefa28",
+        "role-build-output.txt": "3848d9d8a79a749837ba2267d831680291a666e7d7dc096fb83b2c10db9c5288",
+        "defined-functions.txt": "4b636e3601da86aaafcff33a9000626192c29e60157482bdf723ca8923d87d57",
+        "optimized-with-names.wasm": "001855026650c9643223f17976776370237e8ff8f2278488845b3cae6f8cd9d2",
+        "root.wasm.gz": "2a668e9ecaaa267cd4836d0e6ac3c1d1e123d63bbd7214974f41000dad23059c",
+        "generated-Cargo.toml": "bf2b8660aee245b0522e260bce99317b284522f51b0d68a82360b092afdad349",
+        "canonical-storage-bodies.json": "5af62f81f3cc61ec642ee95a6a7a38377b21ed41680bcbe0399052aead067a01"
+      }
+    },
+    "fleet_coordinator": {
+      "all_functions_bijective": 5240,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 14,
+        "core_sharding": 0,
+        "async_job_recovery": 4,
+        "authority_restore": 20,
+        "control_plane_storage": 344,
+        "generic_page": 1,
+        "canic_generic": 2890,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "1dbb2057f3bca4b076f47c0c1b5460adbbd3aa2c4163e911ffaf381ab7e29150",
+        "fleet_coordinator.did": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "canonical-function-map.json": "500d42b754e4ffc817a1d0bc6e38890ed646e2e5478f64d33dadb9d1d59817a0",
+        "fleet_coordinator.wasm": "e88d6bd5878984cc1df78fe1538bf2bb6f6063da142f64b755a8eb4586274a96",
+        "named.wat": "24beda48d688e1899df17bf9264b751ec0ffd7c2ca2516ba1b95417e720d9792",
+        "link-map.txt": "c4651827c2c244ef1c0c887d77a39ece08b4d7729052263fdc9973fa59a1bb3a",
+        "ic-wasm-info.txt": "2a28d8199a14bcfce2430f701a1dd8d28b2f354050f472cdda1c67c9d3443d26",
+        "raw.wasm": "71b0ff6917c06254a605f9fa567be36c4e7552b5ed3f5fc4304bfda940cebe4e",
+        "fleet_coordinator.wasm.gz": "eb25ca5e69c2d76065ffa26362917ad10686c0a810e1db38e3a1124d7a289b9e",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "42423c281afc6160ddd018a1fcfe99d24b5ce51bce0583ffa0b000adc5bc8484",
+        "body-extraction.log": "963ede34d0ba8ff68c8673911a3829d39d92364360dc2f5c36d8e469abd0d44f",
+        "canonical-bijection.json": "b99442729fb31d07d61a40ae44f03ff929003255b9837c44897619be606dd6a5",
+        "raw-with-names.wasm": "f4f5bab8910ddd265e370f39749283fcb63fada19fc8fd52130d0d9147442a3b",
+        "build.log": "1003ac1c52bb73e174fd6c14818137110d0b1394c417803cf3b4acfae52f55ea",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "9f11faf740624d38486f1dcd560890bff3867b7127b023db1141b74e6ef3ec28",
+        "trace.log": "37d3c8ad0c4008b23c391460bd122a2017b681fdb4c9439b2d824fa867d48e5a",
+        "canonical.wat": "6f3de6cddc34f95ac62da48c093b13a9f6f37edcee3cb6fbf5d6ae8bdf75f6ce",
+        "role-build-output.txt": "3d93470ca67ea8f7b69dcbe51a88eca6ff3b57b942a6ced0887efaf14e3a44b7",
+        "defined-functions.txt": "0aa9bb6c3ac1edbb13cfd87fe0d6957ce044770c4a7a6e0871dcd12d25037ec1",
+        "optimized-with-names.wasm": "405812b5ccc80d74a266b72a13433d93cce31b8a45df136d7dd884a1a25b4f28",
+        "generated-Cargo.toml": "b7593aee5c08bef1fa8deedadcebd1763555adf7532a9db6d41691916b7ae4f9",
+        "canonical-storage-bodies.json": "44dac36aed0b54c302c4a9991cdfe9b329769c8d1d24f69303c5b436f761417b"
+      }
+    },
+    "wasm_store": {
+      "all_functions_bijective": 4917,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 15,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 89,
+        "generic_page": 3,
+        "canic_generic": 2393,
+        "template_chunk_storage": 50
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "6fd98a23a5332ac0febce8dca86ac79c4fe22b476e3b8e4e8571df0c9f06c4b2",
+        "canonical-function-map.json": "8c03b45278f16906e29e0bc80f811a1d06c7d355a2e1f1687b9cd9c6ad013300",
+        "named.wat": "756064426310097da28474306afa542ab7d166689f58cf20ad603adcc8ff6ff8",
+        "wasm_store.did": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "link-map.txt": "4cdb566f3899a1a29f00d3f91ea884cd15878359ceff4ceacdc3531fa9a7695b",
+        "ic-wasm-info.txt": "64eecf24cacbf43341bce6b8e20898f1d4c29ebd653f0490ed00624bbf6a6a9d",
+        "wasm_store.wasm.gz": "39c837c60ae17bb721e0a5302d65fc59c4e49be36743140c00466ac8ce2829a5",
+        "raw.wasm": "974b55c11880958d140f3eed616029edd62f2e2d89d1a180a41e8d7285fdedc6",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "65a9e21afdb4217d1223155d08a224dc0f3653f9a45cf99467ee36172ed60254",
+        "body-extraction.log": "91c131683b1034ca148cd3543c2daa89a35d07253832e423b68f47f7872ef1b4",
+        "canonical-bijection.json": "4b42e19bac9b600c944002954641424eac44703e6b74aa75ab3672c90de38959",
+        "raw-with-names.wasm": "02f37d14751fb88589adb90ceb467a43f2a4fe17a84940cd7c3ef31a8df60c6f",
+        "build.log": "9dfe299ec04d06f2ed61f2c9766ac10884397f69376ceb08add58ee3bd940957",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "df93bbe8d2dfc390ccb9099efe77702ac0282949463cb1047fbf5e9c61acf47d",
+        "trace.log": "ea02218d9767a1bc61fe062f8fb9ae94fddd651aa0de666b6418c36e9d7a5de8",
+        "wasm_store.wasm": "fad539ad29bdb4d96cc3e3da6d7952c3a8a899af15a9ad518d2636def46e809d",
+        "canonical.wat": "1f7b92efed0635220f98445d449549545d6cbd3037f0d960dd260f7220facf99",
+        "role-build-output.txt": "d01dd4209aa73fbc16efae15cabc5b66c0fea70ee502600390b697c0c83e5917",
+        "defined-functions.txt": "9d0d1db8bd09b687e014746f02a107fec2110a35e71a8d1b8bd1d6b218f3ff75",
+        "optimized-with-names.wasm": "b500838f2a8dab3135c3818708aa84a30abc2771bf222411fc2a298ffb4c122d",
+        "generated-Cargo.toml": "339b3eb28b03fe7da9ad164511a9c22d7f2a1b3046b1ccb1ccf01489c522c14d",
+        "canonical-storage-bodies.json": "16a56763e8346f04d54fbaebdbbd8742f9497aeb7e8b2bda46636433a99eea14"
+      }
+    },
+    "index_hub": {
+      "all_functions_bijective": 4982,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 10,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 13,
+        "canic_generic": 2535,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "7ba5a567e58b90d48e560b37275aaa5ada15383cd2953247b5d96f3af6bdcbcf",
+        "canonical-function-map.json": "df26580d40bebc96708a7bca181c4fa8b8b3fb4428d6f64db5d78cb27fd1006d",
+        "index_hub.did": "fab1afbf2439b1a10d5778a6c5b2e8275f06dd8f7b8d582d7e75dd05406a56a9",
+        "named.wat": "b042fc32305590e71979c7f3f6e4b643893f9e3c45de08b929fd264bd7ba53eb",
+        "link-map.txt": "fec40406a59eef1b958c33058737d3fd7f70f2fdd2478b14944bbe260e281a96",
+        "ic-wasm-info.txt": "97f1bbe5fce5d2d0cb0fb24b6f9a2e5d7c52d1970cf11818282ac95e4e2dc13c",
+        "index_hub.wasm.gz": "17e4bc5219d2b5f1c0a327c51f4fa454a5dcd121f3a06c3539ef05f1788438b8",
+        "raw.wasm": "a081aacff2e7934f3118d83891a04033bf317e3cb0e327c3f2c036948556c964",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "2c4daee4dcc6913ae86498bb9a8b8cddea0797f1a2871f4faaf5601e9aa8a6af",
+        "body-extraction.log": "6ddb331af9d14139de58ba252b8e501a13efc2366bde513f0d49d2761eab3df1",
+        "canonical-bijection.json": "82a02b54112091e039262701f3d8798398b22b79ee55edf22ad8f43ef9ae7adb",
+        "raw-with-names.wasm": "01545d14a515cc5ef3bb47076d0df3dc30f3df43e41fa292eced9eb899fe5b9e",
+        "build.log": "636d08d3c9139495a1e480f7815033eaaf82e36b8d3978a23226f2173b678027",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "f991f1bee6ca058deaa80cdb24707522d51cd2c8c4997bfe92ecdd194962ae39",
+        "trace.log": "d2ca71fca09521dc0ae7a99002c2904d05058866b8b81b8b7da42e51ea3633ad",
+        "canonical.wat": "058da011c08b2068a9db35f0962727a18c33b8fd8be73d39a4e8c66588049c71",
+        "index_hub.wasm": "bce4cc53bd17cb5b57a962ece7dbea3d178b13fb712980038a62fd833c435620",
+        "role-build-output.txt": "5b6b94499919bfce37703b266a8c5b722a68178cb39b2734a87e50915cc3c394",
+        "defined-functions.txt": "34ba641a3e428fcfe72923d098ab8249f13ab51ba7036c6e5f19b69e56d4477d",
+        "optimized-with-names.wasm": "2203d12a4288cd44b14c005b013775e0502fe2ebef24eb2f9b1aedf5296678e3",
+        "canonical-storage-bodies.json": "94e506e453b8de376b32bfcb87fa903c4264a3327a9fecf51a11e4f8e28a4c67"
+      }
+    },
+    "index_child": {
+      "all_functions_bijective": 4777,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 4,
+        "admission_storage": 2,
+        "core_stable_auth": 0,
+        "access_evaluator": 14,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 12,
+        "canic_generic": 2349,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "index_child.wasm.gz": "086379a18698cfdb3f08a5e0b9a63a1e273800a3afbc711d10982f33178d8962",
+        "link-name-map.json": "f85c0392a7f7c23e0d2d9cda0d338b897ec2682c8da386b6d735f7da9f44b4f3",
+        "canonical-function-map.json": "242424da4c34d640323917f5335650f3687d0004c391cb97b46678064a8d76b8",
+        "named.wat": "f8f78e3bfa6d02268f0f10a613c07ca2b5fb1c5a20bbc5262fc1d8551d5c5d83",
+        "link-map.txt": "45bd760a8acd3fd410ef92373a18035e1ff9f1361a8b8aecb6f1877caa549476",
+        "ic-wasm-info.txt": "8df3ddc6f7fdbbd92acd2a8537ba83b0b0f4fc9e876393a399906e289c5b09a6",
+        "raw.wasm": "8ee15aa40738c43750306093f7774c9b237a33871131f7e4076a1ee913005865",
+        "index_child.wasm": "a3f1a3b6187033bd5ed2c4a427ec6eecf7fd336dab95c37ff4eab6db1c71848f",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "48f11ac2ae4f78754a01ec384a4b3225d19d17688ad719e0e2c0f75213ffb5e9",
+        "body-extraction.log": "1fe2366d61d9bb2a80ffa26572bf13b21bde20eca6b1805a3c64483e34548265",
+        "canonical-bijection.json": "cdce9d32dd63e92cf6faca9172d59df1f676188bad801047eeeafec87c83f014",
+        "raw-with-names.wasm": "76586dadb7da0cc39659777a864edc738e377e92e04c7f241a7b209b0c262596",
+        "build.log": "7a00b0b3f1029feaa95dec5c62d6679ca02ea1fdd75881a69166f0d1713ad2e0",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "c5f2acb95d71c6acd8fbbd5e471376212ad6d01ccc5b2ba4f04d22d28468e063",
+        "index_child.did": "9e8829c4c9344d479c6b773b8197fb91bce7152b96adff441c943dcc38fc68ce",
+        "trace.log": "1ee1cfa0d1dde6abedc7cfaf38b5eaf963450fbf4239c20c4697161b76c88c1b",
+        "canonical.wat": "134072fa05d6318b7e9301e73082c6e1349bd0139230b1bd9d194f8ba554c80e",
+        "role-build-output.txt": "84f1b636da0de91e51e502bd9cbf14e2a51449a2063b258c7dd9b27caa35affc",
+        "defined-functions.txt": "7897af5e7c52ddfa6d91d5bb33cd57a0c39a790f8e2cdd0528f23516bf9deee8",
+        "optimized-with-names.wasm": "dd619093fa202302976851ec1f3c85721a96cd8dcdcad63e1bd6f7c74e82d8df",
+        "canonical-storage-bodies.json": "3cc320c95c2e43af36977335640dfcc3ad9a4b3e06a955cb333ef8d361eff876"
+      }
+    },
+    "user_hub": {
+      "all_functions_bijective": 5233,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 4,
+        "admission_storage": 2,
+        "core_stable_auth": 0,
+        "access_evaluator": 14,
+        "core_sharding": 59,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 16,
+        "canic_generic": 2649,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "10b684e7c27ae52dca0ca8a6e4d22678e000b003411025a26bcd4f3c0e9f6564",
+        "user_hub.wasm.gz": "a543d22ff23344c7f19fe3a2d8ab5c3a3b4be38c5b4d4e69d207c0c3198d700e",
+        "canonical-function-map.json": "e1cab6fafb214a7ad0a5376e8660a8ee32faa4b7a1e5a0c1bc9f76209cb53e68",
+        "named.wat": "48adad132641e2ce1f43757c75ea305c0e992e9da8c5c74a3b857d81dac8afec",
+        "link-map.txt": "0c3aeda80fdf3e4a88ba2000a4772e0b44ff759b60d25266d2362d84d5f13e46",
+        "ic-wasm-info.txt": "c5ca32665bd0aee42911d38e5184aead1ac16d15065306de4cb875abc903712e",
+        "raw.wasm": "7fa197803dd12c0d92c9a28f470a5cfa08931cf088a34c17f4c26433aceddbb1",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "2f06eaa9168d167c96cbbcb00ddb62989a57aa042060ec565af0331a5c038109",
+        "body-extraction.log": "151b97c0d3b9261342157d78eec0343873c422c39c37ea2484573f5fb7d9dc64",
+        "canonical-bijection.json": "98a96f198a67fa3fef9134840bce3b32414f5c6df2c4947526dcc82d99ccc418",
+        "user_hub.did": "f6e91d524b5dafa890eb2d17ab96fee7f594599142b9c7e180bcf00719db3d8c",
+        "raw-with-names.wasm": "2530021c3131c1a60cd58da555670908cd296656ba159c2745d423ed54c95a73",
+        "build.log": "53733d4e584f7df40bbb2f4417265db37a549a39240bcd454ad437650d926df1",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "user_hub.wasm": "16ed7319686ee62fdb9766419edf69e69ef7510b5e6c3731aeda722d9ead5e6a",
+        "transforms.json": "c49d01e8006d4b20c8b556745f3fdf23b4280a8d78cce97f3b340b61a441ed34",
+        "trace.log": "f07c3c665cc59b06152752ac135013c9e6c2166146433561e87e020c094108ac",
+        "canonical.wat": "67f2446dce11d8a71dd708c31af464dd1ad69f54f67ecd582e37a70c8980aa49",
+        "role-build-output.txt": "0ae651d8e5798e1f642f6740ad1a5a873da028cecacb1a207f6cc70bbd44c5bc",
+        "defined-functions.txt": "2e93e56f60874fb7cb3df7402b63089158ea641572c476e0b96a4069f56d48ea",
+        "optimized-with-names.wasm": "55ee4e6152c1ca3f2def691e13968da8e9f2a9c4517569cced95634299bc2dc4",
+        "canonical-storage-bodies.json": "942250f30dc45dd8c12e2604b145f77fb8672bf5e54d532c2db1e7151738eeb8"
+      }
+    },
+    "user_shard": {
+      "all_functions_bijective": 5618,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 4,
+        "admission_storage": 2,
+        "core_stable_auth": 32,
+        "access_evaluator": 12,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 15,
+        "canic_generic": 2552,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "bbc6d286ed2a3555546012ba68d949ee60205459493f99d516e56c6968a7cbe2",
+        "canonical-function-map.json": "117be698661d37eebe8541a62d0749ac5fb9f04956c9b4570aa1085435778f00",
+        "named.wat": "3b6d78d43849e6ec8eefa1663b9b4853a06fe1f32b27fd48ff25139c5c53259e",
+        "link-map.txt": "83f6d824fc506d6d2c3c4c3a81f9c74130442d01b4e16d8de66b072c86bdd720",
+        "ic-wasm-info.txt": "e008d66a0b4dd146771c0ed46a0b20dea8508e5bd61bcdff749a8e3317b43ee1",
+        "raw.wasm": "a74c46b2cb0c85b14de85a80ca123777d8fc9129a4427fbc8cc49733feb2d3b3",
+        "user_shard.wasm": "2de69002df102849e47410ec083133829be35d10d857dc14e53cdada3ed9fc08",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "784aa5d375fb77f739c45a088b1106714d41ab2d9c04370c77513da132c2f24f",
+        "body-extraction.log": "4ab956fdbe75f35329f26a2fc52af51f2c9409f8c7e0e8d7292ce93eeb85945e",
+        "canonical-bijection.json": "facb5eb48ba7833ed695456725e01d4030f72a7d4ef7201da84e3d92a3217008",
+        "user_shard.wasm.gz": "8bd50ffa67795ef42581e1d63db98009cc538252779c2613c41a86b4939a696f",
+        "raw-with-names.wasm": "62f9e2b88c5898990a467c6b93cbb1ec94a2d2f4ac3a428369e5889e571f4ec2",
+        "build.log": "76d763f019c57aca7f81e0ed94300a70006f9957297cd0a4e274332d4728c781",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "119246666a13852a9ab4e74c3c9fa475ec893d40a95a10dc32d65e7865c80af4",
+        "user_shard.did": "d920381516f298a56f2ed22cd7aacbb125838a6bfe19d5459bd8d2ce6a7fcac3",
+        "trace.log": "166cf2b7c3248a669cff46c762af35091c1e8c3b8673b4010d5113d8c63b97a4",
+        "canonical.wat": "333d293e4b3e454ea627442265322d5d56cb4ecda7ffb7fdee62628820907d4e",
+        "role-build-output.txt": "3f34c01026700e2595ba42a6646bebcdf483ff3a4a071977c1be8c30f0d92b41",
+        "defined-functions.txt": "5ef1b7ba6e535d8c4c706318aab9a43eb9d2b2953a5bb7840c6f791dd5ecebed",
+        "optimized-with-names.wasm": "88cf6c4dbbbf92fa7ca0d1f60208b0e3a7ba160bc75b42e5482c248c4f387322",
+        "canonical-storage-bodies.json": "8dbd7e9403bb0acd0fbe51be6686dd95f1fff42b188a39f4f8f5f2013212e7d7"
+      }
+    },
+    "scale_hub": {
+      "all_functions_bijective": 4956,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 10,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 16,
+        "canic_generic": 2510,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "8fe507bed5872747cfe5448bb8c4d8b38544aa3f8959d63b0387f8186718192b",
+        "scale_hub.wasm": "cd059fb5e33ad4dfe3648c5240820c5abdc1063f0a5f7e7795847cfa520dda7e",
+        "canonical-function-map.json": "1f847210c458fd8f99c23858298a2d5ced24461712a7a1a820e59c39aef5b0f7",
+        "named.wat": "f3dd17f8280dfd5007e02c9d8808dd5fb9f0b0ebec21f50bc0570cdcd590e5fe",
+        "link-map.txt": "15af2d8c49bfdf1f1a5f771a9344ffeed809b712e3811c09ee809b3d82d23648",
+        "ic-wasm-info.txt": "44c06e83f36f3b0f4b5d8022b0d26470eeb6fcd1bde079a57797b88e81847e4f",
+        "raw.wasm": "991eb39293fe3e7ec18d3e08e107924f324e4e6c7730e760fc9852ad65f35749",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "57c8eb21a4db025f10b9ae4e2df095f3e0de9867867cb12508327c4627c4508a",
+        "scale_hub.wasm.gz": "e222f3c87af98ec007f7b0a314c9bd870b0b8e4c74d4bd22559ecf931d9a0d60",
+        "body-extraction.log": "9008d5fcea06a20e4fc7870bacba0db23136051cfb652510f4328e31d9185e6f",
+        "canonical-bijection.json": "b1cb4a23e0a2a4b638f5a5064a31096d63939ee4fbeff148538ad1be3bbc0a87",
+        "raw-with-names.wasm": "04cceeb82b73928f9f7073f623dd5c6b57e03bdc4ca851a47f666c1f441d736e",
+        "build.log": "8714668b51619f871e41da48dcd7103c845c17af42445d1994183965b02b5ac8",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "3a808d04b314df2c90d196497ad657f5a633fff16332099110ca85e94e7ad9b7",
+        "scale_hub.did": "bb1f480048160468aa2454234023d9daf03d7a287714085e9e20900539622639",
+        "trace.log": "edae5949d0cf1793d20f6c61beaa744a0c25bf510483ee3219fb2032f049f6d2",
+        "canonical.wat": "b490d4207e26b326e7a89001c566aab6abd80f17deda609205ad77982c29b3c4",
+        "role-build-output.txt": "2b84342d35fed55d891a4cabde2b6e3d9e43a765457662577754315720632d4b",
+        "defined-functions.txt": "56d7ad3688e1857c5f235a1a45883ce9e61c5d36bd829da0040e4fcc37efbec8",
+        "optimized-with-names.wasm": "1566214fd4fc662b02cba18b147b7b256fcafd36242facf78db0fdfb30de1593",
+        "canonical-storage-bodies.json": "8b01269c893c5fe4677d391fe7eda7435d9f6ae25d3d0967fdfd8a70af1a512e"
+      }
+    },
+    "scale_replica": {
+      "all_functions_bijective": 4801,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 10,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 15,
+        "canic_generic": 2379,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "feb923c9a8b1e57145eeff62400155ccc6a9dbe0787b08b5e0a76bbaefc51ce2",
+        "canonical-function-map.json": "98ccaa2b2cbc7968aade3be441e0ef4bae85eec53ffa7ed4339f68fa88af6902",
+        "named.wat": "d314a1c5b91b5068c401618fc8ca4bca02b5d1845ff6be7cddb45238d6ded4fe",
+        "link-map.txt": "414a160896472676cc007cb15d545f3e3bd0345ba9b1d4b39ad934014f7e65b9",
+        "ic-wasm-info.txt": "0eb0cd8c4fa44493105e2499365496ebe4002274a63d4f7fc56b33086a3462e5",
+        "raw.wasm": "cc98815c91145c693cfe92d21705eba75df3a00fa6bd968713f1e4b9afe1335c",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "d7d523fddaa0ea3c26d3bcc62efba871560beabefdc186bbeb24f3043274866e",
+        "body-extraction.log": "2d708ec739024be39d53a009358fd4394435fd666094f2bdc2d0c7b74f2db059",
+        "canonical-bijection.json": "bab01780b6609adeb6df7a2902c5d1e4fc10cf19576115537bdbeb657ff02cbd",
+        "scale_replica.did": "f792ced49b8db92082ca04d3c00b4bfa7dd93594c48a73bd7e7ce04dd0cce198",
+        "raw-with-names.wasm": "991477dec4ff262cf0dcbe387139196322d01b5443f9ec56160acbc411451fce",
+        "build.log": "d0a7f7b803d1b8b33486442a60ee10c99fc856f5a6674954738a599279f06ff6",
+        "scale_replica.wasm.gz": "81df30003a33c8ce037df1ac4c61f088ccba978fd6898f12f16d37e99f8e1b4e",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "2f2ab9548d57f4eaee7e357177aa188ff7fa1acbf433cd2bce67ff0699f1b812",
+        "trace.log": "88dadef63bc61eaf0b78c7b5de8d4c84a91581d2540fd0a9c513d2293852d451",
+        "canonical.wat": "ce24a62f3ffe1d88cdc356fbc96e6316cd69d0c25b03359a52353424e405d7b4",
+        "role-build-output.txt": "d7a948e50aeae5ac10747b6954b07a4509c29747aaf2d6eed575eeb81ebbcc37",
+        "defined-functions.txt": "3696187ea0f7a69a7cbdb2dd711bdee12d3662f78ec96df29f1fdb16242d65e8",
+        "optimized-with-names.wasm": "cdc40c327918e1b0cb35dd797b7817882527a8da23be15d3b8a0ddbd665c7276",
+        "scale_replica.wasm": "480de1c7d659b6a619c0f9bae7bcbd79c393751f4c12b9c417ba23fe5e7a925f",
+        "canonical-storage-bodies.json": "97a98eb8ff459137b46e403a46fe48cb86fa2c8a0b05e5b857197e623d569a39"
+      }
+    },
+    "runtime_probe": {
+      "all_functions_bijective": 4864,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 10,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 5,
+        "canic_generic": 1981,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "d83af30627c0e107e6ff2e9d22497b9458c2e1b253a4d03bbe8b0450f445753d",
+        "instruction-wrapped.wasm": "289f6a72630929bae62043a41987e1117ace28f7e81ac37298fa58e96f7b5615",
+        "canonical-function-map.json": "06f698583013083edf94b50b30aac035420ee40304983e52b3dc2f6ece3d26de",
+        "instruction-wrapped.wat": "6dcd15122c3575c5af0a38178829fd9e995a218a4f805f8d024153cfd1933938",
+        "named.wat": "aa121e1579f3711f0ca992a6486ab6f06f6077ec0bb1f7a95dafced8d9639ddc",
+        "link-map.txt": "748337d0b15fb5dbd96d67fce441655f6083379666307322a41d7569d351e147",
+        "ic-wasm-info.txt": "096e018f2cd0da0c559af8f6b904a7fbe75d8223f16ea30aafb73e8d4ede7fa0",
+        "raw.wasm": "63318524178be45303a252edf9a15aec1569eb4dfd23f5e657bca7e511c205ad",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "test.did": "1e44b40a272d936d043a7323cbd1007b8fff3d6ca80310bce11e59f39ef1b3e5",
+        "preopt-with-names.wasm": "91189eacbc038409200e5c9e94e3f3692911d856659a949291dca8624ec22773",
+        "body-extraction.log": "da0a8fb703f6dce000521ec974e733eb9e68712f728921f280bd48c36c88bdf6",
+        "canonical-bijection.json": "f10ce5d798c2c7dc4c888d5a98567bc2d6842e4891ee45347dba2a90c2cb5ef3",
+        "instruction-original.wat": "a3eec2c5b2ace6665969c50e55af1cadfb0cc919b5a7efef7214cb8f13b389cb",
+        "raw-with-names.wasm": "809e5fbfde17e2c278f8b21176d97e1c0e6950bcbb47ee55cb65b9c822d67b40",
+        "build.log": "688fd26fff20ff1e6282cd7a3860b4cf3b8112a60f33b5aaf5173bc9b318841f",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "7bb063023867b63857b131d4c2e039a1aea3483c8ad5873db1db6638cb08ae5a",
+        "instruction-wrapper.json": "ae215a06715b7a4d1930fa4397eaef68bbb852551553b185202a2bf3ddd45fc6",
+        "trace.log": "2108ab33281d9783d7c2d656fe119c5fbec66f8c5f0907a7b103dcdc63102d94",
+        "canonical.wat": "a3eec2c5b2ace6665969c50e55af1cadfb0cc919b5a7efef7214cb8f13b389cb",
+        "role-build-output.txt": "044f50f9923889cc94ec6604ebe9a30da726715182d05d1f5da75007816e4883",
+        "defined-functions.txt": "88d09232ed361546a1fc87c21fc5217d170db6315c7baa174b5d2729e724234d",
+        "optimized-with-names.wasm": "babf40e74a03e2243af13b8a5c03fd82d807f32a21cad85b9a4d4ac6b05f64e0",
+        "test.wasm.gz": "31718a80657aefab081ac0a5eff3aab17f3c4805bd4e301635f861dc5e6d8645",
+        "test.wasm": "4be7e1feeeefe6536f6f48fe83bbd1e39c1448162971d2332c17868915000f2e",
+        "canonical-storage-bodies.json": "a99522a4a0e4800cbf3ace83173f54e582efabf60e844947b196dc8c20b77fcb"
+      }
+    },
+    "payload_limit_probe": {
+      "all_functions_bijective": 3691,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 9,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 5,
+        "canic_generic": 1600,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "9372751e371e59100a33dbccf64ad23ed8bb33ec5627602daae12d42b1ce160f",
+        "canonical-function-map.json": "85c7b48d2a273bc17a96e0839e617009b2827f2310ec7ec1cfb214c6e058ec4b",
+        "named.wat": "43cf7098eb75eaf4d5db375677b2019df0239e928fb2ded5ddec0458450725c6",
+        "link-map.txt": "9db972ea4a50c715e5f293de94070ec1b95534a7b588fa2339eb4e296a7cbf97",
+        "ic-wasm-info.txt": "2952eaa811ba598d75e8c9c3a7cc498292fbee9803a639fd127fbfc6682c37ae",
+        "raw.wasm": "8e0342da4faec85a56fb432d9164a5ebb05ae5e648ed604dd1478b99a0b891a8",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "test.did": "33db70d1aa707d69a2202e3b120c1991079f5dcf76891b47e35fda5fbe187d74",
+        "preopt-with-names.wasm": "146eaad5c8be2af93a103effff1fed1ef55bea05872d3c581c60f5f841db0011",
+        "body-extraction.log": "567a00c4bc42554822d239ff2e3100391556d59c228d9730517c13036cab4ed5",
+        "canonical-bijection.json": "731c30a8f2a5e5ba07364d395a727f2847f0a247a8fe8c91dd022a6e08585420",
+        "raw-with-names.wasm": "3f08cb9ff75b605ea15311d8b49faa1d8ab7d45c703e1f17161d74efa0eb068d",
+        "build.log": "3ab282ac04056faf9322ea194f7c33b7255b9f390c2fb7739b727a696896027e",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "5f7483bde096e5fed38544cdb204d3dc973313898f51721871316c06a093fc0e",
+        "trace.log": "4d8baf26fd6abfa3a1630ec483ba85148c6a5a901b35a9cd557cf7c07f14fc65",
+        "canonical.wat": "818867a438c02db61f1a8bb21344d449ce6fd2a480fe58f0540e7decaaa4e429",
+        "role-build-output.txt": "9fe058d518fea4b325459a597ce1c8b8d2612187449a2a6d104e4c78143c77ab",
+        "defined-functions.txt": "dc1e43e471293001ad60a45de06f786bbaa6817cfbb2a08c71496542f56dad80",
+        "optimized-with-names.wasm": "4cce8f2da25dc21cf082774ab5408b8b20da8531dd5169a2ee7c300d3f87a7d2",
+        "test.wasm.gz": "922fa88531749eb338ced36599f9146d8eb35412af75e9c96351ec7e12c6a46f",
+        "test.wasm": "e6b19d8ec68b3dd92116517fb261618e873d89de535edb53d685eafaea30447d",
+        "canonical-storage-bodies.json": "7dbe68122366456c2b572d3b617139455d51912b2cae7946e87cd171f4903b4f"
+      }
+    },
+    "blob_storage_probe": {
+      "all_functions_bijective": 3993,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 0,
+        "admission_storage": 0,
+        "core_stable_auth": 0,
+        "access_evaluator": 10,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 5,
+        "canic_generic": 1758,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "f03e0665ebd9455281f48b6ed1520c730369b083f3e9945b2b07570ba7a77a3d",
+        "canonical-function-map.json": "ea9d7215266c79e791cad38d06de74fa2d7be5bfe39053983fb749c0de2caf42",
+        "named.wat": "4c731df86feb3d5fb4d3ec8cdb479df1ce95823e896e237ab2487513df1ddc3f",
+        "link-map.txt": "65a80512a173215bc37331a2767c0126bb1296ed41396344a39609a71bf8cc7c",
+        "ic-wasm-info.txt": "f8540604c5e1a45a3ee82a212db0127764bcfd1883b4a6387f43ce3b59eec1fe",
+        "raw.wasm": "682c54d1661cd10667abf9fd9410d9a3a12817e1d91c8181aae6711dadd81cfe",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "test.did": "0e3ad41621d7147c4c24a5adcd870b90654644915dec80a59b38d59c9461a33e",
+        "preopt-with-names.wasm": "ef56e380c985239d744154a731ad3d61ba82da46867bcd04467b2e739e326bcc",
+        "body-extraction.log": "ff9647b55a1bfa7f80c709952ed8be51b47dd8f4b3362a5f98394cce514dbdce",
+        "canonical-bijection.json": "613f737c7a032b630f27091abb93b4b7e5e63205880d40efe0c98ba30989a9db",
+        "raw-with-names.wasm": "b5aa9d95fa78e32e79caa46d52093f3a50a005cf222b688cc4668f7e2cd93904",
+        "build.log": "ac9762d79d3f6107eb2caab43eff2eb17c1d196937ad5b67c16882132a63dafb",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "4433024001440cd374161fd6ad4759b9028849213d61a8bfb4a4983c1d57cf98",
+        "trace.log": "93ce96328e826b5d3a3fe2663309027411eb742caf6fb2bdaf905959e7995723",
+        "canonical.wat": "537057740f7e8dc6733491edf93ed0deb6a0e8058a43858c225810d0cf16b20d",
+        "role-build-output.txt": "db8f33ce1001ae76d7b64be939e214b0fde5a99cce5430d48f7768c9094732ec",
+        "defined-functions.txt": "534a9aacbc09ad4d4b312a12e1bc3a42cd6d1289862119114ec2cc9c3f7507d2",
+        "optimized-with-names.wasm": "542f82b1e8399309e9c039862d36f0e71266be293637fd4d5033515a4a776c5a",
+        "test.wasm.gz": "a446c279b1bb1dbcdc5a722d705b5beb61ce5395bc5184d5d3f09237126d178e",
+        "test.wasm": "61f813c1896454cc463c49180cc604542cfdc5332a0b34773edb81087f7592b0",
+        "canonical-storage-bodies.json": "e9fdc4522e065a326effe1806bb2bce157aecbbe66605580ee5176c077fdf947"
+      }
+    },
+    "leaf_probe": {
+      "all_functions_bijective": 4822,
+      "non_code_sections_exact": true,
+      "named_family_body_counts": {
+        "admission_projection": 4,
+        "admission_storage": 2,
+        "core_stable_auth": 0,
+        "access_evaluator": 14,
+        "core_sharding": 0,
+        "async_job_recovery": 8,
+        "authority_restore": 15,
+        "control_plane_storage": 0,
+        "generic_page": 20,
+        "canic_generic": 2374,
+        "template_chunk_storage": 0
+      },
+      "evidence_sha256": {
+        "link-name-map.json": "4259c6f676a85620f364cf18ace0b052a087fda8d3ecbd3e5afd9049ed7d6e6e",
+        "canonical-function-map.json": "cb9f5ae9f1bc9ca91d308712fd255166322b6be92ae5914ab852958358e1d063",
+        "named.wat": "dcbfc6e6cef008e324cb07c1a22907ed8b26d86585f4d1b9d4ef2f5c8786167f",
+        "link-map.txt": "82df8c1c91dcead8967e25fac438a596d2224baf0c636545aba234853132d9ac",
+        "ic-wasm-info.txt": "b6eb16f45c3dd0737ace5bf25f3d44a887b2be8effa489ff22c7a052c7f3fde0",
+        "raw.wasm": "1d12359c3ed239c5fdb9bf784c6e4505d87a1a93387231c04c5968663d52ec08",
+        "did-check.txt": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+        "preopt-with-names.wasm": "faf7335f729c160984f931f07ec06d907331306e0d69af4ac008b98485582014",
+        "body-extraction.log": "6ff253b97cb051816b0a4d84e2602bb1e4fb8be952cbde52fd5a57c0ae88fcaf",
+        "canonical-bijection.json": "69a372fcfbbea43212ca2b0ce285c44354e896ae957b4fd4f9a356735a4d77fd",
+        "app.wasm": "502bd6ac0eafb9d7e8c2f21ac17d1e69c488503461cb4b807362eb5160b4a460",
+        "raw-with-names.wasm": "821746ece129120a13a6ea309515e5894ce5dbca26265fa8f90e2f7b5578a32e",
+        "build.log": "9ddf664b6e46fd4f001c354ed993a2b39a1a040e93c2019123506f031a142391",
+        "features.txt": "cd3d820ab146425c8ee3c200578497e9b22dd2968f2c8b7649584879edc9206d",
+        "transforms.json": "2a0aa88e4f3dba25bb16389dc9155ebf4b5eabe0d5436e9655f87a7e0c3b09e9",
+        "trace.log": "18e39f542690404de7da5d66a7fffd45f74675c91ca49af1a041a1f16c9b70c2",
+        "canonical.wat": "1594dc965b86b801f865347388833aa3c97a87e2ed4cba913c04abadcfc3c92c",
+        "role-build-output.txt": "1e3dbea44c953b98135a4dd4b325870a9bb5e7c8ec72215fbb541c9fa7e322cb",
+        "defined-functions.txt": "c29c28a404b183c5ba0e2ded16c83873e5d82764e02493f77cc4f8a5e1da4acd",
+        "optimized-with-names.wasm": "ec1076d907764c229c05b9781f8a2a1c49d64d3a3638eef94a4279d0136cae7e",
+        "app.did": "64e24fcba0c39b1a4b29763e253bfdb75b9b6cc9f9a14ec6592566e9a69bdc4a",
+        "app.wasm.gz": "70c08633a1747688d4cb96dd60ae47158405c98393ad600b4f2127599b7a6123",
+        "canonical-storage-bodies.json": "46ffc938620ae434d6e0168dafcf1bf61624e7ca29c41fc7369f0a9459bf21b2"
+      }
+    }
+  },
+  "root_manifest_names_preserved": [
+    "<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord as ic_stable_structures[f7a82d55eca1bc60]::storable::Storable>::from_bytes",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::remove_helper",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::iter::IterInternal<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::next_map::<ic_stable_structures[f7a82d55eca1bc60]::btreemap::iter::LazyEntry<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>, <ic_stable_structures[f7a82d55eca1bc60]::btreemap::iter::Iter<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>> as core[ed718c3d60ebd546]::iter::traits::iterator::Iterator>::next::{closure#0}>",
+    "canic_core[2aa7fb24bf45d61]::cdk::serialize::serialize::<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord>",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::split_child",
+    "<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TEMPLATE_MANIFESTS::{closure#0} as core[ed718c3d60ebd546]::ops::function::FnOnce<(core[ed718c3d60ebd546]::option::Option<&mut core[ed718c3d60ebd546]::option::Option<core[ed718c3d60ebd546]::cell::RefCell<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>>>,)>>::call_once",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::insert_nonfull",
+    "<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestStateStore>::export",
+    "<core[ed718c3d60ebd546]::iter::adapters::map::Map<ic_stable_structures[f7a82d55eca1bc60]::btreemap::iter::Iter<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>, <canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestStateStore>::export::{closure#0}::{closure#0}> as core[ed718c3d60ebd546]::iter::traits::iterator::Iterator>::next",
+    "<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestStateStore>::remove",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::allocate_node",
+    "canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::manifest_entry_size",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::update_value",
+    "<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord as core[ed718c3d60ebd546]::clone::Clone>::clone",
+    "<alloc[508e33bd5656020b]::vec::into_iter::IntoIter<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestEntryRecord>>::forget_allocation_drop_remaining",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::load_node",
+    "<alloc[508e33bd5656020b]::vec::into_iter::IntoIter<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestEntryRecord> as core[ed718c3d60ebd546]::ops::drop::Drop>::drop",
+    "<ic_stable_structures[f7a82d55eca1bc60]::btreemap::BTreeMap<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>>::new",
+    "core[ed718c3d60ebd546]::ptr::drop_glue::<alloc[508e33bd5656020b]::vec::Vec<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestEntryRecord>>",
+    "core[ed718c3d60ebd546]::ptr::drop_glue::<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord>",
+    "core[ed718c3d60ebd546]::ptr::drop_glue::<core[ed718c3d60ebd546]::iter::adapters::map::Map<ic_stable_structures[f7a82d55eca1bc60]::btreemap::iter::Iter<canic_control_plane[54a896f3e0106e4f]::ids::TemplateReleaseKey, canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, ic_memory[e52228f90468ab3b]::runtime::backing::RuntimeMemory<ic_stable_structures[f7a82d55eca1bc60]::ic0_memory::Ic0StableMemory>>, <canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestStateStore>::export::{closure#0}::{closure#0}>>",
+    "<core[ed718c3d60ebd546]::option::Option<alloc[508e33bd5656020b]::borrow::Cow<[u8]>>>::map::<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord, <canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord as ic_stable_structures[f7a82d55eca1bc60]::storable::Storable>::from_bytes>",
+    "core[ed718c3d60ebd546]::ptr::drop_glue::<core[ed718c3d60ebd546]::option::Option<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestRecord>>",
+    "core[ed718c3d60ebd546]::ptr::drop_glue::<canic_control_plane[54a896f3e0106e4f]::storage::stable::template::manifest::TemplateManifestEntryRecord>"
+  ],
+  "root_template_chunk_named_bodies": 0,
+  "instructions": {
+    "schema_version": 1,
+    "cold_repeat_exact": true,
+    "warm_control_update_state_unchanged": true,
+    "first_touch_control_scope": "Write identical bytes once per 4096-byte region before the query counter; only an attribution control, excluded from qualification.",
+    "charge_quantum_instructions": 80000,
+    "rows": [
+      {
+        "rows": 1,
+        "lifecycle": "install",
+        "access": 0,
+        "export_instructions": {
+          "before": 6748025,
+          "after": 6749116,
+          "delta": 1091,
+          "percent": 0.016167693510316106
+        },
+        "callback_instructions": {
+          "before": 5794069,
+          "after": 5795932,
+          "delta": 1863,
+          "percent": 0.032153569451787156
+        },
+        "query_instructions": {
+          "before": 91123,
+          "after": 91213,
+          "delta": 90,
+          "percent": 0.09876759983757921
+        },
+        "full_query_instructions": {
+          "before": 919559,
+          "after": 919733,
+          "delta": 174,
+          "percent": 0.01892211375236208
+        },
+        "warm_full_query": {
+          "before": 119559,
+          "after": 119733,
+          "percent": 0.14553484053898558
+        },
+        "first_touch_charge_delta": 0
+      },
+      {
+        "rows": 1,
+        "lifecycle": "install",
+        "access": 1,
+        "export_instructions": {
+          "before": 6012629,
+          "after": 6016028,
+          "delta": 3399,
+          "percent": 0.05653101164233565
+        },
+        "callback_instructions": {
+          "before": 4822778,
+          "after": 4745867,
+          "delta": -76911,
+          "percent": -1.5947447715818575
+        },
+        "query_instructions": {
+          "before": 91036,
+          "after": 91263,
+          "delta": 227,
+          "percent": 0.2493519047409798
+        },
+        "full_query_instructions": {
+          "before": 1004041,
+          "after": 1002956,
+          "delta": -1085,
+          "percent": -0.10806331613948394
+        },
+        "warm_full_query": {
+          "before": 124041,
+          "after": 122956,
+          "percent": -0.8747107811126975
+        },
+        "first_touch_charge_delta": 0
+      },
+      {
+        "rows": 1,
+        "lifecycle": "same_wasm_restore",
+        "access": 0,
+        "export_instructions": {
+          "before": 6571834,
+          "after": 6513528,
+          "delta": -58306,
+          "percent": -0.8872104803620995
+        },
+        "callback_instructions": {
+          "before": 5621541,
+          "after": 5464231,
+          "delta": -157310,
+          "percent": -2.798343016621241
+        },
+        "query_instructions": {
+          "before": 91213,
+          "after": 91213,
+          "delta": 0,
+          "percent": 0.0
+        },
+        "full_query_instructions": {
+          "before": 919145,
+          "after": 918114,
+          "delta": -1031,
+          "percent": -0.11216946183681964
+        },
+        "warm_full_query": {
+          "before": 119145,
+          "after": 118114,
+          "percent": -0.8653321582945184
+        },
+        "first_touch_charge_delta": 0
+      },
+      {
+        "rows": 1,
+        "lifecycle": "same_wasm_restore",
+        "access": 1,
+        "export_instructions": {
+          "before": 6006983,
+          "after": 6015297,
+          "delta": 8314,
+          "percent": 0.13840558563258387
+        },
+        "callback_instructions": {
+          "before": 4816014,
+          "after": 4825709,
+          "delta": 9695,
+          "percent": 0.20130755433851455
+        },
+        "query_instructions": {
+          "before": 91213,
+          "after": 91170,
+          "delta": -43,
+          "percent": -0.0471424029469536
+        },
+        "full_query_instructions": {
+          "before": 924071,
+          "after": 1001492,
+          "delta": 77421,
+          "percent": 8.378252320438584
+        },
+        "warm_full_query": {
+          "before": 124071,
+          "after": 121492,
+          "percent": -2.078648515769199
+        },
+        "first_touch_charge_delta": 80000
+      },
+      {
+        "rows": 211,
+        "lifecycle": "install",
+        "access": 0,
+        "export_instructions": {
+          "before": 15730085,
+          "after": 15743523,
+          "delta": 13438,
+          "percent": 0.08542865470848593
+        },
+        "callback_instructions": {
+          "before": 14776134,
+          "after": 14790294,
+          "delta": 14160,
+          "percent": 0.09583020836168021
+        },
+        "query_instructions": {
+          "before": 251313,
+          "after": 171375,
+          "delta": -79938,
+          "percent": -31.80814362965704
+        },
+        "full_query_instructions": {
+          "before": 1082510,
+          "after": 1000843,
+          "delta": -81667,
+          "percent": -7.544225919391046
+        },
+        "warm_full_query": {
+          "before": 122510,
+          "after": 120843,
+          "percent": -1.3607052485511417
+        },
+        "first_touch_charge_delta": -80000
+      },
+      {
+        "rows": 211,
+        "lifecycle": "install",
+        "access": 1,
+        "export_instructions": {
+          "before": 13079064,
+          "after": 13082294,
+          "delta": 3230,
+          "percent": 0.024695956836051636
+        },
+        "callback_instructions": {
+          "before": 11807942,
+          "after": 11811938,
+          "delta": 3996,
+          "percent": 0.03384162964215065
+        },
+        "query_instructions": {
+          "before": 251327,
+          "after": 91067,
+          "delta": -160260,
+          "percent": -63.765532553207585
+        },
+        "full_query_instructions": {
+          "before": 1084015,
+          "after": 1161564,
+          "delta": 77549,
+          "percent": 7.153867797032332
+        },
+        "warm_full_query": {
+          "before": 124015,
+          "after": 121564,
+          "percent": -1.97637382574688
+        },
+        "first_touch_charge_delta": 80000
+      },
+      {
+        "rows": 211,
+        "lifecycle": "same_wasm_restore",
+        "access": 0,
+        "export_instructions": {
+          "before": 15408004,
+          "after": 15511568,
+          "delta": 103564,
+          "percent": 0.6721441661100336
+        },
+        "callback_instructions": {
+          "before": 14457857,
+          "after": 14462129,
+          "delta": 4272,
+          "percent": 0.029547947527763796
+        },
+        "query_instructions": {
+          "before": 251304,
+          "after": 251471,
+          "delta": 167,
+          "percent": 0.0664533791742361
+        },
+        "full_query_instructions": {
+          "before": 1081256,
+          "after": 1080811,
+          "delta": -445,
+          "percent": -0.04115584098492997
+        },
+        "warm_full_query": {
+          "before": 121256,
+          "after": 120811,
+          "percent": -0.36699214884211573
+        },
+        "first_touch_charge_delta": 0
+      },
+      {
+        "rows": 211,
+        "lifecycle": "same_wasm_restore",
+        "access": 1,
+        "export_instructions": {
+          "before": 13242170,
+          "after": 13245690,
+          "delta": 3520,
+          "percent": 0.026581746043130572
+        },
+        "callback_instructions": {
+          "before": 11968398,
+          "after": 11974288,
+          "delta": 5890,
+          "percent": 0.0492129355992299
+        },
+        "query_instructions": {
+          "before": 171305,
+          "after": 171131,
+          "delta": -174,
+          "percent": -0.10157321736085079
+        },
+        "full_query_instructions": {
+          "before": 1084999,
+          "after": 1080901,
+          "delta": -4098,
+          "percent": -0.377696200641664
+        },
+        "warm_full_query": {
+          "before": 124999,
+          "after": 120901,
+          "percent": -3.278426227409814
+        },
+        "first_touch_charge_delta": 0
+      },
+      {
+        "rows": 256,
+        "lifecycle": "install",
+        "access": 0,
+        "export_instructions": {
+          "before": 16200336,
+          "after": 16211290,
+          "delta": 10954,
+          "percent": 0.06761588154715614
+        },
+        "callback_instructions": {
+          "before": 15246479,
+          "after": 15258062,
+          "delta": 11583,
+          "percent": 0.07597163909123239
+        },
+        "query_instructions": {
+          "before": 170990,
+          "after": 251186,
+          "delta": 80196,
+          "percent": 46.900988361892516
+        },
+        "full_query_instructions": {
+          "before": 1079899,
+          "after": 1159757,
+          "delta": 79858,
+          "percent": 7.39495082410484
+        },
+        "warm_full_query": {
+          "before": 119899,
+          "after": 119757,
+          "percent": -0.1184330144538337
+        },
+        "first_touch_charge_delta": 80000
+      },
+      {
+        "rows": 256,
+        "lifecycle": "install",
+        "access": 1,
+        "export_instructions": {
+          "before": 13903177,
+          "after": 13900503,
+          "delta": -2674,
+          "percent": -0.01923301415208689
+        },
+        "callback_instructions": {
+          "before": 12472507,
+          "after": 12469822,
+          "delta": -2685,
+          "percent": -0.021527348110528255
+        },
+        "query_instructions": {
+          "before": 91139,
+          "after": 171097,
+          "delta": 79958,
+          "percent": 87.73192595924905
+        },
+        "full_query_instructions": {
+          "before": 1243382,
+          "after": 1323390,
+          "delta": 80008,
+          "percent": 6.434707917598925
+        },
+        "warm_full_query": {
+          "before": 123382,
+          "after": 123390,
+          "percent": 0.006483927963563119
+        },
+        "first_touch_charge_delta": 80000
+      },
+      {
+        "rows": 256,
+        "lifecycle": "same_wasm_restore",
+        "access": 0,
+        "export_instructions": {
+          "before": 16046094,
+          "after": 16149551,
+          "delta": 103457,
+          "percent": 0.6447488092740761
+        },
+        "callback_instructions": {
+          "before": 15096167,
+          "after": 15100334,
+          "delta": 4167,
+          "percent": 0.027603033273271294
+        },
+        "query_instructions": {
+          "before": 331148,
+          "after": 331150,
+          "delta": 2,
+          "percent": 0.0006039595588758218
+        },
+        "full_query_instructions": {
+          "before": 1319267,
+          "after": 1238675,
+          "delta": -80592,
+          "percent": -6.108846806597912
+        },
+        "warm_full_query": {
+          "before": 119267,
+          "after": 118675,
+          "percent": -0.49636529802878915
+        },
+        "first_touch_charge_delta": -80000
+      },
+      {
+        "rows": 256,
+        "lifecycle": "same_wasm_restore",
+        "access": 1,
+        "export_instructions": {
+          "before": 13894258,
+          "after": 13984577,
+          "delta": 90319,
+          "percent": 0.6500455080076906
+        },
+        "callback_instructions": {
+          "before": 12462600,
+          "after": 12554017,
+          "delta": 91417,
+          "percent": 0.7335307239259903
+        },
+        "query_instructions": {
+          "before": 331260,
+          "after": 331169,
+          "delta": -91,
+          "percent": -0.027470868803958215
+        },
+        "full_query_instructions": {
+          "before": 1243336,
+          "after": 1241084,
+          "delta": -2252,
+          "percent": -0.1811256168887554
+        },
+        "warm_full_query": {
+          "before": 123336,
+          "after": 121084,
+          "percent": -1.825906466887206
+        },
+        "first_touch_charge_delta": 0
+      }
+    ],
+    "all_sampling_within_one_percent": true,
+    "all_cold_queries_within_one_percent": false,
+    "all_warm_controls_within_one_percent": true,
+    "cold_query_exception_accepted": true,
+    "acceptance_authority": "Maintainer explicitly accepted the four measured B2 cold-query regressions on 2026-09-23; 1% remains applicable elsewhere.",
+    "maximum_extra_query_instructions": 80008,
+    "maximum_first_touch_charge_delta": 80000,
+    "lifecycle": [
+      {
+        "condition": "before",
+        "export_instructions": 11466352,
+        "lifecycle": "install",
+        "rows": 1
+      },
+      {
+        "condition": "before",
+        "export_instructions": 12444023,
+        "lifecycle": "same_wasm_restore",
+        "rows": 1
+      },
+      {
+        "condition": "before",
+        "export_instructions": 11466352,
+        "lifecycle": "install",
+        "rows": 211
+      },
+      {
+        "condition": "before",
+        "export_instructions": 12444023,
+        "lifecycle": "same_wasm_restore",
+        "rows": 211
+      },
+      {
+        "condition": "before",
+        "export_instructions": 11466352,
+        "lifecycle": "install",
+        "rows": 256
+      },
+      {
+        "condition": "before",
+        "export_instructions": 12444023,
+        "lifecycle": "same_wasm_restore",
+        "rows": 256
+      },
+      {
+        "condition": "after",
+        "export_instructions": 9297924,
+        "lifecycle": "install",
+        "rows": 1
+      },
+      {
+        "condition": "after",
+        "export_instructions": 11182463,
+        "lifecycle": "same_wasm_restore",
+        "rows": 1
+      },
+      {
+        "condition": "after",
+        "export_instructions": 9297924,
+        "lifecycle": "install",
+        "rows": 211
+      },
+      {
+        "condition": "after",
+        "export_instructions": 11182463,
+        "lifecycle": "same_wasm_restore",
+        "rows": 211
+      },
+      {
+        "condition": "after",
+        "export_instructions": 9297924,
+        "lifecycle": "install",
+        "rows": 256
+      },
+      {
+        "condition": "after",
+        "export_instructions": 11182463,
+        "lifecycle": "same_wasm_restore",
+        "rows": 256
+      }
+    ]
+  },
+  "checks": {
+    "template_native": {
+      "log_sha256": "8439826a2fe870564749ccecdb04dcb9c155423f8a80150f7df3821896481094",
+      "result": "pass"
+    },
+    "root_feature_clippy": {
+      "log_sha256": "8af3e67762277c34954bebf8b83222fee45f1bb4f2b5e0d88ad0144701b0b3a8",
+      "result": "pass"
+    },
+    "core_metrics_native": {
+      "log_sha256": "56c006543deaf66c8c3abc90fff6105861c2de7fbcd526008fe82d71bc11c8bc",
+      "result": "pass"
+    },
+    "core_control_plane_all_target_clippy": {
+      "log_sha256": "0372b51dbefff61d57e06f5f71d093ac8f876ddd687ef1ba9409f32b961df84c",
+      "result": "pass"
+    },
+    "root_store_pocketic": {
+      "log_sha256": "339f2f4d1be8db7a6b436d3ab8d2a83718355796e7cf686fd0246931aa270e74",
+      "result": "pass"
+    },
+    "document_semantics": {
+      "log_sha256": "ba489fa36fca2aebe455ebd0797935ca7007461de877dcdc822633d5d33b607d",
+      "result": "pass"
+    }
+  },
+  "raw_local_identities": {
+    ".tmp/b2-closeout-20260923/after.tar.gz": "7b8ba53219057aed4f6b0aef2469b732c28304a6299bfd3c314c3bb0f14d2d5f",
+    ".tmp/b2-canonical-20260923/results/after/driver": "d695a5ef878e463ae615bcceb0943177366af82a647f6c31e31c8fbd553d8510",
+    ".tmp/b2-query-20260923/full-query/driver": "03c8265f19a22f4b10b7ffba557e43dee6f447e9deee9c44c3c145d78709768f",
+    ".tmp/b2-closeout-20260923/wasm-replica-function-count": "55deb69d0b461d532fdcbcfb3da5a33d09bdbffe32981320f2174a7eaed7e0c9",
+    ".tmp/b2-closeout-20260923/full-query/results/before/runtime_probe/instruction-wrapped.wasm": "2f11349820ef95b422fffc439becccaa0e4f6f46e5cc8ad1c7ddaa7d60c19b63",
+    ".tmp/b2-closeout-20260923/full-query/results/after/runtime_probe/instruction-wrapped.wasm": "c2bef46c89a54766185c57197f0b0b494d3a4ef6b5815ec7d69bab75563b89cf",
+    ".tmp/b2-closeout-20260923/warm-query-control/results/before/runtime_probe/instruction-wrapped.wasm": "25790cc8301c39db83d5b4ccbb5db0a26a494670674e83f88546618404b8a27c",
+    ".tmp/b2-closeout-20260923/warm-query-control/results/after/runtime_probe/instruction-wrapped.wasm": "99a07a15b2169d9a675c72329b56f46a3e4ce7f46c70071d64014b73b878e7be"
+  },
+  "retained_records": {
+    "file": "b2-storage-closeout-records.tar.gz",
+    "sha256": "57c536b8318d5fd8edb99dac178c67ad667cf2ee61fb2a444dbc39fa4a0e6651",
+    "members": 256
+  },
+  "limitations": [
+    "One canonical build per condition; B5 owns final independent clean repetitions.",
+    "No build-speed or process-resource claim.",
+    "Named absence alone does not prove absence of inlined machinery; source reachability and complete canonical mappings accompany it.",
+    "Four cold-query regressions accepted only for these measured B2 vectors; the general 1% allowance remains unchanged.",
+    "Page cohort retained from accepted B1; no new five-width B2 slope claim.",
+    "Raw Wasm, source archive and full linker maps remain in local measurement storage."
+  ],
+  "excluded_attempts": [
+    "Config borrowing and borrowed chronological history experiments were not adopted.",
+    "Initial attribution control selected the wrong baseline malloc body; corrected matched function control alone retained.",
+    "Initial targeted metrics test expectations retained the removed Bootstrap label; native-only assertions corrected and all 92 tests rerun successfully."
+  ]
+}

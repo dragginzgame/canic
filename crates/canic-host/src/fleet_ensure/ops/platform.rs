@@ -619,6 +619,8 @@ enum RejectionCode {
 #[derive(Debug, ThisError)]
 pub enum IcpEnsurePlatformError {
     #[error(transparent)]
+    RetirementDebit(#[from] crate::fleet_ensure::ops::reinstall::debit::RetirementDebitError),
+    #[error(transparent)]
     FundingObservation(
         #[from] crate::fleet_ensure::model::funding_observation::FundingObservationError,
     ),
@@ -877,6 +879,7 @@ struct ObservationCounters {
 
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
+    retirement_debit_block: Option<u64>,
     pub(super) desired: DesiredFleet,
     pub(super) icp: IcpCli,
     initial_observation_delay: Duration,
@@ -917,6 +920,7 @@ impl IcpEnsurePlatform {
         Self {
             desired,
             icp,
+            retirement_debit_block: None,
             initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
             observation_snapshot: RefCell::new(None),
@@ -927,6 +931,13 @@ impl IcpEnsurePlatform {
             estate_observations: BTreeMap::new(),
             root: root.to_path_buf(),
         }
+    }
+
+    /// Select one external debit for a fresh source retirement review, never an apply override.
+    #[must_use]
+    pub const fn with_retirement_debit(mut self, block: Option<u64>) -> Self {
+        self.retirement_debit_block = block;
+        self
     }
 
     /// Select the signer before the operation's existing Principal admission check.
@@ -3311,6 +3322,22 @@ impl IcpEnsurePlatform {
 impl EnsurePlatform for IcpEnsurePlatform {
     type Error = IcpEnsurePlatformError;
 
+    fn retirement_debit_block(&self) -> Option<u64> {
+        self.retirement_debit_block
+    }
+
+    fn observe_retirement_debit(
+        &mut self,
+        block: u64,
+    ) -> Result<Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>, Self::Error> {
+        Ok(Some(crate::fleet_ensure::ops::reinstall::debit::observe(
+            &self.icp,
+            &self.desired.cycles_ledger,
+            &self.desired.operator,
+            block,
+        )?))
+    }
+
     fn with_planning_observations<T, E>(
         &mut self,
         observe: impl FnOnce(&mut Self) -> Result<T, E>,
@@ -3428,137 +3455,144 @@ impl EnsurePlatform for IcpEnsurePlatform {
         root_name: &str,
         check: super::ReinstallAssetCheck,
     ) -> Result<bool, Self::Error> {
-        let binding = intent
-            .authorities
-            .iter()
-            .find(|binding| binding.name == root_name)
-            .ok_or_else(|| {
-                IcpEnsurePlatformError::RootManagement("missing reset Root".to_string())
-            })?;
-        let principal = parse_principal("reset Root", &binding.principal)?;
-        let candid = if let Some(source) = intent.source.as_deref()
-            && check == super::ReinstallAssetCheck::BeforeReset
-        {
-            let path = source
-                .reviewed_desired
-                .desired()
-                .protocol
-                .as_ref()
-                .map(|protocol| &protocol.root_candid)
-                .ok_or_else(|| pool_configuration_error("missing source Root protocol".into()))?;
-            let hash = super::artifact_sha256(&self.root, path)
-                .map_err(|error| pool_configuration_error(error.to_string()))?;
-            if source.candid_sha256_by_path.get(path) != Some(&hash) {
-                return Err(pool_configuration_error(
-                    "source Root protocol changed".into(),
-                ));
-            }
-            self.root.join(path)
-        } else {
-            self.root_protocol_candid()?
-        };
-        let assets = intent
-            .assets
-            .iter()
-            .filter(|asset| asset.root == root_name)
-            .collect::<Vec<_>>();
-        Self::reinstall_assets_match_bound(&self.icp, &candid, principal, &assets, check)
+        self.timed_observation(FleetObservationStage::RootManagement, |platform| {
+            let binding = intent
+                .authorities
+                .iter()
+                .find(|binding| binding.name == root_name)
+                .ok_or_else(|| {
+                    IcpEnsurePlatformError::RootManagement("missing reset Root".to_string())
+                })?;
+            let principal = parse_principal("reset Root", &binding.principal)?;
+            let candid = if let Some(source) = intent.source.as_deref()
+                && check == super::ReinstallAssetCheck::BeforeReset
+            {
+                let path = source
+                    .reviewed_desired
+                    .desired()
+                    .protocol
+                    .as_ref()
+                    .map(|protocol| &protocol.root_candid)
+                    .ok_or_else(|| {
+                        pool_configuration_error("missing source Root protocol".into())
+                    })?;
+                let hash = super::artifact_sha256(&platform.root, path)
+                    .map_err(|error| pool_configuration_error(error.to_string()))?;
+                if source.candid_sha256_by_path.get(path) != Some(&hash) {
+                    return Err(pool_configuration_error(
+                        "source Root protocol changed".into(),
+                    ));
+                }
+                platform.root.join(path)
+            } else {
+                platform.root_protocol_candid()?
+            };
+            let assets = intent
+                .assets
+                .iter()
+                .filter(|asset| asset.root == root_name)
+                .collect::<Vec<_>>();
+            Self::reinstall_assets_match_bound(&platform.icp, &candid, principal, &assets, check)
+        })
     }
 
     fn reinstall_authorities(
         &mut self,
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<BTreeMap<String, RootManagementCanisterObservation>>, Self::Error> {
-        self.require_operator()?;
-        let network = resolve_icp_build_network_from_root(&self.root, &self.desired.environment)
-            .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?;
-        let catalog = if network == BuildNetwork::Ic {
-            let now = SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(|_| {
-                    IcpEnsurePlatformError::RootManagement(
-                        "system clock is before the Unix epoch".to_string(),
-                    )
-                })?
-                .as_secs();
-            Some(
-                load_cached_mainnet_subnet_catalog(&self.root, now)
-                    .map_err(IcpEnsurePlatformError::SubnetCatalog)?,
-            )
-        } else {
-            None
-        };
-        let mut authorities = BTreeMap::new();
-        let root_targets = self
-            .desired
-            .canisters
-            .iter()
-            .filter(|c| c.kind == DesiredCanisterKind::Root)
-            .map(|c| c.name.clone())
-            .collect();
-        let roots = self
-            .observe_root_management(state, &root_targets)?
-            .ok_or_else(|| {
-                IcpEnsurePlatformError::RootManagement("missing Root authority".to_string())
-            })?;
-        let configured = self
-            .desired
-            .canisters
-            .iter()
-            .filter(|c| c.kind != DesiredCanisterKind::Pool)
-            .collect::<Vec<_>>();
-        for batch in configured.chunks(super::bounded_observations::MAX_IN_FLIGHT) {
-            // Root prerequisites finish first. Drain this batch, then consume its
-            // outcomes in configured order before issuing any later batch.
-            let mut statuses = self.read_status_batch(
-                batch
-                    .iter()
-                    .filter(|c| !roots.roots.contains_key(&c.name))
-                    .filter_map(|c| self.current_principal(state, &c.name)),
-            );
-            for configured in batch {
-                let principal =
-                    self.current_principal(state, &configured.name)
+        self.timed_observation(FleetObservationStage::RootManagement, |platform| {
+            platform.require_operator()?;
+            let network =
+                resolve_icp_build_network_from_root(&platform.root, &platform.desired.environment)
+                    .map_err(|error| IcpEnsurePlatformError::RootManagement(error.to_string()))?;
+            let catalog = if network == BuildNetwork::Ic {
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .map_err(|_| {
+                        IcpEnsurePlatformError::RootManagement(
+                            "system clock is before the Unix epoch".to_string(),
+                        )
+                    })?
+                    .as_secs();
+                Some(
+                    load_cached_mainnet_subnet_catalog(&platform.root, now)
+                        .map_err(IcpEnsurePlatformError::SubnetCatalog)?,
+                )
+            } else {
+                None
+            };
+            let mut authorities = BTreeMap::new();
+            let root_targets = platform
+                .desired
+                .canisters
+                .iter()
+                .filter(|c| c.kind == DesiredCanisterKind::Root)
+                .map(|c| c.name.clone())
+                .collect();
+            let roots = platform
+                .observe_root_management(state, &root_targets)?
+                .ok_or_else(|| {
+                    IcpEnsurePlatformError::RootManagement("missing Root authority".to_string())
+                })?;
+            let configured = platform
+                .desired
+                .canisters
+                .iter()
+                .filter(|c| c.kind != DesiredCanisterKind::Pool)
+                .collect::<Vec<_>>();
+            for batch in configured.chunks(super::bounded_observations::MAX_IN_FLIGHT) {
+                // Root prerequisites finish first. Drain this batch, then consume its
+                // outcomes in configured order before issuing any later batch.
+                let mut statuses = platform.read_status_batch(
+                    batch
+                        .iter()
+                        .filter(|c| !roots.roots.contains_key(&c.name))
+                        .filter_map(|c| platform.current_principal(state, &c.name)),
+                );
+                for configured in batch {
+                    let principal = platform
+                        .current_principal(state, &configured.name)
                         .ok_or_else(|| {
                             IcpEnsurePlatformError::UnresolvedCreated(configured.name.clone())
                         })?;
-                // Reuse only this pass's Root observation; a subsequent guard starts fresh.
-                let live = if let Some(root) = roots.roots.get(&configured.name) {
-                    self.complete_install_status(principal, root.live.clone())?
-                } else {
-                    let live = self
-                        .status_batch_response(&mut statuses, principal)?
-                        .ok_or_else(|| {
-                            IcpEnsurePlatformError::RootManagement(
-                                "missing infrastructure".to_string(),
-                            )
-                        })?;
-                    self.complete_install_status(principal, live)?
-                };
-                let subnet = if let Some(root) = roots.roots.get(&configured.name) {
-                    root.subnet.clone()
-                } else if let Some(catalog) = &catalog {
-                    catalog
-                        .catalog
-                        .resolve_canister_route(principal)
-                        .map(|route| route.subnet.to_text())
-                        .map_err(|error| {
-                            IcpEnsurePlatformError::RootManagement(error.to_string())
-                        })?
-                } else {
-                    configured.subnet.clone()
-                };
-                authorities.insert(
-                    configured.name.clone(),
-                    RootManagementCanisterObservation {
-                        live,
-                        name: configured.name.clone(),
-                        subnet,
-                    },
-                );
+                    // Reuse only this pass's Root observation; a subsequent guard starts fresh.
+                    let live = if let Some(root) = roots.roots.get(&configured.name) {
+                        platform.complete_install_status(principal, root.live.clone())?
+                    } else {
+                        let live = platform
+                            .status_batch_response(&mut statuses, principal)?
+                            .ok_or_else(|| {
+                                IcpEnsurePlatformError::RootManagement(
+                                    "missing infrastructure".to_string(),
+                                )
+                            })?;
+                        platform.complete_install_status(principal, live)?
+                    };
+                    let subnet = if let Some(root) = roots.roots.get(&configured.name) {
+                        root.subnet.clone()
+                    } else if let Some(catalog) = &catalog {
+                        catalog
+                            .catalog
+                            .resolve_canister_route(principal)
+                            .map(|route| route.subnet.to_text())
+                            .map_err(|error| {
+                                IcpEnsurePlatformError::RootManagement(error.to_string())
+                            })?
+                    } else {
+                        configured.subnet.clone()
+                    };
+                    authorities.insert(
+                        configured.name.clone(),
+                        RootManagementCanisterObservation {
+                            live,
+                            name: configured.name.clone(),
+                            subnet,
+                        },
+                    );
+                }
             }
-        }
-        Ok(Some(authorities))
+            Ok(Some(authorities))
+        })
     }
 
     fn reinstall_inventory(
@@ -5342,6 +5376,8 @@ const fn rejection_code_name(code: RejectionCode) -> &'static str {
 mod tests {
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
+    #[cfg(unix)]
+    use std::sync::{Arc, Mutex};
 
     #[test]
     fn identity_binding_keeps_operator_fence_before_effects() {
@@ -8164,12 +8200,35 @@ printf 'finish\n' >> events
         let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
         let independent = bound * 2 + 1;
         let mut fixture = ProtocolOwnersFixture::synchronized_reinstall_owners(independent);
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&timings);
+        fixture.platform = fixture.platform.with_observation_handler(move |timing| {
+            sink.lock().unwrap().push(timing);
+        });
         let observed = fixture
             .platform
             .reinstall_authorities(&fixture.state)
             .unwrap()
             .unwrap();
         assert_eq!(observed.len(), independent + 1);
+        let recorded = timings.lock().unwrap();
+        let started = recorded.first().unwrap();
+        let finished = recorded.last().unwrap();
+        assert_eq!(started.span_id, finished.span_id);
+        assert_eq!(started.succeeded, None);
+        assert_eq!(finished.succeeded, Some(true));
+        assert_eq!(finished.stage, FleetObservationStage::RootManagement);
+        assert_eq!(finished.parent_span_id, None);
+        assert_eq!(
+            finished.remote_call_attempts,
+            fixture.platform.icp.remote_call_count()
+        );
+        assert!(
+            recorded
+                .iter()
+                .any(|timing| timing.parent_span_id == Some(started.span_id))
+        );
+        drop(recorded);
         assert!(
             observed
                 .values()
@@ -8215,6 +8274,11 @@ printf 'finish\n' >> events
     fn reinstall_authorities_drain_failed_batch_keep_error_order_and_retry_fresh() {
         let bound = super::super::bounded_observations::MAX_IN_FLIGHT;
         let mut fixture = ProtocolOwnersFixture::synchronized_reinstall_owners(bound + 1);
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&timings);
+        fixture.platform = fixture.platform.with_observation_handler(move |timing| {
+            sink.lock().unwrap().push(timing);
+        });
         let original = std::fs::read(fixture.root.join("coordinator.json")).unwrap();
         std::fs::copy(
             fixture.root.join("store.json"),
@@ -8230,6 +8294,14 @@ printf 'finish\n' >> events
         assert!(
             matches!(fixture.platform.reinstall_authorities(&fixture.state),
             Err(IcpEnsurePlatformError::StatusIdentityMismatch { expected, .. }) if expected == "coordinator")
+        );
+        let finished = timings.lock().unwrap().last().unwrap().clone();
+        assert_eq!(finished.succeeded, Some(false));
+        assert_eq!(finished.stage, FleetObservationStage::RootManagement);
+        assert_eq!(finished.parent_span_id, None);
+        assert_eq!(
+            finished.remote_call_attempts,
+            fixture.platform.icp.remote_call_count()
         );
         let events = std::fs::read_to_string(fixture.root.join("events")).unwrap();
         let finished = events

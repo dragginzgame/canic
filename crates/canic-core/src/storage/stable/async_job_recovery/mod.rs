@@ -6,7 +6,6 @@
 
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    eager_static,
     role_contract::allocation::memory::async_job_recovery::ASYNC_JOB_RECOVERY_ID,
     storage::prelude::*,
 };
@@ -15,7 +14,7 @@ use std::cell::RefCell;
 /// Exact maximum encoded bytes for the complete async-job recovery record.
 pub const MAX_ASYNC_JOB_RECOVERY_RECORD_BYTES: u32 = 810;
 
-eager_static! {
+std::thread_local! {
     static ASYNC_JOB_RECOVERY: RefCell<
         Cell<AsyncJobRecoveryRecord, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(Cell::init(

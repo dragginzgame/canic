@@ -1,0 +1,202 @@
+{
+  "schema_version": 1,
+  "experiment": "b1-17-page-generic-cohort",
+  "source_commit": "50f40171d6177c3d1e490b1fdb5f6163323b2cd5",
+  "run_mode": "retained",
+  "retention_eligible": true,
+  "run_directory": ".tmp/b1-cohort-method-20260922/retained/b1-17-page-generic-cohort-50f40171d617",
+  "complete_matrix_verified": true,
+  "builds_verified": 10,
+  "method_and_lock_hashes_verified": true,
+  "payload_hashes_lengths_gzip_verified": true,
+  "direct_section_sizes_function_counts_verified": true,
+  "repeated_metric_vectors_verified": true,
+  "determinism_claim": "pass",
+  "candid_and_export_identities_equal": true,
+  "instruction_evidence": "absent; no runtime parity claim",
+  "deltas": [
+    {
+      "condition": "width-2",
+      "artifact": "leaf_probe",
+      "absolute": {
+        "wasm_bytes": 2464850,
+        "gzip_bytes": 892839,
+        "code_section_bytes": 2243726,
+        "data_section_bytes": 185654,
+        "replica_limited_defined_functions": 4035,
+        "table_minimum": 856,
+        "element_entries": 855
+      },
+      "from_first_condition": {
+        "wasm_bytes": 1795,
+        "gzip_bytes": 495,
+        "code_section_bytes": 1641,
+        "data_section_bytes": 145,
+        "replica_limited_defined_functions": 3,
+        "table_minimum": 3,
+        "element_entries": 3
+      },
+      "from_previous_condition": {
+        "wasm_bytes": 1795,
+        "gzip_bytes": 495,
+        "code_section_bytes": 1641,
+        "data_section_bytes": 145,
+        "replica_limited_defined_functions": 3,
+        "table_minimum": 3,
+        "element_entries": 3
+      }
+    },
+    {
+      "condition": "width-3",
+      "artifact": "leaf_probe",
+      "absolute": {
+        "wasm_bytes": 2466630,
+        "gzip_bytes": 893252,
+        "code_section_bytes": 2245347,
+        "data_section_bytes": 185804,
+        "replica_limited_defined_functions": 4038,
+        "table_minimum": 859,
+        "element_entries": 858
+      },
+      "from_first_condition": {
+        "wasm_bytes": 3575,
+        "gzip_bytes": 908,
+        "code_section_bytes": 3262,
+        "data_section_bytes": 295,
+        "replica_limited_defined_functions": 6,
+        "table_minimum": 6,
+        "element_entries": 6
+      },
+      "from_previous_condition": {
+        "wasm_bytes": 1780,
+        "gzip_bytes": 413,
+        "code_section_bytes": 1621,
+        "data_section_bytes": 150,
+        "replica_limited_defined_functions": 3,
+        "table_minimum": 3,
+        "element_entries": 3
+      }
+    },
+    {
+      "condition": "width-4",
+      "artifact": "leaf_probe",
+      "absolute": {
+        "wasm_bytes": 2468162,
+        "gzip_bytes": 893614,
+        "code_section_bytes": 2246724,
+        "data_section_bytes": 185950,
+        "replica_limited_defined_functions": 4041,
+        "table_minimum": 862,
+        "element_entries": 861
+      },
+      "from_first_condition": {
+        "wasm_bytes": 5107,
+        "gzip_bytes": 1270,
+        "code_section_bytes": 4639,
+        "data_section_bytes": 441,
+        "replica_limited_defined_functions": 9,
+        "table_minimum": 9,
+        "element_entries": 9
+      },
+      "from_previous_condition": {
+        "wasm_bytes": 1532,
+        "gzip_bytes": 362,
+        "code_section_bytes": 1377,
+        "data_section_bytes": 146,
+        "replica_limited_defined_functions": 3,
+        "table_minimum": 3,
+        "element_entries": 3
+      }
+    },
+    {
+      "condition": "width-5",
+      "artifact": "leaf_probe",
+      "absolute": {
+        "wasm_bytes": 2470169,
+        "gzip_bytes": 893686,
+        "code_section_bytes": 2248580,
+        "data_section_bytes": 186094,
+        "replica_limited_defined_functions": 4042,
+        "table_minimum": 865,
+        "element_entries": 864
+      },
+      "from_first_condition": {
+        "wasm_bytes": 7114,
+        "gzip_bytes": 1342,
+        "code_section_bytes": 6495,
+        "data_section_bytes": 585,
+        "replica_limited_defined_functions": 10,
+        "table_minimum": 12,
+        "element_entries": 12
+      },
+      "from_previous_condition": {
+        "wasm_bytes": 2007,
+        "gzip_bytes": 72,
+        "code_section_bytes": 1856,
+        "data_section_bytes": 144,
+        "replica_limited_defined_functions": 1,
+        "table_minimum": 3,
+        "element_entries": 3
+      }
+    }
+  ],
+  "interfaces": {
+    "leaf_probe": {
+      "candid_sha256": "36bfe246c42512b0b06d3956c32524a32b85a0598ef804d835132e66655ed982",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query audit_env_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query audit_log_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query audit_page_generic_cohort",
+          "kind": 0
+        },
+        {
+          "name": "canister_query audit_time_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    }
+  }
+}

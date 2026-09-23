@@ -1,0 +1,43 @@
+{
+  "schema_version": 1,
+  "experiment": "b1-07-exact-role-capability-expansion",
+  "source_commit": "50f40171d6177c3d1e490b1fdb5f6163323b2cd5",
+  "source_files": [
+    {
+      "path": "crates/canic/src/macros/build.rs",
+      "sha256": "18fef0ccfad913964ccccaf31be37c3e0e47b4babdb977e47ffc6134ee86f58e"
+    },
+    {
+      "path": "crates/canic/src/macros/start.rs",
+      "sha256": "d7aed3ecdd599c1b590b430e3e0035d82f7fcb7f01142dd53336ba67bc5d2912"
+    },
+    {
+      "path": "crates/canic/src/macros/endpoints/role.rs",
+      "sha256": "ec6c75636598b99f530d32a99607b7cdf91b3fbf1ba38e287fc1b4090074445e"
+    },
+    {
+      "path": "crates/canic/src/macros/endpoints/root.rs",
+      "sha256": "4e0e43e4b280a821a85aebca7325d2223bf48759f7d53352ebbd714fcce6c22f"
+    },
+    {
+      "path": "crates/canic/src/macros/endpoints/fleet_coordinator.rs",
+      "sha256": "113e666b295be3ca21ee95926dae166d941b1ff0799c9d50b1fed62052aa0c17"
+    },
+    {
+      "path": "crates/canic/src/macros/endpoints/wasm_store.rs",
+      "sha256": "d68f96a19980e894dbc4c7bde067fceb352c5ad61ee0f43b1e53b2eba22d17c7"
+    },
+    {
+      "path": "apps/test/canic.toml",
+      "sha256": "131b27214362c2a13c26a0523f0ea95cb6f02ed3be25169f51b35fa73ccfd7a4"
+    }
+  ],
+  "accepted": true,
+  "counterfactual_absent": true,
+  "production_saving_claim": false,
+  "optimized_absence_claim": false,
+  "remaining_requirement": "provider ablations and B4 optimized role-inapplicable reachability proof remain binding",
+  "accepted_on": "2026-09-23",
+  "acceptance_authority": "Maintainer explicitly accepted the source finding in the current conversation.",
+  "disposition": "already role-selected at frozen baseline; retain source/protocol evidence and no numeric attribution"
+}

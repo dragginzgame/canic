@@ -1,5 +1,62 @@
 # Release-test throughput qualification
 
+## Post-.37 attribution and early compilation — 2026-09-22
+
+Published .37 is the new base. Its retained successful test command takes
+4,858 seconds versus 2,669 in the earlier .36 run. These are different source
+and cache states, not a controlled benchmark. The
+[structured comparison](post-37-attribution.json) binds the exact logs and
+retains selected timing and request evidence.
+
+| Stage | Earlier .36 run | .37 run |
+| --- | ---: | ---: |
+| Ordinary tests, including compilation | 94 s | 258 s |
+| Internal PocketIC, including compilation | 2,329 s | 4,093 s |
+| Host PocketIC proofs | 21 s | 31 s |
+| Runtime integrations | 197 s | 391 s |
+| Blob storage | 20 s | 71 s |
+| Payload limits | 7 s | 12 s |
+| Instrumented release-artifact resolution, nested in tests | 100.691 s | 946.494 s |
+
+The .37 ordinary native compile takes 178 seconds; internal compilation takes
+81 seconds and runtime integration compilation another 164 seconds. The latter
+does not begin until after the 4,093-second internal suite and host proofs.
+Artifact resolution includes 838.234 seconds of build/seal work. Other fixtures
+also build artifacts, so these instrumented spans are not a complete build ledger.
+
+Instrumented management-status requests fall from 1,585 to 1,577, while their
+inclusive request durations rise from 412.759 to 542.013 seconds. Identity
+lookups are 3,100 versus 3,132 and rise from 76.837 to 200.938 seconds. Identity
+timings can nest within status calls; concurrent and nested durations must not
+be summed as wall time. Polling, local work, transport and concurrent machine
+load can vary. The logs support substantial cold-build cost and slower reads,
+not a new explosion in status-call count or a measured regression attributable
+to .37's observation changes.
+
+The bounded correction moves compilation of all selected serial suites before
+PocketIC server startup. Preparation and execution call the same suite selector,
+with `--no-run` used only for preparation. Package features remain unchanged;
+full runs preserve the workspace host graph and PocketIC-only runs preserve the
+package-scoped host graph. External composition remains unselected. Compilation
+timings are separate from subsequent suite timings. A compile failure prevents
+server startup and every recovery case, while an execution failure retains the
+existing serial barrier and cleanup.
+
+An isolated runner simulation passes compile and execution failures at every
+suite boundary in both modes, selector equality, full successful ordering,
+ordinary failure preventing preparation/startup, narrow-mode scope and owned
+server cleanup. Scoped ShellCheck and the real plan-only inventory also pass.
+No Cargo build or PocketIC suite is executed by these checks.
+
+This prevents a confirmed class of late failure; it does not remove successful
+compilation work or establish a lower full-gate duration. Upfront preparation
+also delays discovery of an early runtime test failure by the cost of compiling
+later suites, and successful runs add Cargo freshness checks. Cold artifact
+builds, feature graphs and fresh authority validation are retained. Local catalog
+profiling remains open before considering any cache-lifetime change. B1 row 8
+is independently retained; serialization and metrics measurements remain the
+structural work queue. Versions stay .37, with one accumulating .38 draft.
+
 ## Post-.36 observation optimization — qualified locally, 2026-09-22
 
 The maintainer authorizes the first two bounded changes from the investigation

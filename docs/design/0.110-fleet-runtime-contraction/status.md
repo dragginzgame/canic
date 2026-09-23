@@ -1,5 +1,88 @@
 # Canic 0.110 Implementation Status
 
+## B1 accepted; B2 complete — 2026-09-23
+
+The [complete B1 review](../../audits/working/0.110-fleet-runtime-contraction/b1-input-evidence.md#complete-b1-review--accepted-2026-09-23)
+retains all required footprint attribution. Rows 2–6 and 8–18 have complete
+selected measurements; row 7 has explicit source/interface acceptance. The
+last documentation, timer and historical-family runs pass independent payload,
+method, interface, exact-repeat and source-restoration verification. Canonical
+and fixture controls satisfy absolute reserves. All five generic widths have
+verified canonical named-body correspondence.
+
+The [provider report](../../audits/reports/2026-09/2026-09-23/b1-provider-measurements.md),
+[prepared-experiment report](../../audits/reports/2026-09/2026-09-23/b1-prepared-experiments.md)
+and [historical-family ledger](../../audits/working/0.110-fleet-runtime-contraction/b1-pool-ledger-recovery-hard-cut.md)
+retain results and overlapping boundaries. No audit stub is a production cut.
+The maximum 1% maintained-workload instruction allowance remains; unexplained
+table growth is not approved. Footprint-only scope is explicitly accepted,
+without a build-speed/resource or runtime-parity claim. The destroyed-state
+inventory preserves historical allocation facts while applying the current
+reinstall-only contract and current-release safety obligations.
+
+B1 implementation, focused evidence and propagation are complete. The maintainer
+explicitly accepted complete B1 and authorized B2 on 2026-09-23. B2 now owns
+role-selected storage reachability; B3 implementation has not started. The open
+`.39` changelog preserves separately published `.38` recovery notes. Shared
+HEAD/package metadata remain `.37`; publication reconciliation belongs to the
+maintainer's Git/release flow. No Git publication or version mutation ran here.
+The [current handoff](../../status/current.md) owns exact run and validation paths.
+
+B2 has removed eager executable TLS registration and now compile-selects Fleet
+admission initialization/restoration. Exact enrollment rejection, corrected retry
+and active same-release projection recovery pass focused qualification. The
+[selection evidence](../../audits/reports/2026-09/2026-09-23/b2-admission-selection.json)
+records this checkpoint. The subsequent
+[admission-reader cut](../../audits/reports/2026-09/2026-09-23/b2-admission-reader.md)
+selects the reader from declared guards and removes its unnecessary async boundary.
+Focused behavior proofs pass. The parent-only diagnostic shrinks by 23,526 code
+bytes; mixed guards grow by 5,384 bytes and two explained evaluator table slots.
+The [final B2 closeout](../../audits/reports/2026-09/2026-09-23/b2-storage-closeout.md)
+completes all eleven canonical roles and four fixtures, exact interfaces,
+frozen reserves and verified canonical body mappings. Canonical code falls by
+186,952 bytes, functions by 476 and table slots by 274.
+Root-local payload readers are removed; approved manifests remain required.
+All twelve sampling exports stay within 1%. Four complete cold queries add one
+first-touch heap charge each; the maintainer explicitly accepted those measured
+B2 results on 2026-09-23. The general 1% allowance remains unchanged elsewhere.
+Warmed controls explain the cost without replacing cold qualification.
+
+Final template/metrics tests, scoped strict lint and the exact real Root/Store
+PocketIC provisioning/recovery case pass. The Page cohort is retained from
+accepted B1; current named generic bodies are refreshed. B2 and the complete
+accepted `.39` batch are push-ready. Stop here for the maintainer's release flow;
+B3 needs a separate residual record/codec benefit decision, and B4/B5 remain.
+No build-speed claim, broad gate, version transaction or Git publication follows.
+
+Cadence review: .110 already exceeds the twelve-release guideline. Keep this
+accepted B1 evidence and early-compilation correction in one open batch; no
+experiment receives a separate patch. B1 remains owned by .110, and .111 still
+requires the human minor-closeout gate.
+
+## After .37 — validation failure turnaround and B1, 2026-09-22
+
+Retained validation attribution separates cold builds from live observations.
+The implemented runner correction compiles selected serial suites before server
+startup, preserving each graph and every case. Simulated failure/recovery
+barriers, selector equality, narrow-lane behavior, cleanup, scoped shell lint
+and release-integrity checks pass. This prevents late compilation failure;
+successful full-gate speed remains unmeasured. See the
+[throughput report](../../audits/working/0.110-validation-throughput/report.md).
+
+Row 8's completed immutable run is now independently verified and
+[retained](../../audits/reports/2026-09/2026-09-22/b1-candid-construction-measurement.md).
+It gives zero executable-code and defined-function reduction across fourteen
+artifacts. Reduced Candid metadata is not a production runtime-contraction win.
+Row 10's complete matched measurement is now retained; row 12 is running after
+its successful completion and checkout restoration. All remaining
+B1 evidence and human acceptance requirements remain in force before B2/B3.
+
+The bounded runner correction is complete locally; the combined B1 batch remains
+in progress. Both changelog views accumulate under .38 while package versions
+remain .37. Continue the existing .110 cadence exception as one accepted batch,
+without a patch per measurement. No broad validation, Git publication, version
+transaction, deployment or sibling edit ran.
+
 ## .37 feedback extension — 2026-09-22
 
 The requested upstream scan confirms Toko's .36 adoption and one new CANIC-181
@@ -2439,8 +2522,8 @@ Current canonical-role evidence:
 
 | Batch | Outcome | Direct evidence | Status |
 | --- | --- | --- | --- |
-| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Active from immutable `v0.110.5`; valid `CANIC-WASM-001/v6` size/determinism evidence, generated-surface/destruction traces, pool-Ledger source absence, the machine-checked eighteen-row ablation harness and repository-owned frozen function counter, immutable all-role row 2 attribution supporting role-selected storage wiring without lifecycle parity, immutable all-role row 3 inclusive activation-persistence attribution supporting role-selected separation without activation parity, immutable canonical-plus-runtime-fixture row 4 authorization-persistence attribution without persistence or authorization parity, immutable canonical-plus-runtime/blob-fixture row 5 shared-CBOR-helper attribution without codec or persistence parity, immutable canonical-plus-runtime-fixture row 6 recovery-dispatch attribution without recovery parity, selected-artifact qualification for rows 8, 10 and 12, immutable row 11 payload-adapter attribution retaining the safety path, the `Page<T>`/`N = 5` generic fixture and hash-bound downstream routing observation are retained, while counter-backed immutable role/fixture measurements, remaining source-ablation patches and measurements, optimized-artifact absence, generic measurements/post-`-Oz` mapping, accepted allowances and compatible predecessor artifact evidence remain open |
-| B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Blocked overall on B1; bounded auth stable-declaration sub-slice explicitly active and targeted role evidence passes |
+| B1 | Immutable baseline, differential attribution and absolute budgets | Dated limits, repository-owned capability fixture matrix, replica-validator-equivalent local-function count, generated-surface inventory, complete artifact vector, current/predecessor delta for the deleted temporary pool Ledger recovery family, `1..=N` generic-instantiation cohort, named post-`-Oz` report, destroyed-state/reconstruction inventory and accepted allowances | Accepted by the maintainer on 2026-09-23. Rows 2–6 and 8–18 retain complete selected measurements; row 7 has accepted source/interface disposition. Canonical/fixture budgets, five-width canonical body mapping, generated surfaces and destroyed-state boundaries are documented in the [review packet](../../audits/working/0.110-fleet-runtime-contraction/b1-input-evidence.md#complete-b1-review--accepted-2026-09-23). |
+| B2 | Role-selected storage reachability | Lazy TLS, direct generated wiring, storage/lifecycle inventory contraction, data-only reservations, symbol absence and full remeasurement | Active after complete B1 acceptance; lazy stores and direct startup/recovery calls pass 87 native tests, three isolated role builds, strict scoped lint and six focused PocketIC lifecycle cases; remaining role reachability and measurements tracked in the [B2 ledger](../../audits/working/0.110-fleet-runtime-contraction/b2-storage-reachability.md) |
 | B3 | Capability-owned activation/auth records and only still-justified codecs | Concrete records, phase cache, bounded codec evidence and full remeasurement | Blocked overall on B2 decision; bounded auth-record split explicitly active without selecting another codec cut |
 | B4 | Endpoint, recovery and role-capability pruning | Complete generated-surface inventory, exact Candid/provider reachability, optimized body/function evidence, direct dispatch, continued absence of the hard-deleted temporary pool Ledger recovery family, role pruning and full remeasurement | Mandatory after the B3 decision while known role-inapplicable reachability remains |
 | B5 | Canic-owned qualification and closeout | Canonical and fixture 5% byte/function reserves, capability matrix, per-role generated-surface absence, total-module limit, instructions, determinism, structured reinstall-only guard, optional consumer observations and immutable audit | Blocked on final B2-B4 decision |
@@ -2458,14 +2541,10 @@ Current canonical-role evidence:
 
 ## Next Authorized Action
 
-Continue the selected validation-throughput investigation in the
-[current queue](../../status/current.md), using the retained .36 timings and
-targeted recovery cases. RF3 and the .36 feedback corrections are complete;
-do not reopen them merely because the dated checkpoints above predate publication.
-
-Then continue B1 from immutable `v0.110.5`. Rows 8, 10 and 12 still need
-retained matched measurements; row 6's retained measurement is complete.
-Complete the remaining controlled ablations, optimized generated-surface
-absence, generic cohort and accepted allowances. Human acceptance of complete
-B1 evidence precedes the remaining B2/B3 scope. Minor closeout remains a
-separate human-owned gate.
+Continue the accepted [B2 storage reachability batch](../../audits/working/0.110-fleet-runtime-contraction/b2-storage-reachability.md).
+Complete role-specific restoration/recovery selection, focused safety evidence
+and matched current optimized-artifact/instruction measurements. Do not rerun
+completed B1 ablations or treat source changes alone as optimized absence.
+Preserve separately published `.38` recovery work; publication ancestry and
+version reconciliation remain in the maintainer's release flow. B3 and minor
+closeout remain separate from this B2 implementation.

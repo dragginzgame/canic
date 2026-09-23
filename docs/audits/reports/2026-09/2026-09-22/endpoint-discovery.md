@@ -1,5 +1,34 @@
 # CANIC-181 selected-build endpoint discovery — 2026-09-22
 
+## Published downstream acceptance — 2026-09-22
+
+A subsequent read-only scan of Toko Miner's local feedback verifies CANIC-181
+on published Canic/CLI .37. The application inspects fresh Game Shard and Root
+declarations by exact build ID without an ICP sidecar or installed Fleet, with
+an intentionally nonexistent ICP executable. The expected 49,152-byte explicit
+action limit and 16,384-byte default are reported; a missing selected build
+rejects. Real-Wasm payload-boundary qualification also passes.
+
+Toko records every CI gate passing on frozen application commit
+`75e727cef3c071bb67997f0dd25b5e6d32db7094` plus the Canic dependency update,
+including all six managed scenarios. The proof uses IcyDB .261.5; current Toko
+feedback selects .261.6 with separate composition evidence. Concurrent/later
+gameplay and live deployment are outside the frozen Canic adoption proof.
+An initial shared-target executable disappearance is retained and the remaining
+gates pass using private outputs; this establishes no new Canic runtime defect.
+
+Source: Toko's `docs/upstream/canic.md`, SHA-256
+`2f3bd886f74dc80afded325e3b216400195575fa1ea16e9089215e0d051b05de`;
+adoption receipt `docs/upstream/artifacts/canic-0.110.37-adoption-2026-09-22.json`,
+SHA-256 `caf87c051266bc91f4cf881434c0b9502a1537ff36e87ee1de611cfc41e90a1e`.
+The scan reads sibling files only. Representative deployment timing, matched
+sampler/full-retention cost, exact live recovery, concurrent-operator and
+release-profile/relocation acceptance remain open with their existing owners.
+No new confirmed Canic defect is reported. The sections below retain the
+original pre-publication correction evidence.
+
+## Original correction context
+
 Toko's published .36 adoption passes full CI and verifies same-checkout fast
 build reuse in 2.00 seconds. It confirms a remaining Canic CLI defect: endpoint
 inspection looks for a local ICP sidecar after a complete managed build retained

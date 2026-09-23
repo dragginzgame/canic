@@ -1,0 +1,233 @@
+{
+  "batch": "B2",
+  "status": "first-slice-qualified-b2-incomplete",
+  "source_files": [
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/allocation_tests/mod.rs",
+      "sha256": "77439903338d1060d39c277ad920a437aac85d5fbc772761a403d46c5c45c572"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/canister_pool/mod.rs",
+      "sha256": "8337931ab5dc1c0a14e38f22c5c27623d3db2b3f81437239d6520274d1ea8ad5"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/component_provisioning/mod.rs",
+      "sha256": "b856971084a64e81d840757a15321545fdfef8bee5e824a5e8e0f150911d5cec"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/component_registry/mod.rs",
+      "sha256": "921bbbadd91807964078d0fb8660b7d4f25fbb73388e8a485f6dcd47c54db17e"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/fixture_store/mod.rs",
+      "sha256": "255223462a5a32b97fa6551984646c8024feaac365866fcb24e6dfa35f87590d"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/fleet_admission/mod.rs",
+      "sha256": "d52478312eb9f7b99f17ff01a14ba773d2461b2bc00e31bfa63b06ab38d37656"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/fleet_coordinator/mod.rs",
+      "sha256": "defa2b1e5e73f4b37ad6e44cb5b29958abefe458e5a818bb87b87d90bc834efa"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/fleet_registry_mirror/mod.rs",
+      "sha256": "7fc5675de95e2e547a188f2402d87f6148b016e9838c6d08a0d6351532c2ca5f"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/root_admission/mod.rs",
+      "sha256": "89b72f65e1f80e0be3010af91593124e84edf65b8e126e023e9a8d46376becbe"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/root_funding/mod.rs",
+      "sha256": "0cb76fc29234d623d2387a1ca521761cfa90c7e305e1b3f1ace432dee1b5f296"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/state/root_wasm_store.rs",
+      "sha256": "a0bfa56860dd071c7aefb9b3e679f06503df3c3ee1faab37dea0ad26f6bb5245"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/template/chunked.rs",
+      "sha256": "275db4ebc0cce8e3f3de3bd4ac8e574187566a783fc4c4720c427e94eddc56f7"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/template/gc/mod.rs",
+      "sha256": "5c8244f4c76681282ab77465dc618a9fd34da472ab79fe31b88e1c63055109fa"
+    },
+    {
+      "path": "crates/canic-control-plane/src/storage/stable/template/manifest.rs",
+      "sha256": "2351d24a747f8381eb563717a1b282065f2776b02e4391dc60f4736677f9a8a2"
+    },
+    {
+      "path": "crates/canic-core/src/memory/mod.rs",
+      "sha256": "c29108ea1c42b42801e01315cb5349708eaec1d9521ad1a70e25414649f90d40"
+    },
+    {
+      "path": "crates/canic-core/src/memory/runtime/mod.rs",
+      "sha256": "8fe72af0e7e43499eeb5344c39c8e33ca7429c1c03cf23f05dd2ed35a4c354d6"
+    },
+    {
+      "path": "crates/canic-core/src/memory_macros.rs",
+      "sha256": "6df9d4ba5cd6801ced0d0620b366e367e5e1e9c1cabf1fdeab849392988b5e15"
+    },
+    {
+      "path": "crates/canic-core/src/ops/runtime/memory/mod.rs",
+      "sha256": "b6186c13ef92bf477d57daab67c4d6352b9b89e74b78fab76284907ca16aa954"
+    },
+    {
+      "path": "crates/canic-core/src/ops/runtime/memory/tests.rs",
+      "sha256": "76e95fbb2ddeed13f4fabdcc3102bb8dfc155d5aa41c421afda45d615b8fe90c"
+    },
+    {
+      "path": "crates/canic-core/src/storage/mod.rs",
+      "sha256": "1102f9ce476b8a16d538da28f6e23cc0493bda1b1258674643fc91ed11ba5c2a"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/async_job_recovery/mod.rs",
+      "sha256": "97cb99385acb16bcd5b0f49e573bdb03c6291bef8bd1718d5b978537d54ea845"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/authority_restore/mod.rs",
+      "sha256": "4354764a40dc7c228160fb2ecd4810c92c30dc570139c2027580c3b6f8441939"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/blob_storage.rs",
+      "sha256": "72e483187eca1ea918c428f9e44b6774b31b6374613e283d7e0b859332d2dc2d"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/children.rs",
+      "sha256": "7e201d17472c1097f3bc42d3158fd3fe1f097c180ca2773a513002499a431630"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/cycles.rs",
+      "sha256": "0d2a9361088ea35230b360a5f0271d42c8f17c7f7d6ee04dfd770bcfd5214f16"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/env.rs",
+      "sha256": "98b81db225f6070dc95365abb17388e9ee8d1c0eb606357c8597849e0526a5a8"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/fleet_activation/mod.rs",
+      "sha256": "9b7625df0615f06c06abbb2ea6b4e519e79de9a077eda5b6f4a608fba4949589"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/fleet_admission_projection/mod.rs",
+      "sha256": "970808ab6db95d862013ec42aab2d9c96840b0ccdbb9545a56ac65ae1fe28840"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/intent.rs",
+      "sha256": "d3fb0058049ab8f2d65f3e034fa061dffdf7946f9adf4a872425d26626d28be8"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/log.rs",
+      "sha256": "9bf1989cf58f3f858770573b707cab48ea477776868e2809349206745b7c145f"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/placement_index.rs",
+      "sha256": "359ce044818a9bdf80e4b7daeb16c96649600440ff42f23cc4765ec678baf260"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/replay.rs",
+      "sha256": "09afe4a8a4cf0b6a5c7adf3b6d28982701e627b2590fd95d1ebb544c67a79acf"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/scaling.rs",
+      "sha256": "22995004f02a2076fe7e24eaf6ed906f6e2c21b77ce627c34a28d43074df6d2f"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/sharding/mod.rs",
+      "sha256": "3691c0cf0aa1a9e4f3744aa6520b4c0e3a83bd7dbbaf4c1132676af284ccc63b"
+    },
+    {
+      "path": "crates/canic-core/src/storage/stable/state/fleet.rs",
+      "sha256": "732dbefb2d7b9e1e505503c762a5b35658351647137d7a49cd46b455014f8ada"
+    },
+    {
+      "path": "crates/canic-core/src/workflow/runtime/nonroot.rs",
+      "sha256": "d6abcc4ad2d86893b63dd134d50c37987d1314fe366e62791b4e74e46a66f553"
+    },
+    {
+      "path": "crates/canic-core/tests/lifecycle_boundary_guard.rs",
+      "sha256": "f5e5c3f873f6a3d7ec2c8b586b5c471877c9b7a4ad63d6d85b03806ffed02869"
+    },
+    {
+      "path": "crates/canic/src/macros/start.rs",
+      "sha256": "7febaa0f636bd26b143217f1e10c5b0c230e17c9601395c5427a7ee079ba992b"
+    }
+  ],
+  "baseline_archive_sha256": "e381097367c5f9298c15553a17c41c58a6b7851b047859d73856abbea583a3fe",
+  "native_checks": [
+    {
+      "command": "cargo test --locked -p canic-core --lib memory",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-core-memory.log",
+      "passed_tests": 30,
+      "result": "passed",
+      "log_sha256": "9c041158c282647319506fd679afaa2e2581639e627d51f207547f54ea3e596f"
+    },
+    {
+      "command": "cargo test --locked -p canic-control-plane --lib storage::stable",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-control-storage.log",
+      "passed_tests": 35,
+      "result": "passed",
+      "log_sha256": "acc2a90d576c3a622077b0e456d41bd62c6cb379d72cf2fdbec8320e079b56e4"
+    },
+    {
+      "command": "cargo test --locked -p canic-core --test lifecycle_boundary_guard --test stable_memory_abi_guard",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-guards.log",
+      "passed_tests": 12,
+      "result": "passed",
+      "log_sha256": "74342c4abbdfaa8481bcfc096eac2ef0145eedaffa85d3c3606fe9737a237e64"
+    },
+    {
+      "command": "cargo test --locked -p canic --test managed_endpoint_gate",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-managed-guard.log",
+      "passed_tests": 10,
+      "result": "passed",
+      "log_sha256": "bdd3d093182830fdf732e73d0ad05c934214a832616256cbbe538d0d3d121df8"
+    },
+    {
+      "command": "cargo clippy --locked -p canic-core -p canic-control-plane -p canic --all-targets --all-features --keep-going -- -D warnings",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-clippy.log",
+      "passed_tests": null,
+      "result": "passed",
+      "log_sha256": "13960719b9faa47781f55f08f82ce589e7fe47655b11235b900901d6daa0a661"
+    }
+  ],
+  "role_compilation": [
+    {
+      "feature": "fleet-coordinator-canister",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-coordinator.log",
+      "result": "passed",
+      "log_sha256": "af5e1666e2518a5ac6a22935b57d6e490fa5f2a8a3f86548e18f418936aa2a75"
+    },
+    {
+      "feature": "root-control-plane",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-root.log",
+      "result": "passed",
+      "log_sha256": "52d1be021d6345d927cc11cd8cc018327ab818ff367c5df1487073382112de3f"
+    },
+    {
+      "feature": "wasm-store-canister",
+      "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-store.log",
+      "result": "passed",
+      "log_sha256": "b5b0763f4ba5cb722a81e674165ee18e9530b2eca729e2461108751082e25f3a"
+    }
+  ],
+  "optimized_footprint": null,
+  "maintained_workload_instructions": null,
+  "slice": "lazy stable TLS and direct non-root runtime calls",
+  "pocketic_check": {
+    "command": "RUSTC_WRAPPER=\"\" make test-pocketic-case CASE=lifecycle_boundary",
+    "result": "passed",
+    "passed_tests": 6,
+    "runner_seconds": 260,
+    "log": ".tmp/b2-storage-baseline-20260923/qualification/canic-b2-lifecycle-pocketic.log",
+    "log_sha256": "0f1dfc0c414b4a6dca07e2bf5a96c7ecf829cb61edfd825af056433e9e7f9454"
+  },
+  "limitations": [
+    "No optimized-footprint saving established.",
+    "No maintained-workload instruction comparison completed.",
+    "Fleet-admission selection remains in shared runtime initialization and restoration.",
+    "Complete B2 release batch is not push-ready."
+  ]
+}

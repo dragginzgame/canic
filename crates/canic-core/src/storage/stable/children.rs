@@ -21,7 +21,7 @@ use crate::{
 };
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     //
     // CANISTER_CHILDREN
     //

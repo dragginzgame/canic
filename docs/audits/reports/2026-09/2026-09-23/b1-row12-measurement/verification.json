@@ -1,0 +1,913 @@
+{
+  "schema_version": 1,
+  "experiment": "b1-12-metrics-providers",
+  "source_commit": "50f40171d6177c3d1e490b1fdb5f6163323b2cd5",
+  "run_mode": "retained",
+  "retention_eligible": true,
+  "run_directory": ".tmp/b1-continuation-20260922/row12/b1-12-metrics-providers-50f40171d617",
+  "complete_matrix_verified": true,
+  "builds_verified": 44,
+  "method_and_lock_hashes_verified": true,
+  "payload_hashes_lengths_gzip_verified": true,
+  "direct_section_sizes_function_counts_verified": true,
+  "repeated_metric_vectors_verified": true,
+  "determinism_claim": "pass",
+  "candid_and_export_identities_equal": true,
+  "instruction_evidence": "absent; no runtime parity claim",
+  "deltas": [
+    {
+      "condition": "variant",
+      "artifact": "canonical_app",
+      "absolute": {
+        "wasm_bytes": 2855422,
+        "gzip_bytes": 1028601,
+        "code_section_bytes": 2622468,
+        "data_section_bytes": 196287,
+        "replica_limited_defined_functions": 4619,
+        "table_minimum": 922,
+        "element_entries": 921
+      },
+      "from_first_condition": {
+        "wasm_bytes": -32065,
+        "gzip_bytes": -10508,
+        "code_section_bytes": -28256,
+        "data_section_bytes": -3744,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -32065,
+        "gzip_bytes": -10508,
+        "code_section_bytes": -28256,
+        "data_section_bytes": -3744,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_fleet_coordinator",
+      "absolute": {
+        "wasm_bytes": 3497977,
+        "gzip_bytes": 1215581,
+        "code_section_bytes": 3247309,
+        "data_section_bytes": 199123,
+        "replica_limited_defined_functions": 4463,
+        "table_minimum": 883,
+        "element_entries": 882
+      },
+      "from_first_condition": {
+        "wasm_bytes": 0,
+        "gzip_bytes": 0,
+        "code_section_bytes": 0,
+        "data_section_bytes": 0,
+        "replica_limited_defined_functions": 0,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": 0,
+        "gzip_bytes": 0,
+        "code_section_bytes": 0,
+        "data_section_bytes": 0,
+        "replica_limited_defined_functions": 0,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_index_child",
+      "absolute": {
+        "wasm_bytes": 2409727,
+        "gzip_bytes": 874947,
+        "code_section_bytes": 2194642,
+        "data_section_bytes": 180918,
+        "replica_limited_defined_functions": 3943,
+        "table_minimum": 837,
+        "element_entries": 836
+      },
+      "from_first_condition": {
+        "wasm_bytes": -33828,
+        "gzip_bytes": -11040,
+        "code_section_bytes": -29978,
+        "data_section_bytes": -3800,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -33828,
+        "gzip_bytes": -11040,
+        "code_section_bytes": -29978,
+        "data_section_bytes": -3800,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_index_hub",
+      "absolute": {
+        "wasm_bytes": 2634459,
+        "gzip_bytes": 950127,
+        "code_section_bytes": 2411694,
+        "data_section_bytes": 186746,
+        "replica_limited_defined_functions": 4288,
+        "table_minimum": 860,
+        "element_entries": 859
+      },
+      "from_first_condition": {
+        "wasm_bytes": -37819,
+        "gzip_bytes": -10389,
+        "code_section_bytes": -32913,
+        "data_section_bytes": -4864,
+        "replica_limited_defined_functions": -58,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -37819,
+        "gzip_bytes": -10389,
+        "code_section_bytes": -32913,
+        "data_section_bytes": -4864,
+        "replica_limited_defined_functions": -58,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_root",
+      "absolute": {
+        "wasm_bytes": 7056182,
+        "gzip_bytes": 2512282,
+        "code_section_bytes": 6624217,
+        "data_section_bytes": 328422,
+        "replica_limited_defined_functions": 9533,
+        "table_minimum": 1652,
+        "element_entries": 1651
+      },
+      "from_first_condition": {
+        "wasm_bytes": -40973,
+        "gzip_bytes": -11646,
+        "code_section_bytes": -35528,
+        "data_section_bytes": -5368,
+        "replica_limited_defined_functions": -63,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -40973,
+        "gzip_bytes": -11646,
+        "code_section_bytes": -35528,
+        "data_section_bytes": -5368,
+        "replica_limited_defined_functions": -63,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_scale_hub",
+      "absolute": {
+        "wasm_bytes": 3214788,
+        "gzip_bytes": 1147568,
+        "code_section_bytes": 2964652,
+        "data_section_bytes": 211069,
+        "replica_limited_defined_functions": 5239,
+        "table_minimum": 965,
+        "element_entries": 964
+      },
+      "from_first_condition": {
+        "wasm_bytes": -37250,
+        "gzip_bytes": -10291,
+        "code_section_bytes": -32396,
+        "data_section_bytes": -4800,
+        "replica_limited_defined_functions": -56,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -37250,
+        "gzip_bytes": -10291,
+        "code_section_bytes": -32396,
+        "data_section_bytes": -4800,
+        "replica_limited_defined_functions": -56,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_scale_replica",
+      "absolute": {
+        "wasm_bytes": 2866151,
+        "gzip_bytes": 1033693,
+        "code_section_bytes": 2632172,
+        "data_section_bytes": 196650,
+        "replica_limited_defined_functions": 4647,
+        "table_minimum": 925,
+        "element_entries": 924
+      },
+      "from_first_condition": {
+        "wasm_bytes": -32064,
+        "gzip_bytes": -10397,
+        "code_section_bytes": -28256,
+        "data_section_bytes": -3743,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -32064,
+        "gzip_bytes": -10397,
+        "code_section_bytes": -28256,
+        "data_section_bytes": -3743,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_test",
+      "absolute": {
+        "wasm_bytes": 3169033,
+        "gzip_bytes": 1129646,
+        "code_section_bytes": 2915529,
+        "data_section_bytes": 210367,
+        "replica_limited_defined_functions": 5136,
+        "table_minimum": 973,
+        "element_entries": 972
+      },
+      "from_first_condition": {
+        "wasm_bytes": -33016,
+        "gzip_bytes": -10310,
+        "code_section_bytes": -29244,
+        "data_section_bytes": -3735,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -33016,
+        "gzip_bytes": -10310,
+        "code_section_bytes": -29244,
+        "data_section_bytes": -3735,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_user_hub",
+      "absolute": {
+        "wasm_bytes": 3290792,
+        "gzip_bytes": 1177429,
+        "code_section_bytes": 3037498,
+        "data_section_bytes": 213092,
+        "replica_limited_defined_functions": 5416,
+        "table_minimum": 980,
+        "element_entries": 979
+      },
+      "from_first_condition": {
+        "wasm_bytes": -39974,
+        "gzip_bytes": -11381,
+        "code_section_bytes": -34749,
+        "data_section_bytes": -5170,
+        "replica_limited_defined_functions": -57,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -39974,
+        "gzip_bytes": -11381,
+        "code_section_bytes": -34749,
+        "data_section_bytes": -5170,
+        "replica_limited_defined_functions": -57,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_user_shard",
+      "absolute": {
+        "wasm_bytes": 3226149,
+        "gzip_bytes": 1151605,
+        "code_section_bytes": 2972161,
+        "data_section_bytes": 211023,
+        "replica_limited_defined_functions": 5288,
+        "table_minimum": 977,
+        "element_entries": 976
+      },
+      "from_first_condition": {
+        "wasm_bytes": -32972,
+        "gzip_bytes": -9754,
+        "code_section_bytes": -29238,
+        "data_section_bytes": -3697,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": -32972,
+        "gzip_bytes": -9754,
+        "code_section_bytes": -29238,
+        "data_section_bytes": -3697,
+        "replica_limited_defined_functions": -53,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    },
+    {
+      "condition": "variant",
+      "artifact": "canonical_wasm_store",
+      "absolute": {
+        "wasm_bytes": 2452131,
+        "gzip_bytes": 890086,
+        "code_section_bytes": 2254620,
+        "data_section_bytes": 177039,
+        "replica_limited_defined_functions": 4244,
+        "table_minimum": 840,
+        "element_entries": 839
+      },
+      "from_first_condition": {
+        "wasm_bytes": 0,
+        "gzip_bytes": 0,
+        "code_section_bytes": 0,
+        "data_section_bytes": 0,
+        "replica_limited_defined_functions": 0,
+        "table_minimum": 0,
+        "element_entries": 0
+      },
+      "from_previous_condition": {
+        "wasm_bytes": 0,
+        "gzip_bytes": 0,
+        "code_section_bytes": 0,
+        "data_section_bytes": 0,
+        "replica_limited_defined_functions": 0,
+        "table_minimum": 0,
+        "element_entries": 0
+      }
+    }
+  ],
+  "interfaces": {
+    "canonical_app": {
+      "candid_sha256": "23a46a416a5337268ac729a02ef9d53d350e2adc0fe847d5f80097f01acf48b8",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_fleet_coordinator": {
+      "candid_sha256": "51fd22fd1e9c038d673fdabc6ea02881e12179199c73974f7d4637477e0d5c66",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_coordinator_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_index_child": {
+      "candid_sha256": "e48c0cd06b2226b109bc232f10a3b0bfc2349974ac668fc26d28ae238da06b55",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_index_hub": {
+      "candid_sha256": "f8dde730be71f9ddb0224dfb8f365685f2579d880cc37e98a6886b0535180c44",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update resolve_item",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_root": {
+      "candid_sha256": "806dde0018643605d58f496261e48ca0950db5391463c887c24c3bb34e63e4b4",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_root_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_chain_key_ecdsa_public_key",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_provision_chain_key_delegation_proof_for_issuer",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_set_canister_running",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_scale_hub": {
+      "candid_sha256": "a4f07b544ad72d4fbe8dae44d64578f016f6b68aa95d89e9795724ea2c9dd5cb",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query plan_create_worker",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update create_worker",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_scale_replica": {
+      "candid_sha256": "a908ffd66c6777c6e00f587e85a80ccbe09513f73dfc09433fefec93dec4a344",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update request_cycles_from_parent",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_test": {
+      "candid_sha256": "d11737484d3563127fb6cb9f76d439a9f3e72556e977f70733e7d338985a4ad6",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_verify_delegated_token",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_user_hub": {
+      "candid_sha256": "905207f61736c3c53ed54fda3dd68252c44065199c26b194f2770d26368d4c16",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query plan_create_account",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update create_account",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_set_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_user_shard": {
+      "candid_sha256": "71ee0c358fad225f964aa71e01af12a3c08a72829c6fff189fc5d57d70698a96",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query hello",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_set_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    },
+    "canonical_wasm_store": {
+      "candid_sha256": "89e2f95c4ac284c099e95d2102df8995e0f5332c50a85e3f3d2ffed918e16fa6",
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_wasm_store_chunk",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_wasm_store_publish_chunk",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ]
+    }
+  }
+}

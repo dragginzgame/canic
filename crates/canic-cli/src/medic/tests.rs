@@ -524,7 +524,56 @@ fn workspace_environment_selection_check_is_workspace_only() {
     assert!(workspace_environment_selection_check(&fleet).is_none());
 }
 
-// Ensure workspace medic validates package-role metadata without spawning Cargo.
+// Resolve exact runtime versions offline before expensive build or recovery work.
+#[test]
+fn workspace_medic_detects_runtime_version_mismatch_without_changing_lockfile() {
+    let root = temp_dir("canic-cli-medic-runtime-version");
+    let config = write_medic_config(
+        &root,
+        r#"
+[app]
+name = "demo"
+[roles.root]
+kind = "root"
+[roles.app]
+kind = "canister"
+package = "app"
+[component_specs.app]
+component_role = "app"
+maximum_instances = 1
+"#,
+    );
+    write_medic_package(&root, "app", "demo", "app");
+    let expected = env!("CARGO_PKG_VERSION").to_owned();
+    let actual = format!("{expected}-preflight");
+    let finding = canic_core::role_contract::RoleContractFinding::CanicVersionMismatch {
+        expected,
+        actual: actual.clone(),
+    };
+    assert!(
+        workspace_config_quality_checks(&root, std::slice::from_ref(&config))
+            .iter()
+            .all(|check| check.code != finding.code())
+    );
+    let manifest = root.join("crates/canic/Cargo.toml");
+    let mut package: toml::Value = toml::from_str(&fs::read_to_string(&manifest).unwrap()).unwrap();
+    package["package"]["version"] = toml::Value::String(actual);
+    fs::write(&manifest, toml::to_string(&package).unwrap()).unwrap();
+    generate_medic_fixture_lockfile(&root);
+    let lock_before = fs::read(root.join("Cargo.lock")).unwrap();
+    let checks = workspace_config_quality_checks(&root, &[config]);
+    let mismatch = checks
+        .iter()
+        .find(|check| check.code == finding.code())
+        .unwrap();
+    assert_eq!(mismatch.status, MedicStatus::Fail);
+    assert_eq!(mismatch.subject, "demo.app");
+    assert_eq!(fs::read(root.join("Cargo.lock")).unwrap(), lock_before);
+    assert!(!root.join("target").exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+// Ensure workspace medic validates package-role metadata from locked Cargo evidence.
 #[test]
 fn workspace_config_quality_checks_validate_role_package_metadata() {
     let root = temp_dir("canic-cli-medic-workspace-config-quality");

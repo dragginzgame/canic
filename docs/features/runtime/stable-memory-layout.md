@@ -6,6 +6,19 @@ one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
 small populated store from 8 MiB to 1 MiB.
 
+## Bootstrap and store access
+
+Canic commits the allocation declarations and runs composed admission before
+stable-memory access. This reserves and validates the declared slots without
+opening every store. Stable stores use ordinary `std::thread_local!` and open
+on their first selected access; declaring a slot does not allocate its payload
+pages. The allocation report includes declared but unopened slots.
+
+Lifecycle owners restore the state they need synchronously before invoking a
+configured lifecycle participant or scheduling deferred work. A lazy store
+still checks bootstrap readiness and its exact committed stable key and ID.
+Application storage must follow the same bootstrap-before-access ordering.
+
 ## Capacity and selection
 
 A bucket is allocation granularity, not a per-store size limit. Stores grow by

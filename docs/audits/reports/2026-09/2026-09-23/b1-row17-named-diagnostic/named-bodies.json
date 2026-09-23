@@ -1,0 +1,1398 @@
+[
+  {
+    "width": 1,
+    "defined_functions": 4022,
+    "named_functions": 3960,
+    "selected_functions": [
+      {
+        "index": 323,
+        "name": "<canic_core::dto::page::Page<canic_core::dto::log::LogEntry> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB7_3log8LogEntryENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyCs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 1088,
+        "body_sha256": "4c77701f0eee314ec8563a00c79400fe2be1976809d6f8c747dd0f7ecea823cb"
+      },
+      {
+        "index": 350,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB1v_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 848,
+        "body_sha256": "f69b4cd95a6912954568239e152182f908c83d853cdbf30af0762cd4100ca6f5"
+      },
+      {
+        "index": 370,
+        "name": "<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1ENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyBP_",
+        "body_bytes": 935,
+        "body_sha256": "f724801985a0244f90aced2e001be3c05eb3952f85a70fdfe0b2ed379b874135"
+      },
+      {
+        "index": 440,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB2d_",
+        "body_bytes": 636,
+        "body_sha256": "69a6c12a04c6923fe28f11369209f99f54714e50efb5c08d2150f76146b622a4"
+      },
+      {
+        "index": 1623,
+        "name": "core::ptr::drop_glue::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtBG_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 118,
+        "body_sha256": "5aa5b5c4a1ccb7e32bc745fc809ae6167457c9ca2c4129e695234067c15da956"
+      },
+      {
+        "index": 3132,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB1D_4page4PageNtNtB1D_3log8LogEntryEENtNtB1D_5error5ErrorEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "e1cb8b3b07f965715f7ea983404e54d6aefe041a0dcb4d982eb2bc29f291d73f",
+        "canonical_match": {
+          "function_index": 3139,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>",
+          "function_table_slot": 12,
+          "type_name_sha256": "baaa8ef0e2bc24bb8e80c849667a66183a5599bdd415fbd02908ab9be3451e94",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3137,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseNtNtNtCs3ZLdtWgCMYM_10canic_core3dto5error5ErrorEEB1A_",
+        "body_bytes": 27,
+        "body_sha256": "12f7da33bca0c406736fb37a1083a196526e1b995a1f4bf40942054864f5d501",
+        "canonical_match": {
+          "function_index": 3144,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>",
+          "function_table_slot": 17,
+          "type_name_sha256": "bc977a652c5c8ebc9eae27c448d8a4c17f467fa18d31b858a6f11f830a299d3a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3138,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "b85e5630009bd8d3079bcaae47c5b3284cf56a8e2cab9f2fba0d1f7fc40efbcc",
+        "canonical_match": {
+          "function_index": 3145,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 18,
+          "type_name_sha256": "2db2d4c55e63dcfe72b5ffbe40d17ede61c26b0e728db11bae8b3076405a3598",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3143,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "16f8d2e249eb3defc34a7ac6822fca6869b6ed4a09be54faf0d48d30780e3527",
+        "canonical_match": {
+          "function_index": 3150,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 23,
+          "type_name_sha256": "4f32f1c6cc69f4e68c99b64dc77950a567ea642eb9bb66767edaeb8b23ac2e66",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3144,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 26,
+        "body_sha256": "200fc63236593fe14292e49ec0e7a82a18a0bbb311ff95bbba2c3d96a701ffd9",
+        "canonical_match": {
+          "function_index": 3151,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::log::LogEntry>",
+          "function_table_slot": 24,
+          "type_name_sha256": "041f0155f6ee56a248e30a5cfe4680e6998f9f94e61b664596b2d80d5318156a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3145,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_6cycles17CycleTrackerEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "e9efc92a382cf00dea1e4f1d41be278c6b31ccd5e88c4777321837cb42055e57",
+        "canonical_match": {
+          "function_index": 3152,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>",
+          "function_table_slot": 25,
+          "type_name_sha256": "cefce5b85ad9d21497d01935cfe421f095d97b4a4202d95e19bf253435694824",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3146,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_7metrics11MetricEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "bad74509da0f509ff87c0ecf78f0082399a296016cd9f8535abaf044df7f03d9",
+        "canonical_match": {
+          "function_index": 3153,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>",
+          "function_table_slot": 26,
+          "type_name_sha256": "3dd818e39e78e389e78b8e266b4c822980746232355cc9893c9522af45a716cd",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3147,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB11_4page4PageNtNtB11_3log8LogEntryEEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "7bee43a776110e83ceeb8f788c686e89fb5d5d54453b1f5a59ef9dac5a6610e8",
+        "canonical_match": {
+          "function_index": 3154,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+          "function_table_slot": 27,
+          "type_name_sha256": "177a994df4b787c1c8eb1d9af1f742927ab58c815d176136bc1ecf0ffe642552",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3152,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal1>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EBY_",
+        "body_bytes": 26,
+        "body_sha256": "cee97634be16956a8f58e45ae5306b1d6715f1c00742b599dd940b5abbea4e1d",
+        "canonical_match": {
+          "function_index": 3159,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal1",
+          "function_table_slot": 32,
+          "type_name_sha256": "6c93159c9675767898e5146920182ab2a1cb61740f200fba13698f2ed993fac5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3155,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericPageCohortResponse>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseEBY_",
+        "body_bytes": 26,
+        "body_sha256": "b92005b34be13117de212e7a5c19825bf87bd536a9b624394bc5c1c14e419ed3",
+        "canonical_match": {
+          "function_index": 3162,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericPageCohortResponse",
+          "function_table_slot": 35,
+          "type_name_sha256": "c80af21bebb2893eb5548eb8f625e00f3c36c796076ff56e06b3f80587f6ae31",
+          "signature": "(param i32) -> ()"
+        }
+      }
+    ]
+  },
+  {
+    "width": 2,
+    "defined_functions": 4025,
+    "named_functions": 3963,
+    "selected_functions": [
+      {
+        "index": 323,
+        "name": "<canic_core::dto::page::Page<canic_core::dto::log::LogEntry> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB7_3log8LogEntryENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyCs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 1088,
+        "body_sha256": "1303879bebc5978d3c67563608ef4a5c1bf210fdd0fcb5eb92ead36fb7c05696"
+      },
+      {
+        "index": 350,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB1v_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 848,
+        "body_sha256": "2e6d68f84313648f876dd85bccf77f0d0d5990fcb0b350236388110841a3273b"
+      },
+      {
+        "index": 370,
+        "name": "<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1ENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyBP_",
+        "body_bytes": 935,
+        "body_sha256": "39e24ef73be4fb7ecc7f39f695ff136c558e32a41e97d4ad6f6d7353a1f57edb"
+      },
+      {
+        "index": 440,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB2d_",
+        "body_bytes": 636,
+        "body_sha256": "ccb3ef7848bee65079c10c6ae77ba4628618f7515b3998a12b586f3355ae60ba"
+      },
+      {
+        "index": 1623,
+        "name": "core::ptr::drop_glue::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtBG_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 118,
+        "body_sha256": "1a314535423eb8433bfc1a60023d24fd44bf44ba6c0b864f81d7b26fd3580191"
+      },
+      {
+        "index": 3132,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB1D_4page4PageNtNtB1D_3log8LogEntryEENtNtB1D_5error5ErrorEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "e1cb8b3b07f965715f7ea983404e54d6aefe041a0dcb4d982eb2bc29f291d73f",
+        "canonical_match": {
+          "function_index": 3139,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>",
+          "function_table_slot": 12,
+          "type_name_sha256": "baaa8ef0e2bc24bb8e80c849667a66183a5599bdd415fbd02908ab9be3451e94",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3137,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseNtNtNtCs3ZLdtWgCMYM_10canic_core3dto5error5ErrorEEB1A_",
+        "body_bytes": 27,
+        "body_sha256": "12f7da33bca0c406736fb37a1083a196526e1b995a1f4bf40942054864f5d501",
+        "canonical_match": {
+          "function_index": 3144,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>",
+          "function_table_slot": 17,
+          "type_name_sha256": "bc977a652c5c8ebc9eae27c448d8a4c17f467fa18d31b858a6f11f830a299d3a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3138,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "b85e5630009bd8d3079bcaae47c5b3284cf56a8e2cab9f2fba0d1f7fc40efbcc",
+        "canonical_match": {
+          "function_index": 3145,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 18,
+          "type_name_sha256": "2db2d4c55e63dcfe72b5ffbe40d17ede61c26b0e728db11bae8b3076405a3598",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3139,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "ebc2a24a78be03f835153f7738a21d7a4372295b9c74bd0dab1efffddc1f9382",
+        "canonical_match": {
+          "function_index": 3146,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 19,
+          "type_name_sha256": "1184e74916a59bfa1ff89d7be924e97a81e1b55acd41ce02a4e4b3d40407d3e2",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3144,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "22267e77f622310841fa50bdda9f6ad6a7ca05f4be152ed35096536f1e602b3f",
+        "canonical_match": {
+          "function_index": 3151,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 24,
+          "type_name_sha256": "4f32f1c6cc69f4e68c99b64dc77950a567ea642eb9bb66767edaeb8b23ac2e66",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3145,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "c15a6d71768a3665daa871cf923b8b8ee7a19d460f124908fa445c94fa7cc2a4",
+        "canonical_match": {
+          "function_index": 3152,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 25,
+          "type_name_sha256": "de66ea9bd42e1786ed3786cb07fa46e7fcde6029d77cae4ffa366670746291c0",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3146,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 26,
+        "body_sha256": "2f8498a4b9395530911355638ea5e763ca90bebd514c855ac20dbcb957181626",
+        "canonical_match": {
+          "function_index": 3153,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::log::LogEntry>",
+          "function_table_slot": 26,
+          "type_name_sha256": "041f0155f6ee56a248e30a5cfe4680e6998f9f94e61b664596b2d80d5318156a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3147,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_6cycles17CycleTrackerEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "be3dcc8e60d63801a20cdc30b9e007e1711b3222cc4b1da5fd3a849b76a10785",
+        "canonical_match": {
+          "function_index": 3154,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>",
+          "function_table_slot": 27,
+          "type_name_sha256": "cefce5b85ad9d21497d01935cfe421f095d97b4a4202d95e19bf253435694824",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3148,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_7metrics11MetricEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "1ea9f188f0f25df5ae4a25f2191191e3c6d37b385c2ff6446d9e41d9e8881a5e",
+        "canonical_match": {
+          "function_index": 3155,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>",
+          "function_table_slot": 28,
+          "type_name_sha256": "3dd818e39e78e389e78b8e266b4c822980746232355cc9893c9522af45a716cd",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3149,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB11_4page4PageNtNtB11_3log8LogEntryEEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "9652f28f936b8b342ad05912a33fdfe81c39b96ddfc4ecb6529d00db5d4f6b28",
+        "canonical_match": {
+          "function_index": 3156,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+          "function_table_slot": 29,
+          "type_name_sha256": "177a994df4b787c1c8eb1d9af1f742927ab58c815d176136bc1ecf0ffe642552",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3154,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal1>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EBY_",
+        "body_bytes": 26,
+        "body_sha256": "7c6b36491190acac83f930ef9e5170da5eff57862dc2df79e8d56b7599ffccc3",
+        "canonical_match": {
+          "function_index": 3161,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal1",
+          "function_table_slot": 34,
+          "type_name_sha256": "6c93159c9675767898e5146920182ab2a1cb61740f200fba13698f2ed993fac5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3155,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal2>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EBY_",
+        "body_bytes": 26,
+        "body_sha256": "7ad039eb02c589e2703557b9f0d5469b314524f23090fde57b523d04ea8435c9",
+        "canonical_match": {
+          "function_index": 3162,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal2",
+          "function_table_slot": 35,
+          "type_name_sha256": "97e5466a48b9612eb4afad21933cfe9e99137b4d9a377dbb3dc9c62111b871f5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3158,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericPageCohortResponse>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseEBY_",
+        "body_bytes": 26,
+        "body_sha256": "36ef7431e1a7b25925b5b5dc54e834a7281dca05916adfcb057cd4461e4397e9",
+        "canonical_match": {
+          "function_index": 3165,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericPageCohortResponse",
+          "function_table_slot": 38,
+          "type_name_sha256": "c80af21bebb2893eb5548eb8f625e00f3c36c796076ff56e06b3f80587f6ae31",
+          "signature": "(param i32) -> ()"
+        }
+      }
+    ]
+  },
+  {
+    "width": 3,
+    "defined_functions": 4028,
+    "named_functions": 3966,
+    "selected_functions": [
+      {
+        "index": 323,
+        "name": "<canic_core::dto::page::Page<canic_core::dto::log::LogEntry> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB7_3log8LogEntryENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyCs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 1088,
+        "body_sha256": "7066de0a6765f952b5d4f81375029e1f0128e26ab36457a66eabb4897f1f8bf3"
+      },
+      {
+        "index": 350,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB1v_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 848,
+        "body_sha256": "0949cb9d2e1171b5965de363de9b295a6725303f5362ba356967c0272a725107"
+      },
+      {
+        "index": 370,
+        "name": "<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1ENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyBP_",
+        "body_bytes": 935,
+        "body_sha256": "b0d3ca2b0d228cf7b4599aeb72538444e2aed387de32ea872c8f932c1cd2712b"
+      },
+      {
+        "index": 440,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB2d_",
+        "body_bytes": 636,
+        "body_sha256": "4665767fc8bb6000e68a1afcedfa6a0f8432093b00397db53d17122863ae2727"
+      },
+      {
+        "index": 1623,
+        "name": "core::ptr::drop_glue::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtBG_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 118,
+        "body_sha256": "2649ded1e4624b32f26b9ec0333f0d723d7c400582715f105ec595bd72740ffd"
+      },
+      {
+        "index": 3132,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB1D_4page4PageNtNtB1D_3log8LogEntryEENtNtB1D_5error5ErrorEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "e1cb8b3b07f965715f7ea983404e54d6aefe041a0dcb4d982eb2bc29f291d73f",
+        "canonical_match": {
+          "function_index": 3139,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>",
+          "function_table_slot": 12,
+          "type_name_sha256": "baaa8ef0e2bc24bb8e80c849667a66183a5599bdd415fbd02908ab9be3451e94",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3137,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseNtNtNtCs3ZLdtWgCMYM_10canic_core3dto5error5ErrorEEB1A_",
+        "body_bytes": 27,
+        "body_sha256": "12f7da33bca0c406736fb37a1083a196526e1b995a1f4bf40942054864f5d501",
+        "canonical_match": {
+          "function_index": 3144,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>",
+          "function_table_slot": 17,
+          "type_name_sha256": "bc977a652c5c8ebc9eae27c448d8a4c17f467fa18d31b858a6f11f830a299d3a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3138,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "b85e5630009bd8d3079bcaae47c5b3284cf56a8e2cab9f2fba0d1f7fc40efbcc",
+        "canonical_match": {
+          "function_index": 3145,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 18,
+          "type_name_sha256": "2db2d4c55e63dcfe72b5ffbe40d17ede61c26b0e728db11bae8b3076405a3598",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3139,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "ebc2a24a78be03f835153f7738a21d7a4372295b9c74bd0dab1efffddc1f9382",
+        "canonical_match": {
+          "function_index": 3146,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 19,
+          "type_name_sha256": "1184e74916a59bfa1ff89d7be924e97a81e1b55acd41ce02a4e4b3d40407d3e2",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3140,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal3>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "168fb7262b26b9893dc682146be2e691f53ae638274b07f029f5b1678c1fb703",
+        "canonical_match": {
+          "function_index": 3147,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal3>",
+          "function_table_slot": 20,
+          "type_name_sha256": "f5fa09a8fce1d7c4bda6b5cbbe311267c1505fa0bac6700fe94ddfd5200fd22e",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3145,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "2cc1af7c2db90429e38216f0656ba33711a79f86057f98475158829b0f4ec8ee",
+        "canonical_match": {
+          "function_index": 3152,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 25,
+          "type_name_sha256": "4f32f1c6cc69f4e68c99b64dc77950a567ea642eb9bb66767edaeb8b23ac2e66",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3146,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "f94f9bfd2a10b7b544967cf2d1fdc5eda3edea1dbecb751b36dfad8bfbf11c30",
+        "canonical_match": {
+          "function_index": 3153,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 26,
+          "type_name_sha256": "de66ea9bd42e1786ed3786cb07fa46e7fcde6029d77cae4ffa366670746291c0",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3147,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal3>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "1d2bfac3025876b32b159bb1852eac3acef018297c88b6aad6a754adc5d1b609",
+        "canonical_match": {
+          "function_index": 3154,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal3>",
+          "function_table_slot": 27,
+          "type_name_sha256": "bf6ad837f42bb450fca4e707761b5e8fcd5187e4ca70ea282e23fec446cd1bf8",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3148,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 26,
+        "body_sha256": "e5e7b5cdf679a29cf3a77386096bf92cb1e3778b7e8598f964c4460a19e4dc16",
+        "canonical_match": {
+          "function_index": 3155,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::log::LogEntry>",
+          "function_table_slot": 28,
+          "type_name_sha256": "041f0155f6ee56a248e30a5cfe4680e6998f9f94e61b664596b2d80d5318156a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3149,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_6cycles17CycleTrackerEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "46f65061a262757026dca08addcb5b6422a7ac4c0d70bfc425c8920e28bc9344",
+        "canonical_match": {
+          "function_index": 3156,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>",
+          "function_table_slot": 29,
+          "type_name_sha256": "cefce5b85ad9d21497d01935cfe421f095d97b4a4202d95e19bf253435694824",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3150,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_7metrics11MetricEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "87e328f3760bc1f4b6534ce8258e6158f219b349f3244a5e9ac212af9c57b6cd",
+        "canonical_match": {
+          "function_index": 3157,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>",
+          "function_table_slot": 30,
+          "type_name_sha256": "3dd818e39e78e389e78b8e266b4c822980746232355cc9893c9522af45a716cd",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3151,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB11_4page4PageNtNtB11_3log8LogEntryEEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "fab3a09e332871144ffa17de905f2a7ee90b650b5191d21f5c39e5546aff73e4",
+        "canonical_match": {
+          "function_index": 3158,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+          "function_table_slot": 31,
+          "type_name_sha256": "177a994df4b787c1c8eb1d9af1f742927ab58c815d176136bc1ecf0ffe642552",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3156,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal1>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EBY_",
+        "body_bytes": 26,
+        "body_sha256": "7fe13c5cb15c034e8d9ceb6cf991116db3412c0fc9aeb8e0cf3d1a26f72df9ee",
+        "canonical_match": {
+          "function_index": 3163,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal1",
+          "function_table_slot": 36,
+          "type_name_sha256": "6c93159c9675767898e5146920182ab2a1cb61740f200fba13698f2ed993fac5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3157,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal2>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EBY_",
+        "body_bytes": 26,
+        "body_sha256": "27048a78dbcfa1bf7a5699c1d0a9b34f0c2d6605667966ba7eb2e29c05cd7c89",
+        "canonical_match": {
+          "function_index": 3164,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal2",
+          "function_table_slot": 37,
+          "type_name_sha256": "97e5466a48b9612eb4afad21933cfe9e99137b4d9a377dbb3dc9c62111b871f5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3158,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal3>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EBY_",
+        "body_bytes": 26,
+        "body_sha256": "09008d4160925231344df54612a19da44c281193afa102de2b3c08c7e2573a50",
+        "canonical_match": {
+          "function_index": 3165,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal3",
+          "function_table_slot": 38,
+          "type_name_sha256": "4da416c94ffa4635ee367808cb4ea5aef73b841a4b461cdc6f140c347e7a6835",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3161,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericPageCohortResponse>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseEBY_",
+        "body_bytes": 26,
+        "body_sha256": "735f5f3508f9a1819435c91de9faa7a763c65d02d6bb461e219c1553e3250e7a",
+        "canonical_match": {
+          "function_index": 3168,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericPageCohortResponse",
+          "function_table_slot": 41,
+          "type_name_sha256": "c80af21bebb2893eb5548eb8f625e00f3c36c796076ff56e06b3f80587f6ae31",
+          "signature": "(param i32) -> ()"
+        }
+      }
+    ]
+  },
+  {
+    "width": 4,
+    "defined_functions": 4031,
+    "named_functions": 3969,
+    "selected_functions": [
+      {
+        "index": 323,
+        "name": "<canic_core::dto::page::Page<canic_core::dto::log::LogEntry> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB7_3log8LogEntryENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyCs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 1089,
+        "body_sha256": "4e3136def73e27b9db8a05158a4ae0104f1642b9442fc3b568eee89bc077257d"
+      },
+      {
+        "index": 350,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB1v_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 849,
+        "body_sha256": "cf2ae3c6cc4bd1f38f1f784bf56ecf7516f9f9fc6ff3c0cd0c6ad068135dff7c"
+      },
+      {
+        "index": 370,
+        "name": "<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1ENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyBP_",
+        "body_bytes": 935,
+        "body_sha256": "42f04ee8489d4788a963ab2cfc6b24acac14c1ab5bd0393f618d4110c60aefd0"
+      },
+      {
+        "index": 440,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB2d_",
+        "body_bytes": 636,
+        "body_sha256": "4b8e2f053f06e9d8bf468f37486b7d16046a108ede0371cea8e69ba33a9a4d19"
+      },
+      {
+        "index": 1623,
+        "name": "core::ptr::drop_glue::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtBG_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 118,
+        "body_sha256": "e32a06dc3bb926325edb7b8d711530a40948082e7343c466bfc7a6ed3d78934d"
+      },
+      {
+        "index": 3132,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB1D_4page4PageNtNtB1D_3log8LogEntryEENtNtB1D_5error5ErrorEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "e1cb8b3b07f965715f7ea983404e54d6aefe041a0dcb4d982eb2bc29f291d73f",
+        "canonical_match": {
+          "function_index": 3139,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>",
+          "function_table_slot": 12,
+          "type_name_sha256": "baaa8ef0e2bc24bb8e80c849667a66183a5599bdd415fbd02908ab9be3451e94",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3137,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseNtNtNtCs3ZLdtWgCMYM_10canic_core3dto5error5ErrorEEB1A_",
+        "body_bytes": 27,
+        "body_sha256": "12f7da33bca0c406736fb37a1083a196526e1b995a1f4bf40942054864f5d501",
+        "canonical_match": {
+          "function_index": 3144,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>",
+          "function_table_slot": 17,
+          "type_name_sha256": "bc977a652c5c8ebc9eae27c448d8a4c17f467fa18d31b858a6f11f830a299d3a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3138,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "b85e5630009bd8d3079bcaae47c5b3284cf56a8e2cab9f2fba0d1f7fc40efbcc",
+        "canonical_match": {
+          "function_index": 3145,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 18,
+          "type_name_sha256": "2db2d4c55e63dcfe72b5ffbe40d17ede61c26b0e728db11bae8b3076405a3598",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3139,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "ebc2a24a78be03f835153f7738a21d7a4372295b9c74bd0dab1efffddc1f9382",
+        "canonical_match": {
+          "function_index": 3146,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 19,
+          "type_name_sha256": "1184e74916a59bfa1ff89d7be924e97a81e1b55acd41ce02a4e4b3d40407d3e2",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3140,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal3>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "168fb7262b26b9893dc682146be2e691f53ae638274b07f029f5b1678c1fb703",
+        "canonical_match": {
+          "function_index": 3147,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal3>",
+          "function_table_slot": 20,
+          "type_name_sha256": "f5fa09a8fce1d7c4bda6b5cbbe311267c1505fa0bac6700fe94ddfd5200fd22e",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3141,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal4>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal4EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "6167f0f9e98312fe71c44d405faddd71e37cf9b4ddc51fa772c1611f74eda848",
+        "canonical_match": {
+          "function_index": 3148,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal4>",
+          "function_table_slot": 21,
+          "type_name_sha256": "cee1df9847893d8a9faa5a07eb5c24d2299e3cef89a725eafbf6fafc774476c9",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3146,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "c1978c88d37d5fa42ebfa2f88931d6b880ca4a1a0d309dfea9303f3b179d1a5a",
+        "canonical_match": {
+          "function_index": 3153,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 26,
+          "type_name_sha256": "4f32f1c6cc69f4e68c99b64dc77950a567ea642eb9bb66767edaeb8b23ac2e66",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3147,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "0af83c1b4820bf16d53b682ea9b4f9851aeb367b5ac9e15573966493e8522416",
+        "canonical_match": {
+          "function_index": 3154,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 27,
+          "type_name_sha256": "de66ea9bd42e1786ed3786cb07fa46e7fcde6029d77cae4ffa366670746291c0",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3148,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal3>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "3d6a309c32b9321019e5f3e05a1dd39c3e78de3b5c625b34c15c0cb3703fa469",
+        "canonical_match": {
+          "function_index": 3155,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal3>",
+          "function_table_slot": 28,
+          "type_name_sha256": "bf6ad837f42bb450fca4e707761b5e8fcd5187e4ca70ea282e23fec446cd1bf8",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3149,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal4>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal4EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "4b5a493c1561d6110639b55ab0a3ed6a713e50113d0a70639c6ef8edcd55fc91",
+        "canonical_match": {
+          "function_index": 3156,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal4>",
+          "function_table_slot": 29,
+          "type_name_sha256": "54e862a7d16f28bf150501712298c396b9757f1dae613a9eb9e6f1455fc0b477",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3150,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 26,
+        "body_sha256": "2535121426a6e5085fb3b0f43ae526a9029320c5f4c363aed40b876230081e88",
+        "canonical_match": {
+          "function_index": 3157,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::log::LogEntry>",
+          "function_table_slot": 30,
+          "type_name_sha256": "041f0155f6ee56a248e30a5cfe4680e6998f9f94e61b664596b2d80d5318156a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3151,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_6cycles17CycleTrackerEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "f1e062b678f048832620cbe307121b041a6aa86506437bee4651d3eaf5d13733",
+        "canonical_match": {
+          "function_index": 3158,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>",
+          "function_table_slot": 31,
+          "type_name_sha256": "cefce5b85ad9d21497d01935cfe421f095d97b4a4202d95e19bf253435694824",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3152,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_7metrics11MetricEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "374e2e7f70f0117a572472c1426a9b2c66a22980f7d51c01728ac1696e872a55",
+        "canonical_match": {
+          "function_index": 3159,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>",
+          "function_table_slot": 32,
+          "type_name_sha256": "3dd818e39e78e389e78b8e266b4c822980746232355cc9893c9522af45a716cd",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3153,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB11_4page4PageNtNtB11_3log8LogEntryEEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "f92c91ece0bc6b1d393a3819b533c44637d2dbe669dbd4c1c284bf8c65d99abd",
+        "canonical_match": {
+          "function_index": 3160,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+          "function_table_slot": 33,
+          "type_name_sha256": "177a994df4b787c1c8eb1d9af1f742927ab58c815d176136bc1ecf0ffe642552",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3158,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal1>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EBY_",
+        "body_bytes": 26,
+        "body_sha256": "e3046a51c066c9833676d4a7db289501f2a87af38996921550e212fc7e2495ab",
+        "canonical_match": {
+          "function_index": 3165,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal1",
+          "function_table_slot": 38,
+          "type_name_sha256": "6c93159c9675767898e5146920182ab2a1cb61740f200fba13698f2ed993fac5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3159,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal2>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EBY_",
+        "body_bytes": 26,
+        "body_sha256": "f1579c6c2c059b237144ade0fbfa1f8196d6cb41316ae7e536403fca6000a5c4",
+        "canonical_match": {
+          "function_index": 3166,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal2",
+          "function_table_slot": 39,
+          "type_name_sha256": "97e5466a48b9612eb4afad21933cfe9e99137b4d9a377dbb3dc9c62111b871f5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3160,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal3>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EBY_",
+        "body_bytes": 26,
+        "body_sha256": "9ba70371f9337587dc891a9cc1280e8315b80b3862535e791bb4638121f7a3fb",
+        "canonical_match": {
+          "function_index": 3167,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal3",
+          "function_table_slot": 40,
+          "type_name_sha256": "4da416c94ffa4635ee367808cb4ea5aef73b841a4b461cdc6f140c347e7a6835",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3161,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal4>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal4EBY_",
+        "body_bytes": 26,
+        "body_sha256": "d99bb1d34d8122ce4c50c37365c1ad56efe2216d4aeba09e604753a54b8673a4",
+        "canonical_match": {
+          "function_index": 3168,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal4",
+          "function_table_slot": 41,
+          "type_name_sha256": "84e98692acd244bf01c8b4af83a833e6873fe35793368949f42865d7b7cdfa42",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3164,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericPageCohortResponse>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseEBY_",
+        "body_bytes": 26,
+        "body_sha256": "44ce95da96ad0e298ac2bd44bdc9cef28ca5705d4f2008b984a556b76eb1cd2c",
+        "canonical_match": {
+          "function_index": 3171,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericPageCohortResponse",
+          "function_table_slot": 44,
+          "type_name_sha256": "c80af21bebb2893eb5548eb8f625e00f3c36c796076ff56e06b3f80587f6ae31",
+          "signature": "(param i32) -> ()"
+        }
+      }
+    ]
+  },
+  {
+    "width": 5,
+    "defined_functions": 4032,
+    "named_functions": 3970,
+    "selected_functions": [
+      {
+        "index": 323,
+        "name": "<canic_core::dto::page::Page<canic_core::dto::log::LogEntry> as candid::types::CandidType>::ty",
+        "symbol": "_RNvYINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB7_3log8LogEntryENtNtCs9p3wv1KnAcG_6candid5types10CandidType2tyCs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 1089,
+        "body_sha256": "a5477dc2a06a13d38cc8e806144d6992195a58cfdfea73b9fe5821b63da02e27"
+      },
+      {
+        "index": 350,
+        "name": "<candid::ser::Compound as candid::types::Compound>::serialize_element::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvXs1_NtCs9p3wv1KnAcG_6candid3serNtB6_8CompoundNtNtB8_5types8Compound17serialize_elementINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB1v_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 849,
+        "body_sha256": "ad79f153b9b3437a654c768c424f6c3e7735b179a679d099c867d1c4dbcaa3aa"
+      },
+      {
+        "index": 1621,
+        "name": "core::ptr::drop_glue::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvNtCsdkdt1aaAg1T_4core3ptr9drop_glueINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtBG_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 118,
+        "body_sha256": "489f82c8a22bc6aef1991b6750a66b3ceb1cb5af5e5e51a2cb80e91ef95a8d71"
+      },
+      {
+        "index": 3130,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseNtNtNtCs3ZLdtWgCMYM_10canic_core3dto5error5ErrorEEB1A_",
+        "body_bytes": 27,
+        "body_sha256": "32037073031585ee619ad4f1a0a2b3b15a26728df049aecc085f05cbf699db98",
+        "canonical_match": {
+          "function_index": 3137,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<leaf_probe::GenericPageCohortResponse, canic_core::dto::error::Error>",
+          "function_table_slot": 8,
+          "type_name_sha256": "bc977a652c5c8ebc9eae27c448d8a4c17f467fa18d31b858a6f11f830a299d3a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3131,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericPageCohortResponse>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe25GenericPageCohortResponseEBY_",
+        "body_bytes": 26,
+        "body_sha256": "a437c18369da4da9a1954ffbf208d735424822b3bd93920ae1c9b45931212ee4",
+        "canonical_match": {
+          "function_index": 3138,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericPageCohortResponse",
+          "function_table_slot": 9,
+          "type_name_sha256": "c80af21bebb2893eb5548eb8f625e00f3c36c796076ff56e06b3f80587f6ae31",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3132,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "dc56353f85fa4e555e61a37aaf426879fb8629d07e2a092cc8f68bbd874149d7",
+        "canonical_match": {
+          "function_index": 3139,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 10,
+          "type_name_sha256": "4f32f1c6cc69f4e68c99b64dc77950a567ea642eb9bb66767edaeb8b23ac2e66",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3133,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal1>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "d9788b3c1ae228619a07aa4d7998c94f03fefff1efae9fc3c00a92bdf3ae8bd6",
+        "canonical_match": {
+          "function_index": 3140,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal1>",
+          "function_table_slot": 11,
+          "type_name_sha256": "2db2d4c55e63dcfe72b5ffbe40d17ede61c26b0e728db11bae8b3076405a3598",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3134,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal1>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal1EBY_",
+        "body_bytes": 26,
+        "body_sha256": "c32022e6c87b6fc5778a72fa81302324d9a6fa7ca48ed088764ad11c6704b07e",
+        "canonical_match": {
+          "function_index": 3141,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal1",
+          "function_table_slot": 12,
+          "type_name_sha256": "6c93159c9675767898e5146920182ab2a1cb61740f200fba13698f2ed993fac5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3135,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "e6ef68ba69b81cd8a89e4f303488c52e82863609ed36046de7d2380fc2b6a74a",
+        "canonical_match": {
+          "function_index": 3142,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 13,
+          "type_name_sha256": "de66ea9bd42e1786ed3786cb07fa46e7fcde6029d77cae4ffa366670746291c0",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3136,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal2>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "187b09631fb16be668065f11a14c79842bfb9506e942232cc04f4705bb7a52bc",
+        "canonical_match": {
+          "function_index": 3143,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal2>",
+          "function_table_slot": 14,
+          "type_name_sha256": "1184e74916a59bfa1ff89d7be924e97a81e1b55acd41ce02a4e4b3d40407d3e2",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3137,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal2>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal2EBY_",
+        "body_bytes": 26,
+        "body_sha256": "2bd2c1cc5bcaea556dffea768b5e10bc030370333bc2ce5a94f116b604d0343a",
+        "canonical_match": {
+          "function_index": 3144,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal2",
+          "function_table_slot": 15,
+          "type_name_sha256": "97e5466a48b9612eb4afad21933cfe9e99137b4d9a377dbb3dc9c62111b871f5",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3138,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal3>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "b3c39260585d810f44fc61abd7ed80671e63c56b478f3810de148c223fb0cfd5",
+        "canonical_match": {
+          "function_index": 3145,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal3>",
+          "function_table_slot": 16,
+          "type_name_sha256": "bf6ad837f42bb450fca4e707761b5e8fcd5187e4ca70ea282e23fec446cd1bf8",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3139,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal3>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "bd86153c4a6624d64f62217c0abc6c53364b0e577bd256035d22560d381af995",
+        "canonical_match": {
+          "function_index": 3146,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal3>",
+          "function_table_slot": 17,
+          "type_name_sha256": "f5fa09a8fce1d7c4bda6b5cbbe311267c1505fa0bac6700fe94ddfd5200fd22e",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3140,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal3>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal3EBY_",
+        "body_bytes": 26,
+        "body_sha256": "bc6cbf864a04c389583583ff8d9c973cf7e0b59fb775f5b6620a5bcbf90da9e5",
+        "canonical_match": {
+          "function_index": 3147,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal3",
+          "function_table_slot": 18,
+          "type_name_sha256": "4da416c94ffa4635ee367808cb4ea5aef73b841a4b461cdc6f140c347e7a6835",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3141,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal4>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal4EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "f2e8d7ccbe1c47b9315193b441e2557f8ba5775371034b421d40983743fde8e7",
+        "canonical_match": {
+          "function_index": 3148,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal4>",
+          "function_table_slot": 19,
+          "type_name_sha256": "54e862a7d16f28bf150501712298c396b9757f1dae613a9eb9e6f1455fc0b477",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3142,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal4>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal4EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "4480172ac7c55017ebef1baf922c75c07aa264841281fd3b982dbbd3aed91c7b",
+        "canonical_match": {
+          "function_index": 3149,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal4>",
+          "function_table_slot": 20,
+          "type_name_sha256": "cee1df9847893d8a9faa5a07eb5c24d2299e3cef89a725eafbf6fafc774476c9",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3143,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal4>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal4EBY_",
+        "body_bytes": 26,
+        "body_sha256": "cbad8eac3ade5362a6338757b1ed9433932aa0acebc4523a6e4fb41b990052aa",
+        "canonical_match": {
+          "function_index": 3150,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal4",
+          "function_table_slot": 21,
+          "type_name_sha256": "84e98692acd244bf01c8b4af83a833e6873fe35793368949f42865d7b7cdfa42",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3144,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<leaf_probe::GenericCohortNominal5>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal5EEB1J_",
+        "body_bytes": 26,
+        "body_sha256": "f232410e4db05f19cac1edbc61cb3df33fdcd43f74661156c5fda99876efeb9d",
+        "canonical_match": {
+          "function_index": 3151,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<leaf_probe::GenericCohortNominal5>",
+          "function_table_slot": 22,
+          "type_name_sha256": "2898e829dde0655f6ce16c634b45180c5d817ab115e1053ac0e18868dcb1ac77",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3145,
+        "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<leaf_probe::GenericCohortNominal5>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsewWLk9TkM7w_5alloc3vec3VecNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal5EEB1v_",
+        "body_bytes": 26,
+        "body_sha256": "3556335962bae72a4a0a94a8cf81b75fe07cd9087f96f9fcfdb315fc5f0c7dc5",
+        "canonical_match": {
+          "function_index": 3152,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "alloc::vec::Vec<leaf_probe::GenericCohortNominal5>",
+          "function_table_slot": 23,
+          "type_name_sha256": "2a452f565982f40bce8d7a26829d10685d034c2e27ecf625ad3c710efcf04118",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3146,
+        "name": "<candid::types::internal::TypeId>::of::<leaf_probe::GenericCohortNominal5>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofNtCs773jfTmv6BT_10leaf_probe21GenericCohortNominal5EBY_",
+        "body_bytes": 26,
+        "body_sha256": "065e53248ab99ac1e432c05687de8a460c8d156cc56f575a807f7a870c000c49",
+        "canonical_match": {
+          "function_index": 3153,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "leaf_probe::GenericCohortNominal5",
+          "function_table_slot": 24,
+          "type_name_sha256": "17e774985e1b69a11897a614f110cdc19016d9c8d0240cd7414caa73ea6b3ade",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3158,
+        "name": "<candid::types::internal::TypeId>::of::<core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtCsdkdt1aaAg1T_4core6result6ResultINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB1D_4page4PageNtNtB1D_3log8LogEntryEENtNtB1D_5error5ErrorEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "6fa4f0ae120ed3abc434322cb0b5866c9964fd335847b4b3b2e5c76bb2e79cea",
+        "canonical_match": {
+          "function_index": 3165,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "core::result::Result<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>, canic_core::dto::error::Error>",
+          "function_table_slot": 41,
+          "type_name_sha256": "baaa8ef0e2bc24bb8e80c849667a66183a5599bdd415fbd02908ab9be3451e94",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3167,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_3log8LogEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 26,
+        "body_sha256": "a3f8c39aeb93c177f222bdbba6f094621c1e52e862e56d860b68cc8954fa242b",
+        "canonical_match": {
+          "function_index": 3174,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::log::LogEntry>",
+          "function_table_slot": 50,
+          "type_name_sha256": "041f0155f6ee56a248e30a5cfe4680e6998f9f94e61b664596b2d80d5318156a",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3168,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_6cycles17CycleTrackerEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "a404edb5c987e91b7a6770931cacc3c2518fae70165fd57fc9178630e571005f",
+        "canonical_match": {
+          "function_index": 3175,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::cycles::CycleTrackerEntry>",
+          "function_table_slot": 51,
+          "type_name_sha256": "cefce5b85ad9d21497d01935cfe421f095d97b4a4202d95e19bf253435694824",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3169,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto4page4PageNtNtB11_7metrics11MetricEntryEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "0cff749495ef23f6646e5101eef043a6ef2bf0e6303da05ce3d8e71c0a24d1e0",
+        "canonical_match": {
+          "function_index": 3176,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::page::Page<canic_core::dto::metrics::MetricEntry>",
+          "function_table_slot": 52,
+          "type_name_sha256": "3dd818e39e78e389e78b8e266b4c822980746232355cc9893c9522af45a716cd",
+          "signature": "(param i32) -> ()"
+        }
+      },
+      {
+        "index": 3170,
+        "name": "<candid::types::internal::TypeId>::of::<canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>>",
+        "symbol": "_RINvMNtNtCs9p3wv1KnAcG_6candid5types8internalNtB3_6TypeId2ofINtNtNtCs3ZLdtWgCMYM_10canic_core3dto7metrics15QueryPerfSampleINtNtB11_4page4PageNtNtB11_3log8LogEntryEEECs773jfTmv6BT_10leaf_probe",
+        "body_bytes": 27,
+        "body_sha256": "12952e42cfac9214aac61fcc608ea0cc4d0dfd502387edf1253cf12e4557ba9b",
+        "canonical_match": {
+          "function_index": 3177,
+          "evidence": "unique exact body bytes, matching type-name memory, and table identity resolving to the matched function",
+          "concrete_type_name": "canic_core::dto::metrics::QueryPerfSample<canic_core::dto::page::Page<canic_core::dto::log::LogEntry>>",
+          "function_table_slot": 53,
+          "type_name_sha256": "177a994df4b787c1c8eb1d9af1f742927ab58c815d176136bc1ecf0ffe642552",
+          "signature": "(param i32) -> ()"
+        }
+      }
+    ]
+  }
+]

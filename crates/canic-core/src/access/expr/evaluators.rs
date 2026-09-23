@@ -49,11 +49,17 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
     }
 }
 
-pub(super) async fn evaluate(
+/// A builtin denial or a predicate absent from the generated evaluator selection.
+pub(super) enum BuiltinFailure {
+    Denied(AccessError),
+    Unselected,
+}
+
+pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
     pred: &BuiltinPredicate,
     ctx: &AccessContext,
-) -> Result<(), AccessError> {
-    match pred {
+) -> Result<(), BuiltinFailure> {
+    let result: Result<(), AccessError> = match pred {
         BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates) => {
             access::fleet::guard_fleet_update()
         }
@@ -62,7 +68,10 @@ pub(super) async fn evaluate(
             access::auth::is_controller(ctx.caller).await
         }
         BuiltinPredicate::Caller(CallerPredicate::IsFleetAdmitted) => {
-            access::auth::is_fleet_admitted(ctx.caller).await
+            if !FLEET_ADMISSION {
+                return Err(BuiltinFailure::Unselected);
+            }
+            access::auth::is_fleet_admitted(ctx.caller)
         }
         BuiltinPredicate::Caller(CallerPredicate::IsParent) => {
             access::auth::is_parent(ctx.caller).await
@@ -86,7 +95,8 @@ pub(super) async fn evaluate(
             access::env::build_network_local()
         }
         BuiltinPredicate::Authenticated { required_scope } => {
-            let issuer_pid = access::auth::delegated_token_verified(ctx.caller, *required_scope)?;
+            let issuer_pid = access::auth::delegated_token_verified(ctx.caller, *required_scope)
+                .map_err(BuiltinFailure::Denied)?;
             DelegatedAuthMetrics::record_authority(issuer_pid);
             Ok(())
         }
@@ -96,5 +106,6 @@ pub(super) async fn evaluate(
         BuiltinPredicate::ServiceAuthority { service } => {
             access::deployment::require_service_authority(service)
         }
-    }
+    };
+    result.map_err(BuiltinFailure::Denied)
 }

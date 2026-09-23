@@ -1,0 +1,966 @@
+{
+  "experiment": "b1-10-candid-serialization-newtypes",
+  "retention_eligible": true,
+  "complete_matrix_verified": true,
+  "payload_hashes_and_lengths_verified": true,
+  "gzip_roundtrips_verified": true,
+  "replica_counts_independently_verified": true,
+  "complete_paired_vectors_verified": true,
+  "determinism_records_verified": true,
+  "delta_direction": "variant_minus_baseline",
+  "canonical_artifact_summed_deltas": {
+    "wasm_bytes": -999416,
+    "gzip_bytes": -287254,
+    "code_section_bytes": -877880,
+    "data_section_bytes": -117228,
+    "replica_limited_defined_functions": -1778,
+    "optimizer_defined_functions": -1778,
+    "table_minimum": -1171,
+    "element_entries": -1171
+  },
+  "instruction_evidence": "absent; audit replies deliberately invalid",
+  "artifacts": [
+    {
+      "artifact": "blob_storage_probe",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query _immutableObjectStorageBlobsAreLive",
+          "kind": 0
+        },
+        {
+          "name": "canister_query _immutableObjectStorageBlobsToDelete",
+          "kind": 0
+        },
+        {
+          "name": "canister_query blob_storage_probe_counts",
+          "kind": 0
+        },
+        {
+          "name": "canister_query blob_storage_probe_is_live",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update _immutableObjectStorageConfirmBlobDeletion",
+          "kind": 0
+        },
+        {
+          "name": "canister_update _immutableObjectStorageCreateCertificate",
+          "kind": 0
+        },
+        {
+          "name": "canister_update _immutableObjectStorageFundFromProjectCycles",
+          "kind": 0
+        },
+        {
+          "name": "canister_update _immutableObjectStorageUpdateGatewayPrincipals",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_add_gateway",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_cashier_top_up",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_cashier_total_balance",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_configure_billing",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_mark_pending_delete",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_remove_gateway",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_sync_gateways_from_cashier",
+          "kind": 0
+        },
+        {
+          "name": "canister_update blob_storage_probe_sync_gateways_from_configured_cashier",
+          "kind": 0
+        },
+        {
+          "name": "canister_update get_blob_storage_status",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -78791,
+        "gzip_bytes": -24292,
+        "code_section_bytes": -69653,
+        "data_section_bytes": -8815,
+        "replica_limited_defined_functions": -132,
+        "optimizer_defined_functions": -132,
+        "table_minimum": -87,
+        "element_entries": -87
+      }
+    },
+    {
+      "artifact": "canonical_app",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -85350,
+        "gzip_bytes": -24328,
+        "code_section_bytes": -75046,
+        "data_section_bytes": -9919,
+        "replica_limited_defined_functions": -155,
+        "optimizer_defined_functions": -155,
+        "table_minimum": -106,
+        "element_entries": -106
+      }
+    },
+    {
+      "artifact": "canonical_fleet_coordinator",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_coordinator_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -68790,
+        "gzip_bytes": -19720,
+        "code_section_bytes": -58705,
+        "data_section_bytes": -9798,
+        "replica_limited_defined_functions": -126,
+        "optimizer_defined_functions": -126,
+        "table_minimum": -74,
+        "element_entries": -74
+      }
+    },
+    {
+      "artifact": "canonical_index_child",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -77509,
+        "gzip_bytes": -22154,
+        "code_section_bytes": -68001,
+        "data_section_bytes": -9159,
+        "replica_limited_defined_functions": -142,
+        "optimizer_defined_functions": -142,
+        "table_minimum": -94,
+        "element_entries": -94
+      }
+    },
+    {
+      "artifact": "canonical_index_hub",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update resolve_item",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -80671,
+        "gzip_bytes": -24393,
+        "code_section_bytes": -71069,
+        "data_section_bytes": -9249,
+        "replica_limited_defined_functions": -144,
+        "optimizer_defined_functions": -144,
+        "table_minimum": -95,
+        "element_entries": -95
+      }
+    },
+    {
+      "artifact": "canonical_root",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_root_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_chain_key_ecdsa_public_key",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_provision_chain_key_delegation_proof_for_issuer",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_set_canister_running",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -193258,
+        "gzip_bytes": -50946,
+        "code_section_bytes": -169788,
+        "data_section_bytes": -22719,
+        "replica_limited_defined_functions": -331,
+        "optimizer_defined_functions": -331,
+        "table_minimum": -195,
+        "element_entries": -195
+      }
+    },
+    {
+      "artifact": "canonical_scale_hub",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query plan_create_worker",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update create_worker",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -88207,
+        "gzip_bytes": -26558,
+        "code_section_bytes": -77726,
+        "data_section_bytes": -10092,
+        "replica_limited_defined_functions": -156,
+        "optimizer_defined_functions": -156,
+        "table_minimum": -108,
+        "element_entries": -108
+      }
+    },
+    {
+      "artifact": "canonical_scale_replica",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update request_cycles_from_parent",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -86773,
+        "gzip_bytes": -25005,
+        "code_section_bytes": -76363,
+        "data_section_bytes": -10022,
+        "replica_limited_defined_functions": -156,
+        "optimizer_defined_functions": -156,
+        "table_minimum": -107,
+        "element_entries": -107
+      }
+    },
+    {
+      "artifact": "canonical_test",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_verify_delegated_token",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -93376,
+        "gzip_bytes": -27251,
+        "code_section_bytes": -82146,
+        "data_section_bytes": -10817,
+        "replica_limited_defined_functions": -165,
+        "optimizer_defined_functions": -165,
+        "table_minimum": -115,
+        "element_entries": -115
+      }
+    },
+    {
+      "artifact": "canonical_user_hub",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query plan_create_account",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update create_account",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_set_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -92327,
+        "gzip_bytes": -27762,
+        "code_section_bytes": -81631,
+        "data_section_bytes": -10289,
+        "replica_limited_defined_functions": -163,
+        "optimizer_defined_functions": -163,
+        "table_minimum": -113,
+        "element_entries": -113
+      }
+    },
+    {
+      "artifact": "canonical_user_shard",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query hello",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_fleet_admission_probe",
+          "kind": 0
+        },
+        {
+          "name": "canister_query test_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_set_recovery_generation",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -90891,
+        "gzip_bytes": -26032,
+        "code_section_bytes": -80187,
+        "data_section_bytes": -10299,
+        "replica_limited_defined_functions": -162,
+        "optimizer_defined_functions": -162,
+        "table_minimum": -112,
+        "element_entries": -112
+      }
+    },
+    {
+      "artifact": "canonical_wasm_store",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_command",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_wasm_store_chunk",
+          "kind": 0
+        },
+        {
+          "name": "canister_update canic_wasm_store_publish_chunk",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -42264,
+        "gzip_bytes": -13105,
+        "code_section_bytes": -37218,
+        "data_section_bytes": -4865,
+        "replica_limited_defined_functions": -78,
+        "optimizer_defined_functions": -78,
+        "table_minimum": -52,
+        "element_entries": -52
+      }
+    },
+    {
+      "artifact": "payload_limit_probe",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update default_echo",
+          "kind": 0
+        },
+        {
+          "name": "canister_update explicit_echo",
+          "kind": 0
+        },
+        {
+          "name": "canister_update relay_explicit_echo",
+          "kind": 0
+        },
+        {
+          "name": "canister_update wire_named_echo",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -52884,
+        "gzip_bytes": -16551,
+        "code_section_bytes": -46480,
+        "data_section_bytes": -6154,
+        "replica_limited_defined_functions": -102,
+        "optimizer_defined_functions": -102,
+        "table_minimum": -65,
+        "element_entries": -65
+      }
+    },
+    {
+      "artifact": "runtime_probe",
+      "candid_equal": true,
+      "export_identities_equal": true,
+      "exports": [
+        {
+          "name": "canister_global_timer",
+          "kind": 0
+        },
+        {
+          "name": "canister_init",
+          "kind": 0
+        },
+        {
+          "name": "canister_inspect_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_post_upgrade",
+          "kind": 0
+        },
+        {
+          "name": "canister_query canic_status",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc10_supported_standards",
+          "kind": 0
+        },
+        {
+          "name": "canister_query icrc21_canister_call_consent_message",
+          "kind": 0
+        },
+        {
+          "name": "canister_query timer_probe_counts",
+          "kind": 0
+        },
+        {
+          "name": "canister_update <ic-cdk internal> timer_executor",
+          "kind": 0
+        },
+        {
+          "name": "canister_update begin_timer_probe_intent",
+          "kind": 0
+        },
+        {
+          "name": "canister_update fill_timer_registry",
+          "kind": 0
+        },
+        {
+          "name": "canister_update reject_invalid_timer_identity",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test",
+          "kind": 0
+        },
+        {
+          "name": "canister_update test_verify_delegated_token",
+          "kind": 0
+        },
+        {
+          "name": "memory",
+          "kind": 2
+        }
+      ],
+      "delta": {
+        "wasm_bytes": -65438,
+        "gzip_bytes": -22277,
+        "code_section_bytes": -58050,
+        "data_section_bytes": -7085,
+        "replica_limited_defined_functions": -120,
+        "optimizer_defined_functions": -120,
+        "table_minimum": -82,
+        "element_entries": -82
+      }
+    }
+  ]
+}

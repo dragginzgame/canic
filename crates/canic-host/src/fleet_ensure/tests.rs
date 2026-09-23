@@ -116,6 +116,8 @@ enum MockFundingRead {
 }
 
 pub(super) struct MockPlatform {
+    retirement_debit_block: Option<u64>,
+    retirement_debit: Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>,
     observation_calls: usize,
     pub(super) root_management: Option<crate::fleet_ensure::model::RootManagementObservation>,
     pub(super) operator_funding: Option<crate::fleet_ensure::view::OperatorFundingObservation>,
@@ -152,6 +154,7 @@ pub(super) struct MockPlatform {
     protocol_pending_waits: u32,
     provisioning_progress: Option<FleetProvisioningProgress>,
     protocol_ready: BTreeSet<String>,
+    protocol_ready_on_effect_observation: BTreeSet<String>,
     protocol_retry: EffectRetry,
     root_owned_topology_policy: MockRootOwnedTopologyPolicy,
     root_owned_pending_waits: BTreeMap<String, u32>,
@@ -214,6 +217,7 @@ impl MockPlatform {
             protocol_pending_waits: 0,
             provisioning_progress: None,
             protocol_ready: BTreeSet::new(),
+            protocol_ready_on_effect_observation: BTreeSet::new(),
             protocol_retry: EffectRetry::None,
             root_owned_topology_policy: MockRootOwnedTopologyPolicy::Direct,
             root_owned_pending_waits: BTreeMap::new(),
@@ -221,6 +225,8 @@ impl MockPlatform {
             typed_protocol_burns: Vec::new(),
             skip_transfer_credit: false,
             stall_before_mutation: BTreeMap::new(),
+            retirement_debit_block: None,
+            retirement_debit: None,
             terminal_inventory: TerminalFleetInventory::default(),
             terminal_inventory_expected_operation_id: None,
             terminal_inventory_operation_ids: Vec::new(),
@@ -799,6 +805,20 @@ impl MockPlatform {
 impl EnsurePlatform for MockPlatform {
     type Error = MockError;
 
+    fn retirement_debit_block(&self) -> Option<u64> {
+        self.retirement_debit_block
+    }
+
+    fn observe_retirement_debit(
+        &mut self,
+        block: u64,
+    ) -> Result<Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>, Self::Error> {
+        Ok(self
+            .retirement_debit
+            .clone()
+            .filter(|receipt| receipt.block_index == block))
+    }
+
     fn apply_independent_effects(
         &mut self,
         operation_id: &str,
@@ -1090,6 +1110,12 @@ impl EnsurePlatform for MockPlatform {
         record: &EffectRecord,
         state: &FleetEnsureStateRecord,
     ) -> Result<EffectObservation, Self::Error> {
+        if self
+            .protocol_ready_on_effect_observation
+            .remove(action.name())
+        {
+            self.protocol_ready.insert(action.name().to_owned());
+        }
         if !self.root_owned_action_authority_is_exact(action, state) {
             return Err(MockError);
         }
@@ -7335,11 +7361,21 @@ fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
 }
 
 /// A deliberately non-executable completed source with a current immutable phase.
+pub(super) fn terminal_retirement_fixture() -> (
+    Fixture,
+    crate::fleet_ensure::ops::EnsurePaths,
+    FleetEnsurePlan,
+) {
+    terminal_retirement_payment_fixture(true)
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one completed-source fixture binds its plan, immutable phase and paid receipts"
 )]
-pub(super) fn terminal_retirement_fixture() -> (
+fn terminal_retirement_payment_fixture(
+    paid: bool,
+) -> (
     Fixture,
     crate::fleet_ensure::ops::EnsurePaths,
     FleetEnsurePlan,
@@ -7366,9 +7402,9 @@ pub(super) fn terminal_retirement_fixture() -> (
     plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(
         &source_desired,
     )));
-    plan.conservation.maximum_new_funding_cycles = 110;
-    plan.conservation.maximum_unavoidable_fee_cycles = 10;
-    plan.conservation.maximum_operator_debit_cycles = 120;
+    plan.conservation.maximum_new_funding_cycles = if paid { 110 } else { 0 };
+    plan.conservation.maximum_unavoidable_fee_cycles = if paid { 10 } else { 0 };
+    plan.conservation.maximum_operator_debit_cycles = if paid { 120 } else { 0 };
     plan.conservation.maximum_execution_burn_cycles = 200;
     plan.continuation = Some(FleetEnsureContinuationAuthority {
         fixture_publication_retry_attempts: 0,
@@ -7390,7 +7426,7 @@ pub(super) fn terminal_retirement_fixture() -> (
         name: "treasury".into(),
         principal: TREASURY.into(),
     };
-    plan.canisters[0].actions = vec![fund.clone()];
+    plan.canisters[0].actions = if paid { vec![fund] } else { Vec::new() };
     plan.protocol_actions.clear();
     plan.plan_sha256 = expected_plan_sha256(&plan);
     let mut phase = plan.clone();
@@ -7419,8 +7455,10 @@ pub(super) fn terminal_retirement_fixture() -> (
         "discovery": "pending_current_protocol",
     });
     fs::write(&paths.plan, serde_json::to_vec(&raw).unwrap()).unwrap();
-    let effects = [fund, phase.protocol_actions[0].clone()]
+    let effects = plan.canisters[0]
+        .actions
         .iter()
+        .chain(phase.protocol_actions.iter())
         .map(|action| EffectRecord {
             publication_attempts: 0,
             maintenance_attempts: 0,
@@ -8011,6 +8049,42 @@ fn pool_batches_stop_at_authority_and_duplicate_asset_boundaries() {
 }
 
 #[test]
+fn store_chunks_observed_before_submission_refresh_persisted_progress() {
+    let mut fixture = store_chunk_fixture();
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        "chunks",
+        "test-fleet",
+        1,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let observed = &planned.plan.protocol_actions[1..5];
+    fixture
+        .platform
+        .protocol_ready_on_effect_observation
+        .extend(observed.iter().map(|action| action.name().to_owned()));
+    fixture.platform.progress.clear();
+    fixture.platform.progress_journal = fixture.platform.publication_journal.clone();
+    let report = apply_fixture_plan(&mut fixture, "chunks", &planned.plan).unwrap();
+    assert!(report.terminal);
+    assert!(fixture.platform.progress.iter().any(|progress| {
+        progress.applied_effects == 5 && progress.phase == FleetEnsurePhase::ControlPlane
+    }));
+    for action in observed {
+        assert!(
+            !fixture
+                .platform
+                .mutations
+                .contains_key(&action_sha256(action))
+        );
+    }
+    assert!(fixture.platform.mutations.values().all(|count| *count == 1));
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
 fn store_chunks_batch_after_preparation_and_replay_without_effects() {
     let mut fixture = store_chunk_fixture();
     let planned = workflow::plan(
@@ -8285,4 +8359,222 @@ fn terminal_retirement_inspects_selected_workspace_without_mutation() {
     {
         assert_eq!(fs::read(path).unwrap(), before);
     }
+}
+
+#[test]
+fn terminal_retirement_external_debit_is_exact_and_separate_from_source_payments() {
+    use crate::fleet_ensure::{
+        model::*, ops::reinstall::terminal,
+        policy::reinstall::terminal::external_debit_conservation,
+    };
+    let (fixture, paths, _) = terminal_retirement_payment_fixture(false);
+    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
+    let state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet").unwrap();
+    let observation = FleetObservation {
+        additional_controlled_cycles: BTreeMap::new(),
+        canisters: BTreeMap::new(),
+        estate_funding_domains: BTreeMap::new(),
+        ledger_fee_cycles: 10,
+        operator_cycles: 880,
+        protocol_ready: BTreeMap::new(),
+    };
+    let debit = RetirementWithdrawalRecord {
+        ledger: LEDGER.into(),
+        operator: source.reviewed_desired.desired().operator.clone(),
+        destination: RETIRED.into(),
+        network_identity_sha256: sha256_hex(b"network"),
+        block_sha256: sha256_hex(b"block"),
+        block_index: 7,
+        timestamp_ns: 2,
+        amount_cycles: 110,
+        fee_cycles: 10,
+    };
+    let actual = external_debit_conservation(&source, &observation, 500, &state, &debit).unwrap();
+    assert_eq!(actual.operator_debit_cycles, 0);
+    assert_eq!(actual.received_new_funding_cycles, 0);
+    assert_eq!(observation.operator_cycles, 880);
+    assert_eq!(source.journal.initial_operator_cycles, 1000);
+    for balance in [879, 881, 990, 1000] {
+        let mut changed = observation.clone();
+        changed.operator_cycles = balance;
+        assert!(external_debit_conservation(&source, &changed, 500, &state, &debit).is_none());
+    }
+    for case in 0..5 {
+        let mut changed = debit.clone();
+        match case {
+            0 => changed.operator = RETIRED.into(),
+            1 => changed.ledger = RETIRED.into(),
+            2 => changed.timestamp_ns = 1,
+            3 => changed.amount_cycles = 0,
+            4 => changed.fee_cycles = u128::MAX,
+            _ => unreachable!(),
+        }
+        assert!(
+            external_debit_conservation(&source, &observation, 500, &state, &changed).is_none()
+        );
+    }
+    let mut inside = state.clone();
+    inside
+        .principals
+        .insert("external".into(), debit.destination.clone());
+    assert!(external_debit_conservation(&source, &observation, 500, &inside, &debit).is_none());
+    let mut additional = observation.clone();
+    additional
+        .additional_controlled_cycles
+        .insert(debit.destination.clone(), 1);
+    assert!(external_debit_conservation(&source, &additional, 500, &state, &debit).is_none());
+    let mut retained = state.clone();
+    retained
+        .retained_cycles_by_principal
+        .insert(debit.destination.clone(), 1);
+    assert!(external_debit_conservation(&source, &observation, 500, &retained, &debit).is_none());
+    let mut paid = source.clone();
+    paid.conservation.maximum_operator_debit_cycles = 1;
+    assert!(external_debit_conservation(&paid, &observation, 500, &state, &debit).is_none());
+    assert!(external_debit_conservation(&source, &observation, 0, &state, &debit).is_none());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one review journey verifies receipt and balance drift before immutable evidence handoff"
+)]
+fn terminal_retirement_external_debit_review_rechecks_receipt_and_balance_before_effects() {
+    use crate::fleet_ensure::{model::*, ops};
+    let (mut fixture, paths, phase) = terminal_retirement_payment_fixture(false);
+    let mut state = ops::read_state(&paths, "test-fleet").unwrap();
+    state.principals.insert("treasury".into(), TREASURY.into());
+    state.topology.insert(
+        "treasury".into(),
+        FleetEnsureTopologyRecord {
+            kind: DesiredCanisterKind::Coordinator,
+            module_hash: Some(sha256_hex(b"current-wasm")),
+            parent: None,
+            protocol_binding: None,
+            role: Some("coordinator".into()),
+        },
+    );
+    ops::write_state(&paths, &state).unwrap();
+    fixture.platform.operator_cycles = 880;
+    fixture.platform.live.get_mut(TREASURY).unwrap().cycles = 490;
+    fixture.platform.terminal_inventory = TerminalFleetInventory {
+        active_registry: state.active_registry.clone(),
+        controlled_cycles_by_principal: BTreeMap::new(),
+        entries: vec![RegistryEntry {
+            pid: TREASURY.into(),
+            role: Some("coordinator".into()),
+            parent_pid: None,
+            module_hash: Some(sha256_hex(b"current-wasm")),
+            protocol_binding: None,
+        }],
+    };
+    fixture.platform.terminal_inventory_expected_operation_id = Some(phase.operation_id);
+    fixture.platform.reinstall_authority = Some(BTreeMap::from([(
+        "treasury".into(),
+        RootManagementCanisterObservation {
+            name: "treasury".into(),
+            subnet: SUBNET.into(),
+            live: fixture.platform.live[TREASURY].clone(),
+        },
+    )]));
+    let debit = RetirementWithdrawalRecord {
+        ledger: LEDGER.into(),
+        operator: fixture.desired.operator.clone(),
+        destination: RETIRED.into(),
+        network_identity_sha256: sha256_hex(b"network"),
+        block_sha256: sha256_hex(b"block"),
+        block_index: 7,
+        timestamp_ns: 2,
+        amount_cycles: 110,
+        fee_cycles: 10,
+    };
+    fixture.platform.retirement_debit_block = Some(7);
+    fixture.platform.retirement_debit = Some(debit.clone());
+    let original = [&paths.plan, &paths.journal, &paths.state].map(|path| fs::read(path).unwrap());
+    let review = workflow::plan_reinstall(
+        &fixture.root,
+        &fixture.desired,
+        "target",
+        "test-fleet",
+        3,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let record = &review
+        .plan
+        .reinstall
+        .as_ref()
+        .unwrap()
+        .source
+        .as_ref()
+        .unwrap()
+        .terminal_retirement
+        .as_ref()
+        .unwrap()
+        .conservation;
+    let FleetRetirementConservationRecord::ExternalDebit(record) = record else {
+        panic!("external debit review")
+    };
+    assert_eq!(record.external_debit, debit);
+    assert_eq!(record.source_conservation.operator_debit_cycles, 0);
+    assert!(fixture.platform.mutations.is_empty());
+    // Apply uses its retained digest; the review-only input is no longer needed.
+    fixture.platform.retirement_debit_block = None;
+    for changed in 0..5 {
+        fixture.platform.retirement_debit = Some(debit.clone());
+        fixture.platform.operator_cycles = 880;
+        match changed {
+            0 => fixture.platform.retirement_debit = None,
+            1 => {
+                fixture
+                    .platform
+                    .retirement_debit
+                    .as_mut()
+                    .unwrap()
+                    .network_identity_sha256 = sha256_hex(b"other network");
+            }
+            2 => {
+                fixture
+                    .platform
+                    .retirement_debit
+                    .as_mut()
+                    .unwrap()
+                    .block_sha256 = sha256_hex(b"other block");
+            }
+            3 => fixture.platform.operator_cycles = 879,
+            4 => fixture.platform.operator_cycles = 1000,
+            _ => unreachable!(),
+        }
+        let result = workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            "target",
+            "test-fleet",
+            &review.plan.plan_sha256,
+            &mut fixture.platform,
+        );
+        if changed < 3 {
+            assert!(matches!(
+                result,
+                Err(workflow::EnsureWorkflowError::DriftedBeforeApply)
+            ));
+        } else {
+            assert!(matches!(
+                result,
+                Err(workflow::EnsureWorkflowError::Conservation(_))
+            ));
+        }
+        assert!(fixture.platform.mutations.is_empty());
+        for (index, path) in [&paths.plan, &paths.journal, &paths.state]
+            .into_iter()
+            .enumerate()
+        {
+            assert_eq!(fs::read(path).unwrap(), original[index]);
+        }
+    }
+    // Exercise the existing archive owner at every interrupted handoff boundary.
+    // Authority sealing itself remains owned by the production PocketIC tests.
+    ops::reinstall::adoption::tests::assert_terminal_handoff(&paths, review.plan);
+    fs::remove_dir_all(fixture.root).unwrap();
 }

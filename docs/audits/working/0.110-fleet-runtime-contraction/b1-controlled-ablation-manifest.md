@@ -1,9 +1,8 @@
 # B1 Controlled-Ablation Manifest
 
 Date: 2026-09-05
-State: experiment and artifact manifests plus frozen function counter
-executable; rows 2, 3, 4, 5, 6 and 11 measured, rows 8, 10 and 12 qualified,
-remaining source switches and immutable measurements open
+State: rows 2–6 and 8–18 measured; row 7 source disposition accepted;
+complete B1 evidence accepted by the maintainer on 2026-09-23
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Baseline authority: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
@@ -13,17 +12,16 @@ Baseline authority: immutable `v0.110.5` at
 B1 now has one machine-checked catalog for all eighteen required experiments,
 including the exact SHA-256 of every runnable or specified patch,
 and one artifact roster for the eleven canonical roles plus four Canic-owned
-capability fixtures. The runner can execute the unchanged baseline, the fixed
-`Page<T>` cohort, the measured row 2 global-storage-registration and row 11
-payload-adapter switches, and the measured row 3 activation-persistence, row 4
-authorization-persistence and row 5 shared-CBOR switches.
-Row 6 now has a retained matched measurement across all twelve selected artifacts.
-Rows 8, 10 and 12 are qualified across their complete selected artifact
-sets against the unchanged `v0.110.5` source. Rows 10 and 12 passed their
-fourteen- and eleven-artifact selectors on 2026-09-14 with their original patches.
-The runner refuses every other
-experiment until its exact one-switch patch or compatible cross-commit input
-exists.
+capability fixtures. The runner accepts qualified `ready` switches for retained
+measurements and permits single-pass development qualification of `specified`
+inputs. The current per-row table below records completed measurements.
+Row 8's [matched measurement](../../reports/2026-09/2026-09-22/b1-candid-construction-measurement.md)
+finds no executable-code or defined-function reduction across fourteen artifacts;
+its smaller Wasm files contain reduced declaration metadata. Rows 10 and 12
+subsequently complete their retained measurements against unchanged `v0.110.5`
+with their original patches. Row 7 has an accepted source/interface disposition;
+row 9 now completes all 56 final-input vectors with exact repetitions and
+bidirectional Candid equality. Row 18 also completes qualification and its retained repeated measurement.
 
 The immutable
 [row 2 report](../../reports/2026-09/2026-09-03/wasm-ablation-b1-02.md)
@@ -103,42 +101,90 @@ onto a newer product release.
 | 4 | authorization records/codecs | auth model, stable storage, ops and workflow | measured; material canonical-plus-runtime-fixture result, persistence and authorization parity open |
 | 5 | bounded relevant-CBOR stub | shared CBOR adapter and its reachable callers | measured; material canonical-plus-runtime/blob-fixture result, codec and persistence parity open |
 | 6 | unconditional recovery dispatch | timer API/workflow and Root pool watchdog | measured; canonical roles plus runtime fixture, recovery parity open |
-| 7 | current versus exact role/capability expansion | build, start and endpoint macros | planned patch |
-| 8 | endpoint Candid type construction | endpoint procedural expansion | ready; all fourteen selected artifacts qualified |
-| 9 | Candid type documentation | reachable DTOs, IDs and endpoint types | planned patch |
-| 10 | Candid serialization/newtype adapters | IDs, DTOs and endpoint adapters | ready; all fourteen selected artifacts qualified |
+| 7 | current versus exact role/capability expansion | build, start and endpoint macros | source/interface finding accepted by maintainer; no numeric or optimized-absence claim |
+| 8 | endpoint Candid type construction | endpoint procedural expansion | measured; no code or defined-function reduction across fourteen artifacts |
+| 9 | Candid type documentation | reachable derive-generated type documentation | measured common preparation; complete final-input matrix across fourteen artifacts retained |
+| 10 | Candid serialization/newtype adapters | IDs, DTOs and endpoint adapters | measured; complete fourteen-artifact result, invalid replies give no wire parity |
 | 11 | payload-limited async adapters | endpoint expansion and ingress payload owner | ready; immutable selected-fixture measurement retained |
-| 12 | metrics providers | role endpoint projection and runtime metrics ops | ready; all eleven canonical artifacts qualified |
-| 13 | configuration/provisioning providers | Root projection and control-plane providers | planned patch |
-| 14 | command providers | managed, Root, Coordinator and Store projections | planned patch |
-| 15 | timer/watchdog providers | lifecycle macros, timer authority and Root watchdog | planned patch |
-| 16 | status projection | managed, Root, Coordinator and Store projections | planned patch |
-| 17 | `Page<T>` generic cohort | `leaf_probe`, `Page<T>` and generated role status | ready; `CANIC_GENERIC_COHORT_WIDTH=1..5` |
-| 18 | pool-Ledger recovery hard cut | former helper, Store, Root, DTO and host family | planned compatible cross-commit comparison |
+| 12 | metrics providers | role endpoint projection and runtime metrics ops | measured; complete matched canonical vectors retained |
+| 13 | configuration/provisioning providers | Root projection and control-plane providers | measured; complete matched canonical vectors preserve Candid/export identities |
+| 14 | command providers | managed, Root, Coordinator and Store projections | measured; complete matched canonical vectors preserve Candid/export identities |
+| 15 | timer/watchdog providers | native timer callback registrations and Root watchdog | measured; complete matched canonical-plus-runtime vectors retained |
+| 16 | status projection | managed, Root, Coordinator and Store projections | measured; complete matched canonical vectors preserve Candid/export identities |
+| 17 | `Page<T>` generic cohort | `leaf_probe`, `Page<T>` and generated role status | measured; five prepared widths repeat exactly, canonical named mapping verified |
+| 18 | pool-Ledger recovery hard cut | former helper, Store, Root, DTO and host family | measured historical family-only patch and common roster; complete canonical pair and separate deleted helper retained |
 
-`planned` is fail-closed and means no source switch exists. `specified` means
+`planned` is fail-closed and means the complete runnable input is absent. `specified` means
 the exact patch exists and applies to its source anchor, but the runner still
-refuses it. A row becomes `ready` only when its patch is reviewable, changes
+refuses a retained measurement. Development qualification is permitted. A row
+becomes `ready` only when its patch is reviewable, changes
 exactly one causal family, compiles every selected artifact and cannot enter a
-published Cargo feature or runtime option. None of these states means that the
-named family is removable.
+published Cargo feature or runtime option. The separately accepted `source_satisfied` state records a source/interface
+finding and refuses every artifact run mode. None of these states means that
+the named family is removable.
 
-Row 7 deliberately remains `planned`. Immutable `v0.110.5` already derives
-exact role capabilities and emits compile-time cfg selection, so a current-
-versus-exact comparison first needs a separately frozen expanded-source or
-projection counterfactual. The working overlay changes selected capability and
-inspect-message projections and cannot define the immutable baseline. A patch
-that merely removes metrics, command, status, timer or recovery providers would
-also duplicate rows 12 through 16 rather than measure role expansion itself.
+Rows 13, 14 and 16 have reviewed generated-provider switches. Their
+[scope and qualification record](../../reports/2026-09/2026-09-22/b1-provider-switches.md)
+binds the exact call roots, retained endpoint checks, overlaps and remaining
+qualification. Typed error stubs preserve signatures but intentionally remove
+provider behavior; they make no runtime, authorization or recovery-parity claim.
+Row 13 includes child, single-component, group and peer provisioning plus
+directory synchronization and configuration export. Rows 14 and 16 preserve
+explicit admission checks before replacing their respective provider dispatch.
 
-Row 9 also remains `planned`. The pinned `candid_derive` implementation emits
-each derived `_ty_doc()` body directly from Rust `#[doc]` attributes and offers
-no Canic-local suppression control. The named Canic DTO, ID and endpoint owner
-directories currently contain 1,451 such attributes. Deleting them would be a
-broad source-documentation mutation, while stripping comments from the rendered
-`.did` would measure metadata bytes after generation rather than the generated
-type-documentation bodies. Row 9 needs a frozen derivation-level counterfactual
-before it can make the one-cause claim.
+Row 15's same review binds the native business callback registrations. It leaves
+timer identities, custody, cadence declarations and lifecycle/application timer
+plumbing intact, while replacing native work with no-work results. Its canonical
+plus runtime-fixture qualification passes. It overlaps row 6's watchdog
+removal and establishes no timer or recovery parity.
+
+Row 7 is `source_satisfied` following explicit maintainer acceptance on
+2026-09-23. Immutable `.5` already derives exact role capabilities and emits
+compile-time cfg selection. The [accepted source disposition](../../reports/2026-09/2026-09-23/b1-prepared-experiments.md#accepted-role-expansion-disposition)
+binds the reviewed files and scope. No artificial no-op pair or numeric saving
+is claimed, and source selection does not prove absence of every unselected
+implementation from optimized Wasm. Provider measurements and B4 remain binding.
+
+Row 9 now has an exact derivation-level counterfactual. A hash-bound audit copy
+of pinned `candid_derive 0.10.35` is common to both conditions; the only
+condition input selects original `_ty_doc()` bodies or `TypeDoc::default()`.
+Rust source documentation, type construction and serialization generation are
+untouched. The scope includes all reachable derived documentation, including
+dependency types; it is not a Canic-DTO-only estimate. An offline locked native
+probe preserves representative wire bytes and types across control, variant and
+same-target retry. The runner verifies added audit-file contents as well as
+tracked source, and rejects injected source drift before artifact compilation.
+Complete paired compilation qualification passes all fourteen selected
+artifacts with explicit composite provenance. The complete final-input retained
+matrix now verifies both clean repetitions. No runtime parity is claimed.
+
+Row 18 now binds a common `.2` product/lock and reviewed family-only removal,
+with the two current index fixtures added identically to both conditions. The
+[prepared-source report](../../reports/2026-09/2026-09-23/b1-prepared-experiments.md)
+retains exact paths, excluded unrelated changes, unchanged existing dependency
+records, and runner rejection/cleanup evidence. Canonical paired qualification
+passes with the helper included; all 46 repeated vectors are now retained in
+the [historical-family ledger](b1-pool-ledger-recovery-hard-cut.md#retained-family-only-result--2026-09-23). The
+historical helper is separately registered as baseline-only; it
+cannot enter ordinary experiments and has no family-absent artifact. Its
+[separate qualification](../../reports/2026-09/2026-09-23/b1-row18-helper-qualification/verification.json) passes; the complete retained run now measures that helper separately.
+
+Row 17's original inert width input is replaced by exact, hash-bound common
+[fixture preparation](b1-generic-instantiation-cohort.md#frozen-fixture-preparation--2026-09-22).
+The integrated method and main catalog are now qualified. All five prepared
+widths complete two identical repetitions; one to five nominal types adds
+6,495 code bytes and ten defined functions with unchanged declarations/exports.
+Canonical optimized-body mapping is now verified through a complete linker
+and function-reference trace at every width. Instruction evidence remains
+explicitly absent, with no parity or savings claim.
+
+Rows 12, 13, 14 and 16 now have independently verified
+[matched measurements](../../reports/2026-09/2026-09-23/b1-provider-measurements.md).
+Row 15 completes qualification and independently verified matched measurement,
+including its runtime fixture.
+Provider results overlap, intentionally remove behavior and authorize no
+production deletion. Completed measurements must not be rebuilt merely because
+older dated checkpoints still described them as queued.
 
 ## Measurement-Switch Rules
 
@@ -149,22 +195,25 @@ linked worktree. They are not compiled into ordinary Canic builds. The runner:
 1. binds one exact source commit and clean linked-worktree path;
 2. compiles a method-owned reporting harness outside the product worktree
    against that exact worktree's `canic-host` and `canic-core`, resolves and
-   retains its separate lock offline, then requires that lock unchanged;
+   retains its separate lock offline, then requires that lock unchanged. The native
+   driver is built once per source condition in a separate target; its executable
+   hash is recorded and checked between repetitions;
 3. builds each selected artifact twice through `canic-host`'s release artifact
    authority with offline Cargo, disabled incremental compilation and no
    ambient compiler wrapper, removing and recreating the same fixed absolute
    target path before each repetition;
-4. applies at most one named, hash-matched patch after capturing the unchanged
-   pair;
+4. applies exact hash-bound experiment inputs, with any common preparation
+   held fixed across conditions and the causal switch applied only to the variant;
 5. requires deterministic Wasm, gzip, Candid and complete metric vectors;
-6. reverses the exact patch and rejects unexpected source mutation; and
+6. checks source after each artifact, reverses exact patches and rejects
+   unexpected source mutation; and
 7. writes evidence outside the product worktree so generated artifacts cannot
    become product inputs.
 
 The generic cohort is the only environment-matrix row. The build script
 accepts exactly widths `1..=5`; all five widths retain the same endpoint,
-variant and wire surface. The pool-Ledger row is not a one-source ablation and
-therefore remains a separately frozen compatible-predecessor comparison.
+variant and wire surface. The pool-Ledger row uses its separately frozen historical source with common
+roster preparation and a family-only removal; it is not a raw release comparison.
 
 Row 2's exact patch identity is bound by the executable experiment manifest.
 It removes the static memory-declaration constructors, authority-range
@@ -378,6 +427,13 @@ restored. Row 8 is now `ready`; this single variant qualification supplies no
 retained before/after delta, determinism or runtime parity claim. See the
 [qualification report](../../reports/2026-09/2026-09-14/b1-row8-qualification.md).
 
+The subsequently completed retained run is reviewed on 2026-09-22 in the
+[matched measurement](../../reports/2026-09/2026-09-22/b1-candid-construction-measurement.md).
+Both repetitions of both conditions pass exact byte and metric determinism
+across all fourteen artifacts. Reduced declaration metadata accounts for smaller
+files; executable code is byte-identical and defined-function counts do not fall.
+This closes row 8's measurement, without recommending production deletion.
+
 Row 10's exact patch identity is bound by the executable experiment manifest.
 For ordinary endpoints it makes the IC CDK runtime wrapper Candid-hidden, gives
 that wrapper a generated fixed opaque reply encoder and separately registers
@@ -411,9 +467,18 @@ Candid and structured-metric validation in 179 seconds. These single-artifact
 builds are qualification evidence only: they do not satisfy the runner's
 two-build determinism, complete selected-artifact matrix or immutable delta
 requirements. On 2026-09-14, the unchanged patch passed the complete fourteen-
-artifact qualification on frozen `v0.110.5`. Row 10 is now `ready`, with no
-retained savings or runtime-parity claim. See the
+artifact qualification on frozen `v0.110.5`. See the
 [qualification report](../../reports/2026-09/2026-09-14/b1-row10-row12-qualification.md).
+
+The subsequent [matched measurement](../../reports/2026-09/2026-09-22/b1-reply-serialization-measurement.md)
+passes both repetitions of both conditions across all fourteen selected
+artifacts, with independently verified payloads, complete vectors, function
+counts and exact Candid/export identities. Canonical artifact-summed attribution
+is 877,880 code bytes and 1,778 defined functions; Root contributes 169,788 bytes
+and 331 functions. Row 10 is measured. This is inclusive endpoint-reply
+reachability, including computation made dead by discarding typed results,
+not an isolated serialization-library cost or production deletion. Invalid
+audit replies supply no wire, runtime or instruction-parity claim.
 
 Row 11's exact patch identity is bound by the executable experiment manifest
 and remains byte-identical to the switch retained by its immutable report.
@@ -569,8 +634,10 @@ bash scripts/ci/wasm-ablation-report.sh --qualify \
   --output-root <temporary-output-directory>
 ```
 
-Qualification records `retention_eligible=no`, emits no baseline or
-determinism rows and cannot satisfy the immutable measurement requirement.
+Qualification records `retention_eligible=no` and no determinism claim. Ordinary
+patches build their variant; prepared pairs/matrices build every declared
+condition once. Historical helpers exist only in the control. None of these
+qualification results satisfies the repeated measurement requirement.
 
 A retained run will use an exact clean linked worktree and external output
 root; the runner owns and compiles the frozen counter:
@@ -585,8 +652,11 @@ bash scripts/ci/wasm-ablation-report.sh \
 
 ## Next Step
 
-Measure ready rows 8, 10 and 12 through the governed runner, then finish
-the remaining source switches and B1 evidence. Measured row 2 confirms the direct hypothesis
+The required footprint evidence is complete. Review the
+[B1 acceptance packet](b1-input-evidence.md#complete-b1-review--accepted-2026-09-23);
+do not repeat completed builds. All five generic widths and their canonical
+symbol mappings are retained.
+Measured row 2 confirms the direct hypothesis
 behind B2 but does not supply its required lifecycle parity; measured row 3
 provides inclusive activation-persistence pressure while measured rows 4 and
 5 provide differently scoped and intentionally overlapping

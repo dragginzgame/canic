@@ -36,6 +36,23 @@ pub fn init_nonroot_canister_before_bootstrap(
     });
 }
 
+pub fn init_nonroot_canister_with_fleet_admission_before_bootstrap(
+    role: CanisterRole,
+    payload: CanisterInitPayload,
+    application_init_args: Option<Vec<u8>>,
+    embedded_release_build_id: Option<&str>,
+    authority: RoleRuntimeAuthority,
+) {
+    init_nonroot_before_bootstrap(role, authority, move |role| {
+        workflow::runtime::init_nonroot_canister_with_fleet_admission(
+            role,
+            payload,
+            application_init_args,
+            embedded_release_build_id,
+        )
+    });
+}
+
 pub fn init_wasm_store_before_bootstrap(
     input: FleetSubnetWasmStoreInitArgs,
     embedded_release_build_id: Option<&str>,

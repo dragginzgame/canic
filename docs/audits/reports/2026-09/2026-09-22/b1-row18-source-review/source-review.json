@@ -1,0 +1,653 @@
+{
+  "schema_version": 1,
+  "experiment": "b1-18-pool-ledger-hard-cut",
+  "evidence_kind": "source_anchor_review",
+  "retention_eligible": false,
+  "artifact_measurement": null,
+  "anchors": {
+    "last_with_family": {
+      "ref": "v0.110.2",
+      "commit": "f9009d5ae7be78d4f9dd746431584368770e8364",
+      "tree": "b185a39fe3143eea5e44455f744274aca3aaded8",
+      "files": {
+        "Cargo.lock": "ab03456c933b3205916d2fbd636a58f93488878f36ade7aa1017437d5f147d5f",
+        "Cargo.toml": "797976a6d41ba2287a2740f92c674c6ab3c7d333462e756223846c7674501fdd",
+        "rust-toolchain.toml": "24a5037a8f0a264369ef37bb46e019ade6c524beaead1c28f77a429f856a066b",
+        "tool-versions.env": "febdd8c4c84ab0a7c62c337058eb7e97ea408373fcb5288705982b3edc11bb71",
+        "apps/test/canic.toml": "76de0f7e02f47c563602ff8d43c4d318fb5a66e38e8dbd5c2b4679fdfc63397b"
+      }
+    },
+    "removal_commit": {
+      "ref": "d5aa319dc6e6d9af48d8833931e076519b80968a",
+      "commit": "d5aa319dc6e6d9af48d8833931e076519b80968a",
+      "tree": "35121218a46d4f90a125d5e350729934cac65bdd",
+      "files": {
+        "Cargo.lock": "bdad965a4eba9df82bd97875e70b35c7b4e94ba55ee18424645bb6f0e3eda878",
+        "Cargo.toml": "48ad6b5823c0399a0d39285ab4d9347a8abd7bb6019e45d2c7405ae7e7766357",
+        "rust-toolchain.toml": "24a5037a8f0a264369ef37bb46e019ade6c524beaead1c28f77a429f856a066b",
+        "tool-versions.env": "e35c156fee0e329f70522e54471b7254205a0307d16f24cda03d61a61c897490",
+        "apps/test/canic.toml": "76de0f7e02f47c563602ff8d43c4d318fb5a66e38e8dbd5c2b4679fdfc63397b"
+      }
+    },
+    "first_release_without_family": {
+      "ref": "v0.110.3",
+      "commit": "938c40b738d55b29fe7457a0475f247102a35fc4",
+      "tree": "095b5361e8fb33a75d516993bfc6452ae18042af",
+      "files": {
+        "Cargo.lock": "3dd29cbff84eeb73b43d4151b2b5f245f59a9e669c2966073284c823a5109626",
+        "Cargo.toml": "ae3328e50971cceab6a8ac199c11ac032484f6a21861f274a24b26df601b997b",
+        "rust-toolchain.toml": "24a5037a8f0a264369ef37bb46e019ade6c524beaead1c28f77a429f856a066b",
+        "tool-versions.env": "e35c156fee0e329f70522e54471b7254205a0307d16f24cda03d61a61c897490",
+        "apps/test/canic.toml": "76de0f7e02f47c563602ff8d43c4d318fb5a66e38e8dbd5c2b4679fdfc63397b"
+      }
+    }
+  },
+  "removal_parent_is_last_release": true,
+  "source_owners": [
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic/src/macros/endpoints/root.rs",
+      "sha256": {
+        "last_with_family": "96ed97b279ce9ce3c8a81a361384709b403d2dd686bd45679f55cacf10335340",
+        "removal_commit": "2143d1a97f2d6b99abfa80272cd04c4bca72794c741ae0fd4c0ad6a09eb8b4fc",
+        "first_release_without_family": "2143d1a97f2d6b99abfa80272cd04c4bca72794c741ae0fd4c0ad6a09eb8b4fc"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-control-plane/src/dto/root.rs",
+      "sha256": {
+        "last_with_family": "7f00f283406c9d8d6f8c40518050056021064a9014bc487dc68a53483b753aac",
+        "removal_commit": "10eb483c6e0ad3f1ea432e14ca0a7139a3bf789a3f243c672346144a5f7b113d",
+        "first_release_without_family": "10eb483c6e0ad3f1ea432e14ca0a7139a3bf789a3f243c672346144a5f7b113d"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-control-plane/src/ops/canister_pool/mod.rs",
+      "sha256": {
+        "last_with_family": "90e6a5620b09c9cafb20bb9ec9bea3ee9840a31e18788b948c268acba223e4da",
+        "removal_commit": "325af3d318bc25991a99262862aa654eaf668d937dc42b431c4b85a6cc159394",
+        "first_release_without_family": "325af3d318bc25991a99262862aa654eaf668d937dc42b431c4b85a6cc159394"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-control-plane/src/storage/stable/canister_pool/mod.rs",
+      "sha256": {
+        "last_with_family": "b84aa2ea83c12648282d38e632cb84f66e859eb1972e5983fa81478b1858db84",
+        "removal_commit": "a9d561e221efe5165dfd9c0cdf0e7e5521fe3bde358ac6763dbaa140679bcaec",
+        "first_release_without_family": "a9d561e221efe5165dfd9c0cdf0e7e5521fe3bde358ac6763dbaa140679bcaec"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+      "sha256": {
+        "last_with_family": "bf4a577c8dd9efd0dd4d71e6a234f21d61fd8718a082cf5140d9bd10f6e22bf5",
+        "removal_commit": "6b3bc4424fa279c10196d82a80974b8aa896818ee53045faa6509ec731c76f57",
+        "first_release_without_family": "6b3bc4424fa279c10196d82a80974b8aa896818ee53045faa6509ec731c76f57"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-control-plane/src/workflow/deployment.rs",
+      "sha256": {
+        "last_with_family": "20755228ca41fe532e50721fd364c7b04dd481047d32c01b473ce4dee9b37d4e",
+        "removal_commit": "b493af657ec4007540a3fa4c9537fdb040dcebb0fb56bbb58a989d0e6ff3eb24",
+        "first_release_without_family": "b493af657ec4007540a3fa4c9537fdb040dcebb0fb56bbb58a989d0e6ff3eb24"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-control-plane/src/workflow/root_status/mod.rs",
+      "sha256": {
+        "last_with_family": "6fa6fa7404dffc8edcf6b8fec4ad37809a529c9cc9ced888165c1fa76fabbeb9",
+        "removal_commit": "3053b41b9021d2441df2b7c386134bddbf4453aca756e816ec97dced97d47da6",
+        "first_release_without_family": "3053b41b9021d2441df2b7c386134bddbf4453aca756e816ec97dced97d47da6"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-core/src/dto/pool.rs",
+      "sha256": {
+        "last_with_family": "631b8e3d7e4cbf4d786c2b19e9b4a44236f6a6f3622e180d7caa195e830d9f88",
+        "removal_commit": "e3b6fa73416a550483849f12bd55e896c992fb60eb44d391f5eaa0babb354ead",
+        "first_release_without_family": "e3b6fa73416a550483849f12bd55e896c992fb60eb44d391f5eaa0babb354ead"
+      }
+    },
+    {
+      "owner": "root_recovery",
+      "path": "crates/canic-core/src/replay_policy/role_command_manifest.rs",
+      "sha256": {
+        "last_with_family": "1383fcfd14672fab94071549e09db508ee6f6557d82b63da3f7cadbc03e2dc27",
+        "removal_commit": "4b9f1dbc15f62cc0f74c3a89f7bec5f802967104b65b4090fde068a2b548d902",
+        "first_release_without_family": "4b9f1dbc15f62cc0f74c3a89f7bec5f802967104b65b4090fde068a2b548d902"
+      }
+    },
+    {
+      "owner": "root_helper_catalog_filter",
+      "path": "crates/canic-control-plane/src/workflow/bootstrap/root_store/mod.rs",
+      "sha256": {
+        "last_with_family": "2106cdeb0aba15f12b99540be4b9f7573fd563800cb7313cea2faf2a11f2df85",
+        "removal_commit": "f664d79ddea60657f67cbbf5a159670ccbaf516de922cb86d1cc91a56ea1c74f",
+        "first_release_without_family": "f664d79ddea60657f67cbbf5a159670ccbaf516de922cb86d1cc91a56ea1c74f"
+      }
+    },
+    {
+      "owner": "host_helper_build_and_publication",
+      "path": "crates/canic-host/src/bootstrap_pool_ledger_recovery.rs",
+      "sha256": {
+        "last_with_family": "c9358921460e1a8c1fdb1e4d5ffa7eec6f0c33c2ef0146706742de66edaf935b",
+        "removal_commit": null,
+        "first_release_without_family": null
+      }
+    },
+    {
+      "owner": "host_helper_build_and_publication",
+      "path": "crates/canic-host/src/bootstrap_pool_ledger_recovery/canister.rs.txt",
+      "sha256": {
+        "last_with_family": "afd6db3c0f57d67b25e2ac0d88d4f518bb56b8f65f45988cc11f1a1b52d6376d",
+        "removal_commit": null,
+        "first_release_without_family": null
+      }
+    },
+    {
+      "owner": "host_helper_build_and_publication",
+      "path": "crates/canic-host/src/canister_build/artifact.rs",
+      "sha256": {
+        "last_with_family": "7d063baf8258df816daf2eed00ecebf20e1773e662cb88f435fb8859c7b3e354",
+        "removal_commit": "519829949e1fc37e8cbad895f3446bd5f30d9650319503f9c77326229f853a5a",
+        "first_release_without_family": "519829949e1fc37e8cbad895f3446bd5f30d9650319503f9c77326229f853a5a"
+      }
+    },
+    {
+      "owner": "host_helper_build_and_publication",
+      "path": "crates/canic-host/src/canister_build/model.rs",
+      "sha256": {
+        "last_with_family": "ab785b4fb5796a47800f00d3320fc87b0c1764713d8fc4810be07b4114fcee37",
+        "removal_commit": "e3f170d8f6d9e25e008e995b72abd20b0baaffc960fb31a50c3642aabd222fc4",
+        "first_release_without_family": "e3f170d8f6d9e25e008e995b72abd20b0baaffc960fb31a50c3642aabd222fc4"
+      }
+    },
+    {
+      "owner": "host_helper_build_and_publication",
+      "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs",
+      "sha256": {
+        "last_with_family": "a36a499040fb11176854f8bb93bb9edb97c0452241b21714f9560ca148e628f0",
+        "removal_commit": "417088ebedf8623f11f3a208eeb22960695363702aa74526dc90cfb4846ba9fa",
+        "first_release_without_family": "417088ebedf8623f11f3a208eeb22960695363702aa74526dc90cfb4846ba9fa"
+      }
+    },
+    {
+      "owner": "host_helper_build_and_publication",
+      "path": "crates/canic-host/src/release_set/infrastructure/mod.rs",
+      "sha256": {
+        "last_with_family": "c6c79a1570a761ab090fa0cd5ab129ed5eb94c24fc5ebf7b31a018f83075674b",
+        "removal_commit": "75ca9fb885912790828965e6372251fe96082a46939338646422749ddb926a9b",
+        "first_release_without_family": "75ca9fb885912790828965e6372251fe96082a46939338646422749ddb926a9b"
+      }
+    },
+    {
+      "owner": "unchanged_store_owners",
+      "path": "crates/canic-host/src/bootstrap_store/mod.rs",
+      "sha256": {
+        "last_with_family": "d797109545e0315d1fed0577ae0d2526f05bf812823f7cf08853b967f7cebece",
+        "removal_commit": "d797109545e0315d1fed0577ae0d2526f05bf812823f7cf08853b967f7cebece",
+        "first_release_without_family": "d797109545e0315d1fed0577ae0d2526f05bf812823f7cf08853b967f7cebece"
+      }
+    },
+    {
+      "owner": "unchanged_store_owners",
+      "path": "crates/canic-control-plane/src/workflow/wasm_store/mod.rs",
+      "sha256": {
+        "last_with_family": "082e49470746075aeeb8d53718ac05b7707c3fdec4bca4bda357fedd2a913fe4",
+        "removal_commit": "082e49470746075aeeb8d53718ac05b7707c3fdec4bca4bda357fedd2a913fe4",
+        "first_release_without_family": "082e49470746075aeeb8d53718ac05b7707c3fdec4bca4bda357fedd2a913fe4"
+      }
+    },
+    {
+      "owner": "unchanged_store_owners",
+      "path": "crates/canic-control-plane/src/workflow/runtime/template/publication/store.rs",
+      "sha256": {
+        "last_with_family": "0aa241700270ab26eadbe168f1c24e754ae7b91c58ce93cba40182b74c746c2b",
+        "removal_commit": "0aa241700270ab26eadbe168f1c24e754ae7b91c58ce93cba40182b74c746c2b",
+        "first_release_without_family": "0aa241700270ab26eadbe168f1c24e754ae7b91c58ce93cba40182b74c746c2b"
+      }
+    },
+    {
+      "owner": "unchanged_store_owners",
+      "path": "crates/canic/src/macros/endpoints/wasm_store.rs",
+      "sha256": {
+        "last_with_family": "d68f96a19980e894dbc4c7bde067fceb352c5ad61ee0f43b1e53b2eba22d17c7",
+        "removal_commit": "d68f96a19980e894dbc4c7bde067fceb352c5ad61ee0f43b1e53b2eba22d17c7",
+        "first_release_without_family": "d68f96a19980e894dbc4c7bde067fceb352c5ad61ee0f43b1e53b2eba22d17c7"
+      }
+    }
+  ],
+  "external_lock_package_changes": [
+    {
+      "name": "aws-lc-rs",
+      "before": [
+        {
+          "version": "1.18.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "ce2b2dcc879c3bae0d371e77c99f2238400ef24ec001394befa67b6e543add9e"
+        }
+      ],
+      "after": [
+        {
+          "version": "1.18.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "b281d307588d634de920874890732659e2e7672f72b5e10e81badc1a8a83621e"
+        }
+      ]
+    },
+    {
+      "name": "aws-lc-sys",
+      "before": [
+        {
+          "version": "0.44.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "f09fae7be8bb3174e05c6afdb34199e6dc0c7c04ba9fa237b1967adfbde27483"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.45.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "9bff6c3b54fad79a2e60b8102caf565819711497c1f5f092f49508e2f5c31b27"
+        }
+      ]
+    },
+    {
+      "name": "backoff",
+      "before": [
+        {
+          "version": "0.4.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "b62ddb9cb1ec0a098ad4bbf9344d0713fa193ae1a80af55febcff2627b6a00c1"
+        }
+      ],
+      "after": []
+    },
+    {
+      "name": "ic-management-canister-types",
+      "before": [
+        {
+          "version": "0.5.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "3149217e24186df3f13dc45eee14cdb3e5cad07d0b2b67bd53555c1c55462957"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.8.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "3187ba94198a8df0e38a478f289812fcead6a86c658b9552b00f1f8081f06bb3"
+        }
+      ]
+    },
+    {
+      "name": "ic-testkit",
+      "before": [
+        {
+          "version": "0.8.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "d8d46cb0f12b2599e471af534826d8d5721fec07987bdfe24f860418f64d4aa1"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.9.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "ac2875512459c61ede44505f82802e48ea7c646f8823a00e7f68d869d771a213"
+        }
+      ]
+    },
+    {
+      "name": "ic-transport-types",
+      "before": [
+        {
+          "version": "0.45.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4a775244756a5d97ff19b08071a946a4b4896904e35deb036bf215e80f2e703d"
+        },
+        {
+          "version": "0.49.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "e2d13d859ea481e8d5766a54a3b4dfcf4c11ff6f21d5e2aeaf9a44dd710a76ff"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.49.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "e2d13d859ea481e8d5766a54a3b4dfcf4c11ff6f21d5e2aeaf9a44dd710a76ff"
+        }
+      ]
+    },
+    {
+      "name": "icydb",
+      "before": [
+        {
+          "version": "0.249.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "9b894bf3a68dfb05f8ba3411a7882c195821df0352b2dbdfbd81a6ebfb2b6040"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.252.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "fc8945164878ea29f8f32a4cace591320946cd35dd58181ee2cd4df081e03aa6"
+        }
+      ]
+    },
+    {
+      "name": "icydb-core",
+      "before": [
+        {
+          "version": "0.249.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "69cb6968927b4e5d54cbb0c9e9b17192a067e06cd107cef153b44715290c9e93"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.252.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "1959baaa758b9cfa5647921af15ae1cc15e456537bfac2b075c6937b111bd409"
+        }
+      ]
+    },
+    {
+      "name": "icydb-diagnostic-code",
+      "before": [
+        {
+          "version": "0.249.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "306b7df70f43ed4674e2582cceaf0e8bd8fbbe91877d8d5395bcf755ea5dbae6"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.252.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "9fa7e8bc3ac81f1c23785496511acedb84c7834074990c983bba02f06337d29d"
+        }
+      ]
+    },
+    {
+      "name": "icydb-model",
+      "before": [
+        {
+          "version": "0.249.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "55425420d74fbc87d42a3a6bc65abe1770d55e15eb037f326fc2078402ffb170"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.252.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "2716e85b920aa2eecf7ec8ad229244d4fa69a025c04cc23af33fbab6201eee54"
+        }
+      ]
+    },
+    {
+      "name": "icydb-model-macros",
+      "before": [
+        {
+          "version": "0.249.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "c214f0b169e1d041672c283c393b649824edec2e56fe04b098b4c913d63a1078"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.252.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "62b14f793bf257bbf6e00ddb795c4a99a0eebc9cf6c727371a53804f046f61b7"
+        }
+      ]
+    },
+    {
+      "name": "icydb-schema",
+      "before": [
+        {
+          "version": "0.249.6",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4da3906059d72c69dbdfbbbf23987a754585f8f120546834cec206b4dc25c70f"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.252.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "ff008ad75a7c55e745e3aa0a258843017c24374a62539006c3d2c9f044378ba0"
+        }
+      ]
+    },
+    {
+      "name": "instant",
+      "before": [
+        {
+          "version": "0.1.13",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "e0242819d153cba4b4b05a5a8f2a7e9bbf97b6055b2a002b395c96b5ff3c0222"
+        }
+      ],
+      "after": []
+    },
+    {
+      "name": "libredox",
+      "before": [
+        {
+          "version": "0.1.21",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "d7955dfc218a8afb29dfeffd540e3a6e96baeb94fe7138228dd7cc6937fbbf96"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.1.23",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "8d8f1ea3f21fd3405dcaf6c9b5c1630af9afc422d9073ea39c5f6d6c772e08ed"
+        }
+      ]
+    },
+    {
+      "name": "pocket-ic",
+      "before": [
+        {
+          "version": "15.0.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4fe796a5fbeb08244338f5eb30f2de91fa12152ea2b5176f9da20fecd20b1ced"
+        }
+      ],
+      "after": [
+        {
+          "version": "16.0.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "882559a1eea632f42b10a408d1f06f9c72a36fec6b0b9daa2eed0095a6fef593"
+        }
+      ]
+    },
+    {
+      "name": "reqwest",
+      "before": [
+        {
+          "version": "0.12.28",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "eddd3ca559203180a307f12d114c268abf583f59b03cb906fd0b3ff8646c1147"
+        },
+        {
+          "version": "0.13.4",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.13.4",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "219c5811de6525e5416c7d5d53bb656d3afdbc6c5af816e0802bcfa42dbdc1c3"
+        }
+      ]
+    },
+    {
+      "name": "ryu",
+      "before": [
+        {
+          "version": "1.0.23",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "9774ba4a74de5f7b1c1451ed6cd5285a32eddb5cccb8cc655a4e50009e06477f"
+        }
+      ],
+      "after": []
+    },
+    {
+      "name": "serde_urlencoded",
+      "before": [
+        {
+          "version": "0.7.1",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "d3491c14715ca2294c4d6a88f15e84739788c1d030eed8c110436aafdaa2f3fd"
+        }
+      ],
+      "after": []
+    },
+    {
+      "name": "thiserror",
+      "before": [
+        {
+          "version": "1.0.69",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+        },
+        {
+          "version": "2.0.20",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "ec86235f5fcc2a73650310756d2ac5b138a5780bbbdfae3eeccec992c435ba4f"
+        }
+      ],
+      "after": [
+        {
+          "version": "1.0.69",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "b6aaf5339b578ea85b50e080feb250a3e8ae8cfcdff9a461c9ec2904bc923f52"
+        },
+        {
+          "version": "2.0.18",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
+        }
+      ]
+    },
+    {
+      "name": "thiserror-impl",
+      "before": [
+        {
+          "version": "1.0.69",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+        },
+        {
+          "version": "2.0.20",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "bc04cd3e1236dd4a98afca4569f2deb3f120e5422a4023be2cb683f8486292af"
+        }
+      ],
+      "after": [
+        {
+          "version": "1.0.69",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "4fee6c4efc90059e10f81e6d42c60a18f76588c3d74cb83a0b242a2b6c7504c1"
+        },
+        {
+          "version": "2.0.18",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
+        }
+      ]
+    },
+    {
+      "name": "wasm-streams",
+      "before": [
+        {
+          "version": "0.4.2",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "15053d8d85c7eccdbefef60f06769760a563c7f0a9d6902a13d35c7800b0ad65"
+        },
+        {
+          "version": "0.5.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "9d1ec4f6517c9e11ae630e200b2b65d193279042e28edd4a2cda233e46670bbb"
+        }
+      ],
+      "after": [
+        {
+          "version": "0.5.0",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "9d1ec4f6517c9e11ae630e200b2b65d193279042e28edd4a2cda233e46670bbb"
+        }
+      ]
+    },
+    {
+      "name": "webpki-roots",
+      "before": [
+        {
+          "version": "1.0.9",
+          "source": "registry+https://github.com/rust-lang/crates.io-index",
+          "checksum": "7dcd9d09a39985f5344844e66b0c530a33843579125f23e21e9f0f220850f22a"
+        }
+      ],
+      "after": []
+    }
+  ],
+  "historical_artifacts": {
+    "config": "apps/test/canic.toml",
+    "declared_roles": [
+      "app",
+      "root",
+      "scale_hub",
+      "scale_replica",
+      "test",
+      "user_hub",
+      "user_shard"
+    ],
+    "generated_common_roles": [
+      "fleet_coordinator",
+      "wasm_store"
+    ],
+    "baseline_only_helper": "pool_ledger_recovery",
+    "current_roles_missing_from_historical_config": [
+      "index_child",
+      "index_hub"
+    ]
+  },
+  "comparison_disposition": {
+    "release_to_release_is_isolated": false,
+    "controlled_pair_required": true,
+    "control_source": "f9009d5ae7be78d4f9dd746431584368770e8364",
+    "variant": "same source plus separately reviewed whole-family removal patch",
+    "hold_fixed": [
+      "Cargo package versions and resolved dependency graph",
+      "toolchain and optimizer",
+      "artifact build method and profile",
+      "role/config roster",
+      "clean repetition paths"
+    ],
+    "store_publication_owner": "host; Root owns helper catalog admission",
+    "store_size_effect": "unmeasured; unchanged Store owners do not prove unchanged linked Wasm",
+    "index_role_coverage": "requires identical explicit fixture preparation on both conditions before claiming the full current roster",
+    "helper_measurement": "separate baseline artifact; never substitute helper bytes for Root or Store marginal deltas",
+    "next_requirements": [
+      "freeze the complete family-only patch with build-compatible host changes",
+      "qualify the historical helper and prepared common artifact selector",
+      "freeze one compatible method and exact inputs for both conditions",
+      "retain repeated vectors, payload verification and optimized mapping"
+    ]
+  }
+}

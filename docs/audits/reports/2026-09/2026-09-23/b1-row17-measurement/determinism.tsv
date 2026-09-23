@@ -1,0 +1,6 @@
+experiment	condition	artifact_id	wasm	gzip	candid	metrics	result
+b1-17-page-generic-cohort	width-1	leaf_probe	PASS	PASS	PASS	PASS	PASS
+b1-17-page-generic-cohort	width-2	leaf_probe	PASS	PASS	PASS	PASS	PASS
+b1-17-page-generic-cohort	width-3	leaf_probe	PASS	PASS	PASS	PASS	PASS
+b1-17-page-generic-cohort	width-4	leaf_probe	PASS	PASS	PASS	PASS	PASS
+b1-17-page-generic-cohort	width-5	leaf_probe	PASS	PASS	PASS	PASS	PASS

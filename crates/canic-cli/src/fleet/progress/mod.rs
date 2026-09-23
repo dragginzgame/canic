@@ -337,6 +337,20 @@ impl ProgressSession {
         self.sink.update(|display| {
             if let Some(receipt) = &mut display.receipt {
                 receipt.finish(report);
+                if display.transport != Transport::Json {
+                    display
+                        .painter
+                        .clear(&mut io::stderr().lock(), terminal::size())?;
+                    receipt.write_summary(
+                        &mut io::stderr().lock(),
+                        if report.is_some() {
+                            "completed"
+                        } else {
+                            "failed"
+                        },
+                        report,
+                    )?;
+                }
             }
             Ok(())
         });
@@ -346,6 +360,16 @@ impl ProgressSession {
         self.sink.update(|display| {
             if let Some(receipt) = &mut display.receipt {
                 receipt.close(if succeeded { "completed" } else { "failed" }, None);
+                if display.transport != Transport::Json {
+                    display
+                        .painter
+                        .clear(&mut io::stderr().lock(), terminal::size())?;
+                    receipt.write_summary(
+                        &mut io::stderr().lock(),
+                        if succeeded { "completed" } else { "failed" },
+                        None,
+                    )?;
+                }
             }
             Ok(())
         });

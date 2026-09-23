@@ -1,7 +1,7 @@
 # 0.110 B1 Generated Surface Inventory
 
 Date: 2026-09-03
-State: source trace complete; optimized-artifact proof open
+State: source trace complete; optimized differential evidence retained; production absence proof open
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Measurement baseline: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
@@ -225,6 +225,63 @@ compare code-section bytes, total bytes, replica-limited defined functions,
 the optimizer-defined cross-check, table entries, instructions, Candid and
 protocol-profile identity.
 
+## Optimized differential evidence — 2026-09-23
+
+The source trace above is now paired with retained optimized experiments on the
+same `.5` source. Each provider switch preserves endpoint signatures and explicit
+admission while replacing its exact dispatch roots. All eleven roles repeat
+exactly and retain identical Candid/export identities. The
+[provider report](../../reports/2026-09/2026-09-23/b1-provider-measurements.md)
+binds full absolute/function/table vectors, patch identities and independent
+verification. The code-section deltas below are variant minus each experiment's
+own control, in bytes; experiments overlap and cannot be summed.
+
+| Role | Metrics | Provisioning | Commands | Timers | Status |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| app | -28,256 | 0 | -35,156 | -639,577 | -95,157 |
+| index_hub | -32,913 | 0 | -169,496 | -125,577 | -98,662 |
+| test | -29,244 | 0 | -40,298 | -515,753 | -98,630 |
+| user_hub | -34,749 | 0 | -80,363 | -401,095 | -103,070 |
+| scale_hub | -32,396 | 0 | -80,323 | -401,944 | -98,478 |
+| index_child | -29,978 | 0 | -33,158 | -154,453 | -94,184 |
+| user_shard | -29,238 | 0 | -95,129 | -432,874 | -110,499 |
+| scale_replica | -28,256 | 0 | -35,156 | -639,583 | -95,110 |
+| root | -35,528 | -364,092 | -1,594,423 | -113,992 | -196,810 |
+| fleet_coordinator | 0 | 0 | -427,380 | 0 | -18,610 |
+| wasm_store | 0 | 0 | -237,049 | -128,474 | -14,896 |
+
+This shows marginal optimized reachability from the generated dispatch, not
+ownership of every byte in a library. Zero means the particular switch makes
+no code-size difference; another root may retain the same implementation.
+Provisioning is Root-local under this experiment. Command dispatch is material
+in Root, Coordinator and Store; status dispatch contributes across the roster.
+Timer callback attribution is largest in automatic-top-up leaf roles and
+overlaps the separately measured recovery/watchdog roots; none of those
+required callbacks can be deleted on this evidence alone.
+
+Endpoint Candid-construction row 8 changes no optimized code bytes or defined
+functions across fourteen artifacts; only metadata shrinks. Reply-serialization
+row 10 has complete matched vectors but intentionally invalid replies, so it
+provides reachability attribution without wire parity. The payload-limited raw
+adapter contributes 967 code bytes and zero defined functions in its owning
+fixture; its independently required payload boundary remains. The
+[experiment manifest](b1-controlled-ablation-manifest.md) binds those reports,
+related storage/recovery experiments and the completed type-documentation row.
+That row reduces canonical code by 263,902 bytes with unchanged table counts;
+Store and each fixture gain one defined function. Its dependency-inclusive
+scope and changed declaration comments remain explicit. The historical family
+comparison separately reduces Root by 95,690 code bytes and 84 functions,
+retains byte-identical Store output and measures the deleted helper independently.
+
+The [named cohort](b1-generic-instantiation-cohort.md) supplies post-`-Oz`
+concrete-type/body mappings. Its subsequent canonical linker/optimizer trace
+verifies every function reference at all five widths, including the larger type
+and serializer bodies. The full executable sections match the retained cohort;
+the data difference is confined to equal-length invocation scratch paths.
+Together these are optimized B1 attribution evidence. They do not establish B4's maintained-behavior or
+role-inapplicable-body absence requirements, and no audit stub becomes a
+production cut.
+
 ## B1 Routing Result
 
 The source inventory is complete enough to route controlled experiments:
@@ -239,9 +296,11 @@ The source inventory is complete enough to route controlled experiments:
 - no large shared protocol enum or generic provider registry is justified by
   this inventory.
 
-B1 is not complete. The repository-owned capability-fixture measurements,
-controlled ablations, optimized `1..=N` generic-cohort measurements,
-post-`-Oz` attribution and compatible predecessor evidence remain open. The
+The required B1 footprint evidence is complete and awaits human acceptance.
+All controlled vectors, the optimized `1..=N` cohort and canonical body mappings
+are retained. Row 7 has a maintainer-accepted source/interface disposition without numeric
+attribution or optimized-absence claims.
+Remaining evidence and limitations are owned by the experiment manifest. The
 generic family and fixture are frozen in the
 [generic-instantiation cohort](b1-generic-instantiation-cohort.md), and the
 source destruction trace is retained in the

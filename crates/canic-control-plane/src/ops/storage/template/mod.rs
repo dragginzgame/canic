@@ -1,7 +1,9 @@
+#[cfg(any(test, feature = "wasm-store-canister"))]
 mod chunked;
 #[cfg(feature = "wasm-store-canister")]
 mod gc;
 
+#[cfg(any(test, feature = "wasm-store-canister"))]
 pub use chunked::TemplateChunkedOps;
 #[cfg(feature = "wasm-store-canister")]
 pub use gc::WasmStoreGcOps;

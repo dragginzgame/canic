@@ -20,6 +20,275 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## B1 accepted; B2 complete and push-ready — 2026-09-23
+
+The maintainer explicitly accepted complete B1 and authorized sequenced B2.
+The [accepted review](../audits/working/0.110-fleet-runtime-contraction/b1-input-evidence.md#complete-b1-review--accepted-2026-09-23)
+retains the footprint-only and row-7 dispositions, maximum 1% maintained-workload
+instruction allowance and no unexplained indirect-table growth. This is not a
+release instruction or minor-closeout acceptance. B2 contracts the global
+constructor-driven TLS initializer registry and role-owned lifecycle paths while
+preserving memory allocation metadata, admission and same-release recovery.
+
+The [first B2 storage cut](../audits/working/0.110-fleet-runtime-contraction/b2-storage-reachability.md)
+removes the eager TLS execution registry and macro wrappers, keeps allocation
+metadata/admission, and makes non-root runtime startup/recovery calls direct.
+The baseline lazy-store regression fails before the cut and passes afterward.
+All 87 selected native tests, three isolated control-plane role builds, strict
+scoped core/control-plane/facade Clippy and six focused PocketIC lifecycle cases
+pass. The [structured evidence](../audits/reports/2026-09/2026-09-23/b2-storage-first-cut.json)
+retains source/log hashes. The participant-ordering guard now checks tokenized
+call identities rather than local binding names.
+
+The next B2 cut now selects Fleet-admission initialization/restoration directly
+with the existing consuming-actor capability, validates exact enrollment and
+payload presence, and preserves synchronous restoration before participants.
+Twenty focused native tests, eight PocketIC tests and strict scoped lint pass.
+The [admission-selection evidence](../audits/reports/2026-09/2026-09-23/b2-admission-selection.json)
+retains source/log hashes, rejected-install retry and active-projection recovery.
+
+The [admission-reader cut](../audits/reports/2026-09/2026-09-23/b2-admission-reader.md)
+now selects evaluation from the declared guard and removes the unnecessary async
+boundary from `auth::is_fleet_admitted`. Direct callers remove `.await`; macro
+predicate syntax is unchanged. Forty-three focused native tests, strict scoped
+lint and the final exact PocketIC admission/recovery case pass. Source and log
+hashes, six paired diagnostic artifacts and the explained table growth are retained.
+
+The parent-only diagnostic loses 23,526 code bytes and 23 functions; only admission
+allocation metadata remains among its named projection owners. Admission-only
+adds 294 code bytes; mixed guards add 5,384 bytes and two evaluator table entries.
+These name-preserving probes are not canonical production artifact qualification.
+The earlier async selection retained an unreachable resume-state call and is
+explicitly superseded. Measurement attempts with unsupported optimizer features
+or stale Cargo objects are excluded, not credited.
+
+The [final B2 closeout](../audits/reports/2026-09/2026-09-23/b2-storage-closeout.md)
+now closes ownership, workload and generic disposition. All eleven canonical
+roles and four fixtures preserve exact interfaces/selection and frozen reserves.
+Canonical modules collectively lose 186,952 code bytes, 476 functions and
+274 table slots; fixtures separately lose 67,222 bytes, 191 functions and
+90 slots. Root's six local chunk-storage bodies disappear while its approved
+manifest mirror remains. Every final canonical function mapping is verified.
+
+Two identical complete-query measurement runs retain four cold-query regressions
+of 77,421–80,008 instructions. A controlled heap-touch comparison identifies one
+extra first-touch charge in each. The maintainer explicitly accepted those four
+B2 vectors on 2026-09-23; the general 1% allowance remains unchanged elsewhere.
+All twelve complete sampling exports and warmed-query comparisons stay within
+1%; synchronous initialization is down 18.91%, restoration down 10.14%.
+The experimental history/config reader changes are excluded from product source.
+The accepted B1 Page cohort remains; final named generic reports are refreshed.
+
+Sixteen template tests, 92 metrics tests, strict Root-only and core/control-plane
+all-target/all-feature Clippy pass. The exact governed Root provisioning and
+recovery PocketIC case passes in 415 seconds. Scoped formatting, whitespace and
+current-document semantics pass. Final records live in the linked report and
+`.tmp/b2-closeout-20260923/`; all measurement builds are finished. Production
+inputs match the frozen source; the retained native-only test overlay corrects
+two metric-label expectations and is included in final native qualification.
+
+The complete accepted batch and both `.39` changelog surfaces are push-ready.
+B3 implementation has not started: first assess residual record/codec complexity
+benefit. B4/B5 and the human minor-closeout gate remain sequenced separately.
+No build-speed claim, broad gate, version transaction, commit, push, deployment
+or sibling mutation ran. Package metadata remains `.37`; reconciliation with
+separately published `.38` belongs to the maintainer's Git/release flow.
+
+The [local performance controls](../audits/reports/2026-09/2026-09-23/performance-controls.md)
+pass, including the governed scratch run and scoped host all-target/all-feature
+Clippy. Repeated parsing of the retained Root contract costs about 96 ms for 33
+inspections; it does not justify a cache. Small real-Cargo reuse controls pass,
+but their synthetic sealing and Fast profile do not qualify Toko Miner Release
+builds. No production speed-up is claimed. Keep those application-scale follow-ups
+distinct from B2; do not repeat completed B1 builds.
+
+## Toko Miner feedback follow-up — 2026-09-23
+
+Toko Miner's retained staging evidence now records successful matched
+application/CLI 0.110.38 recovery, 50 Applied effects and effect-free terminal
+replay. This supersedes the host-only mismatch blocker described below; it does
+not qualify the current dirty candidate or authorize another release.
+
+The open .39 diagnostics slice corrects Medic's version-mismatch advice,
+documents its existing offline preflight, summarizes existing Fleet timing
+events, covers final authority/asset verification with the existing Root management
+timing stage and refreshes progress after completed batch reconciliation is persisted.
+The [feedback/source trace](../audits/reports/2026-09/2026-09-23/toko-feedback-followup.md)
+records the remaining replay and controlled build measurements. Inspection
+reserve reads remain fresh; no deployment-speed improvement is claimed. B1's
+separate review packet is now accepted, with B2 authorized above. Preserve all concurrent
+dirty work; no commit, version change or publication is part of this follow-up.
+
+Focused progress/receipt, offline version mismatch, Store batch/recovery and
+reinstall authority/inspection tests pass. Strict host/CLI Clippy, scoped
+formatting, whitespace and report links also pass. This diagnostic slice and
+its .39 changelog surfaces are ready for review; B2 qualification is now complete
+and the complete accepted batch is push-ready as recorded above.
+No broad workspace or PocketIC suite was run for this follow-up.
+
+## Completed-source external debit recovery — 2026-09-22
+
+Toko Miner authorised this sibling implementation after its frontend top-up
+changed the operator balance before retiring a completed Fleet operation.
+Published .37 correctly rejects that unexplained debit; the new explicit
+`--retirement-debit-block` review accounts for one authenticated external
+withdrawal without changing source evidence or source payment bounds. The
+[operation owner](../features/operations/fleet-ensure.md) defines the zero-payment
+source restriction, exact receipt/control binding and pre-apply re-observation.
+
+Seventeen focused retirement tests pass, including typed receipt rejection,
+net-balance/refund rejection and interrupted evidence handoff; one opt-in
+workspace inspector remains skipped. All 27 scoped Fleet CLI tests, strict
+host/CLI Clippy across all targets, formatting and whitespace checks pass. A separate live read authenticates the existing Ledger burn
+and confirms the destination's controller; this is not a candidate deployment
+review or a successful withdrawal-delivery proof. Existing seal execution is
+unchanged. The subsequent complete release gate passes, including all 64 ordered
+simulator cases, host proofs, runtime, blob-storage and payload-limit suites.
+
+This adds one explicit recovery input and one separate accounting record under
+the existing retirement owner, with no new journal, payment/retry path, schema
+generation or executable predecessor reader. Existing immutable historical
+accounting remains solely conservation evidence. The maintainer subsequently
+explicitly authorised committing/releasing this fix and a host-only CLI exception
+for unchanged Toko Miner 0.3.8. An isolated checkout at
+`/tmp/canic-038-recovery-release` now has source commit
+`65c0591740d6962f0535b2b28e7a66d733043fd8`. Its complete gate passed and the
+governed transaction produced `f73b71695d893b8902bc4e6fcbbeb26314d79f22`.
+That commit and annotated `v0.110.38` are published; all seven matching crates.io
+packages are observed. Concurrent B1/CI work and this shared checkout remain
+outside that release. The private registry CLI installation passes provenance
+checks, but its first no-apply Toko Miner review rejects `CanicVersionMismatch`
+(expected .38, application .37) in terminal inventory's role-contract owner.
+The host-only deployment assumption was incorrect; the maintainer has been asked
+to approve the required application update, qualification and replacement tag.
+No receipt admission, retirement effect or deployment is claimed. Preserve the
+concurrent open draft for its next release after reconciliation; do not reset
+this dirty checkout to published main.
+
+## B1 accepted evidence — 2026-09-23
+
+The [complete B1 review packet](../audits/working/0.110-fleet-runtime-contraction/b1-input-evidence.md#complete-b1-review--accepted-2026-09-23)
+is ready. All eighteen catalog requirements have retained measurements or the
+explicitly accepted row-7 source disposition. Rows 2–6 and 8–18 are measured;
+canonical/fixture absolute budgets and all five generic widths are retained.
+Canonical linker/optimizer traces now verify complete function-reference
+bijections and named bodies at every width. Do not repeat completed builds.
+
+The final independent reviews verify selected membership, payload/method
+hashes, direct section/function counts, interfaces, exact clean repetitions
+and restored source/lockfiles:
+
+- Row 9: all 56 vectors, exact exports and bidirectional structural Candid
+  equality. Canonical sums are minus 263,902 code bytes and 78 functions;
+  Store and each fixture gain one function while code shrinks. Table counts
+  are unchanged. The scope includes dependency-derived documentation.
+- Row 15: all 48 vectors with exact Candid/exports. Canonical sums are minus
+  3,553,322 code bytes and 6,676 functions; the runtime fixture separately
+  contributes minus 152,015 bytes and 335 functions. Required callbacks remain
+  behavior, so these overlapping audit results authorize no deletion.
+- Row 18: all 46 vectors, including the control-only helper. Root alone loses
+  canonical code/functions: 95,690 bytes and 84 functions. The separately
+  deleted helper is 418,859 code bytes and 1,305 functions. Store and the eight
+  configured non-Root roles remain byte-identical. Only Root Candid changes.
+
+The [provider report](../audits/reports/2026-09/2026-09-23/b1-provider-measurements.md),
+[prepared-experiment report](../audits/reports/2026-09/2026-09-23/b1-prepared-experiments.md),
+[historical-family ledger](../audits/working/0.110-fleet-runtime-contraction/b1-pool-ledger-recovery-hard-cut.md)
+and [canonical trace](../audits/reports/2026-09/2026-09-23/b1-row17-canonical-symbols/trace-method.md)
+own the full vectors, provenance and limitations. Earlier failed qualifications
+are explicitly excluded from retained measurements. The destroyed-state review
+now distinguishes frozen `.5` inputs from current reinstall-only obligations;
+it promises no predecessor identity, topology or state reuse.
+
+No active B1 build remains. Sessions `10454`, `27964` and `67684` complete.
+Their raw evidence remains under `.tmp/b1-candid-docs-20260923/retained/`,
+`.tmp/b1-provider-measurement-20260923/row15/` and
+`.tmp/b1-history-20260923/retained/`. All owning product worktrees are clean and
+idle. The final catalog runner regression passes in
+`.tmp/b1-history-20260923/final-catalog-runner-tests.log`; catalog, scoped shell,
+document and whitespace checks pass. The early-compilation CI correction was
+already locally qualified. No broad workspace or PocketIC gate was run here.
+Final review verifies 102 retained-bundle checksums and 415 local links, checks
+the final 150 vectors against the frozen reserves, and passes the targeted
+evidence secret scan. All four owning product worktrees are independently
+confirmed clean. Final document output is retained in
+`.tmp/b1-history-20260923/final-document-check.log`; its only advisories concern
+the pre-existing parked `metrics-history-locality.md` file.
+
+The maintainer already accepts row 7 and the footprint-only resource scope.
+No build-speed/resource or runtime-parity claim follows. Maintain the maximum
+1% representative instruction-regression allowance for later production work;
+unexplained indirect-table growth remains unapproved. Each affected production
+cut must supply exact current-release safety and optimized-absence evidence.
+The maintainer accepted complete B1 on 2026-09-23 and authorized B2. No B1
+implementation or measurement remains; B2 implementation and qualification now
+own the next sequenced work.
+
+The open `.39` changelog covers the whole batch. The shared checkout's HEAD
+and package metadata remain `.37`, while `.38` was separately published above;
+publication ancestry/version reconciliation remains in the maintainer's Git and
+release flow. Preserve concurrent recovery edits. No staging, commit, push,
+version transaction or deployment has been performed for this work. An unrun
+broad suite alone is not a source-batch blocker.
+
+## After .37 — early compilation and resumed B1, 2026-09-22
+
+The maintainer confirms .37 publication and accepts validation attribution
+followed by resumed B1. The retained test run is 4,858 seconds. Instrumented
+artifact resolution rises from 100.691 to 946.494 seconds compared with the
+earlier .36 run; status-call count is nearly unchanged. These different source
+and cache states do not establish a controlled performance regression. The
+[throughput report](../audits/working/0.110-validation-throughput/report.md)
+retains stage, compile and request attribution with log hashes.
+
+The bounded runner correction compiles selected serial suites before server
+startup. A runtime-integration compile failure can no longer wait behind the
+68-minute internal suite. Preparation and execution share selectors and preserve
+feature graphs, coverage, ordinary failure barriers, serial failure ordering and
+cleanup. Narrow lanes stay narrow. Focused simulated compile/runtime failure
+tests, plan resolution, scoped ShellCheck and release-integrity checks pass.
+The obsolete source-line-adjacency guard is removed; injected failures exercise
+the actual barrier in the validation-runner gate. Successful-run wall-time
+improvement remains unmeasured; no broad suite ran.
+
+The earlier row-8 retained run had completed successfully. All retained payload
+digests, lengths, selected repetitions and determinism records have now been
+independently verified and the
+[measurement retained](../audits/reports/2026-09/2026-09-22/b1-candid-construction-measurement.md).
+It saves no executable-code bytes or defined functions; reduced declaration
+metadata explains the smaller files. No production deletion follows.
+
+Row 10's matched serialization measurement has completed against frozen
+`v0.110.5`; its retained output and completed tool session are:
+
+- Product: `.tmp/b1-continuation-20260921/product`
+- Run: `.tmp/b1-continuation-20260922/row10/`
+- Log: `.tmp/b1-continuation-row10.log`
+- Tool session: `64435`
+
+Row 12 is running in tool session `32502`, with log
+`.tmp/b1-continuation-row12.log` and output
+`.tmp/b1-continuation-20260922/row12/`. The temporary continuation script waits
+for row-10 process `37666` to exit, requires its retention/determinism success,
+then waits for any active shared-target Canic build before starting row 12.
+Those prerequisites passed and row 12 has started.
+The experiment runner independently requires the restored clean frozen source.
+Do not launch another measurement into that checkout while either job owns it.
+
+Row 10's final vectors are retained and reviewed; do the same for row 12 before
+claiming it complete.
+Other B1 ablations, generic mapping, optimized-surface evidence,
+allowances and predecessor comparisons remain open. Local catalog profiling
+remains open before changing authority/cache lifetime. B2/B3 remain gated on
+human B1 acceptance; minor closeout remains human-owned.
+
+The runner correction is qualified locally, but the combined accepted B1 batch
+is still in progress and is not being handed off as push-ready. Both changelog
+views accumulate under .38; packages remain .37. The existing .110 cadence
+exception carries this validation/B1 work together, without allocating a release
+per experiment. No commit, push, version transaction, deployment or sibling
+mutation ran.
+
 ## .37 secret-scan correction — 2026-09-22
 
 The maintainer's release validation finds four `generic-api-key` candidates in
@@ -526,24 +795,21 @@ transition is implied. Continue B1 from immutable `v0.110.5`, beginning with the
 already-qualified row 8 matched measurement, then rows 10 and 12. B1's remaining
 criteria and human acceptance still gate B2; RF3 completion does not close B1.
 
-### B1 matched measurement in progress
+### Earlier B1 matched measurement — completed and retained on 2026-09-22
 
-Row 8 is running through the governed retained experiment, with two clean
-baseline and two clean variant repetitions across fourteen selected artifacts.
-The method/manifest preflight passes. The first three baseline artifacts have
-passed artifact validation; this is not yet a completed measurement or a savings
-claim. The runner uses frozen Rust 1.97.1 and a private Cargo target.
+Row 8 completed the governed retained experiment with two clean baseline and
+two clean variant repetitions across fourteen selected artifacts. Its reviewed
+[measurement](../audits/reports/2026-09/2026-09-22/b1-candid-construction-measurement.md)
+supersedes the earlier in-progress note. Frozen Rust 1.97.1 and a private Cargo
+target were used; code bytes and defined-function counts do not shrink.
 
 - Isolated linked checkout: `.tmp/b1-continuation-20260921/product`
 - Source: `50f40171d6177c3d1e490b1fdb5f6163323b2cd5` (`v0.110.5`)
 - Run output: `.tmp/b1-continuation-20260921/row08/`
 - Progress log: `.tmp/b1-continuation-row08.log`
-- Tool process session: `65061`
 
-Check the existing runner before starting another measurement or touching its
-product checkout. It restores the source and emits determinism/metadata records
-on success. Retain and review the completed vectors before claiming row 8
-measured, then continue rows 10 and 12. Unregistered, uncompiled draft switches
+The checkout is now owned by the row-10 run identified in the newest handoff;
+do not start an overlapping measurement there. Unregistered, uncompiled draft switches
 for rows 13, 14 and 16 are under `.tmp/b1-proposals-20260921/`; only their exact
 baseline applicability has been checked. They are not measurement authority or
 production changes. B1 remains incomplete and B2 remains gated.

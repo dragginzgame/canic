@@ -9,7 +9,6 @@ use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::cdk::types::Principal;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
-    eager_static,
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, REPLAY_RECEIPT_SCHEMA_VERSION,
         ReplayActor, ReplayCostGuardSettlement, ReplayReceipt, ReplayReceiptStatus,
@@ -20,7 +19,7 @@ use crate::{
 };
 use std::{borrow::Cow, cell::RefCell};
 
-eager_static! {
+std::thread_local! {
     static REPLAY_RECEIPTS: RefCell<
         StableBtreeMap<ReplayReceiptSlotKey, ReplayReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(

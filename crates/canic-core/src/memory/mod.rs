@@ -11,9 +11,7 @@ mod policy;
 pub mod registry;
 pub mod runtime;
 
-pub use crate::{
-    eager_init, eager_static, ic_memory_key, ic_memory_range, memory_bootstrap_admission,
-};
+pub use crate::{ic_memory_key, ic_memory_range, memory_bootstrap_admission};
 pub use policy::CanicMemoryManagerPolicy;
 
 /// Stable allocation-policy authority for Canic core memory declarations.

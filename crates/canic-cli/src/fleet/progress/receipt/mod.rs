@@ -3,12 +3,13 @@
 //! Responsibility: retain bounded invocation evidence from the existing progress owner.
 //! Boundary: diagnostics never authorize effects, replace a journal or change command results.
 
+mod summary;
 #[cfg(test)]
 mod tests;
 
 use canic_host::fleet_ensure::{
     dto::{FleetEnsureProgress, FleetEnsureProgressState, FleetObservationTiming},
-    model::FleetEnsureReport,
+    model::{FleetEnsurePlanScope, FleetEnsureReport},
 };
 use serde::Serialize;
 use std::{
@@ -53,6 +54,8 @@ pub(super) struct Receipt {
     failed: bool,
     active_stages: Vec<u64>,
     last_progress: Option<FleetEnsureProgress>,
+    summary: summary::Summary,
+    next_review_command: String,
 }
 
 #[derive(Serialize)]
@@ -104,6 +107,8 @@ impl Receipt {
             failed: false,
             active_stages: Vec::new(),
             last_progress: None,
+            summary: summary::Summary::default(),
+            next_review_command: invocation.next_review_command.to_owned(),
         };
         receipt.append("invocation_started", invocation, true)?;
         if receipt.omitted_events > 0 {
@@ -130,6 +135,7 @@ impl Receipt {
     }
 
     pub(super) fn observation(&mut self, timing: &FleetObservationTiming) {
+        self.summary.observe(timing);
         self.record("fleet_ensure_observation", timing);
         if timing.succeeded.is_none() {
             self.active_stages.push(timing.span_id);
@@ -226,6 +232,7 @@ impl Receipt {
             .and_then(|()| self.file.sync_data())
             .is_err()
         {
+            self.failed = true;
             let _ = writeln!(
                 io::stderr().lock(),
                 "{}",
@@ -233,6 +240,45 @@ impl Receipt {
             );
         }
         self.finished = true;
+    }
+
+    pub(super) fn write_summary(
+        &self,
+        output: &mut impl Write,
+        state: &str,
+        report: Option<&FleetEnsureReport>,
+    ) -> io::Result<()> {
+        let partial = self.failed || self.omitted_events > 0 || !self.active_stages.is_empty();
+        writeln!(
+            output,
+            "Fleet invocation {state}: {} ms; timing evidence {}.",
+            self.started.elapsed().as_millis(),
+            if partial { "partial" } else { "retained" },
+        )?;
+        self.summary.write(output)?;
+        writeln!(
+            output,
+            "Phase costs cover completed outer observations only; they are not an end-to-end breakdown."
+        )?;
+        if let Some(progress) = &self.last_progress {
+            writeln!(
+                output,
+                "Last persisted effects: {}; operation {}; plan {}.",
+                progress.applied_effects, progress.operation_id, progress.plan_sha256,
+            )?;
+        }
+        if report.is_some_and(|report| {
+            report.terminal && report.plan.scope == FleetEnsurePlanScope::Full
+        }) {
+            writeln!(output, "Fleet convergence verified for this invocation.")?;
+        } else {
+            writeln!(
+                output,
+                "Fleet convergence is not established by this invocation."
+            )?;
+            writeln!(output, "Review: {}", self.next_review_command)?;
+        }
+        Ok(())
     }
 }
 

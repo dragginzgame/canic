@@ -1,0 +1,111 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "retained",
+  "complete_selected_membership": true,
+  "artifact_vectors": 48,
+  "selected_artifacts": [
+    "canonical_app",
+    "canonical_index_hub",
+    "canonical_test",
+    "canonical_user_hub",
+    "canonical_scale_hub",
+    "canonical_index_child",
+    "canonical_user_shard",
+    "canonical_scale_replica",
+    "canonical_root",
+    "canonical_fleet_coordinator",
+    "canonical_wasm_store",
+    "runtime_probe"
+  ],
+  "payloads_and_method_hashes_verified": true,
+  "section_sizes_and_function_counts_verified": true,
+  "repeated_vectors_verified": true,
+  "source_and_lock_restored": true,
+  "interface_comparison": [
+    {
+      "artifact_id": "canonical_app",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_index_hub",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_test",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_user_hub",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_scale_hub",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_index_child",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_user_shard",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_scale_replica",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_root",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_fleet_coordinator",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "canonical_wasm_store",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    },
+    {
+      "artifact_id": "runtime_probe",
+      "exports_equal": true,
+      "candid_exact": true,
+      "candid_structurally_equal": true
+    }
+  ],
+  "runtime_instruction_evidence": null,
+  "verification_script_sha256": "b87a9634f67b75f63e6419969791b030a8326339529ca9c203114b50a42974d0",
+  "coordinator_section_comparison": {
+    "code_section_exact": false,
+    "changed_standard_sections": [
+      3,
+      9,
+      10,
+      11
+    ],
+    "data_lengths_equal": true,
+    "gzip_delta_bytes": -7
+  }
+}

@@ -7,7 +7,6 @@ use candid::{CandidType, Deserialize, Principal};
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, btreemap::BTreeMap, memory::RuntimeMemory},
     dto::fixture_provisioning::{FixtureDescriptor, FixtureGrant},
-    eager_static,
     role_contract::allocation::memory::control_plane::FIXTURE_STORE_ID,
 };
 use std::cell::RefCell;
@@ -16,7 +15,7 @@ use std::cell::RefCell;
 const KEY_BYTES: usize = 37;
 const ACCOUNTING_KEY: [u8; KEY_BYTES] = [0; KEY_BYTES];
 
-eager_static! {
+std::thread_local! {
     static FIXTURES: RefCell<BTreeMap<[u8; KEY_BYTES], Vec<u8>, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(BTreeMap::init(canic_core::ic_memory_key!(
             authority = CANIC_CONTROL_PLANE_MEMORY_AUTHORITY,

@@ -54,6 +54,13 @@ pub(super) fn apply_batch<P: EnsurePlatform>(
         reconcile(platform, &journal.operation_id, action, record, state)?;
     }
     write_journal(paths, journal)?;
+    if batch
+        .iter()
+        .enumerate()
+        .any(|(offset, _)| journal.effects[index + offset].state == EffectState::Applied)
+    {
+        report_progress(platform, plan, journal, action_progress_phase(batch[0]));
+    }
     let pending = batch
         .iter()
         .enumerate()

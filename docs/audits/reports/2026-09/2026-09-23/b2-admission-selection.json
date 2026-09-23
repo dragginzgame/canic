@@ -1,0 +1,102 @@
+{
+  "date": "2026-09-23",
+  "slice": "compile-selected Fleet admission lifecycle",
+  "source_kind": "dirty working tree",
+  "source_files": [
+    {
+      "path": "crates/canic-core/src/workflow/runtime/nonroot.rs",
+      "sha256": "ff372dbf18d6762577f23fdc081314548ea6407f34a0d757c84abd47a56fefb4"
+    },
+    {
+      "path": "crates/canic-core/src/workflow/runtime/mod.rs",
+      "sha256": "8f00461ecc642edf3a33c3a35866d849d021b94885371c353d7a3e6dfa4a79fe"
+    },
+    {
+      "path": "crates/canic-core/src/lifecycle/init/nonroot.rs",
+      "sha256": "fad691cda09f2c99675d6e1a92fb546b92c8ced2c70e62fd66a4518749e87286"
+    },
+    {
+      "path": "crates/canic-core/src/lifecycle/upgrade/nonroot.rs",
+      "sha256": "adbdb4c00407c96bb6b3a1730c4534631935fb099d05f6a384bc454d26b9a676"
+    },
+    {
+      "path": "crates/canic-core/src/api/lifecycle/nonroot.rs",
+      "sha256": "191d121b045a3b68d170d65ee460496299bef0503823de26fac605a21bc9d1ac"
+    },
+    {
+      "path": "crates/canic/src/macros/start.rs",
+      "sha256": "4286bbb00ffdc78cfaad532548864401fbe65f0db23c36b8c2c36e461c49c913"
+    },
+    {
+      "path": "crates/canic-core/tests/lifecycle_boundary_guard.rs",
+      "sha256": "ad91208b0f7295343e1d4c0de9d7b236c6fd7a0d00d06ce7ae8e8fa6d3ac0c56"
+    },
+    {
+      "path": "crates/canic-tests/tests/lifecycle_boundary.rs",
+      "sha256": "2e53e1542396f8b6c241ba4117c21a8ca0bf70c44a8578016aeb5fde8e408d91"
+    }
+  ],
+  "before_archive": {
+    "path": ".tmp/b2-admission-selection-20260923/before.tar.gz",
+    "sha256": "4bed7ac5d001c2da7fafb7b6574f748f606e0bc56561d4f2523603ec6eb5d3ac",
+    "scope": "Seven lifecycle source/guard files before this cut; excludes the later integration-test edit."
+  },
+  "checks": [
+    {
+      "command": "cargo test --locked -p canic-core --lib workflow::runtime::nonroot::tests",
+      "result": "passed",
+      "passed_tests": 2,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-unit.log",
+      "log_sha256": "fd81fd4b396fc6a675c0ecdb4e682f9615068236eacad3e0942389592471e5c6"
+    },
+    {
+      "command": "cargo test --locked -p canic-core --test lifecycle_boundary_guard",
+      "result": "passed",
+      "passed_tests": 8,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-guard.log",
+      "log_sha256": "1021b4dee1fb39108305bbc2a775c1e396d142470f7cc750eacb9c2dae2b7a95"
+    },
+    {
+      "command": "cargo test --locked -p canic --test managed_endpoint_gate",
+      "result": "passed",
+      "passed_tests": 10,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-facade-guard.log",
+      "log_sha256": "7122afaf42874791452840ac20c52165dddd404285cd32250d2dbedfa4cc1799"
+    },
+    {
+      "command": "cargo clippy --locked -p canic-core -p canic --all-targets --all-features --keep-going -- -D warnings",
+      "result": "passed",
+      "passed_tests": null,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-clippy.log",
+      "log_sha256": "893f297e6ddfe1e46f2f7f767cf6e876b6b8557d44a461b47536a90ac8b4d417"
+    },
+    {
+      "command": "cargo clippy --locked -p canic-tests --test lifecycle_boundary --all-features -- -D warnings",
+      "result": "passed",
+      "passed_tests": null,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-test-lint.log",
+      "log_sha256": "4d5eb94530ef665afe8fea42579834640a7d532b925768645dd6fb4954b05626"
+    },
+    {
+      "command": "RUSTC_WRAPPER=\"\" make test-pocketic-case CASE=lifecycle_boundary",
+      "result": "passed",
+      "passed_tests": 7,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-pocketic.log",
+      "log_sha256": "e9e4608e791941b72dc56997d1ddf59649326a41759ca80d2a62f7d02977f137"
+    },
+    {
+      "command": "RUSTC_WRAPPER=\"\" make test-pocketic-case CASE=pic::lifecycle::tests::managed_projection_fences_then_opens_and_restores",
+      "result": "passed",
+      "passed_tests": 1,
+      "log": ".tmp/b2-admission-selection-20260923/qualification/canic-b2-admission-active-projection.log",
+      "log_sha256": "a77e07834bdec7dc0150c80aea395c07c4b5ee8e469e6b1751fe3868ab2e3b1f"
+    }
+  ],
+  "optimized_footprint": null,
+  "maintained_workload_instructions": null,
+  "limitations": [
+    "Shared access expression evaluation still references Fleet admission storage; optimized retention not yet measured.",
+    "Complete B2 batch remains active and is not push-ready.",
+    "No broad validation or production footprint/speed claim."
+  ]
+}

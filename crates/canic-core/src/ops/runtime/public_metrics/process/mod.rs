@@ -170,7 +170,7 @@ mod tests {
         );
         WasmStoreMetrics::record(
             WasmStoreMetricOperation::SourceResolve,
-            WasmStoreMetricSource::Bootstrap,
+            WasmStoreMetricSource::Store,
             WasmStoreMetricOutcome::Completed,
             WasmStoreMetricReason::Ok,
         );

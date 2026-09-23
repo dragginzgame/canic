@@ -10,7 +10,6 @@ use canic_core::cdk::bounded_cell::BoundedCell;
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    eager_static,
     role_contract::allocation::memory::control_plane::FLEET_COORDINATOR_ADMISSION_ID,
 };
 use canic_core::{
@@ -23,7 +22,7 @@ use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-eager_static! {
+std::thread_local! {
     static FLEET_ADMISSION: RefCell<
         BoundedCell<Option<FleetAdmissionAuthorityRecord>, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(BoundedCell::init(canic_core::ic_memory_key!(

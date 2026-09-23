@@ -1,12 +1,11 @@
 use crate::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    eager_static,
     role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     //
     // ENV
     // All the environment variables a canister needs

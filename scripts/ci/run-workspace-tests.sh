@@ -20,6 +20,7 @@ SCCACHE_STATS_ACTIVE=0
 SCCACHE_START_REQUESTS=0
 SCCACHE_START_HITS=0
 SCCACHE_START_MISSES=0
+PRECOMPILE_ONLY=0
 
 case "$MODE" in
     fast | full | ordinary | pocketic) ;;
@@ -312,6 +313,11 @@ run_test() {
             libtest_args+=("$argument")
         fi
     done
+    if [[ "$PRECOMPILE_ONLY" -eq 1 ]]; then
+        execution="compile"
+        label="$label compilation"
+        libtest_args=()
+    fi
     local summary_execution="$execution"
     if [[ "$summary_execution" = "parallel" ]]; then
         summary_execution="libtest-parallel"
@@ -321,6 +327,8 @@ run_test() {
         printf '==> plan: cargo test --locked'
         if [[ "$execution" = "parallel" ]]; then
             printf ' --no-fail-fast'
+        elif [[ "$execution" = "compile" ]]; then
+            printf ' --no-run'
         fi
         printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
@@ -352,6 +360,9 @@ run_test() {
     fi
     local status=0
     case "$execution" in
+        compile)
+            cargo test --locked --no-run "${cargo_args[@]}" || status=$?
+            ;;
         parallel)
             if [[ "${#libtest_args[@]}" -eq 0 ]]; then
                 cargo test --locked --no-fail-fast "${cargo_args[@]}" || status=$?
@@ -387,8 +398,12 @@ run_test() {
         report_owned_pocketic_server_output
     fi
     append_step_summary "$summary_execution" "$elapsed" "$label" "FAIL ($status)"
-    if [[ "$execution" = "pocketic-serial" ]]; then
-        echo "POCKETIC TEST BARRIER FAILED: skipping the remaining serial suites." >&2
+    if [[ "$execution" = "pocketic-serial" || "$execution" = "compile" ]]; then
+        if [[ "$execution" = "compile" ]]; then
+            echo "POCKETIC COMPILE BARRIER FAILED: skipping server startup and serial execution." >&2
+        else
+            echo "POCKETIC TEST BARRIER FAILED: skipping the remaining serial suites." >&2
+        fi
         finish_test_run
         exit 1
     fi
@@ -527,11 +542,41 @@ cleanup_workspace_test_run() {
 run_pic_inventory_tests() {
     local label="$1"
     local suite="$2"
-    if [[ "$PLAN_ONLY" -eq 0 && "$HEAVY_BUILD_TARGETS_USED" -eq 0 ]]; then
+    if [[ "$PRECOMPILE_ONLY" -eq 0 && "$PLAN_ONLY" -eq 0 && "$HEAVY_BUILD_TARGETS_USED" -eq 0 ]]; then
         HEAVY_BUILD_TARGETS_USED=1
         clear_pocketic_build_targets "before PocketIC integration suites" 1
     fi
     run_inventory_tests "$label" canic-tests pocketic-serial "$suite"
+}
+
+run_pocketic_suites() {
+    # Use the same selectors and feature graphs for preparation and execution.
+    # The internal harness owns case ordering and stops at its first failure.
+    run_serial_pocketic_test \
+        "canic-testing-internal ordered PocketIC suite" \
+        -p canic-testing-internal \
+        --features governed-pocketic-tests \
+        --lib \
+        pic::governed_suite::governed_serial_pocketic_suite \
+        -- --exact --ignored
+
+    # Full ordinary tests already selected the workspace lib/bin graph. Keep
+    # that feature unification for host proofs; other harnesses select no tests.
+    local host_proof_targets=(-p canic-host --lib)
+    if [[ "$MODE" == "full" ]]; then
+        host_proof_targets=(--workspace --lib --bins)
+    fi
+    run_serial_pocketic_test \
+        "canic-host governed PocketIC proofs" \
+        "${host_proof_targets[@]}" \
+        governed_pocketic_ \
+        -- --ignored
+
+    # Clear transient Wasm targets once before integration execution. The
+    # ignored instruction audit retains compile coverage through the inventory.
+    run_pic_inventory_tests "canic-tests runtime PocketIC suite" runtime
+    run_pic_inventory_tests "canic-tests blob-storage PocketIC suite" blob-storage
+    run_pic_inventory_tests "canic-tests payload-limit PocketIC suite" payload-limits
 }
 
 trap cleanup_workspace_test_run EXIT
@@ -577,6 +622,12 @@ if [[ "$MODE" == "full" || "$MODE" == "ordinary" ]]; then
 fi
 
 require_ordinary_success_before_pocketic
+if [[ "$MODE" != "targeted-pocketic" ]]; then
+    # A later integration compile error must fail before long recovery cases.
+    PRECOMPILE_ONLY=1
+    run_pocketic_suites
+    PRECOMPILE_ONLY=0
+fi
 start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
@@ -634,44 +685,6 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
     exit 0
 fi
 
-# One governed harness calls every internal PocketIC scenario in explicit
-# order, reports each result immediately and stops after the first failed case.
-# Keeping one Rust process preserves its process-local artifact and
-# baseline pools. Scenario order remains owned by the fixture catalogue rather
-# than test display-name assertions.
-run_serial_pocketic_test \
-    "canic-testing-internal ordered PocketIC suite" \
-    -p canic-testing-internal \
-    --features governed-pocketic-tests \
-    --lib \
-    pic::governed_suite::governed_serial_pocketic_suite \
-    -- \
-    --exact \
-    --ignored
-
-# Private host workflows retain their focused unit-test access to internal
-# orchestration while sharing the same bounded server and serial execution.
-# A full run already compiled workspace lib/bin tests. Select that same graph
-# again so dependency feature unification does not force a second host harness.
-# The filter runs only governed host proofs; other harnesses select no tests.
-host_proof_targets=(-p canic-host --lib)
-if [[ "$MODE" == "full" ]]; then
-    host_proof_targets=(--workspace --lib --bins)
-fi
-run_serial_pocketic_test \
-    "canic-host governed PocketIC proofs" \
-    "${host_proof_targets[@]}" \
-    governed_pocketic_ \
-    -- \
-    --ignored
-
-# PocketIC-backed integration suites.
-# Receipt, timer and lifecycle use the same internal-test build environment and
-# target directory, so clear once before the group and retain Cargo freshness
-# across the remaining binaries. The ignored instruction-audit target shares
-# this invocation for compile coverage; its explicit audit runner owns execution.
-run_pic_inventory_tests "canic-tests runtime PocketIC suite" runtime
-run_pic_inventory_tests "canic-tests blob-storage PocketIC suite" blob-storage
-run_pic_inventory_tests "canic-tests payload-limit PocketIC suite" payload-limits
+run_pocketic_suites
 
 finish_test_run

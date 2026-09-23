@@ -139,12 +139,45 @@ fn automatic_topup_reachability_is_exactly_role_owned() {
         "macro_rules! __canic_start_local_lifecycle_core",
         "/// Configure Canic's canonical Fleet Subnet Root lifecycle and endpoints.",
     );
-    for lifecycle in [nonroot, local] {
-        assert!(
-            lifecycle.contains("#[cfg(canic_capability_automatic_topup)]")
-                && lifecycle.contains("#[cfg(not(canic_capability_automatic_topup))]"),
-            "non-root lifecycle must select its runtime owner from the compiled capability"
-        );
+    for automatic_topup in [false, true] {
+        for admission in [false, true] {
+            let suffix = match (automatic_topup, admission) {
+                (false, false) => "",
+                (true, false) => "_with_automatic_topup",
+                (false, true) => "_with_fleet_admission",
+                (true, true) => "_with_automatic_topup_and_fleet_admission",
+            };
+            let expected = format!("post_upgrade_nonroot_canister{suffix}_before_bootstrap");
+            assert_selected_lifecycle_owner(
+                nonroot,
+                "post_upgrade",
+                automatic_topup,
+                admission,
+                &expected,
+            );
+            let init = if admission {
+                "init_nonroot_canister_with_fleet_admission_before_bootstrap"
+            } else {
+                "init_nonroot_canister_before_bootstrap"
+            };
+            assert_selected_lifecycle_owner(nonroot, "init", automatic_topup, admission, init);
+            let local_suffix = if automatic_topup {
+                "_with_automatic_topup"
+            } else {
+                ""
+            };
+            for function in ["init", "post_upgrade"] {
+                let expected =
+                    format!("{function}_local_nonroot_canister{local_suffix}_before_bootstrap");
+                assert_selected_lifecycle_owner(
+                    local,
+                    function,
+                    automatic_topup,
+                    admission,
+                    &expected,
+                );
+            }
+        }
     }
 
     let endpoints = read_source("crates/canic/src/macros/endpoints/role.rs");
@@ -256,41 +289,208 @@ fn assert_lifecycle_participant_grammar(source: &str, nonroot: &str, local: &str
     }
 }
 
+fn assert_selected_lifecycle_owner(
+    section: &str,
+    function: &str,
+    automatic_topup: bool,
+    admission: bool,
+    expected: &str,
+) {
+    use proc_macro2::{Delimiter, TokenTree};
+    let body = function_body(section, function)
+        .parse::<proc_macro2::TokenStream>()
+        .unwrap();
+    let Some(TokenTree::Group(body)) = body.into_iter().next() else {
+        panic!("function body")
+    };
+    let tokens = body.stream().into_iter().collect::<Vec<_>>();
+    let mut selected = Vec::new();
+    for statement in
+        tokens.split(|token| matches!(token, TokenTree::Punct(punct) if punct.as_char() == ';'))
+    {
+        let enabled = statement
+            .windows(2)
+            .filter_map(|pair| {
+                if let [TokenTree::Punct(hash), TokenTree::Group(attribute)] = pair
+                    && hash.as_char() == '#'
+                    && attribute.delimiter() == Delimiter::Bracket
+                {
+                    let meta =
+                        syn::parse2::<syn::Meta>(attribute.stream()).expect("Rust attribute");
+                    if let syn::Meta::List(list) = meta
+                        && list.path.is_ident("cfg")
+                    {
+                        return Some(lifecycle_cfg_enabled(
+                            &list.parse_args().unwrap(),
+                            automatic_topup,
+                            admission,
+                        ));
+                    }
+                }
+                None
+            })
+            .all(|enabled| enabled);
+        if enabled {
+            selected.extend(
+                invocation_names(statement.iter().cloned().collect())
+                    .into_iter()
+                    .filter(|name| name.ends_with("_before_bootstrap")),
+            );
+        }
+    }
+    assert_eq!(
+        selected,
+        [expected],
+        "{function}: automatic_topup={automatic_topup}, admission={admission}"
+    );
+}
+
+fn lifecycle_cfg_enabled(meta: &syn::Meta, automatic_topup: bool, admission: bool) -> bool {
+    match meta {
+        syn::Meta::Path(path) if path.is_ident("canic_capability_automatic_topup") => {
+            automatic_topup
+        }
+        syn::Meta::Path(path) if path.is_ident("canic_capability_fleet_admission_projection") => {
+            admission
+        }
+        syn::Meta::List(list) => {
+            let inputs = list
+                .parse_args_with(
+                    syn::punctuated::Punctuated::<syn::Meta, syn::Token![,]>::parse_terminated,
+                )
+                .expect("valid cfg arguments");
+            if list.path.is_ident("not") {
+                assert_eq!(inputs.len(), 1, "not takes exactly one cfg predicate");
+                !lifecycle_cfg_enabled(inputs.first().unwrap(), automatic_topup, admission)
+            } else if list.path.is_ident("all") {
+                inputs
+                    .iter()
+                    .all(|meta| lifecycle_cfg_enabled(meta, automatic_topup, admission))
+            } else {
+                panic!("unsupported lifecycle cfg predicate");
+            }
+        }
+        _ => panic!("unqualified lifecycle capability"),
+    }
+}
+
 fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
-    assert_ordered(
-        function_body(nonroot, "init"),
-        &[
-            "init_nonroot_canister_before_bootstrap(",
-            "$(($lifecycle_init)();)?",
-        ],
-        "managed init participant ordering",
+    for (section, function, owners, participant, deferred) in [
+        (
+            nonroot,
+            "init",
+            vec![
+                "init_nonroot_canister_before_bootstrap",
+                "init_nonroot_canister_with_fleet_admission_before_bootstrap",
+            ],
+            "lifecycle_init",
+            None,
+        ),
+        (
+            nonroot,
+            "post_upgrade",
+            vec![
+                "post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap",
+                "post_upgrade_nonroot_canister_before_bootstrap",
+                "post_upgrade_nonroot_canister_with_fleet_admission_before_bootstrap",
+                "post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap",
+            ],
+            "lifecycle_post_upgrade",
+            Some("__canic_after_optional_start_init_hook"),
+        ),
+        (
+            local,
+            "init",
+            vec![
+                "init_local_nonroot_canister_with_automatic_topup_before_bootstrap",
+                "init_local_nonroot_canister_before_bootstrap",
+            ],
+            "lifecycle_init",
+            Some("__canic_after_optional_start_init_hook"),
+        ),
+        (
+            local,
+            "post_upgrade",
+            vec![
+                "post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap",
+                "post_upgrade_local_nonroot_canister_before_bootstrap",
+            ],
+            "lifecycle_post_upgrade",
+            Some("__canic_after_optional_start_init_hook"),
+        ),
+    ] {
+        let calls = invocation_names(function_body(section, function).parse().unwrap());
+        let position = |name: &str| {
+            calls
+                .iter()
+                .position(|call| call == name)
+                .unwrap_or_else(|| panic!("{function} must invoke {name}"))
+        };
+        let participant_position = position(participant);
+        for owner in owners {
+            assert!(
+                position(owner) < participant_position,
+                "{owner} must finish before {participant}"
+            );
+        }
+        if let Some(deferred) = deferred {
+            assert!(
+                participant_position < position(deferred),
+                "{participant} must finish before deferred work"
+            );
+        }
+    }
+}
+
+fn invocation_names(tokens: proc_macro2::TokenStream) -> Vec<String> {
+    use proc_macro2::{Delimiter, TokenTree};
+    let tokens = tokens.into_iter().collect::<Vec<_>>();
+    let mut calls = Vec::new();
+    for (index, token) in tokens.iter().enumerate() {
+        let arguments = matches!(tokens.get(index + 1),
+            Some(TokenTree::Group(group)) if group.delimiter() == Delimiter::Parenthesis);
+        match token {
+            TokenTree::Ident(name) => {
+                let macro_call = matches!(tokens.get(index + 1),
+                    Some(TokenTree::Punct(punct)) if punct.as_char() == '!')
+                    && matches!(tokens.get(index + 2), Some(TokenTree::Group(_)));
+                if arguments || macro_call {
+                    calls.push(name.to_string());
+                }
+            }
+            TokenTree::Group(group) => {
+                if arguments && group.delimiter() == Delimiter::Parenthesis {
+                    let path = group.stream().into_iter().collect::<Vec<_>>();
+                    if let [TokenTree::Punct(dollar), TokenTree::Ident(name)] = path.as_slice()
+                        && dollar.as_char() == '$'
+                    {
+                        calls.push(name.to_string());
+                    }
+                }
+                calls.extend(invocation_names(group.stream()));
+            }
+            _ => {}
+        }
+    }
+    calls
+}
+
+#[test]
+fn lifecycle_call_observation_ignores_presentation_and_binding_names() {
+    let calls = invocation_names(
+        r#"{
+        // misleading_owner();
+        let renamed_result = LifecycleApi::restore_owner ();
+        let description = "misleading_owner()";
+        $(($lifecycle_post_upgrade) ();)?
+        $crate::schedule_work!({});
+    }"#
+        .parse()
+        .unwrap(),
     );
-    assert_ordered(
-        function_body(nonroot, "post_upgrade"),
-        &[
-            "let active = restore_runtime(",
-            "$(($lifecycle_post_upgrade)();)?",
-            "if active {",
-        ],
-        "managed post-upgrade participant ordering",
-    );
-    assert_ordered(
-        function_body(local, "init"),
-        &[
-            "initialize_runtime(",
-            "$(($lifecycle_init)();)?",
-            "$crate::__canic_after_optional_start_init_hook!",
-        ],
-        "local init participant ordering",
-    );
-    assert_ordered(
-        function_body(local, "post_upgrade"),
-        &[
-            "let _active = restore_runtime(",
-            "$(($lifecycle_post_upgrade)();)?",
-            "$crate::__canic_after_optional_start_init_hook!",
-        ],
-        "local post-upgrade participant ordering",
+    assert_eq!(
+        calls,
+        ["restore_owner", "lifecycle_post_upgrade", "schedule_work"]
     );
 }
 
@@ -445,16 +645,6 @@ fn macro_section<'a>(source: &'a str, start: &str, end: &str) -> &'a str {
         .map(|offset| start + offset)
         .expect("macro section end");
     &source[start..end]
-}
-
-fn assert_ordered(source: &str, fragments: &[&str], context: &str) {
-    let mut cursor = 0usize;
-    for fragment in fragments {
-        let offset = source[cursor..]
-            .find(fragment)
-            .unwrap_or_else(|| panic!("{context} is missing `{fragment}`"));
-        cursor = cursor.saturating_add(offset).saturating_add(fragment.len());
-    }
 }
 
 fn workspace_root() -> PathBuf {

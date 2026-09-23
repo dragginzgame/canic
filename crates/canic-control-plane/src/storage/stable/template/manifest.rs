@@ -4,14 +4,13 @@ use crate::ids::{
 };
 use canic_core::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use canic_core::cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory, storable::Storable};
-use canic_core::eager_static;
 use canic_core::{
     impl_storable_bounded, role_contract::allocation::memory::control_plane::TEMPLATE_MANIFESTS_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     static TEMPLATE_MANIFESTS: RefCell<
         StableBtreeMap<TemplateReleaseKey, TemplateManifestRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -19,8 +18,8 @@ eager_static! {
     );
 }
 
-eager_static! {
-    static TEMPLATE_MANIFESTS_OCCUPIED_BYTES: RefCell<Option<u64>> = RefCell::new(None);
+std::thread_local! {
+    static TEMPLATE_MANIFESTS_OCCUPIED_BYTES: RefCell<Option<u64>> = const { RefCell::new(None) };
 }
 
 ///

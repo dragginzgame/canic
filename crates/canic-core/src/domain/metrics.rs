@@ -236,7 +236,6 @@ impl LifecycleMetricOutcome {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum WasmStoreMetricOperation {
-    BootstrapChunkSync,
     ChunkPublish,
     ChunkUpload,
     ManifestPromote,
@@ -250,7 +249,6 @@ impl WasmStoreMetricOperation {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::BootstrapChunkSync => "bootstrap_chunk_sync",
             Self::ChunkPublish => "chunk_publish",
             Self::ChunkUpload => "chunk_upload",
             Self::ManifestPromote => "manifest_promote",
@@ -270,7 +268,6 @@ impl WasmStoreMetricOperation {
 #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 #[remain::sorted]
 pub enum WasmStoreMetricSource {
-    Bootstrap,
     ManagedFleet,
     Resolver,
     Store,
@@ -282,7 +279,6 @@ impl WasmStoreMetricSource {
     #[must_use]
     pub const fn metric_label(self) -> &'static str {
         match self {
-            Self::Bootstrap => "bootstrap",
             Self::ManagedFleet => "managed_fleet",
             Self::Resolver => "resolver",
             Self::Store => "store",

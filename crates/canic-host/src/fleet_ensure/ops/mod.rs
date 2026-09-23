@@ -184,6 +184,19 @@ pub enum ReinstallAssetCheck {
 pub trait EnsurePlatform {
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Optional exact external Ledger block requested for a new retirement review.
+    fn retirement_debit_block(&self) -> Option<u64> {
+        None
+    }
+
+    /// Authenticate that block and current control of its destination, without a payment.
+    fn observe_retirement_debit(
+        &mut self,
+        _block: u64,
+    ) -> Result<Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>, Self::Error> {
+        Ok(None)
+    }
+
     /// Reuse observations only within one read-only planning transaction. Adapters
     /// must expire evidence on exit, retries, changed inputs and before any effect.
     fn with_planning_observations<T, E>(

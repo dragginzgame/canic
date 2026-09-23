@@ -1,20 +1,21 @@
 # 0.110 B1 Wasm Input Evidence
 
 Date frozen: 2026-09-01
-Last updated: 2026-09-03
+Last updated: 2026-09-23
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Frozen predecessor baseline: `3185dc45b` (`v0.109.35`)
 Current released baseline: `50f40171d` (`v0.110.5`)
 
 ## Authority Boundary
 
-This file retains planning inputs and the active B1 ledger. It is not B1
-completion evidence. B1 must reproduce its accepted baseline and
+This file retains the B1 review packet and planning inputs. The required
+footprint evidence is complete and was accepted by the maintainer on 2026-09-23.
+The retained runs reproduce their exact baseline and
 controlled ablations from one immutable post-0.109 source, toolchain, feature
 set and optimizer configuration.
 
 The human maintainer accepted 0.109 closeout and explicitly promoted B1 on
-2026-09-01. B2 remains blocked on accepted B1 completion evidence.
+2026-09-01. Complete B1 acceptance on 2026-09-23 authorizes sequenced B2.
 
 ## Frozen Network Limits
 
@@ -116,41 +117,120 @@ The largest current role remains the Fleet Subnet Root:
 
 The run result is `fail` with valid evidence because the method's first-v6-
 baseline, Component-spread, Root-ratio and retained-table inputs produce a
-defined risk score of `7/10`. This is size-pressure routing evidence, not a
-limit violation or correctness failure. It completes the current canonical-
-role baseline row only. The
-[generated-surface inventory](b1-generated-surface-inventory.md) now completes
-the source trace while keeping the immutable baseline distinct from the
-working-tree overlay; optimized-artifact absence remains open. The repository-
-owned capability fixture matrix and compatible predecessor comparison remain
-open. The machine-checked
-[controlled-ablation manifest](b1-controlled-ablation-manifest.md) now freezes
-the required rows and runner. Its immutable global-registration measurement
-removes 273,554 optimized code-section bytes and 662 replica-limited defined
-functions across the eleven separately deployed artifacts, including 192,340
-code bytes and 166 functions in Fleet Coordinator. This material attribution
-supports B2 role-selected wiring but makes no bootstrap or lifecycle-parity
-claim. The
-inclusive activation-persistence switch has complete eleven-role release-build
-qualification and awaits immutable measurement. The authorization stable-codec,
-shared-CBOR-helper, watchdog-recovery-dispatch, endpoint-declaration-
-construction, endpoint-reply-serialization and metrics-provider patches remain
-specified and await complete selected-artifact qualification and immutable
-measurement. The
-payload-limited raw-
-adapter now has an immutable selected-fixture measurement: it accounts for 967
-optimized code-section bytes and zero defined functions, so its independent
-canister-origin payload bound is retained. The exact-role expansion, type-
-documentation and remaining
-provider source switches remain open. The
-[destroyed-state inventory](b1-destroyed-state-inventory.md) now covers every
-Canic allocation and names the non-reconstructable consumer domains, while
-keeping application reseed outside Canic's release gate. Maintainer acceptance
-of the hard-cut preconditions remains open. The
-[generic-instantiation cohort](b1-generic-instantiation-cohort.md) freezes the
-Canic-owned `Page<T>` family at `N = 5` from current generated status demand and
-adds the fixed audit-only source fixture; its immutable optimized deltas and
-named post-`-Oz` mapping remain open.
+risk score of `7/10`. This routes size investigation; it is not a network-limit
+violation or correctness failure. It completes the canonical baseline row.
+
+The active [experiment manifest](b1-controlled-ablation-manifest.md) now retains
+rows 2–6 and 8–18 with exact controlled inputs and complete repeated
+vectors. Canonical and runtime/payload/blob fixture evidence is included where
+selected. The five-width cohort retains identical interfaces and named optimized
+canonical body evidence from complete reference-preserving traces. Rows 9, 15
+and 18 now complete independent retained verification. Row 7's already-
+selected source/interface disposition is explicitly accepted, without a
+numeric saving or optimized-absence claim. These states supersede
+the initial September 3 qualification queue; completed builds need no replay.
+
+The [generated-surface inventory](b1-generated-surface-inventory.md) now ties its
+source trace to per-role optimized provider deltas while preserving the distinction
+between `.5` and later working overlays. Differential attribution does not prove
+safe removal or absence of every unselected implementation. The
+[destroyed-state inventory](b1-destroyed-state-inventory.md) covers Canic allocations
+and identifies non-reconstructable consumer domains; application reseed remains
+outside the Canic release gate. The [historical-family ledger](b1-pool-ledger-recovery-hard-cut.md)
+owns the controlled `.2` removal and separately measured helper. None of these
+build-only stubs claims instruction, recovery or persistence parity. Complete B1
+and its allowances were accepted on 2026-09-23; B2 is now authorized.
+
+## Current absolute-budget review — 2026-09-23
+
+The [row-8 controls](../../reports/2026-09/2026-09-22/b1-row8-measurement/artifact-metrics.tsv)
+cover every canonical role and the runtime, payload and blob fixtures. The
+[prepared cohort's width-1 control](../../reports/2026-09/2026-09-23/b1-row17-measurement/artifact-metrics.tsv)
+supplies the leaf fixture. Each comes from its own verified two-clean-build
+capture. These are absolute baseline checks, not a replacement for any
+experiment's matched control, and the prepared leaf is not unprepared `.5`.
+
+| Artifact | Code bytes | Code headroom | Defined functions | Function headroom |
+| --- | ---: | ---: | ---: | ---: |
+| `canonical_app` | 2,650,724 | 7,835,036 | 4,672 | 45,328 |
+| `canonical_index_hub` | 2,444,607 | 8,041,153 | 4,346 | 45,654 |
+| `canonical_test` | 2,944,773 | 7,540,987 | 5,189 | 44,811 |
+| `canonical_user_hub` | 3,072,247 | 7,413,513 | 5,473 | 44,527 |
+| `canonical_scale_hub` | 2,997,048 | 7,488,712 | 5,295 | 44,705 |
+| `canonical_index_child` | 2,224,620 | 8,261,140 | 3,996 | 46,004 |
+| `canonical_user_shard` | 3,001,399 | 7,484,361 | 5,341 | 44,659 |
+| `canonical_scale_replica` | 2,660,428 | 7,825,332 | 4,700 | 45,300 |
+| `canonical_root` | 6,659,745 | 3,826,015 | 9,596 | 40,404 |
+| `canonical_fleet_coordinator` | 3,247,309 | 7,238,451 | 4,463 | 45,537 |
+| `canonical_wasm_store` | 2,254,620 | 8,231,140 | 4,244 | 45,756 |
+| `runtime_probe` | 2,198,713 | 8,287,047 | 4,192 | 45,808 |
+| `payload_limit_probe` | 1,800,078 | 8,685,682 | 3,504 | 46,496 |
+| `blob_storage_probe` | 2,092,495 | 8,393,265 | 3,950 | 46,050 |
+| `leaf_probe` | 2,242,085 | 8,243,675 | 4,032 | 45,968 |
+
+All fifteen controls exceed the binding reserves and remain below the strict
+100 MiB total-module limit. Root is the largest: 7,097,219 total bytes in this
+capture, leaving 3,826,015 code bytes and 40,404 defined functions. The one-byte
+difference in code from the earlier v6 report is retained literally; neither capture
+is substituted into another experiment. Gzip, data, table/element counts,
+exports, declarations and hashes remain in the linked vectors.
+
+The design's maximum 1% representative instruction-regression allowance
+remains unchanged for later maintained production work. Build-only ablations
+have explicit unavailable workload evidence and establish no instruction or
+runtime-parity result. Overlapping reachability deltas do not raise this
+allowance or forecast a recoverable sum. Unexplained indirect-table growth
+also receives no advance approval. The maintainer accepted complete B1 on
+2026-09-23; that decision does not waive B4 absence requirements or qualify
+subsequent production changes.
+
+### Build-resource evidence disposition — accepted 2026-09-23
+
+The normative B1 vector also asks for clean/warm build time, peak RSS and
+process/thread high-water marks. The retained ablation schema records artifact
+and optimizer vectors, source/tool identities and clean repetition, but has no
+resource columns. Recent progress logs record whole-second build durations;
+they are neither controlled warm-build comparisons nor complete process-tree
+resource measurements. The earlier v6 footprint evidence likewise supplies no
+such resource vector. These missing quantities cannot be recovered from the
+artifact bytes or inferred from determinism.
+
+The maintainer explicitly accepts these B1 runs solely as
+optimized footprint attribution, explicitly excluding build-speed and resource
+claims, without repeating completed ablations to collect unrelated timing.
+Any later build-performance claim must have its own controlled cold/warm and
+resource qualification. This changes B1's evidence requirement only; it
+preserves artifact determinism, absolute reserves, canonical symbol
+mapping, explicit runtime-instruction absence, the maximum 1% maintained
+workload allowance, and B4 optimized-absence requirements. This disposition
+does not accept B1 overall or authorize B2/B3.
+
+## Complete B1 review — accepted 2026-09-23
+
+All eighteen catalog requirements now have their measurement or explicitly
+accepted source disposition. The [manifest](b1-controlled-ablation-manifest.md)
+binds each experiment to its evidence; no row remains an unqualified switch or
+an active measurement. Final runs restore clean source/lockfiles and pass exact
+clean-repetition checks. No broad workspace or PocketIC gate was run for this
+audit continuation.
+
+| Requirement | Evidence and disposition |
+| --- | --- |
+| Frozen canonical and capability-fixture baseline; absolute budgets | V6 plus the matched control vectors above cover all eleven roles and four fixtures. Every control exceeds both 5% reserves and satisfies the total-module bound. The prepared leaf is explicitly distinct from unprepared `.5`. |
+| Controlled attribution | Rows 2–6 and 8–18 retain complete selected matrices. [Provider results](../../reports/2026-09/2026-09-23/b1-provider-measurements.md), [documentation results](../../reports/2026-09/2026-09-23/b1-prepared-experiments.md#retained-type-documentation-result) and the [historical-family result](b1-pool-ledger-recovery-hard-cut.md#retained-family-only-result--2026-09-23) close the final measurements. Deltas overlap and are not a savings forecast. |
+| Exact role expansion | Row 7's source/interface disposition is already accepted; no numeric saving or optimized-absence claim. |
+| Five-width generic cohort and named optimized bodies | [Cohort evidence](b1-generic-instantiation-cohort.md) includes exact repeats and canonical function-reference-preserving mappings at all widths. Missing names do not independently prove elimination or folding. |
+| Generated surfaces | The [inventory](b1-generated-surface-inventory.md) links source selection to optimized attribution. Final role-inapplicable absence and maintained-behavior proof remain B4 obligations. |
+| Destroyed state and reconstruction boundaries | The [allocation inventory](b1-destroyed-state-inventory.md) names non-reconstructable domains and current cycle-conservation preconditions. Historical `.5` inputs promise no predecessor identity, topology or state reuse. Each affected production cut still needs current safety evidence. |
+| Allowances and unavailable evidence | Retain the maximum 1% representative instruction-regression allowance for maintained production work. Unexplained indirect-table growth is not approved. Build-only experiments supply no runtime-parity result; the accepted footprint-only disposition supplies no build-speed/resource claim. |
+
+The maintainer explicitly accepted complete B1 and authorized the sequenced B2
+work on 2026-09-23. Acceptance covers the immutable footprint attribution and
+stated boundaries; role-selected storage is now the active batch.
+That future work must measure its current matched workload and optimized
+artifacts; these audit stubs are not production implementations. Human B1
+acceptance remains distinct from a release instruction and the later human
+minor-closeout audit.
 
 ## Published Predecessor Measurements
 

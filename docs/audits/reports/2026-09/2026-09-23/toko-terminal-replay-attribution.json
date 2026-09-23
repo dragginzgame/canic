@@ -1,0 +1,284 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-23",
+  "kind": "retained_replay_attribution",
+  "source_repository": "toko-miner",
+  "sources": [
+    {
+      "path": ".canic/diagnostics/fleet/1790148162878-10005-1.jsonl",
+      "sha256": "d1588b3a961b6747a782674a7b973b660cb60ac84db85b0513094304b32e4b66"
+    },
+    {
+      "path": ".canic/fleet-ensure/staging/toko-miner-staging-001/plan.json",
+      "sha256": "98c78a2df8867048c4feb4a7fd255cac67deca68c167b093fd1728a3313943e4"
+    }
+  ],
+  "outcome": {
+    "effects_applied": 0,
+    "omitted_events": 0,
+    "operation_id": "53f43d751fb993f041b5ad7a346b422dd9da26dcb9f51dedf7af23cb3f76da86",
+    "plan_scope": "full",
+    "plan_sha256": "e1ccc9a02f5067f998c3a30f6b23b0c377594a5526d9270135ea8e359cc56c4a",
+    "state": "completed",
+    "terminal": true
+  },
+  "reinstall_assets": {
+    "count": 24,
+    "unique_principals": 24,
+    "unique_roots": 1
+  },
+  "outer_observations": [
+    {
+      "span_id": 1,
+      "parent_span_id": null,
+      "stage": "terminal_inventory",
+      "parent_stage": null,
+      "elapsed_millis": 31546,
+      "remote_call_attempts": 35,
+      "identity_lookup_attempts": 1,
+      "identity_lookup_millis": 430,
+      "cached_read_hits": 0,
+      "succeeded": true
+    },
+    {
+      "span_id": 2,
+      "parent_span_id": null,
+      "stage": "planning",
+      "parent_stage": null,
+      "elapsed_millis": 21446,
+      "remote_call_attempts": 22,
+      "identity_lookup_attempts": 3,
+      "identity_lookup_millis": 1454,
+      "cached_read_hits": 52,
+      "succeeded": true
+    },
+    {
+      "span_id": 11,
+      "parent_span_id": null,
+      "stage": "root_management",
+      "parent_stage": null,
+      "elapsed_millis": 2960,
+      "remote_call_attempts": 2,
+      "identity_lookup_attempts": 1,
+      "identity_lookup_millis": 448,
+      "cached_read_hits": 0,
+      "succeeded": true
+    }
+  ],
+  "completed_outer_requests": [
+    {
+      "stage": "configured_canisters",
+      "method_or_kind": "canic_root_status",
+      "count": 1,
+      "summed_request_micros": 1138460,
+      "first_completion_micros": 37447631,
+      "last_completion_micros": 37447631
+    },
+    {
+      "stage": "configured_canisters",
+      "method_or_kind": "status",
+      "count": 3,
+      "summed_request_micros": 6974913,
+      "first_completion_micros": 35467570,
+      "last_completion_micros": 36308695
+    },
+    {
+      "stage": "estate_funding",
+      "method_or_kind": "icrc1_balance_of",
+      "count": 1,
+      "summed_request_micros": 1331882,
+      "first_completion_micros": 38780404,
+      "last_completion_micros": 38780404
+    },
+    {
+      "stage": "fleet_snapshot",
+      "method_or_kind": "identity",
+      "count": 1,
+      "summed_request_micros": 559366,
+      "first_completion_micros": 33544313,
+      "last_completion_micros": 33544313
+    },
+    {
+      "stage": "ledger_fee",
+      "method_or_kind": "icrc1_fee",
+      "count": 1,
+      "summed_request_micros": 940189,
+      "first_completion_micros": 39721136,
+      "last_completion_micros": 39721136
+    },
+    {
+      "stage": "protocol_actions",
+      "method_or_kind": "canic_coordinator_operation_status",
+      "count": 2,
+      "summed_request_micros": 3099659,
+      "first_completion_micros": 44584826,
+      "last_completion_micros": 53569041
+    },
+    {
+      "stage": "protocol_actions",
+      "method_or_kind": "canic_coordinator_registry",
+      "count": 1,
+      "summed_request_micros": 881798,
+      "first_completion_micros": 41371384,
+      "last_completion_micros": 41371384
+    },
+    {
+      "stage": "protocol_actions",
+      "method_or_kind": "canic_root_operation_status",
+      "count": 2,
+      "summed_request_micros": 1680458,
+      "first_completion_micros": 49860056,
+      "last_completion_micros": 50816284
+    },
+    {
+      "stage": "protocol_actions",
+      "method_or_kind": "canic_root_status",
+      "count": 3,
+      "summed_request_micros": 2881137,
+      "first_completion_micros": 42282452,
+      "last_completion_micros": 54419714
+    },
+    {
+      "stage": "protocol_actions",
+      "method_or_kind": "canic_wasm_store_catalog",
+      "count": 6,
+      "summed_request_micros": 4514589,
+      "first_completion_micros": 45254993,
+      "last_completion_micros": 49132827
+    },
+    {
+      "stage": "protocol_actions",
+      "method_or_kind": "canic_wasm_store_status",
+      "count": 1,
+      "summed_request_micros": 827626,
+      "first_completion_micros": 43111435,
+      "last_completion_micros": 43111435
+    },
+    {
+      "stage": "root_management",
+      "method_or_kind": "identity",
+      "count": 1,
+      "summed_request_micros": 448012,
+      "first_completion_micros": 55318118,
+      "last_completion_micros": 55318118
+    },
+    {
+      "stage": "root_management",
+      "method_or_kind": "status",
+      "count": 1,
+      "summed_request_micros": 1763901,
+      "first_completion_micros": 57082082,
+      "last_completion_micros": 57082082
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_coordinator_operation_status",
+      "count": 1,
+      "summed_request_micros": 1395388,
+      "first_completion_micros": 3951231,
+      "last_completion_micros": 3951231
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_coordinator_registry",
+      "count": 1,
+      "summed_request_micros": 1116434,
+      "first_completion_micros": 2547869,
+      "last_completion_micros": 2547869
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_observability",
+      "count": 9,
+      "summed_request_micros": 11585695,
+      "first_completion_micros": 13211998,
+      "last_completion_micros": 30362372
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_public_status",
+      "count": 2,
+      "summed_request_micros": 1856679,
+      "first_completion_micros": 19279574,
+      "last_completion_micros": 27044986
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_root_command",
+      "count": 9,
+      "summed_request_micros": 26195910,
+      "first_completion_micros": 16015685,
+      "last_completion_micros": 32977102
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_root_operation_status",
+      "count": 7,
+      "summed_request_micros": 9366752,
+      "first_completion_micros": 10765772,
+      "last_completion_micros": 28769935
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_root_status",
+      "count": 5,
+      "summed_request_micros": 5883002,
+      "first_completion_micros": 4757067,
+      "last_completion_micros": 18139529
+    },
+    {
+      "stage": "terminal_inventory",
+      "method_or_kind": "canic_wasm_store_status",
+      "count": 1,
+      "summed_request_micros": 901243,
+      "first_completion_micros": 5659902,
+      "last_completion_micros": 5659902
+    },
+    {
+      "stage": "unscoped",
+      "method_or_kind": "canic_observability",
+      "count": 24,
+      "summed_request_micros": 32053726,
+      "first_completion_micros": 68418401,
+      "last_completion_micros": 94713853
+    },
+    {
+      "stage": "unscoped",
+      "method_or_kind": "canic_root_command",
+      "count": 24,
+      "summed_request_micros": 76379082,
+      "first_completion_micros": 71457387,
+      "last_completion_micros": 97871054
+    },
+    {
+      "stage": "unscoped",
+      "method_or_kind": "canister_status",
+      "count": 3,
+      "summed_request_micros": 7737897,
+      "first_completion_micros": 62778029,
+      "last_completion_micros": 67447147
+    },
+    {
+      "stage": "unscoped",
+      "method_or_kind": "identity",
+      "count": 1,
+      "summed_request_micros": 433996,
+      "first_completion_micros": 54866944,
+      "last_completion_micros": 54866944
+    },
+    {
+      "stage": "unscoped",
+      "method_or_kind": "status",
+      "count": 2,
+      "summed_request_micros": 3371454,
+      "first_completion_micros": 59323624,
+      "last_completion_micros": 59708693
+    }
+  ],
+  "limits": [
+    "Request duration sums include concurrency and are not critical-path wall time.",
+    "Request target identifies the Root endpoint, not the inspected child.",
+    "The 24 final inspections match distinct retained asset count and source control flow; child-level correlation is not present in this receipt.",
+    "No live deployment, timing experiment or speed-up claim."
+  ]
+}

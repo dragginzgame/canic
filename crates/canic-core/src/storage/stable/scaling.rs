@@ -6,14 +6,13 @@ use crate::{
         structures::{DefaultMemoryImpl, memory::RuntimeMemory},
         types::BoundedString64,
     },
-    eager_static,
     ids::CanisterRole,
     role_contract::allocation::memory::placement::PLACEMENT_SCALING_REGISTRY_ID,
 };
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     static SCALING_REGISTRY: RefCell<
         StableBtreeMap<Principal, WorkerEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(

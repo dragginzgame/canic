@@ -1,6 +1,7 @@
 #![cfg(test)]
 
 use super::*;
+use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use ic_memory::{
     AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationSlotDescriptor,
     SchemaMetadata,
@@ -9,6 +10,43 @@ use ic_memory::{
         memory_manager::{MemoryId, MemoryManager},
     },
 };
+
+#[test]
+fn bootstrap_retains_declarations_and_opens_only_the_accessed_store() {
+    MemoryRegistryOps::bootstrap_registry().expect("bootstrap declared allocations");
+    let before = MemoryRegistryOps::allocation_snapshot().unwrap();
+    let declared = before
+        .memories
+        .iter()
+        .filter(|entry| matches!(entry.binding, MemoryAllocationBinding::Current { .. }))
+        .collect::<Vec<_>>();
+    assert!(!declared.is_empty());
+    assert!(
+        declared
+            .iter()
+            .all(|entry| entry.virtual_extent.wasm_pages == 0)
+    );
+
+    let parent = candid::Principal::from_slice(&[73]);
+    Env::import(EnvData {
+        record: EnvRecord {
+            parent_pid: Some(parent),
+            ..EnvRecord::default()
+        },
+    });
+    let after = MemoryRegistryOps::allocation_snapshot().unwrap();
+    let bindings_id = crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID;
+    for entry in &after.memories {
+        if entry.memory_manager_id == bindings_id {
+            assert!(entry.virtual_extent.wasm_pages > 0);
+        } else if matches!(entry.binding, MemoryAllocationBinding::Current { .. }) {
+            assert_eq!(entry.virtual_extent.wasm_pages, 0);
+        }
+    }
+    assert_eq!(before.current_generation, after.current_generation);
+    assert_eq!(Env::export().record.parent_pid, Some(parent));
+    assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), after);
+}
 
 #[test]
 fn allocation_snapshot_preserves_unopened_memories_and_ledger_generation() {
