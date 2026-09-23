@@ -10,7 +10,7 @@
 //
 // 1. Access pipeline semantics
 //    --------------------------
-//    Access checks are evaluated via `access::expr::eval_access`.
+//    Access checks are evaluated via the statically selected access expression evaluator.
 //    `requires(...)` always lowers to a single AccessExpr::All list.
 //
 //    Evaluation short-circuits on the FIRST failure.
@@ -70,7 +70,10 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
                 }
             }
         }
-        AccessPlan::Expr(expr) => {
+        AccessPlan::Expr {
+            expr,
+            fleet_admission,
+        } => {
             let expr_ident = format_ident!("__canic_access_expr");
             quote! {
                 let #caller = ::canic::__internal::cdk::api::msg_caller();
@@ -79,7 +82,7 @@ pub(super) fn access_stage(plan: &AccessPlan, call: &syn::Ident) -> TokenStream2
                     call: #call,
                 };
                 let #expr_ident = #expr;
-                if let Err(err) = ::canic::__internal::core::access::expr::eval_access(&#expr_ident, &#ctx).await {
+                if let Err(err) = ::canic::__internal::core::access::expr::eval_access_selected::<#fleet_admission>(&#expr_ident, &#ctx).await {
                     #deny
                 }
             }
@@ -105,12 +108,15 @@ pub(super) enum DefaultFleetGuard {
 pub(super) enum AccessPlan {
     None,
     DefaultFleet(DefaultFleetGuard),
-    Expr(TokenStream2),
+    Expr {
+        expr: TokenStream2,
+        fleet_admission: bool,
+    },
 }
 
 impl AccessPlan {
     pub(super) const fn requires_async(&self) -> bool {
-        matches!(self, Self::Expr(_))
+        matches!(self, Self::Expr { .. })
     }
 }
 
@@ -165,11 +171,28 @@ pub(super) fn build_access_plan(
         return Ok(AccessPlan::None);
     }
 
+    let fleet_admission = exprs.iter().any(expr_has_fleet_admission);
     let exprs: Vec<_> = exprs.iter().map(expr_from_ast).collect();
 
-    Ok(AccessPlan::Expr(quote! {
-        ::canic::__internal::core::access::expr::AccessExpr::All(vec![#(#exprs),*])
-    }))
+    Ok(AccessPlan::Expr {
+        expr: quote! {
+            ::canic::__internal::core::access::expr::AccessExpr::All(vec![#(#exprs),*])
+        },
+        fleet_admission,
+    })
+}
+
+fn expr_has_fleet_admission(expr: &AccessExprAst) -> bool {
+    match expr {
+        AccessExprAst::All(exprs) | AccessExprAst::Any(exprs) => {
+            exprs.iter().any(expr_has_fleet_admission)
+        }
+        AccessExprAst::Not(expr) => expr_has_fleet_admission(expr),
+        AccessExprAst::Pred(AccessPredicateAst::Builtin(
+            BuiltinPredicate::CallerIsFleetAdmitted,
+        )) => true,
+        AccessExprAst::Pred(_) => false,
+    }
 }
 
 fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {

@@ -303,6 +303,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         mint_icp_ledger: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
         cancel_mint: None,
         reinstall: false,
+        retirement_debit_block: None,
         apply: Some(plan.plan_sha256.clone()),
         desired: PathBuf::from("missing.toml"),
         environment: Some("local".to_string()),
@@ -1109,4 +1110,54 @@ fn timing_outcome_retains_exact_plan_scope_and_never_promotes_prerequisite_succe
         serde_json::to_value(report.plan.scope).unwrap()
     );
     fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn retirement_debit_requires_an_explicit_new_review() {
+    let parse = |args: &[&str]| EnsureOptions::parse(args.iter().map(OsString::from));
+    let valid = parse(&[
+        "ensure",
+        "staging",
+        "--reinstall",
+        "--retirement-debit-block",
+        "42",
+    ])
+    .unwrap();
+    assert_eq!(valid.retirement_debit_block, Some(42));
+    for args in [
+        vec![
+            "ensure",
+            "staging",
+            "--reinstall",
+            "--retirement-debit-block",
+            "42",
+            "--apply",
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        ],
+        vec!["ensure", "staging", "--retirement-debit-block", "42"],
+        vec![
+            "ensure",
+            "staging",
+            "--reinstall",
+            "--retirement-debit-block",
+            "-1",
+        ],
+        vec![
+            "ensure",
+            "staging",
+            "--reinstall",
+            "--retirement-debit-block",
+            "18446744073709551616",
+        ],
+        vec![
+            "ensure",
+            "staging",
+            "--reinstall",
+            "--retirement-debit-block",
+            "42",
+            "--operator-mint",
+        ],
+    ] {
+        assert!(parse(&args).is_err());
+    }
 }

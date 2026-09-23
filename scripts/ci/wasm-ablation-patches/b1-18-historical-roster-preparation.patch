@@ -1,0 +1,213 @@
+diff --git a/Cargo.lock b/Cargo.lock
+index 6e60909bc..cad051d02 100644
+--- a/Cargo.lock
++++ b/Cargo.lock
+@@ -697,6 +697,24 @@ dependencies = [
+  "ic-cdk",
+ ]
+ 
++[[package]]
++name = "canister_index_child"
++version = "0.110.2"
++dependencies = [
++ "candid",
++ "canic",
++ "ic-cdk",
++]
++
++[[package]]
++name = "canister_index_hub"
++version = "0.110.2"
++dependencies = [
++ "candid",
++ "canic",
++ "ic-cdk",
++]
++
+ [[package]]
+ name = "canister_minimal"
+ version = "0.110.2"
+diff --git a/Cargo.toml b/Cargo.toml
+index fad465be7..2efe4cd77 100644
+--- a/Cargo.toml
++++ b/Cargo.toml
+@@ -5,6 +5,8 @@ members = [
+     "apps/demo/user_hub",
+     "apps/demo/user_shard",
+     "apps/test/app",
++    "apps/test/index_child",
++    "apps/test/index_hub",
+     "apps/test/root",
+     "apps/test/scale",
+     "apps/test/scale_hub",
+diff --git a/apps/test/canic.toml b/apps/test/canic.toml
+index e0eff9a89..1306422a7 100644
+--- a/apps/test/canic.toml
++++ b/apps/test/canic.toml
+@@ -18,6 +18,14 @@ package = "root"
+ kind = "canister"
+ package = "app"
+ 
++[roles.index_child]
++kind = "canister"
++package = "index_child"
++
++[roles.index_hub]
++kind = "canister"
++package = "index_hub"
++
+ [roles.user_hub]
+ kind = "canister"
+ package = "user_hub"
+@@ -81,6 +89,20 @@ topup = {}
+ [component_specs.app.standards]
+ icrc21 = true
+ 
++[component_specs.indexed]
++component_role = "index_hub"
++maximum_instances = 1
++
++[component_specs.indexed.index.pools.items]
++canister_role = "index_child"
++key_name = "item_id"
++
++[component_specs.indexed.children.index_child]
++kind = "instance"
++
++[component_specs.indexed.spawn_grants.index_hub.index_child]
++maximum_instances_per_parent = 4
++
+ [component_specs.test]
+ component_role = "test"
+ maximum_instances = 1
+diff --git a/apps/test/index_child/Cargo.toml b/apps/test/index_child/Cargo.toml
+new file mode 100644
+--- /dev/null
++++ b/apps/test/index_child/Cargo.toml
+@@ -0,0 +1,28 @@
++[package]
++name = "canister_index_child"
++edition = { workspace = true }
++rust-version = { workspace = true }
++version = { workspace = true }
++publish = false
++build = "build.rs"
++
++[package.metadata.cargo-machete]
++ignored = ["ic-cdk"]
++
++[package.metadata.canic]
++app = "test"
++role = "index_child"
++
++[lib]
++crate-type = ["cdylib"]
++
++[dependencies]
++candid = { workspace = true }
++canic = { workspace = true, features = [] }
++ic-cdk = { workspace = true }
++
++[build-dependencies]
++canic = { workspace = true, features = [] }
++
++[lints]
++workspace = true
+diff --git a/apps/test/index_child/build.rs b/apps/test/index_child/build.rs
+new file mode 100644
+--- /dev/null
++++ b/apps/test/index_child/build.rs
+@@ -0,0 +1,3 @@
++fn main() {
++    canic::build!("../canic.toml");
++}
+diff --git a/apps/test/index_child/src/lib.rs b/apps/test/index_child/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/apps/test/index_child/src/lib.rs
+@@ -0,0 +1,18 @@
++#![expect(clippy::unused_async)]
++
++use candid::Principal;
++use canic::{Error, prelude::*};
++
++canic::start!();
++
++async fn canic_setup() {}
++async fn canic_install(_: Option<Vec<u8>>) {}
++async fn canic_upgrade() {}
++
++/// Prove direct Fleet-admitted ingress for an index-created managed child.
++#[canic_query(requires(caller::is_fleet_admitted()))]
++async fn test_fleet_admission_probe() -> Result<Principal, Error> {
++    Ok(ic_cdk::api::msg_caller())
++}
++
++canic::finish!();
+diff --git a/apps/test/index_hub/Cargo.toml b/apps/test/index_hub/Cargo.toml
+new file mode 100644
+--- /dev/null
++++ b/apps/test/index_hub/Cargo.toml
+@@ -0,0 +1,28 @@
++[package]
++name = "canister_index_hub"
++edition = { workspace = true }
++rust-version = { workspace = true }
++version = { workspace = true }
++publish = false
++build = "build.rs"
++
++[package.metadata.cargo-machete]
++ignored = ["ic-cdk"]
++
++[package.metadata.canic]
++app = "test"
++role = "index_hub"
++
++[lib]
++crate-type = ["cdylib"]
++
++[dependencies]
++candid = { workspace = true }
++canic = { workspace = true, features = [] }
++ic-cdk = { workspace = true }
++
++[build-dependencies]
++canic = { workspace = true, features = [] }
++
++[lints]
++workspace = true
+diff --git a/apps/test/index_hub/build.rs b/apps/test/index_hub/build.rs
+new file mode 100644
+--- /dev/null
++++ b/apps/test/index_hub/build.rs
+@@ -0,0 +1,3 @@
++fn main() {
++    canic::build!("../canic.toml");
++}
+diff --git a/apps/test/index_hub/src/lib.rs b/apps/test/index_hub/src/lib.rs
+new file mode 100644
+--- /dev/null
++++ b/apps/test/index_hub/src/lib.rs
+@@ -0,0 +1,21 @@
++#![expect(clippy::unused_async)]
++
++use canic::{Error, api::canister::placement::PlacementIndexApi, prelude::*};
++
++const POOL_NAME: &str = "items";
++
++canic::start!();
++
++async fn canic_setup() {}
++async fn canic_install(_: Option<Vec<u8>>) {}
++async fn canic_upgrade() {}
++
++/// Resolve one indexed key, creating its exact managed child when absent.
++#[canic_update(requires(env::build_local_only()))]
++async fn resolve_item(
++    key: String,
++) -> Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error> {
++    PlacementIndexApi::resolve_or_create(POOL_NAME, key).await
++}
++
++canic::finish!();

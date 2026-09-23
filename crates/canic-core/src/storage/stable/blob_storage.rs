@@ -9,7 +9,6 @@ use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 #[cfg(feature = "blob-storage")]
 use crate::{
     cdk::structures::{DefaultMemoryImpl, memory::RuntimeMemory},
-    eager_static,
     model::blob_storage::BlobRootHash,
     role_contract::allocation::memory::blob_storage::{
         BLOB_STORAGE_GATEWAY_PRINCIPALS_ID, BLOB_STORAGE_PENDING_DELETIONS_ID,
@@ -38,7 +37,7 @@ struct StorageGatewayPrincipalStore;
 struct BlobStorageBillingStore;
 
 #[cfg(feature = "blob-storage")]
-eager_static! {
+std::thread_local! {
     static STORED_BLOBS: RefCell<
         StableBtreeMap<BlobRootHashKey, StoredBlobRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -47,7 +46,7 @@ eager_static! {
 }
 
 #[cfg(feature = "blob-storage")]
-eager_static! {
+std::thread_local! {
     static BLOB_DELETION_PENDING: RefCell<
         StableBtreeMap<BlobRootHashKey, BlobDeletionPendingRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -56,7 +55,7 @@ eager_static! {
 }
 
 #[cfg(feature = "blob-storage")]
-eager_static! {
+std::thread_local! {
     static STORAGE_GATEWAY_PRINCIPALS: RefCell<
         StableBtreeMap<Principal, StorageGatewayPrincipalRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -65,7 +64,7 @@ eager_static! {
 }
 
 #[cfg(feature = "blob-storage-billing")]
-eager_static! {
+std::thread_local! {
     static BLOB_STORAGE_BILLING: RefCell<
         Cell<BlobStorageBillingStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(

@@ -5,6 +5,7 @@
 //! Boundary: derived desired state is retained in the reviewed operation only.
 
 pub(in crate::fleet_ensure) mod adoption;
+pub(in crate::fleet_ensure) mod debit;
 pub(in crate::fleet_ensure) mod source;
 pub(in crate::fleet_ensure) mod terminal;
 

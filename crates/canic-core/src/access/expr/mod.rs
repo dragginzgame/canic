@@ -314,7 +314,20 @@ pub mod deployment {
 ///
 /// Evaluate an access expression and record a normalized denial on failure.
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
-    match eval_access_inner(expr, ctx).await {
+    eval_access_selected::<true>(expr, ctx).await
+}
+
+/// Evaluate a generated expression with its statically selected admission reader.
+///
+/// Endpoint generation selects this reader from the complete declared expression.
+/// Manually composed expressions use `eval_access`, which supports every predicate.
+/// A mismatched selection is terminal and cannot be inverted by `not` or `any`.
+#[doc(hidden)]
+pub async fn eval_access_selected<const FLEET_ADMISSION: bool>(
+    expr: &AccessExpr,
+    ctx: &AccessContext,
+) -> Result<(), AccessError> {
+    match eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
         Ok(()) => Ok(()),
         Err(failure) => Err(record_access_failure(ctx.call, failure)),
     }
@@ -353,7 +366,10 @@ pub fn eval_default_fleet_guard(
     }
 }
 
-fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> AccessEvalFuture<'a> {
+fn eval_access_inner<'a, const FLEET_ADMISSION: bool>(
+    expr: &'a AccessExpr,
+    ctx: &'a AccessContext,
+) -> AccessEvalFuture<'a> {
     Box::pin(async move {
         match expr {
             AccessExpr::All(exprs) => {
@@ -361,7 +377,7 @@ fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> Access
                     return Err(AccessFailure::no_predicates("all"));
                 }
                 for expr in exprs {
-                    if let Err(failure) = eval_access_inner(expr, ctx).await {
+                    if let Err(failure) = eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
                         return Err(failure.with_context("all"));
                     }
                 }
@@ -373,21 +389,32 @@ fn eval_access_inner<'a>(expr: &'a AccessExpr, ctx: &'a AccessContext) -> Access
                 }
                 let mut last = None;
                 for expr in exprs {
-                    match eval_access_inner(expr, ctx).await {
+                    match eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
                         Ok(()) => return Ok(()),
+                        Err(failure) if failure.terminal => return Err(failure),
                         Err(failure) => last = Some(failure.with_context("any")),
                     }
                 }
                 Err(last.unwrap_or_else(|| AccessFailure::no_predicates("any")))
             }
-            AccessExpr::Not(expr) => match eval_access_inner(expr, ctx).await {
+            AccessExpr::Not(expr) => match eval_access_inner::<FLEET_ADMISSION>(expr, ctx).await {
                 Ok(()) => Err(AccessFailure::negated()),
+                Err(failure) if failure.terminal => Err(failure),
                 Err(_) => Ok(()),
             },
             AccessExpr::Pred(pred) => match pred {
-                AccessPredicate::Builtin(builtin) => evaluators::evaluate(builtin, ctx)
-                    .await
-                    .map_err(|err| AccessFailure::from_builtin(builtin, err)),
+                AccessPredicate::Builtin(builtin) => {
+                    evaluators::evaluate::<FLEET_ADMISSION>(builtin, ctx)
+                        .await
+                        .map_err(|failure| match failure {
+                            evaluators::BuiltinFailure::Denied(error) => {
+                                AccessFailure::from_builtin(builtin, error)
+                            }
+                            evaluators::BuiltinFailure::Unselected => {
+                                AccessFailure::unselected(builtin)
+                            }
+                        })
+                }
                 AccessPredicate::Custom(custom) => custom
                     .eval(ctx)
                     .await
@@ -411,6 +438,7 @@ struct AccessFailure {
     metric_kind: AccessMetricKind,
     predicate: &'static str,
     context: Option<&'static str>,
+    terminal: bool,
 }
 
 impl AccessFailure {
@@ -420,6 +448,14 @@ impl AccessFailure {
             metric_kind: pred.metric_kind(),
             predicate: pred.name(),
             context: None,
+            terminal: false,
+        }
+    }
+
+    const fn unselected(pred: &BuiltinPredicate) -> Self {
+        Self {
+            terminal: true,
+            ..Self::from_builtin(pred, AccessError::ExpressionRuleRequired)
         }
     }
 
@@ -429,6 +465,7 @@ impl AccessFailure {
             metric_kind: AccessMetricKind::Custom,
             predicate: name,
             context: None,
+            terminal: false,
         }
     }
 
@@ -438,6 +475,7 @@ impl AccessFailure {
             metric_kind: AccessMetricKind::Auth,
             predicate: "no_rules",
             context: Some(context),
+            terminal: false,
         }
     }
 
@@ -447,6 +485,7 @@ impl AccessFailure {
             metric_kind: AccessMetricKind::Auth,
             predicate: "not",
             context: Some("not"),
+            terminal: false,
         }
     }
 
@@ -493,10 +532,12 @@ mod tests {
     use crate::{
         access,
         ids::{EndpointCall, EndpointCallKind, EndpointId},
+        ops::runtime::metrics::access::AccessMetrics as MetricStore,
         storage::stable::env::{Env, EnvData, EnvRecord},
         storage::stable::state::fleet::{FleetMode, FleetState, FleetStateData, FleetStateRecord},
         test::seams,
     };
+    use std::sync::Mutex;
 
     ///
     /// EnvRestore
@@ -658,5 +699,104 @@ mod tests {
 
         let result = futures::executor::block_on(eval_access(&expr, &ctx));
         assert!(result.is_ok());
+    }
+
+    #[test]
+    fn unselected_admission_cannot_be_inverted_or_accepted_by_another_branch() {
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+        for expr in [
+            caller::is_fleet_admitted(),
+            not(caller::is_fleet_admitted()),
+            any([caller::is_fleet_admitted(), not(all([]))]),
+            not(all([caller::is_fleet_admitted()])),
+        ] {
+            let result = futures::executor::block_on(eval_access_selected::<false>(&expr, &ctx));
+            std::assert_matches!(result, Err(AccessError::ExpressionRuleRequired));
+        }
+    }
+
+    #[test]
+    fn selected_evaluator_preserves_boolean_order_and_denial_metrics() {
+        struct Probe {
+            id: u8,
+            succeeds: bool,
+            calls: Arc<Mutex<Vec<u8>>>,
+        }
+        #[async_trait]
+        impl AsyncAccessPredicate for Probe {
+            async fn eval(&self, _: &AccessContext) -> Result<(), AccessError> {
+                self.calls.lock().unwrap().push(self.id);
+                if self.succeeds {
+                    Ok(())
+                } else {
+                    Err(AccessError::ParentRequired)
+                }
+            }
+            fn name(&self) -> &'static str {
+                "probe"
+            }
+        }
+        let ctx = AccessContext {
+            caller: seams::p(1),
+            call: test_call(),
+        };
+        let calls = Arc::new(Mutex::new(Vec::new()));
+        let probe = |id, succeeds| {
+            custom(Probe {
+                id,
+                succeeds,
+                calls: Arc::clone(&calls),
+            })
+        };
+        let cases = [
+            (all([probe(1, false), probe(2, true)]), vec![1], false),
+            (
+                any([probe(1, false), probe(2, true), probe(3, false)]),
+                vec![1, 2],
+                true,
+            ),
+            (
+                not(all([probe(1, true), probe(2, false)])),
+                vec![1, 2],
+                true,
+            ),
+            (
+                not(any([probe(1, false), probe(2, true)])),
+                vec![1, 2],
+                false,
+            ),
+            (all([]), vec![], false),
+            (any([]), vec![], false),
+        ];
+        for (expr, expected_calls, allowed) in cases {
+            let mut observations = Vec::new();
+            for full in [false, true] {
+                calls.lock().unwrap().clear();
+                MetricStore::reset();
+                let result = if full {
+                    futures::executor::block_on(eval_access(&expr, &ctx))
+                } else {
+                    futures::executor::block_on(eval_access_selected::<false>(&expr, &ctx))
+                };
+                assert_eq!(result.is_ok(), allowed);
+                assert_eq!(*calls.lock().unwrap(), expected_calls);
+                let entries = MetricStore::snapshot().entries;
+                assert_eq!(
+                    entries.iter().map(|(_, count)| count).sum::<u64>(),
+                    u64::from(!allowed)
+                );
+                observations.push((
+                    result.err().map(|error| std::mem::discriminant(&error)),
+                    entries
+                        .into_iter()
+                        .map(|(key, count)| (key.kind, key.predicate, count))
+                        .collect::<Vec<_>>(),
+                ));
+            }
+            assert_eq!(observations[0], observations[1]);
+        }
     }
 }

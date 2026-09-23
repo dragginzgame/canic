@@ -1,0 +1,87 @@
+diff --git a/crates/canic/src/macros/endpoints/root.rs b/crates/canic/src/macros/endpoints/root.rs
+--- a/crates/canic/src/macros/endpoints/root.rs
++++ b/crates/canic/src/macros/endpoints/root.rs
+@@ -531,34 +531,32 @@
+                     }
+                 }
+                 RootCommand::ProvisionChild(request) => {
+-                    let operation_id = request.operation_id;
+-                    let component = request.component;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_child(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_child_allocation(component, operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 RootCommand::ProvisionComponent(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 RootCommand::ProvisionComponents(request) => {
+-                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::accept(request)
+-                        .await
+-                        .map(RootCommandResponse::OperationAccepted)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 RootCommand::ProvisionPeer(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_peer_component_allocation(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 RootCommand::PublishReleaseSet(command) => {
+                     ::canic::api::canister::template::WasmStorePublicationApi::admin(command)
+@@ -683,9 +681,11 @@
+                     }
+                 }
+                 RootCommand::SynchronizeComponentDirectories(request) => {
+-                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::synchronize_directories(request)
+-                        .await
+-                        .map(RootCommandResponse::SynchronizeComponentDirectories)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 RootCommand::SynchronizeRegistry(request) => {
+                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_fleet_registry_synchronization(request)
+@@ -886,9 +886,10 @@
+                         .map(RootStatusResponse::ComponentRegistryPartition)
+                 }
+                 RootStatusRequest::Config => {
+-                    $crate::__internal::core::api::config::ConfigApi::export_toml().map(|toml| {
+-                        RootStatusResponse::Config(::canic::dto::role::ConfigStatusResponse { toml })
+-                    })
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 RootStatusRequest::CycleBalance => Ok(RootStatusResponse::CycleBalance(
+                     ::canic::dto::role::CycleBalanceStatusResponse {

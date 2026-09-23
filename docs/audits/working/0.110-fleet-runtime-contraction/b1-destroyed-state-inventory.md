@@ -1,6 +1,7 @@
 # 0.110 B1 Destroyed-State And Reconstruction Inventory
 
 Date: 2026-09-03
+Policy review: 2026-09-23
 State: allocation catalog complete; hard-cut preconditions and maintainer
 acceptance open
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
@@ -21,8 +22,13 @@ Three different outcomes exist:
 2. operation and history state deliberately reset only after the predecessor
    has no unresolved effect; and
 3. dynamic application, placement, blob and credential state that Canic cannot
-   reconstruct and that a consumer must start fresh, restore under separate
-   application authority or accept as destroyed outside this release line.
+   reconstruct and that may be discarded at the release boundary.
+
+The allocation/source inventory is frozen at `.5`; its historical payload
+fields do not promise current cross-release adoption, identity/topology reuse,
+state import or compatibility recovery. Current release authority is fresh,
+and controlled cycles are the sole cross-release conservation invariant.
+Same-release interruption recovery, backup and restore remain required.
 
 No positional codec cut is yet selected. A B3 cut remains blocked by unresolved
 Canic-owned paid-effect or release-boundary preconditions, not by the absence of
@@ -47,12 +53,12 @@ The cross-release transaction must:
 - re-prove controllers, module hashes, topology and terminal convergence from
   live observations after reinstall.
 
-The host plan has only `Install` and `Reinstall` modes; it has no `Upgrade`
-variant. Existing module-bearing canisters therefore select reinstall in the
-current Ensure policy. However, `CurrentReleaseSetManifest` does not yet carry
-the design's planned machine-readable reinstall-only transition mode. The
-behavioral restriction exists, while the structured release-metadata and
-negative no-effect qualification remain open B5 evidence.
+The frozen host plan has only `Install` and `Reinstall` modes; it has no
+`Upgrade` variant. At that baseline, `CurrentReleaseSetManifest` did not carry
+the design's planned machine-readable reinstall-only transition mode. This
+historical finding is not a defect verdict on later releases. B5 must verify
+the maintained release metadata and negative no-effect qualification against
+its exact current source.
 
 ## Authoritative Reconstruction Inputs
 
@@ -61,11 +67,11 @@ negative no-effect qualification remain open B5 evidence.
 | validated current `canic.toml` and compiled role authority | role/capability graph, Component topology, auth trust configuration, metrics profile and protected deployment shape | live identities, dynamic assignments, sessions, receipts or application data |
 | current release-set manifest and artifact digests | exact Root, Coordinator, Store and application Wasms plus Candid/protocol identities | predecessor stable records or application content |
 | new Fleet Ensure desired state and journal | one reviewed current operation, protected init arguments and effect ordering | predecessor in-flight operation continuation |
-| exact live ICP observations | existing Principals, controllers, modules, lifecycle and cycle balances that remain observable | lost semantic history or unobservable predecessor effects |
+| exact live ICP observations | exact source/destination authority and controlled balances for conservation | predecessor installation adoption, identity/topology reuse, lost semantic history or unobservable effects |
 | Coordinator/Root protected protocols | fresh Registry, Root mirror, Component bindings, admission projection and Store publication | arbitrary predecessor topology or deleted historical memberships |
-| downstream/application owner input | optional application data, blob registrations and business-level assignment reseed | Canic provides no default cross-release importer |
+| downstream/application owner input | fresh application initialization independently owned by the consumer | Canic provides no cross-release state importer or restoration promise |
 
-Fresh Root authority is carried by `FleetSubnetRootInitArgs`: the exact Fleet
+In the frozen `.5` source, Root authority is carried by `FleetSubnetRootInitArgs`: the exact Fleet
 binding, initial release set, expected module hash, sibling Store authority,
 install identity and reviewed pool imports. Fresh Store authority is carried by
 `FleetSubnetWasmStoreInitArgs`. Each managed Component or child receives a
@@ -74,7 +80,9 @@ Root/Component binding, protected deployment and optional admission
 projection. Coordinator init receives the configured App, Registry authority,
 admission policy, Component deployment configuration and Root funding policy.
 
-Those inputs rebuild current authority. They do not migrate predecessor state.
+These historical fields identify the source domains and their inputs. Current
+procedures rebuild fresh authority under the maintained reinstall-only contract;
+they do not adopt or import predecessor state, identity or topology.
 
 ## Complete Canic Allocation Ledger
 
@@ -87,10 +95,10 @@ key remains an independent allocation.
 | `TemplateManifests`, `TemplateChunkSets`, `TemplateChunkRefs`, `TemplateChunkPayloads` | 10-13 | Root, Store | rebuild | Republish the exact current release artifacts and manifests from the immutable release set; no predecessor Store catalog is imported. |
 | `WasmStoreGcState` | 14 | Store | reset | Predecessor GC must be terminal/Normal or its deletion intent must be explicitly abandoned after catalog/content accounting; start new GC only after current catalog publication. |
 | `FleetCoordinatorRegistry` | 15 | Coordinator | rebuild | Initialize a fresh Coordinator Registry from current Fleet authority and rejoin/activate current Roots through the new operation. Historical Registry versions and removed entries are discarded. |
-| `RootWasmStoreState` | 16 | Root | rebuild | Recreate the sibling Store authority and publication state from protected init, adoption/bootstrap and current artifact publication. |
+| `RootWasmStoreState` | 16 | Root | rebuild | Recreate fresh sibling Store authority and publication state from protected init, bootstrap and current artifact publication. |
 | `RootFleetRegistryMirror` | 17 | Root | rebuild | Synchronize the current Coordinator-authored Registry after fresh Root initialization; no predecessor mirror is trusted. |
-| `RootComponentRegistry` | 18-23 | Root | rebuild current topology; discard history | Re-provision or re-observe the current desired Component tree. Creation, install, drain, removal and directory history is not reconstructed. Reusing any live Principal requires exact controller/module/balance observation in the new plan. |
-| `RootCanisterPool` | 24-26 | Root | rebuild from desired and live state | Re-import only explicitly reviewed controlled empty canisters. Lost creation/handoff receipts cannot justify reuse; controllers, lifecycle and cycles must be proved again. |
+| `RootComponentRegistry` | 18-23 | Root | build fresh topology; discard history | Provision the current desired Component tree. Predecessor identities, topology, creation, install, drain, removal and directory history need not survive and do not authorize current work. |
+| `RootCanisterPool` | 24-26 | Root | build fresh controlled pool | Establish the current pool from reviewed current authority. Old creation/handoff receipts do not authorize adoption; predecessor controlled cycles remain subject to the exact conservation boundary. |
 | `RootComponentProvisioning` | 27-29 | Root | reset and re-run | No predecessor provisioning cursor or intent continues across the release. The old operation must be terminal or abandoned without repeating an unresolved effect; a new plan uses new operation IDs. |
 | `CoreRuntimeChildren`, `CoreRuntimeBindings`, `CoreFleetState`, `CoreFleetActivation` | 30-33 | every Runtime role | rebuild | Protected init and current Root/Coordinator protocols recreate identity, binding, activation and child projection. Dynamic predecessor child history is discarded. |
 | `CoreAuthState` | 34 | auth-capable roles and Root | partial rebuild; credentials reset | Rebuild only configured trust anchors and protected authority. Sessions, replay entries, active delegation proofs, issuers, renewal cursors and chain-key batches are not reconstructed; clients/Roots must establish fresh current credentials. |
@@ -104,7 +112,7 @@ key remains an independent allocation.
 | `PlacementScalingRegistry` | 50 | scaling roles | discard/reseed | Config rebuilds scaling policy, not dynamic worker assignments or business placement. Existing assignments require owner reseed or explicit data loss acceptance. |
 | `PlacementIndexRegistry` | 51 | index roles | discard/reseed | Config rebuilds index policy, not key-to-child assignments. The application owner must rebuild the index or accept its loss. |
 | `ShardingRegistry`, `ShardingAssignments`, `ShardingActiveSet` | 52-54 | sharding roles | discard/reseed | Config rebuilds shard-pool policy, not entity assignments or the active dynamic set. The application owner must reseed them. |
-| `BlobStorageRoots`, `BlobStoragePendingDeletions`, `BlobStorageGatewayPrincipals`, `BlobStorageBilling` | 55-58 | blob-storage feature consumers | discard/reseed | Canic config does not recreate live blob registrations, pending deletion authority, gateway membership or billing state. A fresh release starts empty; application backup or reseed is independently consumer-owned. Paid or cycle-bearing work must still be reconciled before destruction. |
+| `BlobStorageRoots`, `BlobStoragePendingDeletions`, `BlobStorageGatewayPrincipals`, `BlobStorageBilling` | 55-58 | blob-storage feature consumers | discard/reseed | Canic config does not recreate live blob registrations, pending deletion authority, gateway membership or billing state. A fresh release starts empty; fresh application initialization is independently consumer-owned. Paid or cycle-bearing work must still be reconciled before destruction. |
 | `CoreAuthorityRestoreFence` | 59 | Root, Coordinator | reset only from terminal open state | A sealed or restoring predecessor cannot cross the cut. Finish or safely abandon restoration and prove timers/authority are open before reinstall. |
 | `CoreAsyncJobRecovery` | 60 | every Runtime role | reset | Reconcile each durable async job and its possible external effect first; new-release timers/jobs do not resume old recovery payloads. |
 | `CoreFleetAdmissionProjection` | 61 | Fleet-admission targets | rebuild | The new Coordinator/Root admission protocol prepares, activates and opens a fresh projection from current policy. Predecessor transition receipts are discarded. |
@@ -174,21 +182,22 @@ boundaries remain part of qualification.
 
 Application-owned stable memory is not described by `StateAllocationKey` and
 is still destroyed by reinstall. Canic neither exports nor imports it across a
-release. The downstream owner must explicitly choose fresh initialization,
-restore from an independently governed application backup, or accept loss.
+release. Fresh application initialization is independently consumer-owned;
+the Canic gate may discard predecessor application data.
 Canic backup/restore guarantees remain same-release behavior and are not a
 cross-release migration lane.
 
 The predecessor host Fleet Ensure plan, journal and `state.json` are likewise
 not imported into a successor release. They remain historical/operator
 evidence only. The current release-set manifest, current desired input and a
-new operation journal become authority. Reusing a controlled Principal or
-balance discovered live does not convert the predecessor journal into a
-migration contract.
+new operation journal become authority. Exact live observations bind controlled
+cycles and source/destination authority; they confer no predecessor adoption or
+identity/topology reuse contract.
 
-## Blocking Findings And Acceptance Items
+## Release-Boundary Obligations And Acceptance Items
 
-The catalog does not yet justify an unconditional codec hard cut:
+The allocation catalog alone does not justify an unconditional codec hard cut.
+Each affected production cut must carry current evidence for these obligations:
 
 - dynamic index, shard and scale assignments are not reconstructable from
   Canic config alone and must be explicitly classified as destroyed by the
@@ -197,15 +206,16 @@ The catalog does not yet justify an unconditional codec hard cut:
   boundary across their active windows;
 - all in-flight paid/replay-protected operations need a terminal-or-abandoned
   precondition before their journals are destroyed;
-- the release-set manifest still lacks the planned machine-readable
-  reinstall-only transition field; and
+- current release metadata must enforce the maintained reinstall-only
+  transition contract; and
 - representative instruction/table allowances and the negative ordinary-
   upgrade no-effect proof remain unaccepted.
 
-These are Canic release-boundary evidence gaps, not arguments for compatibility
-decoders. The pre-1.0 response is to stop the affected cut until the fresh
-reinstall transaction proves its owned preconditions—not to add a predecessor
-import path or wait for a particular consumer's migration policy.
+These are Canic release-boundary proof obligations, not arguments for compatibility
+decoders or a claim that later host recovery work remains unimplemented. An
+affected production cut must stop until the fresh reinstall transaction proves
+its owned preconditions. It adds no predecessor import path and depends on no
+particular consumer's migration policy.
 
 ## B1 Disposition
 

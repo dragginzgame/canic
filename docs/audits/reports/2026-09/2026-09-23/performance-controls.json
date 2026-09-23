@@ -1,0 +1,259 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-23",
+  "rustc": "1.98.1 (48a229cea 2026-09-01)",
+  "cargo": "1.98.1 (797e8a9bc 2026-08-05)",
+  "inspection_parsing": {
+    "inspections_per_sample": 33,
+    "source_bytes": 101033,
+    "source_sha256": "f652b8b8b7d57c1a4480dd9818e7e17267ebd50ca3c0ccad6c2de6f5fb82d92d",
+    "uncached_micros": [
+      96395,
+      97066,
+      95754,
+      95531,
+      95473
+    ],
+    "median_micros": 95754,
+    "profile": "native test, opt-level=1",
+    "artifact_path": "/home/adam/projects/toko-miner/.canic/release-builds/bf077df44be42478849fc40b6116bdbc4573836de716aab80173a4a93e20efc2/artifacts/root/root.did"
+  },
+  "build_reuse": {
+    "fixture": "real Cargo Wasm probe with synthetic sealed release evidence",
+    "profile": "fast",
+    "compiler_wrapper": "disabled by fixture",
+    "target": "private per fixture",
+    "direct_tmp_run": [
+      {
+        "case": "original_cold",
+        "measurement": {
+          "cargo_probe_micros": 314809,
+          "elapsed_micros": 2504042,
+          "inputs": "ba4f5081b5281b299abdf190e233ef158349b222328965af6e776c522bef5a03",
+          "lookup_micros": 1043775,
+          "miss_reason": "no comparable prior input evidence",
+          "release": "52d6acf60af6b3bf9830067b8402c25ededb149a55ce3f8485a573222faad59c",
+          "reused": false,
+          "synthetic_sealing_micros": 1145457,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "unchanged_warm",
+        "measurement": {
+          "cargo_probe_micros": 80190,
+          "elapsed_micros": 1083753,
+          "inputs": "ba4f5081b5281b299abdf190e233ef158349b222328965af6e776c522bef5a03",
+          "lookup_micros": 496929,
+          "miss_reason": null,
+          "release": "52d6acf60af6b3bf9830067b8402c25ededb149a55ce3f8485a573222faad59c",
+          "reused": true,
+          "synthetic_sealing_micros": 506633,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "relocated_frozen_cold",
+        "measurement": {
+          "cargo_probe_micros": 318785,
+          "elapsed_micros": 1958227,
+          "inputs": "10bf5efaea1146340cc9b885ecf6799ee91c5df4b1a454731524bac38510e294",
+          "lookup_micros": 555646,
+          "miss_reason": "source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CANIC_TEST_BUILD_ENVIRONMENT_ROOT, CARGO_TARGET_DIR) (compared with last recorded successful build)",
+          "release": "9119a3381592684569a312927ce4bf0e32432b7e97e5e8be21200618b1a68584",
+          "reused": false,
+          "synthetic_sealing_micros": 1083795,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "relocated_frozen_warm",
+        "measurement": {
+          "cargo_probe_micros": 86977,
+          "elapsed_micros": 1096771,
+          "inputs": "10bf5efaea1146340cc9b885ecf6799ee91c5df4b1a454731524bac38510e294",
+          "lookup_micros": 495413,
+          "miss_reason": null,
+          "release": "9119a3381592684569a312927ce4bf0e32432b7e97e5e8be21200618b1a68584",
+          "reused": true,
+          "synthetic_sealing_micros": 514379,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "qualification_only",
+        "measurement": {
+          "cargo_probe_micros": 87623,
+          "elapsed_micros": 1659782,
+          "inputs": "e2c85019d32856cb819748e4e687ee3f4786bb41be941b93043a305f86315cd2",
+          "lookup_micros": 493535,
+          "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+          "release": "a6ee907776f92f46b5890a3bb5a61e5ba7f16dd78490c2ee2c70275ed8bb6cc8",
+          "reused": false,
+          "synthetic_sealing_micros": 1078622,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "runtime_source",
+        "measurement": {
+          "cargo_probe_micros": 147431,
+          "elapsed_micros": 1702789,
+          "inputs": "7c47540aa38cdb9a7c7d94d539681da24a29b1c5dfdeb2899a88d349363fc5c5",
+          "lookup_micros": 491987,
+          "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+          "release": "33671c6053187b79b123c7719bedd390da6f548f591264498e353561afea2ce3",
+          "reused": false,
+          "synthetic_sealing_micros": 1063370,
+          "wasm": "ad10c990e3c5d07ad5e0815ba752c424653a116e2a8f77b30acc70f4ab5297ca"
+        }
+      },
+      {
+        "case": "dependency_source",
+        "measurement": {
+          "cargo_probe_micros": 178127,
+          "elapsed_micros": 1715218,
+          "inputs": "f8e8500813104d52aa62e5a3a1e5818297be53331d7d507da9aa1dfa1c8d7f3d",
+          "lookup_micros": 497940,
+          "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+          "release": "12e5051bac0bb656db1e82a873ce10aac1661a9de1620b89f1d0dd119a4d6761",
+          "reused": false,
+          "synthetic_sealing_micros": 1039149,
+          "wasm": "f34e5a3831ddf2423285b20530ca72e4247d1ec988c062df73735c9f2d44fc15"
+        }
+      }
+    ],
+    "governed_scratch_run": [
+      {
+        "case": "original_cold",
+        "measurement": {
+          "cargo_probe_micros": 325784,
+          "elapsed_micros": 2048167,
+          "inputs": "2defe4f45481f5c65cda95f2c4fda3dac3e224c25030cb3cd1eea88b2a15f111",
+          "lookup_micros": 585470,
+          "miss_reason": "no comparable prior input evidence",
+          "release": "e9ca728f7d7b75e054a575c27daeeac4c75c4f72dd127b858f409c0cc29506a0",
+          "reused": false,
+          "synthetic_sealing_micros": 1136912,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "unchanged_warm",
+        "measurement": {
+          "cargo_probe_micros": 88915,
+          "elapsed_micros": 1202043,
+          "inputs": "2defe4f45481f5c65cda95f2c4fda3dac3e224c25030cb3cd1eea88b2a15f111",
+          "lookup_micros": 560241,
+          "miss_reason": null,
+          "release": "e9ca728f7d7b75e054a575c27daeeac4c75c4f72dd127b858f409c0cc29506a0",
+          "reused": true,
+          "synthetic_sealing_micros": 552886,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "relocated_frozen_cold",
+        "measurement": {
+          "cargo_probe_micros": 310378,
+          "elapsed_micros": 2026660,
+          "inputs": "106a35e21d328c006b3689eba11d01d5291f0410009926d41e34bd08e51411bd",
+          "lookup_micros": 552549,
+          "miss_reason": "source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CANIC_TEST_BUILD_ENVIRONMENT_ROOT, CARGO_TARGET_DIR) (compared with last recorded successful build)",
+          "release": "0c1f722d41fbb117e48377b9532a5815dc62d8ccc21e5de8c147f37f84296987",
+          "reused": false,
+          "synthetic_sealing_micros": 1163732,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "relocated_frozen_warm",
+        "measurement": {
+          "cargo_probe_micros": 88244,
+          "elapsed_micros": 1197929,
+          "inputs": "106a35e21d328c006b3689eba11d01d5291f0410009926d41e34bd08e51411bd",
+          "lookup_micros": 561257,
+          "miss_reason": null,
+          "release": "0c1f722d41fbb117e48377b9532a5815dc62d8ccc21e5de8c147f37f84296987",
+          "reused": true,
+          "synthetic_sealing_micros": 548425,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "qualification_only",
+        "measurement": {
+          "cargo_probe_micros": 85927,
+          "elapsed_micros": 1780684,
+          "inputs": "05ea739946c511649be1add700c1af74f9ee49bafb3d95ae6ed98e816910718c",
+          "lookup_micros": 535606,
+          "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+          "release": "e9ca44afd590bf40da8696e6fadfac2e2b06a029e09dd5a3ea4e505038f97bc6",
+          "reused": false,
+          "synthetic_sealing_micros": 1159149,
+          "wasm": "cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"
+        }
+      },
+      {
+        "case": "runtime_source",
+        "measurement": {
+          "cargo_probe_micros": 153686,
+          "elapsed_micros": 1845644,
+          "inputs": "cd7c122f9f217b5f48202e468f632fed173f39c178784d7edc16c901576c1f2a",
+          "lookup_micros": 540296,
+          "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+          "release": "9b55041a2d1e2a3181edf59e411901de2fd6bf86c62851bc33fafa84e55a0d66",
+          "reused": false,
+          "synthetic_sealing_micros": 1151661,
+          "wasm": "ad10c990e3c5d07ad5e0815ba752c424653a116e2a8f77b30acc70f4ab5297ca"
+        }
+      },
+      {
+        "case": "dependency_source",
+        "measurement": {
+          "cargo_probe_micros": 185942,
+          "elapsed_micros": 1859006,
+          "inputs": "ea7549264864b6f43c2b5e6cc97650e8d25c74006e2ff86da3a3ac05e5e90ef9",
+          "lookup_micros": 547742,
+          "miss_reason": "source/dependency inputs changed (compared with last recorded successful build)",
+          "release": "392473bdfd7f0b82ab925c63a6ee3acda119ebe6c14b1536ac17badf83c2345f",
+          "reused": false,
+          "synthetic_sealing_micros": 1125321,
+          "wasm": "f34e5a3831ddf2423285b20530ca72e4247d1ec988c062df73735c9f2d44fc15"
+        }
+      }
+    ]
+  },
+  "source_files": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "80333a56fc8e280ae891e411ba50c2bcbb7ac06bb87e08ebc99b7a90f9367c0e"
+    },
+    {
+      "path": "rust-toolchain.toml",
+      "sha256": "7553618f800829444096beea3dce84c3d07585efda504c19adb6787369bbd9e8"
+    },
+    {
+      "path": "crates/canic-host/src/canister_protocol/inspection/mod.rs",
+      "sha256": "a74ac35250350a709f646fdaae8d9b2b90ecf17b46621a780c1fde100b52c68a"
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/reuse/tests/complete/environment/mod.rs",
+      "sha256": "67c34f03f1ab0d1d15220747930118fd3ce401b425d362ba29f1252cfceebbf9"
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/reuse/tests/mod.rs",
+      "sha256": "c9d01491f6b0fe964d706ca944ec3a8fab348948be076981de9d272d0efbc394"
+    },
+    {
+      "path": "crates/canic-host/src/canister_build/reuse/tests/complete/mod.rs",
+      "sha256": "28e965f897e9c0f2a0e8a966ddd750d19da471029cd04599d06789434e53b1a3"
+    }
+  ],
+  "limits": [
+    "These fixtures are not the application-scale Release build.",
+    "Outer host test compilation is excluded from per-case measurement fields.",
+    "Warm cases deliberately invoke a compiler probe even when sealed reuse succeeds.",
+    "No live calls, protected effects, downstream mutations or production speed-up claim."
+  ]
+}

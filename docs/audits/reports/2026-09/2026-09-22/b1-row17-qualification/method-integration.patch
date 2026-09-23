@@ -1,0 +1,134 @@
+diff --git a/scripts/ci/wasm-ablation-report.sh b/scripts/ci/wasm-ablation-report.sh
+--- a/scripts/ci/wasm-ablation-report.sh
++++ b/scripts/ci/wasm-ablation-report.sh
+@@ -39,11 +39,12 @@
+ sccache wrapper when available. Smoke output is never retention-eligible and
+ does not make a determinism claim.
+ 
+-Qualification mode is also development-only. It accepts one `specified` patch,
+-builds its variant once across every selected artifact, or one exact selected
+-artifact when narrowed explicitly, and validates the exact artifacts and
+-structured metrics. It emits no baseline or determinism claim and is never
+-retention-eligible.
++Qualification mode is also development-only. It accepts one `specified` patch
++or prepared matrix, builds each condition once across every selected artifact,
++or one exact selected artifact when narrowed explicitly, and validates artifacts and
++structured metrics. A prepared matrix applies the same hash-bound fixture patch
++at every width. Qualification emits no baseline or determinism claim and is
++never retention-eligible.
+ EOF
+ }
+ 
+@@ -179,7 +180,8 @@
+                 *) fail "unknown immediate baseline for $experiment: $immediate_baseline" ;;
+             esac
+         fi
+-        if [[ ( "$state" == "ready" || "$state" == "specified" ) && "$switch_kind" == "patch" ]]; then
++        if [[ ( "$state" == "ready" || "$state" == "specified" ) &&
++            ( "$switch_kind" == "patch" || "$switch_kind" == "env_matrix" ) ]]; then
+             [[ -f "$METHOD_ROOT/$switch_value" ]] ||
+                 fail "$state patch experiment lacks its switch: $switch_value"
+             [[ "$switch_sha256" =~ ^[0-9a-f]{64}$ ]] ||
+@@ -192,8 +194,8 @@
+             fail "non-runnable or non-patch experiment has a switch SHA-256: $experiment"
+         fi
+         if [[ "$switch_kind" == "env_matrix" ]]; then
+-            [[ "$switch_value" == "CANIC_GENERIC_COHORT_WIDTH=1..5" ]] ||
+-                fail "unexpected environment matrix for $experiment"
++            [[ "$experiment" == "b1-17-page-generic-cohort" ]] ||
++                fail "unknown prepared environment matrix: $experiment"
+         fi
+     done <"$EXPERIMENTS"
+ 
+@@ -288,8 +290,9 @@
+ IFS=$'\t' read -r SEQUENCE _ STATE SWITCH_KIND SWITCH_VALUE SWITCH_SHA256 \
+     ARTIFACT_SELECTORS IMMEDIATE_BASELINE INSTRUCTION_EVIDENCE SOURCE_OWNERS <<<"$EXPERIMENT_ROW"
+ if [[ "$RUN_MODE" == "qualify" ]]; then
+-    [[ "$STATE" == "specified" && "$SWITCH_KIND" == "patch" ]] ||
+-        fail "qualification requires one specified patch experiment: $EXPERIMENT"
++    [[ "$STATE" == "specified" &&
++        ( "$SWITCH_KIND" == "patch" || "$SWITCH_KIND" == "env_matrix" ) ]] ||
++        fail "qualification requires one specified patch or prepared matrix: $EXPERIMENT"
+ else
+     [[ "$STATE" == "ready" ]] ||
+         fail "experiment is not runnable until its one-switch input exists: $EXPERIMENT"
+@@ -685,23 +688,31 @@
+ PATCH_SHA256="NA"
+ PATCH_DIFF_SHA256="NA"
+ PATCH_EXPECTED_PATHS=""
++if [[ "$SWITCH_KIND" == "patch" || "$SWITCH_KIND" == "env_matrix" ]]; then
++    PATCH_PATH="$METHOD_ROOT/$SWITCH_VALUE"
++    [[ -f "$PATCH_PATH" ]] || fail "missing measurement patch: $SWITCH_VALUE"
++    PATCH_SHA256="$(file_hash "$PATCH_PATH")"
++    [[ "$PATCH_SHA256" == "$SWITCH_SHA256" ]] ||
++        fail "measurement patch SHA-256 does not match its experiment record"
++    PATCH_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$PATCH_PATH" | cut -f3 | sort -u)"
++    [[ -n "$PATCH_EXPECTED_PATHS" ]] || fail "measurement patch has no paths: $SWITCH_VALUE"
++fi
+ case "$SWITCH_KIND" in
+     none)
+         build_condition baseline "" ""
+         ;;
+     env_matrix)
++        git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
++        git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
++        PATCH_APPLIED="true"
++        PATCH_DIFF_SHA256="$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')"
+         for width in 1 2 3 4 5; do
+             build_condition "width-$width" CANIC_GENERIC_COHORT_WIDTH "$width"
++            [[ "$(git -C "$PRODUCT_ROOT" diff --binary | sha256sum | awk '{print $1}')" == "$PATCH_DIFF_SHA256" ]] ||
++                fail "prepared matrix source changed during width $width"
+         done
+         ;;
+     patch)
+-        PATCH_PATH="$METHOD_ROOT/$SWITCH_VALUE"
+-        [[ -f "$PATCH_PATH" ]] || fail "missing measurement patch: $SWITCH_VALUE"
+-        PATCH_SHA256="$(file_hash "$PATCH_PATH")"
+-        [[ "$PATCH_SHA256" == "$SWITCH_SHA256" ]] ||
+-            fail "measurement patch SHA-256 does not match its experiment record"
+-        PATCH_EXPECTED_PATHS="$(git -C "$PRODUCT_ROOT" apply --numstat "$PATCH_PATH" | cut -f3 | sort -u)"
+-        [[ -n "$PATCH_EXPECTED_PATHS" ]] || fail "measurement patch has no paths: $SWITCH_VALUE"
+         if [[ "$RUN_MODE" == "smoke" ]]; then
+             git -C "$PRODUCT_ROOT" apply --check "$PATCH_PATH"
+             git -C "$PRODUCT_ROOT" apply "$PATCH_PATH"
+@@ -734,7 +745,7 @@
+ esac
+ 
+ SOURCE_STATUS_DURING="$(git -C "$PRODUCT_ROOT" status --porcelain=v1 --untracked-files=all | awk '$2 !~ /^\.icp\// { print }')"
+-if [[ "$SWITCH_KIND" == "patch" ]]; then
++if [[ "$SWITCH_KIND" == "patch" || "$SWITCH_KIND" == "env_matrix" ]]; then
+     [[ -n "$SOURCE_STATUS_DURING" ]] || fail "measurement patch produced no source difference"
+     PATCH_ACTUAL_PATHS="$(printf '%s\n' "$SOURCE_STATUS_DURING" | awk '{ print $2 }' | sort -u)"
+     [[ "$PATCH_ACTUAL_PATHS" == "$PATCH_EXPECTED_PATHS" ]] ||
+diff --git a/scripts/ci/wasm-ablation-experiments.tsv b/scripts/ci/wasm-ablation-experiments.tsv
+--- a/scripts/ci/wasm-ablation-experiments.tsv
++++ b/scripts/ci/wasm-ablation-experiments.tsv
+@@ -15,5 +15,5 @@
+ 14	b1-14-command-providers	ready	patch	scripts/ci/wasm-ablation-patches/b1-14-command-providers.patch	c6637af98af9e37a52f7cbfa3d3d84921b88e9da03aeb27d35b7e017e083af61	canonical	b1-01-current-baseline	build-only command-dispatch attribution; no command or recovery parity claim	crates/canic/src/macros/endpoints/role.rs;crates/canic/src/macros/endpoints/root.rs;crates/canic/src/macros/endpoints/fleet_coordinator.rs;crates/canic/src/macros/endpoints/wasm_store.rs
+ 15	b1-15-timer-watchdog-providers	specified	patch	scripts/ci/wasm-ablation-patches/b1-15-timer-watchdog-providers.patch	281510984c274898798e02f450f96744c4347a14e561aaf027f0e5aa67a9077e	canonical,runtime_probe	b1-01-current-baseline	build-only native business-callback attribution; no timer, lifecycle or recovery parity claim	crates/canic-control-plane/src/workflow/canister_pool/mod.rs;crates/canic-core/src/workflow/placement/acknowledgement.rs;crates/canic-core/src/workflow/runtime/auth/renewal.rs;crates/canic-core/src/workflow/runtime/cycles/mod.rs;crates/canic-core/src/workflow/runtime/intent.rs;crates/canic-core/src/workflow/runtime/log.rs;crates/canic-core/src/workflow/runtime/timer/mod.rs
+ 16	b1-16-status-projection	ready	patch	scripts/ci/wasm-ablation-patches/b1-16-status-projection.patch	83fe0a97a242945e8136ca5990b6d083ff5028b78d0454738e14cfc0842e7d9a	canonical	b1-01-current-baseline	build-only status-dispatch attribution; no status parity claim	crates/canic/src/macros/endpoints/role.rs;crates/canic/src/macros/endpoints/root.rs;crates/canic/src/macros/endpoints/fleet_coordinator.rs;crates/canic/src/macros/endpoints/wasm_store.rs
+-17	b1-17-page-generic-cohort	planned	env_matrix	CANIC_GENERIC_COHORT_WIDTH=1..5	-	leaf_probe	b1-01-current-baseline	absent until a representative fixture journey exists	canisters/audit/leaf_probe;crates/canic-core/src/dto/page.rs;crates/canic/src/macros/endpoints/role.rs
++17	b1-17-page-generic-cohort	ready	env_matrix	scripts/ci/wasm-ablation-patches/b1-17-page-generic-cohort-fixture.patch	d327b086e98166d92e3a44497d05e7af959ab8b5be50b943d9b1ce90d740b8b0	leaf_probe	b1-01-current-baseline	absent until a representative fixture journey exists	Cargo.lock;canisters/audit/leaf_probe;crates/canic-core/src/dto/page.rs;crates/canic/src/macros/endpoints/role.rs
+ 18	b1-18-pool-ledger-hard-cut	planned	cross_commit	v0.110.2..v0.110.3	-	canonical	v0.110.2	family-only compatible pair required; release transition and current roster are not qualified inputs	crates/canic;crates/canic-control-plane;crates/canic-core;crates/canic-host
+diff --git a/scripts/ci/test-wasm-ablation-report.sh b/scripts/ci/test-wasm-ablation-report.sh
+--- a/scripts/ci/test-wasm-ablation-report.sh
++++ b/scripts/ci/test-wasm-ablation-report.sh
+@@ -82,9 +82,17 @@
+ # This method copy deliberately has no product source paths. The frozen Git tree
+ # supplies those inputs; changes in the active checkout must not rebase an ablation.
+ bash "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh" --check >/dev/null
++# A prepared matrix must bind its common fixture before any artifact work.
++awk -F '\t' 'BEGIN { OFS=FS } $4 == "env_matrix" { $6 = sprintf("%064d", 0) } { print }' \
++    "$ROOT/scripts/ci/wasm-ablation-experiments.tsv" \
++    >"$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
++if bash "$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-report.sh" --check >/dev/null 2>&1; then
++    echo "prepared matrix accepted a mismatched fixture SHA-256" >&2
++    exit 1
++fi
+ # A planned matrix must stop before Cargo or output creation in every run mode.
+ # Set state in the test copy so normal catalog promotion needs no test rewrite.
+-awk -F '\t' 'BEGIN { OFS=FS } $4 == "env_matrix" { $3 = "planned" } { print }' \
++awk -F '\t' 'BEGIN { OFS=FS } $4 == "env_matrix" { $3 = "planned"; $6 = "-" } { print }' \
+     "$ROOT/scripts/ci/wasm-ablation-experiments.tsv" \
+     >"$HASH_CHECK_ROOT/scripts/ci/wasm-ablation-experiments.tsv"
+ for run_mode in retained smoke qualify; do

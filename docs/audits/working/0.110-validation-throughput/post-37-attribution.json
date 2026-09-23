@@ -1,0 +1,159 @@
+{
+  "kind": "retained_validation_attribution",
+  "controlled_comparison": false,
+  "duration_unit": "seconds",
+  "limits": [
+    "Different source and cache states",
+    "Nested and concurrent durations are not additive",
+    "Artifact spans do not cover every fixture build"
+  ],
+  "runs": {
+    "36": {
+      "log_path": "target/validation-runs/20260922T104803Z-16570.vxC9Xr/0.log",
+      "log_sha256": "8a58471c641738788c0c7ec2fc79ca83dbc5cb6c1e3b32f3c6e84c487610aaec",
+      "stages": [
+        {
+          "name": "workspace ordinary tests",
+          "elapsed_seconds": 94
+        },
+        {
+          "name": "canic-testing-internal ordered PocketIC suite",
+          "elapsed_seconds": 2329
+        },
+        {
+          "name": "canic-host governed PocketIC proofs",
+          "elapsed_seconds": 21
+        },
+        {
+          "name": "canic-tests runtime PocketIC suite",
+          "elapsed_seconds": 197
+        },
+        {
+          "name": "canic-tests blob-storage PocketIC suite",
+          "elapsed_seconds": 20
+        },
+        {
+          "name": "canic-tests payload-limit PocketIC suite",
+          "elapsed_seconds": 7
+        }
+      ],
+      "compiler_completions": [
+        "Finished `test` profile [optimized + debuginfo] target(s) in 7.13s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 20.03s",
+        "Finished `fast` profile [optimized] target(s) in 3.92s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 7.91s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 10.35s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 3.93s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 1.79s"
+      ],
+      "selected_spans": {
+        "release_artifact_resolution": {
+          "count": 15,
+          "elapsed_seconds": 100.691178
+        }
+      },
+      "selected_requests": {
+        "management_status:canister_status": {
+          "count": 1585,
+          "inclusive_seconds": 412.759363
+        },
+        "identity:None": {
+          "count": 3100,
+          "inclusive_seconds": 76.836962
+        }
+      }
+    },
+    "37": {
+      "log_path": "target/validation-runs/20260922T144432Z-25540.28SIfE/0.log",
+      "log_sha256": "318d6b58e805b53f587a33ec1d4b0a5213c705bcb8c5b23990e7f3147d24edb2",
+      "stages": [
+        {
+          "name": "workspace ordinary tests",
+          "elapsed_seconds": 258
+        },
+        {
+          "name": "canic-testing-internal ordered PocketIC suite",
+          "elapsed_seconds": 4093
+        },
+        {
+          "name": "canic-host governed PocketIC proofs",
+          "elapsed_seconds": 31
+        },
+        {
+          "name": "canic-tests runtime PocketIC suite",
+          "elapsed_seconds": 391
+        },
+        {
+          "name": "canic-tests blob-storage PocketIC suite",
+          "elapsed_seconds": 71
+        },
+        {
+          "name": "canic-tests payload-limit PocketIC suite",
+          "elapsed_seconds": 12
+        }
+      ],
+      "compiler_completions": [
+        "Finished `test` profile [optimized + debuginfo] target(s) in 2m 58s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 1m 21s",
+        "Finished `fast` profile [optimized] target(s) in 48.62s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 16.03s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 2m 44s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 3.45s",
+        "Finished `test` profile [optimized + debuginfo] target(s) in 2.57s"
+      ],
+      "selected_spans": {
+        "release_artifact_resolution": {
+          "count": 15,
+          "elapsed_seconds": 946.493708
+        },
+        "artifact_build_and_seal": {
+          "count": 10,
+          "elapsed_seconds": 838.234429
+        }
+      },
+      "selected_requests": {
+        "management_status:canister_status": {
+          "count": 1577,
+          "inclusive_seconds": 542.013443
+        },
+        "identity:None": {
+          "count": 3132,
+          "inclusive_seconds": 200.937516
+        }
+      }
+    }
+  },
+  "early_compilation_qualification": {
+    "base_commit": "64024b5aed48b54f7e9537aefefc4b8887f286b4",
+    "source_sha256": {
+      "scripts/ci/run-workspace-tests.sh": "b696add1c52d55f6511c4c30c80df457c3024796bd2eec8bd32778e0df0e4510",
+      "scripts/ci/test-workspace-test-runner.sh": "59c38f60941dfd7361080a49eace4f75214977ca66b4a670cce958439eab3928",
+      "scripts/ci/check-release-integrity-contract.sh": "3d8d2e2c87edb0e9f21b3968fc3784fa275399c794f7f3135dce98420ea36c23"
+    },
+    "checks": [
+      {
+        "path": ".tmp/validation38/runner-regression.log",
+        "sha256": "85c5d08213085f14a19ce1f826a4d56cb114a658e0e528cd660ee83ce576115e",
+        "result": "pass"
+      },
+      {
+        "path": ".tmp/validation38/release-integrity.log",
+        "sha256": "b3ded237be138e5699278f7bbf162ac9f437328aeb6b4cc9f4a39d1a7a89f67e",
+        "result": "pass"
+      },
+      {
+        "path": ".tmp/validation38/native-icp.log",
+        "sha256": "81e77697bd24c5b37ab6dce34dde19d55beaf1cd9d6acf48a445c552002ee9ef",
+        "result": "pass"
+      },
+      {
+        "path": ".tmp/validation38/full-plan.log",
+        "sha256": "6afcece6b1019ed7822f339c249cf579150d6f2cedff0b0ca19baebfebdd2da3",
+        "result": "pass"
+      }
+    ],
+    "scoped_shellcheck": "pass",
+    "broad_suite_run": false,
+    "successful_run_speedup_measured": false
+  }
+}

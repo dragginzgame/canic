@@ -1,10 +1,11 @@
 // Category C - Artifact / deployment test (embedded config).
 // This test relies on embedded production config by design.
 
-use candid::{CandidType, Deserialize, Principal};
+use candid::{CandidType, Deserialize, Principal, decode_args, encode_args};
 use canic::{
     Error,
     dto::{
+        abi::v1::CanisterInitPayload,
         fleet_activation::FleetActivationPhase,
         role::{ComponentRuntimeOperationStatus, OperationStatusRequest},
         runtime::{CanicReadinessStatus, ReadinessStatus},
@@ -239,6 +240,56 @@ fn init_participant_trap_leaves_empty_canister_before_corrected_retry() {
         uninstalled.init_args,
         None,
     );
+    assert_prepared_and_not_ready(&fixture.pic, uninstalled.canister_id, fixture.root);
+}
+
+#[test]
+fn missing_selected_admission_rejects_install_then_accepts_corrected_retry() {
+    let fixture = install_lifecycle_boundary_fixture();
+    let uninstalled = fixture.create_uninstalled_canic_canister();
+    let (mut payload, application_args): (CanisterInitPayload, Option<Vec<u8>>) =
+        decode_args(&uninstalled.init_args).expect("fixture init payload");
+    assert!(payload.admission.take().is_some());
+    let rejected = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        fixture.pic.install_canister(
+            uninstalled.canister_id,
+            fixture.canic_wasm.clone(),
+            encode_args((payload, application_args)).unwrap(),
+            None,
+        );
+    }));
+    assert!(rejected.is_err());
+    fixture.pic.tick();
+    assert_eq!(
+        fixture
+            .pic
+            .canister_status(uninstalled.canister_id, None)
+            .unwrap()
+            .module_hash,
+        None
+    );
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture.pic.install_canister(
+        uninstalled.canister_id,
+        fixture.canic_wasm.clone(),
+        uninstalled.init_args,
+        None,
+    );
+    assert_prepared_and_not_ready(&fixture.pic, uninstalled.canister_id, fixture.root);
+    fixture
+        .pic
+        .wait_out_install_code_rate_limit(INSTALL_CODE_COOLDOWN);
+    fixture
+        .pic
+        .upgrade_canister(
+            uninstalled.canister_id,
+            fixture.canic_wasm.clone(),
+            upgrade_args(),
+            None,
+        )
+        .expect("restore corrected admission state");
     assert_prepared_and_not_ready(&fixture.pic, uninstalled.canister_id, fixture.root);
 }
 

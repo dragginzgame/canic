@@ -1,0 +1,619 @@
+diff --git a/crates/canic/src/macros/endpoints/fleet_coordinator.rs b/crates/canic/src/macros/endpoints/fleet_coordinator.rs
+--- a/crates/canic/src/macros/endpoints/fleet_coordinator.rs
++++ b/crates/canic/src/macros/endpoints/fleet_coordinator.rs
+@@ -109,10 +109,11 @@
+             $crate::__internal::core::api::authority_restore::AuthorityRestoreApi::require_command_variant_allowed(
+                 recovery_command,
+             )?;
+-            $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::command(
+-                command,
+-            )
+-            .await
++            // Audit-only provider ablation; retain typed boundary and admission checks.
++            let _ = ::core::hint::black_box(command);
++            ::core::hint::black_box(Err(::canic::Error::from_registered(
++                ::canic::diagnostics::codes::REQUEST_INVALID,
++            )))
+         }
+ 
+         #[$crate::canic_query(public)]
+diff --git a/crates/canic/src/macros/endpoints/role.rs b/crates/canic/src/macros/endpoints/role.rs
+--- a/crates/canic/src/macros/endpoints/role.rs
++++ b/crates/canic/src/macros/endpoints/role.rs
+@@ -529,43 +529,30 @@
+                     $crate::__internal::core::access::auth::is_root(caller)
+                         .await
+                         .map_err(::canic::Error::from)?;
+-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::activate(request)
+-                        .map(CanisterCommandResponse::ActivateFleetAdmission)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 #[cfg(canic_capability_local_application_authorization)]
+                 CanisterCommand::ApplicationSession(command) => {
+-                    let response = match command {
+-                        ::canic::dto::auth::ApplicationSessionCommand::Establish(request) => {
+-                            $crate::__internal::core::api::auth::AuthApi::establish_application_session(request)?
+-                        }
+-                        ::canic::dto::auth::ApplicationSessionCommand::Clear => {
+-                            $crate::__internal::core::api::auth::AuthApi::clear_application_session()?
+-                        }
+-                    };
+-                    Ok(CanisterCommandResponse::ApplicationSession(response))
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(command);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 CanisterCommand::ConfigureRuntime(request) => {
+                     let caller = $crate::__internal::cdk::api::msg_caller();
+                     $crate::__internal::core::access::auth::is_root(caller)
+                         .await
+                         .map_err(::canic::Error::from)?;
+-                    let operation_id = request.operation_id;
+-                    #[cfg(canic_capability_automatic_topup)]
+-                    let configure_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::configure_component_runtime_with_automatic_topup;
+-                    #[cfg(not(canic_capability_automatic_topup))]
+-                    let configure_runtime = $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::configure;
+-                    let transition = configure_runtime(request)?;
+-                    #[cfg(canic_capability_fleet_admission_projection)]
+-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open_fresh()?;
+-                    if transition.transitioned {
+-                        __canic_schedule_prepared_activation_init(
+-                            transition.application_init_args,
+-                        );
+-                    }
+-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
+-                    Ok(CanisterCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 #[cfg(canic_capability_delegated_token_issuer)]
+                 CanisterCommand::InstallDelegationProof(request) => {
+@@ -573,10 +560,11 @@
+                     $crate::__internal::core::access::auth::is_controller(caller)
+                         .await
+                         .map_err(::canic::Error::from)?;
+-                    $crate::__internal::core::api::auth::AuthApi::install_active_delegation_proof(
+-                        request,
+-                    )
+-                    .map(CanisterCommandResponse::InstallDelegationProof)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 #[cfg(canic_capability_fleet_admission_projection)]
+                 CanisterCommand::OpenFleetAdmission(request) => {
+@@ -584,14 +572,19 @@
+                     $crate::__internal::core::access::auth::is_root(caller)
+                         .await
+                         .map_err(::canic::Error::from)?;
+-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open(request)
+-                        .map(CanisterCommandResponse::OpenFleetAdmission)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 #[cfg(canic_capability_delegated_token_issuer)]
+                 CanisterCommand::PrepareDelegatedToken(request) => {
+-                    $crate::__internal::core::api::auth::AuthApi::prepare_delegated_token(request)
+-                        .await
+-                        .map(CanisterCommandResponse::PrepareDelegatedToken)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 #[cfg(canic_capability_fleet_admission_projection)]
+                 CanisterCommand::PrepareFleetAdmission(request) => {
+@@ -599,16 +592,19 @@
+                     $crate::__internal::core::access::auth::is_root(caller)
+                         .await
+                         .map_err(::canic::Error::from)?;
+-                    $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::prepare(request)
+-                        .map(CanisterCommandResponse::PrepareFleetAdmission)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(request);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+                 #[cfg(canic_capability_child_provisioning)]
+                 CanisterCommand::RespondCapability(envelope) => {
+-                    $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_nonroot(
+-                        envelope,
+-                    )
+-                    .await
+-                    .map(CanisterCommandResponse::RespondCapability)
++                    // Audit-only provider ablation; retain typed boundary and admission checks.
++                    let _ = ::core::hint::black_box(envelope);
++                    ::core::hint::black_box(Err(::canic::Error::from_registered(
++                        ::canic::diagnostics::codes::REQUEST_INVALID,
++                    )))
+                 }
+             }
+         }
+diff --git a/crates/canic/src/macros/endpoints/root.rs b/crates/canic/src/macros/endpoints/root.rs
+--- a/crates/canic/src/macros/endpoints/root.rs
++++ b/crates/canic/src/macros/endpoints/root.rs
+@@ -344,363 +344,11 @@
+             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_command_variant_allowed(
+                 prepared_command,
+             )?;
+-            match command {
+-                RootCommand::AcceptFunding(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_root_funding(request)
+-                        .map(RootCommandResponse::AcceptFunding)
+-                }
+-                RootCommand::ActivateFleetAdmission(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_root_fleet_admission(request)
+-                        .map(RootCommandResponse::ActivateFleetAdmission)
+-                }
+-                RootCommand::ActivateFundingPolicyRotation(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::activate_root_funding_policy_rotation(request)
+-                        .await
+-                        .map(RootCommandResponse::ActivateFundingPolicyRotation)
+-                }
+-                RootCommand::AdoptStore(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::adopt_fleet_subnet_wasm_store(request).await?;
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::BootstrapStore(request) => {
+-                    let operation_id = request.operation_id;
+-                    ::canic::api::canister::template::WasmStoreBootstrapApi::bootstrap_root_store(request).await?;
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::GetOrCreateDelegationProof => {
+-                    $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()
+-                        .await
+-                        .map(RootCommandResponse::GetOrCreateDelegationProof)
+-                }
+-                RootCommand::HandoffPoolCanister(request) => {
+-                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+-                        ::canic::dto::pool::PoolAdminCommand::Handoff {
+-                            canister_id: request.canister_id,
+-                            recipient: request.recipient,
+-                        },
+-                    )
+-                    .await?;
+-                    match response {
+-                        ::canic::dto::pool::PoolAdminResponse::HandedOff {
+-                            canister_id,
+-                            recipient,
+-                        } => Ok(RootCommandResponse::HandoffPoolCanister(
+-                            ::canic::dto::pool::PoolHandoffResponse {
+-                                canister_id,
+-                                recipient,
+-                            },
+-                        )),
+-                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    }
+-                }
+-                RootCommand::ImportPoolCanister(request) => {
+-                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+-                        ::canic::dto::pool::PoolAdminCommand::Import {
+-                            canister_id: request.canister_id,
+-                        },
+-                    )
+-                    .await?;
+-                    let response = match response {
+-                        ::canic::dto::pool::PoolAdminResponse::Imported { canister_id } => {
+-                            ::canic::dto::pool::PoolImportResponse::Imported { canister_id }
+-                        }
+-                        ::canic::dto::pool::PoolAdminResponse::ResetFailed {
+-                            canister_id,
+-                            reason,
+-                        } => ::canic::dto::pool::PoolImportResponse::ResetFailed {
+-                            canister_id,
+-                            reason,
+-                        },
+-                        _ => return Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    };
+-                    Ok(RootCommandResponse::ImportPoolCanister(response))
+-                }
+-                RootCommand::InspectCanister(request) => {
+-                    $crate::__internal::core::api::ic::mgmt::MgmtApi::canister_status(
+-                        request.canister_id,
+-                    )
+-                    .await
+-                    .map(RootCommandResponse::InspectCanister)
+-                }
+-                RootCommand::MaintainPool => {
+-                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+-                        ::canic::dto::pool::PoolAdminCommand::Maintain,
+-                    )
+-                    .await?;
+-                    let response = match response {
+-                        ::canic::dto::pool::PoolAdminResponse::Maintained => {
+-                            ::canic::dto::pool::PoolMaintenanceResponse::Maintained
+-                        }
+-                        ::canic::dto::pool::PoolAdminResponse::MaintenancePaused { reason } => {
+-                            ::canic::dto::pool::PoolMaintenanceResponse::MaintenancePaused { reason }
+-                        }
+-                        ::canic::dto::pool::PoolAdminResponse::Created { canister_id } => {
+-                            ::canic::dto::pool::PoolMaintenanceResponse::Created { canister_id }
+-                        }
+-                        ::canic::dto::pool::PoolAdminResponse::RefillWaitingForCycles {
+-                            available,
+-                            creation_amount,
+-                        } => ::canic::dto::pool::PoolMaintenanceResponse::RefillWaitingForCycles {
+-                            available,
+-                            creation_amount,
+-                        },
+-                        ::canic::dto::pool::PoolAdminResponse::RefillPending {
+-                            operation_id,
+-                            uncertain_result,
+-                        } => ::canic::dto::pool::PoolMaintenanceResponse::RefillPending {
+-                            operation_id,
+-                            uncertain_result,
+-                        },
+-                        ::canic::dto::pool::PoolAdminResponse::RefillBlocked {
+-                            operation_id,
+-                            failure,
+-                        } => ::canic::dto::pool::PoolMaintenanceResponse::RefillBlocked {
+-                            operation_id,
+-                            failure,
+-                        },
+-                        ::canic::dto::pool::PoolAdminResponse::ResetReady { canister_id } => {
+-                            ::canic::dto::pool::PoolMaintenanceResponse::ResetReady { canister_id }
+-                        }
+-                        ::canic::dto::pool::PoolAdminResponse::ResetFailed {
+-                            canister_id,
+-                            reason,
+-                        } => ::canic::dto::pool::PoolMaintenanceResponse::ResetFailed {
+-                            canister_id,
+-                            reason,
+-                        },
+-                        _ => return Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    };
+-                    Ok(RootCommandResponse::MaintainPool(response))
+-                }
+-                RootCommand::OpenFleetAdmission(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::open_root_fleet_admission(request)
+-                        .map(RootCommandResponse::OpenFleetAdmission)
+-                }
+-                RootCommand::PrepareAuthoritySnapshot(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_authority_snapshot(request)
+-                        .await
+-                        .map(RootCommandResponse::PrepareAuthoritySnapshot)
+-                }
+-                RootCommand::PrepareComponentRegistry(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_component_registry(request)
+-                        .await
+-                        .map(RootCommandResponse::PrepareComponentRegistry)
+-                }
+-                RootCommand::PrepareFleetActivation => {
+-                    __canic_run_prepared_root_init_block().await;
+-                    let response = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_fleet_activation().await?;
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt {
+-                            operation_id: response.identity.operation_id,
+-                        },
+-                    ))
+-                }
+-                RootCommand::PrepareFleetAdmission(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_root_fleet_admission(request)
+-                        .map(RootCommandResponse::PrepareFleetAdmission)
+-                }
+-                RootCommand::PrepareFundingPolicyRotation(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::prepare_root_funding_policy_rotation(request)
+-                        .map(RootCommandResponse::PrepareFundingPolicyRotation)
+-                }
+-                #[cfg(canic_capability_role_attestation_signer)]
+-                RootCommand::PrepareRoleAttestation(request) => {
+-                    $crate::__internal::control_plane::api::component_auth::ComponentAuthApi::prepare_role_attestation(request)
+-                        .map(RootCommandResponse::PrepareRoleAttestation)
+-                }
+-                RootCommand::PreviewCycleRefill(request) => {
+-                    let response = $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(
+-                        ::canic::dto::icp_refill::IcpRefillRequest {
+-                            operation_id: request.operation_id,
+-                            source_subaccount: request.source_subaccount,
+-                            amount_e8s: request.amount_e8s,
+-                            dry_run: true,
+-                        },
+-                    )
+-                    .await?;
+-                    match response {
+-                        ::canic::dto::icp_refill::IcpRefillEndpointResponse::DryRun(response) => {
+-                            Ok(RootCommandResponse::PreviewCycleRefill(response))
+-                        }
+-                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    }
+-                }
+-                RootCommand::ProvisionChild(request) => {
+-                    let operation_id = request.operation_id;
+-                    let component = request.component;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_child(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_child_allocation(component, operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::ProvisionComponent(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_component_allocation(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::ProvisionComponents(request) => {
+-                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::accept(request)
+-                        .await
+-                        .map(RootCommandResponse::OperationAccepted)
+-                }
+-                RootCommand::ProvisionPeer(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::reserve_peer_component_allocation(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_allocation(operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::PublishReleaseSet(command) => {
+-                    ::canic::api::canister::template::WasmStorePublicationApi::admin(command)
+-                        .await
+-                        .map(RootCommandResponse::PublishReleaseSet)
+-                }
+-                RootCommand::RefillCycles(request) => {
+-                    let operation_id = request.operation_id;
+-                    let response = $crate::__internal::core::api::icp_refill::IcpRefillApi::refill(
+-                        ::canic::dto::icp_refill::IcpRefillRequest {
+-                            operation_id,
+-                            source_subaccount: request.source_subaccount,
+-                            amount_e8s: request.amount_e8s,
+-                            dry_run: false,
+-                        },
+-                    )
+-                    .await?;
+-                    if !matches!(
+-                        response,
+-                        ::canic::dto::icp_refill::IcpRefillEndpointResponse::Refill(_)
+-                    ) {
+-                        return Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into());
+-                    }
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::RemoveComponent(request) => {
+-                    let operation_id = request.operation_id;
+-                    let component = request.component;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_draining(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_removal(component, operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::RemoveRoot(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_fleet_subnet_root_removal(request)
+-                        .map(RootCommandResponse::OperationAccepted)
+-                }
+-                RootCommand::RemoveSubtree(request) => {
+-                    let operation_id = request.operation_id;
+-                    let component = request.component;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::begin_component_subtree_removal(request).await?;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::schedule_component_subtree_removal(component, operation_id);
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::RespondCapability(envelope) => {
+-                    $crate::__internal::control_plane::api::component_rpc::ComponentRpcApi::response_capability_v1_root(envelope)
+-                        .await
+-                        .map(RootCommandResponse::RespondCapability)
+-                }
+-                RootCommand::ResumeAuthoritySnapshot(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_authority_snapshot(request)
+-                        .await
+-                        .map(RootCommandResponse::ResumeAuthoritySnapshot)
+-                }
+-                RootCommand::ResumeFleetActivation(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::resume_fleet_activation(request).await?;
+-                    __canic_schedule_prepared_activation_init();
+-                    Ok(RootCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                RootCommand::RetryPoolRefill => {
+-                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+-                        ::canic::dto::pool::PoolAdminCommand::RetryRefill,
+-                    )
+-                    .await?;
+-                    match response {
+-                        ::canic::dto::pool::PoolAdminResponse::RefillRetryScheduled {
+-                            previous_operation_id,
+-                        } => Ok(RootCommandResponse::RetryPoolRefill(
+-                            ::canic::dto::pool::PoolRefillRetryResponse {
+-                                previous_operation_id,
+-                            },
+-                        )),
+-                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    }
+-                }
+-                RootCommand::RetryPoolReset(request) => {
+-                    let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
+-                        ::canic::dto::pool::PoolAdminCommand::RetryReset {
+-                            canister_id: request.canister_id,
+-                        },
+-                    )
+-                    .await?;
+-                    match response {
+-                        ::canic::dto::pool::PoolAdminResponse::ResetQueued { canister_id } => {
+-                            Ok(RootCommandResponse::RetryPoolReset(
+-                                ::canic::dto::pool::PoolResetRetryResponse { canister_id },
+-                            ))
+-                        }
+-                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    }
+-                }
+-                RootCommand::SetCyclesFunding(request) => {
+-                    let response = $crate::__internal::control_plane::api::state::FleetStateApi::execute_command(
+-                        ::canic::dto::state::FleetCommand::SetCyclesFundingEnabled(request.enabled),
+-                    )
+-                    .await?;
+-                    match response {
+-                        ::canic::dto::state::FleetCommandResponse::CyclesFundingEnabled(response) => {
+-                            Ok(RootCommandResponse::SetCyclesFunding(response))
+-                        }
+-                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    }
+-                }
+-                RootCommand::SetFleetStatus(request) => {
+-                    let response = $crate::__internal::control_plane::api::state::FleetStateApi::execute_command(
+-                        ::canic::dto::state::FleetCommand::SetStatus(request.status),
+-                    )
+-                    .await?;
+-                    match response {
+-                        ::canic::dto::state::FleetCommandResponse::Status(response) => {
+-                            Ok(RootCommandResponse::SetFleetStatus(response))
+-                        }
+-                        _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
+-                    }
+-                }
+-                RootCommand::SynchronizeComponentDirectories(request) => {
+-                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::synchronize_directories(request)
+-                        .await
+-                        .map(RootCommandResponse::SynchronizeComponentDirectories)
+-                }
+-                RootCommand::SynchronizeRegistry(request) => {
+-                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::accept_fleet_registry_synchronization(request)
+-                        .await
+-                        .map(RootCommandResponse::OperationAccepted)
+-                }
+-                RootCommand::UpsertIssuerPolicy(request) => {
+-                    $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_policy_root(request)
+-                        .map(RootCommandResponse::UpsertIssuerPolicy)
+-                }
+-                RootCommand::UpsertIssuerRenewalTemplate(request) => {
+-                    $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_renewal_template_root(request)
+-                        .map(RootCommandResponse::UpsertIssuerRenewalTemplate)
+-                }
+-            }
++            // Audit-only provider ablation; retain typed boundary and admission checks.
++            let _ = ::core::hint::black_box(command);
++            ::core::hint::black_box(Err(::canic::Error::from_registered(
++                ::canic::diagnostics::codes::REQUEST_INVALID,
++            )))
+             })
+             .await
+         }
+diff --git a/crates/canic/src/macros/endpoints/wasm_store.rs b/crates/canic/src/macros/endpoints/wasm_store.rs
+--- a/crates/canic/src/macros/endpoints/wasm_store.rs
++++ b/crates/canic/src/macros/endpoints/wasm_store.rs
+@@ -62,7 +62,7 @@
+         async fn canic_command(
+             command: ::canic::dto::template::StoreCommand,
+         ) -> Result<::canic::dto::template::StoreCommandResponse, ::canic::Error> {
+-            use ::canic::dto::template::{StoreCommand, StoreCommandResponse};
++            use ::canic::dto::template::StoreCommand;
+ 
+             let caller = $crate::__internal::cdk::api::msg_caller();
+             if matches!(
+@@ -103,80 +103,11 @@
+                     .map_err(::canic::Error::from)?;
+             }
+ 
+-            match command {
+-                StoreCommand::ActivateFleet(request) => {
+-                    let operation_id = request.operation_id;
+-                    let transition = $crate::__internal::core::api::fleet_activation::FleetActivationApi::activate_nonroot(request)?;
+-                    if transition.transitioned {
+-                        __canic_schedule_prepared_activation_init(
+-                            transition.application_init_args,
+-                        );
+-                    }
+-                    Ok(StoreCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                StoreCommand::InspectTemplate(request) => {
+-                    ::canic::api::canister::template::WasmStoreCanisterApi::info(
+-                        request.template_id,
+-                        request.version,
+-                    )
+-                    .map(StoreCommandResponse::InspectTemplate)
+-                }
+-                StoreCommand::PrepareChunkSet(request) => {
+-                    ::canic::api::canister::template::WasmStoreCanisterApi::prepare(request)
+-                        .map(StoreCommandResponse::PrepareChunkSet)
+-                }
+-                StoreCommand::PrepareFleetCredential(request) => {
+-                    let operation_id = request.operation_id;
+-                    $crate::__internal::core::api::fleet_activation::FleetActivationApi::prepare_nonroot_credential_generation(request)?;
+-                    Ok(StoreCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                StoreCommand::ReclaimDeletionCycles(request) => {
+-                    ::canic::api::canister::template::WasmStoreCanisterApi::reclaim_deletion_cycles(request)
+-                        .await
+-                        .map(StoreCommandResponse::ReclaimDeletionCycles)
+-                }
+-                StoreCommand::RespondCapability(envelope) => {
+-                    $crate::__internal::core::api::rpc::RpcApi::response_capability_v1_nonroot(
+-                        envelope,
+-                    )
+-                    .await
+-                    .map(StoreCommandResponse::RespondCapability)
+-                }
+-                StoreCommand::RunGc(request) => {
+-                    let operation_id = request.operation_id;
+-                    let should_advance = ::canic::api::canister::template::WasmStoreCanisterApi::status()?.gc.mode
+-                        != ::canic::ids::WasmStoreGcMode::Normal;
+-                    ::canic::api::canister::template::WasmStoreCanisterApi::prepare_gc(operation_id)?;
+-                    if should_advance {
+-                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
+-                            ::core::time::Duration::ZERO,
+-                            "canic:wasm_store:gc",
+-                            async move {
+-                                let _ = ::canic::api::canister::template::WasmStoreCanisterApi::run_gc(operation_id).await;
+-                            },
+-                        );
+-                    }
+-                    Ok(StoreCommandResponse::OperationAccepted(
+-                        ::canic::dto::role::OperationReceipt { operation_id },
+-                    ))
+-                }
+-                StoreCommand::StageManifest(request) => {
+-                    ::canic::api::canister::template::WasmStoreCanisterApi::stage_manifest(request)?;
+-                    Ok(StoreCommandResponse::StageManifest)
+-                }
+-                StoreCommand::SynchronizeState(snapshot) => {
+-                    $crate::__internal::core::api::cascade::CascadeApi::sync_state(snapshot).await?;
+-                    Ok(StoreCommandResponse::SynchronizeState)
+-                }
+-                StoreCommand::SynchronizeTopology(snapshot) => {
+-                    $crate::__internal::core::api::cascade::CascadeApi::sync_topology(snapshot).await?;
+-                    Ok(StoreCommandResponse::SynchronizeTopology)
+-                }
+-            }
++            // Audit-only provider ablation; retain typed boundary and admission checks.
++            let _ = ::core::hint::black_box(command);
++            ::core::hint::black_box(Err(::canic::Error::from_registered(
++                ::canic::diagnostics::codes::REQUEST_INVALID,
++            )))
+         }
+ 
+         #[$crate::canic_query(public)]

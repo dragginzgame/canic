@@ -1,0 +1,157 @@
+diff --git a/crates/canic-control-plane/src/workflow/canister_pool/mod.rs b/crates/canic-control-plane/src/workflow/canister_pool/mod.rs
+--- a/crates/canic-control-plane/src/workflow/canister_pool/mod.rs
++++ b/crates/canic-control-plane/src/workflow/canister_pool/mod.rs
+@@ -318,14 +318,18 @@
+             let mut registration = registration
+                 .try_borrow_mut()
+                 .map_err(|_| AuthorityTimerError::CustodyBusy)?;
++            // Audit-only: native custody and cadence remain, business work is disconnected.
++            let _ = run_maintenance_timer;
+             reconcile_after_completion(
+                 &mut registration,
+                 &identity,
+                 cadence,
+                 desired,
+                 |_context| async {
+-                    let result = run_maintenance_timer().await;
+-                    TimerRunResult::new(result.completion(), TimerDirective::RecurAfterCompletion)
++                    TimerRunResult::new(
++                        TimerCompletion::no_work(),
++                        TimerDirective::RecurAfterCompletion,
++                    )
+                 },
+             )
+             .map_err(AuthorityTimerError::from)
+@@ -341,8 +345,10 @@
+             let mut registration = registration
+                 .try_borrow_mut()
+                 .map_err(|_| AuthorityTimerError::CustodyBusy)?;
++            // Audit-only: retain the source provider without registering it.
++            let _ = run_recovery_watchdog;
+             reconcile_watchdog(&mut registration, &identity, cadence, desired, |_context| {
+-                run_recovery_watchdog()
++                WatchdogRunResult::new(TimerCompletion::no_work(), WatchdogDecision::Continue)
+             })
+             .map_err(AuthorityTimerError::from)
+         })
+diff --git a/crates/canic-core/src/workflow/placement/acknowledgement.rs b/crates/canic-core/src/workflow/placement/acknowledgement.rs
+--- a/crates/canic-core/src/workflow/placement/acknowledgement.rs
++++ b/crates/canic-core/src/workflow/placement/acknowledgement.rs
+@@ -266,10 +266,14 @@
+         if with_owned_once(&ACKNOWLEDGEMENT_TIMER, |_| ())?.is_some() {
+             return Ok(());
+         }
++        // Audit-only: retain source checking without registering the business callback.
++        let _ = Self::run_registered;
+         let registration = register_once(
+             Self::timer_identity()?,
+             DeclarationLifetime::Retained,
+-            |_context: OnceContext| async { Self::run_registered().await },
++            |_context: OnceContext| async {
++                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
++            },
+         )?;
+         retain_owned_once(&ACKNOWLEDGEMENT_TIMER, registration)
+     }
+diff --git a/crates/canic-core/src/workflow/runtime/auth/renewal.rs b/crates/canic-core/src/workflow/runtime/auth/renewal.rs
+--- a/crates/canic-core/src/workflow/runtime/auth/renewal.rs
++++ b/crates/canic-core/src/workflow/runtime/auth/renewal.rs
+@@ -333,10 +333,14 @@
+         if with_owned_once(&RENEWAL_TIMER, |_| ())?.is_some() {
+             return Ok(());
+         }
++        // Audit-only: retain source checking without registering the business callback.
++        let _ = Self::run_registered;
+         let registration = register_once(
+             Self::timer_identity()?,
+             DeclarationLifetime::Retained,
+-            |_context: OnceContext| async { Self::run_registered().await },
++            |_context: OnceContext| async {
++                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
++            },
+         )?;
+         retain_owned_once(&RENEWAL_TIMER, registration)
+     }
+diff --git a/crates/canic-core/src/workflow/runtime/cycles/mod.rs b/crates/canic-core/src/workflow/runtime/cycles/mod.rs
+--- a/crates/canic-core/src/workflow/runtime/cycles/mod.rs
++++ b/crates/canic-core/src/workflow/runtime/cycles/mod.rs
+@@ -685,10 +685,14 @@
+         if with_owned_once(&TOPUP_TIMER, |_| ())?.is_some() {
+             return Ok(());
+         }
++        // Audit-only: retain source checking without registering the business callback.
++        let _ = Self::run_registered;
+         let registration = register_once(
+             Self::timer_identity()?,
+             DeclarationLifetime::Retained,
+-            |_context: OnceContext| async { Self::run_registered().await },
++            |_context: OnceContext| async {
++                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
++            },
+         )?;
+         retain_owned_once(&TOPUP_TIMER, registration)
+     }
+diff --git a/crates/canic-core/src/workflow/runtime/intent.rs b/crates/canic-core/src/workflow/runtime/intent.rs
+--- a/crates/canic-core/src/workflow/runtime/intent.rs
++++ b/crates/canic-core/src/workflow/runtime/intent.rs
+@@ -514,10 +514,14 @@
+         if with_owned_once(&INTENT_CLEANUP_TIMER, |_| ())?.is_some() {
+             return Ok(());
+         }
++        // Audit-only: retain source checking without registering the business callback.
++        let _ = Self::run_due_batch;
+         let registration = register_once(
+             Self::timer_identity()?,
+             DeclarationLifetime::Retained,
+-            |_context: OnceContext| async { Self::run_due_batch() },
++            |_context: OnceContext| async {
++                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
++            },
+         )?;
+         retain_owned_once(&INTENT_CLEANUP_TIMER, registration)
+     }
+diff --git a/crates/canic-core/src/workflow/runtime/log.rs b/crates/canic-core/src/workflow/runtime/log.rs
+--- a/crates/canic-core/src/workflow/runtime/log.rs
++++ b/crates/canic-core/src/workflow/runtime/log.rs
+@@ -92,10 +92,14 @@
+         if with_owned_once(&LOG_RETENTION_TIMER, |_| ())?.is_some() {
+             return Ok(());
+         }
++        // Audit-only: retain source checking without registering the business callback.
++        let _ = Self::run_due_batch;
+         let registration = register_once(
+             Self::timer_identity()?,
+             DeclarationLifetime::Retained,
+-            |_context: OnceContext| async { Self::run_due_batch() },
++            |_context: OnceContext| async {
++                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
++            },
+         )?;
+         retain_owned_once(&LOG_RETENTION_TIMER, registration)
+     }
+diff --git a/crates/canic-core/src/workflow/runtime/timer/mod.rs b/crates/canic-core/src/workflow/runtime/timer/mod.rs
+--- a/crates/canic-core/src/workflow/runtime/timer/mod.rs
++++ b/crates/canic-core/src/workflow/runtime/timer/mod.rs
+@@ -277,6 +277,8 @@
+     desired: WatchdogReconcileState,
+     recover: fn(u64) -> u64,
+ ) -> Result<(), TimerError> {
++    // Audit-only: discard the business dispatcher before constructing the callback.
++    let _ = (run_core_recovery_watchdog, recover);
+     let identity = recovery_watchdog_identity()?;
+     let cadence = TimerCadence::new(RECOVERY_WATCHDOG_CADENCE)?;
+     CORE_RECOVERY_WATCHDOG
+@@ -289,7 +291,12 @@
+                 &identity,
+                 cadence,
+                 desired,
+-                move |_context| run_core_recovery_watchdog(recover),
++                |_context| {
++                    WatchdogRunResult::new(
++                        TimerCompletion::no_work(),
++                        ic_timers::WatchdogDecision::Continue,
++                    )
++                },
+             )
+             .map_err(TimerError::from)
+         })

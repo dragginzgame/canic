@@ -1,0 +1,111 @@
+{
+  "experiment": "b1-17-page-generic-cohort",
+  "run_mode": "qualify",
+  "retention_eligible": false,
+  "determinism_claim": "not_claimed",
+  "complete_width_matrix_verified": true,
+  "candidate_method_sha256": "b58e97cfc3d667dfe1d21871ebc49a973857f31c496575023bd338d591805635",
+  "preparation_sha256": "d327b086e98166d92e3a44497d05e7af959ab8b5be50b943d9b1ce90d740b8b0",
+  "exports": [
+    {
+      "name": "canister_global_timer",
+      "kind": 0
+    },
+    {
+      "name": "canister_init",
+      "kind": 0
+    },
+    {
+      "name": "canister_inspect_message",
+      "kind": 0
+    },
+    {
+      "name": "canister_post_upgrade",
+      "kind": 0
+    },
+    {
+      "name": "canister_query audit_env_probe",
+      "kind": 0
+    },
+    {
+      "name": "canister_query audit_log_probe",
+      "kind": 0
+    },
+    {
+      "name": "canister_query audit_page_generic_cohort",
+      "kind": 0
+    },
+    {
+      "name": "canister_query audit_time_probe",
+      "kind": 0
+    },
+    {
+      "name": "canister_query canic_status",
+      "kind": 0
+    },
+    {
+      "name": "canister_query icrc10_supported_standards",
+      "kind": 0
+    },
+    {
+      "name": "canister_update <ic-cdk internal> timer_executor",
+      "kind": 0
+    },
+    {
+      "name": "canister_update canic_command",
+      "kind": 0
+    },
+    {
+      "name": "memory",
+      "kind": 2
+    }
+  ],
+  "widths": [
+    {
+      "width": 1,
+      "wasm_sha256": "1863249c230baf3ab63cf3b5b5b71bd9e15a632e769a8f802994f534af974065",
+      "candid_sha256": "36bfe246c42512b0b06d3956c32524a32b85a0598ef804d835132e66655ed982",
+      "payload_hashes_and_lengths_verified": true,
+      "gzip_roundtrip": true,
+      "candid_equal_to_width_1": true,
+      "export_identities_equal_to_width_1": true
+    },
+    {
+      "width": 2,
+      "wasm_sha256": "5987274f21e206da3ba31dd7f7ac4eda7a524a26b5a115b5d9dc3e7dd8c1d078",
+      "candid_sha256": "36bfe246c42512b0b06d3956c32524a32b85a0598ef804d835132e66655ed982",
+      "payload_hashes_and_lengths_verified": true,
+      "gzip_roundtrip": true,
+      "candid_equal_to_width_1": true,
+      "export_identities_equal_to_width_1": true
+    },
+    {
+      "width": 3,
+      "wasm_sha256": "db37d75944ceb014df8aff6f20919ff4fd0ddb022dc10fe314ab138d9dc897c1",
+      "candid_sha256": "36bfe246c42512b0b06d3956c32524a32b85a0598ef804d835132e66655ed982",
+      "payload_hashes_and_lengths_verified": true,
+      "gzip_roundtrip": true,
+      "candid_equal_to_width_1": true,
+      "export_identities_equal_to_width_1": true
+    },
+    {
+      "width": 4,
+      "wasm_sha256": "8c416fff7d5c9fb038d3c36c269be6b129e33329d3f33c1698d85a34df65302e",
+      "candid_sha256": "36bfe246c42512b0b06d3956c32524a32b85a0598ef804d835132e66655ed982",
+      "payload_hashes_and_lengths_verified": true,
+      "gzip_roundtrip": true,
+      "candid_equal_to_width_1": true,
+      "export_identities_equal_to_width_1": true
+    },
+    {
+      "width": 5,
+      "wasm_sha256": "3551380c74957683f0b85076601d8c04e5414e1bb29935a6b8817e7187617b09",
+      "candid_sha256": "36bfe246c42512b0b06d3956c32524a32b85a0598ef804d835132e66655ed982",
+      "payload_hashes_and_lengths_verified": true,
+      "gzip_roundtrip": true,
+      "candid_equal_to_width_1": true,
+      "export_identities_equal_to_width_1": true
+    }
+  ],
+  "instruction_evidence": "absent"
+}

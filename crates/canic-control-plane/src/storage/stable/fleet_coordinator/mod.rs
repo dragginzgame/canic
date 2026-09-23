@@ -11,7 +11,7 @@ use candid::{CandidType, Principal};
 #[cfg(feature = "fleet-coordinator-canister")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    eager_static, impl_storable_bounded,
+    impl_storable_bounded,
     role_contract::allocation::memory::control_plane::{
         FLEET_COORDINATOR_FUNDING_ID, FLEET_COORDINATOR_REGISTRY_ID,
     },
@@ -86,7 +86,7 @@ struct FleetCoordinatorRegistryState;
 struct FleetCoordinatorFundingState;
 
 #[cfg(feature = "fleet-coordinator-canister")]
-eager_static! {
+std::thread_local! {
     static FLEET_COORDINATOR_STATE:
         RefCell<Cell<FleetCoordinatorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
@@ -101,7 +101,7 @@ eager_static! {
 }
 
 #[cfg(feature = "fleet-coordinator-canister")]
-eager_static! {
+std::thread_local! {
     static FLEET_COORDINATOR_FUNDING_STATE:
         RefCell<Cell<FleetCoordinatorFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(

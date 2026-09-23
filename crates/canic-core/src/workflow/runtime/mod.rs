@@ -35,11 +35,13 @@ use crate::{
 
 pub use nonroot::{
     init_local_nonroot_canister, init_local_nonroot_canister_with_automatic_topup,
-    init_nonroot_canister, init_wasm_store_canister,
+    init_nonroot_canister, init_nonroot_canister_with_fleet_admission, init_wasm_store_canister,
     post_upgrade_local_nonroot_canister_after_memory_init,
     post_upgrade_local_nonroot_canister_with_automatic_topup_after_memory_init,
     post_upgrade_nonroot_canister_after_memory_init,
     post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init,
+    post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_after_memory_init,
+    post_upgrade_nonroot_canister_with_fleet_admission_after_memory_init,
 };
 pub use root::{init_root_canister, post_upgrade_root_canister_after_memory_init};
 

@@ -6,7 +6,6 @@
 
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    eager_static,
     ids::{
         FleetAdmissionPolicy, FleetCoordinatorBinding, FleetSubnetRootBinding,
         ManagedCanisterBinding,
@@ -20,7 +19,7 @@ use std::cell::RefCell;
 
 struct RootAdmissionState;
 
-eager_static! {
+std::thread_local! {
     static ROOT_ADMISSION_STATE:
         RefCell<Cell<RootAdmissionStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(

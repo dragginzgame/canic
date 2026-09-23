@@ -18,7 +18,7 @@ use std::cell::RefCell;
 /// Maximum encoded bytes admitted for the complete authority restore fence.
 pub const MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES: u32 = 256;
 
-eager_static! {
+std::thread_local! {
     static AUTHORITY_RESTORE_FENCE: RefCell<
         BoundedCell<Option<AuthorityRestoreFenceRecord>, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(

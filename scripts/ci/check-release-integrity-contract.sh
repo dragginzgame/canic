@@ -497,9 +497,8 @@ for governed_test in "${governed_host_pocketic_tests[@]}"; do
 done
 rg -F 'cargo test --locked --no-fail-fast' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not retain failures across Cargo test binaries"
-rg --multiline 'require_ordinary_success_before_pocketic\nstart_owned_pocketic_server' \
-    "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the full workspace runner does not stop after ordinary failures before PocketIC"
+# The validation-runner gate injects failures to verify the ordinary and serial
+# barriers. Source-line adjacency is not execution-order evidence.
 rg -F '"$HEAVY_BUILD_TARGETS_USED" -eq 0' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the PocketIC integration group does not preserve Wasm build freshness between suites"
 build_recipe="$(sed -n '/^build:/,/^$/p' "$MAKEFILE")"

@@ -1,0 +1,1441 @@
+{
+  "root": "README.md",
+  "method": "Recursive local inline Markdown and HTML src/href links; fenced code excluded; directory links descend into README.md when present. ATX heading fragments checked; external HTTP targets not contacted. Historical prose is not tested for current semantic validity.",
+  "counts": {
+    "markdown_files": 248,
+    "local_link_occurrences": 1140,
+    "external_links_not_requested": 68
+  },
+  "files": [
+    {
+      "depth": 0,
+      "path": "README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/getting-started/minimal-managed-fleet.md"
+    },
+    {
+      "depth": 1,
+      "path": "INSTALLING.md"
+    },
+    {
+      "depth": 1,
+      "path": "CONFIG.md"
+    },
+    {
+      "depth": 1,
+      "path": "AGENTS.md"
+    },
+    {
+      "depth": 1,
+      "path": "TESTING.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/runtime/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/authentication/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/fleet-orchestration/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/scaling-and-placement/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/build-and-evidence/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/backup-and-restore/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/blob-storage/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/operations/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/features/operations/fleet-ensure.md"
+    },
+    {
+      "depth": 1,
+      "path": "crates/canic/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "crates/canic-core/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "crates/canic-control-plane/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "crates/canic-cli/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "crates/canic-host/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "crates/canic-backup/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "apps/README.md"
+    },
+    {
+      "depth": 1,
+      "path": "docs/status/current.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/governance/ci-deployment.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/runtime/public-observability.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/runtime/update-payload-limits.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/runtime/native-timers.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/contracts/ARCHITECTURE.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/architecture/authentication.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/contracts/AUTH_DELEGATED_SIGNATURES.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/contracts/ACCESS_ARCHITECTURE.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/root-proof-provisioning.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/architecture/build-artifacts.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/getting-started/local-academic-fleet.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/architecture/evidence-envelopes.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/architecture/ci-policy-gates.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/build-and-evidence/managed-app-qualification.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/build-and-evidence/fixture-artifacts.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/architecture/v1-operator-walkthrough.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/recovery-retry-runbooks.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/blob-storage-integration.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/blob-storage-billing-readiness.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/contracts/BLOB_STORAGE_INVENTORY.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/contracts/BLOB_STORAGE_CASHIER_INVENTORY.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/operations/icp-integration.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/README.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/release-validation-matrix.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/governance/supported-platforms.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-21/deployment-timing.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/activation-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-05/fleet-reinstall-journey.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/canic-140-retained-creation-fee.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/operations/local-development-fleet.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/operations/component-operations.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/operations/frontend-handoff.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/operations/fleet-observatory.md"
+    },
+    {
+      "depth": 2,
+      "path": "crates/canic-host/examples/frontend-consumer/README.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-input-evidence.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-23/b1-provider-measurements.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-23/b1-prepared-experiments.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-pool-ledger-recovery-hard-cut.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-23/b1-row17-canonical-symbols/trace-method.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/0.110-validation-throughput/report.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-22/b1-candid-construction-measurement.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-22/endpoint-discovery.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-22/upstream-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/0.110-fleet-runtime-contraction/metrics-history-locality.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-21/history-locality.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-21/sampler-cost-investigation.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/canic002-cost-evidence/report.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/icydb033-composed-wasm/w1.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/retirement-recovery.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/root-authority-throughput.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/fixture-build-throughput.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/pocketic-redundancy.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/rf3-local-demand.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/rf3-funding-bindings.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-18/toko-feedback-follow-up.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/0.110-fleet-runtime-contraction/status.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-17/canic-166-terminal-retirement.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/0.110-fleet-runtime-contraction/0.110-design.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-15/canic-172-child-funding-usage.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-15/canic-166-171-activation-reset.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-15/ic-query-0.43.1.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-15/ic-query-0.43.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/icydb033-composed-wasm/outlining.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/changelog/0.110.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-14/canic-172-native-funding.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-14/canic-172-child-reserve.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-14/canic-174-funding-deadline.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-15/icp-1.5.0-integration.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-15/icp-1.5.0-implementation.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-14/toko-recovery-followups.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/toko-upstream-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/status/archive/2026-06-30-precompact.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/status/archive/2026-07-13-precompact.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/status/archive/2026-08-12-precompact.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/status/archive/2026-08-26-pre-root-repair-hard-cut.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/status/archive/2026-08-30-pre-roadmap-reorientation.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/icydb033-composed-wasm/report.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/features/runtime/stable-memory-layout.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/ideas/role-specific-stable-initialization/design.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-delivery.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/canic165-fixture-provisioning/design.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-import-commit.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-transport.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-store.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-host-sources.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-build-binding.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-root-sources.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-publication.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-grants.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-consumer.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic165-readiness.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/working/canic163-selected-build-reinstall/design.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic163-selected-build-reinstall.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-11/canic166-staging-review.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic164-public-memory.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic160-fresh-observation.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic160-pool-concurrency.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic162-memory.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/toko-feedback-triage.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/build-declaration-reuse.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-09/build-pipeline.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-09/build-reuse-first-build.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/metrics-cost-policy.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-09/toko-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-09/metrics-history-index.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic159-runtime.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/operations/fleet-funding.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic161-funding.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-09/build-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/operator-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/test-compile-consolidation.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/release-turnaround.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/public-sampling-bounds.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/public-chart-history.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-08/generated-fleet-artifacts.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/public-observability.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/retained-fleet-feedback.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/canonical-fleet-root.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/test-throughput-audit.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/cli-command-audit.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-07/canic-142-reviewed-funding.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-08/2026-08-31/0.109-b9-superseding-complexity-audit.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-08/2026-08-31/0.109-b10-managed-app-qualification-reconciliation.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/release-lines/0.109-closeout-audit.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/0.109-fleet-wide-ingress-admission/status.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/design/0.111-bounded-multi-fleet-estates/status.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-03/architecture-consolidation-audit-update.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-05/fleet-feedback-readiness.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-05/fleet-hard-cut-review.md"
+    },
+    {
+      "depth": 2,
+      "path": "docs/audits/reports/2026-09/2026-09-05/fleet-feedback-performance.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/governance/delivery-cadence.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/governance/changelog.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/features/runtime/public-metrics-qualification.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/archive/0.103-role-owned-candid-surface/0.103-design.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/archive/0.61-replay-protection/0.61-design.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/recurring/invariants/expiry-replay-single-use.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/recurring/system/security-boundary-ordering.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/ci-diagnostics.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/release-package-install-validation.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/wasm-capability-size-report.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/blob-storage-source-handoff.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/receipt-backed-intent-adapter.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/0.56-v1-release-probes.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/0.56-installed-cli-smoke.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/0.56-packaged-downstream-cli.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/operations/0.56-packaged-wasm-store.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-01/wasm-footprint-v5-2.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.109-fleet-wide-ingress-admission/b9-release-wasm-optimization.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-03/wasm-footprint-v6.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-controlled-ablation-manifest.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-generated-surface-inventory.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-destroyed-state-inventory.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-generic-instantiation-cohort.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.110-fleet-runtime-contraction/b1-toko-canary-and-reseed.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-22/b1-provider-switches.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-22/b1-reply-serialization-measurement.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.106-fleet-estate-platform-qualification/b1-protocol.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/canic-175-state-cascade.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/b1-recovery-dispatch-measurement.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/toko-recovery-172-175.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/toko-upstream-feedback.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/b1-row8-qualification.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/canic-139-absent-inputs.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-14/b1-row10-row12-qualification.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/recurring/system/dry-consolidation.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-08/2026-08-24/saltz-mainnet-calibration.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/0.106-fleet-estate-platform-qualification/status.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/0.107-fresh-fleet-preflight-and-runtime-admission/status.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/0.108-coordinator-backed-root-funding/status.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/archive/0.111-rescinded-stateful-fleet-release-adoption/status.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/ideas/README.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/ideas/immutable-test-checkout-lease/design.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-10/canic162-ic-memory-prompt.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/reports/2026-09/2026-09-05/auth-feedback-toko-root.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/release-lines/0.109-post-implementation-complexity-audit.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/0.109-fleet-wide-ingress-admission/0.109-design.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/audits/working/0.109-fleet-wide-ingress-admission/b8-release-go-live-support.md"
+    },
+    {
+      "depth": 3,
+      "path": "docs/design/0.111-bounded-multi-fleet-estates/0.111-design.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/changelog/0.33.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/AUDIT-HOWTO.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/size-summary.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/app.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/test.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/user_hub.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/scale_hub.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/user_shard.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/scale_replica.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/root.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/fleet_coordinator.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-01/artifacts/wasm-footprint-v5-2/wasm_store.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/size-summary.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/app.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/index_hub.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/test.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/user_hub.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/scale_hub.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/index_child.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/user_shard.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/scale_replica.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/root.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/fleet_coordinator.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/artifacts/wasm-footprint-v6/wasm_store.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/wasm-ablation-b1-02.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-04/wasm-ablation-b1-03.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-05/wasm-ablation-b1-05.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-03/wasm-ablation-b1-11.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-09/2026-09-04/wasm-ablation-b1-04.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/working/0.106-fleet-estate-platform-qualification/README.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/design/0.107-fresh-fleet-preflight-and-runtime-admission/0.107-design.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/working/0.107-fresh-fleet-preflight-and-runtime-admission/README.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/design/archive/0.111-rescinded-stateful-fleet-release-adoption/0.111-design.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/design/ideas/standalone-blob-service-extraction/design.md"
+    },
+    {
+      "depth": 4,
+      "path": "docs/audits/reports/2026-08/2026-08-31/0.109-b9-complexity-method-v3.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/audits/product-tree-scope-v1.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/audits/mandatory-trace-protocol.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/audits/retired-methods.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/design/0.106-fleet-estate-platform-qualification/0.106-design.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/audits/working/0.106-fleet-estate-platform-qualification/b1-baseline-inventory.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/audits/working/0.107-fresh-fleet-preflight-and-runtime-admission/b1-baseline-and-contract.md"
+    },
+    {
+      "depth": 5,
+      "path": "docs/audits/working/0.107-fresh-fleet-preflight-and-runtime-admission/b5-b7-progress.md"
+    }
+  ],
+  "missing_targets": [
+    {
+      "source": "docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md",
+      "line": 515,
+      "target": "../../audits/working/0.104-timer-ownership/README.md"
+    },
+    {
+      "source": "docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md",
+      "line": 517,
+      "target": "../../audits/working/0.104-timer-ownership/b3-domain-async-job-recovery.md"
+    },
+    {
+      "source": "docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md",
+      "line": 518,
+      "target": "../../audits/working/0.104-timer-ownership/b4-domain-native-custody.md"
+    },
+    {
+      "source": "docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md",
+      "line": 519,
+      "target": "../../audits/working/0.104-timer-ownership/README.md#b5-pool-lifecycle-and-snapshot-completion"
+    },
+    {
+      "source": "docs/design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md",
+      "line": 520,
+      "target": "../../audits/working/0.104-timer-ownership/README.md#b6-native-adoption-and-lifecycle-participant"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md",
+      "line": 2622,
+      "target": "../../governance/delivery-cadence.md"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md",
+      "line": 182,
+      "target": "../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md",
+      "line": 196,
+      "target": "../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/closeout.md"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md",
+      "line": 204,
+      "target": "../../governance/delivery-cadence.md"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md",
+      "line": 215,
+      "target": "../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md",
+      "line": 233,
+      "target": "../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/qualification.md"
+    },
+    {
+      "source": "docs/design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md",
+      "line": 273,
+      "target": "../../audits/release-lines/supporting/0.101-fleet-authoritative-service-provisioning-and-publication/closeout.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 12,
+      "target": "archive/2026-06-30-precompact.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 13,
+      "target": "archive/2026-07-13-precompact.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 1999,
+      "target": "../audits/release-lines/0.95-closeout.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2021,
+      "target": "../design/0.92-holistic-audit-and-audit-system-validation/0.92-design.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2023,
+      "target": "../design/0.96-receipt-replay-horizon-and-terminal-reclamation/0.96-design.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2025,
+      "target": "../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-design.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2027,
+      "target": "../design/0.98-architectural-sediment-hard-cuts/0.98-design.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2029,
+      "target": "../changelog/0.98.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2030,
+      "target": "../changelog/0.97.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2031,
+      "target": "../changelog/0.96.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2032,
+      "target": "../changelog/0.95.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2033,
+      "target": "../changelog/0.94.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2034,
+      "target": "../changelog/0.92.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2117,
+      "target": "../design/0.97-role-owned-runtime-dependencies-and-cdk-surface/0.97-closeout-audit.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2201,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-audit-system-inventory.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2204,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-audit-system-hardening.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2207,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-method-freeze.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2209,
+      "target": "../audits/METHODS.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2245,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-dependency-hygiene-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2247,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-dependency-hygiene-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2255,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-product-baseline-identity-correction.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2260,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-release-integrity.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2265,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d9-release-execution-integrity.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2269,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d10-active-documentation-and-hard-cut-residue.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2274,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d11-canonical-layering-closure.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2278,
+      "target": "../audits/reports/2026-07/2026-07-16/0.92-d12-dedicated-secret-scan.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2282,
+      "target": "../audits/reports/2026-07/2026-07-16/0.92-d13-workspace-lock-sync.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2287,
+      "target": "../audits/reports/2026-07/2026-07-16/0.92-v0916-compatibility-accounting.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2294,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-layer-boundary.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2296,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-layer-boundary-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2302,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-build-integrity-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2304,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-build-integrity-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2312,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d8-reproducible-root-artifacts.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2318,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-auth-invariants.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2322,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-auth-invariants-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2329,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-mandatory-trace-admission.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2334,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-mandatory-traces-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2337,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-mandatory-trace-evidence-completion.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2341,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-control-plane-publication.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2344,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d1-publication-safety.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2349,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d2-auth-typed-causes.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2353,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d3-canonical-layer-contract.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2358,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d4-root-issuer-admission-ownership.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2364,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d5-blob-billing-workflow-ownership.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2369,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d6-passive-rpc-dto-ownership.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2374,
+      "target": "../audits/reports/2026-07/2026-07-15/0.92-d7-internal-surface-hard-cuts.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2380,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-security-boundary-ordering.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2385,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-bootstrap-lifecycle-symmetry.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2390,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-capability-surface-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2393,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-capability-surface-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2397,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-publish-surface.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2403,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-module-structure-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2410,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-dry-consolidation-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2416,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-complexity-accretion-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2418,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-complexity-accretion-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2427,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-change-friction-v1.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2429,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-change-friction-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2435,
+      "target": "../audits/reports/2026-07/2026-07-14/instruction-footprint.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2442,
+      "target": "../audits/reports/2026-07/2026-07-15/instruction-footprint-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2449,
+      "target": "../audits/reports/2026-07/2026-07-14/wasm-footprint.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2455,
+      "target": "../audits/reports/2026-07/2026-07-15/wasm-footprint-v2.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2461,
+      "target": "../audits/reports/2026-07/2026-07-14/canic-core-module-surface-hardening.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2467,
+      "target": "../audits/reports/2026-07/2026-07-14/0.92-phase-c-baseline-review.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 2742,
+      "target": "../design/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 3194,
+      "target": "../design/0.99-app-fleet-identity-and-terminology-hard-cut/0.99-semantic-inventory.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-12-precompact.md",
+      "line": 3314,
+      "target": "../audits/release-lines/0.92-closeout.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-26-pre-root-repair-hard-cut.md",
+      "line": 182,
+      "target": "../../design/0.102-compact-diagnostic-codes/status.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-26-pre-root-repair-hard-cut.md",
+      "line": 183,
+      "target": "../../design/0.103-role-owned-candid-surface/status.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-26-pre-root-repair-hard-cut.md",
+      "line": 183,
+      "target": "../../design/0.104-ic-timers-consumer-hard-cut/status.md"
+    },
+    {
+      "source": "docs/status/archive/2026-08-26-pre-root-repair-hard-cut.md",
+      "line": 183,
+      "target": "../../design/0.105-framework-neutral-local-application-authorization/status.md"
+    },
+    {
+      "source": "docs/design/archive/0.103-role-owned-candid-surface/0.103-design.md",
+      "line": 18,
+      "target": "../../audits/working/0.103-role-owned-candid-surface/README.md"
+    },
+    {
+      "source": "docs/design/archive/0.103-role-owned-candid-surface/0.103-design.md",
+      "line": 608,
+      "target": "../../audits/working/0.103-role-owned-candid-surface/b6-surface-report.md"
+    },
+    {
+      "source": "docs/design/archive/0.103-role-owned-candid-surface/0.103-design.md",
+      "line": 609,
+      "target": "../../audits/working/0.103-role-owned-candid-surface/b7-closeout.md"
+    },
+    {
+      "source": "docs/design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md",
+      "line": 10,
+      "target": "../archive/0.99-app-fleet-identity-and-terminology-hard-cut/0.99-design.md"
+    },
+    {
+      "source": "docs/design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md",
+      "line": 3311,
+      "target": "../../audits/release-lines/supporting/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-authority-inventory.md"
+    }
+  ],
+  "unresolved_fragments": []
+}

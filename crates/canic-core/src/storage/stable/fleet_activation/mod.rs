@@ -30,7 +30,7 @@ pub const MAX_FLEET_ACTIVATION_RECORD_BYTES: u32 = 2_097_152;
 /// Maximum credential generations retained while a Fleet is being activated.
 pub const MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS: usize = 2;
 
-eager_static! {
+std::thread_local! {
     static FLEET_ACTIVATION: RefCell<
         BoundedCell<Option<FleetActivationRecord>, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(

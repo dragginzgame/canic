@@ -214,7 +214,7 @@ mod tests {
             [
                 "wasm_store",
                 "chunk_upload",
-                "bootstrap",
+                "store",
                 "skipped",
                 "cache_hit",
             ],
@@ -259,7 +259,7 @@ mod tests {
         );
         WasmStoreMetrics::record(
             WasmStoreMetricOperation::ChunkUpload,
-            WasmStoreMetricSource::Bootstrap,
+            WasmStoreMetricSource::Store,
             WasmStoreMetricOutcome::Skipped,
             WasmStoreMetricReason::CacheHit,
         );

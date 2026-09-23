@@ -1,12 +1,96 @@
 # 0.110 B1 Pool Ledger Recovery Hard-Cut Ledger
 
 Date: 2026-09-03
-State: source-family absence proved; compatible artifact delta open
+State: source-family absence proved; controlled repeated artifact delta retained
 Design owner: [0.110 Fleet runtime contraction](../../../design/0.110-fleet-runtime-contraction/0.110-design.md)
 Last source containing the family: immutable `v0.110.2`
 First source without the family: immutable `v0.110.3`
 Current released baseline: immutable `v0.110.5` at
 `50f40171d6177c3d1e490b1fdb5f6163323b2cd5`
+
+## Controlled preparation — 2026-09-23
+
+The [prepared-source report](../../reports/2026-09/2026-09-23/b1-prepared-experiments.md)
+now binds the common eleven-role roster and family-only removal on `.2`.
+Existing dependency records remain exact; only the two local index fixtures
+are added. Offline locked metadata, patch applicability, wrong-anchor and
+preparation-drift rejection, and failed-metadata cleanup pass. Row 18 is
+`ready`: [paired qualification](../../reports/2026-09/2026-09-23/b1-row18-qualification/verification.json)
+verifies all 23 vectors, including the separately registered baseline-only
+helper, and clean source restoration. Its 46-build repeated measurement now
+passes complete independent verification. The older review below records why
+a raw release comparison was rejected and does not describe current readiness.
+
+## Retained family-only result — 2026-09-23
+
+The [complete vectors](../../reports/2026-09/2026-09-23/b1-row18-measurement/artifact-metrics.tsv)
+contain two clean repetitions for both conditions across eleven canonical
+roles, plus two family-present helper builds. Independent
+[verification](../../reports/2026-09/2026-09-23/b1-row18-measurement/verification.json)
+checks every payload hash/length, gzip roundtrip, direct section/function
+counts, selected membership, exact repeats, method identities and clean
+source/lock restoration. The [metadata](../../reports/2026-09/2026-09-23/b1-row18-measurement/run-metadata.tsv)
+binds the corrected common preparation and family-only removal.
+
+| Artifact | Code bytes | Raw bytes | Gzip bytes | Defined functions | Table/element entries | Candid bytes |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Root, variant minus matched control | -95,690 | -99,853 | -30,661 | -84 | -13 / -13 | -1,700 |
+| Coordinator, variant minus matched control | 0 | 0 | +5 | 0 | 0 / 0 | 0 |
+| Each other canonical role, including Store | 0 | 0 | 0 | 0 | 0 / 0 | 0 |
+| Deleted helper, complete control artifact | 418,859 | 497,508 | 201,321 | 1,305 | 397 / 396 | 505 |
+
+Root is the only canonical artifact with a code/function reduction. All exports
+remain identical; only Root's Candid changes as the family is removed. Store
+and the eight configured non-Root roles are byte-identical across conditions.
+Coordinator's raw length and function count are unchanged, but its bytes differ
+and gzip grows by five bytes; no executable-size reduction is attributed there.
+The helper has only a family-present artifact and retains exactly its required
+`authority` and `recover` methods. Its complete footprint is separate from
+Root's marginal delta and is never added into one module's headroom.
+
+This isolates the already-published removal under the `.2` graph with common
+index fixtures. It does not measure all intervening release changes, host
+binary size, runtime instructions, recovery parity or build performance, and
+it introduces no predecessor reader or compatibility lane. The final B4
+absence and current-release behavior gates remain separate.
+
+## Source-pair review — 2026-09-22
+
+The catalog now names the actual removal boundary, `v0.110.2..v0.110.3`,
+instead of the stale `v0.109.35..candidate` placeholder. Row 18 remains
+`planned`; these historical anchors do not authorize a release-to-release
+attribution or satisfy the current canonical selector.
+
+The [structured source review](../../reports/2026-09/2026-09-22/b1-row18-source-review/source-review.json)
+binds commit/tree identities, lock/config/toolchain hashes and twenty relevant
+source owners. Its [checksum](../../reports/2026-09/2026-09-22/b1-row18-source-review/sha256.txt)
+is retained alongside it. The last release containing the family is
+`f9009d5ae7be78d4f9dd746431584368770e8364`; its immediate successor
+`d5aa319dc6e6d9af48d8833931e076519b80968a` removes the family. The first
+release without it is `938c40b738d55b29fe7457a0475f247102a35fc4`.
+
+Three constraints prevent an uncontrolled comparison:
+
+- The release transition changes 22 external package identities, including
+  IcyDB and ic-testkit, as well as ICP CLI and PocketIC pins. Keep one resolved
+  graph and toolchain for both conditions; do not attribute these changes to
+  pool recovery.
+- Both historical configs have seven declared roles plus the generated
+  Coordinator and Store. Neither includes `index_hub` or `index_child`.
+  The full current eleven-role selector requires identical, separately frozen
+  fixture preparation on both conditions. The removed helper is an additional
+  baseline artifact, not a replacement for a missing current role.
+- Helper publication is host orchestration, with helper-catalog admission in
+  Root. The reviewed Store builder, Store workflow, publication adapter and
+  endpoint projection are byte-identical across the boundary. Removing host
+  publication does not itself establish smaller Store Wasm; shared dependency
+  reachability still needs measurement.
+
+Use `.2` as the common product source and extract a complete, reviewed
+family-only removal patch, including the host changes needed to build it.
+Freeze a compatible method and qualify the complete prepared selector before
+retaining repeated measurements. Measure the helper separately. The source
+review supplies no artifact vector, instruction result or byte/function saving.
 
 ## Verdict
 
@@ -94,35 +178,40 @@ The hard cut also remains visible in current positive shapes:
   variant; and
 - current infrastructure role selection contains only maintained built-ins.
 
-## Required Compatible Measurement
+## Compatible Measurement And Final Absence Boundary
 
 The previously reported roughly 195 KiB compressed helper size is routing
 evidence only. It is not the Root/Store marginal delta and is not a code-section
 or replica-function result.
 
-The remaining paired experiment must use one frozen method, toolchain,
-optimizer, build path, feature set and role roster for both sides. It must
-record:
+The retained paired experiment above uses one frozen method, toolchain,
+optimizer, build path, feature set and role roster for both sides. It records:
 
 1. the v0.110.2 helper artifact's code, total, gzip, replica-limited function,
-   optimizer-defined cross-check, tables, instructions, Candid and exports;
+   optimizer-defined cross-check, tables, explicit instruction-evidence absence,
+   Candid and exports;
 2. Root with and without the command/status/record/workflow family;
-3. Store with and without helper publication reachability;
+3. Store under the same family-only patch, with host helper publication and
+   Root catalog admission identified separately from Store-linked code;
 4. the canonical current roles to confirm no unexpected shared-family shift;
 5. exact lock/config/source identities and the intentionally limited retained
-   diff; and
-6. an optimized absence/symbol result, without adding the three overlapping
-   deltas into one savings claim.
+   diff.
+
+The optimized Root code/function/Candid delta and separate helper artifact
+complete historical attribution. The design's B4 current-candidate
+absence/symbol result remains a separate obligation; neither source absence nor
+these overlapping deltas substitutes for that final proof or combines into
+one module's savings claim.
 
 Because v6 added `index_hub` and `index_child` after the old evidence and has no
 compatible predecessor, comparing its published v0.110.5 Root or Store row to
-an older v5/v0.110.2 row would mix method and roster changes. B1 must instead
-retain a dedicated compatible paired run or an accepted same-source controlled
-ablation.
+an older v5/v0.110.2 row would mix method and roster changes. The dedicated
+common-preparation, family-only comparison above resolves that attribution gap.
 
 ## B1 Disposition
 
-Source-family absence is complete. The compatible whole-family artifact delta
-remains open, and B1 must not claim byte/function savings for this deletion
-until that paired evidence is retained. B4 should keep an exact identifier
-absence ratchet so later work cannot resurrect the helper.
+Source-family absence and the compatible whole-family artifact delta are
+retained. Keep their historical attribution separate from B4's final current
+artifact absence and behavior evidence. Human acceptance of complete B1 remains
+pending; current-behavior tests cover the maintained pool contract.
+Do not add an anti-resurrection test for the removed family.

@@ -79,6 +79,15 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             let authority = __canic_compiled_role_runtime_authority();
 
+            #[cfg(canic_capability_fleet_admission_projection)]
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_with_fleet_admission_before_bootstrap(
+                $canister_role,
+                payload,
+                args,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
+                authority,
+            );
+            #[cfg(not(canic_capability_fleet_admission_projection))]
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_nonroot_canister_before_bootstrap(
                 $canister_role,
                 payload,
@@ -94,11 +103,26 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         fn post_upgrade() {
             let authority = __canic_compiled_role_runtime_authority();
 
-            #[cfg(canic_capability_automatic_topup)]
-            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap;
-            #[cfg(not(canic_capability_automatic_topup))]
-            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap;
-            let active = restore_runtime(
+            #[cfg(all(canic_capability_automatic_topup, canic_capability_fleet_admission_projection))]
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap(
+                $canister_role,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
+                authority,
+            );
+            #[cfg(all(canic_capability_automatic_topup, not(canic_capability_fleet_admission_projection)))]
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
+                $canister_role,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
+                authority,
+            );
+            #[cfg(all(not(canic_capability_automatic_topup), canic_capability_fleet_admission_projection))]
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_fleet_admission_before_bootstrap(
+                $canister_role,
+                option_env!("CANIC_RELEASE_BUILD_ID"),
+                authority,
+            );
+            #[cfg(all(not(canic_capability_automatic_topup), not(canic_capability_fleet_admission_projection)))]
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
                 option_env!("CANIC_RELEASE_BUILD_ID"),
                 authority,
@@ -267,10 +291,13 @@ macro_rules! __canic_start_local_lifecycle_core {
             let env = __canic_local_env(role.clone(), component_spec);
 
             #[cfg(canic_capability_automatic_topup)]
-            let initialize_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_with_automatic_topup_before_bootstrap;
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+                role,
+                env,
+                authority,
+            );
             #[cfg(not(canic_capability_automatic_topup))]
-            let initialize_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap;
-            initialize_runtime(
+            $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_local_nonroot_canister_before_bootstrap(
                 role,
                 env,
                 authority,
@@ -300,10 +327,12 @@ macro_rules! __canic_start_local_lifecycle_core {
             let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_automatic_topup)]
-            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap;
+            let _active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_with_automatic_topup_before_bootstrap(
+                $canister_role,
+                authority,
+            );
             #[cfg(not(canic_capability_automatic_topup))]
-            let restore_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_before_bootstrap;
-            let _active = restore_runtime(
+            let _active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_local_nonroot_canister_before_bootstrap(
                 $canister_role,
                 authority,
             );

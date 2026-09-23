@@ -155,7 +155,13 @@ The production Wasm dependency graph still requires exactly one memory runtime.
 Ordinary tests
 retain libtest's default parallelism; PocketIC suites remain explicitly
 single-threaded and ordered until a measured narrower concurrency policy is
-proven stable. After every serial suite the runner reports the shared server's
+proven stable. Complete and PocketIC-only runs compile every selected serial
+suite before starting the shared server. Preparation and execution use the same
+package, feature and target selectors; a compilation failure stops before any
+PocketIC case. The ordinary-test barrier still leads complete runs, and narrow
+targeted, ordinary and fast lanes do not inherit the full serial preparation.
+This moves compilation failures forward; it does not skip cases or claim a
+shorter successful run. After every serial suite the runner reports the shared server's
 current resident memory, resident high-water mark and thread count from the
 release-supported Linux process boundary. `make test-wasm` is the fast lane and
 runs only its classified release-surface integrations; it does not run workspace

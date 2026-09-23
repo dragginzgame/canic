@@ -45,7 +45,7 @@ type ApplicationReceiptEligibilityMap = StableBtreeMap<
 >;
 type ApplicationReceiptEligibilityState = (ApplicationReceiptEligibilityMap, StableIntentMemory);
 
-eager_static! {
+std::thread_local! {
     static INTENT_META: RefCell<Cell<IntentStoreMetaRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
             crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.intent.meta.v1", ty = IntentStoreMetaRecord, id = INTENT_META_ID),
@@ -53,7 +53,7 @@ eager_static! {
         ));
 }
 
-eager_static! {
+std::thread_local! {
     static APPLICATION_RECEIPT_ELIGIBILITY: RefCell<ApplicationReceiptEligibilityState> = {
         let memory = crate::ic_memory_key!(
             authority = CANIC_CORE_MEMORY_AUTHORITY,
@@ -66,7 +66,7 @@ eager_static! {
     };
 }
 
-eager_static! {
+std::thread_local! {
     static RECEIPT_BACKED_INTENT_RECORDS: RefCell<
         StableBtreeMap<
             OperationId,
@@ -81,7 +81,7 @@ eager_static! {
     )));
 }
 
-eager_static! {
+std::thread_local! {
     static INTENT_EXPIRY_INDEX: RefCell<
         StableBtreeMap<IntentExpiryKeyRecord, IntentExpiryEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -89,7 +89,7 @@ eager_static! {
     );
 }
 
-eager_static! {
+std::thread_local! {
     static PLACEMENT_ACKNOWLEDGEMENT_INDEX: RefCell<
         StableBtreeMap<
             OperationId,
@@ -104,7 +104,7 @@ eager_static! {
     )));
 }
 
-eager_static! {
+std::thread_local! {
     static INTENT_RECORDS: RefCell<
         StableBtreeMap<IntentId, IntentRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -112,7 +112,7 @@ eager_static! {
     );
 }
 
-eager_static! {
+std::thread_local! {
     static INTENT_TOTALS: RefCell<
         StableBtreeMap<IntentResourceKey, IntentResourceTotalsRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(
@@ -120,7 +120,7 @@ eager_static! {
     );
 }
 
-eager_static! {
+std::thread_local! {
     static INTENT_PENDING: RefCell<
         StableBtreeMap<IntentId, IntentPendingEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(

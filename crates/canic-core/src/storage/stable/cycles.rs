@@ -8,7 +8,6 @@ use crate::cdk::structures::btreemap::BTreeMap as StableBtreeMap;
 use crate::{
     cdk::structures::{DefaultMemoryImpl, Storable, memory::RuntimeMemory, storable::Bound},
     domain::cycles::CycleTopupFailureDisposition,
-    eager_static,
     role_contract::allocation::memory::cycles::{
         CYCLES_FUNDING_LEDGER_ID, CYCLES_TOPUP_EVENTS_ID, CYCLES_TRACKER_ID,
     },
@@ -16,7 +15,7 @@ use crate::{
 };
 use std::{borrow::Cow, cell::RefCell};
 
-eager_static! {
+std::thread_local! {
     //
     // CYCLE_TRACKER
     //
@@ -26,7 +25,7 @@ eager_static! {
         )));
 }
 
-eager_static! {
+std::thread_local! {
     //
     // CYCLE_TOPUP_EVENTS
     //
@@ -36,7 +35,7 @@ eager_static! {
         )));
 }
 
-eager_static! {
+std::thread_local! {
     //
     // CYCLES_FUNDING_LEDGER
     //

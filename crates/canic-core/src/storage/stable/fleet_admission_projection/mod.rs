@@ -14,7 +14,7 @@ use crate::{
 };
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     static FLEET_ADMISSION_PROJECTION: RefCell<
         BoundedCell<Option<FleetAdmissionProjectionRecord>, RuntimeMemory<DefaultMemoryImpl>>,
     > = RefCell::new(BoundedCell::init(crate::ic_memory_key!(

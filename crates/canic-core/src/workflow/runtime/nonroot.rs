@@ -45,6 +45,42 @@ pub fn init_nonroot_canister(
     application_init_args: Option<Vec<u8>>,
     embedded_release_build_id: Option<&str>,
 ) -> Result<(), InternalError> {
+    prepare_managed_nonroot(
+        &canister_role,
+        payload,
+        application_init_args,
+        embedded_release_build_id,
+        false,
+    )?;
+    register_nonroot_runtime_contract(&canister_role)
+}
+
+/// Initialize the compile-selected Fleet admission projection before application startup.
+pub fn init_nonroot_canister_with_fleet_admission(
+    canister_role: CanisterRole,
+    payload: CanisterInitPayload,
+    application_init_args: Option<Vec<u8>>,
+    embedded_release_build_id: Option<&str>,
+) -> Result<(), InternalError> {
+    let admission = prepare_managed_nonroot(
+        &canister_role,
+        payload,
+        application_init_args,
+        embedded_release_build_id,
+        true,
+    )?
+    .ok_or_else(InternalError::invariant)?;
+    FleetAdmissionProjectionWorkflow::initialize(admission)?;
+    register_nonroot_runtime_contract(&canister_role)
+}
+
+fn prepare_managed_nonroot(
+    canister_role: &CanisterRole,
+    payload: CanisterInitPayload,
+    application_init_args: Option<Vec<u8>>,
+    embedded_release_build_id: Option<&str>,
+    selected_admission: bool,
+) -> Result<Option<crate::ids::FleetAdmissionProjection>, InternalError> {
     let CanisterInitPayload {
         fixture,
         install_id,
@@ -53,6 +89,11 @@ pub fn init_nonroot_canister(
         component_deployment,
         admission,
     } = payload;
+    let admission = validate_fleet_admission_payload(
+        selected_admission,
+        ConfigOps::role_uses_fleet_admission(canister_role)?,
+        admission,
+    )?;
     let fleet = match &authority {
         CanisterInitAuthority::Component { binding, .. } => binding.authority.binding.fleet.clone(),
         CanisterInitAuthority::ComponentChild { binding, .. } => {
@@ -87,7 +128,7 @@ pub fn init_nonroot_canister(
     };
 
     // --- Phase 1: Init base systems ---
-    initialize_nonroot_base(&canister_role)?;
+    initialize_nonroot_base(canister_role)?;
     FleetActivationRuntimeOps::set_managed();
     let embedded_release_build_id =
         ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
@@ -102,10 +143,10 @@ pub fn init_nonroot_canister(
     .map_err(crate::ops::storage::StorageOpsError::from)?;
 
     // --- Phase 2: Payload registration ---
-    register_managed_nonroot_authority(&canister_role, authority, admission)?;
+    register_managed_nonroot_authority(canister_role, authority)?;
 
     // Prepared managed Canisters do not start timers or application hooks.
-    Ok(())
+    Ok(admission)
 }
 
 /// Initialize one host-installed sibling Wasm Store with reciprocal root authority.
@@ -145,7 +186,8 @@ pub fn init_local_nonroot_canister(
     canister_role: CanisterRole,
     env: EnvBootstrapArgs,
 ) -> Result<(), InternalError> {
-    init_local_nonroot_canister_with_runtime(canister_role, env, RuntimeWorkflow::start_all)
+    initialize_local_nonroot(canister_role, env)?;
+    RuntimeWorkflow::start_all()
 }
 
 /// Initialize one standalone-local profile with compile-selected automatic top-up custody.
@@ -153,24 +195,19 @@ pub fn init_local_nonroot_canister_with_automatic_topup(
     canister_role: CanisterRole,
     env: EnvBootstrapArgs,
 ) -> Result<(), InternalError> {
-    init_local_nonroot_canister_with_runtime(
-        canister_role,
-        env,
-        RuntimeWorkflow::start_all_with_automatic_topup,
-    )
+    initialize_local_nonroot(canister_role, env)?;
+    RuntimeWorkflow::start_all_with_automatic_topup()
 }
 
-fn init_local_nonroot_canister_with_runtime(
+fn initialize_local_nonroot(
     canister_role: CanisterRole,
     env: EnvBootstrapArgs,
-    start_runtime: fn() -> Result<(), InternalError>,
 ) -> Result<(), InternalError> {
     initialize_nonroot_base(&canister_role)?;
     FleetActivationRuntimeOps::set_standalone_local();
     EnvWorkflow::init_env_from_args(env, canister_role.clone())
         .map_err(|_err| InternalError::invariant())?;
-    register_nonroot_runtime_contract(&canister_role)?;
-    start_runtime()
+    register_nonroot_runtime_contract(&canister_role)
 }
 
 fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalError> {
@@ -185,7 +222,6 @@ fn initialize_nonroot_base(canister_role: &CanisterRole) -> Result<(), InternalE
 fn register_managed_nonroot_authority(
     canister_role: &CanisterRole,
     authority: CanisterInitAuthority,
-    admission: Option<crate::ids::FleetAdmissionProjection>,
 ) -> Result<(), InternalError> {
     match authority {
         CanisterInitAuthority::Component { root, binding } => {
@@ -196,13 +232,7 @@ fn register_managed_nonroot_authority(
         }
     }
 
-    if let Some(admission) = validate_fleet_admission_payload(
-        ConfigOps::role_uses_fleet_admission(canister_role)?,
-        admission,
-    )? {
-        FleetAdmissionProjectionWorkflow::initialize(admission)?;
-    }
-    register_nonroot_runtime_contract(canister_role)
+    Ok(())
 }
 
 fn register_nonroot_runtime_contract(canister_role: &CanisterRole) -> Result<(), InternalError> {
@@ -224,11 +254,11 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
-    post_upgrade_nonroot_canister_with_runtime(
-        canister_role,
-        embedded_release_build_id,
-        RuntimeWorkflow::start_all,
-    )
+    let active = restore_managed_nonroot(canister_role, embedded_release_build_id, false)?;
+    if active {
+        RuntimeWorkflow::start_all()?;
+    }
+    Ok(active)
 }
 
 /// Restore one managed profile with compile-selected automatic top-up custody.
@@ -236,31 +266,60 @@ pub fn post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init(
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
-    post_upgrade_nonroot_canister_with_runtime(
-        canister_role,
-        embedded_release_build_id,
-        RuntimeWorkflow::start_all_with_automatic_topup,
-    )
+    let active = restore_managed_nonroot(canister_role, embedded_release_build_id, false)?;
+    if active {
+        RuntimeWorkflow::start_all_with_automatic_topup()?;
+    }
+    Ok(active)
 }
 
-fn post_upgrade_nonroot_canister_with_runtime(
+/// Restore compile-selected Fleet admission before starting the selected runtime services.
+pub fn post_upgrade_nonroot_canister_with_fleet_admission_after_memory_init(
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
-    start_runtime: fn() -> Result<(), InternalError>,
+) -> Result<bool, InternalError> {
+    let active = restore_managed_nonroot(canister_role, embedded_release_build_id, true)?;
+    FleetAdmissionProjectionWorkflow::restore()?;
+    if active {
+        RuntimeWorkflow::start_all()?;
+    }
+    Ok(active)
+}
+
+/// Restore compile-selected Fleet admission before starting the selected runtime services.
+pub fn post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_after_memory_init(
+    canister_role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
+) -> Result<bool, InternalError> {
+    let active = restore_managed_nonroot(canister_role, embedded_release_build_id, true)?;
+    FleetAdmissionProjectionWorkflow::restore()?;
+    if active {
+        RuntimeWorkflow::start_all_with_automatic_topup()?;
+    }
+    Ok(active)
+}
+
+fn restore_managed_nonroot(
+    canister_role: CanisterRole,
+    embedded_release_build_id: Option<&str>,
+    selected_admission: bool,
 ) -> Result<bool, InternalError> {
     FleetActivationRuntimeOps::set_managed();
     let embedded_release_build_id =
         ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
     FleetActivationOps::require_release_build(embedded_release_build_id)
         .map_err(crate::ops::storage::StorageOpsError::from)?;
+    let enrolled = if canister_role.is_wasm_store() {
+        false
+    } else {
+        ConfigOps::role_uses_fleet_admission(&canister_role)?
+    };
+    validate_fleet_admission_selection(selected_admission, enrolled)?;
     restore_nonroot_after_upgrade(canister_role)?;
     let active = FleetActivationOps::status(false)
         .map_err(crate::ops::storage::StorageOpsError::from)?
         .phase
         == FleetActivationPhase::Active;
-    if active {
-        start_runtime()?;
-    }
     Ok(active)
 }
 
@@ -268,27 +327,23 @@ fn post_upgrade_nonroot_canister_with_runtime(
 pub fn post_upgrade_local_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
 ) -> Result<bool, InternalError> {
-    post_upgrade_local_nonroot_canister_with_runtime(canister_role, RuntimeWorkflow::start_all)
+    restore_local_nonroot(canister_role)?;
+    RuntimeWorkflow::start_all()?;
+    Ok(true)
 }
 
 /// Restore one standalone-local profile with compile-selected automatic top-up custody.
 pub fn post_upgrade_local_nonroot_canister_with_automatic_topup_after_memory_init(
     canister_role: CanisterRole,
 ) -> Result<bool, InternalError> {
-    post_upgrade_local_nonroot_canister_with_runtime(
-        canister_role,
-        RuntimeWorkflow::start_all_with_automatic_topup,
-    )
+    restore_local_nonroot(canister_role)?;
+    RuntimeWorkflow::start_all_with_automatic_topup()?;
+    Ok(true)
 }
 
-fn post_upgrade_local_nonroot_canister_with_runtime(
-    canister_role: CanisterRole,
-    start_runtime: fn() -> Result<(), InternalError>,
-) -> Result<bool, InternalError> {
+fn restore_local_nonroot(canister_role: CanisterRole) -> Result<(), InternalError> {
     FleetActivationRuntimeOps::set_standalone_local();
-    restore_nonroot_after_upgrade(canister_role)?;
-    start_runtime()?;
-    Ok(true)
+    restore_nonroot_after_upgrade(canister_role)
 }
 
 fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), InternalError> {
@@ -312,9 +367,6 @@ fn restore_nonroot_after_upgrade(canister_role: CanisterRole) -> Result<(), Inte
             &deployment,
             owning_component(&binding),
         )?;
-        if ConfigOps::role_uses_fleet_admission(&canister_role)? {
-            FleetAdmissionProjectionWorkflow::restore()?;
-        }
     }
     RuntimeAuthWorkflow::ensure_nonroot_crypto_contract(&canister_role, &canister_cfg)?;
     RuntimeAuthWorkflow::reconcile_local_application_authority()?;
@@ -329,10 +381,23 @@ const fn owning_component(binding: &ManagedCanisterBinding) -> &ComponentBinding
     }
 }
 
+const fn validate_fleet_admission_selection(
+    selected: bool,
+    enrolled: bool,
+) -> Result<(), InternalError> {
+    if selected == enrolled {
+        Ok(())
+    } else {
+        Err(InternalError::invariant())
+    }
+}
+
 fn validate_fleet_admission_payload(
+    selected: bool,
     enrolled: bool,
     admission: Option<crate::ids::FleetAdmissionProjection>,
 ) -> Result<Option<crate::ids::FleetAdmissionProjection>, InternalError> {
+    validate_fleet_admission_selection(selected, enrolled)?;
     match (enrolled, admission) {
         (true, Some(admission)) => Ok(Some(admission)),
         (false, None) => Ok(None),
@@ -345,14 +410,45 @@ mod tests {
     use super::validate_fleet_admission_payload;
 
     #[test]
-    fn managed_init_projection_presence_must_match_explicit_role_enrollment() {
+    fn managed_init_projection_matches_selected_and_declared_enrollment() {
         let projection = crate::test::support::fleet_admission_projection(
             crate::test::support::managed_component_binding(),
         );
+        for selected in [false, true] {
+            for enrolled in [false, true] {
+                for present in [false, true] {
+                    let result = validate_fleet_admission_payload(
+                        selected,
+                        enrolled,
+                        present.then(|| projection.clone()),
+                    );
+                    if selected == enrolled && enrolled == present {
+                        assert_eq!(result.unwrap().is_some(), present);
+                    } else {
+                        assert_eq!(
+                            result.unwrap_err().code(),
+                            crate::diagnostics::codes::STATE_INVALID
+                        );
+                    }
+                }
+            }
+        }
+    }
 
-        assert!(validate_fleet_admission_payload(true, Some(projection.clone())).is_ok());
-        assert!(validate_fleet_admission_payload(false, None).is_ok());
-        assert!(validate_fleet_admission_payload(true, None).is_err());
-        assert!(validate_fleet_admission_payload(false, Some(projection)).is_err());
+    #[test]
+    fn restored_admission_selection_must_match_compiled_authority() {
+        for selected in [false, true] {
+            for enrolled in [false, true] {
+                let result = super::validate_fleet_admission_selection(selected, enrolled);
+                if selected == enrolled {
+                    result.unwrap();
+                } else {
+                    assert_eq!(
+                        result.unwrap_err().code(),
+                        crate::diagnostics::codes::STATE_INVALID
+                    );
+                }
+            }
+        }
     }
 }

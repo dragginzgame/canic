@@ -169,8 +169,7 @@ pub async fn is_controller_or_root(caller: Principal) -> Result<(), AccessError>
 
 /// Require that the caller appears in the exact open Fleet projection.
 /// Missing, invalid or fenced stable authority fails closed.
-#[expect(clippy::unused_async)]
-pub async fn is_fleet_admitted(caller: Principal) -> Result<(), AccessError> {
+pub fn is_fleet_admitted(caller: Principal) -> Result<(), AccessError> {
     predicates::require_fleet_admission(caller).map(|_caller| ())
 }
 

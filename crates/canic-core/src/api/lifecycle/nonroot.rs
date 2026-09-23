@@ -47,6 +47,23 @@ impl LifecycleApi {
         );
     }
 
+    /// Initialize a managed actor with its compile-selected admission store.
+    pub fn init_nonroot_canister_with_fleet_admission_before_bootstrap(
+        role: CanisterRole,
+        payload: CanisterInitPayload,
+        application_init_args: Option<Vec<u8>>,
+        embedded_release_build_id: Option<&str>,
+        authority: RoleRuntimeAuthority,
+    ) {
+        lifecycle::init::nonroot::init_nonroot_canister_with_fleet_admission_before_bootstrap(
+            role,
+            payload,
+            application_init_args,
+            embedded_release_build_id,
+            authority,
+        );
+    }
+
     pub fn init_wasm_store_before_bootstrap(
         input: FleetSubnetWasmStoreInitArgs,
         embedded_release_build_id: Option<&str>,
@@ -97,6 +114,20 @@ impl LifecycleApi {
         )
     }
 
+    /// Restore selected admission before runtime services and lifecycle participants.
+    #[must_use]
+    pub fn post_upgrade_nonroot_canister_with_fleet_admission_before_bootstrap(
+        role: CanisterRole,
+        embedded_release_build_id: Option<&str>,
+        authority: RoleRuntimeAuthority,
+    ) -> bool {
+        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_with_fleet_admission_before_bootstrap(
+            role,
+            embedded_release_build_id,
+            authority,
+        )
+    }
+
     #[doc(hidden)]
     #[must_use]
     pub fn post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
@@ -105,6 +136,20 @@ impl LifecycleApi {
         authority: RoleRuntimeAuthority,
     ) -> bool {
         lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
+            role,
+            embedded_release_build_id,
+            authority,
+        )
+    }
+
+    /// Restore selected admission before runtime services and lifecycle participants.
+    #[must_use]
+    pub fn post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap(
+        role: CanisterRole,
+        embedded_release_build_id: Option<&str>,
+        authority: RoleRuntimeAuthority,
+    ) -> bool {
+        lifecycle::upgrade::nonroot::post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap(
             role,
             embedded_release_build_id,
             authority,

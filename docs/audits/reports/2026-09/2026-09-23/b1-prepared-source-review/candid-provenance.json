@@ -1,0 +1,64 @@
+{
+  "schema_version": 1,
+  "source_commit": "50f40171d6177c3d1e490b1fdb5f6163323b2cd5",
+  "upstream_package": "candid_derive",
+  "upstream_version": "0.10.35",
+  "upstream_archive_sha256": "13501edc1f9c9f057d5d84171a13ee1fe4255705f9027a3fac64b5949cbdd170",
+  "preparation_patch_sha256": "f4248cac1657775a7f4994708631b7c09eb49be9ba1ea06c95387d7fb6cb9a5a",
+  "vendor_files": [
+    {
+      "path": "crates/canic-macros/audit/candid_derive/Cargo.toml",
+      "upstream_sha256": "45a8f76777b446974951af19a401564d0e738eef5ef71d1df4f6cbd61f4fa233",
+      "prepared_sha256": "45a8f76777b446974951af19a401564d0e738eef5ef71d1df4f6cbd61f4fa233"
+    },
+    {
+      "path": "crates/canic-macros/audit/candid_derive/LICENSE",
+      "upstream_sha256": "3ec7531366b7e2440aa35dd675edc479f7690099821ce68b64c5548ba4849daa",
+      "prepared_sha256": "3ec7531366b7e2440aa35dd675edc479f7690099821ce68b64c5548ba4849daa"
+    },
+    {
+      "path": "crates/canic-macros/audit/candid_derive/README.md",
+      "upstream_sha256": "3ed979f9d31dedbbdefe97a5c3a2495c14b72425ed746d764d1ce64f573e66ca",
+      "prepared_sha256": "3ed979f9d31dedbbdefe97a5c3a2495c14b72425ed746d764d1ce64f573e66ca"
+    },
+    {
+      "path": "crates/canic-macros/audit/candid_derive/src/lib.rs",
+      "upstream_sha256": "5cdf6978e6b459714a0f62eca69ae51934c44b09e4166858813de4e28310ca19",
+      "prepared_sha256": "5cdf6978e6b459714a0f62eca69ae51934c44b09e4166858813de4e28310ca19"
+    },
+    {
+      "path": "crates/canic-macros/audit/candid_derive/src/derive.rs",
+      "upstream_sha256": "15babba496b9c5714f44ab3ab62e74bcad11f961190a039bb0f6c56f6cf89539",
+      "prepared_sha256": "56611953c805977f32049faae1fcca261bcd8a2f6ef4e7ee5c0c0803bd6e1ab5"
+    },
+    {
+      "path": "crates/canic-macros/audit/candid_derive/src/docs.rs",
+      "upstream_sha256": "9460958f6339f9e11cb7f2011083ccf3c34c866a82ce2a7a2f6596ce6af35160",
+      "prepared_sha256": "9460958f6339f9e11cb7f2011083ccf3c34c866a82ce2a7a2f6596ce6af35160"
+    },
+    {
+      "path": "crates/canic-macros/audit/candid_derive/src/func.rs",
+      "upstream_sha256": "9a397ba06028e011e48bd70da36f002c79ce358390e323b9d940f097b038193b",
+      "prepared_sha256": "9a397ba06028e011e48bd70da36f002c79ce358390e323b9d940f097b038193b"
+    }
+  ],
+  "control_environment": {
+    "CANIC_AUDIT_CANDID_TYPE_DOCS": "1"
+  },
+  "variant_environment": {
+    "CANIC_AUDIT_CANDID_TYPE_DOCS": "0"
+  },
+  "scope": "all reachable CandidType derive-generated type-documentation bodies; endpoint-method documentation unchanged",
+  "lock_change": "replace only candid_derive registry identity with audit path; dependency versions retained",
+  "initial_patch_sha256": "ec3931fcf2fa626054ed92973da0cc6e90837ee1f004055fdf16cb14f762d3df",
+  "store_materialization": {
+    "path": "crates/canic-host/src/bootstrap_store/mod.rs",
+    "baseline_sha256": "d797109545e0315d1fed0577ae0d2526f05bf812823f7cf08853b967f7cebece",
+    "prepared_sha256": "630b63b4f7df1b1d50778948a07e3a07d51b69e2f1d70a4a899ae140c0d5e38b",
+    "exact_materialized_candid_profile_check_preserved": true,
+    "reason": "checked-in type comments intentionally differ from documentation-disabled compiled declaration",
+    "unaffected_generated_derive_source": true,
+    "control": "original canonical declaration, checked exactly against compiled declaration",
+    "variant": "compiled declaration is materialized, retaining exact profile/declaration check"
+  }
+}

@@ -45,7 +45,7 @@ use canic_host::{
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
-use clap::{ArgAction, Command};
+use clap::{Arg, ArgAction, Command};
 use std::{
     ffi::OsString,
     fs, io,
@@ -233,6 +233,7 @@ struct EnsureOptions {
     mint_icp_ledger: String,
     cancel_mint: Option<String>,
     reinstall: bool,
+    retirement_debit_block: Option<u64>,
     apply: Option<String>,
     desired: PathBuf,
     environment: Option<String>,
@@ -260,6 +261,7 @@ impl EnsureOptions {
         Ok(Self {
             observe_funding: string_option(ensure, "observe-funding"),
             reinstall: ensure.get_flag("reinstall"),
+            retirement_debit_block: ensure.get_one::<u64>("retirement-debit-block").copied(),
             operator_mint: ensure.get_flag("operator-mint"),
             mint_cmc: required_string(ensure, "mint-cmc"),
             mint_icp_ledger: required_string(ensure, "mint-icp-ledger"),
@@ -415,6 +417,9 @@ fn ensure_command() -> Command {
                     "Review a selected-build database wipe or supported partial-activation recovery",
                 ),
         )
+        .arg(Arg::new("retirement-debit-block").long("retirement-debit-block").value_name("BLOCK")
+            .value_parser(clap::value_parser!(u64)).requires("reinstall")
+            .help("Verify one external operator withdrawal during completed-source retirement review"))
         .arg(value_arg("operator-mint").long("operator-mint").action(ArgAction::SetTrue).num_args(0)
             .help("Review, inspect or apply one receipt-bound ICP conversion for a retained operator shortfall"))
         .arg(value_arg("mint-cmc").long("mint-cmc").default_value("rkp4c-7iaaa-aaaaa-aaaca-cai").requires("operator-mint")
@@ -499,6 +504,7 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
     let observation_sink = progress_session.sink();
     let request_sink = progress_session.sink();
     let platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
+        .with_retirement_debit(options.retirement_debit_block)
         .with_identity(options.identity.as_deref())
         .with_progress_handler(move |mut progress| {
             if let FleetEnsureProgressState::ReviewRequired {

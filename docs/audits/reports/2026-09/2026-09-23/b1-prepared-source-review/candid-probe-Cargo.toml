@@ -1,0 +1,11 @@
+[package]
+name = "canic-audit-candid-docs-probe"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+[workspace]
+
+[dependencies]
+candid = "=0.10.35"
+serde = { version = "=1.0.229", features = ["derive"] }

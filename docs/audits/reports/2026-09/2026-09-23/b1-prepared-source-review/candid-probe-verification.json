@@ -1,0 +1,12 @@
+{
+  "control_variant_retry_wire_and_type_equal": true,
+  "wire_and_type_sha256": "6b64fdf2b58b7c1d9a57cfcb446ff3cde44e1e35276e90268cddb64d243e1e9a",
+  "prepared_lock_only_change": [
+    [
+      "candid_derive",
+      "0.10.35"
+    ]
+  ],
+  "derive_path": "crates/canic-macros/audit/candid_derive/Cargo.toml",
+  "probe_versions_subset_of_product": true
+}

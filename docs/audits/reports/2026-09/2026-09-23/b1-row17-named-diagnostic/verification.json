@@ -1,0 +1,426 @@
+{
+  "schema_version": 1,
+  "evidence_kind": "named_optimized_diagnostic",
+  "retention_eligible": false,
+  "canonical_mapping_claim": "exact selected TypeId bodies only",
+  "diagnostic_widths": [
+    1,
+    2,
+    3,
+    4,
+    5
+  ],
+  "payloads_and_method_hashes_verified": true,
+  "source_restored_clean": true,
+  "demangler": "GNU c++filt (GNU Binutils for Ubuntu) 2.42",
+  "canonical_section_comparison": [
+    {
+      "width": 1,
+      "executable_equal": false,
+      "candid_equal": true,
+      "canonical_sha256": "4c9948382ddcf8833cd599b222626744163bf4f1ef63dbf5117e99e506dd5ac9",
+      "named_sha256": "6ae47db3419fb4936c54323f239090bddc4c3e734bc0caeba62937f545cc6fb5",
+      "sections": [
+        {
+          "id": 1,
+          "equal": false,
+          "canonical_bytes": 704,
+          "named_bytes": 704
+        },
+        {
+          "id": 2,
+          "equal": false,
+          "canonical_bytes": 890,
+          "named_bytes": 890
+        },
+        {
+          "id": 3,
+          "equal": false,
+          "canonical_bytes": 4034,
+          "named_bytes": 4024
+        },
+        {
+          "id": 4,
+          "equal": false,
+          "canonical_bytes": 7,
+          "named_bytes": 7
+        },
+        {
+          "id": 5,
+          "equal": true,
+          "canonical_bytes": 3,
+          "named_bytes": 3
+        },
+        {
+          "id": 6,
+          "equal": true,
+          "canonical_bytes": 9,
+          "named_bytes": 9
+        },
+        {
+          "id": 7,
+          "equal": false,
+          "canonical_bytes": 413,
+          "named_bytes": 413
+        },
+        {
+          "id": 9,
+          "equal": false,
+          "canonical_bytes": 1701,
+          "named_bytes": 1695
+        },
+        {
+          "id": 12,
+          "equal": true,
+          "canonical_bytes": 2,
+          "named_bytes": 2
+        },
+        {
+          "id": 10,
+          "equal": false,
+          "canonical_bytes": 2242085,
+          "named_bytes": 2242014
+        },
+        {
+          "id": 11,
+          "equal": false,
+          "canonical_bytes": 185509,
+          "named_bytes": 185554
+        }
+      ],
+      "names_count": 3960,
+      "canic_generic_names": []
+    },
+    {
+      "width": 2,
+      "executable_equal": false,
+      "candid_equal": true,
+      "canonical_sha256": "7e665855011e1a602c00e7189a7919a888b4efb9da67c15680b916f07b4a7901",
+      "named_sha256": "ab9ac281b9902f17c568a027630e90e7a7a783745edcd3c43a38a70673b19d8b",
+      "sections": [
+        {
+          "id": 1,
+          "equal": false,
+          "canonical_bytes": 704,
+          "named_bytes": 704
+        },
+        {
+          "id": 2,
+          "equal": false,
+          "canonical_bytes": 890,
+          "named_bytes": 890
+        },
+        {
+          "id": 3,
+          "equal": false,
+          "canonical_bytes": 4037,
+          "named_bytes": 4027
+        },
+        {
+          "id": 4,
+          "equal": false,
+          "canonical_bytes": 7,
+          "named_bytes": 7
+        },
+        {
+          "id": 5,
+          "equal": true,
+          "canonical_bytes": 3,
+          "named_bytes": 3
+        },
+        {
+          "id": 6,
+          "equal": true,
+          "canonical_bytes": 9,
+          "named_bytes": 9
+        },
+        {
+          "id": 7,
+          "equal": false,
+          "canonical_bytes": 413,
+          "named_bytes": 413
+        },
+        {
+          "id": 9,
+          "equal": false,
+          "canonical_bytes": 1707,
+          "named_bytes": 1701
+        },
+        {
+          "id": 12,
+          "equal": false,
+          "canonical_bytes": 2,
+          "named_bytes": 2
+        },
+        {
+          "id": 10,
+          "equal": false,
+          "canonical_bytes": 2243726,
+          "named_bytes": 2243655
+        },
+        {
+          "id": 11,
+          "equal": false,
+          "canonical_bytes": 185654,
+          "named_bytes": 185698
+        }
+      ],
+      "names_count": 3963,
+      "canic_generic_names": []
+    },
+    {
+      "width": 3,
+      "executable_equal": false,
+      "candid_equal": true,
+      "canonical_sha256": "3c22535dbfc6b68304b41d7a2f9da8005e5ad7e063cf7108ce7a5db772ba26eb",
+      "named_sha256": "2af64358cddfe57bfec0b50eeb1dc0a7a2e8e81e331f43987e11bc2b61ba5c36",
+      "sections": [
+        {
+          "id": 1,
+          "equal": false,
+          "canonical_bytes": 704,
+          "named_bytes": 704
+        },
+        {
+          "id": 2,
+          "equal": false,
+          "canonical_bytes": 890,
+          "named_bytes": 890
+        },
+        {
+          "id": 3,
+          "equal": false,
+          "canonical_bytes": 4040,
+          "named_bytes": 4030
+        },
+        {
+          "id": 4,
+          "equal": false,
+          "canonical_bytes": 7,
+          "named_bytes": 7
+        },
+        {
+          "id": 5,
+          "equal": true,
+          "canonical_bytes": 3,
+          "named_bytes": 3
+        },
+        {
+          "id": 6,
+          "equal": true,
+          "canonical_bytes": 9,
+          "named_bytes": 9
+        },
+        {
+          "id": 7,
+          "equal": false,
+          "canonical_bytes": 413,
+          "named_bytes": 413
+        },
+        {
+          "id": 9,
+          "equal": false,
+          "canonical_bytes": 1713,
+          "named_bytes": 1707
+        },
+        {
+          "id": 12,
+          "equal": false,
+          "canonical_bytes": 2,
+          "named_bytes": 2
+        },
+        {
+          "id": 10,
+          "equal": false,
+          "canonical_bytes": 2245347,
+          "named_bytes": 2245276
+        },
+        {
+          "id": 11,
+          "equal": false,
+          "canonical_bytes": 185804,
+          "named_bytes": 185850
+        }
+      ],
+      "names_count": 3966,
+      "canic_generic_names": []
+    },
+    {
+      "width": 4,
+      "executable_equal": false,
+      "candid_equal": true,
+      "canonical_sha256": "3bb5f11f484c0c2ae4174f960a0b39ddd06a6ae85822ae33138d2a305e35968f",
+      "named_sha256": "37e6947ae2a8673cbb049a00e2015978efee059d5ae95e4dec957a424f81ada5",
+      "sections": [
+        {
+          "id": 1,
+          "equal": false,
+          "canonical_bytes": 704,
+          "named_bytes": 704
+        },
+        {
+          "id": 2,
+          "equal": false,
+          "canonical_bytes": 890,
+          "named_bytes": 890
+        },
+        {
+          "id": 3,
+          "equal": false,
+          "canonical_bytes": 4043,
+          "named_bytes": 4033
+        },
+        {
+          "id": 4,
+          "equal": false,
+          "canonical_bytes": 7,
+          "named_bytes": 7
+        },
+        {
+          "id": 5,
+          "equal": true,
+          "canonical_bytes": 3,
+          "named_bytes": 3
+        },
+        {
+          "id": 6,
+          "equal": true,
+          "canonical_bytes": 9,
+          "named_bytes": 9
+        },
+        {
+          "id": 7,
+          "equal": false,
+          "canonical_bytes": 413,
+          "named_bytes": 413
+        },
+        {
+          "id": 9,
+          "equal": false,
+          "canonical_bytes": 1719,
+          "named_bytes": 1713
+        },
+        {
+          "id": 12,
+          "equal": false,
+          "canonical_bytes": 2,
+          "named_bytes": 2
+        },
+        {
+          "id": 10,
+          "equal": false,
+          "canonical_bytes": 2246724,
+          "named_bytes": 2246653
+        },
+        {
+          "id": 11,
+          "equal": false,
+          "canonical_bytes": 185950,
+          "named_bytes": 185994
+        }
+      ],
+      "names_count": 3969,
+      "canic_generic_names": []
+    },
+    {
+      "width": 5,
+      "executable_equal": false,
+      "candid_equal": true,
+      "canonical_sha256": "3a3586ad51c3daad8d3f695917a3a00e6562e1b0e784c69bf0f54b9bd6ecbd09",
+      "named_sha256": "f4468af2cef848cf17070ad528b86622540bbcfa43b9886f472746558b84dff7",
+      "sections": [
+        {
+          "id": 1,
+          "equal": false,
+          "canonical_bytes": 704,
+          "named_bytes": 704
+        },
+        {
+          "id": 2,
+          "equal": false,
+          "canonical_bytes": 890,
+          "named_bytes": 890
+        },
+        {
+          "id": 3,
+          "equal": false,
+          "canonical_bytes": 4044,
+          "named_bytes": 4034
+        },
+        {
+          "id": 4,
+          "equal": false,
+          "canonical_bytes": 7,
+          "named_bytes": 7
+        },
+        {
+          "id": 5,
+          "equal": true,
+          "canonical_bytes": 3,
+          "named_bytes": 3
+        },
+        {
+          "id": 6,
+          "equal": true,
+          "canonical_bytes": 9,
+          "named_bytes": 9
+        },
+        {
+          "id": 7,
+          "equal": false,
+          "canonical_bytes": 413,
+          "named_bytes": 413
+        },
+        {
+          "id": 9,
+          "equal": false,
+          "canonical_bytes": 1725,
+          "named_bytes": 1719
+        },
+        {
+          "id": 12,
+          "equal": false,
+          "canonical_bytes": 2,
+          "named_bytes": 2
+        },
+        {
+          "id": 10,
+          "equal": false,
+          "canonical_bytes": 2248580,
+          "named_bytes": 2248509
+        },
+        {
+          "id": 11,
+          "equal": false,
+          "canonical_bytes": 186094,
+          "named_bytes": 186138
+        }
+      ],
+      "names_count": 3970,
+      "canic_generic_names": []
+    }
+  ],
+  "scope": "All selected diagnostic names have body identities. TypeId bodies additionally map uniquely to canonical bytes/signatures, equal concrete-name data and their exact function-table self identity. No whole-module equivalence, other canonical body mapping, complete symbol coverage, inlining/folding, runtime or instruction claim.",
+  "canonical_type_identity_matches": [
+    {
+      "width": 1,
+      "matched_bodies": 10
+    },
+    {
+      "width": 2,
+      "matched_bodies": 13
+    },
+    {
+      "width": 3,
+      "matched_bodies": 16
+    },
+    {
+      "width": 4,
+      "matched_bodies": 19
+    },
+    {
+      "width": 5,
+      "matched_bodies": 22
+    }
+  ]
+}

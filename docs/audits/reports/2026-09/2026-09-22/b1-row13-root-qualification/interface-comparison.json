@@ -1,0 +1,64 @@
+{
+  "experiment": "b1-13-configuration-provisioning-providers",
+  "artifact": "canonical_root",
+  "candid_equal": true,
+  "export_identities_equal": true,
+  "payload_hashes_verified": true,
+  "retention_eligible": false,
+  "baseline": {
+    "baseline_wasm_sha256": "f712cc5c0cc57003fcbba29e9f2a17f24e210953355c4d2719be90b5cb5cf416",
+    "candid_sha256": "806dde0018643605d58f496261e48ca0950db5391463c887c24c3bb34e63e4b4",
+    "candid_bytes": 88042,
+    "exports": [
+      {
+        "name": "canister_global_timer",
+        "kind": 0
+      },
+      {
+        "name": "canister_init",
+        "kind": 0
+      },
+      {
+        "name": "canister_inspect_message",
+        "kind": 0
+      },
+      {
+        "name": "canister_post_upgrade",
+        "kind": 0
+      },
+      {
+        "name": "canister_query canic_status",
+        "kind": 0
+      },
+      {
+        "name": "canister_query icrc10_supported_standards",
+        "kind": 0
+      },
+      {
+        "name": "canister_update <ic-cdk internal> timer_executor",
+        "kind": 0
+      },
+      {
+        "name": "canister_update canic_root_command",
+        "kind": 0
+      },
+      {
+        "name": "canister_update test_chain_key_ecdsa_public_key",
+        "kind": 0
+      },
+      {
+        "name": "canister_update test_provision_chain_key_delegation_proof_for_issuer",
+        "kind": 0
+      },
+      {
+        "name": "canister_update test_set_canister_running",
+        "kind": 0
+      },
+      {
+        "name": "memory",
+        "kind": 2
+      }
+    ]
+  },
+  "candidate_wasm_sha256": "02b1a11baf14a3da38d654517ea5c539b02a78efa81c66b807573894771007fe"
+}

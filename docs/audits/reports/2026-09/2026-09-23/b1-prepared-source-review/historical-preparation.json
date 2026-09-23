@@ -1,0 +1,77 @@
+{
+  "source_commit": "f9009d5ae7be78d4f9dd746431584368770e8364",
+  "removal_source_commit": "d5aa319dc6e6d9af48d8833931e076519b80968a",
+  "family_patch_sha256": "516140429e9e37f31d11ff81cc7291422f76c4c3f4f2211c0dfea6fbd17141f2",
+  "selected_paths": [
+    "crates/canic-cli/src/build.rs",
+    "crates/canic-control-plane/src/dto/root.rs",
+    "crates/canic-control-plane/src/ops/canister_pool/mod.rs",
+    "crates/canic-control-plane/src/storage/stable/canister_pool/mod.rs",
+    "crates/canic-control-plane/src/workflow/bootstrap/root_store/mod.rs",
+    "crates/canic-control-plane/src/workflow/bootstrap/root_store/tests.rs",
+    "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
+    "crates/canic-control-plane/src/workflow/deployment.rs",
+    "crates/canic-control-plane/src/workflow/root_status/mod.rs",
+    "crates/canic-core/src/dto/pool.rs",
+    "crates/canic-core/src/replay_policy/role_command_manifest.rs",
+    "crates/canic-host/src/bootstrap_pool_ledger_recovery.rs",
+    "crates/canic-host/src/bootstrap_pool_ledger_recovery/canister.rs.txt",
+    "crates/canic-host/src/bootstrap_pool_ledger_recovery/tests.rs",
+    "crates/canic-host/src/canister_build/artifact.rs",
+    "crates/canic-host/src/canister_build/model.rs",
+    "crates/canic-host/src/canister_build/tests.rs",
+    "crates/canic-host/src/fleet_ensure/mod.rs",
+    "crates/canic-host/src/fleet_ensure/model/mod.rs",
+    "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs",
+    "crates/canic-host/src/fleet_ensure/ops/current_protocol/tests.rs",
+    "crates/canic-host/src/fleet_ensure/ops/predecessor_root_status/mod.rs",
+    "crates/canic-host/src/fleet_ensure/ops/predecessor_root_status/tests.rs",
+    "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+    "crates/canic-host/src/lib.rs",
+    "crates/canic-host/src/release_set/infrastructure/mod.rs",
+    "crates/canic-host/src/release_set/infrastructure/persistence/tests.rs",
+    "crates/canic-host/src/release_set/infrastructure/tests.rs",
+    "crates/canic/src/macros/endpoints/root.rs"
+  ],
+  "common_preparation_sha256": "0afebd7cfd003bfabd5924e16ed44e28e5eca26daaf018fa6bd3541bccf42189",
+  "dependency_graph": "all existing package versions/checksums/dependency lists unchanged; two local fixture packages added",
+  "excluded_changes": [
+    "native ICP management and platform adapter",
+    "funding bound increase",
+    "workspace/dependency upgrades",
+    "tool pins",
+    "release/version/docs",
+    "unrelated test and CI changes"
+  ],
+  "qualification": "pending",
+  "lock_order_correction": {
+    "failure": "Cargo canonicalized lockfile package ordering during the first workspace artifact build",
+    "old_preparation_sha256": "e24ee347de290cf23d7ed77665c33d9791a3865750e1ebc32d880fd91686739c",
+    "new_preparation_sha256": "0afebd7cfd003bfabd5924e16ed44e28e5eca26daaf018fa6bd3541bccf42189",
+    "old_prepared_lock_sha256": "7b51918da7daffa31307ef8c9ccbda2984d7d45954286177f59973449c1f2b79",
+    "new_prepared_lock_sha256": "530d8edc77e460fe6d61d8027c3e326fd5f1785abc46778b8ca7cd8a0d1d03eb",
+    "all_existing_package_records_exact": true,
+    "added_package_records": [
+      {
+        "name": "canister_index_child",
+        "version": "0.110.2",
+        "dependencies": [
+          "candid",
+          "canic",
+          "ic-cdk"
+        ]
+      },
+      {
+        "name": "canister_index_hub",
+        "version": "0.110.2",
+        "dependencies": [
+          "candid",
+          "canic",
+          "ic-cdk"
+        ]
+      }
+    ],
+    "completed_control_builds": 11,
+    "retained_measurement": false
+  }
+}

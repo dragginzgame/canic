@@ -126,35 +126,6 @@ macro_rules! ic_memory_range {
     };
 }
 
-/// Register one eager-init body for execution during lifecycle bootstrap.
-#[macro_export]
-macro_rules! eager_init {
-    ($body:block) => {
-        $crate::__reexports::ic_memory::eager_init!($body);
-    };
-}
-
-/// Declare a thread-local static and schedule an eager initialization touch.
-#[macro_export]
-macro_rules! eager_static {
-    ($vis:vis static $name:ident : $ty:ty = $init:expr;) => {
-        thread_local! {
-            $vis static $name: $ty = $init;
-        }
-
-        const _: () = {
-            fn __canic_touch_tls() {
-                $name.with(|_| {});
-            }
-
-            #[ $crate::__reexports::ctor::ctor(unsafe, anonymous, crate_path = $crate::__reexports::ctor) ]
-            fn __canic_register_eager_tls() {
-                $crate::memory::runtime::defer_tls_initializer(__canic_touch_tls);
-            }
-        };
-    };
-}
-
 /// Register the artifact's composed memory admission before Canic bootstrap.
 ///
 /// Supply a semantic `ic_memory::PolicyIdentity` and a synchronous callback taking

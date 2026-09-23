@@ -6,13 +6,12 @@ use crate::{
         structures::{DefaultMemoryImpl, memory::RuntimeMemory},
         types::{BoundedString64, BoundedString128},
     },
-    eager_static,
     role_contract::allocation::memory::placement::PLACEMENT_INDEX_REGISTRY_ID,
     storage::prelude::*,
 };
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     static PLACEMENT_INDEX_REGISTRY: RefCell<
         StableBtreeMap<PlacementIndexKey, PlacementIndexEntryRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(

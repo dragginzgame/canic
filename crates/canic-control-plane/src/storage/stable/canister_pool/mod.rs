@@ -9,7 +9,6 @@ use canic_core::{
         types::{Cycles, Principal},
     },
     control_plane_support::model::replay::ReplayCostGuardSettlement,
-    eager_static,
     ids::ComponentInstanceId,
     impl_storable_bounded, impl_storable_unbounded,
     role_contract::allocation::memory::control_plane::{
@@ -20,7 +19,7 @@ use canic_core::{
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
-eager_static! {
+std::thread_local! {
     static CANISTER_POOL: RefCell<
         StableBtreeMap<Principal, CanisterPoolAssetRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
@@ -31,7 +30,7 @@ eager_static! {
     )));
 }
 
-eager_static! {
+std::thread_local! {
     static CANISTER_POOL_HANDOFF_RECEIPTS: RefCell<
         StableBtreeMap<Principal, CanisterPoolHandoffReceiptRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(StableBtreeMap::init(canic_core::ic_memory_key!(
@@ -42,7 +41,7 @@ eager_static! {
     )));
 }
 
-eager_static! {
+std::thread_local! {
     static CANISTER_POOL_STATE: RefCell<
         Cell<CanisterPoolStateRecord, RuntimeMemory<DefaultMemoryImpl>>
     > = RefCell::new(Cell::init(

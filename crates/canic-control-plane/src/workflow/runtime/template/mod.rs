@@ -7,10 +7,7 @@ pub use publication::WasmStorePublicationWorkflow;
 use crate::{
     dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
     ids::{TemplateId, TemplateReleaseKey, TemplateVersion, WasmStoreBinding},
-    ops::storage::{
-        state::root_wasm_store::RootWasmStoreStateOps,
-        template::{TemplateChunkedOps, TemplateManifestOps},
-    },
+    ops::storage::{state::root_wasm_store::RootWasmStoreStateOps, template::TemplateManifestOps},
 };
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
@@ -19,14 +16,8 @@ use canic_core::api::lifecycle::metrics::{
 use canic_core::api::runtime::install::ApprovedModuleSource;
 use canic_core::cdk::types::Principal;
 use canic_core::cdk::utils::hash::wasm_hash;
-use canic_core::control_plane_support::{
-    error::InternalError,
-    ops::ic::{IcOps, mgmt::MgmtOps},
-};
+use canic_core::control_plane_support::error::InternalError;
 use canic_core::diagnostics::codes;
-use std::collections::BTreeSet;
-
-pub const WASM_STORE_BOOTSTRAP_BINDING: WasmStoreBinding = WasmStoreBinding::new("bootstrap");
 
 /// Read and verify one complete chunked payload from an exact Store.
 pub(in crate::workflow) async fn exact_store_payload_bytes(
@@ -122,43 +113,6 @@ async fn approved_module_source_from_manifest(
             Err(InternalError::lifecycle_failure())
         }
         crate::ids::TemplateChunkingMode::Chunked => {
-            if manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING {
-                record_wasm_store_metric(
-                    WasmStoreMetricOperation::SourceResolve,
-                    WasmStoreMetricSource::Bootstrap,
-                    WasmStoreMetricOutcome::Started,
-                    WasmStoreMetricReason::Ok,
-                );
-                let (store_pid, info) =
-                    match resolved_bootstrap_chunk_set_for_manifest(manifest).await {
-                        Ok(source) => source,
-                        Err(err) => {
-                            record_wasm_store_metric(
-                                WasmStoreMetricOperation::SourceResolve,
-                                WasmStoreMetricSource::Bootstrap,
-                                WasmStoreMetricOutcome::Failed,
-                                WasmStoreMetricReason::from_manifest_source_error(&err),
-                            );
-                            return Err(err);
-                        }
-                    };
-
-                record_wasm_store_metric(
-                    WasmStoreMetricOperation::SourceResolve,
-                    WasmStoreMetricSource::Bootstrap,
-                    WasmStoreMetricOutcome::Completed,
-                    WasmStoreMetricReason::Ok,
-                );
-
-                return Ok(ApprovedModuleSource::chunked(
-                    store_pid,
-                    release_source_label(&manifest.template_id, &manifest.version),
-                    manifest.payload_hash.clone(),
-                    info.chunk_hashes,
-                    manifest.payload_size_bytes,
-                ));
-            }
-
             record_wasm_store_metric(
                 WasmStoreMetricOperation::SourceResolve,
                 WasmStoreMetricSource::Store,
@@ -196,32 +150,10 @@ async fn approved_module_source_from_manifest(
     }
 }
 
-// Resolve the root-local bootstrap chunk source for one manifest and make sure
-// the current canister's management chunk store contains the expected payload.
-async fn resolved_bootstrap_chunk_set_for_manifest(
-    manifest: &TemplateManifestResponse,
-) -> Result<(Principal, TemplateChunkSetInfoResponse), InternalError> {
-    let store_pid = IcOps::canister_self();
-    let info =
-        TemplateChunkedOps::chunk_set_info_response(&manifest.template_id, &manifest.version)?;
-
-    if info.chunk_hashes.is_empty() {
-        return Err(InternalError::lifecycle_failure());
-    }
-
-    ensure_bootstrap_chunk_hashes_present(&manifest.template_id, &manifest.version, &info).await?;
-
-    Ok((store_pid, info))
-}
-
 // Resolve deterministic chunk metadata for one manifest-bound store release and verify it is installable.
 async fn resolved_store_chunk_set_for_manifest(
     manifest: &TemplateManifestResponse,
 ) -> Result<(Principal, TemplateChunkSetInfoResponse), InternalError> {
-    if manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING {
-        return Err(InternalError::lifecycle_failure());
-    }
-
     let store_pid = store_pid_for_binding(&manifest.store_binding)?;
     let info = WasmStoreInternalClient::new(store_pid)
         .info(&manifest.template_id, &manifest.version)
@@ -232,100 +164,6 @@ async fn resolved_store_chunk_set_for_manifest(
     }
 
     Ok((store_pid, info))
-}
-
-// Upload any missing root-local staged chunks into the current canister's
-// management chunk store before install uses it as the bootstrap source.
-async fn ensure_bootstrap_chunk_hashes_present(
-    template_id: &TemplateId,
-    version: &TemplateVersion,
-    info: &TemplateChunkSetInfoResponse,
-) -> Result<(), InternalError> {
-    record_wasm_store_metric(
-        WasmStoreMetricOperation::BootstrapChunkSync,
-        WasmStoreMetricSource::Bootstrap,
-        WasmStoreMetricOutcome::Started,
-        WasmStoreMetricReason::Ok,
-    );
-    let store_pid = IcOps::canister_self();
-    let stored_hashes = MgmtOps::stored_chunks(store_pid)
-        .await?
-        .into_iter()
-        .collect::<BTreeSet<_>>();
-
-    if info
-        .chunk_hashes
-        .iter()
-        .all(|expected_hash| stored_hashes.contains(expected_hash))
-    {
-        record_wasm_store_metric(
-            WasmStoreMetricOperation::BootstrapChunkSync,
-            WasmStoreMetricSource::Bootstrap,
-            WasmStoreMetricOutcome::Completed,
-            WasmStoreMetricReason::CacheHit,
-        );
-        return Ok(());
-    }
-
-    for (chunk_index, expected_hash) in info.chunk_hashes.iter().cloned().enumerate() {
-        if stored_hashes.contains(&expected_hash) {
-            record_wasm_store_metric(
-                WasmStoreMetricOperation::ChunkUpload,
-                WasmStoreMetricSource::Bootstrap,
-                WasmStoreMetricOutcome::Skipped,
-                WasmStoreMetricReason::CacheHit,
-            );
-            continue;
-        }
-
-        record_wasm_store_metric(
-            WasmStoreMetricOperation::ChunkUpload,
-            WasmStoreMetricSource::Bootstrap,
-            WasmStoreMetricOutcome::Started,
-            WasmStoreMetricReason::CacheMiss,
-        );
-        let chunk_index =
-            u32::try_from(chunk_index).map_err(|_| InternalError::lifecycle_failure())?;
-        let bytes = TemplateChunkedOps::chunk_response(template_id, version, chunk_index)?.bytes;
-        let uploaded_hash = match MgmtOps::upload_chunk(store_pid, bytes).await {
-            Ok(uploaded_hash) => uploaded_hash,
-            Err(err) => {
-                record_wasm_store_metric(
-                    WasmStoreMetricOperation::ChunkUpload,
-                    WasmStoreMetricSource::Bootstrap,
-                    WasmStoreMetricOutcome::Failed,
-                    WasmStoreMetricReason::ManagementCall,
-                );
-                return Err(err);
-            }
-        };
-
-        if uploaded_hash != expected_hash {
-            record_wasm_store_metric(
-                WasmStoreMetricOperation::ChunkUpload,
-                WasmStoreMetricSource::Bootstrap,
-                WasmStoreMetricOutcome::Failed,
-                WasmStoreMetricReason::HashMismatch,
-            );
-            return Err(InternalError::lifecycle_failure());
-        }
-
-        record_wasm_store_metric(
-            WasmStoreMetricOperation::ChunkUpload,
-            WasmStoreMetricSource::Bootstrap,
-            WasmStoreMetricOutcome::Completed,
-            WasmStoreMetricReason::Ok,
-        );
-    }
-
-    record_wasm_store_metric(
-        WasmStoreMetricOperation::BootstrapChunkSync,
-        WasmStoreMetricSource::Bootstrap,
-        WasmStoreMetricOutcome::Completed,
-        WasmStoreMetricReason::CacheMiss,
-    );
-
-    Ok(())
 }
 
 // Record one wasm-store metric point through the core API facade.
@@ -362,8 +200,39 @@ fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, Intern
 
 #[cfg(test)]
 mod tests {
-    use super::release_source_label;
-    use crate::ids::{TemplateId, TemplateVersion};
+    use super::{release_source_label, store_pid_for_binding};
+    use crate::{
+        ids::{TemplateId, TemplateVersion, WasmStoreBinding},
+        storage::stable::state::root_wasm_store::{
+            RootWasmStoreState, RootWasmStoreStateData, RootWasmStoreStateRecord,
+            WasmStoreGcRecord, WasmStoreRecord,
+        },
+    };
+    use canic_core::{cdk::types::Principal, diagnostics::codes};
+
+    #[test]
+    fn manifest_source_requires_the_exact_registered_store_binding() {
+        let binding = WasmStoreBinding::new("primary");
+        let pid = Principal::from_slice(&[31; 29]);
+        RootWasmStoreState::import(RootWasmStoreStateData {
+            record: RootWasmStoreStateRecord {
+                wasm_stores: vec![WasmStoreRecord {
+                    binding: binding.clone(),
+                    pid,
+                    created_at: 10,
+                    gc: WasmStoreGcRecord::default(),
+                }],
+                ..RootWasmStoreStateRecord::default()
+            },
+        });
+        assert_eq!(store_pid_for_binding(&binding).unwrap(), pid);
+        let error = store_pid_for_binding(&WasmStoreBinding::new("unregistered")).unwrap_err();
+        assert_eq!(
+            error.public_error().code(),
+            codes::WASM_STORE_MANIFEST_MISSING.raw_code()
+        );
+        RootWasmStoreState::import(RootWasmStoreStateData::default());
+    }
 
     #[test]
     fn release_source_label_includes_version() {

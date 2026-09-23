@@ -35,7 +35,7 @@ use std::cell::RefCell;
 //
 
 #[cfg(feature = "sharding")]
-eager_static! {
+std::thread_local! {
     static SHARDING_CORE: RefCell<ShardingCore<RuntimeMemory<DefaultMemoryImpl>>> = RefCell::new(
         ShardingCore::new(
             StableBtreeMap::init(crate::ic_memory_key!(authority = CANIC_CORE_MEMORY_AUTHORITY, key = "canic.core.sharding.registry.v1", ty = ShardingRegistry, id = SHARDING_REGISTRY_ID)),

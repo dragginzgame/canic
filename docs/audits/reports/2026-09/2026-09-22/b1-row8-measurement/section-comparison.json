@@ -1,0 +1,52 @@
+{
+  "blob_storage_probe": [
+    "icp:public candid:service"
+  ],
+  "canonical_app": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_fleet_coordinator": [],
+  "canonical_index_child": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_index_hub": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_root": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_scale_hub": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_scale_replica": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_test": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_user_hub": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_user_shard": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "canonical_wasm_store": [
+    "11",
+    "icp:public candid:service"
+  ],
+  "payload_limit_probe": [
+    "icp:public candid:service"
+  ],
+  "runtime_probe": [
+    "icp:public candid:service"
+  ]
+}

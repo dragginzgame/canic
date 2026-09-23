@@ -303,7 +303,7 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
 
     WasmStoreMetrics::record(
         WasmStoreMetricOperation::SourceResolve,
-        WasmStoreMetricSource::Bootstrap,
+        WasmStoreMetricSource::Store,
         WasmStoreMetricOutcome::Completed,
         WasmStoreMetricReason::Ok,
     );
@@ -324,13 +324,7 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
 
     assert_metric_count(
         &entries,
-        &[
-            "wasm_store",
-            "source_resolve",
-            "bootstrap",
-            "completed",
-            "ok",
-        ],
+        &["wasm_store", "source_resolve", "store", "completed", "ok"],
         1,
     );
     assert_metric_count(

@@ -12,7 +12,7 @@ use canic_core::dto::root_store::RootStoreBootstrapRequest;
 #[cfg(feature = "root-control-plane")]
 use canic_core::{
     cdk::structures::{DefaultMemoryImpl, cell::Cell, memory::RuntimeMemory},
-    eager_static, impl_storable_bounded,
+    impl_storable_bounded,
     role_contract::allocation::memory::control_plane::ROOT_FLEET_REGISTRY_MIRROR_ID,
 };
 use serde::{Deserialize, Serialize};
@@ -26,7 +26,7 @@ const ROOT_FLEET_REGISTRY_MIRROR_MAX_BYTES: u32 = 4_194_304;
 struct RootFleetRegistryMirrorState;
 
 #[cfg(feature = "root-control-plane")]
-eager_static! {
+std::thread_local! {
     static ROOT_FLEET_REGISTRY_MIRROR:
         RefCell<Cell<RootFleetRegistryMirrorStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(

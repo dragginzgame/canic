@@ -51,6 +51,19 @@ error means incomplete evidence. Interrupted files are retained; continuation
 creates a new file. Keep both when reporting a deployment issue. No automatic
 cross-invocation pruning is performed.
 
+Human output ends with an invocation summary of completed outer observation
+costs, remote attempt counts and the latest persisted effect count. Nested
+observations are excluded from these aggregates; the phase costs are not an
+end-to-end breakdown. Failed invocations and incomplete timing evidence are
+identified explicitly. Command completion alone does not establish Fleet
+convergence: the summary requires a terminal result for a full plan, otherwise it
+prints the retained no-effect review command. JSON output keeps the existing
+event schema. Batch reconciliation refreshes progress after persisting effects
+already observed as complete, without an additional remote poll.
+`root_management` also encloses final reinstall authority and retained-asset
+verification, including their protected inspection/reserve pairs. Nested Root
+status timings remain child observations and must not be added to that total.
+
 Generation retains catalog progress and endpoint collection durations. Endpoint
 collection includes certification; final acquisition completion includes the
 upstream agreement, cache validation and publication boundary. Existing validated
@@ -58,7 +71,16 @@ cache reuse and freshness/assurance rules remain unchanged. See the
 [qualification report](../../audits/reports/2026-09/2026-09-21/deployment-timing.md)
 for measured costs and coverage limits.
 
-Before compiling a release, run the early check from the workspace:
+Before compiling or qualifying a release, or attempting recovery with a newly
+installed CLI, run `canic medic --ci` from the application workspace. Its locked,
+offline package checks compare each resolved application Canic dependency with
+the running CLI's exact version. A mismatch requires a matching CLI or a jointly
+updated and requalified application; a host-only update does not bypass the
+runtime contract. If Cargo evidence is unavailable, resolve that finding before
+treating the preflight as passed. This check does not rebuild artifacts or prove
+live deployment readiness.
+
+Then run the early Fleet check from the workspace:
 
 ```sh
 canic --environment staging fleet readiness staging --identity staging-operator \
@@ -1206,6 +1228,25 @@ bounds. Unresolved effects, creation/funding-review histories, pending creation,
 transfers, missing assets and unrelated operator balance changes reject this
 bounded path. Receipt inspection verifies the retained completion evidence; it
 does not independently fetch historical Ledger blocks.
+
+A completed source with no operator payments may explicitly review one external
+Cycles Ledger withdrawal using `--reinstall --retirement-debit-block <BLOCK>`.
+This is limited to a default operator account and a currently operator-controlled
+destination outside the source Fleet. The block must postdate the source review;
+its exact amount plus fee must explain the entire independent balance change.
+No source document or bound changes. Sources with operator payments, unexplained
+movement, refunds or a destination inside the source estate reject this lane.
+
+The host fetches that single block through a replicated query and verifies the
+destination with controller-only management status. The record binds the Ledger,
+operator, destination, network root key, block hash/index, timestamp, amount and
+fee. A burn receipt proves the debit only: it neither proves successful delivery
+nor authorises retrying a withdrawal. The receipt is retained separately from
+source conservation in the new reviewed plan. Apply takes only that plan's digest,
+re-reads the receipt and live balances, and rejects changes before source adoption
+or authority sealing. Response size, decoding work and observation time are bounded;
+archived or unsupported receipt shapes fail closed. Existing source archive,
+interruption and effect-free replay owners remain unchanged.
 
 The separate preparation review exposes those measured values under
 `reinstall.source.terminal_retirement.conservation`, together with exact raw

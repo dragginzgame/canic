@@ -14,6 +14,21 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.39` detects PocketIC compilation failures before long serial suites
+  and extends controlled B1/B2 footprint evidence with verified experiment inputs.
+  Summarize Fleet timing costs, cover final authority verification, refresh
+  reconciled batch progress and clarify early CLI/runtime version checks.
+  Retain bounded local performance controls without claiming a deployment speed-up.
+  Make stable stores lazy and hard-cut eager initialization APIs while preserving
+  allocation admission and direct role-selected startup/recovery. Select Fleet
+  admission initialization/restoration in the consuming actor and reject mismatched
+  enrollment before application startup. Select admission readers from declared
+  endpoint guards and make the direct admission predicate synchronous. Resolve
+  Root template payloads through the recorded Store and remove obsolete local readers.
+  Complete B2 qualification with the accepted four-case cold-query tradeoff.
+- `0.110.38` adds receipt-bound external debit review for completed-source
+  retirement, preserving original evidence and exact balance checks.
+
 - `0.110.37` reuses fresh reconciliation balances and overlaps independent
   reinstall-authority observations, retaining protected Pool checks and recovery
   qualification while reducing host observation work. Fix selected-build endpoint

@@ -1,0 +1,33 @@
+   Compiling candid_derive v0.10.36
+   Compiling candid v0.10.36
+   Compiling ic-transport-types v0.49.2
+   Compiling ic-management-canister-types v0.8.0
+   Compiling icrc-cbor v0.1.0
+   Compiling candid_parser v0.4.1
+   Compiling ic-cdk-macros v0.20.3
+   Compiling canic-core v0.110.37 (/home/adam/projects/canic/crates/canic-core)
+   Compiling icrc-ledger-types v0.2.0
+   Compiling ic-cdk v0.20.3
+   Compiling ic-agent v0.49.2
+   Compiling pocket-ic v16.0.0
+   Compiling ic-query v0.43.1
+   Compiling ic-testkit v0.10.0
+   Compiling canic-control-plane v0.110.37 (/home/adam/projects/canic/crates/canic-control-plane)
+   Compiling canic-host v0.110.37 (/home/adam/projects/canic/crates/canic-host)
+    Finished `test` profile [optimized + debuginfo] target(s) in 2m 21s
+     Running unittests src/lib.rs (target/debug/deps/canic_host-971d40ac3429719b)
+
+running 1 test
+[CANIC-BUILD-MATRIX] {"case":"original_cold","measurement":{"cargo_probe_micros":325784,"elapsed_micros":2048167,"inputs":"2defe4f45481f5c65cda95f2c4fda3dac3e224c25030cb3cd1eea88b2a15f111","lookup_micros":585470,"miss_reason":"no comparable prior input evidence","release":"e9ca728f7d7b75e054a575c27daeeac4c75c4f72dd127b858f409c0cc29506a0","reused":false,"synthetic_sealing_micros":1136912,"wasm":"cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"}}
+[CANIC-BUILD-MATRIX] {"case":"unchanged_warm","measurement":{"cargo_probe_micros":88915,"elapsed_micros":1202043,"inputs":"2defe4f45481f5c65cda95f2c4fda3dac3e224c25030cb3cd1eea88b2a15f111","lookup_micros":560241,"miss_reason":null,"release":"e9ca728f7d7b75e054a575c27daeeac4c75c4f72dd127b858f409c0cc29506a0","reused":true,"synthetic_sealing_micros":552886,"wasm":"cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"}}
+[CANIC-BUILD-MATRIX] {"case":"relocated_frozen_cold","measurement":{"cargo_probe_micros":310378,"elapsed_micros":2026660,"inputs":"106a35e21d328c006b3689eba11d01d5291f0410009926d41e34bd08e51411bd","lookup_micros":552549,"miss_reason":"source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CANIC_TEST_BUILD_ENVIRONMENT_ROOT, CARGO_TARGET_DIR) (compared with last recorded successful build)","release":"0c1f722d41fbb117e48377b9532a5815dc62d8ccc21e5de8c147f37f84296987","reused":false,"synthetic_sealing_micros":1163732,"wasm":"cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"}}
+[CANIC-BUILD-MATRIX] {"case":"relocated_frozen_warm","measurement":{"cargo_probe_micros":88244,"elapsed_micros":1197929,"inputs":"106a35e21d328c006b3689eba11d01d5291f0410009926d41e34bd08e51411bd","lookup_micros":561257,"miss_reason":null,"release":"0c1f722d41fbb117e48377b9532a5815dc62d8ccc21e5de8c147f37f84296987","reused":true,"synthetic_sealing_micros":548425,"wasm":"cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"}}
+[CANIC-BUILD-MATRIX] {"case":"qualification_only","measurement":{"cargo_probe_micros":85927,"elapsed_micros":1780684,"inputs":"05ea739946c511649be1add700c1af74f9ee49bafb3d95ae6ed98e816910718c","lookup_micros":535606,"miss_reason":"source/dependency inputs changed (compared with last recorded successful build)","release":"e9ca44afd590bf40da8696e6fadfac2e2b06a029e09dd5a3ea4e505038f97bc6","reused":false,"synthetic_sealing_micros":1159149,"wasm":"cf5fe80cc00fb4e45e200cb98593bfb0783d5fc60c9a73f4de5c5b860fb6e639"}}
+[CANIC-BUILD-MATRIX] {"case":"runtime_source","measurement":{"cargo_probe_micros":153686,"elapsed_micros":1845644,"inputs":"cd7c122f9f217b5f48202e468f632fed173f39c178784d7edc16c901576c1f2a","lookup_micros":540296,"miss_reason":"source/dependency inputs changed (compared with last recorded successful build)","release":"9b55041a2d1e2a3181edf59e411901de2fd6bf86c62851bc33fafa84e55a0d66","reused":false,"synthetic_sealing_micros":1151661,"wasm":"ad10c990e3c5d07ad5e0815ba752c424653a116e2a8f77b30acc70f4ab5297ca"}}
+[CANIC-BUILD-MATRIX] {"case":"dependency_source","measurement":{"cargo_probe_micros":185942,"elapsed_micros":1859006,"inputs":"ea7549264864b6f43c2b5e6cc97650e8d25c74006e2ff86da3a3ac05e5e90ef9","lookup_micros":547742,"miss_reason":"source/dependency inputs changed (compared with last recorded successful build)","release":"392473bdfd7f0b82ab925c63a6ee3acda119ebe6c14b1536ac17badf83c2345f","reused":false,"synthetic_sealing_micros":1125321,"wasm":"f34e5a3831ddf2423285b20530ca72e4247d1ec988c062df73735c9f2d44fc15"}}
+test canister_build::reuse::tests::complete::environment::frozen_relocated_and_changed_tree_measurement ... ok
+
+test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 947 filtered out; finished in 12.08s
+
+==> leaving Cargo build artifacts intact
+==> clearing invocation-owned test scratch: test-runtime.7Y5BYT

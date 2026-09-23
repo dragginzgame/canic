@@ -1,10 +1,9 @@
 use crate::{
     dto::template::{TemplateChunkSetInfoResponse, TemplateManifestResponse},
-    ops::storage::template::TemplateChunkedOps,
     workflow::runtime::template::{
         publication::{
             WasmStorePublicationWorkflow,
-            store::{local_chunk, store_chunk, store_chunk_set_info},
+            store::{store_chunk, store_chunk_set_info},
         },
         record_wasm_store_metric,
     },
@@ -12,44 +11,25 @@ use crate::{
 use canic_core::api::lifecycle::metrics::{
     WasmStoreMetricOperation, WasmStoreMetricOutcome, WasmStoreMetricReason, WasmStoreMetricSource,
 };
-use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{error::InternalError, ops::cost_guard::CostGuardPermit};
 
-use super::super::super::{WASM_STORE_BOOTSTRAP_BINDING, store_pid_for_binding};
 use super::metrics::{WasmStorePublicationError, record_wasm_store_publish_failed};
+use crate::workflow::runtime::template::store_pid_for_binding;
 
 impl WasmStorePublicationWorkflow {
-    // Resolve the source store pid for one manifest-backed release, if it is store-backed.
-    pub(super) fn source_store_pid_for_manifest(
-        manifest: &TemplateManifestResponse,
-    ) -> Result<Option<Principal>, InternalError> {
-        if manifest.store_binding == WASM_STORE_BOOTSTRAP_BINDING {
-            Ok(None)
-        } else {
-            store_pid_for_binding(&manifest.store_binding).map(Some)
-        }
-    }
-
     // Resolve deterministic chunk-set metadata for one manifest from its authoritative source.
     async fn source_chunk_set_info_for_manifest(
         publication_permit: &CostGuardPermit,
         manifest: &TemplateManifestResponse,
     ) -> Result<TemplateChunkSetInfoResponse, InternalError> {
-        match Self::source_store_pid_for_manifest(manifest)? {
-            Some(store_pid) => {
-                store_chunk_set_info(
-                    publication_permit,
-                    store_pid,
-                    &manifest.template_id,
-                    &manifest.version,
-                )
-                .await
-            }
-            None => TemplateChunkedOps::chunk_set_info_response(
-                &manifest.template_id,
-                &manifest.version,
-            ),
-        }
+        let store_pid = store_pid_for_binding(&manifest.store_binding)?;
+        store_chunk_set_info(
+            publication_permit,
+            store_pid,
+            &manifest.template_id,
+            &manifest.version,
+        )
+        .await
     }
 
     // Resolve one deterministic chunk for one manifest from its authoritative source.
@@ -58,19 +38,15 @@ impl WasmStorePublicationWorkflow {
         manifest: &TemplateManifestResponse,
         chunk_index: u32,
     ) -> Result<Vec<u8>, InternalError> {
-        match Self::source_store_pid_for_manifest(manifest)? {
-            Some(store_pid) => {
-                store_chunk(
-                    publication_permit,
-                    store_pid,
-                    &manifest.template_id,
-                    &manifest.version,
-                    chunk_index,
-                )
-                .await
-            }
-            None => local_chunk(&manifest.template_id, &manifest.version, chunk_index),
-        }
+        let store_pid = store_pid_for_binding(&manifest.store_binding)?;
+        store_chunk(
+            publication_permit,
+            store_pid,
+            &manifest.template_id,
+            &manifest.version,
+            chunk_index,
+        )
+        .await
     }
 
     // Resolve source chunk hashes and record release-level failure if lookup fails.

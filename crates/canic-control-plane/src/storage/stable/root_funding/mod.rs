@@ -10,7 +10,7 @@ use canic_core::{
         FleetFundingPolicyRotationRootPrepareRequest, FleetFundingPolicyRotationRootReceipt,
         FleetRootFundingAcceptanceReceipt, FleetRootFundingRequest, FleetRootFundingResponse,
     },
-    eager_static, impl_storable_bounded,
+    impl_storable_bounded,
     role_contract::allocation::memory::control_plane::ROOT_FUNDING_ID,
 };
 use serde::{Deserialize, Serialize};
@@ -20,7 +20,7 @@ const ROOT_FUNDING_STATE_MAX_BYTES: u32 = 32_768;
 
 struct RootFundingState;
 
-eager_static! {
+std::thread_local! {
     static ROOT_FUNDING_STATE:
         RefCell<Cell<RootFundingStateRecord, RuntimeMemory<DefaultMemoryImpl>>> =
         RefCell::new(Cell::init(
