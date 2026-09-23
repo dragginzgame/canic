@@ -15,7 +15,7 @@ esac
 
 cd "$ROOT"
 make --no-print-directory ensure-clean
-bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE"
+bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE" --check-remote
 validated_head="$(git rev-parse HEAD)"
 receipt_dir="${CANIC_RELEASE_RECEIPT_DIR:-$ROOT/target/release-validation}"
 receipt="$receipt_dir/$VALIDATION_KIND-$validated_head.receipt"

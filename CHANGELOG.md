@@ -27,6 +27,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Root template payloads through the recorded Store and remove obsolete local readers.
   Complete B2 qualification with the accepted four-case cold-query tradeoff.
   Correct the Store-binding test setup to respect the storage ops boundary.
+  Reject remote divergence and occupied release tags before expensive validation.
 - `0.110.38` adds receipt-bound external debit review for completed-source
   retirement, preserving original evidence and exact balance checks.
 

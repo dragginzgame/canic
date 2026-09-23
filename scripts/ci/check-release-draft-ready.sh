@@ -3,6 +3,12 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BUMP_TYPE="${1:-patch}"
+CHECK_REMOTE="${2:-}"
+
+if [[ $# -gt 2 || ( -n "$CHECK_REMOTE" && "$CHECK_REMOTE" != --check-remote ) ]]; then
+    echo "usage: $0 [patch|minor|major] [--check-remote]" >&2
+    exit 2
+fi
 
 cd "$ROOT"
 current="$(bash scripts/ci/read-workspace-version.sh)"
@@ -40,5 +46,9 @@ release_entry_count="$(rg -c "^## ${planned//./\\.} - (Unreleased|[0-9]{4}-[0-9]
     echo "❌ $detailed_changelog must contain one $planned release entry (Unreleased or YYYY-MM-DD)." >&2
     exit 1
 }
+
+if [[ "$CHECK_REMOTE" == --check-remote ]]; then
+    bash scripts/ci/check-release-remote-state.sh before-version "$planned"
+fi
 
 echo "✅ Release-notes preflight passed for $planned"
