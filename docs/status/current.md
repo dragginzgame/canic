@@ -87,6 +87,13 @@ current-document semantics pass. Final records live in the linked report and
 inputs match the frozen source; the retained native-only test overlay corrects
 two metric-label expectations and is included in final native qualification.
 
+The maintainer's subsequent layering gate exposed direct stable-record setup
+in the new workflow binding test. The
+[correction](../audits/reports/2026-09/2026-09-23/b2-layering-correction/evidence.json)
+uses the existing ops test boundary and retains the exact-binding and typed
+rejection assertions. This third native-only overlay preserves all production
+bytes and canonical artifact evidence; the layering guard remains unchanged.
+
 The complete accepted batch and both `.39` changelog surfaces are push-ready.
 B3 implementation has not started: first assess residual record/codec complexity
 benefit. B4/B5 and the human minor-closeout gate remain sequenced separately.

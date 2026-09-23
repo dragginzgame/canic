@@ -1,0 +1,45 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-23",
+  "scope": "Native B2 test setup corrected to use existing ops boundary",
+  "source": {
+    "path": "crates/canic-control-plane/src/workflow/runtime/template/mod.rs",
+    "canonical_source_sha256": "7cb50a63b2a3b1e80eaaa5dad7cd352b3112f0509421a9d5d5e21faccd13a6a2",
+    "corrected_source_sha256": "ef727c5d31bb3c17e458ed6253558734662292299bd9568bc0b7c5370c84c2d8",
+    "production_prefix_sha256": "893df47ba2b1365c71bb4e8daf7836dcc6ca989f4363942d9a067b01f110245f",
+    "production_bytes_unchanged": true,
+    "native_only": true
+  },
+  "production_source_files_verified": 1994,
+  "native_only_overlay_files": [
+    "crates/canic-control-plane/src/workflow/runtime/template/mod.rs",
+    "crates/canic-core/src/ops/runtime/metrics/tests.rs",
+    "crates/canic-core/src/workflow/metrics/query.rs"
+  ],
+  "canonical_evidence_unchanged": true,
+  "previous_report_sha256": "00eeb82db868a7b25a492d2eb5cadc47f71dde831f124b5d7a6d7df8e052734e",
+  "checks": [
+    {
+      "command": "bash scripts/ci/run-layering-guards.sh",
+      "result": "pass",
+      "log": "layering.log",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    {
+      "command": "RUSTC_WRAPPER='' CARGO_NET_OFFLINE=true cargo test --locked -p canic-control-plane --lib workflow::runtime::template",
+      "result": "pass",
+      "log": "tests.log",
+      "sha256": "30901180300b4daf3bb543d7ed9275e67be983d6b4651236897d81ea9538bf8b"
+    },
+    {
+      "command": "RUSTC_WRAPPER='' CARGO_NET_OFFLINE=true cargo clippy --locked -p canic-control-plane --lib --tests --all-features -- -D warnings",
+      "result": "pass",
+      "log": "clippy.log",
+      "sha256": "b836dd49aa29cb16e07952c84af0a773ce557c0e58e846e8f3aafbeb65e584d4"
+    }
+  ],
+  "guard_changed": false,
+  "artifacts_rebuilt": false,
+  "broad_gate_run": false,
+  "git_effects": false
+}

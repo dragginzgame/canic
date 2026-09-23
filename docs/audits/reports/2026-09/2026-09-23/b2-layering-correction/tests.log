@@ -1,0 +1,24 @@
+   Compiling canic-control-plane v0.110.37 (/home/adam/projects/canic/crates/canic-control-plane)
+    Finished `test` profile [optimized + debuginfo] target(s) in 24.11s
+     Running unittests src/lib.rs (target/debug/deps/canic_control_plane-94e4a72d1e20405a)
+
+running 16 tests
+test workflow::runtime::template::publication::cost_guard::tests::durable_publication_effect_adapters_require_permits ... ok
+test workflow::runtime::template::client::tests::typed_client_uses_only_store_command_catalog_and_byte_lanes ... ok
+test workflow::runtime::template::publication::cost_guard::tests::durable_publication_request_keeps_command_quotas_independent ... ok
+test workflow::runtime::template::publication::cost_guard::tests::durable_publication_request_pins_quota_and_cycle_policy ... ok
+test workflow::runtime::template::publication::error::tests::broad_publication_wrappers_map_at_the_typed_boundary ... ok
+test workflow::runtime::template::publication::error::tests::finite_publication_causes_use_approved_registered_identities ... ok
+test workflow::runtime::template::publication::error::tests::publication_causes_map_to_stable_public_codes ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::lifecycle_guard_rejects_concurrent_entry_and_releases_on_drop ... ok
+test workflow::runtime::template::publication::release::catalog::tests::catalog_reconciliation_distinguishes_gc_fence_from_missing_release ... ok
+test workflow::runtime::template::publication::release::metrics::tests::publication_failure_reasons_use_public_codes ... ok
+test workflow::runtime::template::tests::release_source_label_includes_version ... ok
+test workflow::runtime::template::publication::cost_guard::tests::durable_publication_request_rejects_insufficient_cycle_headroom ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::deleted_store_inventory_reconciliation_is_root_owned_and_idempotent ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::root_store_gc_reconciliation_preserves_live_retry_lineage ... ok
+test workflow::runtime::template::publication::lifecycle::gc::tests::reclaimed_store_binding_finalization_resumes_from_every_durable_slot ... ok
+test workflow::runtime::template::tests::manifest_source_requires_the_exact_registered_store_binding ... ok
+
+test result: ok. 16 passed; 0 failed; 0 ignored; 0 measured; 266 filtered out; finished in 0.01s
+

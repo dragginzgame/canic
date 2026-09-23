@@ -150,6 +150,16 @@ maintained `Store` metric label; their exact overlay and structural `cfg(test)`
 boundaries are retained. The corrected 92-test run and final lint include that
 overlay. It has no Wasm production input difference.
 
+The subsequent maintainer gate found direct stable-record access in the new
+workflow binding test. Its setup now uses the existing
+`RootWasmStoreStateOps::import_test_state` boundary, preserving exact binding
+and typed-rejection assertions. The
+[native correction](b2-layering-correction/evidence.json) records the final
+targeted checks and a third native-only overlay. Every byte before that file's
+`cfg(test)` module matches the captured artifact source. The layering guard and
+production inputs are unchanged; the retained canonical measurements remain
+the qualified artifact snapshot.
+
 The final artifacts use the same Release pipeline, paths, lockfile and tools as
 the previous candidate, with dependency reuse inside the isolated target. These
 are not independent clean repetitions or build-time/resource measurements.
