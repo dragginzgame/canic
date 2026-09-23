@@ -1,0 +1,8 @@
+{
+  "path": "crates/canic-control-plane/src/workflow/runtime/template/mod.rs",
+  "canonical_source_sha256": "7cb50a63b2a3b1e80eaaa5dad7cd352b3112f0509421a9d5d5e21faccd13a6a2",
+  "corrected_source_sha256": "ef727c5d31bb3c17e458ed6253558734662292299bd9568bc0b7c5370c84c2d8",
+  "production_prefix_sha256": "893df47ba2b1365c71bb4e8daf7836dcc6ca989f4363942d9a067b01f110245f",
+  "production_bytes_unchanged": true,
+  "native_only": true
+}

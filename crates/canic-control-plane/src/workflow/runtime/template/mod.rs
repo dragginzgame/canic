@@ -202,36 +202,49 @@ fn store_pid_for_binding(binding: &WasmStoreBinding) -> Result<Principal, Intern
 mod tests {
     use super::{release_source_label, store_pid_for_binding};
     use crate::{
-        ids::{TemplateId, TemplateVersion, WasmStoreBinding},
-        storage::stable::state::root_wasm_store::{
-            RootWasmStoreState, RootWasmStoreStateData, RootWasmStoreStateRecord,
-            WasmStoreGcRecord, WasmStoreRecord,
+        ids::{TemplateId, TemplateVersion, WasmStoreBinding, WasmStoreGcMode},
+        ops::storage::state::root_wasm_store::{
+            PublicationStoreStateTestInput, RootWasmStoreStateOps, WasmStoreStateTestInput,
         },
     };
     use canic_core::{cdk::types::Principal, diagnostics::codes};
+
+    fn import_store_inventory(wasm_stores: Vec<WasmStoreStateTestInput>) {
+        RootWasmStoreStateOps::import_test_state(
+            PublicationStoreStateTestInput {
+                active_binding: None,
+                detached_binding: None,
+                retired_binding: None,
+                generation: 0,
+                changed_at: 0,
+                retired_at: 0,
+            },
+            wasm_stores,
+        );
+    }
 
     #[test]
     fn manifest_source_requires_the_exact_registered_store_binding() {
         let binding = WasmStoreBinding::new("primary");
         let pid = Principal::from_slice(&[31; 29]);
-        RootWasmStoreState::import(RootWasmStoreStateData {
-            record: RootWasmStoreStateRecord {
-                wasm_stores: vec![WasmStoreRecord {
-                    binding: binding.clone(),
-                    pid,
-                    created_at: 10,
-                    gc: WasmStoreGcRecord::default(),
-                }],
-                ..RootWasmStoreStateRecord::default()
-            },
-        });
+        import_store_inventory(vec![WasmStoreStateTestInput {
+            binding: binding.clone(),
+            pid,
+            created_at: 10,
+            gc_mode: WasmStoreGcMode::Normal,
+            gc_changed_at: 0,
+            prepared_at: None,
+            started_at: None,
+            completed_at: None,
+            runs_completed: 0,
+        }]);
         assert_eq!(store_pid_for_binding(&binding).unwrap(), pid);
         let error = store_pid_for_binding(&WasmStoreBinding::new("unregistered")).unwrap_err();
         assert_eq!(
             error.public_error().code(),
             codes::WASM_STORE_MANIFEST_MISSING.raw_code()
         );
-        RootWasmStoreState::import(RootWasmStoreStateData::default());
+        import_store_inventory(Vec::new());
     }
 
     #[test]
