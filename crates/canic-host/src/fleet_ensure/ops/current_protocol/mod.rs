@@ -1017,7 +1017,7 @@ pub(super) fn observe(
     clippy::too_many_lines,
     reason = "one exhaustive observer keeps every closed action beside its terminal predicate"
 )]
-fn observe_with_staging(
+pub(super) fn observe_with_staging(
     icp: &IcpCli,
     root: &Path,
     action: &EnsureAction,
@@ -1670,7 +1670,7 @@ fn manifest_response(request: &TemplateManifestInput) -> TemplateManifestRespons
     }
 }
 
-/// Exact query identity within one read-only protocol compilation.
+/// Exact query identity within one read-only protocol observation pass.
 #[derive(Eq, Ord, PartialEq, PartialOrd)]
 struct StoreStagingAuthority {
     candid_path: PathBuf,
@@ -1680,13 +1680,18 @@ struct StoreStagingAuthority {
     version: TemplateVersion,
 }
 
-/// Reuse successful template observations only while binding one action sequence.
+/// Reuse successful template observations only within one read-only pass.
 #[derive(Default)]
-struct StoreStagingObservations {
+pub(super) struct StoreStagingObservations {
     templates: BTreeMap<StoreStagingAuthority, TemplateStagingStatusResponse>,
+    cached_reads: u64,
 }
 
 impl StoreStagingObservations {
+    pub(super) const fn cached_reads(&self) -> u64 {
+        self.cached_reads
+    }
+
     fn query(
         &mut self,
         icp: &IcpCli,
@@ -1702,6 +1707,7 @@ impl StoreStagingObservations {
             version: version.clone(),
         };
         if let Some(status) = self.templates.get(&authority) {
+            self.cached_reads = self.cached_reads.saturating_add(1);
             return Ok(status.clone());
         }
         let status = query_store_staging(icp, resolved, template_id, version)?;

@@ -10,7 +10,7 @@ use crate::icp::{IcpCli, IcpManagementCallError};
 use candid::{CandidType, Principal};
 use ic_agent::{Agent, AgentError, agent::agent_error::TransportError};
 use serde::de::DeserializeOwned;
-use std::{future::Future, time::Duration};
+use std::{future::Future, sync::Arc, time::Duration};
 use thiserror::Error;
 
 // Bound the transport envelope, not the logical contents of application storage.
@@ -44,9 +44,69 @@ pub enum IcpQueryError {
 
     #[error("query runtime failed: {0}")]
     Runtime(#[source] std::io::Error),
+
+    #[error("query HTTP client setup failed: {0}")]
+    Client(#[source] reqwest::Error),
+}
+
+/// Connection pool and one IO worker shared by a command's cloned query contexts.
+/// Contains no signer, network authority, Agent or query response cache.
+#[derive(Debug)]
+pub(super) struct QueryTransport {
+    client: reqwest::Client,
+    runtime: Option<tokio::runtime::Runtime>,
+}
+
+impl QueryTransport {
+    fn new() -> Result<Self, IcpQueryError> {
+        // Match ic-agent's native client defaults; query deadlines remain tighter.
+        let client = reqwest::Client::builder()
+            .use_rustls_tls()
+            .timeout(Duration::from_secs(360))
+            .build()
+            .map_err(IcpQueryError::Client)?;
+        let runtime = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(1)
+            .thread_name("canic-query")
+            .enable_all()
+            .build()
+            .map_err(IcpQueryError::Runtime)?;
+        Ok(Self {
+            client,
+            runtime: Some(runtime),
+        })
+    }
+
+    fn block_on<F: Future>(&self, future: F) -> F::Output {
+        self.runtime
+            .as_ref()
+            .expect("live query transport")
+            .block_on(future)
+    }
+}
+
+impl Drop for QueryTransport {
+    fn drop(&mut self) {
+        // IcpCli may be owned by an async caller. No query can still borrow this
+        // final Arc; shut down idle IO without blocking that caller's runtime.
+        if let Some(runtime) = self.runtime.take() {
+            runtime.shutdown_background();
+        }
+    }
 }
 
 impl IcpCli {
+    fn query_transport(&self) -> Result<Arc<QueryTransport>, IcpQueryError> {
+        let mut retained = self.query_transport.lock().expect("query transport lock");
+        if let Some(transport) = retained.as_ref() {
+            return Ok(Arc::clone(transport));
+        }
+        let transport = Arc::new(QueryTransport::new()?);
+        *retained = Some(Arc::clone(&transport));
+        drop(retained);
+        Ok(transport)
+    }
+
     /// Query one immutable request with at most three logical attempts in 30 seconds
     /// after local identity/network resolution. Agent-internal HTTP retries and
     /// certificate reads share that deadline but are not separate logical attempts.
@@ -63,8 +123,13 @@ impl IcpCli {
             Some(method),
             || {
                 let argument = candid::encode_one(input).map_err(IcpQueryError::Encode)?;
+                let transport = self.query_transport()?;
                 let agent = self
-                    .authenticated_agent_with_response_limit(RESPONSE_BYTES)
+                    .build_authenticated_agent(
+                        Agent::builder()
+                            .with_http_client(transport.client.clone())
+                            .with_max_response_body_size(RESPONSE_BYTES),
+                    )
                     .map_err(|error| IcpQueryError::Authority(Box::new(error)))?;
                 let bytes = query_bytes(self, &agent, canister, method, &argument)?;
                 let mut config = candid::de::DecoderConfig::new();
@@ -84,11 +149,7 @@ fn query_bytes(
     method: &str,
     argument: &[u8],
 ) -> Result<Vec<u8>, IcpQueryError> {
-    let runtime = tokio::runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .map_err(IcpQueryError::Runtime)?;
-    runtime.block_on(async {
+    icp.query_transport()?.block_on(async {
         tokio::time::timeout(
             TOTAL_TIMEOUT,
             retry_query(|| async {

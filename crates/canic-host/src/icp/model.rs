@@ -46,6 +46,8 @@ pub struct IcpCli {
     pub(super) identity_password_file: Option<PathBuf>,
     pub(super) selected_identity: std::sync::Arc<std::sync::OnceLock<String>>,
     pub(super) compatible_version: std::sync::Arc<std::sync::Mutex<Option<String>>>,
+    pub(super) query_transport:
+        std::sync::Arc<std::sync::Mutex<Option<std::sync::Arc<super::query::QueryTransport>>>>,
 }
 
 ///

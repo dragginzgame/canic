@@ -221,6 +221,18 @@ pub trait EnsurePlatform {
         observe(self)
     }
 
+    /// Share Store catalog reads within one independent-effect reconciliation pass.
+    /// Expire them on exit and before submission; balances remain fresh per effect.
+    fn with_independent_observations<T, E>(
+        &mut self,
+        observe: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E>
+    where
+        Self: Sized,
+    {
+        observe(self)
+    }
+
     /// Measure an existing activity without changing its result or owning its effects.
     fn with_activity<T, E>(
         &mut self,

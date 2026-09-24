@@ -18,6 +18,7 @@ Supporting implementation evidence does not belong here.
 - `immutable-test-checkout-lease/`
 - `inspect-message-admission/`
 - `operator-funding-conversion-authority/`
+- `release-binding-finalization/`
 - `role-specific-stable-initialization/`
 - `standalone-blob-service-extraction/`
 

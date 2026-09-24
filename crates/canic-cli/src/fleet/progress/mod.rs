@@ -94,6 +94,11 @@ struct Display {
     receipt: Option<receipt::Receipt>,
     transport: Transport,
     disabled: bool,
+    finished: bool,
+    context: Option<String>,
+    receipt_path: Option<std::path::PathBuf>,
+    notice: Option<String>,
+    catalog: Option<Vec<String>>,
     planning_reported: bool,
     milestones: ProgressOutput,
     painter: terminal::Painter,
@@ -104,6 +109,9 @@ struct Display {
 
 impl Display {
     fn progress(&mut self, progress: FleetEnsureProgress, now: Instant) -> io::Result<()> {
+        if self.finished {
+            return Ok(());
+        }
         if let Some(receipt) = &mut self.receipt {
             receipt.progress(&progress);
         }
@@ -119,6 +127,12 @@ impl Display {
             self.changed = now;
         }
         self.observed = now;
+        if self.transport == Transport::Live {
+            self.catalog = None;
+            self.notice = None;
+            self.latest = Some(progress);
+            return self.repaint(now);
+        }
         if actionable(&progress) {
             self.latest = None;
             self.painter
@@ -135,37 +149,66 @@ impl Display {
     }
 
     fn repaint(&mut self, now: Instant) -> io::Result<()> {
-        if self.disabled {
+        if self.disabled || self.finished {
             return Ok(());
         }
-        if let Some(progress) = &self.latest {
-            let size = terminal::size();
-            if self.transport != Transport::Live || size.0 < 60 || size.1 < 14 {
-                self.painter.clear(&mut io::stderr().lock(), size)?;
-                if self.milestones.should_emit(progress, now) {
-                    writeln!(
-                        io::stderr().lock(),
-                        "{}",
-                        render::milestone(
-                            progress,
-                            now.saturating_duration_since(self.observed),
-                            now.saturating_duration_since(self.changed)
-                        )
-                    )?;
-                }
-                return Ok(());
+        if self.transport == Transport::Live {
+            let mut lines = vec![
+                self.context
+                    .clone()
+                    .unwrap_or_else(|| "Fleet deployment".into()),
+                String::new(),
+            ];
+            if let Some(progress) = &self.latest {
+                lines.extend(render::panel(
+                    progress,
+                    now.saturating_duration_since(self.observed),
+                    now.saturating_duration_since(self.changed),
+                ));
+            } else if let Some(catalog) = &self.catalog {
+                lines.extend(catalog.iter().cloned());
+            } else {
+                lines.push("Preparing deployment plan...".into());
             }
-            let lines = render::panel(
-                progress,
-                now.saturating_duration_since(self.observed),
-                now.saturating_duration_since(self.changed),
-            );
-            self.painter.paint(&mut io::stderr().lock(), &lines, size)?;
+            if let Some(notice) = &self.notice {
+                lines.push(String::new());
+                lines.push(notice.clone());
+            }
+            if let Some(path) = &self.receipt_path {
+                lines.push(String::new());
+                if self
+                    .receipt
+                    .as_ref()
+                    .is_some_and(receipt::Receipt::has_failed)
+                {
+                    lines.push("Timing receipt is incomplete: writing failed".into());
+                }
+                lines.push(format!("Timing receipt: {}", path.display()));
+            }
+            return self
+                .painter
+                .paint(&mut io::stderr().lock(), &lines, terminal::size());
+        }
+        if let Some(progress) = &self.latest
+            && self.milestones.should_emit(progress, now)
+        {
+            writeln!(
+                io::stderr().lock(),
+                "{}",
+                render::milestone(
+                    progress,
+                    now.saturating_duration_since(self.observed),
+                    now.saturating_duration_since(self.changed)
+                )
+            )?;
         }
         Ok(())
     }
 
     fn observation(&mut self, timing: FleetObservationTiming) -> io::Result<()> {
+        if self.finished {
+            return Ok(());
+        }
         if let Some(receipt) = &mut self.receipt {
             receipt.observation(&timing);
         }
@@ -181,6 +224,12 @@ impl Display {
         }
         if timing.succeeded.is_none() {
             return Ok(());
+        }
+        if self.transport == Transport::Live {
+            if timing.succeeded == Some(false) {
+                self.notice = Some(render_observation_timing(&timing, false));
+            }
+            return self.repaint(Instant::now());
         }
         let summary = timing.stage == FleetObservationStage::Planning
             && timing.parent_stage.is_none()
@@ -239,8 +288,21 @@ impl ProgressSink {
             if let Some(receipt) = &mut display.receipt {
                 receipt.record("subnet_catalog_progress", progress);
             }
-            crate::fleet::subnet_catalog::print_progress(progress);
-            Ok(())
+            if display.finished || display.disabled {
+                return Ok(());
+            }
+            if display.transport == Transport::Live {
+                display.catalog = Some(
+                    crate::fleet::subnet_catalog::render_progress(progress)
+                        .lines()
+                        .map(str::to_owned)
+                        .collect(),
+                );
+                display.repaint(Instant::now())
+            } else {
+                crate::fleet::subnet_catalog::print_progress(progress);
+                Ok(())
+            }
         });
     }
 
@@ -250,6 +312,9 @@ impl ProgressSink {
         {
             display.disabled = true;
             display.latest = None;
+            let _ = display
+                .painter
+                .clear(&mut io::stderr().lock(), terminal::size());
         }
     }
 }
@@ -267,7 +332,8 @@ impl ProgressSession {
             io::stderr().is_terminal(),
             std::env::var("TERM").ok().as_deref(),
             std::env::var_os("NO_COLOR").is_some(),
-        ) && !json;
+        ) && !json
+            && terminal::install_cleanup().is_ok();
         let now = Instant::now();
         let sink = ProgressSink(Arc::new(Mutex::new(Display {
             receipt: None,
@@ -279,6 +345,11 @@ impl ProgressSession {
                 Transport::Plain
             },
             disabled: false,
+            finished: false,
+            context: None,
+            receipt_path: None,
+            notice: None,
+            catalog: None,
             planning_reported: false,
             milestones: ProgressOutput::default(),
             painter: terminal::Painter::default(),
@@ -307,9 +378,15 @@ impl ProgressSession {
         invocation: &receipt::Invocation<'_>,
     ) {
         match receipt::Receipt::create(root, invocation) {
-            Ok((receipt, path)) => {
+            Ok((mut receipt, path)) => {
                 self.sink.update(|display| {
+                    if display.transport == Transport::Live { receipt.defer_error_output(); }
                     display.receipt = Some(receipt);
+                    display.context = Some(format!("Fleet {} ({})", invocation.fleet, invocation.environment));
+                    display.receipt_path = Some(path.clone());
+                    if display.transport == Transport::Live {
+                        return display.repaint(Instant::now());
+                    }
                     display.painter.clear(&mut io::stderr().lock(), terminal::size())?;
                     if display.transport == Transport::Json {
                         writeln!(io::stderr().lock(), "{}", serde_json::json!({
@@ -321,11 +398,14 @@ impl ProgressSession {
                 });
             }
             Err(_) => {
-                let _ = writeln!(
-                    io::stderr().lock(),
-                    "{}",
-                    serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "creation", "incomplete": true})
-                );
+                self.sink.update(|display| {
+                    if display.transport == Transport::Live {
+                        display.notice = Some("Timing receipt unavailable; deployment progress is not being retained".into());
+                        display.repaint(Instant::now())
+                    } else {
+                        writeln!(io::stderr().lock(), "{}", serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "creation", "incomplete": true}))
+                    }
+                });
             }
         }
     }
@@ -335,6 +415,20 @@ impl ProgressSession {
         report: Option<&canic_host::fleet_ensure::model::FleetEnsureReport>,
     ) {
         self.sink.update(|display| {
+            display.finished = true;
+            display.latest = None;
+            display
+                .painter
+                .clear(&mut io::stderr().lock(), terminal::size())?;
+            if display.transport == Transport::Live
+                && let Some(path) = &display.receipt_path
+            {
+                writeln!(
+                    io::stderr().lock(),
+                    "Fleet timing receipt: {}",
+                    path.display()
+                )?;
+            }
             if let Some(receipt) = &mut display.receipt {
                 receipt.finish(report);
                 if display.transport != Transport::Json {
@@ -358,6 +452,20 @@ impl ProgressSession {
 
     pub(super) fn finish_generation(&self, succeeded: bool) {
         self.sink.update(|display| {
+            display.finished = true;
+            display.latest = None;
+            display
+                .painter
+                .clear(&mut io::stderr().lock(), terminal::size())?;
+            if display.transport == Transport::Live
+                && let Some(path) = &display.receipt_path
+            {
+                writeln!(
+                    io::stderr().lock(),
+                    "Fleet timing receipt: {}",
+                    path.display()
+                )?;
+            }
             if let Some(receipt) = &mut display.receipt {
                 receipt.close(if succeeded { "completed" } else { "failed" }, None);
                 if display.transport != Transport::Json {
@@ -386,10 +494,13 @@ impl Drop for ProgressSession {
         if let Some(worker) = self.worker.take() {
             let _ = worker.join();
         }
-        self.sink.update(|display| {
-            display
-                .painter
-                .clear(&mut io::stderr().lock(), terminal::size())
-        });
+        let mut display = self
+            .sink
+            .0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let _ = display
+            .painter
+            .clear(&mut io::stderr().lock(), terminal::size());
     }
 }

@@ -49,10 +49,13 @@ pub(super) fn apply_batch<P: EnsurePlatform>(
     write_journal(paths, journal)?;
     // Exact live observation still precedes every fresh submission. Already completed
     // effects become terminal without another update.
-    for (offset, action) in batch.iter().enumerate() {
-        let record = &mut journal.effects[index + offset];
-        reconcile(platform, &journal.operation_id, action, record, state)?;
-    }
+    platform.with_independent_observations(|platform| {
+        for (offset, action) in batch.iter().enumerate() {
+            let record = &mut journal.effects[index + offset];
+            reconcile(platform, &journal.operation_id, action, record, state)?;
+        }
+        Ok::<_, EnsureWorkflowError<P::Error>>(())
+    })?;
     write_journal(paths, journal)?;
     if batch
         .iter()
@@ -86,33 +89,36 @@ pub(super) fn apply_batch<P: EnsurePlatform>(
     let mut first_error = None;
     // All workers have joined. Persist successful receipts even if an earlier
     // sibling failed, then observe every submitted effect including lost replies.
-    for ((effect_index, action), outcome) in pending.into_iter().zip(outcomes) {
-        let record = &mut journal.effects[effect_index];
-        match outcome {
-            Ok(outcome) => {
-                if !retain_outcome(record, outcome) {
-                    first_error
-                        .get_or_insert((effect_index, EnsureWorkflowError::JournalIntegrity));
+    platform.with_independent_observations(|platform| {
+        for ((effect_index, action), outcome) in pending.into_iter().zip(outcomes) {
+            let record = &mut journal.effects[effect_index];
+            match outcome {
+                Ok(outcome) => {
+                    if !retain_outcome(record, outcome) {
+                        first_error
+                            .get_or_insert((effect_index, EnsureWorkflowError::JournalIntegrity));
+                    }
+                }
+                Err(error) => {
+                    first_error.get_or_insert((effect_index, EnsureWorkflowError::Platform(error)));
                 }
             }
-            Err(error) => {
-                first_error.get_or_insert((effect_index, EnsureWorkflowError::Platform(error)));
+            write_journal(paths, journal)?;
+            let record = &mut journal.effects[effect_index];
+            if let Err(error) = reconcile(platform, &journal.operation_id, action, record, state) {
+                first_error.get_or_insert((effect_index, error));
+            }
+            let applied = journal.effects[effect_index].state == EffectState::Applied;
+            if applied {
+                journal.stalled_observations = 0;
+            }
+            write_journal(paths, journal)?;
+            if applied {
+                report_progress(platform, plan, journal, action_progress_phase(action));
             }
         }
-        write_journal(paths, journal)?;
-        let record = &mut journal.effects[effect_index];
-        if let Err(error) = reconcile(platform, &journal.operation_id, action, record, state) {
-            first_error.get_or_insert((effect_index, error));
-        }
-        let applied = journal.effects[effect_index].state == EffectState::Applied;
-        if applied {
-            journal.stalled_observations = 0;
-        }
-        write_journal(paths, journal)?;
-        if applied {
-            report_progress(platform, plan, journal, action_progress_phase(action));
-        }
-    }
+        Ok::<_, EnsureWorkflowError<P::Error>>(())
+    })?;
     if let Some((failed_index, error)) = first_error {
         journal.stalled_observations = journal.stalled_observations.saturating_add(1);
         write_journal(paths, journal)?;

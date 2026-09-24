@@ -37,6 +37,10 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
             )
             .unwrap();
         assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
+        // A successor acquires a new guard and revalidates the retained release.
+        drop(reuse);
+        let reuse = prepared_reuse(&context);
+        assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
         let key = context
             .icp_root
             .join(".canic/local-secrets/build-environment.key");
@@ -48,11 +52,10 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
         assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
         fs::write(directory.join("last-input-diagnostics.json"), b"invalid").unwrap();
         assert_eq!(reuse.load().unwrap().unwrap().release_build_id, release);
-        fs::write(
-            reuse.release_directory(release).join("artifacts/app.wasm"),
-            b"tampered",
-        )
-        .unwrap();
+        let artifact = reuse.release_directory(release).join("artifacts/app.wasm");
+        drop(reuse);
+        fs::write(artifact, b"tampered").unwrap();
+        let reuse = prepared_reuse(&context);
         assert!(matches!(reuse.load(), Err(BuildReuseError::Evidence(_))));
         drop(reuse);
         fs::remove_dir_all(root).unwrap();

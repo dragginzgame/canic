@@ -885,6 +885,7 @@ pub struct IcpEnsurePlatform {
     initial_observation_delay: Duration,
     maximum_observation_delay: Duration,
     observation_snapshot: RefCell<Option<FleetObservationSnapshot>>,
+    staging_observations: Option<current_protocol::StoreStagingObservations>,
     cached_reads: Cell<u64>,
     observation_stages: Vec<(u64, FleetObservationStage)>,
     progress_handler: Option<Box<dyn FnMut(FleetEnsureProgress)>>,
@@ -924,6 +925,7 @@ impl IcpEnsurePlatform {
             initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
             observation_snapshot: RefCell::new(None),
+            staging_observations: None,
             cached_reads: Cell::new(0),
             observation_stages: Vec::new(),
             progress_handler: None,
@@ -3368,6 +3370,17 @@ impl EnsurePlatform for IcpEnsurePlatform {
         }
     }
 
+    fn with_independent_observations<T, E>(
+        &mut self,
+        observe: impl FnOnce(&mut Self) -> Result<T, E>,
+    ) -> Result<T, E> {
+        // Every pass starts fresh, including retries and nested invocations.
+        self.staging_observations = Some(current_protocol::StoreStagingObservations::default());
+        let result = observe(self);
+        self.staging_observations = None;
+        result
+    }
+
     fn report_progress(&mut self, progress: FleetEnsureProgress) {
         if let Some(handler) = self.progress_handler.as_mut() {
             handler(progress);
@@ -4329,7 +4342,20 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 action: current_action,
                 ..
             } => {
-                let mut observation = match current_protocol::observe(&platform.icp, &platform.root, action)
+                let observed = match platform.staging_observations.as_mut() {
+                    Some(staging) => {
+                        let before = staging.cached_reads();
+                        let result = current_protocol::observe_with_staging(
+                            &platform.icp, &platform.root, action, staging,
+                        );
+                        if staging.cached_reads() > before {
+                            platform.record_cached_read();
+                        }
+                        result
+                    }
+                    None => current_protocol::observe(&platform.icp, &platform.root, action),
+                };
+                let mut observation = match observed
                 {
                     Ok(observation) => observation,
                     Err(error)
@@ -4525,6 +4551,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
     ) -> Result<Vec<Result<EffectOutcome, Self::Error>>, Self::Error> {
         self.measure_observation(FleetObservationStage::IndependentSubmission, |platform| {
             platform.observation_snapshot.take();
+            platform.staging_observations = None;
             platform.require_operator()?;
             Ok(
                 super::independent_effects::apply(&platform.icp, &platform.root, uploads)?
@@ -4548,6 +4575,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
     ) -> Result<EffectOutcome, Self::Error> {
         self.measure_observation(FleetObservationStage::EffectSubmission, |platform| {
             platform.observation_snapshot.take();
+            platform.staging_observations = None;
             platform.require_operator()?;
             match action {
                 EnsureAction::SealAuthority { .. } => super::authority_seal::apply(

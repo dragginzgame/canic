@@ -431,6 +431,106 @@ impl Drop for StoreStagingFixture {
 
 #[cfg(unix)]
 #[test]
+fn store_staging_batch_passes_refresh_partial_completion_and_failed_reads() {
+    use crate::fleet_ensure::{
+        model::{EffectRecord, EffectState},
+        ops::{EnsurePlatform, platform::IcpEnsurePlatform},
+    };
+
+    let mut fixture = StoreStagingFixture::new();
+    fixture.status.stored_chunk_hashes[1] = None;
+    fixture.status.stored_chunk_hashes[2] = Some(vec![0; 32]);
+    fixture.respond();
+    let desired = desired(Vec::new());
+    let actions = fixture
+        .actions
+        .iter()
+        .enumerate()
+        .map(|(index, action)| {
+            bind_action(
+                &fixture.root,
+                &desired,
+                &state(),
+                desired.protocol.as_ref().unwrap(),
+                action.clone(),
+                principal(21),
+                format!("chunk-{index}"),
+                0,
+            )
+            .unwrap()
+        })
+        .collect::<Vec<_>>();
+    let mut platform = IcpEnsurePlatform::new(
+        desired,
+        fixture.root.join("icp").to_str().unwrap(),
+        &fixture.root,
+    );
+    let read = |platform: &mut IcpEnsurePlatform| {
+        actions
+            .iter()
+            .map(|action| {
+                let record = EffectRecord {
+                    maintenance_attempts: 0,
+                    publication_attempts: 0,
+                    action_sha256: super::super::action_sha256(action),
+                    created_principal: None,
+                    destination_post_cycles: None,
+                    destination_pre_cycles: None,
+                    post_cycles: None,
+                    pre_cycles: None,
+                    pre_canister_version: None,
+                    progress_identity: None,
+                    receipt: None,
+                    state: EffectState::Intent,
+                };
+                platform
+                    .observe_effect("batch", action, &record, &state())
+                    .map(|value| value.applied)
+            })
+            .collect::<Result<Vec<_>, _>>()
+    };
+    assert_eq!(
+        platform.with_independent_observations(read).unwrap(),
+        [true, false, false]
+    );
+    assert_eq!(fixture.calls(), 1);
+    // A completed chunk with a lost reply is found by the next fresh pass; a
+    // sibling with the wrong content is still individually nonterminal.
+    fixture.status.stored_chunk_hashes[1] = Some(fixture.status.expected_chunk_hashes[1].clone());
+    fixture.respond();
+    assert_eq!(
+        platform.with_independent_observations(read).unwrap(),
+        [true, true, false]
+    );
+    assert_eq!(fixture.calls(), 2);
+    fs::write(fixture.root.join("fail"), []).unwrap();
+    assert!(platform.with_independent_observations(read).is_err());
+    fs::remove_file(fixture.root.join("fail")).unwrap();
+    fixture.status.stored_chunk_hashes[2] = Some(fixture.status.expected_chunk_hashes[2].clone());
+    fixture.respond();
+    assert_eq!(
+        platform.with_independent_observations(read).unwrap(),
+        [true, true, true]
+    );
+    assert_eq!(fixture.calls(), 4);
+    // Outside a batch there is no observation reuse.
+    assert_eq!(read(&mut platform).unwrap(), [true, true, true]);
+    assert_eq!(fixture.calls(), 4 + actions.len());
+    // A pass can fail after caching a successful read. Its next caller must
+    // still observe fresh content, including a chunk that has disappeared.
+    let failed = platform.with_independent_observations(|platform| {
+        assert_eq!(read(platform).unwrap(), [true, true, true]);
+        Err::<(), _>(())
+    });
+    assert!(failed.is_err());
+    fixture.status.stored_chunk_hashes[1] = None;
+    fixture.respond();
+    assert_eq!(read(&mut platform).unwrap(), [true, false, true]);
+    assert_eq!(fixture.calls(), 5 + 2 * actions.len());
+}
+
+#[cfg(unix)]
+#[test]
 fn store_staging_reads_once_per_plan_and_refreshes_changed_chunks() {
     let mut fixture = StoreStagingFixture::new();
     assert!(fixture.pending().unwrap().is_empty());

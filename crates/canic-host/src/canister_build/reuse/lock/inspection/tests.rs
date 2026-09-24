@@ -27,16 +27,8 @@ fn process_parser_bounds_identity_and_never_exposes_arbitrary_names() {
 }
 
 #[cfg(target_os = "linux")]
-#[test]
-fn inspection_binds_kernel_inode_namespace_and_birth_before_reporting_children() {
-    use crate::canister_build::reuse::lock::{BuildLock, tests::context};
+fn write_process_view(proc_root: &Path, pid: u32, identity: &BuildProcessIdentity) {
     use std::os::unix::fs::symlink;
-    let root = temp_dir("lock-process-view");
-    let lock = BuildLock::acquire(&context(root.clone()), |_| Ok(())).unwrap();
-    let path = root.join(".canic/locks/complete-build-reuse.lock");
-    let proc_root = root.join("proc");
-    let pid = std::process::id();
-    let identity = read_owner(&lock.file).unwrap().identity.unwrap();
     fs::create_dir_all(proc_root.join("sys/kernel/random")).unwrap();
     fs::create_dir_all(proc_root.join("self/ns")).unwrap();
     fs::write(
@@ -72,6 +64,20 @@ fn inspection_binds_kernel_inode_namespace_and_birth_before_reporting_children()
         (pid + 1).to_string(),
     )
     .unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn inspection_binds_kernel_inode_namespace_and_birth_before_reporting_children() {
+    use crate::canister_build::reuse::lock::{BuildLock, tests::context};
+    use std::os::unix::fs::symlink;
+    let root = temp_dir("lock-process-view");
+    let lock = BuildLock::acquire(&context(root.clone()), |_| Ok(())).unwrap();
+    let path = root.join(".canic/locks/complete-build-reuse.lock");
+    let proc_root = root.join("proc");
+    let pid = std::process::id();
+    let identity = read_owner(&lock.file).unwrap().identity.unwrap();
+    write_process_view(&proc_root, pid, &identity);
     let metadata = lock.file.metadata().unwrap();
     fs::write(
         proc_root.join("locks"),
@@ -118,6 +124,22 @@ fn inspection_binds_kernel_inode_namespace_and_birth_before_reporting_children()
         inspect().owner_visibility,
         BuildProcessVisibility::Unavailable
     );
+    fs::write(
+        proc_root.join(format!("{pid}/stat")),
+        stat(pid, "canic", "S", identity.start_ticks, 1),
+    )
+    .unwrap();
+    // Visible numeric PIDs in a different namespace cannot establish identity.
+    fs::remove_file(proc_root.join("self/ns/pid")).unwrap();
+    symlink("pid:[0]", proc_root.join("self/ns/pid")).unwrap();
+    let hidden_namespace = inspect();
+    assert_eq!(hidden_namespace.kernel, KernelBuildLock::Held { pid });
+    assert_eq!(
+        hidden_namespace.owner_visibility,
+        BuildProcessVisibility::Unavailable
+    );
+    assert!(hidden_namespace.processes.is_empty());
+    assert!(!hidden_namespace.process_snapshot_complete);
     fs::write(proc_root.join("locks"), "").unwrap();
     assert_eq!(inspect().kernel, KernelBuildLock::NotObserved);
     fs::remove_file(proc_root.join("locks")).unwrap();
