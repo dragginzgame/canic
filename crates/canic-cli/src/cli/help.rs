@@ -57,7 +57,7 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
     },
     CommandSpec {
         name: "diagnostic",
-        about: "Look up one compact Canic diagnostic code",
+        about: "Look up a diagnostic code or inspect a build lock",
     },
     CommandSpec {
         name: "evidence",

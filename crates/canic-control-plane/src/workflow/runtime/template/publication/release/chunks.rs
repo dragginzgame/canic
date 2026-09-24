@@ -211,7 +211,7 @@ impl WasmStorePublicationWorkflow {
                 record_wasm_store_publish_failed(WasmStoreMetricReason::ManagementCall);
                 return Err(crate::workflow::runtime::template::publication::error::PublicationWorkflowError::TransportUnavailable {
                     surface: "management upload_chunk",
-                    cause: err,
+                    cause: Box::new(err),
                 }
                 .into());
             }

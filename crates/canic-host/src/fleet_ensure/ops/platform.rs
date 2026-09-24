@@ -1395,35 +1395,39 @@ impl IcpEnsurePlatform {
         check: super::ReinstallAssetCheck,
     ) -> Result<bool, IcpEnsurePlatformError> {
         let target = parse_principal("reset asset", &asset.principal)?;
-        crate::canister_protocol::inspection::preflight_inspection(icp, candid, principal, target)
+        icp.measure_canister_inspection(principal, target, || {
+            crate::canister_protocol::inspection::preflight_inspection(
+                icp, candid, principal, target,
+            )
             .map_err(current_protocol::CurrentProtocolError::from)?;
-        let response: RootInspectionResponse = call_with_candid(
-            icp,
-            candid,
-            principal,
-            canic_protocol::CANIC_ROOT_COMMAND,
-            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                canister_id: target,
-            }),
-        )
-        .map_err(current_protocol::CurrentProtocolError::from)?;
-        let status = response
-            .into_status(principal, target)
+            let response: RootInspectionResponse = call_with_candid(
+                icp,
+                candid,
+                principal,
+                canic_protocol::CANIC_ROOT_COMMAND,
+                &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                    canister_id: target,
+                }),
+            )
             .map_err(current_protocol::CurrentProtocolError::from)?;
-        let mut controllers = status
-            .settings
-            .controllers
-            .iter()
-            .map(Principal::to_text)
-            .collect::<Vec<_>>();
-        controllers.sort();
-        let module = status
-            .module_hash
-            .as_ref()
-            .map(canic_core::cdk::utils::hash::hex_bytes);
-        let module_matches =
-            check == super::ReinstallAssetCheck::Terminal || module == asset.module_sha256;
-        Ok(controllers == asset.controllers && module_matches)
+            let status = response
+                .into_status(principal, target)
+                .map_err(current_protocol::CurrentProtocolError::from)?;
+            let mut controllers = status
+                .settings
+                .controllers
+                .iter()
+                .map(Principal::to_text)
+                .collect::<Vec<_>>();
+            controllers.sort();
+            let module = status
+                .module_hash
+                .as_ref()
+                .map(canic_core::cdk::utils::hash::hex_bytes);
+            let module_matches =
+                check == super::ReinstallAssetCheck::Terminal || module == asset.module_sha256;
+            Ok(controllers == asset.controllers && module_matches)
+        })
     }
 
     #[expect(
@@ -2351,27 +2355,29 @@ impl IcpEnsurePlatform {
         candid: &Path,
         authority: PoolInspectionAuthority,
     ) -> Result<RootInspectionStatus, IcpEnsurePlatformError> {
-        crate::canister_protocol::inspection::preflight_inspection(
-            icp,
-            candid,
-            authority.root,
-            authority.target,
-        )
-        .map_err(current_protocol::CurrentProtocolError::from)?;
-        let response: RootInspectionResponse = call_with_candid(
-            icp,
-            candid,
-            authority.root,
-            canic_protocol::CANIC_ROOT_COMMAND,
-            &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
-                canister_id: authority.target,
-            }),
-        )
-        .map_err(current_protocol::CurrentProtocolError::from)?;
-        response
-            .into_status(authority.root, authority.target)
-            .map_err(current_protocol::CurrentProtocolError::from)
-            .map_err(Into::into)
+        icp.measure_canister_inspection(authority.root, authority.target, || {
+            crate::canister_protocol::inspection::preflight_inspection(
+                icp,
+                candid,
+                authority.root,
+                authority.target,
+            )
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+            let response: RootInspectionResponse = call_with_candid(
+                icp,
+                candid,
+                authority.root,
+                canic_protocol::CANIC_ROOT_COMMAND,
+                &RootInspectionCommand::InspectCanister(CanisterInspectionRequest {
+                    canister_id: authority.target,
+                }),
+            )
+            .map_err(current_protocol::CurrentProtocolError::from)?;
+            response
+                .into_status(authority.root, authority.target)
+                .map_err(current_protocol::CurrentProtocolError::from)
+                .map_err(Into::into)
+        })
     }
 
     // Only a successfully validated consumer may retain a response in this observation.
@@ -5538,7 +5544,17 @@ echo effect >> effects
     #[cfg(unix)]
     #[test]
     fn pool_inspection_preflight_stops_before_update_and_requeries_on_retry() {
+        use crate::icp::IcpRequestKind;
+        use std::sync::{Arc, Mutex};
         let mut fixture = PoolInspectionFixture::new();
+        let timings = Arc::new(Mutex::new(Vec::new()));
+        let sink = Arc::clone(&timings);
+        fixture.owners.platform.icp = fixture
+            .owners
+            .platform
+            .icp
+            .clone()
+            .with_timing_handler(move |event| sink.lock().unwrap().push(event));
         let root = fixture.root_id;
         let target = fixture.target;
         let path = fixture.owners.root.clone();
@@ -5583,6 +5599,42 @@ echo effect >> effects
                 Ok(())
             })
             .unwrap();
+        let timings = timings.lock().unwrap();
+        let inspections = timings
+            .iter()
+            .filter(|event| {
+                event.kind == IcpRequestKind::CanisterInspection && event.succeeded.is_some()
+            })
+            .collect::<Vec<_>>();
+        assert_eq!(
+            inspections
+                .iter()
+                .map(|event| event.succeeded)
+                .collect::<Vec<_>>(),
+            [Some(false), Some(true)]
+        );
+        for inspection in inspections {
+            assert_eq!(inspection.subject, Some(target));
+            assert_eq!(inspection.target.as_deref(), Some(root.to_text().as_str()));
+            let children = timings
+                .iter()
+                .filter(|event| event.parent_request_id == Some(inspection.request_id))
+                .collect::<Vec<_>>();
+            assert!(children.iter().all(|event| event.subject == Some(target)));
+            assert!(
+                children
+                    .iter()
+                    .any(|event| event.method.as_deref()
+                        == Some(canic_protocol::CANIC_OBSERVABILITY))
+            );
+            assert_eq!(
+                children.iter().any(
+                    |event| event.method.as_deref() == Some(canic_protocol::CANIC_ROOT_COMMAND)
+                ),
+                inspection.succeeded == Some(true)
+            );
+        }
+        drop(timings);
         std::fs::remove_dir_all(path).unwrap();
     }
 

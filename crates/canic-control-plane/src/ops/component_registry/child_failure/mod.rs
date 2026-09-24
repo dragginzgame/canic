@@ -58,6 +58,7 @@ impl ComponentRegistryOps {
             if let Some(failure) = allocation.last_failure {
                 return Ok(Some(ProvisioningFailureView {
                     recorded_at_ns: Some(failure.failed_at_ns),
+                    retry_at_ns: Some(failure.retry_at_ns),
                     stage: ProvisioningFailureStage::ComponentChildAllocation,
                     target: registry.root.fleet_subnet_root,
                     operation_id: allocation.operation_id,

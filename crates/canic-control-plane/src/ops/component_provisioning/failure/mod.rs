@@ -138,6 +138,7 @@ pub(super) const fn failure_view(
     RootComponentProvisioningFailureView {
         origin: ProvisioningFailureView {
             recorded_at_ns: Some(record.failed_at_ns),
+            retry_at_ns: record.retry_at_ns,
             stage: record.stage,
             target: record.target,
             operation_id: record.operation_id,

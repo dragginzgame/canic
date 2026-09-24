@@ -14,8 +14,12 @@ fn native_readiness_requires_exact_identity_controllers_and_real_balance() {
     let principal = Principal::self_authenticating(b"root").to_text();
     let operator = Principal::self_authenticating(b"operator");
     let expected = BTreeSet::from([operator]);
-    let original = status(&principal, &operator.to_text());
-    assert_eq!(native_balance(&principal, &expected, &original), Ok(700));
+    let mut original = status(&principal, &operator.to_text());
+    original.cycles = Some("407_037_311_267_631".into());
+    assert_eq!(
+        native_balance(&principal, &expected, &original),
+        Ok(407_037_311_267_631)
+    );
     for change in 0..4 {
         let mut report = original.clone();
         match change {
@@ -39,6 +43,100 @@ fn native_readiness_requires_exact_identity_controllers_and_real_balance() {
             })
         );
     }
+}
+
+#[test]
+fn native_readiness_accepts_exact_plain_and_grouped_cycle_counts() {
+    let principal = Principal::self_authenticating(b"root").to_text();
+    let operator = Principal::self_authenticating(b"operator");
+    let expected = BTreeSet::from([operator]);
+    for (cycles, amount) in [
+        ("0", 0),
+        ("700", 700),
+        ("1_000", 1000),
+        ("407_037_311_267_631", 407_037_311_267_631),
+        ("340282366920938463463374607431768211455", u128::MAX),
+        (
+            "340_282_366_920_938_463_463_374_607_431_768_211_455",
+            u128::MAX,
+        ),
+    ] {
+        let report = serde_json::from_value(serde_json::json!({
+            "id": principal,
+            "settings": { "controllers": [operator.to_text()] },
+            "cycles": cycles,
+        }))
+        .unwrap();
+        assert_eq!(native_balance(&principal, &expected, &report), Ok(amount));
+    }
+}
+
+#[test]
+fn native_readiness_rejects_malformed_or_overflowing_cycle_counts() {
+    let principal = Principal::self_authenticating(b"root").to_text();
+    let operator = Principal::self_authenticating(b"operator");
+    let expected = BTreeSet::from([operator]);
+    for cycles in [
+        "",
+        "_",
+        "_700",
+        "700_",
+        "1__000",
+        "12_34",
+        "1234_567",
+        "1_0000",
+        "-1",
+        "+1",
+        "1.5",
+        "1T",
+        "1 cycles",
+        " 700",
+        "700 ",
+        "1 000",
+        "١",
+        "340282366920938463463374607431768211456",
+        "340_282_366_920_938_463_463_374_607_431_768_211_456",
+        "0000000000000000000000000000000000000000000000000000",
+    ] {
+        let mut report = status(&principal, &operator.to_text());
+        report.cycles = Some(cycles.into());
+        assert_eq!(
+            native_balance(&principal, &expected, &report),
+            Err(RootReadinessUnavailable::BalanceUnavailable)
+        );
+    }
+}
+
+#[test]
+fn grouped_native_balance_reports_exact_floor_shortfall() {
+    let mut fixture = protocol_tranche_fixture(Vec::new());
+    fixture.desired.bootstrap = None;
+    fixture.desired.protocol = None;
+    let mut root = fixture.desired.canisters[0].clone();
+    root.kind = DesiredCanisterKind::Root;
+    root.name = "root".into();
+    root.principal = Some(Principal::self_authenticating(b"root").to_text());
+    root.controllers = vec![fixture.desired.operator.clone()];
+    root.controller_canisters.clear();
+    root.minimum_cycles = "500T".into();
+    fixture.desired.canisters.push(root);
+    for (cycles, shortfall) in [
+        ("407_037_311_267_631", 92_962_688_732_369),
+        ("600_000_000_000_000", 0),
+    ] {
+        let funding = roots_with(&fixture.root, &fixture.desired, |principal| {
+            let mut report = status(principal, &fixture.desired.operator);
+            report.cycles = Some(cycles.into());
+            Ok(report)
+        })
+        .unwrap();
+        let observed = &funding.roots[0];
+        assert_eq!(observed.required_native_floor_cycles, 500_000_000_000_000);
+        assert_eq!(observed.floor_shortfall_cycles, Some(shortfall));
+        assert!(observed.available_native_cycles.is_some());
+        assert_eq!(observed.unavailable, None);
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
 }
 
 #[test]

@@ -17,11 +17,12 @@ use crate::{
     },
     evidence_support::current_evidence_timestamp,
     output,
+    support::build_lock::LockWaitDisplay,
 };
 use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
 use canic_host::canister_build::{
-    BuildReuseProgress, CanisterArtifactBuildOptions, CanisterArtifactBuilder,
+    BuildReuseError, BuildReuseProgress, CanisterArtifactBuildOptions, CanisterArtifactBuilder,
     CanisterBuildProfile, CompleteBuildReuse, ConfiguredCanisterArtifactBuildOutput,
     WorkspaceBuildContext, copy_icp_wasm_output, print_workspace_build_context_once,
     read_wasm_artifact_metrics,
@@ -267,7 +268,7 @@ fn build_complete_app(
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     let lookup_started = Instant::now();
-    let (reuse, lock_elapsed) = prepare_build_reuse(builder, &context);
+    let (reuse, lock_elapsed) = prepare_build_reuse(builder, &context)?;
     let mut miss_reason = "input comparison unavailable".to_string();
     if let Some(reuse) = &reuse {
         match reuse.load() {
@@ -329,6 +330,9 @@ fn build_complete_app(
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     context = context.with_release_build_id(release.record.release_build_id);
+    if let Some(reuse) = &reuse {
+        reuse.report_building_artifacts();
+    }
     let manifest_path = build_app(options, &context, roles, builder, &fixture_sources)?;
     let artifact_count = all_roles.len();
     if let Some(reuse) = reuse {
@@ -362,27 +366,38 @@ fn build_complete_app(
 fn prepare_build_reuse(
     builder: &CanisterArtifactBuilder,
     context: &WorkspaceBuildContext,
-) -> (Option<CompleteBuildReuse>, Duration) {
+) -> Result<(Option<CompleteBuildReuse>, Duration), BuildCommandError> {
+    let mut display =
+        LockWaitDisplay::start().map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     let mut lock_elapsed = Duration::ZERO;
     let reuse = match builder.prepare_complete_build_reuse(context, |progress| match progress {
-        BuildReuseProgress::WaitingForLock(wait) => {
-            eprintln!("{}", build_lock_wait_message(&wait));
-        }
+        BuildReuseProgress::WaitingForLock(wait) => display.waiting(&wait),
         BuildReuseProgress::LockFinished(elapsed) => {
+            display.check_cancelled()?;
             lock_elapsed = elapsed;
-            eprintln!(
-                "Build phase reuse lock acquisition: {:.2}s",
-                elapsed.as_secs_f64()
-            );
+            display.finish("acquired");
+            Ok(())
         }
     }) {
         Ok(reuse) => Some(reuse),
+        Err(error @ BuildReuseError::Lock(_)) => {
+            let outcome = if matches!(&error, BuildReuseError::Lock(source) if source.kind() == std::io::ErrorKind::Interrupted)
+            {
+                "cancelled (owner unaffected)"
+            } else {
+                "acquisition failed"
+            };
+            display.finish(outcome);
+            drop(display);
+            return Err(BuildCommandError::Build(Box::new(error)));
+        }
         Err(error) => {
             eprintln!("Build reuse unavailable: {error}");
             None
         }
     };
-    (reuse, lock_elapsed)
+    drop(display);
+    Ok((reuse, lock_elapsed))
 }
 
 fn build_command() -> ClapCommand {
@@ -1078,54 +1093,11 @@ fn resolve_build_network(
 // -----------------------------------------------------------------------------
 // Tests
 
-#[expect(
-    clippy::unnecessary_debug_formatting,
-    reason = "quote and escape diagnostic paths so workspace names cannot inject terminal lines"
-)]
-fn build_lock_wait_message(wait: &canic_host::canister_build::BuildLockWait) -> String {
-    let owner = wait.recorded_owner.as_ref().map_or_else(
-        || "recorded owner unavailable".to_string(),
-        |owner| format!(
-            "recorded owner (advisory): pid={} workspace={:?} profile={} started_at_unix_seconds={}",
-            owner.pid, owner.workspace, owner.profile, owner.started_at_unix_seconds
-        ),
-    );
-    format!(
-        "Waiting for complete-build reuse lock: {:.2}s; lock={:?}; {owner}",
-        wait.elapsed.as_secs_f64(),
-        wait.lock_path
-    )
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::test_support::temp_dir;
-    use canic_host::canister_build::{BuildLockOwner, BuildLockWait};
     use std::fs;
-
-    #[test]
-    fn lock_wait_rendering_distinguishes_advisory_metadata_and_escapes_paths() {
-        let mut wait = BuildLockWait {
-            elapsed: std::time::Duration::from_secs(3),
-            lock_path: "/tmp/lock\nname".into(),
-            recorded_owner: None,
-        };
-        assert!(super::build_lock_wait_message(&wait).contains("owner unavailable"));
-        wait.recorded_owner = Some(BuildLockOwner {
-            pid: 42,
-            profile: "release".into(),
-            started_at_unix_seconds: 123,
-            workspace: "/tmp/work\nspace".into(),
-        });
-        let message = super::build_lock_wait_message(&wait);
-        assert!(message.contains("advisory"));
-        assert!(message.contains("pid=42"));
-        assert!(message.contains("profile=release"));
-        assert!(message.contains("started_at_unix_seconds=123"));
-        assert!(!message.contains('\n'));
-        assert!(message.contains(r"work\nspace"));
-    }
 
     #[test]
     fn build_parses_app_and_optional_role() {

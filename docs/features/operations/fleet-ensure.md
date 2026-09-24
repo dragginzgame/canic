@@ -40,10 +40,40 @@ with its children, or concurrent request durations as critical-path wall time.
 Request times include local startup/IPC and remote response/confirmation; pure
 CPU, internal IC calls and remote-wait components remain unavailable.
 
+Protected read timings distinguish the transport endpoint (`request.target`,
+usually the Root) from the inspected child (`request.subject`, a Principal or
+`null` when unavailable). An inclusive `canister_inspection` request encloses the
+fresh reserve query, protected status request and local validation. Its nested
+requests inherit the child and link back through `parent_request_id`; a
+`canister_history` boundary similarly attributes protected install-history reads.
+These logical boundaries add no IC calls and do not count as remote attempts.
+Their elapsed time includes their nested transports; do not add both, and do not
+sum concurrent child durations as wall time. Failures retain the child binding;
+an unmatched start remains incomplete evidence.
+
+For example, list completed per-child inspections from an existing receipt:
+
+```bash
+jq -c 'select(.event == "icp_request_timing") | .data |
+  select(.request.kind == "canister_inspection" and .request.succeeded != null) |
+  {parent_span_id, request: (.request |
+    {request_id, target, subject, elapsed_micros, succeeded})}' receipt.jsonl
+```
+
+The observation span ties each inspection to inventory, planning or final
+authority verification. Changing or missing subjects never grants authority to
+reuse an observation; all existing freshness and reserve checks still run.
+
 Receipts distinguish confirmed increases in applied receipts or provisioning
 counts from repeated polls and local activity. They retain the exact next
 no-effect review command and available originating retry owner/cause. A missing
-origin or runtime retry deadline stays unknown. The final diagnostic workflow outcome
+origin or runtime retry deadline stays unknown. Protected failure origins carry
+`retry_at_ns` as Unix nanoseconds or `null` in progress JSON and timing receipts.
+Human output shows a reported deadline as an observed UTC timestamp. It reflects
+the owner's last reported schedule, not a promised completion time or a live
+countdown; expired and stale observations keep their original timestamp. Deadline
+changes alone do not count as remote advancement or reset the last-change age.
+The final diagnostic workflow outcome
 includes the plan scope and `terminal` flag; the plan/journal remain the execution
 authority. An 8 MiB per-invocation cap reserves room for an outcome and an omitted
 count. A partial final line, absent outcome, omitted events or diagnostic I/O

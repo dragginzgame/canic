@@ -60,12 +60,12 @@ fn verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output() {
 }
 
 fn prepared_reuse(context: &WorkspaceBuildContext) -> CompleteBuildReuse {
-    prepared_reuse_with_progress(context, |_| {})
+    prepared_reuse_with_progress(context, |_| Ok(()))
 }
 
 fn prepared_reuse_with_progress(
     context: &WorkspaceBuildContext,
-    progress: impl FnMut(BuildReuseProgress),
+    progress: impl FnMut(BuildReuseProgress) -> std::io::Result<()>,
 ) -> CompleteBuildReuse {
     let lock = lock::BuildLock::acquire(context, progress).unwrap();
     diagnostics::InputDiagnostics::prepare(&context.icp_root);
@@ -79,7 +79,7 @@ fn prepared_reuse_with_progress(
             .join(format!("{}.json", inputs.digest())),
         inputs,
         tool_paths: vec![],
-        _lock: lock,
+        lock,
         context: context.clone(),
     }
 }
@@ -305,6 +305,7 @@ fn waiting_build_reuses_verified_release_after_owner_finishes() {
                 if let BuildReuseProgress::WaitingForLock(wait) = progress {
                     send.send(wait).unwrap();
                 }
+                Ok(())
             });
             reuse.load().unwrap().unwrap().release_build_id
         });
@@ -312,7 +313,7 @@ fn waiting_build_reuses_verified_release_after_owner_finishes() {
             .recv_timeout(std::time::Duration::from_secs(10))
             .unwrap();
         assert_eq!(
-            wait.recorded_owner.unwrap().workspace,
+            wait.inspection.recorded_owner.unwrap().workspace,
             context.workspace_root
         );
         drop(owner);

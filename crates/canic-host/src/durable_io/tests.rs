@@ -82,6 +82,7 @@ fn durable_lock_reports_wait_for_another_process_and_retains_exclusion() {
                 .write_all(b"release\n")
                 .unwrap();
         }
+        Ok(())
     })
     .unwrap();
     assert!(child.wait().unwrap().success());

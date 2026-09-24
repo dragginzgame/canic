@@ -12,6 +12,8 @@ use candid::Principal;
 pub struct ProvisioningFailureView {
     /// Set when the originating owner records the failure durably.
     pub recorded_at_ns: Option<u64>,
+    /// Deadline supplied by the observed retry owner; never inferred by an outer caller.
+    pub retry_at_ns: Option<u64>,
     pub stage: ProvisioningFailureStage,
     pub target: Principal,
     pub operation_id: [u8; 32],

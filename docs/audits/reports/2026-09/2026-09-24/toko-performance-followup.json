@@ -1,0 +1,1075 @@
+{
+  "schema_version": 1,
+  "generated_utc": "2026-09-24T10:11:33Z",
+  "scope": "Local Canic diagnostic implementation plus published .39 Release-build baseline; no live deployment or .40 speedup claim",
+  "implementation": {
+    "source_hashes": [
+      {
+        "sha256": "70960534b683de81fa79911983ca612872bf38dc287a22aac6d6bfc32684f9d9",
+        "path": "crates/canic-host/src/icp/timing/mod.rs"
+      },
+      {
+        "sha256": "145ea61ac46048f33f19077eb66d3cf9ceb23a171ce78acbfaf3fa3257fbffe1",
+        "path": "crates/canic-host/src/fleet_ensure/ops/platform.rs"
+      },
+      {
+        "sha256": "579147844784cb223c658bcec7ceca1d0f63736f3521266344ed8562ca8ae5fb",
+        "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/mod.rs"
+      },
+      {
+        "sha256": "28c4a7e0557a5dd44024d3268ea286f0b5efa1203a46a655cb62f668a4c8d83b",
+        "path": "crates/canic-host/src/fleet_ensure/ops/install_history/mod.rs"
+      },
+      {
+        "sha256": "c3daf3ec93942b4cfd48fc47d8d495011b7ec08c438860ee140dc25eb7f65c5a",
+        "path": "crates/canic-host/src/observability/mod.rs"
+      },
+      {
+        "sha256": "3967d23b76825bc5236ea0f175c75854611823480c7d6a66f67924888cef9942",
+        "path": "crates/canic-cli/src/fleet/progress/receipt/tests.rs"
+      },
+      {
+        "sha256": "3c6dff8a0e865ef5fb02d7f7f0778d147acc32707e51673a7f4ef6fb10341d64",
+        "path": "Cargo.lock"
+      }
+    ],
+    "check_log_hashes": [
+      {
+        "sha256": "54dfd140e5d133dd7eff15f06e68796a13ba194a387bec8a675c85eb5e4ef8bf",
+        "path": ".tmp/toko-performance-20260924/timing-tests-final.log"
+      },
+      {
+        "sha256": "05ab4eac265299dab97e8ee486d495842202794b961a24f3728c40bb993f29d1",
+        "path": ".tmp/toko-performance-20260924/clippy.log"
+      },
+      {
+        "sha256": "0496889aa991439f2ceed307e4917f34caf603564323f1468d64ef8118fa8060",
+        "path": ".tmp/toko-performance-20260924/timing-source.sha256"
+      }
+    ],
+    "native_host_tests_passed": 33,
+    "native_cli_tests_passed": 9,
+    "strict_host_cli_clippy": "passed",
+    "command": "RUSTC_WRAPPER= CARGO_NET_OFFLINE=true bash scripts/ci/run-with-test-scratch.sh cargo test --locked -p canic-host -p canic-cli --lib --no-fail-fast -- icp::timing fleet::progress::receipt pool_inspection_preflight reinstall_inspections reinstall_authorities install_history current_inventory observability::tests"
+  },
+  "measurement": {
+    "context": {
+      "schema_version": 1,
+      "application": "toko_miner",
+      "source_commit": null,
+      "source_archive_sha256": "8a302cae7d08d3d4d39f570cbbdfd5f479c234e1e7b83b544b00f986e7f7202c",
+      "cli_version": "0.110.39",
+      "cli_sha256": "8ed659755cd84b14696102ce18c79ed0815b8f59c72f718977aec4ab115f25ab",
+      "cargo_lock_sha256": "07a6732e683912edca14ceaa37ea17bdada6aa16f28e12b12eff8de6f59538e0",
+      "matrix_script_sha256": "ca86a8a0134ad201e66be1393d7f6a16fa5d49179f692aaaee97b7d65e24e6db",
+      "runtime_canic_version": "0.110.39",
+      "icydb_version": "0.261.10",
+      "profile": "release",
+      "build_network": "ic",
+      "environment": "staging",
+      "cargo_build_jobs": 4,
+      "compiler_wrapper": "disabled",
+      "network_access": "cargo offline; no deployment commands",
+      "mutable_targets": "private original and relocated targets; declarations nested separately",
+      "cold_definition": "empty private Cargo target and no admitted complete-build record; registry sources and OS page cache are not cold",
+      "max_process_rss_definition": "GNU time maximum resident set for the measured command/children; not simultaneous process-tree RSS",
+      "host": "shared; process snapshots and existing PocketIC residents retained",
+      "source_scope": "hash-verified 2018-file qualified snapshot: base commit plus recorded .39 adoption changes; current gameplay edits excluded",
+      "frontend": "not built; external asset source is excluded",
+      "qualification_change": "add apps/toko_miner/game_shard/qualification-build-note.md; no Rust source change",
+      "gameplay_change": "game_shard energy_bar PRICE from 5 to 6 in the isolated copy",
+      "dependency_change": "path dependency toko-miner-contracts MAX_ENROLLMENT_OPERATION_ID_LEN from 64 to 65 in the isolated copy",
+      "relocation": "same frozen archive and baseline .canic evidence, different absolute workspace and empty private Cargo target",
+      "acceptance": "build and exact artifact reuse only; no managed application tests, live deployment, or downstream adoption",
+      "performance_claim": "baseline workload/cache comparisons, not a before/after Canic optimisation claim",
+      "source_base_commit": "0a35352aad9269be050ddd3bbb023834ba50878b",
+      "qualified_source_inventory_sha256": "dfe11135eac918741131ef4a93ca0570dfa567aa8c03222f81ebbbdb5a8bb08b",
+      "prior_attempt": "../matrix: current committed gameplay failed E0599 before complete Release build"
+    },
+    "tool_versions": [
+      "rustc 1.98.1 (48a229cea 2026-09-01)",
+      "cargo 1.98.1 (797e8a9bc 2026-08-05)",
+      "ic-wasm 0.11.1",
+      "wasm-opt version 132 (version_132)"
+    ],
+    "tool_hashes": [
+      {
+        "sha256": "204dad3ad59b78a46fad559dfefcdcaee3609433e5e4e6d81bda5e051a2bc0bc",
+        "path": "/home/adam/.local/bin/ic-wasm"
+      },
+      {
+        "sha256": "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725",
+        "path": "/home/adam/.local/bin/wasm-opt"
+      },
+      {
+        "sha256": "6f8d7681095dad13fe2b8b337620b5e7d01c7bdd8a6c9f5487d6912d197bbbdc",
+        "path": "/home/adam/.cargo/bin/candid-extractor"
+      },
+      {
+        "sha256": "6fc707d24d37c00c20e2e0466fb10e2bdd7c7ef4d10a2e945eece9cd60f6cd9b",
+        "path": "/home/adam/.local/bin/icp"
+      }
+    ],
+    "ancestor_manifest_hashes": [
+      {
+        "sha256": "0ca9047036797cf6226191733fc748bb2e64626bb5eb3e4b1bab7acff47b7037",
+        "path": "Cargo.toml"
+      },
+      {
+        "sha256": "3c6dff8a0e865ef5fb02d7f7f0778d147acc32707e51673a7f4ef6fb10341d64",
+        "path": "Cargo.lock"
+      }
+    ],
+    "prior_qualification_hashes": [
+      {
+        "sha256": "5cbf0b43009066d5ae250b2ac7eefdd692633cef90cf4a9b65449d31c98d2a34",
+        "path": "/tmp/toko-miner-canic-011039/ci-result.json"
+      },
+      {
+        "sha256": "c8e0abbd27bfc1dffd9bb392f26bc16e72db8f413d598baafc3a633907d0a71f",
+        "path": "/tmp/toko-miner-canic-011039/ci.log"
+      }
+    ],
+    "all_warm_pairs_preserve_exact_records_and_artifact_hashes": true,
+    "final_source_inventories_match": true,
+    "cases": [
+      {
+        "case": "original_cold",
+        "started_utc": "2026-09-24T09:14:59Z",
+        "finished_utc": "2026-09-24T09:30:25Z",
+        "resources": {
+          "elapsed_seconds": 925.54,
+          "user_seconds": 2010.72,
+          "system_seconds": 222.05,
+          "max_process_rss_kib": 2797048,
+          "major_faults": 6008,
+          "minor_faults": 51182501,
+          "voluntary_switches": 629312,
+          "involuntary_switches": 133168,
+          "filesystem_inputs": 195648,
+          "filesystem_outputs": 17106712,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "da1b6a655877295724094091ab6e6f975729e1b2e8576a3e7fbc8d04eb52029e",
+        "canonical_records_sha256": "de79616c8fae99b69f45050fb78f3e49f574977e63d1a4be723ed316858d3372",
+        "build_log_sha256": "0b998567ac91ad21616f8929ad03a2d34c2378aeb9fffeabb1aedbe30166974a",
+        "process_samples_sha256": "dccd728482ee4b690f445ebcac7624e7e538e89ab6d9c74ef06f7898d4602c24",
+        "external_toko_cargo_observations": 29,
+        "selected_record": {
+          "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+          "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.03
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.81
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_coordinator",
+            "seconds": 113.98
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_store",
+            "seconds": 85.09
+          },
+          {
+            "phase": "dependency feature admission",
+            "seconds": 4.01
+          },
+          {
+            "phase": "declaration",
+            "seconds": 175.63
+          },
+          {
+            "phase": "Candid extraction",
+            "seconds": 4.37
+          },
+          {
+            "phase": "runtime Cargo/link",
+            "seconds": 515.76
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: miss (no comparable prior input evidence)",
+          "Build cache wasm_store: miss (no comparable prior input evidence)",
+          "Build cache root: miss (no comparable prior input evidence)",
+          "Build cache game_hub: miss (no comparable prior input evidence)",
+          "Build cache game_shard: miss (no comparable prior input evidence)",
+          "Build cache translation: miss (no comparable prior input evidence)",
+          "Build cache user_hub: miss (no comparable prior input evidence)",
+          "Build cache user_shard: miss (no comparable prior input evidence)",
+          "Build declaration cache game_hub: miss (extracted current Wasm)",
+          "Build declaration cache root: miss (extracted current Wasm)",
+          "Build declaration cache translation: miss (extracted current Wasm)",
+          "Build declaration cache game_shard: miss (extracted current Wasm)",
+          "Build declaration cache user_shard: miss (extracted current Wasm)",
+          "Build declaration cache user_hub: miss (extracted current Wasm)"
+        ]
+      },
+      {
+        "case": "original_warm",
+        "started_utc": "2026-09-24T09:30:25Z",
+        "finished_utc": "2026-09-24T09:30:27Z",
+        "resources": {
+          "elapsed_seconds": 1.86,
+          "user_seconds": 0.88,
+          "system_seconds": 0.98,
+          "max_process_rss_kib": 105852,
+          "major_faults": 0,
+          "minor_faults": 64305,
+          "voluntary_switches": 598,
+          "involuntary_switches": 47,
+          "filesystem_inputs": 0,
+          "filesystem_outputs": 40,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "da1b6a655877295724094091ab6e6f975729e1b2e8576a3e7fbc8d04eb52029e",
+        "canonical_records_sha256": "de79616c8fae99b69f45050fb78f3e49f574977e63d1a4be723ed316858d3372",
+        "build_log_sha256": "31d4a8f2c1a353620b1635e94114c0b4233f4a089fb4abbaf8de859c428b71dd",
+        "process_samples_sha256": "e0459f3b623fe70c5cd2466f2ada42fa3d25ff0bef180ae749e25cb0a9a4524d",
+        "external_toko_cargo_observations": 1,
+        "selected_record": {
+          "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+          "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.00
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.83
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: hit (verified complete release)",
+          "Build cache wasm_store: hit (verified complete release)",
+          "Build cache root: hit (verified complete release)",
+          "Build cache game_hub: hit (verified complete release)",
+          "Build cache game_shard: hit (verified complete release)",
+          "Build cache translation: hit (verified complete release)",
+          "Build cache user_hub: hit (verified complete release)",
+          "Build cache user_shard: hit (verified complete release)"
+        ]
+      },
+      {
+        "case": "qualification_only",
+        "started_utc": "2026-09-24T09:30:27Z",
+        "finished_utc": "2026-09-24T09:38:07Z",
+        "resources": {
+          "elapsed_seconds": 459.95,
+          "user_seconds": 853.07,
+          "system_seconds": 55.99,
+          "max_process_rss_kib": 2795260,
+          "major_faults": 4509,
+          "minor_faults": 12676626,
+          "voluntary_switches": 142935,
+          "involuntary_switches": 27356,
+          "filesystem_inputs": 523064,
+          "filesystem_outputs": 1091080,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+            "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e"
+          },
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "a95930fa25f64558dbfc993e8a5e7aa220301e6fe424e4f0060a16444a77f985",
+        "canonical_records_sha256": "2cc480db4da2865708bd32f166ac0c71fc300f14a65dc7f1a32faf3c60866f3d",
+        "build_log_sha256": "91dd344e0ab79bf152bec2113bd2eb901a77e6e69e8978ac71dabf277fb1f5aa",
+        "process_samples_sha256": "cdb6f4d3d9f2afb8d1ce76db20d2e645185a571a319e968c24add827e717e8f2",
+        "external_toko_cargo_observations": 13,
+        "selected_record": {
+          "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+          "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.00
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.75
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_coordinator",
+            "seconds": 47.50
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_store",
+            "seconds": 26.16
+          },
+          {
+            "phase": "dependency feature admission",
+            "seconds": 4.12
+          },
+          {
+            "phase": "declaration",
+            "seconds": 27.76
+          },
+          {
+            "phase": "Candid extraction",
+            "seconds": 0.07
+          },
+          {
+            "phase": "runtime Cargo/link",
+            "seconds": 327.70
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache wasm_store: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache root: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache game_hub: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache game_shard: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache translation: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache user_hub: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache user_shard: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build declaration cache game_hub: hit (verified compiled Wasm)",
+          "Build declaration cache translation: hit (verified compiled Wasm)",
+          "Build declaration cache root: hit (verified compiled Wasm)",
+          "Build declaration cache game_shard: hit (verified compiled Wasm)",
+          "Build declaration cache user_shard: hit (verified compiled Wasm)",
+          "Build declaration cache user_hub: hit (verified compiled Wasm)"
+        ]
+      },
+      {
+        "case": "qualification_warm",
+        "started_utc": "2026-09-24T09:38:07Z",
+        "finished_utc": "2026-09-24T09:38:09Z",
+        "resources": {
+          "elapsed_seconds": 1.84,
+          "user_seconds": 0.88,
+          "system_seconds": 0.93,
+          "max_process_rss_kib": 105856,
+          "major_faults": 0,
+          "minor_faults": 64328,
+          "voluntary_switches": 581,
+          "involuntary_switches": 40,
+          "filesystem_inputs": 0,
+          "filesystem_outputs": 40,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+            "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e"
+          },
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "a95930fa25f64558dbfc993e8a5e7aa220301e6fe424e4f0060a16444a77f985",
+        "canonical_records_sha256": "2cc480db4da2865708bd32f166ac0c71fc300f14a65dc7f1a32faf3c60866f3d",
+        "build_log_sha256": "a6228a968a8204010edde3c20eea6db006edf9fef37f5806cfc4465705202df0",
+        "process_samples_sha256": "2bbe50d5a36b42dc156fa9bb7f348ecabfc9cd5e6781ef7e2800f0dd286ef9b8",
+        "external_toko_cargo_observations": 0,
+        "selected_record": {
+          "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+          "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.01
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.80
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: hit (verified complete release)",
+          "Build cache wasm_store: hit (verified complete release)",
+          "Build cache root: hit (verified complete release)",
+          "Build cache game_hub: hit (verified complete release)",
+          "Build cache game_shard: hit (verified complete release)",
+          "Build cache translation: hit (verified complete release)",
+          "Build cache user_hub: hit (verified complete release)",
+          "Build cache user_shard: hit (verified complete release)"
+        ]
+      },
+      {
+        "case": "gameplay_change",
+        "started_utc": "2026-09-24T09:38:10Z",
+        "finished_utc": "2026-09-24T09:46:36Z",
+        "resources": {
+          "elapsed_seconds": 506.42,
+          "user_seconds": 947.97,
+          "system_seconds": 69.33,
+          "max_process_rss_kib": 2795604,
+          "major_faults": 2907,
+          "minor_faults": 13123094,
+          "voluntary_switches": 341759,
+          "involuntary_switches": 38488,
+          "filesystem_inputs": 202992,
+          "filesystem_outputs": 1064112,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "962eafc10e4bab15e0de0178db9f2c8e9331f1222f314b8417ea5260d5d1c7cc",
+            "release_build_id": "127cade4dd91e435562a0691f56ee08a49be72e162a97a0c61a676ecb332d211"
+          },
+          {
+            "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+            "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e"
+          },
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "844584ca38148b52b82369db6473ff5d7ff5669ba7f7a99156cd2aef3729df27",
+        "canonical_records_sha256": "8cbf1973143310378ea88946314a4b0242d583ae174aa8efee6b53c11f36d471",
+        "build_log_sha256": "cac654c301ed5e286da53ed21d4787313e2715a126c2e3409dd4db9e05f1f257",
+        "process_samples_sha256": "e0d9b34ea35955ef5a5afe89c8acb59a6e2268ff930f92db5626667335f91ac7",
+        "external_toko_cargo_observations": 14,
+        "selected_record": {
+          "inputs": "962eafc10e4bab15e0de0178db9f2c8e9331f1222f314b8417ea5260d5d1c7cc",
+          "release_build_id": "127cade4dd91e435562a0691f56ee08a49be72e162a97a0c61a676ecb332d211",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.00
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.74
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_coordinator",
+            "seconds": 43.67
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_store",
+            "seconds": 25.39
+          },
+          {
+            "phase": "dependency feature admission",
+            "seconds": 4.40
+          },
+          {
+            "phase": "declaration",
+            "seconds": 33.34
+          },
+          {
+            "phase": "Candid extraction",
+            "seconds": 2.10
+          },
+          {
+            "phase": "runtime Cargo/link",
+            "seconds": 367.49
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache wasm_store: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache root: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache game_hub: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache game_shard: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache translation: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache user_hub: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache user_shard: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build declaration cache game_hub: hit (verified compiled Wasm)",
+          "Build declaration cache translation: hit (verified compiled Wasm)",
+          "Build declaration cache root: hit (verified compiled Wasm)",
+          "Build declaration cache game_shard: miss (extracted current Wasm)",
+          "Build declaration cache user_hub: hit (verified compiled Wasm)",
+          "Build declaration cache user_shard: hit (verified compiled Wasm)"
+        ]
+      },
+      {
+        "case": "gameplay_warm",
+        "started_utc": "2026-09-24T09:46:36Z",
+        "finished_utc": "2026-09-24T09:46:38Z",
+        "resources": {
+          "elapsed_seconds": 1.90,
+          "user_seconds": 0.93,
+          "system_seconds": 0.97,
+          "max_process_rss_kib": 106496,
+          "major_faults": 0,
+          "minor_faults": 64322,
+          "voluntary_switches": 608,
+          "involuntary_switches": 44,
+          "filesystem_inputs": 0,
+          "filesystem_outputs": 48,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "962eafc10e4bab15e0de0178db9f2c8e9331f1222f314b8417ea5260d5d1c7cc",
+            "release_build_id": "127cade4dd91e435562a0691f56ee08a49be72e162a97a0c61a676ecb332d211"
+          },
+          {
+            "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+            "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e"
+          },
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "844584ca38148b52b82369db6473ff5d7ff5669ba7f7a99156cd2aef3729df27",
+        "canonical_records_sha256": "8cbf1973143310378ea88946314a4b0242d583ae174aa8efee6b53c11f36d471",
+        "build_log_sha256": "7ef97c232686934903f79d3313159f773ddae53a4e95920f029dc78e575edbe5",
+        "process_samples_sha256": "5f37927e9cbc91546cdde6b3bdc11962f661fabc321e6a40c59d46bf54f8c481",
+        "external_toko_cargo_observations": 1,
+        "selected_record": {
+          "inputs": "962eafc10e4bab15e0de0178db9f2c8e9331f1222f314b8417ea5260d5d1c7cc",
+          "release_build_id": "127cade4dd91e435562a0691f56ee08a49be72e162a97a0c61a676ecb332d211",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.01
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.86
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: hit (verified complete release)",
+          "Build cache wasm_store: hit (verified complete release)",
+          "Build cache root: hit (verified complete release)",
+          "Build cache game_hub: hit (verified complete release)",
+          "Build cache game_shard: hit (verified complete release)",
+          "Build cache translation: hit (verified complete release)",
+          "Build cache user_hub: hit (verified complete release)",
+          "Build cache user_shard: hit (verified complete release)"
+        ]
+      },
+      {
+        "case": "dependency_change",
+        "started_utc": "2026-09-24T09:46:39Z",
+        "finished_utc": "2026-09-24T09:55:06Z",
+        "resources": {
+          "elapsed_seconds": 507.28,
+          "user_seconds": 1015.68,
+          "system_seconds": 82.38,
+          "max_process_rss_kib": 2796516,
+          "major_faults": 1867,
+          "minor_faults": 14210667,
+          "voluntary_switches": 477251,
+          "involuntary_switches": 81163,
+          "filesystem_inputs": 3592,
+          "filesystem_outputs": 1228848,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "60c0e01454a746dd366a09105ae6dfffd7a965f92adfd2cb59286473839042c9",
+            "release_build_id": "897e28040ce7a115c8b5991b81722be8f22d5422893454466ecc8bdfa4f57ad7"
+          },
+          {
+            "inputs": "962eafc10e4bab15e0de0178db9f2c8e9331f1222f314b8417ea5260d5d1c7cc",
+            "release_build_id": "127cade4dd91e435562a0691f56ee08a49be72e162a97a0c61a676ecb332d211"
+          },
+          {
+            "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+            "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e"
+          },
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "320b44d1e16d6e189f926a09077a5c2d8b7ffbd3fa51ccd357a4436706f3bebc",
+        "canonical_records_sha256": "107a461062d88e7ee7994f90debba383925dd1a1b0d410ad22011a1a95f2859d",
+        "build_log_sha256": "59d8840df77fc22ef1aaf6ee141524441e8f3c6772e51840290057a2b4ccaf1c",
+        "process_samples_sha256": "8ba8fb3c82bf4f3d967945e7541db74905ed9f2a623ba5cd95b5a05ea03f1e0f",
+        "external_toko_cargo_observations": 13,
+        "selected_record": {
+          "inputs": "60c0e01454a746dd366a09105ae6dfffd7a965f92adfd2cb59286473839042c9",
+          "release_build_id": "897e28040ce7a115c8b5991b81722be8f22d5422893454466ecc8bdfa4f57ad7",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.00
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.84
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_coordinator",
+            "seconds": 52.12
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_store",
+            "seconds": 29.31
+          },
+          {
+            "phase": "dependency feature admission",
+            "seconds": 4.44
+          },
+          {
+            "phase": "declaration",
+            "seconds": 38.21
+          },
+          {
+            "phase": "Candid extraction",
+            "seconds": 4.21
+          },
+          {
+            "phase": "runtime Cargo/link",
+            "seconds": 349.82
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache wasm_store: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache root: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache game_hub: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache game_shard: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache translation: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache user_hub: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build cache user_shard: miss (source/dependency inputs changed (compared with last recorded successful build))",
+          "Build declaration cache translation: hit (verified compiled Wasm)",
+          "Build declaration cache root: hit (verified compiled Wasm)",
+          "Build declaration cache game_hub: miss (extracted current Wasm)",
+          "Build declaration cache game_shard: miss (extracted current Wasm)",
+          "Build declaration cache user_hub: miss (extracted current Wasm)",
+          "Build declaration cache user_shard: miss (extracted current Wasm)"
+        ]
+      },
+      {
+        "case": "dependency_warm",
+        "started_utc": "2026-09-24T09:55:06Z",
+        "finished_utc": "2026-09-24T09:55:08Z",
+        "resources": {
+          "elapsed_seconds": 1.92,
+          "user_seconds": 0.95,
+          "system_seconds": 0.96,
+          "max_process_rss_kib": 106872,
+          "major_faults": 0,
+          "minor_faults": 64321,
+          "voluntary_switches": 587,
+          "involuntary_switches": 50,
+          "filesystem_inputs": 432,
+          "filesystem_outputs": 48,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "60c0e01454a746dd366a09105ae6dfffd7a965f92adfd2cb59286473839042c9",
+            "release_build_id": "897e28040ce7a115c8b5991b81722be8f22d5422893454466ecc8bdfa4f57ad7"
+          },
+          {
+            "inputs": "962eafc10e4bab15e0de0178db9f2c8e9331f1222f314b8417ea5260d5d1c7cc",
+            "release_build_id": "127cade4dd91e435562a0691f56ee08a49be72e162a97a0c61a676ecb332d211"
+          },
+          {
+            "inputs": "ac914af6db7d2aed54a00e08c9f7b14b028427e4c95a1587b4965a2b4792f41b",
+            "release_build_id": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e"
+          },
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          }
+        ],
+        "release_files_inventory_sha256": "320b44d1e16d6e189f926a09077a5c2d8b7ffbd3fa51ccd357a4436706f3bebc",
+        "canonical_records_sha256": "107a461062d88e7ee7994f90debba383925dd1a1b0d410ad22011a1a95f2859d",
+        "build_log_sha256": "8ed91e2641a0dece0be6f75785e089d229ef757ada97b841b4bd6f4b049eb548",
+        "process_samples_sha256": "3ca247875d4b4a4d18ca1ea716b88a84dae56169b27810156fda6327127a738d",
+        "external_toko_cargo_observations": 0,
+        "selected_record": {
+          "inputs": "60c0e01454a746dd366a09105ae6dfffd7a965f92adfd2cb59286473839042c9",
+          "release_build_id": "897e28040ce7a115c8b5991b81722be8f22d5422893454466ecc8bdfa4f57ad7",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.01
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.88
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: hit (verified complete release)",
+          "Build cache wasm_store: hit (verified complete release)",
+          "Build cache root: hit (verified complete release)",
+          "Build cache game_hub: hit (verified complete release)",
+          "Build cache game_shard: hit (verified complete release)",
+          "Build cache translation: hit (verified complete release)",
+          "Build cache user_hub: hit (verified complete release)",
+          "Build cache user_shard: hit (verified complete release)"
+        ]
+      },
+      {
+        "case": "relocated_cold",
+        "started_utc": "2026-09-24T09:55:08Z",
+        "finished_utc": "2026-09-24T10:10:23Z",
+        "resources": {
+          "elapsed_seconds": 914.57,
+          "user_seconds": 1993.19,
+          "system_seconds": 236.63,
+          "max_process_rss_kib": 2796736,
+          "major_faults": 4998,
+          "minor_faults": 51195659,
+          "voluntary_switches": 661196,
+          "involuntary_switches": 132776,
+          "filesystem_inputs": 12664,
+          "filesystem_outputs": 17107832,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          },
+          {
+            "inputs": "c636ff524b13ecb72e762980ec01e212fc45a8f0821ae3f4ecb38fdda89d4581",
+            "release_build_id": "dde634d2a17aa7cdc6b8d637dc8101ebc5f0daf9a9e7a778720290724d132cdc"
+          }
+        ],
+        "release_files_inventory_sha256": "598271a2ee72b1a57b96b93ed60f0669f87678e6c0a5ac2955a0cf905e5bd2d6",
+        "canonical_records_sha256": "d9f77815be325ac467524d080481ff34797d2e53e61b55aa4e9b77231552e9f3",
+        "build_log_sha256": "2a2a9f149700a88e5c51317d7e2af34c5b835f274eb999d2aff8a73e0dc0909a",
+        "process_samples_sha256": "ef379526d294be241178ef4fa680f3fa3282cd3746b31ad3d800edeabfeeb493",
+        "external_toko_cargo_observations": 3,
+        "selected_record": {
+          "inputs": "c636ff524b13ecb72e762980ec01e212fc45a8f0821ae3f4ecb38fdda89d4581",
+          "release_build_id": "dde634d2a17aa7cdc6b8d637dc8101ebc5f0daf9a9e7a778720290724d132cdc",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.00
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.85
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_coordinator",
+            "seconds": 113.31
+          },
+          {
+            "phase": "runtime Cargo/link bootstrap_store",
+            "seconds": 81.54
+          },
+          {
+            "phase": "dependency feature admission",
+            "seconds": 4.43
+          },
+          {
+            "phase": "declaration",
+            "seconds": 176.22
+          },
+          {
+            "phase": "Candid extraction",
+            "seconds": 4.29
+          },
+          {
+            "phase": "runtime Cargo/link",
+            "seconds": 507.57
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache wasm_store: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache root: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache game_hub: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache game_shard: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache translation: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache user_hub: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build cache user_shard: miss (source/dependency inputs changed; toolchain/configuration inputs changed; environment changed (changed-value keys, up to 8: CARGO_TARGET_DIR, PWD) (compared with last recorded successful build))",
+          "Build declaration cache game_hub: miss (extracted current Wasm)",
+          "Build declaration cache root: miss (extracted current Wasm)",
+          "Build declaration cache translation: miss (extracted current Wasm)",
+          "Build declaration cache game_shard: miss (extracted current Wasm)",
+          "Build declaration cache user_shard: miss (extracted current Wasm)",
+          "Build declaration cache user_hub: miss (extracted current Wasm)"
+        ]
+      },
+      {
+        "case": "relocated_warm",
+        "started_utc": "2026-09-24T10:10:23Z",
+        "finished_utc": "2026-09-24T10:10:25Z",
+        "resources": {
+          "elapsed_seconds": 1.84,
+          "user_seconds": 0.89,
+          "system_seconds": 0.94,
+          "max_process_rss_kib": 105852,
+          "major_faults": 0,
+          "minor_faults": 64326,
+          "voluntary_switches": 600,
+          "involuntary_switches": 40,
+          "filesystem_inputs": 0,
+          "filesystem_outputs": 40,
+          "exit_code": 0
+        },
+        "retained_records": [
+          {
+            "inputs": "afb9f51d93e50f76880ef69d0305c337763f45c22198bfc48907cddde10ed9df",
+            "release_build_id": "6b9923453aadc2b42cf7e3183c3f61fed6b0d44c7d2fcd988acada953001dc86"
+          },
+          {
+            "inputs": "c636ff524b13ecb72e762980ec01e212fc45a8f0821ae3f4ecb38fdda89d4581",
+            "release_build_id": "dde634d2a17aa7cdc6b8d637dc8101ebc5f0daf9a9e7a778720290724d132cdc"
+          }
+        ],
+        "release_files_inventory_sha256": "598271a2ee72b1a57b96b93ed60f0669f87678e6c0a5ac2955a0cf905e5bd2d6",
+        "canonical_records_sha256": "d9f77815be325ac467524d080481ff34797d2e53e61b55aa4e9b77231552e9f3",
+        "build_log_sha256": "a31e7154e02b42dd2a4b3c4b9b44a22a6ced81b4b92ce258a1fa1f355a013602",
+        "process_samples_sha256": "1a7933cf28ea536dda4d9e5b55df49b45668b6f8cb41177adeef6cf35005d64a",
+        "external_toko_cargo_observations": 0,
+        "selected_record": {
+          "inputs": "c636ff524b13ecb72e762980ec01e212fc45a8f0821ae3f4ecb38fdda89d4581",
+          "release_build_id": "dde634d2a17aa7cdc6b8d637dc8101ebc5f0daf9a9e7a778720290724d132cdc",
+          "roles": [
+            "fleet_coordinator",
+            "wasm_store",
+            "root",
+            "game_hub",
+            "game_shard",
+            "translation",
+            "user_hub",
+            "user_shard"
+          ],
+          "output_file_count": 30
+        },
+        "phases": [
+          {
+            "phase": "reuse lock acquisition",
+            "seconds": 0.00
+          },
+          {
+            "phase": "input/output verification",
+            "seconds": 1.81
+          }
+        ],
+        "cache_diagnostics": [
+          "Build cache fleet_coordinator: hit (verified complete release)",
+          "Build cache wasm_store: hit (verified complete release)",
+          "Build cache root: hit (verified complete release)",
+          "Build cache game_hub: hit (verified complete release)",
+          "Build cache game_shard: hit (verified complete release)",
+          "Build cache translation: hit (verified complete release)",
+          "Build cache user_hub: hit (verified complete release)",
+          "Build cache user_shard: hit (verified complete release)"
+        ]
+      }
+    ],
+    "qualification_only_artifact_comparison": {
+      "new_release": "207ef50dee8dd7ed6f17eac7c6b84c1541cf21687666dfa0ebbc573b1ab2462e",
+      "artifacts": [
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/fleet_coordinator/fleet_coordinator.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/game_hub/game_hub.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/game_hub/game_hub.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/game_shard/game_shard.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/game_shard/game_shard.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/root/root.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/root/root.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/translation/translation.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/translation/translation.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/user_hub/user_hub.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/user_hub/user_hub.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/user_shard/user_shard.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/user_shard/user_shard.wasm",
+          "identical": false
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.did",
+          "identical": true
+        },
+        {
+          "path": "artifacts/wasm_store/wasm_store.wasm",
+          "identical": false
+        }
+      ]
+    }
+  },
+  "excluded_attempt": {
+    "source_commit": "a7e7023d478e03fb923879ff6307933b4f44854a",
+    "elapsed_seconds": 322.57,
+    "exit_code": 1,
+    "compiler_error": "E0599",
+    "reason": "Executor references absent FieldAction::BoardMinion variant",
+    "evidence_hashes": [
+      {
+        "sha256": "3fcfbe45d073672828cc0becb82de5d6b0774e2a3cb9ff36ef2b26b5245da3ab",
+        "path": ".tmp/toko-performance-20260924/matrix/results/original_cold/build.log"
+      },
+      {
+        "sha256": "b0c43d974fa03ca5d5335edbb0e4bdb9cbf5e08d94f99ee2ca1596b723816b61",
+        "path": ".tmp/toko-performance-20260924/matrix/results/original_cold/resources.json"
+      }
+    ]
+  },
+  "downstream_pending": [
+    "Published .40 launcher/readiness/retry-deadline acceptance",
+    "Matched live apply and effect-free replay with child attribution",
+    "Any optimization claim against this Release baseline"
+  ]
+}

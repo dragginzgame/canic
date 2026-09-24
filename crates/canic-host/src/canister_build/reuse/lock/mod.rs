@@ -1,7 +1,11 @@
-//! Complete-build lock diagnostics, without changing kernel lock authority.
+//! Module: canister_build::reuse::lock
 //!
-//! Owner metadata is advisory, bounded and never a reason to break a lock.
+//! Responsibility: retain kernel exclusion and publish bounded advisory build phases.
+//! Does not own: cache admission or recovery authority.
+//! Boundary: metadata failure never changes exclusion; the lock inode is never replaced.
 
+mod inspection;
+mod serialization;
 #[cfg(all(test, unix))]
 mod tests;
 
@@ -12,13 +16,28 @@ use std::{
     fs,
     io::{self, Read, Seek, SeekFrom, Write},
     path::PathBuf,
+    sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
+};
+
+pub use inspection::{
+    BuildLockInspection, BuildProcessActivity, BuildProcessIdentity, BuildProcessKind,
+    BuildProcessObservation, BuildProcessVisibility, KernelBuildLock, inspect_build_lock,
 };
 
 const OWNER_LIMIT: usize = 4096;
 
-/// Last recorded build owner; a crash or publication race may leave stale metadata.
-/// This diagnostic contains no command arguments or environment values.
+/// Last entered build phase; a timestamp is not a heartbeat or proof of forward progress.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum BuildLockPhase {
+    PreparingInputs,
+    VerifyingOutputs,
+    BuildingArtifacts,
+    VerifyingAndPublishing,
+}
+
+/// Last recorded owner; stale or partial metadata never authorizes breaking a lock.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct BuildLockOwner {
@@ -26,58 +45,79 @@ pub struct BuildLockOwner {
     pub profile: String,
     pub started_at_unix_seconds: u64,
     pub workspace: PathBuf,
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub identity: Option<BuildProcessIdentity>,
+    pub phase: BuildLockPhase,
+    pub phase_started_at_unix_seconds: u64,
 }
 
-/// Current contention and optional advisory owner on the same opened lock inode.
+/// Contention observed on the opened inode, with fallible read-only diagnostics.
 #[derive(Clone, Debug)]
 pub struct BuildLockWait {
     pub elapsed: Duration,
-    pub lock_path: PathBuf,
-    pub recorded_owner: Option<BuildLockOwner>,
+    pub inspection: BuildLockInspection,
 }
 
-/// Holds the existing kernel lock; clears advisory data before releasing it.
-pub(super) struct BuildLock(fs::File);
+/// Holds the kernel lock and clears advisory data before releasing it.
+pub(super) struct BuildLock {
+    file: fs::File,
+    owner: Mutex<BuildLockOwner>,
+}
 
 impl BuildLock {
     pub(super) fn acquire(
         context: &WorkspaceBuildContext,
-        mut progress: impl FnMut(BuildReuseProgress),
+        mut progress: impl FnMut(BuildReuseProgress) -> io::Result<()>,
     ) -> io::Result<Self> {
         let lock_path = context
             .icp_root
             .join(".canic/locks/complete-build-reuse.lock");
         let started = Instant::now();
-        let result = lock_file_with_progress(&lock_path, |file, elapsed| {
+        let file = lock_file_with_progress(&lock_path, |file, elapsed| {
             progress(BuildReuseProgress::WaitingForLock(BuildLockWait {
                 elapsed,
-                lock_path: lock_path.clone(),
-                recorded_owner: read_owner(file),
-            }));
-        });
-        progress(BuildReuseProgress::LockFinished(started.elapsed()));
-        let lock = Self(result?);
-        // Diagnostics fail soft. Neither stale nor missing data changes exclusion.
-        let _ = lock.publish(context);
-        Ok(lock)
-    }
-
-    fn publish(&self, context: &WorkspaceBuildContext) -> io::Result<()> {
-        self.0.set_len(0)?;
+                inspection: inspection::inspect_open_file(file, lock_path.clone()),
+            }))
+        })?;
+        // A pending cancellation must not start another build or clear another owner's metadata.
+        progress(BuildReuseProgress::LockFinished(started.elapsed()))?;
+        let now = unix_seconds();
         let owner = BuildLockOwner {
             pid: std::process::id(),
             profile: context.profile.target_dir_name().into(),
-            started_at_unix_seconds: SystemTime::now()
-                .duration_since(UNIX_EPOCH)
-                .map_err(io::Error::other)?
-                .as_secs(),
+            started_at_unix_seconds: now,
             workspace: context.workspace_root.clone(),
+            identity: inspection::current_identity(),
+            phase: BuildLockPhase::PreparingInputs,
+            phase_started_at_unix_seconds: now,
         };
-        let bytes = serde_json::to_vec(&owner)?;
+        let lock = Self {
+            file,
+            owner: Mutex::new(owner),
+        };
+        if let Ok(owner) = lock.owner.lock() {
+            let _ = lock.publish(&owner);
+        }
+        Ok(lock)
+    }
+
+    pub(super) fn phase(&self, phase: BuildLockPhase) {
+        if let Ok(mut owner) = self.owner.lock()
+            && owner.phase != phase
+        {
+            owner.phase = phase;
+            owner.phase_started_at_unix_seconds = unix_seconds();
+            let _ = self.publish(&owner);
+        }
+    }
+
+    fn publish(&self, owner: &BuildLockOwner) -> io::Result<()> {
+        self.file.set_len(0)?;
+        let bytes = serde_json::to_vec(owner)?;
         if bytes.len() > OWNER_LIMIT {
             return Ok(());
         }
-        let mut file = &self.0;
+        let mut file = &self.file;
         file.seek(SeekFrom::Start(0))?;
         file.write_all(&bytes)
     }
@@ -85,9 +125,14 @@ impl BuildLock {
 
 impl Drop for BuildLock {
     fn drop(&mut self) {
-        // Never unlink or replace the inode: contenders already have it open.
-        let _ = self.0.set_len(0);
+        let _ = self.file.set_len(0);
     }
+}
+
+fn unix_seconds() -> u64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .map_or(0, |time| time.as_secs())
 }
 
 fn read_owner(mut file: &fs::File) -> Option<BuildLockOwner> {

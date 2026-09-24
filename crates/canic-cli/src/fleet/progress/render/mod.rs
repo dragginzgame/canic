@@ -4,6 +4,7 @@
 //! Does not own: backend readiness, progress inference or deployment completion.
 //! Boundary: Root counts stay distinct from Components and reviewed effects from time.
 
+use crate::support::path_stamp::utc_timestamp_ns;
 use canic_core::dto::component_provisioning::FleetComponentProvisioningPhase;
 use canic_host::fleet_ensure::dto::{
     FleetEnsureActionKind, FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState,
@@ -45,7 +46,7 @@ pub(in crate::fleet) fn plain(progress: &FleetEnsureProgress) -> String {
                 detail.component_count
             );
             if let Some(retry) = detail.pending_root_failure {
-                let _ = write!(line, "; {}", pending_retry(retry));
+                let _ = write!(line, "; {}", pending_retry(retry).join("; "));
             }
         } else {
             line.push_str("; readiness detail unavailable");
@@ -113,7 +114,7 @@ pub(super) fn panel(
             lines.extend(stages(detail));
             lines.push("Final checks                     Pending".into());
             if let Some(retry) = detail.pending_root_failure {
-                lines.push(pending_retry(retry));
+                lines.extend(pending_retry(retry));
             }
             lines.push(format!(
                 "{elapsed_seconds}s awaiting this effect here; Components in scope: {}",
@@ -289,16 +290,26 @@ fn safe_text(value: &str) -> String {
 
 fn pending_retry(
     retry: canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure,
-) -> String {
+) -> [String; 2] {
     if let Some(origin) = retry.origin {
-        format!(
-            "Pending owner {}: {:?}, code {}, {:?}; retry deadline unavailable",
-            origin.target, origin.stage, origin.diagnostic_code, origin.retry_category
-        )
+        let deadline = origin.retry_at_ns.map_or_else(
+            || "retry deadline unavailable".to_owned(),
+            |value| format!("observed retry deadline: {}", utc_timestamp_ns(value)),
+        );
+        [
+            format!(
+                "Pending owner {}: {:?}, code {}, {:?}",
+                origin.target, origin.stage, origin.diagnostic_code, origin.retry_category,
+            ),
+            deadline,
+        ]
     } else {
-        format!(
-            "Root {}: {:?}, code {}; originating owner unavailable; retry deadline unavailable",
-            retry.fleet_subnet_root, retry.stage, retry.diagnostic_code
-        )
+        [
+            format!(
+                "Root {}: {:?}, code {}; originating owner unavailable",
+                retry.fleet_subnet_root, retry.stage, retry.diagnostic_code
+            ),
+            "retry deadline unavailable".to_owned(),
+        ]
     }
 }

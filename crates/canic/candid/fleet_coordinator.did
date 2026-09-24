@@ -1255,6 +1255,7 @@ type Page = record { total : nat64; entries : vec principal };
 type PageRequest = record { offset : nat64; limit : nat64 };
 // Protected origin carried through outer provisioning stages without public error expansion.
 type ProvisioningFailureOrigin = record {
+  retry_at_ns : opt nat64;
   retry_category : ProvisioningRetryCategory;
   operation_id : blob;
   stage : ProvisioningFailureStage;

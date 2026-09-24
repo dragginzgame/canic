@@ -26,6 +26,7 @@ clap = { workspace = true }
 rustix = { workspace = true, features = ["termios"] }
 serde = { workspace = true }
 serde_json = { workspace = true }
+signal-hook = { workspace = true }
 thiserror = { workspace = true }
 toml = { workspace = true }
 

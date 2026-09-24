@@ -1515,6 +1515,52 @@ fn pending_root_retry_failure_is_typed_bounded_and_restart_safe() {
     );
     assert_eq!(failure.diagnostic_code, diagnostic_code);
     assert_eq!(failure.failed_at_ns, 162);
+    assert_eq!(failure.origin, None);
+
+    let root_failure = canic_core::dto::component_provisioning::RootComponentProvisioningFailure {
+        stage:
+            canic_core::dto::component_provisioning::ProvisioningFailureStage::ComponentMembership,
+        target: principal(8),
+        operation_id: [9; 32],
+        diagnostic_code,
+        retry_category: canic_core::dto::component_provisioning::ProvisioningRetryCategory::Backoff,
+        failed_at_ns: 160,
+        consecutive_failures: 1,
+        retry_at_ns: Some(1_000_000_160),
+    };
+    for retry_at_ns in [root_failure.retry_at_ns, Some(2_000_000_160), None] {
+        let observed = FleetCoordinatorOps::observed_failure_error(
+            canic_core::dto::component_provisioning::RootComponentProvisioningFailure {
+                retry_at_ns,
+                ..root_failure
+            },
+        );
+        let status = FleetCoordinatorOps::record_component_provisioning_root_failure(
+            status_request,
+            diagnostic_code,
+            observed.provisioning_failure(),
+            163,
+        )
+        .unwrap();
+        let origin = status.pending_root_failure.unwrap().origin.unwrap();
+        assert_eq!(origin.retry_at_ns, retry_at_ns);
+        assert_eq!(origin.failed_at_ns, root_failure.failed_at_ns);
+        assert_eq!(origin.target, root_failure.target);
+        assert_eq!(origin.operation_id, root_failure.operation_id);
+        let snapshot = FleetCoordinatorRegistryStore::export();
+        FleetCoordinatorRegistryStore::import(snapshot);
+        assert_eq!(
+            FleetCoordinatorOps::component_provisioning_status_for_test(&config, status_request)
+                .unwrap()
+                .pending_root_failure,
+            status.pending_root_failure,
+        );
+    }
+    let failure =
+        FleetCoordinatorOps::component_provisioning_status_for_test(&config, status_request)
+            .unwrap()
+            .pending_root_failure
+            .unwrap();
 
     let durable = FleetCoordinatorRegistryStore::export();
     FleetCoordinatorRegistryStore::import(durable);
@@ -7012,4 +7058,5 @@ fn provisioning_wait_does_not_block_coordinator_publication() {
         Some(provisioning_failure.failed_at_ns)
     );
     assert_eq!(origin.retry_category, provisioning_failure.retry_category);
+    assert_eq!(origin.retry_at_ns, provisioning_failure.retry_at_ns);
 }

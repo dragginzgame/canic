@@ -14,6 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.40` corrects Fleet readiness balances, exposes reported retry deadlines
+  in deployment diagnostics, and adds compact build-lock waits with read-only
+  owner inspection and safe waiter cancellation. Attribute protected reads to
+  their child targets in existing timing receipts.
 - `0.110.39` detects PocketIC compilation failures before long serial suites
   and extends controlled B1/B2 footprint evidence with verified experiment inputs.
   Summarize Fleet timing costs, cover final authority verification, refresh

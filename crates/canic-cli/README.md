@@ -223,6 +223,18 @@ canic diagnostic E123
 canic diagnostic 123
 ```
 
+Inspect a contended build without changing the lock or signalling its owner:
+
+```bash
+canic diagnostic build-lock --lock .canic/locks/complete-build-reuse.lock
+canic diagnostic build-lock --lock .canic/locks/complete-build-reuse.lock --json
+```
+
+The report separates the kernel holder from advisory metadata, shows UTC phase
+times and bounded process observations, and reports unavailable process visibility
+explicitly. A quiet compiler or hidden PID does not establish a stalled or exited
+owner. Cancel a redundant waiter if needed; never delete the lock file.
+
 For argument-boundary debugging, `CANIC_TRACE_ARGV=1` prints every raw argument
 before parsing. It may disclose secrets and should not be retained in shared
 logs.

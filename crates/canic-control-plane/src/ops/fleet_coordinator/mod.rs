@@ -179,6 +179,7 @@ impl FleetCoordinatorOps {
         InternalError::unavailable().with_observed_provisioning_failure(
             canic_core::control_plane_support::error::ProvisioningFailureView {
                 recorded_at_ns: Some(failure.failed_at_ns),
+                retry_at_ns: failure.retry_at_ns,
                 stage: failure.stage,
                 target: failure.target,
                 operation_id: failure.operation_id,
@@ -776,6 +777,7 @@ impl FleetCoordinatorOps {
             origin: origin.map(|origin| {
                 canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
                     failed_at_ns: origin.recorded_at_ns.unwrap_or(failed_at_ns),
+                    retry_at_ns: origin.retry_at_ns,
                     stage: origin.stage,
                     target: origin.target,
                     operation_id: origin.operation_id,

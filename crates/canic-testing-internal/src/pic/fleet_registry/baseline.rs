@@ -5632,6 +5632,7 @@ exec icp "$@"
                     observed.origin,
                     Some(ProvisioningFailureOrigin {
                         failed_at_ns: failure.failed_at_ns,
+                        retry_at_ns: failure.retry_at_ns,
                         stage: failure.stage,
                         target: failure.target,
                         operation_id: failure.operation_id,

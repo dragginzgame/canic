@@ -86,6 +86,7 @@ impl InternalError {
             self.provisioning_failure =
                 Some(crate::view::provisioning_failure::ProvisioningFailureView {
                     recorded_at_ns: None,
+                    retry_at_ns: None,
                     stage,
                     target,
                     operation_id,

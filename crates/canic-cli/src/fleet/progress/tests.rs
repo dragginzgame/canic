@@ -260,6 +260,68 @@ fn reported_retry_is_distinct_from_waiting_and_keeps_root_evidence_in_json() {
 }
 
 #[test]
+fn observed_retry_deadlines_reach_human_and_json_output_without_advancement() {
+    use canic_core::dto::component_provisioning::{
+        FleetComponentProvisioningRetryStage, FleetComponentProvisioningRootFailure,
+        ProvisioningFailureOrigin, ProvisioningFailureStage, ProvisioningRetryCategory,
+    };
+    let mut event = activating();
+    let unchanged = transition_identity(&event);
+    for (retry_at_ns, rendered) in [
+        (Some(0), "1970-01-01T00:00:00.000000000Z"),
+        (
+            Some(1_715_090_400_123_456_789),
+            "2024-05-07T14:00:00.123456789Z",
+        ),
+        (Some(u64::MAX), "2554-07-21T23:34:33.709551615Z"),
+        (None, "retry deadline unavailable"),
+    ] {
+        let FleetEnsureProgressState::AwaitingProgress {
+            provisioning: Some(detail),
+            ..
+        } = &mut event.state
+        else {
+            panic!("fixture must be awaiting provisioning");
+        };
+        detail.pending_root_failure = Some(FleetComponentProvisioningRootFailure {
+            origin: Some(ProvisioningFailureOrigin {
+                failed_at_ns: 123,
+                retry_at_ns,
+                stage: ProvisioningFailureStage::ComponentMembership,
+                target: candid::Principal::from_slice(&[8]),
+                operation_id: [9; 32],
+                diagnostic_code: 137,
+                retry_category: ProvisioningRetryCategory::Backoff,
+            }),
+            fleet_subnet_root: candid::Principal::from_slice(&[7]),
+            stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
+            diagnostic_code: 137,
+            failed_at_ns: 124,
+        });
+        assert!(render::plain(&event).contains(rendered));
+        let mut output = Vec::new();
+        terminal::Painter::default()
+            .paint(
+                &mut output,
+                &render::panel(&event, Duration::ZERO, Duration::ZERO),
+                (80, 24),
+            )
+            .unwrap();
+        assert!(String::from_utf8(output).unwrap().contains(rendered));
+        assert!(
+            render::milestone(&event, Duration::from_secs(90), Duration::from_secs(120))
+                .contains(rendered)
+        );
+        let json: serde_json::Value = serde_json::from_str(&render_progress(&event, true)).unwrap();
+        assert_eq!(
+            json["progress"]["state"]["provisioning"]["pending_root_failure"]["origin"]["retry_at_ns"],
+            serde_json::to_value(retry_at_ns).unwrap()
+        );
+        assert_eq!(transition_identity(&event), unchanged);
+    }
+}
+
+#[test]
 fn live_selection_respects_redirection_and_limited_terminals() {
     assert!(terminal::supports_live(true, Some("xterm-256color"), false));
     assert!(!terminal::supports_live(false, Some("xterm"), false));

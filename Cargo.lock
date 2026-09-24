@@ -538,6 +538,7 @@ dependencies = [
  "rustix",
  "serde",
  "serde_json",
+ "signal-hook",
  "thiserror 2.0.18",
  "toml 1.1.6+spec-1.1.0",
 ]
@@ -2648,9 +2649,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.261.8"
+version = "0.261.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d89c5bb87a1e6f2057149a0036f7d7da5498cfbccce52c8c1c5ef18765ee05b5"
+checksum = "e7b6d67331a1c69ad651767cffbf482a9572733655e5c233857f021788fb0a92"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2666,9 +2667,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.261.8"
+version = "0.261.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f1fbe5ac5137c772c153bf9f9e02f496b6a74f1afcfbc7b9722f1dc30643d2a"
+checksum = "1b6a0297054eec2eb5e61ca012bccf82622c0d3935d83a9da7b895fd6d8390ec"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2691,18 +2692,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.261.8"
+version = "0.261.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7df5bba417da8593f1a38d1ae8a07cc3830ec178b9f2482afa652757252a8070"
+checksum = "91006400b01fa6f6d842c197521595e172da7bcb538b12133d1feb86032955b2"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.261.8"
+version = "0.261.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "00f396e8b32fc6b171fb2a35c4101cb680db01678f465694647961cbfddf9e8c"
+checksum = "79444f1810bc8007e3dc345879642019d75f14d8e34a89c8fdfe663667d9cdf4"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2722,9 +2723,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.261.8"
+version = "0.261.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "85ba53840dda973df482333ea36429585fdfa3f82b6c32b1d0aefd0a7ed34da0"
+checksum = "261eec76d0dd67b7b970e9a2cd8ba076b2f1ca1526889d8ec5fc7fcc7ea4be9c"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2739,9 +2740,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.261.8"
+version = "0.261.10"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adfeaee4fdfcec6baac458b75cb32045440e62a6940ddbfe2256f1887f93f0dd"
+checksum = "17a7598142b7d9a6b128d61619e3138e34ef483c806ed672723c2376fa39d23c"
 dependencies = [
  "candid",
  "derive_more",
@@ -4428,6 +4429,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f8fadd59c855ef2080decdef8ff161eb6661b86933c9d82e5ba29dc602a55aba"
 
 [[package]]
+name = "signal-hook"
+version = "0.3.18"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d881a16cf4426aa584979d30bd82cb33429027e42122b169753d6ef1085ed6e2"
+dependencies = [
+ "libc",
+ "signal-hook-registry",
+]
+
+[[package]]
 name = "signal-hook-registry"
 version = "1.4.8"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -5593,18 +5604,18 @@ dependencies = [
 
 [[package]]
 name = "zerocopy"
-version = "0.8.57"
+version = "0.8.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d35102a9f36d089ccae9e4c6802bc118be4487b80aaffc0ab4e0cf5ce92d2873"
+checksum = "c17e8fafad82b542ff3717217ecdc736231b59e387768c9630123b4ce4d2db44"
 dependencies = [
  "zerocopy-derive",
 ]
 
 [[package]]
 name = "zerocopy-derive"
-version = "0.8.57"
+version = "0.8.58"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "146c01f5ab44258da43cf276c74a2763db2ff3969c9c652c3f2de07041d0b2bc"
+checksum = "595f56e044df4f46a0c9a626f65c3d99eb8488f7e8a8baa12dd76326d9710bf2"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -1822,6 +1822,7 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
     let initial = status_response(accepted.clone());
     let origin = ProvisioningFailureView {
         recorded_at_ns: None,
+        retry_at_ns: None,
         stage: ProvisioningFailureStage::StoreStatus,
         target: principal(8),
         operation_id: [9; 32],
@@ -1838,6 +1839,7 @@ fn provisioning_failure_backoff_survives_restart_without_changing_work_receipts(
         )
         .unwrap();
         assert_eq!(failure.retry_at_ns, Some(now + delay * 1_000_000_000));
+        assert_eq!(failure.origin.retry_at_ns, failure.retry_at_ns);
         let snapshot = RootComponentProvisioningStore::export();
         RootComponentProvisioningStore::import(snapshot.clone());
         assert_eq!(RootComponentProvisioningStore::export(), snapshot);

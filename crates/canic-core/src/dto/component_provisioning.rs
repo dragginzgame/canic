@@ -454,6 +454,9 @@ pub struct RootComponentProvisioningStatusResponse {
 #[serde(deny_unknown_fields)]
 pub struct ProvisioningFailureOrigin {
     pub failed_at_ns: u64,
+    /// Observed owner's retry deadline in Unix nanoseconds, absent when unknown.
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub retry_at_ns: Option<u64>,
     pub stage: ProvisioningFailureStage,
     pub target: Principal,
     pub operation_id: [u8; 32],

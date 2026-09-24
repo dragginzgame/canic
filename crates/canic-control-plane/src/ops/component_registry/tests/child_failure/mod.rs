@@ -84,6 +84,7 @@ fn initial_child_origin_survives_outer_failure_context_without_changing_state() 
             .unwrap()
             .unwrap();
         assert_eq!(origin.recorded_at_ns, Some(failure.failed_at_ns));
+        assert_eq!(origin.retry_at_ns, Some(failure.retry_at_ns));
         assert_eq!(
             origin.stage,
             ProvisioningFailureStage::ComponentChildAllocation
