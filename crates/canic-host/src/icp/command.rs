@@ -43,6 +43,7 @@ impl IcpCli {
             identity_password_file: configured_identity_password_file(),
             selected_identity: std::sync::Arc::default(),
             compatible_version: std::sync::Arc::default(),
+            query_transport: std::sync::Arc::default(),
         }
     }
 

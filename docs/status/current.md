@@ -20,6 +20,97 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Deployment screen corrected; binding experiment bounded — 2026-09-24
+
+The [progress correction](../audits/reports/2026-09/2026-09-24/deployment-progress-screen.md)
+addresses the supplied Toko transcript. Interactive ensure/generate progress
+stays on a dedicated screen; prerequisite, placement, observation and receipt
+failure updates do not become scrolling log lines. Resizing keeps the same mode.
+Completion, errors, Ctrl-C, SIGTERM and panic restore the ordinary terminal before
+final output. Reviewed effects remain a count without a percentage-style bar.
+Plain and JSON output retain their modes and schemas.
+
+All 29 selected progress/receipt/catalog tests pass, as do scoped strict CLI lint,
+formatting, layering, document semantics and whitespace checks. A real PTY resize
+replay has one screen entry/exit and preserves following output. Evidence is in
+`.tmp/deployment-screen-20260924/`. The correction and both changelog views extend
+the existing .41 batch; the complete bounded host/display batch is ready for the
+maintainer's commit/release flow. Everything remains uncommitted; no package
+version, publication, live deployment or broad gate ran.
+
+After that correction, the [isolated binding experiment](../audits/reports/2026-09/2026-09-24/release-binding-feasibility.md)
+compiled one optimized synthetic module and finalized two distinct identities.
+PocketIC observes both, preserves same-Wasm restoration and rejects unbound and
+mismatched identities. All non-binding bytes stay identical. Retained source,
+lockfile, structured result and tool hashes accompany the report. This is a
+feasibility checkpoint only: real Canic roles/activation, artifact finalization
+recovery and application-scale speed remain unqualified. Production release
+identity handling is unchanged and the proposal remains unscheduled.
+
+## Deployment observation batch complete — open .41, 2026-09-24
+
+The [implementation/evidence report](../audits/reports/2026-09/2026-09-24/deployment-speed-implementation.md)
+records fresh Store catalog sharing within each upload reconciliation pass and
+authenticated-query connection/runtime reuse. Exact chunk/Candid checks,
+per-effect cycle observations and recovery remain intact; query signer, network
+and root-key authority are freshly resolved. The original
+[investigation](../audits/reports/2026-09/2026-09-24/deployment-speed-opportunities.md)
+remains the prioritization baseline.
+
+All 21 focused native regressions and strict host Clippy, including `local-fleet`
+and test targets, pass. Formatting, layering, document semantics, whitespace and
+the query-source secret scan pass; document layout reports two existing advisory
+warnings for the metrics-history idea. Evidence is in `.tmp/deployment-speed-20260924/`.
+The native HTTP fixtures needed localhost access outside the network sandbox.
+No full suite, live IC request, application build or deployment ran. The prior
+issue #28 source hashes and Cargo lockfile are unchanged.
+
+The complete bounded host batch and both .41 changelog views are ready for the
+maintainer's commit/release flow. Package versions remain .40; all edits are
+uncommitted. This groups both optimizations and their recovery/authority evidence
+into one batch despite the existing 0.110 release-count overrun; it does not
+replace accepted B3/B4 work or close downstream issue #28 acceptance.
+
+There is no measured end-to-end speedup claim. A matched live convergence/replay
+receipt can quantify the request/setup reduction after an authorized deployment.
+The [compilation/finalization proposal](../design/ideas/release-binding-finalization/design.md)
+is reviewable but unscheduled: executable release-binding and optimizer proofs
+must precede implementation. It is not authority to begin another minor.
+
+## Issue #28 — native qualification complete, downstream acceptance open
+
+The [qualification follow-up](../audits/reports/2026-09/2026-09-24/issue-28-qualification.md)
+records real CLI inspection across normal/crashed fixture-owner handoff,
+stale identity and malformed metadata, hidden namespace handling, and exact
+artifact verification after a fresh lock acquisition. Focused host/CLI tests,
+strict scoped lint and the existing integration inventory pass. No production
+defect was found; changes are test-only and do not allocate a new patch draft.
+
+Keep #28 open for Toko's ordinary-launcher recovery matrix and an authorized
+.40 convergence/replay run checking retry deadlines and per-child timing.
+Toko remains read-only; no application build, deployment, publication or broad
+gate ran. The Canic qualification slice is ready for review, not a claim that
+the complete upstream acceptance batch is closed. Changes are uncommitted.
+
+## Pending dependency follow-up — ic-certification 4.x
+
+On future upstream/dependency reviews, check for a published `ic-agent` release
+that supports `ic-certification` 4.x and remind the maintainer when it is
+available. Keep this item in subsequent handoffs until resolved; this is a
+review reminder, not an automated release notification.
+
+As checked on 2026-09-24, Canic resolves `ic-certification` 3.2.0 and the latest
+published `ic-agent` 0.49.2 still requires 3.x. Certification 4.0.0 has no Rust
+source changes in that crate, but changing our dependency alone would make our
+receipt `Certificate` type incompatible with `Agent::verify`. Wait for upstream
+alignment rather than adding adapters or forks. Recheck `ic-transport-types`,
+`ic-canister-sig-creation` and `ic-signature-verification` at the same time.
+
+Once compatible releases exist, assess the coordinated manifest/lockfile update
+and targeted receipt-verification, signature and Wasm dependency checks.
+Sources: [agent releases](https://github.com/dfinity/agent-rs/releases) and
+[certification 4.0.0](https://github.com/dfinity/response-verification/releases/tag/4.0.0).
+
 ## .40 integration inventory correction — 2026-09-24
 
 The maintainer's invariant run found the CLI `build_lock_inspection` integration

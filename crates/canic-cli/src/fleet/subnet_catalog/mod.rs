@@ -13,7 +13,7 @@ pub(super) fn print_progress(progress: &CatalogAcquisitionProgress) {
     eprintln!("{}", render_progress(progress));
 }
 
-fn render_progress(progress: &CatalogAcquisitionProgress) -> String {
+pub(super) fn render_progress(progress: &CatalogAcquisitionProgress) -> String {
     let phase = match &progress.stage {
         CatalogAcquisitionStage::CacheLookup => "checking cached placement evidence".to_string(),
         CatalogAcquisitionStage::Collecting { endpoint } => {

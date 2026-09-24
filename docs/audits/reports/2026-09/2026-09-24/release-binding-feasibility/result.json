@@ -1,0 +1,20 @@
+{
+  "bound_a_sha256": "fb1bcae8d24f169b7ab3259eea9f8fa4130a54348cf66e8157b71d3181e6b247",
+  "bound_b_sha256": "622c5d1b95c10c0fcef9c1689268669e7ac87aaf34a263a2b1062a73e01f3e41",
+  "exact_repeat": true,
+  "non_binding_bytes_identical": true,
+  "pocketic": {
+    "mismatched_rejected": true,
+    "same_wasm_restore": true,
+    "two_distinct_bindings": true,
+    "unbound_rejected": true
+  },
+  "production_role_qualification": false,
+  "schema_version": 1,
+  "scope": "synthetic_fixture_only",
+  "slot_bytes": 64,
+  "slot_start": 620,
+  "speedup_measured": false,
+  "template_bytes": 684,
+  "template_sha256": "b5636e496c2cd20943f70c0f4fa6a393914f46a940d0b702c5c1169c8b230208"
+}

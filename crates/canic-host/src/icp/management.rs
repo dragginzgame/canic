@@ -11,6 +11,7 @@ use std::{sync::Arc, time::Duration};
 use candid::{CandidType, Principal};
 use ic_agent::{
     Agent, AgentError, Identity,
+    agent::AgentBuilder,
     identity::{BasicIdentity, Prime256v1Identity, Secp256k1Identity},
 };
 use serde::{Deserialize, de::DeserializeOwned};
@@ -114,7 +115,7 @@ impl IcpCli {
     ///
     /// The caller owns reviewed effect authority and durable intent before using it.
     pub fn authenticated_agent(&self) -> Result<Agent, IcpManagementCallError> {
-        self.build_authenticated_agent(None)
+        self.build_authenticated_agent(Agent::builder())
     }
 
     /// Resolve the same selected identity and network with bounded HTTP response bodies.
@@ -122,12 +123,12 @@ impl IcpCli {
         &self,
         maximum: usize,
     ) -> Result<Agent, IcpManagementCallError> {
-        self.build_authenticated_agent(Some(maximum))
+        self.build_authenticated_agent(Agent::builder().with_max_response_body_size(maximum))
     }
 
-    fn build_authenticated_agent(
+    pub(super) fn build_authenticated_agent(
         &self,
-        maximum: Option<usize>,
+        builder: AgentBuilder,
     ) -> Result<Agent, IcpManagementCallError> {
         let environment = self
             .environment
@@ -135,13 +136,10 @@ impl IcpCli {
             .ok_or(IcpManagementCallError::MissingEnvironment)?;
         let network = self.network_status(environment)?;
         let identity = self.exported_active_identity()?;
-        let mut builder = Agent::builder()
+        let builder = builder
             .with_url(&network.api_url)
             .with_arc_identity(identity)
             .with_ingress_expiry(MANAGEMENT_INGRESS_EXPIRY);
-        if let Some(maximum) = maximum {
-            builder = builder.with_max_response_body_size(maximum);
-        }
         let agent = builder
             .build()
             .map_err(IcpManagementCallError::AgentBuild)?;

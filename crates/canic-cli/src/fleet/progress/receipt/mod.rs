@@ -52,6 +52,7 @@ pub(super) struct Receipt {
     omitted_events: u64,
     finished: bool,
     failed: bool,
+    emit_errors: bool,
     active_stages: Vec<u64>,
     last_progress: Option<FleetEnsureProgress>,
     summary: summary::Summary,
@@ -105,6 +106,9 @@ impl Receipt {
             omitted_events: 0,
             finished: false,
             failed: false,
+            // The caller reports construction failures once; Drop must not
+            // print a second diagnostic before output ownership is established.
+            emit_errors: false,
             active_stages: Vec::new(),
             last_progress: None,
             summary: summary::Summary::default(),
@@ -115,7 +119,17 @@ impl Receipt {
             return Err(io::ErrorKind::InvalidInput.into());
         }
         receipt.file.sync_data()?;
+        receipt.emit_errors = true;
         Ok((receipt, path))
+    }
+
+    /// Let the screen owner display failures; final summaries still mark partial evidence.
+    pub(super) const fn defer_error_output(&mut self) {
+        self.emit_errors = false;
+    }
+
+    pub(super) const fn has_failed(&self) -> bool {
+        self.failed
     }
 
     pub(super) fn progress(&mut self, progress: &FleetEnsureProgress) {
@@ -156,11 +170,13 @@ impl Receipt {
     pub(super) fn record(&mut self, name: &str, value: &impl Serialize) {
         if !self.failed && !self.finished && self.append(name, value, false).is_err() {
             self.failed = true;
-            let _ = writeln!(
-                io::stderr().lock(),
-                "{}",
-                serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "write", "incomplete": true})
-            );
+            if self.emit_errors {
+                let _ = writeln!(
+                    io::stderr().lock(),
+                    "{}",
+                    serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "write", "incomplete": true})
+                );
+            }
         }
     }
 
@@ -233,11 +249,13 @@ impl Receipt {
             .is_err()
         {
             self.failed = true;
-            let _ = writeln!(
-                io::stderr().lock(),
-                "{}",
-                serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "finalization", "incomplete": true})
-            );
+            if self.emit_errors {
+                let _ = writeln!(
+                    io::stderr().lock(),
+                    "{}",
+                    serde_json::json!({"event": "fleet_timing_receipt_error", "schema_version": 1, "kind": "finalization", "incomplete": true})
+                );
+            }
         }
         self.finished = true;
     }

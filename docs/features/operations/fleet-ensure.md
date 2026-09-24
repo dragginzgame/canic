@@ -246,6 +246,10 @@ Candid decoding failures stop immediately; mutation calls are outside this retry
 path. Exhaustion retains the original issued operation for ordinary same-digest
 recovery; it never authorizes a replacement effect.
 
+Authenticated queries share connection/runtime setup within a command, while
+each logical query resolves and verifies its signer, network and root key
+afresh. This reuses transport resources, not authority or query results.
+
 Terminal inventory also overlaps independent Component partition reads and,
 within each parent's child set, Root allocation-receipt reads up to four at a
 time. Each set must validate before its management inspections begin. Receipt
@@ -255,8 +259,12 @@ existing boundaries; these observations are not cached across terminal passes.
 
 Within one read-only protocol planning pass, manifest and chunk checks share a
 successful template-status read for the exact Store, Candid path/digest, template
-and version. Each action still verifies its Candid binding. Later plans, retries
-and execution-time checks query afresh; no template observation crosses an effect.
+and version. Each action still verifies its Candid binding. Independent upload
+batches similarly share one catalog response within each reconciliation pass,
+testing every chunk's exact hash separately. Pre-submit and post-submit passes
+start fresh; no template observation crosses an effect or survives a failed
+pass. Standalone checks and later plans/retries query afresh. Cycle observations
+remain fresh per effect, and `cached_read_hits` includes shared catalog reads.
 
 The later pool-balance stage refreshes PendingReset and Failed assets in groups
 of at most four. Each required inspection retains its target-specific reserve
@@ -629,7 +637,7 @@ JSON carries `state.elapsed_seconds` and nullable `state.provisioning` on
 `awaiting_progress` events; provisioning phases retain Coordinator enum names.
 These bounded informational fields add no polls, do not publish the internal
 progress identity, and cannot replace fresh funding or completion evidence.
-Interactive stderr uses a compact panel with named work, a Root stage table,
+Interactive stderr uses a dedicated screen with named work, a Root stage table,
 reviewed-effect accounting and the age of the latest progress observation and
 transition. A local spinner indicates an observed wait; at thirty seconds without
 a new progress event it becomes a stale-observation marker. Neither animation nor
@@ -649,15 +657,23 @@ Redirected stderr, limited terminals and `NO_COLOR` use plain milestone output
 with thirty-second local heartbeats, including explicit observation age when a
 remote call stops returning new events. Advancing counters alone do not print a line per
 effect; phase, authority, denominator and provisioning changes remain visible.
-Funding, review, prerequisite and failure messages interrupt the panel and retain
-the existing commands and detailed guidance. Resizing to a narrow or short terminal
-falls back to plain milestones. No alternate screen, hidden cursor or raw input
-mode needs recovery after cancellation.
+The interactive screen keeps prerequisite transitions, placement collection and
+observation failures in place. It does not insert scrolling log lines between
+updates or switch to milestone logs when resized. Narrow/short windows display a
+bounded portion of the same screen. Reviewed effects are a count, without a
+deployment percentage bar. Completion restores the ordinary terminal before the
+receipt summary, final report or recovery error is printed; the repaint clock
+cannot overwrite that output. Ctrl-C, SIGTERM and panic restore the terminal
+before retaining their normal termination/error behavior. Raw input mode and
+cursor hiding are not used.
 
 Successful per-query timings and cache/identity counts are available through the
-existing explicit `--json` mode. Default text prints one inclusive planning summary;
-failed observations stay visible. JSON emits every typed host event on stderr and
+existing explicit `--json` mode. Plain logs print one inclusive planning summary;
+the interactive screen retains detailed timing in the receipt and displays failed
+observations in place. JSON emits every typed host event on stderr and
 the complete final report on stdout, without animation or milestone suppression.
+Receipt write failures stay inside the interactive screen and mark final timing
+evidence partial; they do not interrupt the display with a separate log line.
 Errors after ensure-option parsing use the `fleet_ensure_error` JSON event;
 invalid CLI syntax still follows the ordinary argument-parser error path.
 For detailed evidence, select `--json` on the intended invocation and redirect

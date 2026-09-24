@@ -47,6 +47,34 @@ fn read(path: &Path) -> Vec<serde_json::Value> {
 }
 
 #[test]
+fn screen_owned_receipt_failures_are_retained_without_stderr_writes() {
+    const CHILD: &str = "CANIC_RECEIPT_SCREEN_FAILURE";
+    if let Ok(mode) = std::env::var(CHILD) {
+        let (root, mut receipt, path) = fixture();
+        let before = fs::read(&path).unwrap();
+        receipt.file = File::open(&path).unwrap();
+        receipt.defer_error_output();
+        if mode == "write" {
+            receipt.observation(&observation(Some(true)));
+        } else {
+            receipt.finish(None);
+        }
+        assert!(receipt.has_failed());
+        assert_eq!(fs::read(&path).unwrap(), before);
+        drop(receipt);
+        fs::remove_dir_all(root).unwrap();
+        return;
+    }
+    for mode in ["write", "finalization"] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "fleet::progress::receipt::tests::screen_owned_receipt_failures_are_retained_without_stderr_writes", "--nocapture"])
+            .env(CHILD, mode).output().unwrap();
+        assert!(output.status.success());
+        assert!(output.stderr.is_empty());
+    }
+}
+
+#[test]
 fn paired_events_retain_clocks_input_binding_and_failure_without_prose() {
     let (root, mut receipt, path) = fixture();
     receipt.observation(&observation(None));

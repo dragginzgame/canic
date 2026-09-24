@@ -196,7 +196,7 @@ fn local_animation_marks_stale_observations_without_inventing_backend_progress()
     assert!(fresh.contains("/ Waiting"));
     assert!(stale.contains("! Waiting"));
     assert!(stale.contains("observation: 31s old (stale)"));
-    assert!(stale.contains("33s awaiting this effect here"));
+    assert!(stale.contains("Waiting: 33s"));
     assert!(!stale.contains("64s awaiting"));
     assert_eq!(event.applied_effects, 70);
 }
@@ -338,25 +338,26 @@ fn repaint_bounds_names_and_resizes_without_erasing_prior_messages() {
     let lines = vec!["unsafe\x1b[2J\nname界".repeat(20), "second".into()];
     painter.paint(&mut bytes, &lines, (80, 24)).unwrap();
     let first = String::from_utf8(bytes.clone()).unwrap();
-    assert!(first.lines().all(|line| line.len() <= 79));
-    assert!(!first.contains('\x1b'));
+    let (_, frame) = first.split_once("\x1b[H\x1b[2J").unwrap();
+    assert!(frame.lines().all(|line| line.len() <= 79));
+    assert!(!frame.contains('\x1b'));
+    assert!(first.starts_with("\x1b[?1049h"));
     bytes.clear();
     painter.paint(&mut bytes, &lines, (24, 24)).unwrap();
     let resized = String::from_utf8(bytes).unwrap();
-    assert_eq!(resized.matches("\x1b[1A").count(), 5);
+    let (_, frame) = resized.split_once("\x1b[H\x1b[2J").unwrap();
+    assert!(frame.lines().all(|line| line.len() <= 23));
+    assert!(!resized.contains("\x1b[?1049h"));
     let mut bytes = Vec::new();
     painter.clear(&mut bytes, (24, 24)).unwrap();
-    assert_eq!(
-        String::from_utf8(bytes).unwrap().matches("\x1b[1A").count(),
-        2
-    );
+    assert_eq!(bytes, b"\x1b[?1049l");
     let mut bytes = Vec::new();
     painter.clear(&mut bytes, (24, 24)).unwrap();
     assert!(bytes.is_empty());
 }
 
 #[test]
-fn broken_repaint_returns_typed_io_error_without_terminal_mode_changes() {
+fn broken_repaint_returns_typed_io_error_and_restores_a_partial_entry() {
     struct Broken;
     impl Write for Broken {
         fn write(&mut self, _: &[u8]) -> io::Result<usize> {
@@ -375,7 +376,83 @@ fn broken_repaint_returns_typed_io_error_without_terminal_mode_changes() {
     painter.clear(&mut cleanup, (80, 24)).unwrap();
     let cleanup = String::from_utf8(cleanup).unwrap();
     assert!(!cleanup.contains("?25"));
-    assert!(!cleanup.contains("?1049"));
+    assert_eq!(cleanup, "\x1b[?1049l");
+}
+
+#[cfg(unix)]
+#[test]
+fn live_screen_keeps_callbacks_inside_and_restores_before_output_or_termination() {
+    use std::os::unix::process::ExitStatusExt as _;
+    const CHILD: &str = "CANIC_PROGRESS_SCREEN_CASE";
+    if let Ok(mode) = std::env::var(CHILD) {
+        terminal::install_cleanup().unwrap();
+        let session = ProgressSession::new(false);
+        session.sink.0.lock().unwrap().transport = Transport::Live;
+        let sink = session.sink();
+        let mut progress = activating();
+        for (applied, reviewed) in [(34, 48), (48, 72)] {
+            progress.applied_effects = applied;
+            progress.reviewed_effects = reviewed;
+            progress.state = FleetEnsureProgressState::PrerequisiteComplete;
+            sink.progress(progress.clone());
+        }
+        sink.progress(activating());
+        for succeeded in [true, false] {
+            sink.observation(FleetObservationTiming {
+                span_id: 1,
+                parent_span_id: None,
+                identity_lookup_millis: 0,
+                stage: FleetObservationStage::Planning,
+                parent_stage: None,
+                elapsed_millis: 6008,
+                remote_call_attempts: 35,
+                identity_lookup_attempts: 1,
+                cached_read_hits: 0,
+                succeeded: Some(succeeded),
+            });
+        }
+        match mode.as_str() {
+            "int" => signal_hook::low_level::raise(signal_hook::consts::SIGINT).unwrap(),
+            "term" => signal_hook::low_level::raise(signal_hook::consts::SIGTERM).unwrap(),
+            "panic" => panic!("screen cleanup fixture"),
+            _ => {}
+        }
+        if mode == "generation" {
+            session.finish_generation(true);
+        } else {
+            session.finish(None);
+        }
+        // A late callback and a repaint tick must not redraw over final output.
+        sink.progress(activating());
+        eprintln!("SCREEN_FINISHED");
+        thread::sleep(Duration::from_millis(350));
+        drop(session);
+        return;
+    }
+    for mode in ["finish", "generation", "int", "term", "panic"] {
+        let output = std::process::Command::new(std::env::current_exe().unwrap())
+            .args(["--exact", "fleet::progress::tests::live_screen_keeps_callbacks_inside_and_restores_before_output_or_termination", "--nocapture"])
+            .env(CHILD, mode).env("TERM", "dumb").output().unwrap();
+        match mode {
+            "int" => assert_eq!(output.status.signal(), Some(signal_hook::consts::SIGINT)),
+            "term" => assert_eq!(output.status.signal(), Some(signal_hook::consts::SIGTERM)),
+            "panic" => assert!(!output.status.success()),
+            _ => assert!(output.status.success()),
+        }
+        let text = String::from_utf8(output.stderr).unwrap();
+        let (before, active) = text.split_once("\x1b[?1049h").unwrap();
+        assert!(before.is_empty());
+        let (active, after) = active.split_once("\x1b[?1049l").unwrap();
+        assert!(!active.contains("\x1b[?1049h"));
+        assert!(active.matches("\x1b[H\x1b[2J").count() >= 3);
+        assert!(!after.contains("\x1b[H"));
+        if matches!(mode, "finish" | "generation") {
+            assert_eq!(after, "SCREEN_FINISHED\n");
+        }
+        if matches!(mode, "int" | "term") {
+            assert!(after.is_empty());
+        }
+    }
 }
 
 #[test]

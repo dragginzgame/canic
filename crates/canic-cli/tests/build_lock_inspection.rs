@@ -1,5 +1,8 @@
 //! Integration coverage for read-only build-lock inspection through the CLI boundary.
 
+#[cfg(target_os = "linux")]
+mod recovery;
+
 use std::{
     fs,
     process::Command,

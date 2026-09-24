@@ -95,10 +95,18 @@ pub(super) fn panel(
     } else {
         " "
     };
-    let mut lines = vec![format!("Fleet deployment    {marker} {}", job(progress))];
-    if let Some(action) = &progress.next_action {
+    let mut lines = vec![format!("{marker} {}", job(progress))];
+    if let Some(action) = &progress.next_action
+        && !matches!(
+            progress.state,
+            FleetEnsureProgressState::AwaitingProgress {
+                provisioning: Some(_),
+                ..
+            }
+        )
+    {
         lines.push(format!(
-            "Next reviewed: {} ({})",
+            "Current work: {} ({})",
             action_label(action.kind),
             safe_text(&action.target)
         ));
@@ -109,25 +117,26 @@ pub(super) fn panel(
     } = &progress.state
     {
         lines.push(String::new());
-        lines.push(format!("{:<32} State / observed Roots", "Stage"));
         if let Some(detail) = provisioning {
+            lines.push(format!("{:<32} State   Roots", "Stage"));
             lines.extend(stages(detail));
             lines.push("Final checks                     Pending".into());
             if let Some(retry) = detail.pending_root_failure {
                 lines.extend(pending_retry(retry));
             }
             lines.push(format!(
-                "{elapsed_seconds}s awaiting this effect here; Components in scope: {}",
+                "Waiting: {elapsed_seconds}s; Components in scope: {}",
                 detail.component_count
             ));
         } else {
             lines.push("Readiness detail unavailable".into());
-            lines.push(format!(
-                "{elapsed_seconds}s awaiting this effect here (last reported)"
-            ));
+            lines.push(format!("Waiting: {elapsed_seconds}s (last reported)"));
         }
     }
-    lines.push(effect_bar(progress));
+    lines.push(format!(
+        "Reviewed work: {}/{} effects",
+        progress.applied_effects, progress.reviewed_effects
+    ));
     lines.push(format!(
         "Last change: {}s ago; observation: {}s old{}",
         unchanged.as_secs(),
@@ -184,22 +193,6 @@ fn stage(label: &str, done: u32, total: u32, waiting: bool) -> String {
         "Pending"
     };
     format!("{label:<32} {state:<7} {done}/{total}")
-}
-
-fn effect_bar(progress: &FleetEnsureProgress) -> String {
-    let filled = if progress.reviewed_effects == 0 {
-        0
-    } else {
-        (u128::from(progress.applied_effects) * 10 / progress.reviewed_effects as u128).min(10)
-            as usize
-    };
-    format!(
-        "Reviewed effects: {}/{} [{}{}] (not deployment %)",
-        progress.applied_effects,
-        progress.reviewed_effects,
-        "#".repeat(filled),
-        "-".repeat(10 - filled)
-    )
 }
 
 const fn job(progress: &FleetEnsureProgress) -> &'static str {

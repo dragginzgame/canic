@@ -695,7 +695,7 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         |event: &canic_host::subnet_catalog::view::CatalogAcquisitionProgress| {
             catalog_sink.catalog(event);
         };
-    let result = (|| -> Result<(), FleetCommandError> {
+    let result = (|| -> Result<_, FleetCommandError> {
         let generated = generate_desired_fleet(&FleetGenerateRequest {
             catalog_progress: Some(&catalog_progress),
             app_config: &resolve_from_root(&root, &options.app_config),
@@ -711,24 +711,25 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         let output = resolve_from_root(&root, &options.output);
         let bytes = toml::to_string_pretty(&generated.desired)?.into_bytes();
         publish_generated(&output, &bytes, options.replace.as_deref())?;
-        println!("fleet: {}", options.fleet);
-        println!("release_build: {}", generated.release_build_id);
-        println!("observed_canisters: {}", generated.observed_canisters);
-        println!(
-            "observed_controlled_cycles: {}",
-            format_cycles(generated.observed_controlled_cycles)
-        );
-        println!("desired: {}", output.display());
-        print!(
-            "{}",
-            subnet_catalog::render(generated.subnet_catalog.as_ref())
-        );
-        print!("{}", startup_funding::render(&generated.startup_funding));
-        Ok(())
+        Ok((generated, output))
     })();
     timing.finish_generation(result.is_ok());
     drop(timing);
-    result
+    let (generated, output) = result?;
+    println!("fleet: {}", options.fleet);
+    println!("release_build: {}", generated.release_build_id);
+    println!("observed_canisters: {}", generated.observed_canisters);
+    println!(
+        "observed_controlled_cycles: {}",
+        format_cycles(generated.observed_controlled_cycles)
+    );
+    println!("desired: {}", output.display());
+    print!(
+        "{}",
+        subnet_catalog::render(generated.subnet_catalog.as_ref())
+    );
+    print!("{}", startup_funding::render(&generated.startup_funding));
+    Ok(())
 }
 
 fn resolve_from_root(root: &std::path::Path, path: &std::path::Path) -> PathBuf {

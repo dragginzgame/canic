@@ -17,7 +17,7 @@ publish = true
 ignored = ["serde_bytes"]
 
 [features]
-local-fleet = ["dep:ic-testkit", "dep:reqwest"]
+local-fleet = ["dep:ic-testkit"]
 
 [dependencies]
 candid = { workspace = true }
@@ -40,7 +40,7 @@ ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }
 prost = { workspace = true }
-reqwest = { workspace = true, optional = true }
+reqwest = { workspace = true }
 serde = { workspace = true, features = ["derive"] }
 serde-saphyr = { workspace = true }
 serde_bytes = { workspace = true }
