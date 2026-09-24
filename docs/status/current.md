@@ -20,6 +20,19 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .40 integration inventory correction — 2026-09-24
+
+The maintainer's invariant run found the CLI `build_lock_inspection` integration
+target missing from `scripts/ci/workspace-test-inventory.tsv`. Both reported gate
+failures came from that single omission. It is now registered in the ordinary
+parallel suite. The inventory guard, validation-runner fixtures, workspace-runner
+fixtures and native ICP selection fixtures pass; an effect-free ordinary plan
+includes the target. No Rust source changed and no full suite was rerun.
+The complete release-integrity gate was not rerun because its hook fixtures
+create Git commits; its failing inventory subcheck passes directly. The bounded
+.40 batch and both changelog surfaces remain ready for the maintainer's release
+flow with this correction left uncommitted.
+
 ## Toko performance follow-up — complete locally, 2026-09-24
 
 The accepted CANIC-160 child attribution and CANIC-176 Release measurements are

@@ -1,4 +1,5 @@
 package	target	release_lane	execution	suite
+canic-cli	build_lock_inspection	full	parallel	ordinary
 canic-cli	subcommand_order	full	parallel	ordinary
 canic-core	candid_serde_boundary_guard	full	parallel	ordinary
 canic-core	cost_guard_boundary_guard	full	parallel	ordinary
