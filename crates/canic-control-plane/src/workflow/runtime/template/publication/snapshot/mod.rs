@@ -132,7 +132,7 @@ impl PublicationStoreSnapshot {
                     .map_err(|cause| {
                         super::error::PublicationWorkflowError::TransportUnavailable {
                             surface: "management stored_chunks",
-                            cause,
+                            cause: Box::new(cause),
                         }
                     })?
                     .into_iter()

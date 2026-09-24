@@ -704,7 +704,7 @@ fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_ty
 }
 
 #[test]
-fn fleet_coordinator_retirement_types_match_rust() {
+fn fleet_coordinator_diagnostic_and_retirement_types_match_rust() {
     fn assert_current_type<T: candid::CandidType>(name: &str) {
         let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
         let (mut env, _) = CandidSource::Text(&did)
@@ -731,6 +731,28 @@ fn fleet_coordinator_retirement_types_match_rust() {
         "FleetSubnetRootDrainingReservationRequest",
     );
     assert_current_type::<FleetRetirementStatus>("FleetRetirementStatus");
+    assert_current_type::<canic::dto::component_provisioning::ProvisioningFailureOrigin>(
+        "ProvisioningFailureOrigin",
+    );
+}
+
+#[test]
+fn provisioning_origin_preserves_explicit_deadline_presence() {
+    use canic::dto::component_provisioning::{
+        ProvisioningFailureOrigin, ProvisioningFailureStage, ProvisioningRetryCategory,
+    };
+    for retry_at_ns in [Some(u64::MAX), None] {
+        let origin = ProvisioningFailureOrigin {
+            failed_at_ns: 123,
+            retry_at_ns,
+            stage: ProvisioningFailureStage::ComponentMembership,
+            target: Principal::from_slice(&[8]),
+            operation_id: [9; 32],
+            diagnostic_code: 137,
+            retry_category: ProvisioningRetryCategory::Backoff,
+        };
+        assert_candid_roundtrip(origin);
+    }
 }
 
 #[test]

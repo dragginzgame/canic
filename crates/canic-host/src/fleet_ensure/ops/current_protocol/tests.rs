@@ -1340,6 +1340,7 @@ fn assert_retry_timestamp_is_not_durable_progress(
         canic_core::dto::component_provisioning::FleetComponentProvisioningRootFailure {
             origin: Some(canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
                 failed_at_ns: 9,
+                retry_at_ns: Some(1_000_000_009),
                 stage: canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreCatalog,
                 target: principal(11),
                 operation_id: [9; 32],
@@ -1376,6 +1377,14 @@ fn assert_retry_timestamp_is_not_durable_progress(
         .as_mut()
         .unwrap()
         .failed_at_ns = 19;
+    repeated_failure
+        .pending_root_failure
+        .as_mut()
+        .unwrap()
+        .origin
+        .as_mut()
+        .unwrap()
+        .retry_at_ns = Some(2_000_000_019);
     assert_eq!(
         component_provisioning_observation(false, &first_failure)
             .expect("first failure observation")
@@ -1395,6 +1404,7 @@ fn assert_retry_timestamp_is_not_durable_progress(
     permanent.pending_root_failure.as_mut().unwrap().origin = Some(
         canic_core::dto::component_provisioning::ProvisioningFailureOrigin {
             failed_at_ns: 10,
+            retry_at_ns: None,
             stage: canic_core::dto::component_provisioning::ProvisioningFailureStage::StoreStatus,
             target: principal(11),
             operation_id: [9; 32],

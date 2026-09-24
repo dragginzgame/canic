@@ -5,7 +5,7 @@ use std::{
     process::{Command, Stdio},
 };
 
-fn context(root: PathBuf) -> WorkspaceBuildContext {
+pub(super) fn context(root: PathBuf) -> WorkspaceBuildContext {
     WorkspaceBuildContext {
         role: "root".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,
@@ -24,7 +24,7 @@ fn context(root: PathBuf) -> WorkspaceBuildContext {
 fn contender_reports_owner_and_recovers_after_interrupted_ownership() {
     const CHILD: &str = "CANIC_TEST_LOCK_OWNER_ROOT";
     if let Some(root) = std::env::var_os(CHILD) {
-        let _lock = BuildLock::acquire(&context(root.into()), |_| {}).unwrap();
+        let _lock = BuildLock::acquire(&context(root.into()), |_| Ok(())).unwrap();
         println!("OWNER_READY");
         io::stdout().flush().unwrap();
         let mut input = String::new();
@@ -56,8 +56,8 @@ fn contender_reports_owner_and_recovers_after_interrupted_ownership() {
     let mut observed = false;
     let lock = BuildLock::acquire(&context, |progress| {
         if let BuildReuseProgress::WaitingForLock(wait) = progress {
-            let owner = wait.recorded_owner.unwrap();
-            assert_eq!(wait.lock_path, path);
+            let owner = wait.inspection.recorded_owner.unwrap();
+            assert_eq!(wait.inspection.lock_path, path);
             assert_eq!(owner.pid, child.id());
             assert_eq!(owner.workspace, root);
             assert_eq!(owner.profile, "fast");
@@ -66,11 +66,12 @@ fn contender_reports_owner_and_recovers_after_interrupted_ownership() {
             // Simulate a crash: no Drop cleanup, and no lock-file deletion.
             child.kill().unwrap();
         }
+        Ok(())
     })
     .unwrap();
     child.wait().unwrap();
     assert!(observed);
-    assert_eq!(read_owner(&lock.0).unwrap().pid, std::process::id());
+    assert_eq!(read_owner(&lock.file).unwrap().pid, std::process::id());
     let contender = fs::File::open(&path).unwrap();
     assert_eq!(
         rustix::fs::flock(
@@ -88,17 +89,75 @@ fn contender_reports_owner_and_recovers_after_interrupted_ownership() {
 fn invalid_owner_metadata_is_bounded_and_never_lock_authority() {
     let root = temp_dir("build-owner-invalid");
     let context = context(root.clone());
-    let lock = BuildLock::acquire(&context, |_| {}).unwrap();
+    let lock = BuildLock::acquire(&context, |_| Ok(())).unwrap();
     for bytes in [vec![], b"not-json".to_vec(), vec![b'x'; OWNER_LIMIT + 1]] {
-        lock.0.set_len(0).unwrap();
-        let mut file = &lock.0;
+        lock.file.set_len(0).unwrap();
+        let mut file = &lock.file;
         file.seek(SeekFrom::Start(0)).unwrap();
         file.write_all(&bytes).unwrap();
-        assert!(read_owner(&lock.0).is_none());
+        assert!(read_owner(&lock.file).is_none());
     }
     drop(lock);
-    let recovered = BuildLock::acquire(&context, |_| {}).unwrap();
-    assert!(read_owner(&recovered.0).is_some());
+    let recovered = BuildLock::acquire(&context, |_| Ok(())).unwrap();
+    assert!(read_owner(&recovered.file).is_some());
     drop(recovered);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn cancelled_waiter_preserves_owner_inode_metadata_and_exclusion() {
+    use std::os::unix::fs::MetadataExt;
+    let root = temp_dir("lock-cancel");
+    let context = context(root.clone());
+    let owner = BuildLock::acquire(&context, |_| Ok(())).unwrap();
+    let path = root.join(".canic/locks/complete-build-reuse.lock");
+    let inode = owner.file.metadata().unwrap().ino();
+    owner.phase(BuildLockPhase::BuildingArtifacts);
+    let before = fs::read(&path).unwrap();
+    let result = BuildLock::acquire(&context, |_| {
+        Err(io::Error::from(io::ErrorKind::Interrupted))
+    });
+    assert!(matches!(result, Err(error) if error.kind() == io::ErrorKind::Interrupted));
+    assert_eq!(fs::read(&path).unwrap(), before);
+    assert_eq!(fs::metadata(&path).unwrap().ino(), inode);
+    assert_eq!(
+        read_owner(&owner.file).unwrap().phase,
+        BuildLockPhase::BuildingArtifacts
+    );
+    let contender = fs::File::open(&path).unwrap();
+    assert_eq!(
+        rustix::fs::flock(
+            &contender,
+            rustix::fs::FlockOperation::NonBlockingLockExclusive
+        ),
+        Err(rustix::io::Errno::WOULDBLOCK)
+    );
+    drop(owner);
+    let survivor = BuildLock::acquire(&context, |_| Ok(())).unwrap();
+    assert_eq!(survivor.file.metadata().unwrap().ino(), inode);
+    drop(survivor);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn owner_metadata_requires_explicit_nullable_identity_and_phase_updates_are_not_heartbeats() {
+    let root = temp_dir("owner-shape");
+    let lock = BuildLock::acquire(&context(root.clone()), |_| Ok(())).unwrap();
+    let mut owner = read_owner(&lock.file).unwrap();
+    owner.identity = None;
+    let value = serde_json::to_value(&owner).unwrap();
+    assert!(value["identity"].is_null());
+    assert_eq!(
+        serde_json::from_value::<BuildLockOwner>(value.clone()).unwrap(),
+        owner
+    );
+    let mut missing = value;
+    missing.as_object_mut().unwrap().remove("identity");
+    assert!(serde_json::from_value::<BuildLockOwner>(missing).is_err());
+    lock.phase(BuildLockPhase::BuildingArtifacts);
+    let before = read_owner(&lock.file).unwrap();
+    lock.phase(BuildLockPhase::BuildingArtifacts);
+    assert_eq!(read_owner(&lock.file).unwrap(), before);
+    drop(lock);
     fs::remove_dir_all(root).unwrap();
 }

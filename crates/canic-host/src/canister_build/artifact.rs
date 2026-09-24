@@ -105,7 +105,7 @@ impl CanisterArtifactBuilder {
     pub fn prepare_complete_build_reuse(
         &self,
         context: &WorkspaceBuildContext,
-        progress: impl FnMut(super::BuildReuseProgress),
+        progress: impl FnMut(super::BuildReuseProgress) -> std::io::Result<()>,
     ) -> Result<super::CompleteBuildReuse, super::BuildReuseError> {
         super::CompleteBuildReuse::prepare(context, &self.toolchain, progress)
     }

@@ -40,6 +40,8 @@ use process::parse_parent_process_id;
 mod tests;
 
 pub use reuse::{
-    BuildLockOwner, BuildLockWait, BuildReuseError, BuildReuseProgress, CompleteBuildReuse,
-    ReusedCompleteBuild,
+    BuildLockInspection, BuildLockOwner, BuildLockPhase, BuildLockWait, BuildProcessActivity,
+    BuildProcessIdentity, BuildProcessKind, BuildProcessObservation, BuildProcessVisibility,
+    BuildReuseError, BuildReuseProgress, CompleteBuildReuse, KernelBuildLock, ReusedCompleteBuild,
+    inspect_build_lock,
 };

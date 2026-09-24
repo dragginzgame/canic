@@ -61,6 +61,18 @@ pub fn backup_list_timestamp(seconds: u64) -> String {
     format!("{day:02}/{month:02}/{year:04} {hour:02}:{minute:02}")
 }
 
+/// Render an observed Unix-nanosecond deadline without consulting the local clock.
+pub fn utc_timestamp_ns(nanoseconds: u64) -> String {
+    let seconds = nanoseconds / 1_000_000_000;
+    let days = i64::try_from(seconds / 86_400).unwrap_or(i64::MAX);
+    let (year, month, day) = civil_from_days(days);
+    let hour = seconds % 86_400 / 3_600;
+    let minute = seconds % 3_600 / 60;
+    let second = seconds % 60;
+    let fraction = nanoseconds % 1_000_000_000;
+    format!("{year:04}-{month:02}-{day:02}T{hour:02}:{minute:02}:{second:02}.{fraction:09}Z")
+}
+
 pub fn file_safe_component(value: &str) -> String {
     let cleaned = value
         .chars()

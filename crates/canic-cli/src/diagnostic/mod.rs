@@ -1,30 +1,30 @@
 //! Module: canic_cli::diagnostic
 //!
-//! Responsibility: parse and render host lookup for one compact Canic diagnostic code.
+//! Responsibility: render compact diagnostic codes and read-only build-lock inspection.
 //! Does not own: allocation history, runtime construction, or public response decoding.
-//! Boundary: accepts only a raw decimal or exact uppercase `E` form and delegates to canic-host.
+//! Boundary: delegates observations to canic-host without taking recovery actions.
 
 #[cfg(test)]
 mod tests;
 
+#[cfg(test)]
+use crate::cli::clap::render_usage;
 use crate::{
-    cli::{
-        clap::{parse_matches, render_usage, required_string, value_arg},
-        help::print_help_or_version,
-    },
-    version_text,
+    cli::clap::{flag_arg, parse_matches, required_string, value_arg},
+    support::build_lock::render_inspection,
 };
 use canic_core::diagnostics::DiagnosticCode;
 use canic_host::diagnostics::{DiagnosticLookup, lookup_diagnostic};
 use clap::Command;
-use std::ffi::OsString;
+use std::{ffi::OsString, path::PathBuf};
 use thiserror::Error as ThisError;
 
 const CODE_ARGUMENT: &str = "code";
 const DIAGNOSTIC_HELP_AFTER: &str = "\
 Examples:
   canic diagnostic E123
-  canic diagnostic 123";
+  canic diagnostic 123
+  canic diagnostic build-lock --lock .canic/locks/complete-build-reuse.lock";
 
 ///
 /// DiagnosticCommandError
@@ -34,6 +34,12 @@ Examples:
 
 #[derive(Debug, ThisError)]
 pub enum DiagnosticCommandError {
+    #[error("build lock inspection failed: {0}")]
+    Inspection(#[from] std::io::Error),
+
+    #[error("build lock report serialization failed: {0}")]
+    Json(#[from] serde_json::Error),
+
     #[error("invalid diagnostic code '{0}'; expected an unsigned decimal or uppercase E prefix")]
     InvalidCode(String),
 
@@ -46,13 +52,31 @@ pub fn run<I>(args: I) -> Result<(), DiagnosticCommandError>
 where
     I: IntoIterator<Item = OsString>,
 {
-    let args = args.into_iter().collect::<Vec<_>>();
-    if print_help_or_version(&args, usage, version_text()) {
+    let matches = match parse_matches(diagnostic_command(), args) {
+        Ok(matches) => matches,
+        Err(error)
+            if matches!(
+                error.kind(),
+                clap::error::ErrorKind::DisplayHelp | clap::error::ErrorKind::DisplayVersion
+            ) =>
+        {
+            print!("{error}");
+            return Ok(());
+        }
+        Err(error) => return Err(DiagnosticCommandError::Usage(error.to_string())),
+    };
+    if let Some(options) = matches.subcommand_matches("build-lock") {
+        let path = options
+            .get_one::<PathBuf>("lock")
+            .expect("required by parser");
+        let report = canic_host::canister_build::inspect_build_lock(path)?;
+        if options.get_flag("json") {
+            println!("{}", serde_json::to_string_pretty(&report)?);
+        } else {
+            println!("{}", render_inspection(&report));
+        }
         return Ok(());
     }
-
-    let matches = parse_matches(diagnostic_command(), args)
-        .map_err(|_| DiagnosticCommandError::Usage(usage()))?;
     let input = required_string(&matches, CODE_ARGUMENT);
     let code = parse_code(&input)?;
     let lookup = lookup_diagnostic(code);
@@ -63,8 +87,17 @@ where
 fn diagnostic_command() -> Command {
     Command::new("diagnostic")
         .bin_name("canic diagnostic")
-        .about("Look up one compact Canic diagnostic code")
+        .about("Look up a diagnostic code or inspect a build lock")
+        .version(env!("CARGO_PKG_VERSION"))
+        .subcommand_negates_reqs(true)
+        .args_conflicts_with_subcommands(true)
         .after_help(DIAGNOSTIC_HELP_AFTER)
+        .subcommand(Command::new("build-lock")
+            .about("Inspect an existing build lock without changing it")
+            .after_help("Example:\n  canic diagnostic build-lock --lock .canic/locks/complete-build-reuse.lock --json")
+            .arg(flag_arg("json").long("json").help("Print the structured observation"))
+            .arg(value_arg("lock").long("lock").required(true).value_name("path")
+                .value_parser(clap::value_parser!(PathBuf)).help("Exact existing complete-build lock path")))
         .arg(
             value_arg(CODE_ARGUMENT)
                 .required(true)
@@ -73,6 +106,7 @@ fn diagnostic_command() -> Command {
         )
 }
 
+#[cfg(test)]
 fn usage() -> String {
     render_usage(diagnostic_command)
 }

@@ -132,43 +132,45 @@ pub fn observe_fleet_canister(
     let root_canister = parse_principal("Fleet Subnet Root", &root.pid)?;
     let target = parse_principal("observability target", &entry.pid)?;
     if matches!(&request, CanisterObservabilityRequest::CycleBalance) {
-        crate::canister_protocol::inspection::preflight_inspection(
-            icp,
-            &binding.candid_path,
-            root_canister,
-            target,
-        )?;
-        let response: RootCommandResponseFragment = call_canister_with_arg(
-            icp,
-            &binding,
-            root_canister,
-            protocol::CANIC_ROOT_COMMAND,
-            &RootCommandFragment::InspectCanister(CanisterInspectionRequest {
-                canister_id: target,
-            }),
-        )?;
-        let response = match response {
-            RootCommandResponseFragment::InspectCanister(response) => response,
-            RootCommandResponseFragment::InspectionReserveRequired(evidence) => {
-                return Err(CanisterProtocolError::inspection_reserve(
-                    root_canister,
-                    target,
-                    evidence,
-                )
-                .into());
-            }
-            RootCommandResponseFragment::ObserveCanister(_) => {
-                return Err(FleetObservabilityError::UnexpectedRootResponse);
-            }
-        };
-        let cycles = u128::try_from(response.cycles.0).map_err(|_| {
-            FleetObservabilityError::CycleBalanceOverflow {
-                canister: entry.pid.clone(),
-            }
-        })?;
-        return Ok(CanisterObservabilityResponse::CycleBalance(
-            canic_core::dto::role::CycleBalanceStatusResponse { cycles },
-        ));
+        return icp.measure_canister_inspection(root_canister, target, || {
+            crate::canister_protocol::inspection::preflight_inspection(
+                icp,
+                &binding.candid_path,
+                root_canister,
+                target,
+            )?;
+            let response: RootCommandResponseFragment = call_canister_with_arg(
+                icp,
+                &binding,
+                root_canister,
+                protocol::CANIC_ROOT_COMMAND,
+                &RootCommandFragment::InspectCanister(CanisterInspectionRequest {
+                    canister_id: target,
+                }),
+            )?;
+            let response = match response {
+                RootCommandResponseFragment::InspectCanister(response) => response,
+                RootCommandResponseFragment::InspectionReserveRequired(evidence) => {
+                    return Err(CanisterProtocolError::inspection_reserve(
+                        root_canister,
+                        target,
+                        evidence,
+                    )
+                    .into());
+                }
+                RootCommandResponseFragment::ObserveCanister(_) => {
+                    return Err(FleetObservabilityError::UnexpectedRootResponse);
+                }
+            };
+            let cycles = u128::try_from(response.cycles.0).map_err(|_| {
+                FleetObservabilityError::CycleBalanceOverflow {
+                    canister: entry.pid.clone(),
+                }
+            })?;
+            Ok(CanisterObservabilityResponse::CycleBalance(
+                canic_core::dto::role::CycleBalanceStatusResponse { cycles },
+            ))
+        });
     }
     if entry.role.as_deref() == Some(CanisterRole::WASM_STORE.as_str()) {
         return observe_store(icp, icp_root, environment, entry, request);

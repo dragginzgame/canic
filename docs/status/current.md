@@ -20,6 +20,98 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Toko performance follow-up — complete locally, 2026-09-24
+
+The accepted CANIC-160 child attribution and CANIC-176 Release measurements are
+complete. The [follow-up report](../audits/reports/2026-09/2026-09-24/toko-performance-followup.md)
+and structured evidence bind the source, tests, measurements and limitations.
+Protected inspection/history requests retain the child separately from the Root
+endpoint, through concurrency, failure and receipt propagation. All 42 selected
+tests and strict host/CLI Clippy pass; no remote calls or authority reuse were added.
+
+Ten real .39 Release builds in isolated qualified-source copies pass. All five
+warm pairs preserve exact records and artifacts in 1.84–1.92 seconds. Rebuilds
+take 459.95–925.54 seconds on the shared host; runtime compilation dominates.
+Both source inventories and all tools remain unchanged. An initial current-commit
+gameplay compile failure is retained and excluded. Toko Miner remains read-only.
+Logs live under `.tmp/toko-performance-20260924/`. There is no .40 build-speed
+claim, new timing gate or portable-cache implementation.
+
+The complete bounded .40 batch now covers CANIC-182 readiness, CANIC-150 retry
+deadlines, CANIC-176 lock diagnostics and this local performance follow-up. It
+and both changelog views are ready for the maintainer's release flow. Package
+versions remain unchanged and edits are uncommitted; no broad gate was pre-run.
+Publication, real launcher acceptance and matched live apply/replay remain
+downstream. Further runtime-build optimization and B3 remain separate work.
+
+## CANIC-176 build-lock waits — complete locally, 2026-09-24
+
+The maintainer authorized Toko's build-lock presentation/inspection correction.
+The [closeout report](../audits/reports/2026-09/2026-09-24/canic-176-lock-wait.md)
+records compact terminal waits, sparse redirected output, safe waiter
+cancellation, typed acquisition failures and the read-only
+`canic diagnostic build-lock --lock <path> [--json]` command. Owner phase times
+and bounded process observations remain advisory; hidden or reused PIDs cannot
+authorize recovery. Kernel exclusion and exact artifact verification remain intact.
+
+All 45 selected native/CLI checks, strict host/CLI all-target/all-feature Clippy,
+dependency-risk inventory, layering, formatting and document checks pass. A live
+host-visible fixture also verifies actual CLI/kernel holder identity. Evidence
+and source hashes are in `.tmp/canic-176-20260924/`. Prior CANIC-150/CANIC-182
+source remains byte-identical; only signal-hook entries extend the prior lockfile.
+
+The complete bounded .40 batch now includes CANIC-176, CANIC-150 and CANIC-182
+and is ready for the maintainer's release flow, with both changelog views ready.
+Package versions remain unchanged and all edits remain uncommitted. No broad
+gate ran. Published adoption and real Toko launcher acceptance remain downstream;
+application-scale performance qualification, per-target timing and B3 are separate.
+
+## CANIC-150 retry deadlines — complete locally, 2026-09-24
+
+The maintainer authorized the next bounded Toko diagnostic correction. The
+[retry-deadline report](../audits/reports/2026-09/2026-09-24/canic-150-retry-deadlines.md)
+records the Root-to-Coordinator propagation, protected status contract and
+human/JSON/receipt output. Scheduling and progress authority remain unchanged.
+Known deadlines render as observed UTC timestamps, with a dedicated TTY line;
+unknown observations stay unavailable. Deadline changes never imply remote
+advancement or reset the last-change age.
+
+All 33 selected native tests, three Candid checks, the final isolated CLI rerun,
+strict affected-package all-target/all-feature Clippy and the exact governed
+Store-outage recovery PocketIC case pass. The simulator case verifies Root's
+deadline reaches Coordinator status and the same operation recovers. Scoped
+formatting, layering, whitespace and document checks pass. Logs and frozen
+source/lock hashes are in `.tmp/canic-150-deadlines-20260924/`.
+
+The complete bounded .40 operator-correction batch now includes CANIC-182 and
+CANIC-150 and is ready for the maintainer's release flow. Both changelog views
+are updated; package versions and the pre-existing lockfile edit are unchanged.
+Changes remain uncommitted. No broad gate or external deployment ran. Downstream
+publication/adoption and live output acceptance remain separate. Per-target
+timing, application-scale build measurements and B3 have not started here.
+
+## CANIC-182 readiness correction — complete locally, 2026-09-24
+
+The [correction report](../audits/reports/2026-09/2026-09-24/canic-182-readiness.md)
+records the newly confirmed Toko Miner feedback and its bounded host fix.
+Fleet readiness now reads ICP's grouped native-cycle values and reports exact
+Root balances and floor shortfalls. Identity/controller checks remain intact;
+malformed, oversized and overflowing input remains unavailable. Existing human
+and JSON output uses the corrected values without a schema change.
+
+Five focused readiness tests, strict host all-target/all-feature Clippy,
+formatting, layering and whitespace checks pass. One existing opt-in external
+inspection is skipped. Logs and source hashes are retained under
+`.tmp/canic-182-20260924/`. Toko Miner remains read-only; release adoption and
+live acceptance are still downstream work.
+
+The bounded CANIC-182 correction is complete and ready for the maintainer's
+release flow, with both changelog views in the open `.40` draft. Keep this
+operator-regression correction on the affected .110 line under the documented
+cadence exception. Package versions and the pre-existing lockfile edit are
+unchanged by this work. No broad gate, staging, commit, push or deployment ran.
+B3 and the separate performance follow-ups have not started here.
+
 ## Release ancestry reconciliation — 2026-09-23
 
 The maintainer's complete validation succeeded for

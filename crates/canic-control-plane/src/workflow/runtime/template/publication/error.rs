@@ -97,7 +97,7 @@ pub(super) enum PublicationWorkflowError {
     #[error("publication transport unavailable at {surface}: {cause}")]
     TransportUnavailable {
         surface: &'static str,
-        cause: InternalError,
+        cause: Box<InternalError>,
     },
 }
 
@@ -252,7 +252,7 @@ mod tests {
             (
                 PublicationWorkflowError::TransportUnavailable {
                     surface: "store status",
-                    cause: InternalError::platform_failure(),
+                    cause: Box::new(InternalError::platform_failure()),
                 },
                 codes::PLATFORM_UNAVAILABLE.raw_code(),
             ),
@@ -377,7 +377,7 @@ mod tests {
         assert_diagnostic_codes(
             PublicationWorkflowError::TransportUnavailable {
                 surface: "store status",
-                cause: InternalError::platform_failure(),
+                cause: Box::new(InternalError::platform_failure()),
             },
             codes::PLATFORM_FAILED,
             codes::PLATFORM_UNAVAILABLE,

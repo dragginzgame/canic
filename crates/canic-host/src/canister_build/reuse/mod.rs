@@ -37,7 +37,11 @@ use std::{
 };
 use thiserror::Error;
 
-pub use lock::{BuildLockOwner, BuildLockWait};
+pub use lock::{
+    BuildLockInspection, BuildLockOwner, BuildLockPhase, BuildLockWait, BuildProcessActivity,
+    BuildProcessIdentity, BuildProcessKind, BuildProcessObservation, BuildProcessVisibility,
+    KernelBuildLock, inspect_build_lock,
+};
 
 use snapshot::BuildInputSnapshot;
 
@@ -56,7 +60,7 @@ pub struct CompleteBuildReuse {
     record_path: PathBuf,
     diagnostics: diagnostics::InputDiagnostics,
     input_locations: diagnostics::InputLocations,
-    _lock: lock::BuildLock,
+    lock: lock::BuildLock,
 }
 
 ///
@@ -106,6 +110,9 @@ struct CompleteBuildReuseRecord {
 
 #[derive(Debug, Error)]
 pub enum BuildReuseError {
+    #[error("complete-build lock acquisition failed: {0}")]
+    Lock(io::Error),
+
     #[error("build inputs changed during compilation; no reusable build was recorded")]
     Changed,
 
@@ -137,9 +144,10 @@ impl CompleteBuildReuse {
     pub(crate) fn prepare(
         context: &WorkspaceBuildContext,
         tools: &BuildToolchain,
-        mut progress: impl FnMut(BuildReuseProgress),
+        mut progress: impl FnMut(BuildReuseProgress) -> io::Result<()>,
     ) -> Result<Self, BuildReuseError> {
-        let lock = lock::BuildLock::acquire(context, &mut progress)?;
+        let lock =
+            lock::BuildLock::acquire(context, &mut progress).map_err(BuildReuseError::Lock)?;
         diagnostics::InputDiagnostics::prepare(&context.icp_root);
         let mut tool_paths = vec![
             env::current_exe()?,
@@ -184,7 +192,7 @@ impl CompleteBuildReuse {
             record_path,
             diagnostics,
             input_locations,
-            _lock: lock,
+            lock,
         })
     }
 
@@ -197,6 +205,7 @@ impl CompleteBuildReuse {
 
     /// Return a hit only after checking every recorded output and all release manifest bindings.
     pub fn load(&self) -> Result<Option<ReusedCompleteBuild>, BuildReuseError> {
+        self.lock.phase(BuildLockPhase::VerifyingOutputs);
         let bytes = match read_regular_bytes(&self.record_path, RECORD_LIMIT) {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
@@ -243,12 +252,18 @@ impl CompleteBuildReuse {
         }))
     }
 
+    /// Publish an advisory phase transition while retaining the same kernel lock.
+    pub fn report_building_artifacts(&self) {
+        self.lock.phase(BuildLockPhase::BuildingArtifacts);
+    }
+
     /// Record only a finalized release whose governed inputs remained byte-identical during work.
     pub fn record(
         &self,
         release_build_id: ReleaseBuildId,
         roles: Vec<String>,
     ) -> Result<(), BuildReuseError> {
+        self.lock.phase(BuildLockPhase::VerifyingAndPublishing);
         verify_release(&self.context, release_build_id)?;
         let after = input_snapshot(&self.context, &self.tool_paths)?;
         self.inputs.validate_after(&after).inspect_err(|error| {

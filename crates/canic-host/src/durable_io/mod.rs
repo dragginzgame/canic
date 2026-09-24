@@ -159,7 +159,7 @@ pub(crate) fn lock_regular_file_with_parents(
 /// Acquire the same exclusive lock, reporting contention while preserving its lifetime.
 pub(crate) fn lock_file_with_progress(
     path: &Path,
-    mut waiting: impl FnMut(&fs::File, std::time::Duration),
+    mut waiting: impl FnMut(&fs::File, std::time::Duration) -> io::Result<()>,
 ) -> io::Result<fs::File> {
     let started = std::time::Instant::now();
     open_regular_lock_file(path, |file| {
@@ -173,8 +173,8 @@ pub(crate) fn lock_file_with_progress(
                     Err(rustix::io::Errno::WOULDBLOCK) => {
                         let elapsed = started.elapsed();
                         if elapsed >= next_report {
-                            waiting(file, elapsed);
-                            next_report = elapsed + std::time::Duration::from_secs(5);
+                            waiting(file, elapsed).map_err(RegularFileLockError::Io)?;
+                            next_report = elapsed + std::time::Duration::from_secs(1);
                         }
                         std::thread::sleep(std::time::Duration::from_millis(100));
                     }
@@ -184,7 +184,16 @@ pub(crate) fn lock_file_with_progress(
         }
         Ok(())
     })
-    .map_err(|error| io::Error::other(format!("cannot lock regular file: {error:?}")))
+    .map_err(|error| match error {
+        RegularFileLockError::Io(error) => error,
+        error @ RegularFileLockError::NotRegular => {
+            io::Error::other(format!("cannot lock regular file: {error:?}"))
+        }
+        #[cfg(windows)]
+        error @ RegularFileLockError::UnsupportedPlatform => {
+            io::Error::other(format!("cannot lock regular file: {error:?}"))
+        }
+    })
 }
 
 fn open_regular_lock_file(

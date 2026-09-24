@@ -82,6 +82,11 @@ from the App's ordinary Cargo graph. Build scripts must declare external inputs
 to Cargo. Input collection is conservative across the complete Cargo catalog,
 rather than a minimal per-role dependency cache.
 
+The [Toko Miner Release measurement report](../audits/reports/2026-09/2026-09-24/toko-performance-followup.md)
+records application-scale cold, warm, changed-source and relocated-checkout
+behaviour, including exact artifact verification and shared-host limitations.
+Its published .39 baseline is separate from qualification of current CLI changes.
+
 Repeated Cargo dependency records reuse the first observation of a path within
 that snapshot, including paths already captured by package scans. The next
 snapshot reads the bytes again. No input observation is cached across the
@@ -184,15 +189,36 @@ build scripts remain build inputs. Exact selected-release and output verificatio
 post-build source checks and rejection of unobserved dependencies remain required.
 
 The existing exclusive complete-build reuse lock remains held through lookup,
-compilation and finalization. Contention reports progress after one second and
-every five seconds thereafter. Each waiting event includes the lock path and
-bounded advisory PID, workspace, profile and acquisition time in Unix seconds.
-Malformed, partial or missing metadata is reported as unavailable; stale metadata
-never authorizes lock breaking. Owners update the same locked inode and clear
-metadata before normal release; crashes rely on the kernel releasing exclusion.
-Command arguments and environment values are not recorded, and paths are escaped
-in terminal output. The next holder still verifies exact release/output evidence.
-Stderr reports lock acquisition separately;
+compilation and finalization. Contention is sampled after one second and every
+second thereafter. Interactive stderr uses one width-bounded updating line;
+redirected output reports owner/phase changes and a summary at most every 30
+seconds between changes, without terminal escapes. Acquisition, failure and
+SIGINT/SIGTERM cancellation leave a final wait summary. Cancellation stops only
+the waiter, and acquisition errors stop the build instead of bypassing exclusion.
+
+The existing inode carries bounded advisory PID, workspace, profile, acquisition
+time, process birth identity and last entered phase. Human reports show UTC times
+and ages. Phase timestamps change only at actual input preparation, output
+verification, artifact building and final verification/publication transitions.
+They do not claim progress within a long phase. Malformed, partial or missing
+metadata remains unavailable; stale metadata never authorizes lock breaking.
+Owners update the same locked inode and clear metadata before normal release;
+crashes rely on the kernel releasing exclusion.
+
+`canic diagnostic build-lock --lock <exact-path> [--json]` opens an existing
+regular file read-only, without acquiring or creating a lock. On Linux it matches
+the opened device/inode against the visible kernel lock table and checks the
+recorded PID against boot, PID namespace and process birth before showing child
+observations. The snapshot is bounded to 32 processes and 64 threads; incomplete
+or hidden observations remain explicit. Process names are reduced to Canic,
+Cargo, rustc, sccache or Other; command arguments and environment values are
+never read. A sleeping process, CPU counter, or phase age proves neither forward
+progress nor a stall. Verify identity and namespace on the host before taking
+action; restarting a waiter does not fix its owner, and the lock file must never
+be deleted or replaced. Paths are escaped in human output.
+
+The next holder still verifies exact release/output evidence. Stderr reports
+lock acquisition separately;
 input/output verification time excludes it. These are phase observations, not
 evidence that lock waiting caused an earlier slow build.
 

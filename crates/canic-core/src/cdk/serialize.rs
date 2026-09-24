@@ -4,7 +4,7 @@
 //! Does not own: individual stable schema bounds or migration policy.
 //! Boundary: maps serde encode/decode failures into typed Canic errors.
 
-use serde::{Serialize, de::DeserializeOwned};
+use serde::{Deserialize, Deserializer, Serialize, de::DeserializeOwned};
 use thiserror::Error as ThisError;
 
 ///
@@ -41,11 +41,61 @@ where
     ciborium::de::from_reader(bytes).map_err(|err| SerializeError::Deserialize(err.to_string()))
 }
 
+/// Deserialize a required current-contract field whose explicit value may be null.
+pub(crate) fn required_option<'de, D, T>(deserializer: D) -> Result<Option<T>, D::Error>
+where
+    D: Deserializer<'de>,
+    T: Deserialize<'de>,
+{
+    Option::<T>::deserialize(deserializer)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{deserialize, serialize};
     use serde::{Deserialize, Serialize};
     use std::collections::BTreeMap;
+
+    #[test]
+    fn provisioning_origin_requires_explicit_deadline_presence() {
+        use crate::dto::component_provisioning::{
+            ProvisioningFailureOrigin, ProvisioningFailureStage, ProvisioningRetryCategory,
+        };
+        for retry_at_ns in [Some(u64::MAX), None] {
+            let origin = ProvisioningFailureOrigin {
+                failed_at_ns: 123,
+                retry_at_ns,
+                stage: ProvisioningFailureStage::ComponentMembership,
+                target: candid::Principal::from_slice(&[8]),
+                operation_id: [9; 32],
+                diagnostic_code: 137,
+                retry_category: ProvisioningRetryCategory::Backoff,
+            };
+            assert_eq!(
+                deserialize::<ProvisioningFailureOrigin>(&serialize(&origin).unwrap()).unwrap(),
+                origin
+            );
+            let ciborium::value::Value::Map(mut fields) =
+                deserialize(&serialize(&origin).unwrap()).unwrap()
+            else {
+                panic!("origin is a record");
+            };
+            let deadline_key = ciborium::value::Value::Text("retry_at_ns".into());
+            assert_eq!(
+                fields
+                    .iter()
+                    .find(|(key, _)| key == &deadline_key)
+                    .unwrap()
+                    .1,
+                retry_at_ns.map_or(ciborium::value::Value::Null, |value| {
+                    ciborium::value::Value::Integer(value.into())
+                }),
+            );
+            fields.retain(|(key, _)| key != &deadline_key);
+            let missing = serialize(&ciborium::value::Value::Map(fields)).unwrap();
+            assert!(deserialize::<ProvisioningFailureOrigin>(&missing).is_err());
+        }
+    }
 
     #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
     enum FixtureVariant {

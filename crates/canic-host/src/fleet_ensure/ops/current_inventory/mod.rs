@@ -1590,28 +1590,31 @@ fn inspect_root_controlled_canister(
     root: Principal,
     canister_id: Principal,
 ) -> Result<CanisterStatusResponse, CurrentProtocolError> {
-    crate::canister_protocol::inspection::preflight_inspection(
-        icp,
-        root_candid_path,
-        root,
-        canister_id,
-    )?;
-    let response: RootInventoryCommandResponse = terminal_observation(
-        "root_controlled_canister",
-        call_with_candid(
+    icp.measure_canister_inspection(root, canister_id, || {
+        crate::canister_protocol::inspection::preflight_inspection(
             icp,
             root_candid_path,
             root,
-            protocol::CANIC_ROOT_COMMAND,
-            &RootInventoryCommand::InspectCanister(CanisterInspectionRequest { canister_id }),
-        ),
-    )?;
-    match response {
-        RootInventoryCommandResponse::InspectCanister(status) => Ok(*status),
-        RootInventoryCommandResponse::InspectionReserveRequired(evidence) => Err(
-            crate::CanisterProtocolError::inspection_reserve(root, canister_id, evidence).into(),
-        ),
-    }
+            canister_id,
+        )?;
+        let response: RootInventoryCommandResponse = terminal_observation(
+            "root_controlled_canister",
+            call_with_candid(
+                icp,
+                root_candid_path,
+                root,
+                protocol::CANIC_ROOT_COMMAND,
+                &RootInventoryCommand::InspectCanister(CanisterInspectionRequest { canister_id }),
+            ),
+        )?;
+        match response {
+            RootInventoryCommandResponse::InspectCanister(status) => Ok(*status),
+            RootInventoryCommandResponse::InspectionReserveRequired(evidence) => Err(
+                crate::CanisterProtocolError::inspection_reserve(root, canister_id, evidence)
+                    .into(),
+            ),
+        }
+    })
 }
 
 fn observed_cycle_balance(status: &CanisterStatusResponse) -> Result<u128, CurrentProtocolError> {

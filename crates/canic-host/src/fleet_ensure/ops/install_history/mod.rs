@@ -88,21 +88,23 @@ pub(super) fn observe(
         .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
     let witness_principal = Principal::from_text(&witness.authority.principal)
         .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
-    let Response::InspectCanisterHistory(response) = call_with_candid(
-        icp,
-        &path,
-        witness_principal,
-        canic_core::protocol::CANIC_ROOT_COMMAND,
-        &Command::InspectCanisterHistory(CanisterInspectionRequest {
-            canister_id: principal,
-        }),
-    )?;
-    if response.canister_id != principal {
-        return Err(CurrentProtocolError::ResponseMismatch);
-    }
-    let history: History = candid::decode_one(&response.history_candid)
-        .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
-    Ok(classify_history(&history, operator, before, live))
+    icp.measure_canister_history(witness_principal, principal, || {
+        let Response::InspectCanisterHistory(response) = call_with_candid(
+            icp,
+            &path,
+            witness_principal,
+            canic_core::protocol::CANIC_ROOT_COMMAND,
+            &Command::InspectCanisterHistory(CanisterInspectionRequest {
+                canister_id: principal,
+            }),
+        )?;
+        if response.canister_id != principal {
+            return Err(CurrentProtocolError::ResponseMismatch);
+        }
+        let history: History = candid::decode_one(&response.history_candid)
+            .map_err(|_| CurrentProtocolError::ResponseMismatch)?;
+        Ok(classify_history(&history, operator, before, live))
+    })
 }
 
 /// Correlate deployment history with both module identities in the reviewed transition.

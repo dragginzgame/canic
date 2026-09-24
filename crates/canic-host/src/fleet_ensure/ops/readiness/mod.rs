@@ -234,7 +234,39 @@ fn native_balance(
     }
     status
         .cycles
-        .as_ref()
-        .and_then(|value| value.parse().ok())
+        .as_deref()
+        .and_then(parse_native_cycles)
         .ok_or(RootReadinessUnavailable::BalanceUnavailable)
+}
+
+// ICP status uses decimal digits with optional three-digit underscore groups.
+// Bound the external text to a grouped u128 and reject overflow without allocating.
+fn parse_native_cycles(value: &str) -> Option<u128> {
+    const MAX_DIGITS: usize = 39;
+    const MAX_GROUPED_BYTES: usize = MAX_DIGITS + (MAX_DIGITS - 1) / 3;
+
+    if value.len() > MAX_GROUPED_BYTES {
+        return None;
+    }
+    let first_group_limit = if value.contains('_') { 3 } else { MAX_DIGITS };
+    let mut cycles = 0_u128;
+    for (index, group) in value.split('_').enumerate() {
+        let valid_width = if index == 0 {
+            (1..=first_group_limit).contains(&group.len())
+        } else {
+            group.len() == 3
+        };
+        if !valid_width {
+            return None;
+        }
+        for byte in group.bytes() {
+            if !byte.is_ascii_digit() {
+                return None;
+            }
+            cycles = cycles
+                .checked_mul(10)?
+                .checked_add(u128::from(byte - b'0'))?;
+        }
+    }
+    Some(cycles)
 }

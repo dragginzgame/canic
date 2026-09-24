@@ -219,3 +219,108 @@ fn repeated_activity_is_not_confirmed_remote_advancement() {
     drop(receipt);
     fs::remove_dir_all(root).unwrap();
 }
+
+#[test]
+fn retry_deadline_changes_are_retained_without_claiming_remote_advancement() {
+    use canic_core::dto::component_provisioning::{
+        FleetComponentProvisioningPhase, FleetComponentProvisioningRetryStage,
+        FleetComponentProvisioningRootFailure, ProvisioningFailureOrigin, ProvisioningFailureStage,
+        ProvisioningRetryCategory,
+    };
+    use canic_host::fleet_ensure::dto::{FleetEnsurePhase, FleetProvisioningProgress};
+    let (root, mut receipt, path) = fixture();
+    for retry_at_ns in [Some(1_000_000_123_u64), Some(2_000_000_123), None] {
+        receipt.progress(&FleetEnsureProgress {
+            next_action: None,
+            operation_id: "op".into(),
+            plan_sha256: "plan".into(),
+            phase: FleetEnsurePhase::WorkloadProvisioning,
+            applied_effects: 1,
+            reviewed_effects: 3,
+            state: FleetEnsureProgressState::AwaitingProgress {
+                elapsed_seconds: 30,
+                provisioning: Some(FleetProvisioningProgress {
+                    phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
+                    root_batch_count: 1,
+                    accepted_root_count: 1,
+                    provisioned_root_count: 1,
+                    directory_confirmed_root_count: 1,
+                    directory_confirmation_root_count: 1,
+                    runtime_activated_root_count: 0,
+                    component_count: 2,
+                    pending_root_failure: Some(FleetComponentProvisioningRootFailure {
+                        origin: Some(ProvisioningFailureOrigin {
+                            failed_at_ns: 123,
+                            retry_at_ns,
+                            stage: ProvisioningFailureStage::ComponentMembership,
+                            target: candid::Principal::from_slice(&[8]),
+                            operation_id: [9; 32],
+                            diagnostic_code: 137,
+                            retry_category: ProvisioningRetryCategory::Backoff,
+                        }),
+                        fleet_subnet_root: candid::Principal::from_slice(&[7]),
+                        stage: FleetComponentProvisioningRetryStage::RuntimeActivation,
+                        diagnostic_code: 137,
+                        failed_at_ns: 124,
+                    }),
+                }),
+            },
+        });
+        let events = read(&path);
+        let data = &events.last().unwrap()["data"];
+        assert_eq!(data["confirmed_remote_advancement"], false);
+        assert_eq!(
+            data["progress"]["state"]["provisioning"]["pending_root_failure"]["origin"]["retry_at_ns"],
+            serde_json::to_value(retry_at_ns).unwrap()
+        );
+    }
+    drop(receipt);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn protected_request_receipts_preserve_child_subject_parent_and_incomplete_pairs() {
+    use canic_host::icp::{IcpRequestKind, IcpRequestTiming};
+    let (root, mut receipt, path) = fixture();
+    receipt.observation(&observation(None));
+    let endpoint = candid::Principal::from_slice(&[1]);
+    let child = candid::Principal::from_slice(&[2]);
+    let mut request = IcpRequestTiming {
+        request_id: 10,
+        parent_request_id: None,
+        kind: IcpRequestKind::CanisterInspection,
+        target: Some(endpoint.to_text()),
+        subject: Some(child),
+        method: None,
+        elapsed_micros: 0,
+        in_flight: 1,
+        succeeded: None,
+    };
+    receipt.request(&request);
+    request.request_id = 11;
+    request.parent_request_id = Some(10);
+    request.kind = IcpRequestKind::Query;
+    request.method = Some("canic_observability".into());
+    receipt.request(&request);
+    request.elapsed_micros = 20;
+    request.succeeded = Some(false);
+    receipt.request(&request);
+    // Leave the inclusive inspection unmatched, as an interrupted invocation would.
+    receipt.close("interrupted", None);
+    drop(receipt);
+    let events = read(&path);
+    let requests = events
+        .iter()
+        .filter(|event| event["event"] == "icp_request_timing")
+        .collect::<Vec<_>>();
+    for event in &requests {
+        assert_eq!(event["data"]["parent_span_id"], 1);
+        assert_eq!(event["data"]["request"]["target"], endpoint.to_text());
+        assert_eq!(event["data"]["request"]["subject"], child.to_text());
+    }
+    assert!(requests[0]["data"]["request"]["succeeded"].is_null());
+    assert_eq!(requests[1]["data"]["request"]["parent_request_id"], 10);
+    assert_eq!(requests[2]["data"]["request"]["succeeded"], false);
+    assert_eq!(events.last().unwrap()["data"]["state"], "interrupted");
+    fs::remove_dir_all(root).unwrap();
+}
