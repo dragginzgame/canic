@@ -3,7 +3,19 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-validation-lane.XXXXXX")"
-trap 'rm -rf "$FIXTURE"' EXIT
+# Keep expected rejection diagnostics out of passing validation output. Replay
+# the complete fixture log only when an assertion or setup command fails.
+exec 3>&1 4>&2
+cleanup() {
+    local status=$?
+    if [[ "$status" -ne 0 ]]; then
+        cat "$FIXTURE/output.log" >&4
+    fi
+    rm -rf "$FIXTURE"
+    exit "$status"
+}
+trap cleanup EXIT
+exec >"$FIXTURE/output.log" 2>&1
 
 mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci" "$FIXTURE/docs/changelog" "$FIXTURE/docs/status"
 cp "$ROOT/scripts/ci/run-release-validation-lane.sh" \
@@ -175,4 +187,4 @@ rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENT
     exit 1
 }
 
-echo "release validation lane test passed"
+echo "release validation lane test passed" >&3

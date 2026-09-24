@@ -14,11 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.41` reduces repeated Store catalog reads within upload reconciliation
-  passes and reuses authenticated-query connections and runtime setup, retaining
-  fresh authority checks, bounded retries and individual effect recovery. Keep
-  interactive Fleet progress on a dedicated screen, separate from final reports
-  and plain redirected logs.
+- `0.110.41` reduces repeated deployment observation and query setup work while
+  preserving authority checks and recovery. Keep interactive Fleet progress on
+  a dedicated screen and expected test rejections out of successful validation
+  output.
 - `0.110.40` corrects Fleet readiness balances, exposes reported retry deadlines
   in deployment diagnostics, and adds compact build-lock waits with read-only
   owner inspection and safe waiter cancellation. Attribute protected reads to
