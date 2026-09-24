@@ -20,6 +20,22 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release fixture diagnostic correction — 2026-09-24
+
+The reported missing `docs/status/current.md` message came from the
+release-validation lane's deliberate rejection fixture, not the checkout.
+The fixture now captures its output and replays it only on failure; a passing
+run prints its success summary with empty stderr. Its original exit-status,
+no-validation and no-version-mutation assertions remain intact.
+
+The focused fixture passes, and an injected unexpected exit verifies that a
+real failure remains nonzero and exposes its captured diagnostic. ShellCheck,
+Bash syntax and whitespace checks pass. Evidence is in
+`.tmp/release-lane-output-20260924/`. The full release-integrity guard was not
+rerun because its other fixtures create Git commits. This correction extends
+the open .41 batch and both changelog views, ready for the maintainer's flow;
+these follow-up edits remain uncommitted. No broad validation or release ran.
+
 ## Deployment screen corrected; binding experiment bounded — 2026-09-24
 
 The [progress correction](../audits/reports/2026-09/2026-09-24/deployment-progress-screen.md)
