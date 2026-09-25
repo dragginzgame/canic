@@ -18,9 +18,10 @@ fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {
     let mut response = fixture();
     let hash = FleetSubnetRootDrainingReservationOps::content_hash(&response)
         .expect("hash draining reservation");
+    // Current Candid authority includes the recovery-controller vector even when empty.
     assert_eq!(
         crate::cdk::utils::hash::hex_bytes(hash),
-        "5c97a41797c3f5d714d8a7aac4ed61280cc3d3320d8ec59fe153e31c7be9a999"
+        "250c5cc099056db3407a1c9e015aac7606a52621c562d0ff12c2c0c12f111199"
     );
     response.reservation_hash = [99; 32];
     assert_eq!(
@@ -34,6 +35,20 @@ fn reservation_hash_is_domain_separated_and_excludes_only_its_hash_field() {
     assert_ne!(
         FleetSubnetRootDrainingReservationOps::content_hash(&redirected)
             .expect("hash redirected draining reservation"),
+        hash
+    );
+
+    let mut changed_recovery = response.clone();
+    changed_recovery
+        .request
+        .expected_registry
+        .authority
+        .binding
+        .recovery_controllers
+        .push(Principal::from_slice(&[17; 29]));
+    assert_ne!(
+        FleetSubnetRootDrainingReservationOps::content_hash(&changed_recovery)
+            .expect("hash changed recovery authority"),
         hash
     );
 

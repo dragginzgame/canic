@@ -20,6 +20,24 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .42 release-gate corrections — 2026-09-25
+
+Maintainer-run release validation exposed two stale expected hashes after the
+recovery-controller authority field was added. The provisioning-receipt and
+Root-draining vectors now match the current Candid schema. Nine focused tests
+pass, including controller-sensitive hashing and typed rejection of rehashed
+recovery-authority substitution. Scoped all-feature core Clippy and formatting
+pass; logs are in `.tmp/release42-core-hashes/`. Production hashing and DTOs
+are unchanged by this test correction. The earlier non-test-only lint expectation
+correction also passed scoped all-target/all-feature testing-package Clippy.
+
+These corrections remain in the existing `.42` batch; its changelog is updated.
+The complete batch is ready to resume the maintainer-selected release gate.
+No broad suite, version transaction or publication was rerun here, and the
+earlier B5/CLI records retain their exact source checkpoints. The latest full
+test gate stopped at ordinary tests before PocketIC; its incidental invalid
+Candid diagnostics came from deliberate negative fixtures.
+
 ## CANIC-176 build-cache readability — complete locally, 2026-09-25
 
 The maintainer authorized the new Toko feedback from commit
