@@ -375,9 +375,12 @@ mod tests {
     }
 
     #[derive(CandidType, Deserialize)]
-    #[expect(
-        clippy::large_enum_variant,
-        reason = "the direct Root wire decoder changes size across test-only variants"
+    #[cfg_attr(
+        not(test),
+        expect(
+            clippy::large_enum_variant,
+            reason = "the non-test decoder omits the larger test-only response variants"
+        )
     )]
     enum RootCommandResponseFragment {
         PrepareStoreFixture(
