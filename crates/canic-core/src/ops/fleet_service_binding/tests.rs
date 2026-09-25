@@ -551,11 +551,12 @@ fn fixture() -> (
 #[test]
 fn compiles_complete_mode_compatible_initial_services_in_canonical_order() {
     let (config, registry, plan, receipts) = fixture();
+    // Current Candid authority includes the recovery-controller vector even when empty.
     assert_eq!(
         receipts[0].receipt_content_hash,
         [
-            107, 188, 71, 179, 147, 110, 64, 198, 102, 9, 85, 59, 63, 179, 31, 202, 193, 117, 42,
-            149, 94, 218, 71, 54, 87, 9, 177, 162, 168, 91, 99, 224,
+            83, 141, 145, 136, 197, 121, 172, 165, 116, 47, 37, 12, 69, 138, 75, 188, 38, 140, 244,
+            32, 47, 157, 208, 50, 240, 251, 255, 20, 197, 149, 74, 225,
         ]
     );
     let services = compile_initial(&config, &registry, &plan, [10; 32], &receipts)
@@ -712,6 +713,24 @@ fn rejects_missing_reordered_or_wrong_operation_root_receipts() {
 
     crate::assert_err_variant!(
         compile_initial(&config, &registry, &plan, [11; 32], &receipts),
+        Err(FleetServiceBindingOpsError::RootReceiptIdentityMismatch)
+    );
+}
+
+#[test]
+fn rejects_recovery_controller_substitution_even_with_a_valid_receipt_hash() {
+    let (config, registry, plan, mut receipts) = fixture();
+    let original_hash = receipts[0].receipt_content_hash;
+    receipts[0]
+        .fleet_registry
+        .authority
+        .binding
+        .recovery_controllers
+        .push(principal(90));
+    rehash(&mut receipts[0], &plan.batches[0]);
+    assert_ne!(receipts[0].receipt_content_hash, original_hash);
+    crate::assert_err_variant!(
+        compile_initial(&config, &registry, &plan, [10; 32], &receipts),
         Err(FleetServiceBindingOpsError::RootReceiptIdentityMismatch)
     );
 }
