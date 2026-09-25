@@ -195,6 +195,21 @@ use std::time::Duration;
 const MAX_COMPONENT_DIRECTORY_PAGE_ENTRIES: u16 = 100;
 const MAX_COMPONENT_DIRECTORY_CURSOR_BYTES: usize = 2_048;
 
+fn has_exact_workload_controllers(
+    root: candid::Principal,
+    observed: &[candid::Principal],
+) -> Result<bool, InternalError> {
+    let (authority, actual_root) = root_authority()?;
+    if root != actual_root {
+        return Err(InternalError::conflict());
+    }
+    Ok(authority
+        .binding
+        .authority
+        .binding
+        .has_exact_root_controllers(root, observed))
+}
+
 #[derive(CandidType)]
 enum CanisterCommandFragment {
     ConfigureRuntime(ComponentRuntimeDirectoryPreparationRequest),
@@ -2494,7 +2509,11 @@ async fn install_child_allocation_for_parent(
 pub async fn commit_child_allocation(
     request: RootComponentChildCommitRequest,
 ) -> Result<RootComponentChildCommitResponse, InternalError> {
-    commit_child_allocation_for_parent(request, IcOps::msg_caller()).await
+    Box::pin(commit_child_allocation_for_parent(
+        request,
+        IcOps::msg_caller(),
+    ))
+    .await
 }
 
 async fn commit_child_allocation_for_parent(
@@ -2564,10 +2583,13 @@ async fn prepare_child_directories_for_parent(
     request: RootComponentChildDirectoryPreparationRequest,
     parent_canister_id: candid::Principal,
 ) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
-    let plan =
-        prepared_child_runtime_plan(request.component, request.operation_id, parent_canister_id)
-            .await
-            .map_err(|error| child_directory_failure("plan", error))?;
+    let plan = Box::pin(prepared_child_runtime_plan(
+        request.component,
+        request.operation_id,
+        parent_canister_id,
+    ))
+    .await
+    .map_err(|error| child_directory_failure("plan", error))?;
     let observed =
         query_component_runtime_status(plan.child_canister, plan.directory_request.operation_id)
             .await
@@ -2668,16 +2690,23 @@ fn child_directory_failure(stage: &'static str, error: InternalError) -> Interna
 pub async fn activate_child_runtime(
     request: RootComponentChildRuntimeActivationRequest,
 ) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
-    activate_child_runtime_for_parent(request, IcOps::msg_caller()).await
+    Box::pin(activate_child_runtime_for_parent(
+        request,
+        IcOps::msg_caller(),
+    ))
+    .await
 }
 
 async fn activate_child_runtime_for_parent(
     request: RootComponentChildRuntimeActivationRequest,
     parent_canister_id: candid::Principal,
 ) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
-    let plan =
-        prepared_child_runtime_plan(request.component, request.operation_id, parent_canister_id)
-            .await?;
+    let plan = Box::pin(prepared_child_runtime_plan(
+        request.component,
+        request.operation_id,
+        parent_canister_id,
+    ))
+    .await?;
     if !committed_child_directory_receipt(&plan.allocation)?.directory_prepared {
         return Err(InternalError::unavailable());
     }
@@ -2726,9 +2755,12 @@ async fn activate_child_membership_for_parent(
     request: RootComponentChildMembershipActivationRequest,
     parent_canister_id: candid::Principal,
 ) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
-    let plan =
-        prepared_child_runtime_plan(request.component, request.operation_id, parent_canister_id)
-            .await?;
+    let plan = Box::pin(prepared_child_runtime_plan(
+        request.component,
+        request.operation_id,
+        parent_canister_id,
+    ))
+    .await?;
     if !committed_child_directory_receipt(&plan.allocation)?.runtime_activated {
         return Err(InternalError::unavailable());
     }
@@ -5783,7 +5815,7 @@ async fn observed_component_quiescence_status(
     plan: &PreparedComponentQuiescencePlan,
 ) -> Result<CanisterStatusType, InternalError> {
     let status = MgmtOps::canister_status(plan.stop.canister_id).await?;
-    if status.settings.controllers != vec![plan.stop.controller] {
+    if !has_exact_workload_controllers(plan.stop.controller, &status.settings.controllers)? {
         return Err(InternalError::conflict());
     }
     if status.module_hash.as_deref() != Some(plan.expected_status_module_hash.as_slice()) {
@@ -5867,7 +5899,7 @@ fn validate_component_deletion_live_status(
     stop: &RootComponentQuiescenceStopIntentView,
     expected_status_module_hash: [u8; 32],
 ) -> Result<(), InternalError> {
-    if status.settings.controllers != vec![stop.controller] {
+    if !has_exact_workload_controllers(stop.controller, &status.settings.controllers)? {
         return Err(InternalError::conflict());
     }
     if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
@@ -5910,7 +5942,7 @@ fn validate_subtree_leaf_live_status(
     stop: &RootComponentSubtreeStopEffectView,
     expected_status_module_hash: [u8; 32],
 ) -> Result<CanisterStatusType, InternalError> {
-    if status.settings.controllers != vec![stop.controller] {
+    if !has_exact_workload_controllers(stop.controller, &status.settings.controllers)? {
         return Err(InternalError::conflict());
     }
     if status.module_hash.as_deref() != Some(expected_status_module_hash.as_slice()) {
@@ -6432,6 +6464,7 @@ mod tests {
                         &[4; 29],
                     )),
                     coordinator: candid::Principal::from_slice(&[5; 29]),
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },

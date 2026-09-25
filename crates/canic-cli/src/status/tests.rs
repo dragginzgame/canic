@@ -384,6 +384,7 @@ fn terminal_registry(network: CanonicalNetworkId, coordinator: Principal) -> Fle
                         .expect("Coordinator Subnet Principal"),
                 ),
                 coordinator,
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

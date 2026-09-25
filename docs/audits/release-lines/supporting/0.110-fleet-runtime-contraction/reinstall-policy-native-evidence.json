@@ -1,0 +1,26 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-25",
+  "audited_base_commit": "4e7bd773714cb0c46eec9d440383f55c23901a10",
+  "scope": "native follow-up to 0.110 closeout findings",
+  "transition_mode": "reinstall_only",
+  "checks": {
+    "release_manifest": "pass",
+    "generated_fleet_pre_effect_rejection_and_recovery": "pass",
+    "selected_candid": "pass",
+    "selected_protocol_binding": "pass",
+    "scoped_host_clippy": "pass"
+  },
+  "proof_boundary": {
+    "platform": "native deterministic adapter",
+    "planning_rejection": true,
+    "apply_rejection": true,
+    "zero_modeled_platform_mutations": true,
+    "unchanged_live_module_controller_cycle_observations": true,
+    "unchanged_workflow_record_bytes": true,
+    "same_release_recovery": true,
+    "pocketic_stable_memory_observation": false
+  },
+  "final_b5_qualification": false,
+  "source_manifest_sha256": "8c9f9061755c2eb60cb7ab054d0fa14fcb43c5dbda52212db514e49d1e7eb2c1"
+}

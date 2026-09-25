@@ -17,7 +17,7 @@ use crate::{
     },
     evidence_support::current_evidence_timestamp,
     output,
-    support::build_lock::LockWaitDisplay,
+    support::{build_cache::cache_report, build_lock::BuildCheckDisplay},
 };
 use canic_core::ids::{BuildNetwork, CanisterRole, ReleaseBuildId};
 use canic_host::build_provenance::{BuildProvenanceRequest, build_provenance_envelope};
@@ -148,6 +148,7 @@ struct BuildOptions {
     no_default_features: bool,
     provenance: Option<PathBuf>,
     standalone_local: bool,
+    verbose: bool,
 }
 
 impl BuildOptions {
@@ -174,6 +175,7 @@ impl BuildOptions {
             no_default_features: matches.get_flag("no-default-features"),
             provenance: string_option(&matches, "provenance").map(PathBuf::from),
             standalone_local: matches.get_flag("standalone-local"),
+            verbose: matches.get_flag("verbose"),
         })
     }
 
@@ -218,14 +220,25 @@ where
         }
     }
 
-    let builder = CanisterArtifactBuilder::for_profile(context.profile)?;
-    eprintln!(
-        "Canic build tools:\n{}",
-        builder.diagnostic_lines().join("\n")
+    TerminalStyle::detected().print_section(
+        "Build App",
+        &format!(
+            "{} | {} profile | {} network",
+            options.app,
+            context.profile.target_dir_name(),
+            context.build_network
+        ),
     );
+    let builder = CanisterArtifactBuilder::for_profile(context.profile)?;
+    if options.verbose {
+        eprintln!(
+            "Canic build tools:\n{}",
+            builder.diagnostic_lines().join("\n")
+        );
+        print_workspace_build_context_once(&context)?;
+    }
 
     if let Some(role) = &options.role {
-        print_workspace_build_context_once(&context)?;
         let output = builder.build_workspace_canister_artifact_with_options(
             &context,
             &options.artifact_build_options(),
@@ -261,31 +274,24 @@ fn build_complete_app(
     builder: &CanisterArtifactBuilder,
     started_at: Instant,
 ) -> Result<(), BuildCommandError> {
-    print_workspace_build_context_once(&context)?;
     let fixture_sources = canic_host::release_set::fixture::load_configured_fixture_sources(
         &context.icp_root,
         &context.config_path,
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
-    let lookup_started = Instant::now();
-    let (reuse, lock_elapsed) = prepare_build_reuse(builder, &context)?;
+    let mut display = BuildCheckDisplay::start()?;
+    let reuse = prepare_build_reuse(builder, &context, &mut display)?;
+    let loaded = reuse.as_ref().map(CompleteBuildReuse::load);
+    display.finish_checks();
+    drop(display);
     let mut miss_reason = "input comparison unavailable".to_string();
-    if let Some(reuse) = &reuse {
-        match reuse.load() {
+    if let Some(loaded) = loaded {
+        match loaded {
             Ok(Some(hit)) => {
                 fixture_sources
                     .verify_unchanged(&context.icp_root, &context.config_path)
                     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
-                for role in &hit.roles {
-                    eprintln!("Build cache {role}: hit (verified complete release)");
-                }
-                eprintln!(
-                    "Build phase input/output verification: {:.2}s",
-                    lookup_started
-                        .elapsed()
-                        .saturating_sub(lock_elapsed)
-                        .as_secs_f64()
-                );
+                eprintln!("{}", cache_report(hit.roles.len(), None, options.verbose));
                 TerminalStyle::detected().print_section(
                     "Build complete",
                     &build_completion_detail(
@@ -302,7 +308,11 @@ fn build_complete_app(
                 );
                 return Ok(());
             }
-            Ok(None) => miss_reason = reuse.miss_reason(),
+            Ok(None) => {
+                if let Some(reuse) = &reuse {
+                    miss_reason = reuse.miss_reason();
+                }
+            }
             Err(error) => {
                 eprintln!("Build cache rejected: {error}");
                 miss_reason = "retained output/evidence rejected".into();
@@ -313,15 +323,9 @@ fn build_complete_app(
         .into_iter()
         .chain(roles.iter().cloned())
         .collect::<Vec<_>>();
-    for role in &all_roles {
-        eprintln!("Build cache {role}: miss ({miss_reason})");
-    }
     eprintln!(
-        "Build phase input/output verification: {:.2}s",
-        lookup_started
-            .elapsed()
-            .saturating_sub(lock_elapsed)
-            .as_secs_f64()
+        "{}",
+        cache_report(all_roles.len(), Some(&miss_reason), options.verbose)
     );
     let release = plan_release_build_for_profile_and_network(
         &context.icp_root,
@@ -366,18 +370,11 @@ fn build_complete_app(
 fn prepare_build_reuse(
     builder: &CanisterArtifactBuilder,
     context: &WorkspaceBuildContext,
-) -> Result<(Option<CompleteBuildReuse>, Duration), BuildCommandError> {
-    let mut display =
-        LockWaitDisplay::start().map_err(|error| BuildCommandError::Build(Box::new(error)))?;
-    let mut lock_elapsed = Duration::ZERO;
+    display: &mut BuildCheckDisplay,
+) -> Result<Option<CompleteBuildReuse>, BuildCommandError> {
     let reuse = match builder.prepare_complete_build_reuse(context, |progress| match progress {
         BuildReuseProgress::WaitingForLock(wait) => display.waiting(&wait),
-        BuildReuseProgress::LockFinished(elapsed) => {
-            display.check_cancelled()?;
-            lock_elapsed = elapsed;
-            display.finish("acquired");
-            Ok(())
-        }
+        BuildReuseProgress::LockFinished(elapsed) => display.acquired(elapsed),
     }) {
         Ok(reuse) => Some(reuse),
         Err(error @ BuildReuseError::Lock(_)) => {
@@ -388,16 +385,15 @@ fn prepare_build_reuse(
                 "acquisition failed"
             };
             display.finish(outcome);
-            drop(display);
             return Err(BuildCommandError::Build(Box::new(error)));
         }
         Err(error) => {
+            display.finish_checks();
             eprintln!("Build reuse unavailable: {error}");
             None
         }
     };
-    drop(display);
-    Ok((reuse, lock_elapsed))
+    Ok(reuse)
 }
 
 fn build_command() -> ClapCommand {
@@ -479,6 +475,11 @@ fn build_command() -> ClapCommand {
                 .help("Emit a local runtime with Candid retained only in the adjacent .did"),
         )
         .arg(internal_environment_arg())
+        .arg(
+            flag_arg("verbose")
+                .long("verbose")
+                .help("Show tool/configuration details and the complete bounded cache explanation"),
+        )
         .after_help(BUILD_HELP_AFTER)
 }
 
@@ -528,21 +529,14 @@ fn build_app(
     fixture_sources: &canic_host::release_set::fixture::ConfiguredFixtureSources,
 ) -> Result<PathBuf, BuildCommandError> {
     let style = TerminalStyle::detected();
-    style.print_section(
-        "Build App",
-        &format!(
-            "{} | {} profile | {} network",
-            options.app,
-            context.profile.target_dir_name(),
-            context.build_network
-        ),
-    );
-    println!(
-        "App config: {}",
-        display_workspace_path(&context.workspace_root, &context.config_path)
-    );
-    println!("Root Wasm: App-config-bound | Subnet-unbound until Fleet ensure");
-    println!();
+    if options.verbose {
+        println!(
+            "App config: {}",
+            display_workspace_path(&context.workspace_root, &context.config_path)
+        );
+        println!("Root Wasm: App-config-bound | Subnet-unbound until Fleet ensure");
+        println!();
+    }
 
     let release_build_id = context
         .release_build_id
@@ -1115,6 +1109,15 @@ mod tests {
         assert!(!options.no_default_features);
         assert_eq!(options.provenance, None);
         assert!(!options.standalone_local);
+        assert!(!options.verbose);
+    }
+
+    #[test]
+    fn build_accepts_verbose_diagnostics_for_complete_and_selected_builds() {
+        for args in [vec!["demo", "--verbose"], vec!["demo", "app", "--verbose"]] {
+            let options = BuildOptions::parse(args.into_iter().map(OsString::from)).unwrap();
+            assert!(options.verbose);
+        }
     }
 
     #[test]
@@ -1659,6 +1662,7 @@ mod tests {
             no_default_features: false,
             provenance: None,
             standalone_local: false,
+            verbose: false,
         }
     }
 

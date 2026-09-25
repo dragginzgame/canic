@@ -169,7 +169,7 @@ impl CyclesLedgerInfra {
 
     /// Ask the Cycles Ledger to create one root-controlled Canister on an exact Subnet.
     pub async fn create_canister(
-        root: Principal,
+        controllers: Vec<Principal>,
         subnet: Principal,
         amount: Cycles,
         created_at_time: u64,
@@ -184,7 +184,7 @@ impl CyclesLedgerInfra {
                 amount: Nat::from(amount.to_u128()),
                 creation_args: Some(CyclesLedgerCmcCreateCanisterArgs {
                     settings: Some(CyclesLedgerCanisterSettings {
-                        controllers: Some(vec![root]),
+                        controllers: Some(controllers),
                         compute_allocation: None,
                         memory_allocation: None,
                         freezing_threshold: None,

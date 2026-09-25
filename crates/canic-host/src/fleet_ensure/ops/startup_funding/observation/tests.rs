@@ -192,6 +192,7 @@ fn pending_root_operations_are_not_reported_as_successful_grants() {
                     },
                     coordinator_subnet: Principal::from_slice(&[3]).into(),
                     coordinator: value.coordinator,
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },

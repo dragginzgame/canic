@@ -1,0 +1,1830 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-25",
+  "scope": "Final local 0.110.42 candidate: explicitly authorized B5 qualification",
+  "release_anchor": "v0.110.41",
+  "package_version": "0.110.41",
+  "open_patch": "0.110.42",
+  "source_commit_full": "4e7bd773714cb0c46eec9d440383f55c23901a10",
+  "source_tree_hash": {
+    "value": "bd6a5637e1b96058e7097d826af2947846d9a05a",
+    "scope": "committed base only; candidate is the source-manifest-bound overlay"
+  },
+  "product_tree_hash": {
+    "value": "not_applicable",
+    "reason": "Candidate is uncommitted; canonical product-tree hashing requires a committed snapshot. The candidate product-input SHA manifest is retained instead."
+  },
+  "clean_worktree": false,
+  "source_manifest_sha256": "c8beec66a4bf5dc8ff52109715eba6decb8063aa766f2e3427e5f6724c240d3b",
+  "cargo_lock_hash": "8643706d7a15025a43572e851e5a54a179c8a3ddfd26003d1a61ba8f26ba1c21",
+  "rust_toolchain": "1.98.1; packaged public consumer also checks repository MSRV 1.91",
+  "target_triple": [
+    "wasm32-unknown-unknown",
+    "x86_64-unknown-linux-gnu"
+  ],
+  "feature_set": "Exact per-role cfgs and generated Cargo manifests retained in results/a and b; fixed roster and existing test selectors",
+  "audit_method_id": "CANIC-0.110-B5",
+  "audit_method_version": 1,
+  "reviewer": "Codex",
+  "audit_method_fingerprint": "7d607f24239bd6d5c7d9eabd8a40f4b4a5a9a1ca289b030ab7b37a5252c913a2",
+  "audit_script_hashes": {
+    "member": "method/method-files.sha256",
+    "sha256": "7d607f24239bd6d5c7d9eabd8a40f4b4a5a9a1ca289b030ab7b37a5252c913a2"
+  },
+  "accepted_design_sha256": "8970ce88fffa3b564bd6ba5c9c8110dbe59f15ce250f9f0bb2e942eb2277e56f",
+  "external_tool_versions": {
+    "member": "method/tool-identities.txt",
+    "rustup_resolved_binaries": "method/native-toolchain.sha256",
+    "icp": "1.6.0",
+    "pocket_ic": "16.0.0",
+    "icp_sha256": "c7d4e0122770a467437d5dae8505317e701c40486ab6b5106d01e1023a5c72c6",
+    "pocket_ic_sha256": "69e324bdb68d32d878b7a9504b1379f08f8d1921272bacb065b0fabb3d0f3792"
+  },
+  "fixture_or_seed": {
+    "roster_member": "method/roster.tsv",
+    "roster_sha256": "060d33752b37d5027e0cd3141c3f0d172e9ab32a4a5ac0ea2d4f5bea4f488699",
+    "instruction_seed": "retained B2 fixture: history rows 1, 211 and 256, install/restore and first/second access"
+  },
+  "environment_class": "Disposable local Linux x86_64 WSL2 build targets and PocketIC; no live IC effects",
+  "started_at": "2026-09-25T08:53:04Z",
+  "completed_at": "2026-09-25T11:12:40Z",
+  "run_result": "pass",
+  "result_validity": "valid",
+  "closeout_verdict": "pass_with_limitations",
+  "human_acceptance": "pending",
+  "broad_workspace_validation_run": false,
+  "clean_repeat_claim": true,
+  "byte_determinism": true,
+  "matrix": {
+    "schema_version": 1,
+    "clean_repeat_claim": true,
+    "byte_determinism": true,
+    "artifacts": [
+      {
+        "artifact": "app",
+        "role": "app",
+        "wasm_sha256": "784c41b5a9a12fbcba388a7cbc3be63d3cf45d15f74de5964517cbc40c35ca58",
+        "gzip_sha256": "a1c2d65c7242932a85a0b0d9548ac3bc686487c0d1b2407aa6db1fd40a6129f6",
+        "candid_sha256": "ce7522e4c0b12ee9954032424823659400b23a4ee88d5d6579ada7de0d171fe2",
+        "wasm_bytes": 2968273,
+        "gzip_bytes": 1065344,
+        "code_section_bytes": 2706980,
+        "data_section_bytes": 212148,
+        "defined_functions": 4757,
+        "optimizer_defined_functions": 4757,
+        "table_minimum": 975,
+        "element_entries": 974,
+        "code_headroom_bytes": 7778780,
+        "function_headroom": 45243,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "blob_storage_probe",
+        "role": "test",
+        "wasm_sha256": "54b27bc98a99e3869270011e8fadba941c30e6e9c841705f54c83ac3469bf00d",
+        "gzip_sha256": "5574e9da8ba0827940db6a6f57421f147900c5dbebe721e16f52b7073e4f3464",
+        "candid_sha256": "c84a5d891af8e0badb6331661fa79f9253e1320a372ef1e99b516177d8f835eb",
+        "wasm_bytes": 2317667,
+        "gzip_bytes": 835187,
+        "code_section_bytes": 2096048,
+        "data_section_bytes": 189155,
+        "defined_functions": 3973,
+        "optimizer_defined_functions": 3973,
+        "table_minimum": 846,
+        "element_entries": 845,
+        "code_headroom_bytes": 8389712,
+        "function_headroom": 46027,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "fleet_coordinator",
+        "role": "fleet_coordinator",
+        "wasm_sha256": "4dc58d5066397817285ee5c0b5496520b158be1b75da756c3bb1b567598ef8ac",
+        "gzip_sha256": "546ff9969c1e1aaad8851dd6bea3fe74f66b476cbcfe8bef82b1b089612a597c",
+        "candid_sha256": "a85bc9944ee90a765849f4220b2cf1f0c6cf289e0c4f649595eca543b61a94ac",
+        "wasm_bytes": 4131321,
+        "gzip_bytes": 1432101,
+        "code_section_bytes": 3849294,
+        "data_section_bytes": 225224,
+        "defined_functions": 5223,
+        "optimizer_defined_functions": 5223,
+        "table_minimum": 993,
+        "element_entries": 992,
+        "code_headroom_bytes": 6636466,
+        "function_headroom": 44777,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "index_child",
+        "role": "index_child",
+        "wasm_sha256": "371434600d8a2c437c1196e64dd1acd6d7c9bdc8cbb3c7b5c4ff40d5b0a715c9",
+        "gzip_sha256": "8dee45ab366871709a642f4f7c4e922cce311d8c04c66d3fa3ec5518d619b13a",
+        "candid_sha256": "a7a9619e5172e38a94d5b3fb7e22783e0f04ce78840b0dc774621363702065d8",
+        "wasm_bytes": 2968385,
+        "gzip_bytes": 1066571,
+        "code_section_bytes": 2708959,
+        "data_section_bytes": 211553,
+        "defined_functions": 4750,
+        "optimizer_defined_functions": 4750,
+        "table_minimum": 963,
+        "element_entries": 962,
+        "code_headroom_bytes": 7776801,
+        "function_headroom": 45250,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "index_hub",
+        "role": "index_hub",
+        "wasm_sha256": "c8e85c491f32e592ca2b47e9d6efc17d83ee000fbbe6650b21c0f43a6874b944",
+        "gzip_sha256": "5ae1b0b9099d5ba2e7d58d88a8f9989ce7b4b59a4e68af6b8d90d4a75e0b2419",
+        "candid_sha256": "abc6fe9d72b18566b3b5768f77f72c898f7295f441e6112cc04d549c2b1d141c",
+        "wasm_bytes": 3082857,
+        "gzip_bytes": 1103612,
+        "code_section_bytes": 2816580,
+        "data_section_bytes": 216502,
+        "defined_functions": 4957,
+        "optimizer_defined_functions": 4957,
+        "table_minimum": 976,
+        "element_entries": 975,
+        "code_headroom_bytes": 7669180,
+        "function_headroom": 45043,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "leaf_probe",
+        "role": "app",
+        "wasm_sha256": "922a842ab100f76a47d0015a420424a78f7216b61426035af4d7d9dc855318d2",
+        "gzip_sha256": "62a9cf6f85d35a74e5a2f61e083e683aa345315b8ae2d5d74119c9166e56c179",
+        "candid_sha256": "ef5382dd0e154bfd5d255c727069ee04e932922695bf9c6d4728fd6fb253398a",
+        "wasm_bytes": 2994285,
+        "gzip_bytes": 1074849,
+        "code_section_bytes": 2732081,
+        "data_section_bytes": 212569,
+        "defined_functions": 4794,
+        "optimizer_defined_functions": 4794,
+        "table_minimum": 984,
+        "element_entries": 983,
+        "code_headroom_bytes": 7753679,
+        "function_headroom": 45206,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "payload_limit_probe",
+        "role": "test",
+        "wasm_sha256": "fbee2a323642a334b0ef61b9f5d2ef473a7a9f08fff58eb031f9dce0f511db92",
+        "gzip_sha256": "d881bab47359a16ccfd30908176379ea2c5e7a5ecaa81da11d56b09bef05130d",
+        "candid_sha256": "c56e00af34806e36b66875b4fa6bdd2cdb7d3260e203c75b23b348add4db8fd6",
+        "wasm_bytes": 2099974,
+        "gzip_bytes": 766111,
+        "code_section_bytes": 1893192,
+        "data_section_bytes": 181590,
+        "defined_functions": 3670,
+        "optimizer_defined_functions": 3670,
+        "table_minimum": 788,
+        "element_entries": 787,
+        "code_headroom_bytes": 8592568,
+        "function_headroom": 46330,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "root",
+        "role": "root",
+        "wasm_sha256": "eadf004e00904dbd8aed8ca41e1efe9352e58bfb2ce534e44ccba063ab68834e",
+        "gzip_sha256": "6ab5392dac3f158eaca757260f2e3e178784489862f788766c372cbc8c3bdd51",
+        "candid_sha256": "8f893182ca656b863af5d4bade910931ee80b953774aadf75666c9d1c9bca375",
+        "wasm_bytes": 8008134,
+        "gzip_bytes": 2841111,
+        "code_section_bytes": 7514905,
+        "data_section_bytes": 369582,
+        "defined_functions": 10056,
+        "optimizer_defined_functions": 10056,
+        "table_minimum": 1726,
+        "element_entries": 1725,
+        "code_headroom_bytes": 2970855,
+        "function_headroom": 39944,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "runtime_probe",
+        "role": "test",
+        "wasm_sha256": "fd5d7014186bfc287b9bd8d6df8d5b77f9a7f8e6c5377fac644975f286d0a42d",
+        "gzip_sha256": "6201be2e68bc5769c04bcdf0453f99a2c567f0ff086c818acde7597cc6d889aa",
+        "candid_sha256": "250408ceaaa3a26690a517fb95747ec60d28bb6527c02de233c0ae7de7a45f5a",
+        "wasm_bytes": 2753695,
+        "gzip_bytes": 987226,
+        "code_section_bytes": 2510845,
+        "data_section_bytes": 209306,
+        "defined_functions": 4822,
+        "optimizer_defined_functions": 4822,
+        "table_minimum": 954,
+        "element_entries": 953,
+        "code_headroom_bytes": 7974915,
+        "function_headroom": 45178,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "scale_hub",
+        "role": "scale_hub",
+        "wasm_sha256": "750415a66b6d967f15b2a40b73b64d78929006876eacf1dd3dd6e1a1ab5e990f",
+        "gzip_sha256": "f4bb768a71977ccb0be91b680c4294bb9f19cedb54e44712ad1a538fcbe7786e",
+        "candid_sha256": "1a8d5ba7098a69ddba75e78af3ebc59701b8d0db0855bec02eb503f5f451878f",
+        "wasm_bytes": 3064422,
+        "gzip_bytes": 1099296,
+        "code_section_bytes": 2796345,
+        "data_section_bytes": 216891,
+        "defined_functions": 4931,
+        "optimizer_defined_functions": 4931,
+        "table_minimum": 993,
+        "element_entries": 992,
+        "code_headroom_bytes": 7689415,
+        "function_headroom": 45069,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "scale_replica",
+        "role": "scale_replica",
+        "wasm_sha256": "4683dfb367759336a7ec2646cba9abb72b4df7fe9766a0204b68669518c0934e",
+        "gzip_sha256": "c8d8f7a6b4a4d3871a9f5a65bed4c2da82ab570818caa2c80a159a891d1972d4",
+        "candid_sha256": "f1ccbcbe3f9787b8e36d70e21cbd8b88a40373e6b9623bdcd7502cef3a0ca07f",
+        "wasm_bytes": 2977459,
+        "gzip_bytes": 1068873,
+        "code_section_bytes": 2715134,
+        "data_section_bytes": 212527,
+        "defined_functions": 4776,
+        "optimizer_defined_functions": 4776,
+        "table_minimum": 978,
+        "element_entries": 977,
+        "code_headroom_bytes": 7770626,
+        "function_headroom": 45224,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "test",
+        "role": "test",
+        "wasm_sha256": "9a233c2ead07149067128b3ced3db77a3674210875c3e2ed865012631cbfd848",
+        "gzip_sha256": "96ac00f17f540c25d3d68ccf772485bbbba4b4a3db46bfeae03c3a265a74e3d0",
+        "candid_sha256": "e75f33045f0bb8860717830e632870cf204e48d25293626758198b85fdfbe6e9",
+        "wasm_bytes": 3268444,
+        "gzip_bytes": 1164750,
+        "code_section_bytes": 2989097,
+        "data_section_bytes": 223570,
+        "defined_functions": 5261,
+        "optimizer_defined_functions": 5261,
+        "table_minimum": 1037,
+        "element_entries": 1036,
+        "code_headroom_bytes": 7496663,
+        "function_headroom": 44739,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "user_hub",
+        "role": "user_hub",
+        "wasm_sha256": "c835ca663c577dd9bea70abda4a9ed0ff1456cc4090cc60ad48d0324d23899a7",
+        "gzip_sha256": "88d67f71d119b3dcd231648817229925292c9823fdb93e6da3fe71ebebb3e11c",
+        "candid_sha256": "b69a133dc5eb565e769557b55b0b77606946127f7a3788ed1057088cd3b0b388",
+        "wasm_bytes": 3209519,
+        "gzip_bytes": 1157475,
+        "code_section_bytes": 2935536,
+        "data_section_bytes": 220685,
+        "defined_functions": 5204,
+        "optimizer_defined_functions": 5204,
+        "table_minimum": 1024,
+        "element_entries": 1023,
+        "code_headroom_bytes": 7550224,
+        "function_headroom": 44796,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "user_shard",
+        "role": "user_shard",
+        "wasm_sha256": "bc60e9b98c803a265fbb974823a3455ebc08bb8d9d8db04cd9adbafbf1abd7fa",
+        "gzip_sha256": "35a0c6889faa5b225da7f6809863214628fbe4718dd8902103a086b9a74d253a",
+        "candid_sha256": "937599e9405d45a0ca921c942660e9b0e7630a7f825ee567a39dbbdf1fc19ec1",
+        "wasm_bytes": 3466372,
+        "gzip_bytes": 1242265,
+        "code_section_bytes": 3181140,
+        "data_section_bytes": 227452,
+        "defined_functions": 5565,
+        "optimizer_defined_functions": 5565,
+        "table_minimum": 1075,
+        "element_entries": 1074,
+        "code_headroom_bytes": 7304620,
+        "function_headroom": 44435,
+        "reserve_pass": true,
+        "total_module_pass": true
+      },
+      {
+        "artifact": "wasm_store",
+        "role": "wasm_store",
+        "wasm_sha256": "b7a45e5f0d686dcd3e97e1b487ce618c3c9aa245a156baa9796989dfb58fdaf8",
+        "gzip_sha256": "06ec29659176a64d6ec901b5e72df3a3cfbec7e1e01c25158829a32b4cbcac24",
+        "candid_sha256": "e1c4b81922a3db87f82eb2c5068575239c991ccc530ee8794e63a016933eac12",
+        "wasm_bytes": 2879150,
+        "gzip_bytes": 1036765,
+        "code_section_bytes": 2642016,
+        "data_section_bytes": 207049,
+        "defined_functions": 4896,
+        "optimizer_defined_functions": 4896,
+        "table_minimum": 927,
+        "element_entries": 926,
+        "code_headroom_bytes": 7843744,
+        "function_headroom": 45104,
+        "reserve_pass": true,
+        "total_module_pass": true
+      }
+    ]
+  },
+  "checkpoint_comparison": {
+    "schema_version": 1,
+    "comparison": "B2 final checkpoint to final B5 source; combined source change, no isolated attribution",
+    "artifacts": [
+      {
+        "artifact": "app",
+        "previous_sha256": "5b4be13893917a3db16be71bbe71734121da16d89c8b289ced756bd95a0eefac",
+        "current_sha256": "784c41b5a9a12fbcba388a7cbc3be63d3cf45d15f74de5964517cbc40c35ca58",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "66b0f2d1bd8ba7773371bd4064a73918737f518656ede2607b277471e70a01ed",
+        "current_candid_sha256": "ce7522e4c0b12ee9954032424823659400b23a4ee88d5d6579ada7de0d171fe2",
+        "delta": {
+          "code_section_bytes": 8232,
+          "defined_functions": 13,
+          "raw_bytes": 8454,
+          "gzip_bytes": 3550,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "blob_storage_probe",
+        "previous_sha256": "61f813c1896454cc463c49180cc604542cfdc5332a0b34773edb81087f7592b0",
+        "current_sha256": "54b27bc98a99e3869270011e8fadba941c30e6e9c841705f54c83ac3469bf00d",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "0e3ad41621d7147c4c24a5adcd870b90654644915dec80a59b38d59c9461a33e",
+        "current_candid_sha256": "c84a5d891af8e0badb6331661fa79f9253e1320a372ef1e99b516177d8f835eb",
+        "delta": {
+          "code_section_bytes": 6922,
+          "defined_functions": 18,
+          "raw_bytes": 7168,
+          "gzip_bytes": 2247,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "fleet_coordinator",
+        "previous_sha256": "e88d6bd5878984cc1df78fe1538bf2bb6f6063da142f64b755a8eb4586274a96",
+        "current_sha256": "4dc58d5066397817285ee5c0b5496520b158be1b75da756c3bb1b567598ef8ac",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [],
+        "previous_capabilities": [],
+        "candid_changed": true,
+        "previous_candid_sha256": "8364bf9f36632298e94d07c2207471a47a69910c313a1c7aaa2f21223d2a952a",
+        "current_candid_sha256": "a85bc9944ee90a765849f4220b2cf1f0c6cf289e0c4f649595eca543b61a94ac",
+        "delta": {
+          "code_section_bytes": 27732,
+          "defined_functions": 19,
+          "raw_bytes": 28817,
+          "gzip_bytes": 10784,
+          "table_slots": 1,
+          "element_entries": 1
+        }
+      },
+      {
+        "artifact": "index_child",
+        "previous_sha256": "a3f1a3b6187033bd5ed2c4a427ec6eecf7fd336dab95c37ff4eab6db1c71848f",
+        "current_sha256": "371434600d8a2c437c1196e64dd1acd6d7c9bdc8cbb3c7b5c4ff40d5b0a715c9",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "9e8829c4c9344d479c6b773b8197fb91bce7152b96adff441c943dcc38fc68ce",
+        "current_candid_sha256": "a7a9619e5172e38a94d5b3fb7e22783e0f04ce78840b0dc774621363702065d8",
+        "delta": {
+          "code_section_bytes": 9325,
+          "defined_functions": 11,
+          "raw_bytes": 9563,
+          "gzip_bytes": 4779,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "index_hub",
+        "previous_sha256": "bce4cc53bd17cb5b57a962ece7dbea3d178b13fb712980038a62fd833c435620",
+        "current_sha256": "c8e85c491f32e592ca2b47e9d6efc17d83ee000fbbe6650b21c0f43a6874b944",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_index",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_index",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "fab1afbf2439b1a10d5778a6c5b2e8275f06dd8f7b8d582d7e75dd05406a56a9",
+        "current_candid_sha256": "abc6fe9d72b18566b3b5768f77f72c898f7295f441e6112cc04d549c2b1d141c",
+        "delta": {
+          "code_section_bytes": 9330,
+          "defined_functions": 13,
+          "raw_bytes": 9578,
+          "gzip_bytes": 3884,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "leaf_probe",
+        "previous_sha256": "502bd6ac0eafb9d7e8c2f21ac17d1e69c488503461cb4b807362eb5160b4a460",
+        "current_sha256": "922a842ab100f76a47d0015a420424a78f7216b61426035af4d7d9dc855318d2",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "64e24fcba0c39b1a4b29763e253bfdb75b9b6cc9f9a14ec6592566e9a69bdc4a",
+        "current_candid_sha256": "ef5382dd0e154bfd5d255c727069ee04e932922695bf9c6d4728fd6fb253398a",
+        "delta": {
+          "code_section_bytes": 9392,
+          "defined_functions": 11,
+          "raw_bytes": 9622,
+          "gzip_bytes": 4329,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "payload_limit_probe",
+        "previous_sha256": "e6b19d8ec68b3dd92116517fb261618e873d89de535edb53d685eafaea30447d",
+        "current_sha256": "fbee2a323642a334b0ef61b9f5d2ef473a7a9f08fff58eb031f9dce0f511db92",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "33db70d1aa707d69a2202e3b120c1991079f5dcf76891b47e35fda5fbe187d74",
+        "current_candid_sha256": "c56e00af34806e36b66875b4fa6bdd2cdb7d3260e203c75b23b348add4db8fd6",
+        "delta": {
+          "code_section_bytes": 7632,
+          "defined_functions": 17,
+          "raw_bytes": 7910,
+          "gzip_bytes": 2722,
+          "table_slots": 1,
+          "element_entries": 1
+        }
+      },
+      {
+        "artifact": "root",
+        "previous_sha256": "fb7e51c127255a0424dfc918946a823597908215b2b7ac0205aeccb9ffa917d1",
+        "current_sha256": "eadf004e00904dbd8aed8ca41e1efe9352e58bfb2ce534e44ccba063ab68834e",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_role_attestation_signer",
+          "cargo:rustc-cfg=canic_capability_root",
+          "cargo:rustc-cfg=canic_capability_root_control_plane",
+          "cargo:rustc-cfg=canic_capability_root_delegation",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_is_root",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_platform",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_role_attestation_signer",
+          "cargo:rustc-cfg=canic_capability_root",
+          "cargo:rustc-cfg=canic_capability_root_control_plane",
+          "cargo:rustc-cfg=canic_capability_root_delegation",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_is_root",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_platform",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "63152816c240c9076835f0a61a81b29ddf7a5cfc066242dfe9f28a3818a7c998",
+        "current_candid_sha256": "8f893182ca656b863af5d4bade910931ee80b953774aadf75666c9d1c9bca375",
+        "delta": {
+          "code_section_bytes": 30026,
+          "defined_functions": -27,
+          "raw_bytes": 32395,
+          "gzip_bytes": 21145,
+          "table_slots": -4,
+          "element_entries": -4
+        }
+      },
+      {
+        "artifact": "runtime_probe",
+        "previous_sha256": "4be7e1feeeefe6536f6f48fe83bbd1e39c1448162971d2332c17868915000f2e",
+        "current_sha256": "fd5d7014186bfc287b9bd8d6df8d5b77f9a7f8e6c5377fac644975f286d0a42d",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "1e44b40a272d936d043a7323cbd1007b8fff3d6ca80310bce11e59f39ef1b3e5",
+        "current_candid_sha256": "250408ceaaa3a26690a517fb95747ec60d28bb6527c02de233c0ae7de7a45f5a",
+        "delta": {
+          "code_section_bytes": 6387,
+          "defined_functions": -4,
+          "raw_bytes": 6663,
+          "gzip_bytes": 3003,
+          "table_slots": 1,
+          "element_entries": 1
+        }
+      },
+      {
+        "artifact": "scale_hub",
+        "previous_sha256": "cd059fb5e33ad4dfe3648c5240820c5abdc1063f0a5f7e7795847cfa520dda7e",
+        "current_sha256": "750415a66b6d967f15b2a40b73b64d78929006876eacf1dd3dd6e1a1ab5e990f",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_scaling",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_scaling",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "bb1f480048160468aa2454234023d9daf03d7a287714085e9e20900539622639",
+        "current_candid_sha256": "1a8d5ba7098a69ddba75e78af3ebc59701b8d0db0855bec02eb503f5f451878f",
+        "delta": {
+          "code_section_bytes": 8594,
+          "defined_functions": 13,
+          "raw_bytes": 8834,
+          "gzip_bytes": 4214,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "scale_replica",
+        "previous_sha256": "480de1c7d659b6a619c0f9bae7bcbd79c393751f4c12b9c417ba23fe5e7a925f",
+        "current_sha256": "4683dfb367759336a7ec2646cba9abb72b4df7fe9766a0204b68669518c0934e",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "f792ced49b8db92082ca04d3c00b4bfa7dd93594c48a73bd7e7ce04dd0cce198",
+        "current_candid_sha256": "f1ccbcbe3f9787b8e36d70e21cbd8b88a40373e6b9623bdcd7502cef3a0ca07f",
+        "delta": {
+          "code_section_bytes": 8170,
+          "defined_functions": 13,
+          "raw_bytes": 8402,
+          "gzip_bytes": 3019,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "test",
+        "previous_sha256": "0c1dd733d8c13e0b7ec71794563eb4706ff97ade6389331d0050f60eaf32a8d9",
+        "current_sha256": "9a233c2ead07149067128b3ced3db77a3674210875c3e2ed865012631cbfd848",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_fleet_admission_projection",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_fleet_admission_projection",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "8e8aa9baaf1b3397c2c4588ef98b1b6b2a227f7960cd8020f9fb1ac5297e4fdf",
+        "current_candid_sha256": "e75f33045f0bb8860717830e632870cf204e48d25293626758198b85fdfbe6e9",
+        "delta": {
+          "code_section_bytes": 7425,
+          "defined_functions": -10,
+          "raw_bytes": 7631,
+          "gzip_bytes": 4742,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "user_hub",
+        "previous_sha256": "16ed7319686ee62fdb9766419edf69e69ef7510b5e6c3731aeda722d9ead5e6a",
+        "current_sha256": "c835ca663c577dd9bea70abda4a9ed0ff1456cc4090cc60ad48d0324d23899a7",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_sharding",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_sharding",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_placement",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "f6e91d524b5dafa890eb2d17ab96fee7f594599142b9c7e180bcf00719db3d8c",
+        "current_candid_sha256": "b69a133dc5eb565e769557b55b0b77606946127f7a3788ed1057088cd3b0b388",
+        "delta": {
+          "code_section_bytes": 9616,
+          "defined_functions": 11,
+          "raw_bytes": 9863,
+          "gzip_bytes": 4964,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "user_shard",
+        "previous_sha256": "2de69002df102849e47410ec083133829be35d10d857dc14e53cdada3ed9fc08",
+        "current_sha256": "bc60e9b98c803a265fbb974823a3455ebc08bb8d9d8db04cd9adbafbf1abd7fa",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_issuer",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_automatic_topup",
+          "cargo:rustc-cfg=canic_capability_delegated_token_issuer",
+          "cargo:rustc-cfg=canic_capability_delegated_token_verifier",
+          "cargo:rustc-cfg=canic_capability_icrc21",
+          "cargo:rustc-cfg=canic_capability_role_attestation_verifier",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_icrc21_enabled",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_security"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "d920381516f298a56f2ed22cd7aacbb125838a6bfe19d5459bd8d2ce6a7fcac3",
+        "current_candid_sha256": "937599e9405d45a0ca921c942660e9b0e7630a7f825ee567a39dbbdf1fc19ec1",
+        "delta": {
+          "code_section_bytes": 7079,
+          "defined_functions": -10,
+          "raw_bytes": 7298,
+          "gzip_bytes": 4208,
+          "table_slots": 0,
+          "element_entries": 0
+        }
+      },
+      {
+        "artifact": "wasm_store",
+        "previous_sha256": "fad539ad29bdb4d96cc3e3da6d7952c3a8a899af15a9ad518d2636def46e809d",
+        "current_sha256": "b7a45e5f0d686dcd3e97e1b487ce618c3c9aa245a156baa9796989dfb58fdaf8",
+        "exports_preserved": true,
+        "capabilities_preserved": true,
+        "current_capabilities": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_wasm_store",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "previous_capabilities": [
+          "cargo:rustc-cfg=canic_capability_child_provisioning",
+          "cargo:rustc-cfg=canic_capability_runtime",
+          "cargo:rustc-cfg=canic_capability_wasm_store",
+          "cargo:rustc-cfg=canic_metrics_core",
+          "cargo:rustc-cfg=canic_metrics_runtime",
+          "cargo:rustc-cfg=canic_metrics_storage"
+        ],
+        "candid_changed": true,
+        "previous_candid_sha256": "8b120c99f522e8c204898b1043f9df7408c7eeef57fd389796493c3f45b2aebc",
+        "current_candid_sha256": "e1c4b81922a3db87f82eb2c5068575239c991ccc530ee8794e63a016933eac12",
+        "delta": {
+          "code_section_bytes": 11597,
+          "defined_functions": 17,
+          "raw_bytes": 12881,
+          "gzip_bytes": 3358,
+          "table_slots": 1,
+          "element_entries": 1
+        }
+      }
+    ]
+  },
+  "generic_summary": {
+    "artifacts": [
+      {
+        "artifact": "app",
+        "body_count": 4638,
+        "generic_instances": 2368,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "blob_storage_probe",
+        "body_count": 3843,
+        "generic_instances": 1763,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "fleet_coordinator",
+        "body_count": 5088,
+        "generic_instances": 2906,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "index_child",
+        "body_count": 4632,
+        "generic_instances": 2354,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "index_hub",
+        "body_count": 4835,
+        "generic_instances": 2539,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "leaf_probe",
+        "body_count": 4670,
+        "generic_instances": 2379,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "payload_limit_probe",
+        "body_count": 3560,
+        "generic_instances": 1603,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "root",
+        "body_count": 9854,
+        "generic_instances": 6543,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "runtime_probe",
+        "body_count": 4660,
+        "generic_instances": 1985,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "scale_hub",
+        "body_count": 4806,
+        "generic_instances": 2514,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "scale_replica",
+        "body_count": 4656,
+        "generic_instances": 2383,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "test",
+        "body_count": 5117,
+        "generic_instances": 2423,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "user_hub",
+        "body_count": 5064,
+        "generic_instances": 2654,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "user_shard",
+        "body_count": 5403,
+        "generic_instances": 2556,
+        "bijection_verified": true
+      },
+      {
+        "artifact": "wasm_store",
+        "body_count": 4760,
+        "generic_instances": 2399,
+        "bijection_verified": true
+      }
+    ],
+    "all_bijections_verified": true
+  },
+  "table_comparison": [
+    {
+      "artifact": "app",
+      "before_entries": 974,
+      "after_entries": 974,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "blob_storage_probe",
+      "before_entries": 845,
+      "after_entries": 845,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "fleet_coordinator",
+      "before_entries": 991,
+      "after_entries": 992,
+      "delta": 1,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        },
+        {
+          "name": "<candid::types::internal::TypeId>::of::<alloc::boxed::Box<canic_core::dto::fleet_registry::FleetRegistryVersion>>",
+          "before": 0,
+          "after": 1,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "index_child",
+      "before_entries": 962,
+      "after_entries": 962,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "index_hub",
+      "before_entries": 975,
+      "after_entries": 975,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "leaf_probe",
+      "before_entries": 983,
+      "after_entries": 983,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "payload_limit_probe",
+      "before_entries": 786,
+      "after_entries": 787,
+      "delta": 1,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        },
+        {
+          "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<ic_principal::Principal>>",
+          "before": 0,
+          "after": 1,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "root",
+      "before_entries": 1729,
+      "after_entries": 1725,
+      "delta": -4,
+      "changes": [
+        {
+          "name": "<&alloc::string::String as core::fmt::Debug>::fmt",
+          "before": 3,
+          "after": 2,
+          "delta": -1
+        },
+        {
+          "name": "<canic_core::cdk::serialize::SerializeError as core::fmt::Debug>::fmt",
+          "before": 2,
+          "after": 1,
+          "delta": -1
+        },
+        {
+          "name": "<ic_memory::registry::StaticMemoryDeclarationError as core::fmt::Debug>::fmt",
+          "before": 2,
+          "after": 1,
+          "delta": -1
+        },
+        {
+          "name": "<ic_memory::runtime::error::RuntimeOpenError as core::fmt::Debug>::fmt",
+          "before": 2,
+          "after": 1,
+          "delta": -1
+        },
+        {
+          "name": "core::ptr::drop_glue::<anyhow::wrapper::MessageError<alloc::string::String>>",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "core::ptr::drop_glue::<canic_core::ids::fleet_topology::FleetRegistryAuthority>",
+          "before": 0,
+          "after": 1,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "runtime_probe",
+      "before_entries": 952,
+      "after_entries": 953,
+      "delta": 1,
+      "changes": [
+        {
+          "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<ic_principal::Principal>>",
+          "before": 0,
+          "after": 1,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "scale_hub",
+      "before_entries": 992,
+      "after_entries": 992,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "scale_replica",
+      "before_entries": 977,
+      "after_entries": 977,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "test",
+      "before_entries": 1036,
+      "after_entries": 1036,
+      "delta": 0,
+      "changes": []
+    },
+    {
+      "artifact": "user_hub",
+      "before_entries": 1023,
+      "after_entries": 1023,
+      "delta": 0,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        }
+      ]
+    },
+    {
+      "artifact": "user_shard",
+      "before_entries": 1074,
+      "after_entries": 1074,
+      "delta": 0,
+      "changes": []
+    },
+    {
+      "artifact": "wasm_store",
+      "before_entries": 925,
+      "after_entries": 926,
+      "delta": 1,
+      "changes": [
+        {
+          "name": "<alloc::string::String as core::fmt::Write>::write_str",
+          "before": 7,
+          "after": 6,
+          "delta": -1
+        },
+        {
+          "name": "<candid::error::Error as core::fmt::Debug>::fmt",
+          "before": 1,
+          "after": 2,
+          "delta": 1
+        },
+        {
+          "name": "<candid::types::internal::TypeId>::of::<alloc::vec::Vec<ic_principal::Principal>>",
+          "before": 0,
+          "after": 1,
+          "delta": 1
+        }
+      ]
+    }
+  ],
+  "generic_cohort_disposition": {
+    "decision": "retain",
+    "accepted_widths": [
+      1,
+      2,
+      3,
+      4,
+      5
+    ],
+    "current_source_check": "proofs/cohort-source-check.log",
+    "current_named_page_bodies": "proofs/page-family.json",
+    "limits": "Current generic-name scan includes generic and trait-instance candidates. B1 cohort deltas remain historical; no new slope or disjoint savings claim."
+  },
+  "interface_disposition": {
+    "exports_preserved": true,
+    "capabilities_preserved": true,
+    "maintained_canonical_candid_equal": true,
+    "intentional_candid_changes": [
+      "FleetCoordinatorBinding.recovery_controllers in all fifteen surfaces",
+      "ProvisioningFailureOrigin.retry_at_ns in Coordinator"
+    ],
+    "repeat_records": "repeat-verification.json"
+  },
+  "instructions": {
+    "schema_version": 1,
+    "baseline_exact": true,
+    "repeat_exact": true,
+    "matrix_nonempty": true,
+    "matrix_identity_complete": true,
+    "allowance_percent": 1,
+    "exception_authority": "2026-09-23 accepted B2 full-query vectors; fixed checkpoint, no rolling allowance",
+    "rows": [
+      {
+        "rows": 1,
+        "lifecycle": "install",
+        "access": 0,
+        "export": {
+          "before": 6748025,
+          "after": 6749115,
+          "percent": 0.016152874359542935,
+          "pass": true
+        },
+        "full_query": {
+          "before": 919559,
+          "accepted_b2": 919733,
+          "after": 919952,
+          "percent_from_frozen": 0.0427378776130638,
+          "percent_from_accepted": 0.023811258267336655,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 1639336
+      },
+      {
+        "rows": 1,
+        "lifecycle": "install",
+        "access": 1,
+        "export": {
+          "before": 6012629,
+          "after": 6016033,
+          "percent": 0.056614169941293646,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1004041,
+          "accepted_b2": 1002956,
+          "after": 1003175,
+          "percent_from_frozen": -0.08625145785878807,
+          "percent_from_accepted": 0.021835454396801346,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 1652644
+      },
+      {
+        "rows": 1,
+        "lifecycle": "same_wasm_restore",
+        "access": 0,
+        "export": {
+          "before": 6571834,
+          "after": 6513570,
+          "percent": -0.8865713893564608,
+          "pass": true
+        },
+        "full_query": {
+          "before": 919145,
+          "accepted_b2": 918114,
+          "after": 918333,
+          "percent_from_frozen": -0.0883429709131911,
+          "percent_from_accepted": 0.023853246982397103,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 1478412
+      },
+      {
+        "rows": 1,
+        "lifecycle": "same_wasm_restore",
+        "access": 1,
+        "export": {
+          "before": 6006983,
+          "after": 6015350,
+          "percent": 0.13928789210824188,
+          "pass": true
+        },
+        "full_query": {
+          "before": 924071,
+          "accepted_b2": 1001492,
+          "after": 1001711,
+          "percent_from_frozen": 8.401951798076123,
+          "percent_from_accepted": 0.021867373878170504,
+          "accepted_exception": true,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 1487300
+      },
+      {
+        "rows": 211,
+        "lifecycle": "install",
+        "access": 0,
+        "export": {
+          "before": 15730085,
+          "after": 15738146,
+          "percent": 0.05124574978456753,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1082510,
+          "accepted_b2": 1000843,
+          "after": 1001062,
+          "percent_from_frozen": -7.523995159398067,
+          "percent_from_accepted": 0.021881553850100488,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5292700
+      },
+      {
+        "rows": 211,
+        "lifecycle": "install",
+        "access": 1,
+        "export": {
+          "before": 13079064,
+          "after": 13081045,
+          "percent": 0.015146343805638729,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1084015,
+          "accepted_b2": 1161564,
+          "after": 1161783,
+          "percent_from_frozen": 7.174070469504579,
+          "percent_from_accepted": 0.01885389009990135,
+          "accepted_exception": true,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5292700
+      },
+      {
+        "rows": 211,
+        "lifecycle": "same_wasm_restore",
+        "access": 0,
+        "export": {
+          "before": 15408004,
+          "after": 15511610,
+          "percent": 0.6724167517090374,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1081256,
+          "accepted_b2": 1080811,
+          "after": 1081030,
+          "percent_from_frozen": -0.02090161811818536,
+          "percent_from_accepted": 0.02026256209457511,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5292729
+      },
+      {
+        "rows": 211,
+        "lifecycle": "same_wasm_restore",
+        "access": 1,
+        "export": {
+          "before": 13242170,
+          "after": 13245743,
+          "percent": 0.026981982560259077,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1084999,
+          "accepted_b2": 1080901,
+          "after": 1081120,
+          "percent_from_frozen": -0.35751185024133214,
+          "percent_from_accepted": 0.020260874955235764,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5292729
+      },
+      {
+        "rows": 256,
+        "lifecycle": "install",
+        "access": 0,
+        "export": {
+          "before": 16200336,
+          "after": 16208992,
+          "percent": 0.05343099056711598,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1079899,
+          "accepted_b2": 1159757,
+          "after": 1159976,
+          "percent_from_frozen": 7.415230498407732,
+          "percent_from_accepted": 0.01888326606349633,
+          "accepted_exception": true,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5294592
+      },
+      {
+        "rows": 256,
+        "lifecycle": "install",
+        "access": 1,
+        "export": {
+          "before": 13903177,
+          "after": 13899120,
+          "percent": -0.02918038085827357,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1243382,
+          "accepted_b2": 1323390,
+          "after": 1323609,
+          "percent_from_frozen": 6.452321169198205,
+          "percent_from_accepted": 0.01654840976583749,
+          "accepted_exception": true,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5294592
+      },
+      {
+        "rows": 256,
+        "lifecycle": "same_wasm_restore",
+        "access": 0,
+        "export": {
+          "before": 16046094,
+          "after": 16149593,
+          "percent": 0.6450105552167296,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1319267,
+          "accepted_b2": 1238675,
+          "after": 1238894,
+          "percent_from_frozen": -6.092246679406066,
+          "percent_from_accepted": 0.01768018245302816,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5294592
+      },
+      {
+        "rows": 256,
+        "lifecycle": "same_wasm_restore",
+        "access": 1,
+        "export": {
+          "before": 13894258,
+          "after": 13984630,
+          "percent": 0.6504269605472901,
+          "pass": true
+        },
+        "full_query": {
+          "before": 1243336,
+          "accepted_b2": 1241084,
+          "after": 1241303,
+          "percent_from_frozen": -0.16351171364780148,
+          "percent_from_accepted": 0.01764586442174476,
+          "accepted_exception": false,
+          "pass": true
+        },
+        "history_points": 1,
+        "history_reserved_bytes": 5294592
+      }
+    ],
+    "lifecycle": [
+      {
+        "rows": 1,
+        "lifecycle": "install",
+        "before": 11466352,
+        "after": 9330061,
+        "percent": -18.630956035537714,
+        "pass": true
+      },
+      {
+        "rows": 1,
+        "lifecycle": "same_wasm_restore",
+        "before": 12444023,
+        "after": 11171675,
+        "percent": -10.224571266060822,
+        "pass": true
+      },
+      {
+        "rows": 211,
+        "lifecycle": "install",
+        "before": 11466352,
+        "after": 9330061,
+        "percent": -18.630956035537714,
+        "pass": true
+      },
+      {
+        "rows": 211,
+        "lifecycle": "same_wasm_restore",
+        "before": 12444023,
+        "after": 11171675,
+        "percent": -10.224571266060822,
+        "pass": true
+      },
+      {
+        "rows": 256,
+        "lifecycle": "install",
+        "before": 11466352,
+        "after": 9330061,
+        "percent": -18.630956035537714,
+        "pass": true
+      },
+      {
+        "rows": 256,
+        "lifecycle": "same_wasm_restore",
+        "before": 12444023,
+        "after": 11171675,
+        "percent": -10.224571266060822,
+        "pass": true
+      }
+    ],
+    "lifecycle_identity_complete": true,
+    "pass": true
+  },
+  "limits": {
+    "code_bytes": 10485760,
+    "minimum_code_headroom": 524288,
+    "defined_functions": 50000,
+    "minimum_function_headroom": 2500,
+    "total_module_bytes_exclusive": 104857600,
+    "instruction_allowance_percent": 1
+  },
+  "representative_proofs": {
+    "environment": {
+      "CANIC_TEST_ICP_BIN": "/tmp/canic-icp-1.6.0-bin/icp",
+      "CARGO_BUILD_JOBS": 2,
+      "CARGO_INCREMENTAL": 0,
+      "CARGO_NET_OFFLINE": "true",
+      "POCKET_IC_BIN": "/home/adam/.cache/canic/pocket-ic-server-16.0.0/pocket-ic",
+      "RUSTC_WRAPPER": ""
+    },
+    "limits": "Elapsed and RSS include compilation and concurrent isolated-target work; no matched full-suite performance or resource claim.",
+    "proofs": [
+      {
+        "command": "bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects",
+        "command_elapsed": "5:01.87",
+        "command_max_rss_kib": 3368028,
+        "exit_status": 0,
+        "id": "fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects",
+        "invariant": "Fresh creation, direct recovery-controller management access after interruption, and effect-free replay",
+        "kind": "pocketic",
+        "log": "proofs/fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects.log",
+        "observed_passed_tests": 1,
+        "resources": "proofs/fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects.resources.txt",
+        "result": "pass",
+        "server_resources": {
+          "high_water_kib": 238592,
+          "rss_kib": 238592,
+          "threads": 19
+        },
+        "test_seconds": 1.43
+      },
+      {
+        "command": "bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic lifecycle_boundary",
+        "command_elapsed": "4:24.78",
+        "command_max_rss_kib": 2472720,
+        "exit_status": 0,
+        "id": "lifecycle_boundary",
+        "invariant": "All registered lifecycle-boundary cases: admission, trap rollback, same-release retry and changed-release rejection",
+        "kind": "pocketic",
+        "log": "proofs/lifecycle_boundary.log",
+        "observed_passed_tests": 7,
+        "resources": "proofs/lifecycle_boundary.resources.txt",
+        "result": "pass",
+        "server_resources": {
+          "high_water_kib": 423332,
+          "rss_kib": 418300,
+          "threads": 22
+        },
+        "test_seconds": 19.57
+      },
+      {
+        "command": "bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+        "command_elapsed": "5:54.08",
+        "command_max_rss_kib": 2539496,
+        "exit_status": 0,
+        "id": "pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership",
+        "invariant": "Real Coordinator/Root/Store provisioning, lost-response correlation, initial-shard bootstrap and terminal membership",
+        "kind": "pocketic",
+        "log": "proofs/pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership.log",
+        "observed_passed_tests": 1,
+        "resources": "proofs/pic::fleet_registry::baseline::tests::prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership.resources.txt",
+        "result": "pass",
+        "server_resources": {
+          "high_water_kib": 588088,
+          "rss_kib": 512820,
+          "threads": 19
+        },
+        "test_seconds": 62.19
+      },
+      {
+        "command": "bash scripts/ci/verify-packaged-downstream-wasm-store.sh",
+        "command_elapsed": "12:14.10",
+        "command_max_rss_kib": 2430304,
+        "exit_status": 0,
+        "fixture_root": "isolated disposable /tmp directory, removed by governed script",
+        "id": "packaged-consumer",
+        "invariant": "Packaged public testing facade and consumer Wasm at MSRV; generated Coordinator, Root and Store without repository crate paths",
+        "kind": "packaged_compile",
+        "log": "proofs/packaged-consumer.log",
+        "resources": "proofs/packaged-consumer.resources.txt",
+        "result": "pass"
+      },
+      {
+        "cargo_profile": "fast",
+        "command": "bash scripts/ci/run-with-test-scratch.sh bash scripts/ci/run-workspace-tests.sh targeted-pocketic fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects",
+        "command_elapsed": "0:02.91",
+        "command_max_rss_kib": 239104,
+        "exit_status": 0,
+        "id": "stable-rejection",
+        "invariant": "Explicit real module, non-empty stable memory, controller, cycle, version and workflow observations across typed policy rejection, with valid controls and corrected replay",
+        "kind": "pocketic",
+        "log": "proofs/stable-rejection.log",
+        "observed_passed_tests": 1,
+        "resources": "proofs/stable-rejection.resources.txt",
+        "result": "pass",
+        "scope": "Synthetic management-backed estate; same frozen production source, supplemented cfg(test) case only",
+        "server_resources": {
+          "high_water_kib": 239104,
+          "rss_kib": 239104,
+          "threads": 19
+        },
+        "test_only_overlay": "method/stable-rejection-overlay.patch",
+        "test_seconds": 1.17
+      }
+    ],
+    "schema_version": 1
+  },
+  "residual_inventory": {
+    "file": "residual-inventory.json",
+    "sha256": "6f24c09508a4b80826e6c7fdf7d9191da162e84c5b0a00506be8ff927518f6b7",
+    "qualification": "final_artifact_correlated",
+    "optimized_absence_claim": false,
+    "byte_savings_claim": false
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "finding_status": "fixed",
+      "evidence": "Final clean matrix, interfaces/instructions, consumer and representative recovery records"
+    },
+    {
+      "id": "F2",
+      "finding_status": "fixed",
+      "evidence": "Final optimized correspondence and source-owned residual inventory"
+    },
+    {
+      "id": "F3",
+      "finding_status": "fixed",
+      "evidence": "Mandatory manifest transition mode, digest binding, 49 scoped native regressions, current lifecycle rejection/retry and explicit PocketIC stable-state observations"
+    }
+  ],
+  "native_proofs": "proofs/final-native-summary.json",
+  "supplemental_test_overlay": {
+    "manifest": "proofs/stable-rejection-overlay.json",
+    "patch": "method/stable-rejection-overlay.patch",
+    "observations": "proofs/stable-rejection-observations.json",
+    "overlay_changes_production_source": false
+  },
+  "discovered_defect": {
+    "finding": "Terminal replay without continuation authority performed paid status reads before policy rejection",
+    "observed_debit_per_canister": "1526000",
+    "before": "proofs/stable-rejection-trace-before-fix.log",
+    "correction": "method/zero-read-correction.patch",
+    "source_delta": "proofs/zero-read-source-delta.json",
+    "native_regressions": "proofs/zero-read-native.log",
+    "clippy": "proofs/zero-read-clippy-result.json",
+    "status": "fixed",
+    "recovery_boundary": "Exact Root-start uses retained installed authority without requiring application build files. Full release scopes require the manifest; present malformed policies are rejected."
+  },
+  "build_speed_claim": false,
+  "resource_improvement_claim": false,
+  "validation_envelope": {
+    "inventory_targets": 41,
+    "parallel_targets": 31,
+    "serial_pocketic_targets": 10,
+    "comparison": "B2 had 40/30/10; the sole added integration target is native build_lock_inspection. No PocketIC case was added for this audit correction.",
+    "records": [
+      "proofs/test-inventory.log",
+      "proofs/test-plan.log",
+      "proofs/test-inventory.diff"
+    ],
+    "scope": "Current registered membership and serial execution preserved; selected elapsed/RSS/thread observations retained. No matched full-suite speed or resource claim."
+  },
+  "records": {
+    "file": "b5-qualification-records.tar.gz",
+    "sha256": "36baeb7b68c11e9bd69bcfb9cf6859b0e5dde087dfa7d48fbca22e203105be72"
+  },
+  "limitations": [
+    "Qualification is bound to the dirty candidate, not a published validation receipt. Version, commit, tag, push and deployment were not performed.",
+    "B1 remains accepted, B2 complete with its exact four accepted query exceptions, B3 stopped and further B4 pruning deferred. Residuals are not declared absent.",
+    "Same-release lifecycle/recovery proofs use their registered fixture recipes; no application adoption, historical upgrade or live Fleet controller change is qualified.",
+    "Native zero-effect policy tests establish the host boundary; the separate test-only overlay adds explicit PocketIC module/stable/controller/cycle/version and workflow observations on a synthetic management-backed estate.",
+    "Final optimized generic bodies are correlated, but the historical width cohort was not rerun and no new downstream slope is inferred.",
+    "Raw large Wasm/WAT build products remain local; retained hashes, methods and source overlays reproduce the measured candidate.",
+    "Final clean repetitions use identical matrix-product paths. Generated roles retain absolute diagnostic paths in data; no cross-path reproducibility claim is made against the first product-path checkpoint.",
+    "The shell default icp still reports 1.5.0. Governed qualification explicitly selects the checksum-bound native 1.6.0 binary.",
+    "Human acceptance of this exact 0.110 verdict remains required before 0.111 implementation."
+  ]
+}

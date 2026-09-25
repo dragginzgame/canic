@@ -179,10 +179,11 @@ fn protected_sibling_wasm_store_authority(
 }
 
 fn sibling_wasm_store_controllers(authority: &FleetSubnetWasmStoreAuthority) -> Vec<Principal> {
-    let mut controllers = vec![
+    let mut controllers = authority.authority.binding.recovery_controllers.clone();
+    controllers.extend([
         authority.installation_controller,
         authority.fleet_subnet_root,
-    ];
+    ]);
     controllers.sort();
     controllers
 }
@@ -223,7 +224,12 @@ fn sibling_wasm_store_requires_controller_update(
     if observed.controllers == expected {
         return Ok(false);
     }
-    if observed.controllers == [authority.fleet_subnet_root] {
+    if observed.controllers
+        == authority
+            .authority
+            .binding
+            .root_controllers(authority.fleet_subnet_root)
+    {
         return Ok(true);
     }
     Err(InternalError::conflict())
@@ -1746,7 +1752,13 @@ mod tests {
 
     #[test]
     fn sibling_store_controllers_accept_only_exact_reconciler_authority() {
-        let authority = authority().wasm_store_authority;
+        let mut authority = authority().wasm_store_authority;
+        let recovery = candid::Principal::from_slice(&[91; 29]);
+        authority
+            .authority
+            .binding
+            .recovery_controllers
+            .push(recovery);
         let expected = sibling_wasm_store_controllers(&authority);
         let evidence = |controllers| SiblingWasmStoreLiveEvidence { controllers };
 
@@ -1763,10 +1775,23 @@ mod tests {
         assert!(
             sibling_wasm_store_requires_controller_update(
                 &authority,
+                &evidence(
+                    authority
+                        .authority
+                        .binding
+                        .root_controllers(authority.fleet_subnet_root)
+                ),
+                &expected,
+            )
+            .expect("Root plus recovery ownership is the accepted preparation source")
+        );
+        assert!(
+            sibling_wasm_store_requires_controller_update(
+                &authority,
                 &evidence(vec![authority.fleet_subnet_root]),
                 &expected,
             )
-            .expect("Root-only ownership is the one accepted preparation source")
+            .is_err()
         );
         assert!(
             require_sibling_wasm_store_controllers(
@@ -1807,6 +1832,7 @@ mod tests {
                     &[2; 29],
                 )),
                 coordinator: candid::Principal::from_slice(&[3; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         };

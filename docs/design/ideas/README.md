@@ -11,6 +11,7 @@ Supporting implementation evidence does not belong here.
 
 ## Current Topics
 
+- `bounded-multi-fleet-estates/`
 - `cross-subnet-data-transport-groundwork/`
 - `declarative-authentication-profiles/`
 - `demand-driven-canister-pool-maintenance/`
@@ -20,24 +21,27 @@ Supporting implementation evidence does not belong here.
 - `operator-funding-conversion-authority/`
 - `release-binding-finalization/`
 - `role-specific-stable-initialization/`
-- `standalone-blob-service-extraction/`
 
 ## Maintainer Priorities
 
-The two most pressing ideas, identified by the maintainer on 2026-09-06, are:
+The maintainer's priorities, updated on 2026-09-25, are:
 
 1. [Canonical infrastructure crates](../0.110-fleet-runtime-contraction/0.110-design.md#canonical-fleet-subnet-root-batch-cr1):
    give Root one Canic-owned entrypoint and consistent Fleet crate names.
-2. [Standalone blob extraction](standalone-blob-service-extraction/design.md):
-   remove application blob-storage semantics from Canic infrastructure.
+2. [Standalone blob extraction](../0.111-standalone-blob-service-extraction/0.111-design.md):
+   now assigned the next 0.111 roadmap position after accepted 0.110 closeout.
+   External owner, repository, consumer and provider evidence remain to be
+   resolved before implementation depends on an external service.
 
 The operator Component lifecycle, frontend handoff, host-first observatory and
 persistent local Fleet were promoted to 0.110 OP1–OP4 on 2026-09-13 by explicit
 maintainer instruction. Their maintained design and tracker live in 0.110.
 
 Canonical infrastructure was promoted into the current 0.110 CR1 batch on
-2026-09-07 at the maintainer’s request. Standalone blob extraction remains
-deferred; the remaining ideas have no release position.
+2026-09-07 at the maintainer’s request. On 2026-09-25, the maintainer moved
+bounded multi-Fleet estates out of the 0.111 slot and back to this deferred
+collection. It has no release position and does not gate blob extraction.
+The remaining ideas are likewise unscheduled.
 
 ## Review Disposition
 

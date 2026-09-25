@@ -63,6 +63,7 @@ fn authority(fleet_byte: u8) -> FleetRegistryAuthority {
             },
             coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[1; 29])),
             coordinator: Principal::from_slice(&[2; 29]),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     }

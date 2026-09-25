@@ -178,6 +178,7 @@ fn mutation_request_digest_binds_every_authority_field() {
             fleet: fleet(7),
             coordinator_subnet: SubnetId::from_principal(principal(8)),
             coordinator: principal(9),
+            recovery_controllers: Vec::new(),
         },
         expected_generation: 3,
         expected_policy_digest: [4; 32],
@@ -236,6 +237,7 @@ fn mutation_operation_identity_binds_registry_and_exact_successor() {
             fleet: fleet(7),
             coordinator_subnet: SubnetId::from_principal(principal(8)),
             coordinator: principal(9),
+            recovery_controllers: Vec::new(),
         },
         epoch: 10,
     };

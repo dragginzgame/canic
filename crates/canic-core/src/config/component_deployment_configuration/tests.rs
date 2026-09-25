@@ -595,6 +595,7 @@ fn component_binding(component_spec: ComponentSpecId, spec_hash: [u8; 32]) -> Co
                 },
                 coordinator_subnet,
                 coordinator: Principal::from_slice(&[4; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

@@ -108,7 +108,7 @@ pub enum RootStoreBootstrapCommitError {
 
 #[cfg(feature = "root-control-plane")]
 fn sibling_wasm_store_adoption_record_is_valid(record: &SiblingWasmStoreAdoptionRecord) -> bool {
-    let canonical_controllers = record.controllers.len() == 2
+    let canonical_controllers = (2..=10).contains(&record.controllers.len())
         && record.controllers.windows(2).all(|pair| pair[0] < pair[1]);
     [
         record.operation_id != [0; 32],

@@ -172,6 +172,7 @@ fn fixture() -> Fixture {
             fleet: fleet.clone(),
             coordinator_subnet: subnet(1),
             coordinator: principal(30),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

@@ -806,6 +806,7 @@ fn append_root_components(
                 binding.canister_id,
                 &observed,
                 protocol,
+                &binding.authority.binding.recovery_controllers,
             )?;
             Ok(observed)
         },
@@ -1280,6 +1281,7 @@ fn observe_terminal_descendants(
             descendant.child.pid,
             &observed,
             descendant.protocol,
+            &descendant.component.authority.binding.recovery_controllers,
         )?;
         Ok(observed)
     })
@@ -1627,6 +1629,7 @@ fn require_terminal_component_authority(
     canister_id: Principal,
     observed: &CanisterStatusResponse,
     protocol: &ProtocolEntry,
+    recovery_controllers: &[Principal],
 ) -> Result<(), CurrentProtocolError> {
     require_terminal_component_values(
         root,
@@ -1635,6 +1638,7 @@ fn require_terminal_component_authority(
         &observed.settings.controllers,
         observed.module_hash.as_deref(),
         protocol,
+        recovery_controllers,
     )
 }
 
@@ -1645,6 +1649,7 @@ fn require_terminal_component_values(
     controllers: &[Principal],
     module_hash: Option<&[u8]>,
     protocol: &ProtocolEntry,
+    recovery_controllers: &[Principal],
 ) -> Result<(), CurrentProtocolError> {
     if status != CanisterStatusType::Running {
         return Err(CurrentProtocolError::TerminalCanisterStatus {
@@ -1653,12 +1658,16 @@ fn require_terminal_component_values(
             observed: status,
         });
     }
-    let expected = vec![root];
-    if controllers != expected {
+    let mut expected = recovery_controllers.to_vec();
+    expected.push(root);
+    expected.sort_unstable();
+    let mut actual = controllers.to_vec();
+    actual.sort_unstable();
+    if actual != expected {
         return Err(CurrentProtocolError::TerminalCanisterControllers {
             canister: canister_id,
             expected,
-            observed: controllers.to_vec(),
+            observed: actual,
         });
     }
     require_current_module(canister_id, module_hash, protocol)
@@ -2141,7 +2150,7 @@ mod tests {
     }
 
     #[test]
-    fn terminal_component_requires_running_root_only_authority() {
+    fn terminal_component_requires_running_exact_authority() {
         let root = Principal::from_slice(&[7; 29]);
         let component = Principal::from_slice(&[8; 29]);
         let foreign = Principal::from_slice(&[9; 29]);
@@ -2149,38 +2158,40 @@ mod tests {
         let protocol = protocol_entry(&hex_bytes(expected_hash));
 
         assert!(matches!(
-            require_terminal_component_values(
-                root,
-                component,
-                CanisterStatusType::Stopped,
-                &[root],
-                Some(&expected_hash),
-                &protocol,
-            ),
-            Err(CurrentProtocolError::TerminalCanisterStatus {
-                canister,
-                expected: CanisterStatusType::Running,
-                observed: CanisterStatusType::Stopped,
-            }) if canister == component
-        ));
+                    require_terminal_component_values(
+                        root,
+                        component,
+                        CanisterStatusType::Stopped,
+                        &[root],
+                        Some(&expected_hash),
+                        &protocol,
+                        &[],
+        ),
+                    Err(CurrentProtocolError::TerminalCanisterStatus {
+                        canister,
+                        expected: CanisterStatusType::Running,
+                        observed: CanisterStatusType::Stopped,
+                    }) if canister == component
+                ));
 
         assert!(matches!(
-            require_terminal_component_values(
-                root,
-                component,
-                CanisterStatusType::Running,
-                &[root, foreign],
-                Some(&expected_hash),
-                &protocol,
-            ),
-            Err(CurrentProtocolError::TerminalCanisterControllers {
-                canister,
-                expected,
-                observed,
-            }) if canister == component
-                && expected == [root]
-                && observed == [root, foreign]
-        ));
+                    require_terminal_component_values(
+                        root,
+                        component,
+                        CanisterStatusType::Running,
+                        &[root, foreign],
+                        Some(&expected_hash),
+                        &protocol,
+                        &[],
+        ),
+                    Err(CurrentProtocolError::TerminalCanisterControllers {
+                        canister,
+                        expected,
+                        observed,
+                    }) if canister == component
+                        && expected == [root]
+                        && observed == [root, foreign]
+                ));
 
         require_terminal_component_values(
             root,
@@ -2189,8 +2200,32 @@ mod tests {
             &[root],
             Some(&expected_hash),
             &protocol,
+            &[],
         )
         .expect("running Component with exact Root-only authority");
+        let recovery = Principal::from_slice(&[10; 29]);
+        require_terminal_component_values(
+            root,
+            component,
+            CanisterStatusType::Running,
+            &[recovery, root],
+            Some(&expected_hash),
+            &protocol,
+            &[recovery],
+        )
+        .expect("terminal Component retains its recovery controller");
+        assert!(matches!(
+            require_terminal_component_values(
+                root,
+                component,
+                CanisterStatusType::Running,
+                &[root],
+                Some(&expected_hash),
+                &protocol,
+                &[recovery],
+            ),
+            Err(CurrentProtocolError::TerminalCanisterControllers { .. })
+        ));
     }
 
     #[test]
@@ -2783,6 +2818,7 @@ mod tests {
                 fleet: fleet.clone(),
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[4; 29])),
                 coordinator,
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         };

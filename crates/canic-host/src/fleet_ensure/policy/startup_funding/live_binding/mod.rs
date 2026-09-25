@@ -118,6 +118,7 @@ pub(in crate::fleet_ensure) fn selected(
             },
             coordinator_subnet: bootstrap.coordinator_subnet,
             coordinator: principal(&bootstrap.coordinator)?,
+            recovery_controllers: bootstrap.recovery_controllers.clone(),
         },
         root: principal(root_name)?,
         subnet: root.placement_subnet,

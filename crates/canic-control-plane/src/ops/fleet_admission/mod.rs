@@ -2184,6 +2184,7 @@ mod tests {
             fleet: fleet.clone(),
             coordinator_subnet: SubnetId::from_principal(principal(4)),
             coordinator: principal(5),
+            recovery_controllers: Vec::new(),
         };
         let policy = crate::test_support::fleet_admission_policy(fleet);
         let registry = FleetRegistry {

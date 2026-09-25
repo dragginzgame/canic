@@ -352,3 +352,157 @@ fn protected_request_receipts_preserve_child_subject_parent_and_incomplete_pairs
     assert_eq!(events.last().unwrap()["data"]["state"], "interrupted");
     fs::remove_dir_all(root).unwrap();
 }
+
+fn request(succeeded: Option<bool>) -> canic_host::icp::IcpRequestTiming {
+    canic_host::icp::IcpRequestTiming {
+        request_id: 10,
+        parent_request_id: None,
+        kind: canic_host::icp::IcpRequestKind::Status,
+        target: Some(candid::Principal::from_slice(&[1]).to_text()),
+        subject: None,
+        method: None,
+        elapsed_micros: 0,
+        in_flight: 1,
+        succeeded,
+    }
+}
+
+#[test]
+fn unfinished_request_without_an_open_observation_marks_timing_evidence_partial() {
+    let (root, mut receipt, path) = fixture();
+    receipt.request(&request(None));
+    receipt.finish(None);
+    let mut summary = Vec::new();
+    receipt.write_summary(&mut summary, "failed", None).unwrap();
+    assert!(
+        String::from_utf8(summary)
+            .unwrap()
+            .contains("timing evidence partial")
+    );
+    let events = read(&path);
+    assert_eq!(
+        events.last().unwrap()["data"]["timing_evidence_complete"],
+        false
+    );
+    drop(receipt);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn overlapping_requests_finish_independently_and_failed_replies_retain_complete_timings() {
+    let (root, mut receipt, path) = fixture();
+    let mut first = request(None);
+    let mut second = request(None);
+    second.request_id += 1;
+    second.in_flight = 2;
+    receipt.observation(&observation(None));
+    receipt.request(&first);
+    receipt.request(&second);
+    first.succeeded = Some(false);
+    receipt.request(&first);
+    assert!(!receipt.timing_evidence_complete());
+    second.succeeded = Some(true);
+    receipt.request(&second);
+    receipt.observation(&observation(Some(false)));
+    receipt.finish(None);
+    let events = read(&path);
+    let outcome = &events.last().unwrap()["data"];
+    assert_eq!(outcome["state"], "failed");
+    assert_eq!(outcome["timing_evidence_complete"], true);
+    drop(receipt);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn duplicate_starts_and_unmatched_completions_leave_partial_evidence() {
+    for kind in [
+        "request_duplicate",
+        "request_completion",
+        "observation_duplicate",
+        "observation_completion",
+    ] {
+        let (root, mut receipt, path) = fixture();
+        match kind {
+            "request_duplicate" => {
+                receipt.request(&request(None));
+                receipt.request(&request(None));
+                receipt.request(&request(Some(true)));
+            }
+            "request_completion" => receipt.request(&request(Some(true))),
+            "observation_duplicate" => {
+                receipt.observation(&observation(None));
+                receipt.observation(&observation(None));
+                receipt.observation(&observation(Some(true)));
+            }
+            _ => receipt.observation(&observation(Some(true))),
+        }
+        receipt.finish(None);
+        let events = read(&path);
+        assert_eq!(
+            events.last().unwrap()["data"]["timing_evidence_complete"],
+            false,
+            "{kind}"
+        );
+        drop(receipt);
+        fs::remove_dir_all(root).unwrap();
+    }
+}
+
+#[test]
+fn finalized_receipt_ignores_late_callbacks_in_both_file_and_summary() {
+    let (root, mut receipt, path) = fixture();
+    receipt.observation(&observation(None));
+    receipt.observation(&observation(Some(true)));
+    receipt.finish(None);
+    let bytes = fs::read(&path).unwrap();
+    let mut before = Vec::new();
+    receipt.summary.write(&mut before).unwrap();
+    receipt.observation(&observation(None));
+    receipt.observation(&observation(Some(false)));
+    receipt.request(&request(None));
+    receipt.progress(&FleetEnsureProgress {
+        operation_id: "late-operation".into(),
+        plan_sha256: "late-plan".into(),
+        phase: canic_host::fleet_ensure::dto::FleetEnsurePhase::ControlPlane,
+        state: FleetEnsureProgressState::Advancing,
+        applied_effects: 0,
+        reviewed_effects: 1,
+        next_action: None,
+    });
+    let mut after = Vec::new();
+    receipt.summary.write(&mut after).unwrap();
+    assert_eq!(before, after);
+    assert_eq!(fs::read(&path).unwrap(), bytes);
+    assert!(receipt.last_progress.is_none());
+    assert!(receipt.timing_evidence_complete());
+    drop(receipt);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn omitted_events_bound_pair_tracking_and_cannot_produce_complete_evidence() {
+    let (root, mut receipt, path) = fixture();
+    receipt.observation(&observation(None));
+    receipt.record("oversized", &"x".repeat(MAX_EVENT_BYTES));
+    assert!(receipt.omitted_events > 0);
+    let mut later = observation(None);
+    later.span_id += 1;
+    receipt.observation(&later);
+    receipt.request(&request(None));
+    assert_eq!(receipt.timing_pairs.active_stages, [1]);
+    assert!(receipt.timing_pairs.active_requests.is_empty());
+    receipt.finish(None);
+    let events = read(&path);
+    let request_event = events
+        .iter()
+        .find(|event| event["event"] == "icp_request_timing")
+        .unwrap();
+    assert!(request_event["data"]["parent_span_id"].is_null());
+    assert_eq!(
+        events.last().unwrap()["data"]["timing_evidence_complete"],
+        false
+    );
+    assert!(fs::metadata(&path).unwrap().len() <= u64::try_from(MAX_BYTES).unwrap());
+    drop(receipt);
+    fs::remove_dir_all(root).unwrap();
+}

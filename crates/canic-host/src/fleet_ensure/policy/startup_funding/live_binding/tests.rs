@@ -161,6 +161,7 @@ pub(in crate::fleet_ensure) fn qualify_selected(desired: &DesiredFleet) {
         },
         coordinator_subnet: bootstrap.coordinator_subnet,
         coordinator: principal(&bootstrap.coordinator),
+        recovery_controllers: bootstrap.recovery_controllers.clone(),
     };
     assert_eq!(selected(desired, &root.root, &binding), Ok(()));
     qualify_current(desired, &root.root, &binding);
@@ -175,6 +176,26 @@ pub(in crate::fleet_ensure) fn qualify_selected(desired: &DesiredFleet) {
         selected(&withdrawn, &root.root, &binding),
         Err(StartupUsageUnavailable::AuthorityMismatch)
     );
+    let recovery = Principal::from_slice(&[96]);
+    let mut protected = desired.clone();
+    protected
+        .bootstrap
+        .as_mut()
+        .unwrap()
+        .recovery_controllers
+        .push(recovery);
+    assert_eq!(
+        selected(&protected, &root.root, &binding),
+        Err(StartupUsageUnavailable::AuthorityMismatch),
+    );
+    let mut protected_binding = binding.clone();
+    protected_binding
+        .component
+        .authority
+        .binding
+        .recovery_controllers
+        .push(recovery);
+    assert_eq!(selected(&protected, &root.root, &protected_binding), Ok(()));
     let mut variants = vec![binding; 5];
     variants[0].component.authority.binding.fleet.app = "different-app".into();
     variants[1].component.authority.binding.coordinator = Principal::from_slice(&[97]);

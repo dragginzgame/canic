@@ -917,6 +917,7 @@ fn validate_wasm_store_activation_authority_record(
     let expected_controllers = expected_wasm_store_controllers(
         root.binding.fleet_subnet_root,
         store.installation_controller,
+        &root.binding.authority.binding.recovery_controllers,
     );
     let valid = child.operation_id != [0; 32]
         && child.fleet == root.binding.authority.binding.fleet
@@ -1593,6 +1594,7 @@ mod tests {
                 },
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[20; 29])),
                 coordinator: Principal::from_slice(&[21; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         };
@@ -1654,6 +1656,7 @@ mod tests {
                 controllers: expected_wasm_store_controllers(
                     fleet_subnet_root,
                     installation_controller,
+                    &[],
                 ),
                 manifest_digest: initial_release_set.manifest_digest,
             },

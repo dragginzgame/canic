@@ -13,6 +13,7 @@ use canic_host::fleet_ensure::{
 };
 use serde::Serialize;
 use std::{
+    collections::BTreeSet,
     fs::{self, File, OpenOptions},
     io::{self, Write},
     path::{Path, PathBuf},
@@ -53,10 +54,18 @@ pub(super) struct Receipt {
     finished: bool,
     failed: bool,
     emit_errors: bool,
-    active_stages: Vec<u64>,
+    timing_pairs: TimingPairs,
     last_progress: Option<FleetEnsureProgress>,
     summary: summary::Summary,
     next_review_command: String,
+}
+
+/// Open timing boundaries and pairing errors for the retained diagnostic events.
+#[derive(Default)]
+struct TimingPairs {
+    active_stages: Vec<u64>,
+    active_requests: BTreeSet<u64>,
+    invalid: bool,
 }
 
 #[derive(Serialize)]
@@ -78,6 +87,7 @@ struct Outcome<'a> {
     plan_scope: Option<canic_host::fleet_ensure::model::FleetEnsurePlanScope>,
     effects_applied: Option<u32>,
     omitted_events: u64,
+    timing_evidence_complete: bool,
 }
 
 impl Receipt {
@@ -109,7 +119,7 @@ impl Receipt {
             // The caller reports construction failures once; Drop must not
             // print a second diagnostic before output ownership is established.
             emit_errors: false,
-            active_stages: Vec::new(),
+            timing_pairs: TimingPairs::default(),
             last_progress: None,
             summary: summary::Summary::default(),
             next_review_command: invocation.next_review_command.to_owned(),
@@ -133,6 +143,9 @@ impl Receipt {
     }
 
     pub(super) fn progress(&mut self, progress: &FleetEnsureProgress) {
+        if self.finished || self.failed {
+            return;
+        }
         let confirmed_remote_advancement = self.last_progress.as_ref().is_some_and(|previous| {
             previous.operation_id == progress.operation_id
                 && previous.plan_sha256 == progress.plan_sha256
@@ -149,20 +162,50 @@ impl Receipt {
     }
 
     pub(super) fn observation(&mut self, timing: &FleetObservationTiming) {
-        self.summary.observe(timing);
-        self.record("fleet_ensure_observation", timing);
-        if timing.succeeded.is_none() {
-            self.active_stages.push(timing.span_id);
-        } else {
-            self.active_stages.retain(|id| *id != timing.span_id);
+        if self.finished || self.failed {
+            return;
         }
+        // Once evidence is omitted, completeness is already lost. Stop retaining
+        // new pairing state so the receipt byte bound also bounds this bookkeeping.
+        if self.omitted_events == 0 {
+            self.summary.observe(timing);
+            let position = self
+                .timing_pairs
+                .active_stages
+                .iter()
+                .position(|id| *id == timing.span_id);
+            match (timing.succeeded, position) {
+                (None, None) => self.timing_pairs.active_stages.push(timing.span_id),
+                (Some(_), Some(position)) => {
+                    self.timing_pairs.active_stages.remove(position);
+                }
+                _ => self.timing_pairs.invalid = true,
+            }
+        }
+        self.record("fleet_ensure_observation", timing);
     }
 
     pub(super) fn request(&mut self, timing: &canic_host::icp::IcpRequestTiming) {
+        if self.finished || self.failed {
+            return;
+        }
+        if self.omitted_events == 0 {
+            let paired = if timing.succeeded.is_none() {
+                self.timing_pairs.active_requests.insert(timing.request_id)
+            } else {
+                self.timing_pairs.active_requests.remove(&timing.request_id)
+            };
+            self.timing_pairs.invalid |= !paired;
+        }
+        let parent_span_id = if self.omitted_events == 0 {
+            self.timing_pairs.active_stages.last().copied()
+        } else {
+            None
+        };
         self.record(
             "icp_request_timing",
             &serde_json::json!({
-                "parent_span_id": self.active_stages.last(), "request": timing,
+                "parent_span_id": parent_span_id, "request": timing,
             }),
         );
     }
@@ -241,6 +284,7 @@ impl Receipt {
             plan_scope: report.map(|report| report.plan.scope),
             effects_applied: report.map(|report| report.effects_applied),
             omitted_events: self.omitted_events,
+            timing_evidence_complete: self.timing_evidence_complete(),
         };
         let outcome = serde_json::to_value(outcome).expect("bounded diagnostic outcome serializes");
         if self
@@ -266,12 +310,15 @@ impl Receipt {
         state: &str,
         report: Option<&FleetEnsureReport>,
     ) -> io::Result<()> {
-        let partial = self.failed || self.omitted_events > 0 || !self.active_stages.is_empty();
         writeln!(
             output,
             "Fleet invocation {state}: {} ms; timing evidence {}.",
             self.started.elapsed().as_millis(),
-            if partial { "partial" } else { "retained" },
+            if self.timing_evidence_complete() {
+                "retained"
+            } else {
+                "partial"
+            },
         )?;
         self.summary.write(output)?;
         writeln!(
@@ -297,6 +344,14 @@ impl Receipt {
             writeln!(output, "Review: {}", self.next_review_command)?;
         }
         Ok(())
+    }
+
+    fn timing_evidence_complete(&self) -> bool {
+        let all_events_retained = !self.failed && self.omitted_events == 0;
+        let all_pairs_complete = !self.timing_pairs.invalid
+            && self.timing_pairs.active_stages.is_empty()
+            && self.timing_pairs.active_requests.is_empty();
+        all_events_retained && all_pairs_complete
     }
 }
 

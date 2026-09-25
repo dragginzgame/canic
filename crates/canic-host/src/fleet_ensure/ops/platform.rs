@@ -1462,6 +1462,13 @@ impl IcpEnsurePlatform {
             let root_authority = authorities.get(root_name).ok_or_else(|| {
                 IcpEnsurePlatformError::RootManagement("missing Root binding".to_string())
             })?;
+            let recovery_controllers = self
+                .desired
+                .bootstrap
+                .as_ref()
+                .map_or(&[][..], |bootstrap| {
+                    bootstrap.recovery_controllers.as_slice()
+                });
             for batch in pool
                 .assets
                 .chunks(super::bounded_observations::MAX_IN_FLIGHT)
@@ -1482,6 +1489,7 @@ impl IcpEnsurePlatform {
                             asset,
                             *unique,
                             allow_pending_reset,
+                            recovery_controllers,
                         )
                     })?;
                 for (asset, inspected) in batch.iter().zip(responses) {
@@ -1559,6 +1567,7 @@ impl IcpEnsurePlatform {
         asset: &EstatePoolAssetObservation,
         unique: bool,
         allow_pending_reset: bool,
+        recovery_controllers: &[Principal],
     ) -> Result<ReinstallAssetStatus, IcpEnsurePlatformError> {
         let terminal = matches!(
             asset.lifecycle,
@@ -1602,7 +1611,14 @@ impl IcpEnsurePlatform {
             &response.cycles,
         )?;
         controllers.sort();
-        if controllers != [root.to_string()] {
+        let mut expected = recovery_controllers
+            .iter()
+            .map(Principal::to_text)
+            .collect::<Vec<_>>();
+        expected.push(root.to_string());
+        expected.sort();
+        expected.dedup();
+        if controllers != expected {
             return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
                 canister: asset.principal.clone(),
                 field: "exact Root controllers",
@@ -1971,6 +1987,10 @@ impl IcpEnsurePlatform {
             &response.settings.controllers,
             response.module_hash.as_deref(),
             &response.cycles,
+            self.desired
+                .bootstrap
+                .as_ref()
+                .map_or(&[], |bootstrap| &bootstrap.recovery_controllers),
         )?;
         Ok((Some(cycles), false))
     }
@@ -2319,6 +2339,10 @@ impl IcpEnsurePlatform {
                 &response.settings.controllers,
                 response.module_hash.as_deref(),
                 &response.cycles,
+                self.desired
+                    .bootstrap
+                    .as_ref()
+                    .map_or(&[], |bootstrap| &bootstrap.recovery_controllers),
             ),
             PoolInspectionRequirement::RootControlled(module) => {
                 validate_root_controlled_inspection(
@@ -2328,6 +2352,10 @@ impl IcpEnsurePlatform {
                     &response.settings.controllers,
                     response.module_hash.as_deref(),
                     &response.cycles,
+                    self.desired
+                        .bootstrap
+                        .as_ref()
+                        .map_or(&[], |bootstrap| &bootstrap.recovery_controllers),
                 )
             }
         }?;
@@ -2449,7 +2477,13 @@ impl IcpEnsurePlatform {
         };
         Ok(Some(LiveCanister {
             canister_version: None,
-            controllers: vec![root.to_string()],
+            controllers: {
+                let mut controllers = configured.controllers.clone();
+                controllers.push(root.to_string());
+                controllers.sort();
+                controllers.dedup();
+                controllers
+            },
             cycles: asset.cycles.to_u128(),
             module_sha256: None,
             principal: principal.to_string(),
@@ -2563,7 +2597,13 @@ impl IcpEnsurePlatform {
         }
         Ok(Some(LiveCanister {
             canister_version: None,
-            controllers: vec![root.to_string()],
+            controllers: {
+                let mut controllers = configured.controllers.clone();
+                controllers.push(root.to_string());
+                controllers.sort();
+                controllers.dedup();
+                controllers
+            },
             cycles,
             module_sha256: retained_topology.module_hash.clone(),
             principal: principal.to_string(),
@@ -2618,7 +2658,13 @@ impl IcpEnsurePlatform {
                 .parent
                 .as_deref()
                 .and_then(|parent| state.principals.get(parent))
-                .filter(|root| live.controllers.as_slice() == [root.as_str()])
+                .filter(|root| {
+                    let mut expected = configured.controllers.clone();
+                    expected.push((*root).clone());
+                    expected.sort();
+                    expected.dedup();
+                    live.controllers == expected
+                })
                 .and(retained_topology)
                 .and_then(|topology| topology.module_hash.as_deref())
         })
@@ -5127,15 +5173,23 @@ fn validate_pending_fresh_pool_inspection(
     controllers: &[Principal],
     module_hash: Option<&[u8]>,
     cycles: &Nat,
+    recovery_controllers: &[Principal],
 ) -> Result<u128, IcpEnsurePlatformError> {
     let mut actual = controllers
         .iter()
         .map(Principal::to_text)
         .collect::<Vec<_>>();
     actual.sort();
-    let mut temporary = vec![root.to_string(), operator.to_string()];
+    let mut ready = recovery_controllers
+        .iter()
+        .map(Principal::to_text)
+        .collect::<Vec<_>>();
+    ready.push(root.to_string());
+    ready.sort();
+    let mut temporary = ready.clone();
+    temporary.push(operator.to_string());
     temporary.sort();
-    if actual != [root] && actual != temporary {
+    if actual != ready && actual != temporary {
         return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
             canister: canister.to_string(),
             field: "reviewed fresh pool controllers",
@@ -5153,11 +5207,22 @@ fn validate_root_controlled_inspection(
     controllers: &[Principal],
     module_hash: Option<&[u8]>,
     cycles: &Nat,
+    recovery_controllers: &[Principal],
 ) -> Result<u128, IcpEnsurePlatformError> {
-    if controllers.len() != 1 || controllers[0].to_text() != root {
+    let mut expected = recovery_controllers.to_vec();
+    expected.push(Principal::from_text(root).map_err(|_| {
+        IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
+            canister: canister.to_string(),
+            field: "Root Principal",
+        }
+    })?);
+    expected.sort_unstable();
+    let mut actual = controllers.to_vec();
+    actual.sort_unstable();
+    if actual != expected {
         return Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
             canister: canister.to_string(),
-            field: "Root-only controllers",
+            field: "exact Root controllers",
         });
     }
     validate_inspected_cycles(canister, module, module_hash, cycles)
@@ -6550,7 +6615,8 @@ if"#,
                 release_build_id: canic_core::ids::ReleaseBuildId::from_nonce(canic_core::ids::ReleaseBuildNonce::from_random_bytes([7; 32])),
                 root_funding: None,
                 roots: Vec::new(),
-            });
+                            recovery_controllers: Vec::new(),
+});
             std::fs::write(
                 owners.root.join(format!("{}.json", fixture.root_id)),
                 serde_json::json!({
@@ -7422,7 +7488,7 @@ printf 'finish\n' >> events
                 platform.refresh_pool_balances(&fixture.root_id.to_text(), assets)
             });
         assert!(
-            matches!(failed, Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { canister, field: "Root-only controllers" }) if canister == unchanged[0].principal)
+            matches!(failed, Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { canister, field: "exact Root controllers" }) if canister == unchanged[0].principal)
         );
         assert_eq!(*assets, unchanged);
         let events = std::fs::read_to_string(path.join("events")).unwrap();
@@ -7742,7 +7808,7 @@ printf 'finish\n' >> events
                 assert!(matches!(
                     platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any),
                     Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
-                        field: "Root-only controllers",
+                        field: "exact Root controllers",
                         ..
                     })
                 ));
@@ -8089,7 +8155,7 @@ printf 'finish\n' >> events
                 assert!(matches!(
                     platform.inspect_pool_balance("pool", &root, &target, InspectedModule::Any),
                     Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict {
-                        field: "Root-only controllers",
+                        field: "exact Root controllers",
                         ..
                     })
                 ));
@@ -9729,6 +9795,7 @@ esac
                 &[root],
                 None,
                 &cycles,
+                &[],
             )
             .expect("exact Root-authorized pool inspection"),
             2_898_749_313_788,
@@ -9742,6 +9809,7 @@ esac
                 &[root],
                 Some(&[1]),
                 &cycles,
+                &[],
             )
             .expect("installed controlled asset remains part of conservation"),
             2_898_749_313_788,
@@ -9755,6 +9823,7 @@ esac
                 &[foreign],
                 Some(&[1]),
                 &cycles,
+                &[],
             ),
             validate_root_controlled_inspection(
                 "pool-0",
@@ -9763,6 +9832,7 @@ esac
                 &[foreign],
                 None,
                 &cycles,
+                &[],
             ),
             validate_root_controlled_inspection(
                 "pool-0",
@@ -9771,6 +9841,7 @@ esac
                 &[root],
                 Some(&[1]),
                 &cycles,
+                &[],
             ),
         ] {
             assert!(matches!(
@@ -9794,6 +9865,7 @@ esac
                     &controllers,
                     None,
                     &Nat::from(17_u8),
+                    &[],
                 )
                 .expect("issued fresh controller transition"),
                 17,
@@ -9813,9 +9885,68 @@ esac
                     &controllers,
                     None,
                     &Nat::from(17_u8),
+                    &[],
                 ),
                 Err(IcpEnsurePlatformError::FundingInspectionAuthorityConflict { .. })
             ));
         }
+    }
+
+    #[test]
+    fn recovery_controller_is_required_on_ready_and_pending_fresh_pool_assets() {
+        let root = Principal::from_slice(&[7; 29]);
+        let operator = Principal::from_slice(&[8; 29]);
+        let recovery = Principal::from_slice(&[9; 29]);
+        let cycles = Nat::from(17_u8);
+        assert!(
+            validate_root_controlled_inspection(
+                "ready",
+                InspectedModule::Empty,
+                &root.to_text(),
+                &[root, recovery],
+                None,
+                &cycles,
+                &[recovery],
+            )
+            .is_ok()
+        );
+        assert!(
+            validate_root_controlled_inspection(
+                "ready",
+                InspectedModule::Empty,
+                &root.to_text(),
+                &[root],
+                None,
+                &cycles,
+                &[recovery],
+            )
+            .is_err()
+        );
+        for controllers in [vec![root, recovery], vec![root, operator, recovery]] {
+            assert!(
+                validate_pending_fresh_pool_inspection(
+                    "pending",
+                    &root.to_text(),
+                    &operator.to_text(),
+                    &controllers,
+                    None,
+                    &cycles,
+                    &[recovery],
+                )
+                .is_ok()
+            );
+        }
+        assert!(
+            validate_pending_fresh_pool_inspection(
+                "pending",
+                &root.to_text(),
+                &operator.to_text(),
+                &[root, operator],
+                None,
+                &cycles,
+                &[recovery],
+            )
+            .is_err()
+        );
     }
 }

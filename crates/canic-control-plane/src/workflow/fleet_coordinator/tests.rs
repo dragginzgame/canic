@@ -166,6 +166,7 @@ fn maximum_production_root_prepare_command_fits_update_envelope() {
             fleet,
             coordinator_subnet: SubnetId::from_principal(principal(1)),
             coordinator: principal(2),
+            recovery_controllers: Vec::new(),
         },
         operation_id: [0xe2; 32],
         expected_generation: u64::MAX - 1,
@@ -288,6 +289,7 @@ fn maximum_admission_publication_history_fits_coordinator_registry_cell() {
             },
             coordinator_subnet: SubnetId::from_principal(principal(207)),
             coordinator: principal(208),
+            recovery_controllers: Vec::new(),
         },
         epoch: u64::MAX,
     };
@@ -758,6 +760,7 @@ fn init_args_with_config(coordinator: Principal, config: &ConfigModel) -> FleetC
                 fleet: fleet.clone(),
                 coordinator_subnet: SubnetId::from_principal(principal(2)),
                 coordinator,
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },
@@ -2645,7 +2648,7 @@ fn drive_prepared_scale_out(
                     .copied()
                     .unwrap_or_default();
                 let response = terminal_scale_out_synchronization_response(
-                    &(fleet_subnet_root, synchronization),
+                    &(fleet_subnet_root, *synchronization),
                     affected_component_count,
                     now + 1,
                 );
@@ -4434,7 +4437,7 @@ fn expect_scale_out_synchronization_call(
                 fleet_subnet_root,
                 request,
             },
-        ) => (fleet_subnet_root, request),
+        ) => (fleet_subnet_root, *request),
         _ => panic!("scale-out Directory barrier must synchronize the current root"),
     }
 }

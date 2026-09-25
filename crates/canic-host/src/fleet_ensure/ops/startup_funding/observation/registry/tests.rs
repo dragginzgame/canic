@@ -41,6 +41,7 @@ maximum_instances = 1
                 fleet: fleet.clone(),
                 coordinator_subnet: Principal::from_slice(&[2]).into(),
                 coordinator: Principal::from_slice(&[3]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

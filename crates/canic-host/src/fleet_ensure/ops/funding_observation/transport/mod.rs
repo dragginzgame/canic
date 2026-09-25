@@ -164,8 +164,10 @@ impl FundingObservationPlatform for IcpEnsurePlatform {
             .child(&request.role)
             .ok_or(FundingObservationError::AuthorityMismatch)?;
         let hash = status.module_hash.as_ref().map(hex_bytes);
+        let mut observed_controllers = status.settings.controllers.clone();
+        observed_controllers.sort_unstable();
         if status.status != CanisterStatusType::Running
-            || status.settings.controllers != vec![root]
+            || observed_controllers != request.component.authority.binding.root_controllers(root)
             || !hash.as_ref().is_some_and(|hash| {
                 hash == &entry.raw_module_hash || hash == &entry.installed_module_hash
             })

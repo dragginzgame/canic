@@ -302,6 +302,7 @@ fn fixture() -> InitFixture {
             root: "root-0".to_string(),
             store: "store-0".to_string(),
         }],
+        recovery_controllers: Vec::new(),
     };
     let registry = registry_authority(&bootstrap, principal(1));
     let root_binding = FleetSubnetRootBinding {

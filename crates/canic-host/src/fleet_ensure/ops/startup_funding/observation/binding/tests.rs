@@ -21,6 +21,7 @@ fn component() -> ComponentBinding {
                 },
                 coordinator_subnet: SubnetId::from_principal(p(1)),
                 coordinator: p(2),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

@@ -718,7 +718,17 @@ async fn observed_child_install_state(
     plan: &ComponentChildInstallPlan,
 ) -> Result<bool, InternalError> {
     let status = MgmtOps::canister_status(plan.canister).await?;
-    if status.settings.controllers != vec![plan.durable.binding.component.fleet_subnet_root] {
+    if !plan
+        .durable
+        .binding
+        .component
+        .authority
+        .binding
+        .has_exact_root_controllers(
+            plan.durable.binding.component.fleet_subnet_root,
+            &status.settings.controllers,
+        )
+    {
         return Err(InternalError::conflict());
     }
     match status.module_hash {
@@ -949,7 +959,7 @@ async fn start_installed_workload(
     validate()?;
     let status = MgmtOps::canister_status(canister).await?;
     validate()?;
-    if status.settings.controllers != [IcOps::canister_self()]
+    if !has_exact_workload_controllers(IcOps::canister_self(), &status.settings.controllers)?
         || status.module_hash.as_deref() != Some(expected_module.as_slice())
     {
         return Err(InternalError::conflict());
@@ -965,7 +975,16 @@ async fn start_installed_workload(
 
 async fn observed_install_state(plan: &ComponentInstallPlan) -> Result<bool, InternalError> {
     let status = MgmtOps::canister_status(plan.canister).await?;
-    if status.settings.controllers != vec![plan.durable.binding.fleet_subnet_root] {
+    if !plan
+        .durable
+        .binding
+        .authority
+        .binding
+        .has_exact_root_controllers(
+            plan.durable.binding.fleet_subnet_root,
+            &status.settings.controllers,
+        )
+    {
         return Err(InternalError::conflict());
     }
     match status.module_hash {

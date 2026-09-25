@@ -44,6 +44,7 @@ fn authority() -> ComponentAuthorityRecord {
                     },
                     coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[2])),
                     coordinator: Principal::from_slice(&[3]),
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },

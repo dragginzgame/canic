@@ -86,6 +86,12 @@ production artifacts. Canic keeps Wasm compilation non-incremental and uses an
 explicit `RUSTC_WRAPPER`; when no wrapper is supplied, it discovers `sccache`
 on `PATH`.
 
+Complete builds report one verified cache hit or shared rebuild reason with the
+artifact count. Add `--verbose` for tool/configuration details and the full
+bounded cache explanation, including environment key names without values.
+Checking and lock waiting use one live terminal line; redirected logs contain
+plain phase events and separate check/lock timing.
+
 ## Fleet Ensure
 
 `canic fleet ensure` is the sole Fleet installation and convergence workflow.

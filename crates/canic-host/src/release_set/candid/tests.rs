@@ -83,6 +83,7 @@ impl Fixture {
             infrastructure_artifact_manifest_sha256: manifest.digest().expect("digest"),
             release_build_id: release,
             schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,
+            transition_mode: crate::release_set::ReleaseTransitionMode::ReinstallOnly,
         };
         let current_path = directory.join("current-release-set-manifest.json");
         fs::write(

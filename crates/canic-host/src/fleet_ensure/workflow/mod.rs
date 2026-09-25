@@ -31,10 +31,10 @@ use crate::fleet_ensure::{
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
-        compact_inline_plan, effect_preparation::prepare_effect, lock_operation, read_plan,
-        read_root_start_authority, read_state, reserve_fixture_publication_attempt,
-        resolve_desired_artifacts, retain_configured_principal_bindings, write_journal, write_plan,
-        write_state,
+        compact_inline_plan, continuation::verify_release_transition,
+        effect_preparation::prepare_effect, lock_operation, read_plan, read_root_start_authority,
+        read_state, reserve_fixture_publication_attempt, resolve_desired_artifacts,
+        retain_configured_principal_bindings, write_journal, write_plan, write_state,
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
@@ -485,6 +485,7 @@ where
         if review.desired_sha256 != desired_sha256 {
             return Err(EnsureWorkflowError::DriftedBeforeApply);
         }
+        verify_release_transition(root, desired, review.scope)?;
         return Ok(FleetEnsureReport {
             funding_review: None,
             actual_conservation: None,
@@ -503,6 +504,11 @@ where
         )?;
         let state = read_state(&paths, requested_fleet)?;
         verify_journal(&journal, &retained, requested_fleet, &state)?;
+        let operation_desired = retained
+            .reviewed_desired
+            .as_deref()
+            .map_or(desired, |reviewed| reviewed.desired());
+        verify_release_transition(root, operation_desired, retained.scope)?;
         if journal.estate_funding_required.is_some()
             || funding::native_review_applicable(&retained, &journal)
         {
@@ -533,6 +539,7 @@ where
             terminal: false,
         });
     }
+    verify_release_transition(root, desired, FleetEnsurePlanScope::RootStartPrerequisite)?;
     let mut state = read_state(&paths, requested_fleet)?;
     let prior_plan = retained_plan::read(&paths, &desired.environment, requested_fleet)?
         .map(verified_plan)
@@ -631,6 +638,7 @@ where
                 terminal: false,
             });
         }
+        verify_release_transition(root, desired, FleetEnsurePlanScope::Full)?;
         if let Some(plan) = crate::fleet_ensure::policy::root_reinstall::compile(
             RootStartPlanInput {
                 state: &state,
@@ -653,6 +661,7 @@ where
             });
         }
     }
+    verify_release_transition(root, desired, FleetEnsurePlanScope::Full)?;
     let artifacts = resolve_desired_artifacts(root, desired)?;
     let mut observation = platform
         .observe(&operation_id, &state)
@@ -1037,7 +1046,6 @@ where
         .is_some_and(|journal| journal.completion == FleetEnsureCompletion::InProgress);
     if let Some(journal) = retained_journal.as_ref().filter(|_| in_progress) {
         verify_journal(journal, &retained_plan, requested_fleet, &state)?;
-        compact_inline_plan(&paths, &retained_plan)?;
     }
     if !in_progress
         && retained_plan.reinstall.is_none()
@@ -1067,6 +1075,10 @@ where
         }
         desired
     };
+    verify_release_transition(root, operation_desired, retained_plan.scope)?;
+    if in_progress {
+        compact_inline_plan(&paths, &retained_plan)?;
+    }
     if !retained_journal.as_ref().is_some_and(|journal| {
         journal.completion == FleetEnsureCompletion::Converged
             && journal.plan_sha256 == retained_plan.plan_sha256
@@ -4437,7 +4449,14 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
                         .as_ref()
                         .is_some_and(|bootstrap| bootstrap.fresh_estate)
                         && configured.principal.is_none()
-                        && configured.controllers.is_empty()
+                        && desired.bootstrap.as_ref().is_some_and(|bootstrap| {
+                            configured.controllers
+                                == bootstrap
+                                    .recovery_controllers
+                                    .iter()
+                                    .map(candid::Principal::to_text)
+                                    .collect::<Vec<_>>()
+                        })
                         && configured.controller_canisters.len() == 1
                         && canister_plan.actions.iter().any(|action| {
                             matches!(
@@ -4447,7 +4466,12 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
                                     controllers,
                                     ..
                                 } if controller_canisters == &configured.controller_canisters
-                                    && controllers == std::slice::from_ref(&desired.operator)
+                                    && controllers == &{
+                                        let mut expected = configured.controllers.clone();
+                                        expected.push(desired.operator.clone());
+                                        expected.sort();
+                                        expected
+                                    }
                             )
                         });
                     temporary_create.then_some(canister_plan.name.as_str())

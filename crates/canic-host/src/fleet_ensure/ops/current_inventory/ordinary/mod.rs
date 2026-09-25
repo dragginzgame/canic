@@ -169,6 +169,7 @@ pub(super) fn observe(
             binding.canister_id,
             &observed,
             protocol,
+            &binding.authority.binding.recovery_controllers,
         )?;
         output.push(OrdinaryComponentObservation {
             binding: binding.clone(),

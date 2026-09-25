@@ -80,7 +80,7 @@ pub enum FleetComponentDirectoryConfirmationCallView {
     },
     ScaleOutSynchronization {
         fleet_subnet_root: Principal,
-        request: RootComponentDirectorySynchronizationRequest,
+        request: Box<RootComponentDirectorySynchronizationRequest>,
     },
     ScaleOutPublication {
         fleet_subnet_root: Principal,

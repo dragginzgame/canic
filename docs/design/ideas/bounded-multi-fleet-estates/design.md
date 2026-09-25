@@ -1,4 +1,10 @@
-# Canic 0.111 Design: Bounded Multi-Fleet Estates
+# Idea: Bounded Multi-Fleet Estates
+
+Deferred and unnumbered by the maintainer on 2026-09-25. Blob service
+extraction now owns the planned 0.111 position. This retained proposal is not
+a prerequisite for blob extraction and authorizes no implementation or Q0 run.
+The qualification sequence below applies only after a future explicit
+promotion to a scheduled line with refreshed evidence and owners.
 
 Date: 2026-08-18
 Promoted from former 0.112: 2026-08-31
@@ -7,8 +13,8 @@ Cycle-disposition primitive hold: 2026-08-31
 
 ## Status
 
-- Status: held at Q0 platform qualification. This amendment authorizes no
-  0.111 implementation, and B1 cannot be promoted from the current design.
+- Status: deferred; Q0 platform qualification remains unproved. No release
+  position or implementation authority is assigned.
 - Purpose: add indexed Root-local estates, one ordinary reserve Fleet and one
   bounded same-Subnet source-disposition/destination-credit operation.
 - Predecessor: accepted 0.110 contraction closeout and explicit Q0 promotion.
@@ -30,8 +36,9 @@ with the complete pre-1.0 hard cut. It required backup transitions, stable
 conversion and preservation of Principals and application state across
 releases. That proposal is cancelled and archived without active authority.
 
-The former 0.112 bounded-estates design is promoted to 0.111, but its physical
-Principal controller-transfer path is also removed. The maintained operation
+The former 0.112 bounded-estates design was promoted to 0.111 on 2026-08-31,
+then deferred without a number on 2026-09-25. Its physical Principal
+controller-transfer path was removed. The retained proposed operation
 conserves controlled cycles while disposing one empty source asset. It does not
 move or preserve that Canister. A later destination asset is fresh.
 
@@ -47,7 +54,7 @@ estate storage or workflow implementation begins.
 
 ## Decision
 
-0.111 makes these decisions:
+The retained proposal makes these decisions:
 
 1. Every Fleet Subnet Root owns one bounded indexed ledger of physical assets
    under its current authority.
@@ -82,7 +89,7 @@ estate storage or workflow implementation begins.
 
 ## Non-Goals
 
-0.111 does not:
+The retained proposal does not:
 
 - upgrade, migrate, adopt or preserve an installation across releases;
 - preserve or transfer application data, stable memory, Wasm, logical identity
@@ -350,7 +357,7 @@ credit-response-loss/deletion and two-Fleet isolation journeys.
 
 | Batch | Outcome and owner | Included evidence | Focused validation | Status |
 | --- | --- | --- | --- | --- |
-| Q0 | Physical cycle-disposition primitive; test/design owners | Finalized capsule install/invoke, atomic receipt, duplicate refund, response-loss recovery, slack, uninstall, residual observation and confirmed deletion discard | Disposable-canister PocketIC qualification and immutable platform report | Blocked on accepted 0.110 closeout and explicit promotion |
+| Q0 | Physical cycle-disposition primitive; test/design owners | Finalized capsule install/invoke, atomic receipt, duplicate refund, response-loss recovery, slack, uninstall, residual observation and confirmed deletion discard | Disposable-canister PocketIC qualification and immutable platform report | Deferred; requires future release assignment, refreshed design and explicit promotion |
 | B1 | Indexed estate authority; Root model/ops | Bounded counters/indexes, corruption, first excess and scan removal | Pure/state/property tests | Held until Q0 evidence is accepted and B1 is explicitly promoted |
 | B2 | Ordinary reserve Fleet; host/CLI | Empty topology, exact Roots, no-effect plan and authority isolation | Config/plan/help fixtures and disposable local install | Blocked on B1 |
 | B3 | One-asset cycle disposition; Roots/host | Two-Root prepare/activate, finalized capsule binding, atomic receipt, exact credit, deletion fence and same-operation retry | Pure transition matrix, response-loss fixtures and one PocketIC journey | Blocked on B2 |
@@ -360,7 +367,7 @@ credit-response-loss/deletion and two-Fleet isolation journeys.
 
 ## Completion Criteria
 
-0.111 is complete only when:
+If promoted, the proposed scope would be complete only when:
 
 1. estate decisions use bounded indexes/counters without full scans;
 2. owned target, maximum and Ready reserve remain distinct;
@@ -392,7 +399,8 @@ credit-response-loss/deletion and two-Fleet isolation journeys.
 
 ## Next Authorized Action
 
-No 0.111 implementation is authorized. Complete and accept 0.110 closeout,
-then explicitly promote Q0 against disposable canisters and exact platform,
-cycle and validation budgets. B1 remains held until the immutable Q0 report is
-accepted and the maintainer separately promotes B1.
+No implementation is authorized. Reconsider only when multi-Fleet capacity
+or cycle disposition becomes a concrete priority. Future promotion must assign
+a release position and owners, refresh platform and runtime-budget evidence,
+and explicitly authorize Q0. B1 remains held until its immutable platform proof
+is accepted. Completing 0.110 or blob extraction does not promote this idea.

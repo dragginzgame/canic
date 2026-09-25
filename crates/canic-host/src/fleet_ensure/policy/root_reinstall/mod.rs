@@ -61,7 +61,7 @@ pub(in crate::fleet_ensure) fn compile(
             subnet: observed.subnet.clone(),
         };
         let expected = RootManagementBinding {
-            controllers: vec![desired.operator.clone()],
+            controllers: expected_controllers.clone(),
             module_sha256: binding.module_sha256.clone(),
             name: configured.name.clone(),
             principal: root_management_principal(configured, state, requested_fleet)?.to_string(),

@@ -2085,10 +2085,11 @@ fn require_exact_store(
 }
 
 fn expected_store_controllers(authority: &FleetSubnetWasmStoreAuthority) -> Vec<Principal> {
-    let mut controllers = vec![
+    let mut controllers = authority.authority.binding.recovery_controllers.clone();
+    controllers.extend([
         authority.fleet_subnet_root,
         authority.installation_controller,
-    ];
+    ]);
     controllers.sort_unstable();
     controllers.dedup();
     controllers

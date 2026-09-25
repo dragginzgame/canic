@@ -393,6 +393,7 @@ mod tests {
                     },
                     coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[5; 29])),
                     coordinator,
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: u64::MAX,
             },

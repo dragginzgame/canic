@@ -89,7 +89,7 @@ enum RemoteFundingPolicyRotationPhase {
     ActivatingRoots {
         activated_root_count: u32,
         expected_root_count: u32,
-        successor_registry: canic_core::dto::fleet_registry::FleetRegistryVersion,
+        successor_registry: Box<canic_core::dto::fleet_registry::FleetRegistryVersion>,
     },
     Completed(Reserved),
     PreparingRoots {

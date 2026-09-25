@@ -73,7 +73,7 @@ impl FleetCoordinatorOps {
                 } => FleetFundingPolicyRotationStatusPhase::ActivatingRoots {
                     activated_root_count: rotation_root_count(activated.len())?,
                     expected_root_count,
-                    successor_registry: successor_registry.as_ref().clone(),
+                    successor_registry: successor_registry.clone(),
                 },
             };
             return Ok(Some(FleetFundingPolicyRotationStatusResponse {

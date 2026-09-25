@@ -91,6 +91,7 @@ fn admission_target() -> ManagedCanisterBinding {
                 fleet,
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[3; 29])),
                 coordinator: Principal::from_slice(&[4; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },
@@ -1834,6 +1835,38 @@ fn public_health_canonical_types_match_rust() {
 }
 
 #[test]
+fn fleet_recovery_controller_binding_matches_canonical_candid() {
+    for file in ["fleet_coordinator.did", "wasm_store.did"] {
+        let did = read_text(&workspace_root().join("crates/canic/candid").join(file));
+        let (mut env, _) = CandidSource::Text(&did).load().expect("canonical Candid");
+        let canonical = env.find_type("FleetCoordinatorBinding").unwrap().clone();
+        let mut rust = TypeContainer::new();
+        let ty = rust.add::<canic_core::ids::FleetCoordinatorBinding>();
+        let ty = env.merge_type(rust.env, ty);
+        candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+            .expect("Fleet recovery controller binding matches canonical Candid");
+    }
+}
+
+#[cfg(feature = "control-plane")]
+#[test]
+fn fleet_funding_rotation_status_matches_canonical_candid_after_recovery_binding() {
+    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
+    let (mut env, _) = CandidSource::Text(&did).load().expect("Coordinator Candid");
+    let canonical = env
+        .find_type("FleetFundingPolicyRotationStatusPhase")
+        .unwrap()
+        .clone();
+    let mut rust = TypeContainer::new();
+    let ty = rust
+        .add::<canic_control_plane::dto::fleet_coordinator::FleetFundingPolicyRotationStatusPhase>(
+        );
+    let ty = env.merge_type(rust.env, ty);
+    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
+        .expect("funding rotation status retains its canonical Candid shape");
+}
+
+#[test]
 fn provisioning_failure_stage_matches_canonical_candid() {
     let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
     let (mut env, _) = CandidSource::Text(&did).load().expect("Coordinator Candid");
@@ -1845,11 +1878,7 @@ fn provisioning_failure_stage_matches_canonical_candid() {
         .expect("protected provisioning stage equals the current Rust contract");
 }
 
-#[cfg(any(
-    feature = "control-plane",
-    feature = "fleet-coordinator-canister",
-    feature = "wasm-store-canister"
-))]
+#[cfg(any(feature = "control-plane", feature = "wasm-store-canister"))]
 #[test]
 fn state_cascade_store_response_matches_canonical_candid() {
     let did = read_text(&workspace_root().join("crates/canic/candid/wasm_store.did"));

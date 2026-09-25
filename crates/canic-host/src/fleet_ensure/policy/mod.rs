@@ -1489,7 +1489,14 @@ fn create_plan(
             .as_ref()
             .is_some_and(|bootstrap| bootstrap.fresh_estate)
         && configured.principal.is_none()
-        && configured.controllers.is_empty()
+        && desired.bootstrap.as_ref().is_some_and(|bootstrap| {
+            configured.controllers
+                == bootstrap
+                    .recovery_controllers
+                    .iter()
+                    .map(Principal::to_text)
+                    .collect::<Vec<_>>()
+        })
         && configured.parent.as_ref().is_some_and(|parent| {
             configured.controller_canisters.as_slice() == std::slice::from_ref(parent)
         });
@@ -1945,6 +1952,41 @@ fn validate_authority(
     validate_funding_policy(desired)?;
     validate_terminal_pool_capacity(desired)?;
     if let Some(bootstrap) = &desired.bootstrap {
+        let operator = Principal::from_text(&desired.operator).map_err(|_| {
+            EnsurePolicyError::InvalidTopology {
+                name: "bootstrap".to_string(),
+                reason: "operator Principal is invalid",
+            }
+        })?;
+        let recovery = &bootstrap.recovery_controllers;
+        let mut unique_recovery = BTreeSet::new();
+        if recovery.len() > 8
+            || recovery.iter().any(|controller| {
+                *controller == Principal::anonymous()
+                    || *controller == operator
+                    || !unique_recovery.insert(controller)
+            })
+        {
+            return Err(EnsurePolicyError::InvalidTopology {
+                name: "bootstrap".to_string(),
+                reason: "recovery controllers must be distinct non-anonymous Principals and at most eight",
+            });
+        }
+        for configured in desired
+            .canisters
+            .iter()
+            .filter(|canister| canister.presence == DesiredPresence::Present)
+        {
+            if recovery
+                .iter()
+                .any(|controller| !configured.controllers.contains(&controller.to_text()))
+            {
+                return Err(EnsurePolicyError::InvalidTopology {
+                    name: configured.name.clone(),
+                    reason: "present Fleet canister omits a configured recovery controller",
+                });
+            }
+        }
         for root in &bootstrap.roots {
             validate_bootstrap_root_pool_import_capacity(root)?;
         }

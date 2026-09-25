@@ -181,12 +181,13 @@ type FleetCascadeManifestEntry = record {
 //
 // FleetCoordinatorBinding
 //
-// Immutable identity and exact physical placement of one Fleet Coordinator.
+// Immutable Coordinator identity, placement and direct Fleet recovery authority.
 //
 type FleetCoordinatorBinding = record {
   fleet : FleetBinding;
   coordinator_subnet : principal;
   coordinator : principal;
+  recovery_controllers : vec principal;
 };
 //
 // FleetCredentialGenerationRef

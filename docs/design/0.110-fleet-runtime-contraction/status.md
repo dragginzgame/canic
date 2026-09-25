@@ -1,5 +1,61 @@
 # Canic 0.110 Implementation Status
 
+## Closeout qualification complete — 2026-09-25
+
+The maintainer-requested [closeout audit](../../audits/release-lines/0.110-closeout-audit.md#final-b5-qualification--2026-09-25)
+now concludes **pass with limitations; ready for human acceptance**. The
+explicitly authorized B5 run resolves F1–F3 on the source-bound `.42` candidate:
+two clean fifteen-artifact matrices match, all absolute reserves and maintained
+instruction comparisons pass, interface/table changes are explained, and the
+final residual inventory has artifact evidence, owners and dispositions.
+Representative PocketIC recovery/lifecycle/provisioning and the packaged public
+consumer pass. Mandatory reinstall-only metadata has native and explicit
+PocketIC unchanged-state rejection evidence, including non-empty stable memory.
+The [structured qualification](../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/b5-qualification.json)
+retains source/method identities, observations and limits.
+
+The subsequent authorized CANIC-176 build-cache presentation follow-up is also
+qualified: 40 focused checks and strict CLI Clippy pass. Its
+[exact CLI delta](../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic176-readability.json)
+retains all B5 non-CLI product inputs unchanged and supplements that checkpoint.
+The current closeout verdict includes this follow-up; downstream adoption remains
+separate.
+
+The complete `.42` batch and changelog surfaces are ready for the maintainer's
+release flow; package metadata remains `.41`. No version transaction or Git
+publication ran. B1/B2 acceptance and the B3 stop/B4 deferral stand. **Human
+acceptance of this exact 0.110 verdict remains pending; 0.111 implementation
+must wait.** This section supersedes the earlier negative audit checkpoint.
+
+
+## Final feature target .42 — accepted 2026-09-25
+
+The maintainer accepts the [scope amendment](0.110-design.md#final-feature-boundary--accepted-2026-09-25):
+finish `.42` as the last planned feature release, stop B3, defer remaining B4
+and prioritize [blob extraction in 0.111](../0.111-standalone-blob-service-extraction/status.md).
+B1 acceptance and complete B2 evidence remain intact. Stopped/deferred work
+is not complete and carries no new claim of absent code or measured savings.
+
+| Batch | Current disposition |
+| --- | --- |
+| B1 | Accepted 2026-09-23 |
+| B2 | Complete with the specifically accepted cold-query tradeoff |
+| B3 | Stopped; no further record/codec restructuring selected |
+| B4 | Remaining pruning deferred and unscheduled; B5 records residuals and owners |
+| B5 | Qualified on final source; exact closeout verdict awaits human acceptance |
+
+The complete local `.42` implementation and changelog surfaces are ready for
+the maintainer's release flow. Final-source B5 now qualifies the recovery-controller
+and host policy changes directly. Downstream launcher/live-timing acceptance
+remains separately open; any discovered Canic-owned defect must be assessed on
+its merits. Necessary correctness, security or recovery follow-ups may still
+require a patch on this line.
+
+The requested exact 0.110 closeout audit is complete. Await human acceptance of
+its pass-with-limitations verdict before 0.111 implementation. No release or
+publication follows automatically. Dated checkpoints below retain historical
+evidence; the current handoff supersedes their pending B5 and B3/B4 queues.
+
 ## B1 accepted; B2 complete — 2026-09-23
 
 The [complete B1 review](../../audits/working/0.110-fleet-runtime-contraction/b1-input-evidence.md#complete-b1-review--accepted-2026-09-23)

@@ -144,6 +144,7 @@ fn plan_fixture() -> AdmissionPlanFile {
                 [0x65; 32],
             )),
             coordinator,
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

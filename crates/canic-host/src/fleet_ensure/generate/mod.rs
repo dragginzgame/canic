@@ -294,6 +294,8 @@ struct FleetSource {
     schema_version: u32,
     funding_profile: FleetFundingProfile,
     operator: String,
+    #[serde(default)]
+    recovery_controllers: Vec<String>,
     admission: AdmissionSource,
     coordinator: CoordinatorSource,
     fleet_subnet_roots: Vec<RootSource>,
@@ -444,6 +446,10 @@ pub fn initialize_fresh_estate_seed(
 ) -> Result<canic_core::ids::FleetId, FleetGenerateError> {
     let source: FleetSource = load_toml(request.source, "source")?;
     require_schema(source.schema_version, "source")?;
+    canonical_recovery_controllers(
+        &source.recovery_controllers,
+        parse_principal("operator", &source.operator)?,
+    )?;
     parse_principal("Cycles Ledger", request.cycles_ledger)?;
     if let Some(existing) = read_seed(request.seed)? {
         require_fresh_seed_authority(&existing, &source, request)?;
@@ -744,7 +750,7 @@ fn generate(
     request: &FleetGenerateRequest<'_>,
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
-    let source: FleetSource = load_toml(request.source, "source")?;
+    let mut source: FleetSource = load_toml(request.source, "source")?;
     let seed: EstateSeed = load_toml(request.seed, "seed")?;
     require_schema(source.schema_version, "source")?;
     require_schema(seed.schema_version, "seed")?;
@@ -756,6 +762,8 @@ fn generate(
         ));
     }
     let operator = parse_principal("operator", &source.operator)?;
+    source.recovery_controllers =
+        canonical_recovery_controllers(&source.recovery_controllers, operator)?;
     parse_subnet("Coordinator", &source.coordinator.subnet.subnet)?;
     let config = AppConfigSnapshot::load(request.app_config)
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
@@ -1092,6 +1100,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         (!input.seed.fresh_estate).then_some(input.seed.coordinator.as_str()),
         None,
         &input.source.operator,
+        &input.source.recovery_controllers,
         &input.source.coordinator.subnet.subnet,
         input.source.coordinator.creation_funding.cycles.to_u128(),
         input
@@ -1128,6 +1137,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             (!input.seed.fresh_estate).then_some(seed.root.as_str()),
             Some("coordinator"),
             &input.source.operator,
+            &input.source.recovery_controllers,
             &source.placement_subnet,
             source.root_creation_funding.cycles.to_u128(),
             source.root_funding.request_threshold.to_u128(),
@@ -1142,6 +1152,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             (!input.seed.fresh_estate).then_some(seed.store.as_str()),
             Some(&root_name),
             &input.source.operator,
+            &input.source.recovery_controllers,
             &source.placement_subnet,
             source.wasm_store_creation_funding.cycles.to_u128(),
             0,
@@ -1185,9 +1196,9 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                     Vec::new()
                 },
                 controllers: if input.seed.fresh_estate {
-                    Vec::new()
+                    input.source.recovery_controllers.clone()
                 } else {
-                    vec![seed.root.clone()]
+                    sorted_controllers(&seed.root, &input.source.recovery_controllers)
                 },
                 drain: None,
                 initial_cycles: config_cycles(creation_funding),
@@ -1242,7 +1253,10 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
         canisters.push(DesiredCanister {
             canic_init: None,
             controller_canisters: Vec::new(),
-            controllers: vec![input.source.operator.clone()],
+            controllers: sorted_controllers(
+                &input.source.operator,
+                &input.source.recovery_controllers,
+            ),
             drain: None,
             initial_cycles: config_cycles(0),
             init_arg: None,
@@ -1273,6 +1287,12 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
                 "Coordinator",
                 &input.source.coordinator.subnet.subnet,
             )?,
+            recovery_controllers: input
+                .source
+                .recovery_controllers
+                .iter()
+                .map(|controller| parse_principal("recovery controller", controller))
+                .collect::<Result<Vec<_>, _>>()?,
             fleet_id: input.seed.fleet_id,
             fresh_estate: input.seed.fresh_estate,
             release_build_id: input.request.release_build_id,
@@ -1373,7 +1393,7 @@ fn observe_estate(
         seed.coordinator.clone(),
         (
             source.coordinator.subnet.subnet.clone(),
-            vec![source.operator.clone()],
+            sorted_controllers(&source.operator, &source.recovery_controllers),
         ),
         "Coordinator",
     )?;
@@ -1383,7 +1403,10 @@ fn observe_estate(
         insert_expected_canister(
             &mut expected,
             treasury.principal.clone(),
-            (treasury.subnet.clone(), vec![source.operator.clone()]),
+            (
+                treasury.subnet.clone(),
+                sorted_controllers(&source.operator, &source.recovery_controllers),
+            ),
             "treasury",
         )?;
     }
@@ -1392,7 +1415,10 @@ fn observe_estate(
         insert_expected_canister(
             &mut expected,
             root.root.clone(),
-            (root.placement_subnet.clone(), vec![source.operator.clone()]),
+            (
+                root.placement_subnet.clone(),
+                sorted_controllers(&source.operator, &source.recovery_controllers),
+            ),
             "Fleet Subnet Root",
         )?;
     }
@@ -1517,7 +1543,10 @@ fn observe_estate(
                 })?;
                 let root_name = retained_root_name(source, seed, topology, &root.root)?;
                 stopped_roots.push(RootManagementBinding {
-                    controllers: vec![operator.to_text()],
+                    controllers: sorted_controllers(
+                        &operator.to_text(),
+                        &source.recovery_controllers,
+                    ),
                     name: root_name,
                     module_sha256,
                     principal: root.root.clone(),
@@ -1763,6 +1792,12 @@ fn observe_root_owned_pool_assets(
             },
             coordinator_subnet: expected_coordinator_subnet,
             coordinator: expected_coordinator,
+            recovery_controllers: request
+                .source
+                .recovery_controllers
+                .iter()
+                .map(|controller| parse_principal("recovery controller", controller))
+                .collect::<Result<Vec<_>, _>>()?,
         };
         let expected_registry_authority = FleetRegistryAuthority {
             binding: expected_coordinator.clone(),
@@ -2025,6 +2060,50 @@ fn require_exact_controllers(
     Ok(())
 }
 
+fn sorted_controllers(primary: &str, recovery: &[String]) -> Vec<String> {
+    let mut controllers = recovery.to_vec();
+    controllers.push(primary.to_string());
+    controllers.sort();
+    controllers.dedup();
+    controllers
+}
+
+fn canonical_recovery_controllers(
+    configured: &[String],
+    operator: Principal,
+) -> Result<Vec<String>, FleetGenerateError> {
+    // Reserve two controller slots for the Root and a temporary handoff recipient.
+    if configured.len() > 8 {
+        return Err(FleetGenerateError::Authority(
+            "at most eight recovery controllers are supported".to_string(),
+        ));
+    }
+    let mut controllers = configured
+        .iter()
+        .map(|value| parse_principal("recovery controller", value))
+        .collect::<Result<Vec<_>, _>>()?;
+    if controllers
+        .iter()
+        .any(|controller| *controller == Principal::anonymous() || *controller == operator)
+    {
+        return Err(FleetGenerateError::Authority(
+            "recovery controllers must be non-anonymous and distinct from the operator".to_string(),
+        ));
+    }
+    controllers.sort_unstable();
+    if controllers.windows(2).any(|pair| pair[0] == pair[1]) {
+        return Err(FleetGenerateError::Authority(
+            "recovery controllers must be unique".to_string(),
+        ));
+    }
+    let mut rendered = controllers
+        .into_iter()
+        .map(|controller| controller.to_text())
+        .collect::<Vec<_>>();
+    rendered.sort();
+    Ok(rendered)
+}
+
 fn release_authority(
     request: &FleetGenerateRequest<'_>,
     component_topology: &canic_core::control_plane_support::config::ComponentTopology,
@@ -2103,6 +2182,7 @@ fn infrastructure_canister(
     principal: Option<&str>,
     parent: Option<&str>,
     operator: &str,
+    recovery_controllers: &[String],
     subnet: &str,
     initial_cycles: u128,
     minimum_cycles: u128,
@@ -2111,7 +2191,7 @@ fn infrastructure_canister(
     DesiredCanister {
         canic_init,
         controller_canisters: Vec::new(),
-        controllers: vec![operator.to_string()],
+        controllers: sorted_controllers(operator, recovery_controllers),
         drain: None,
         initial_cycles: config_cycles(initial_cycles),
         init_arg: None,

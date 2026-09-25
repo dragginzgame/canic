@@ -7,14 +7,15 @@ use crate::{
     fleet_ensure::{
         model::{
             DesiredFleet, FleetEnsureContinuationAuthority, FleetEnsureJournalRecord,
-            FleetEnsurePlan, FleetEnsureSuccessorPhaseRecord, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
-            StartupFundingRequirement,
+            FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureSuccessorPhaseRecord,
+            MAX_FLEET_ENSURE_PROTOCOL_STEPS, StartupFundingRequirement,
         },
         ops::{EnsurePaths, EnsureStateError, artifact_sha256, is_sha256, read_plan, write_plan},
         policy::expected_plan_sha256,
     },
     release_set::{
-        load_persisted_application_artifact_union, load_persisted_current_release_set_manifest,
+        CurrentReleaseSetManifestError, load_persisted_application_artifact_union,
+        load_persisted_current_release_set_manifest,
     },
 };
 use canic_core::{
@@ -24,6 +25,28 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
+
+/// Reject unsupported current-release policy before any paid platform observation.
+pub(in crate::fleet_ensure) fn verify_release_transition(
+    root: &Path,
+    desired: &DesiredFleet,
+    scope: FleetEnsurePlanScope,
+) -> Result<(), EnsureStateError> {
+    let (Some(bootstrap), Some(_)) = (&desired.bootstrap, &desired.protocol) else {
+        return Ok(());
+    };
+    match load_persisted_current_release_set_manifest(root, bootstrap.release_build_id) {
+        Ok(_) => Ok(()),
+        // Starting an exactly retained installed Root does not consume a selected
+        // application release. Missing build inputs cannot strand that recovery.
+        Err(CurrentReleaseSetManifestError::Missing(_))
+            if scope == FleetEnsurePlanScope::RootStartPrerequisite =>
+        {
+            Ok(())
+        }
+        Err(error) => Err(invalid(error.to_string())),
+    }
+}
 
 pub(super) fn resolve_authority(
     root: &Path,

@@ -231,7 +231,7 @@ pub struct FleetSubnetRootLimits {
 ///
 /// FleetCoordinatorBinding
 ///
-/// Immutable identity and exact physical placement of one Fleet Coordinator.
+/// Immutable Coordinator identity, placement and direct Fleet recovery authority.
 ///
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -240,6 +240,28 @@ pub struct FleetCoordinatorBinding {
     pub fleet: FleetBinding,
     pub coordinator_subnet: SubnetId,
     pub coordinator: Principal,
+    /// Canonical direct controllers that may recover any canister in this Fleet.
+    pub recovery_controllers: Vec<Principal>,
+}
+
+impl FleetCoordinatorBinding {
+    /// Exact controller set for a Root-owned canister, including recovery authority.
+    #[must_use]
+    pub fn root_controllers(&self, root: Principal) -> Vec<Principal> {
+        let mut controllers = self.recovery_controllers.clone();
+        controllers.push(root);
+        controllers.sort_unstable();
+        controllers.dedup();
+        controllers
+    }
+
+    /// Compare IC controller sets without relying on management response order.
+    #[must_use]
+    pub fn has_exact_root_controllers(&self, root: Principal, observed: &[Principal]) -> bool {
+        let mut observed = observed.to_vec();
+        observed.sort_unstable();
+        observed == self.root_controllers(root)
+    }
 }
 
 ///
@@ -354,6 +376,31 @@ pub enum ManagedCanisterBinding {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn root_controller_set_includes_exact_recovery_principals() {
+        use crate::ids::{AppId, CanonicalNetworkId, FleetId, FleetKey};
+
+        let root = Principal::from_slice(&[21; 29]);
+        let recovery = Principal::from_slice(&[22; 29]);
+        let binding = FleetCoordinatorBinding {
+            fleet: FleetBinding {
+                fleet: FleetKey {
+                    canonical_network_id: CanonicalNetworkId::ic_mainnet(),
+                    fleet_id: FleetId::from_generated_bytes([23; 32]),
+                },
+                app: AppId::from("recovery-test"),
+            },
+            coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[24; 29])),
+            coordinator: Principal::from_slice(&[25; 29]),
+            recovery_controllers: vec![recovery],
+        };
+        let mut expected = vec![root, recovery];
+        expected.sort_unstable();
+        assert_eq!(binding.root_controllers(root), expected);
+        assert!(binding.has_exact_root_controllers(root, &[recovery, root]));
+        assert!(!binding.has_exact_root_controllers(root, &[root]));
+    }
 
     #[test]
     fn funding_profile_candid_spelling_roundtrips() {

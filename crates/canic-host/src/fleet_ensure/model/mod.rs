@@ -341,6 +341,8 @@ pub struct DesiredFleetBootstrap {
         canic_core::control_plane_support::config::ComponentDeploymentConfiguration,
     pub coordinator: String,
     pub coordinator_subnet: canic_core::ids::SubnetId,
+    /// Exact direct recovery controllers for every Fleet canister.
+    pub recovery_controllers: Vec<canic_core::cdk::types::Principal>,
     pub fleet_id: canic_core::ids::FleetId,
     pub fresh_estate: bool,
     pub release_build_id: canic_core::ids::ReleaseBuildId,

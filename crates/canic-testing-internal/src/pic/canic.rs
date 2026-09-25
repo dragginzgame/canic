@@ -850,6 +850,7 @@ fn managed_test_root_init_args(
             },
             coordinator_subnet: test_subnet(0x40),
             coordinator,
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

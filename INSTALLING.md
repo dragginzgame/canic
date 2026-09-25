@@ -42,13 +42,27 @@ keep deterministic Wasm builds non-incremental.
 
 ## ICP CLI compatibility
 
-The maintained range is `icp-cli >=1.5.0, <2.0.0`; the maintainer toolchain currently pins `1.5.0`.
+The maintained range is `icp-cli >=1.5.0, <2.0.0`; the maintainer toolchain currently pins `1.6.0`.
 
 ```bash
 which icp
 icp --version
 bash scripts/ci/install-icp-cli.sh
 ```
+
+The installer writes the verified binary to `~/.cargo/bin/icp` by default.
+If another `icp` appears earlier on `PATH`, the shell may still run the older
+binary. Check with `type -a icp`, then select the installed binary in the
+current shell:
+
+```bash
+export PATH="$HOME/.cargo/bin:$PATH"
+hash -r
+icp -V
+```
+
+For future shells, put `~/.cargo/bin` before the other `icp` location in your
+shell startup configuration.
 
 Custom connected networks must declare their exact root key. Enroll that trust
 through Canic before Fleet observation or mutation:
