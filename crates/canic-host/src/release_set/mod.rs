@@ -29,7 +29,8 @@ pub use config::{
 };
 pub use current::{
     CurrentReleaseSetManifest, CurrentReleaseSetManifestError, PersistedCurrentReleaseSetManifest,
-    compile_and_persist_current_release_set_manifest, load_persisted_current_release_set_manifest,
+    ReleaseTransitionMode, compile_and_persist_current_release_set_manifest,
+    load_persisted_current_release_set_manifest,
 };
 pub use infrastructure::{
     CanicInfrastructureArtifactBuildOutput, CanicInfrastructureArtifactEntry,

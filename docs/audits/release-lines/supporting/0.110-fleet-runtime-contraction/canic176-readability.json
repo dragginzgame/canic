@@ -1,0 +1,118 @@
+{
+   "b5_disposition" : "Retain B5 exact-source measurements. All recorded non-CLI product inputs match; this additive record qualifies the CLI-only delta. No new artifact/instruction or full-suite measurement is claimed.",
+   "checks" : [
+      {
+         "command" : "cargo test --locked -p canic-cli --lib build::tests",
+         "id" : "build-tests",
+         "log" : "build-tests.log",
+         "passed" : 27,
+         "result" : "pass"
+      },
+      {
+         "command" : "cargo test --locked -p canic-cli --lib support::build",
+         "id" : "display-tests",
+         "log" : "display-tests.log",
+         "passed" : 9,
+         "result" : "pass"
+      },
+      {
+         "command" : "cargo test --locked -p canic-cli --test subcommand_order",
+         "id" : "help-tests",
+         "log" : "help-tests.log",
+         "passed" : 2,
+         "result" : "pass"
+      },
+      {
+         "command" : "cargo test --locked -p canic-host --lib canister_build::reuse::tests::complete::verified_repeat_survives_missing_diagnostics_and_rejects_tampered_output",
+         "id" : "reuse-tests",
+         "log" : "reuse-tests.log",
+         "passed" : 1,
+         "result" : "pass"
+      },
+      {
+         "command" : "cargo test --locked -p canic-host --lib canister_build::reuse::tests::complete::environment::launcher_shell_depth_and_credentials_preserve_reuse_while_build_inputs_invalidate",
+         "id" : "environment-tests",
+         "log" : "environment-tests.log",
+         "passed" : 1,
+         "result" : "pass"
+      },
+      {
+         "command" : "cargo clippy --locked -p canic-cli --lib --tests -- -D warnings",
+         "id" : "clippy",
+         "log" : "clippy.log",
+         "result" : "pass"
+      }
+   ],
+   "date" : "2026-09-25",
+   "environment" : {
+      "CARGO_BUILD_JOBS" : "2",
+      "CARGO_INCREMENTAL" : "0",
+      "CARGO_NET_OFFLINE" : "true",
+      "RUSTC_WRAPPER" : ""
+   },
+   "feedback" : {
+      "commit" : "6166d79c3b083892fb218114ac5af80b07bdf295",
+      "path" : "toko-miner/docs/upstream/canic.md",
+      "sha256" : "467038bd808d51b9c33b7e768cedbaa936a7455dee6f167eccf839ab45aab98a"
+   },
+   "invariants" : [
+      "Shared verified hits and misses are summarized once with artifact count",
+      "Detailed bounded host attribution is available once with --verbose",
+      "Distinct rejection errors remain visible",
+      "Checking/waiting share the existing TTY-bounded display; redirected phase output has no cursor controls",
+      "Cache admission, environment normalization/binding and output verification are unchanged"
+   ],
+   "issue" : "CANIC-176",
+   "limitations" : [
+      "Terminal width/resize behavior uses the actual painter with in-memory writers; no new real PTY or downstream launcher run is claimed",
+      "Toko adoption and application acceptance remain downstream work",
+      "No version transaction, Git publication, deployment or next-minor implementation ran",
+      "Human acceptance of the exact 0.110 audit including this delta remains pending"
+   ],
+   "open_patch" : "0.110.42",
+   "package_version" : "0.110.41",
+   "records" : {
+      "file" : "canic176-readability-records.tar.gz",
+      "sha256" : "2f3d33db76372cb018cecb09a93d7d9412232fc52d97927c067d69d45bbe7b36"
+   },
+   "result" : "pass",
+   "schema_version" : 1,
+   "scope" : "CLI build-cache presentation follow-up within the open 0.110.42 batch",
+   "source" : {
+      "changes" : [
+         {
+            "after" : "48f322c040b3ac247c028873b38cab16ac09b8e6b25f9802f60d93f7112cafb8",
+            "before" : "cece19b12d3a7fd795549a55910347ce0e55a733ae103c6e3fbe85c6447ffaf9",
+            "path" : "crates/canic-cli/README.md"
+         },
+         {
+            "after" : "1d102caef3afb8705fd88905d4a81fced47d5bb9ee2af40af09123a8b50824bc",
+            "before" : "693a75a217c03bdcab2cfc8e82b594be56cfee1eef6594a2c22eae7b4f9056a5",
+            "path" : "crates/canic-cli/src/build.rs"
+         },
+         {
+            "after" : "c0531a7a11a8c6b93a515b83bb6f87bc8747256b23d97ccd4b509ca63fc6d194",
+            "before" : "274e3230c4e2e7b1cbb29ad8034a389771cc7199f32bca8ce173e36646e97668",
+            "path" : "crates/canic-cli/src/support/build_lock/mod.rs"
+         },
+         {
+            "after" : "e658e2f99b76ee02a598f1c02a41f7959e71a2c8997ae1dfd4fe8019e4363b58",
+            "before" : "c8291f55e0ce0d164d6cfcc8b5f3e5a425202a6de09675271751e589c2197817",
+            "path" : "crates/canic-cli/src/support/build_lock/tests.rs"
+         },
+         {
+            "after" : "3af13f8bf3fc1f4c49f75e2af5764605c36f3686dd4ad66841f0491bc317eca3",
+            "before" : "7fed18d8e304df98a9dab83173c9d05a48746814e76c078b88c9100c363417af",
+            "path" : "crates/canic-cli/src/support/mod.rs"
+         },
+         {
+            "after" : "fb1b566e665ea2e994693df8ee0816cb9654b95a43fecaa60e101716b5b2e96b",
+            "before" : null,
+            "path" : "crates/canic-cli/src/support/build_cache/mod.rs"
+         }
+      ],
+      "prior_source_manifest_sha256" : "c8beec66a4bf5dc8ff52109715eba6decb8063aa766f2e3427e5f6724c240d3b",
+      "source_manifest_sha256" : "8fef4a16efefe1cfd08141ed398125a24e1651b60662676096d8e76d537234ab",
+      "unchanged_non_cli_product_inputs" : true
+   }
+}

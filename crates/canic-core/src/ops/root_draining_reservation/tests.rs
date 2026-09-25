@@ -58,6 +58,7 @@ fn fixture() -> FleetSubnetRootDrainingReservationResponse {
             },
             coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[2; 29])),
             coordinator,
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

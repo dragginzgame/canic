@@ -307,6 +307,7 @@ fn validate_wasm_store_activation_authority(
     let expected_controllers = expected_wasm_store_controllers(
         input.binding.fleet_subnet_root,
         input.wasm_store_authority.installation_controller,
+        &input.binding.authority.binding.recovery_controllers,
     );
     let exact_binding = child.fleet == input.binding.authority.binding.fleet
         && child.fleet_subnet_root == input.binding.fleet_subnet_root
@@ -328,8 +329,10 @@ fn validate_wasm_store_activation_authority(
 pub fn expected_wasm_store_controllers(
     fleet_subnet_root: Principal,
     installation_controller: Principal,
+    recovery_controllers: &[Principal],
 ) -> Vec<Principal> {
-    let mut controllers = vec![fleet_subnet_root, installation_controller];
+    let mut controllers = recovery_controllers.to_vec();
+    controllers.extend([fleet_subnet_root, installation_controller]);
     controllers.sort();
     controllers.dedup();
     controllers
@@ -376,6 +379,7 @@ mod tests {
                 },
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[4; 29])),
                 coordinator: Principal::from_slice(&[5; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         };
@@ -422,6 +426,7 @@ mod tests {
             controllers: expected_wasm_store_controllers(
                 fleet_subnet_root,
                 installation_controller,
+                &[],
             ),
             manifest_digest: initial_release_set.manifest_digest,
         };

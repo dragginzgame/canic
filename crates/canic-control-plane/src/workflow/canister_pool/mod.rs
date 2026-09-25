@@ -53,6 +53,39 @@ const MAINTENANCE_INTERVAL: Duration = Duration::from_secs(30);
 const MAINTENANCE_LEASE_NS: u64 = 5 * 60 * 1_000_000_000;
 const MAX_STATUS_PAGE_ENTRIES: u16 = 256;
 
+fn root_controllers(root: Principal) -> Result<Vec<Principal>, InternalError> {
+    let binding = FleetActivationWorkflow::root_authority()?.binding;
+    if binding.fleet_subnet_root != root {
+        return Err(InternalError::conflict());
+    }
+    Ok(binding.authority.binding.root_controllers(root))
+}
+
+fn has_exact_root_controllers(
+    root: Principal,
+    observed: &[Principal],
+) -> Result<bool, InternalError> {
+    let binding = FleetActivationWorkflow::root_authority()?.binding;
+    if binding.fleet_subnet_root != root {
+        return Err(InternalError::conflict());
+    }
+    Ok(binding
+        .authority
+        .binding
+        .has_exact_root_controllers(root, observed))
+}
+
+fn handoff_controllers(
+    root: Principal,
+    recipient: Principal,
+) -> Result<Vec<Principal>, InternalError> {
+    let mut controllers = root_controllers(root)?;
+    controllers.push(recipient);
+    controllers.sort_unstable();
+    controllers.dedup();
+    Ok(controllers)
+}
+
 thread_local! {
     static MAINTENANCE_TIMER: RefCell<Option<AfterCompletionRegistration>> = const { RefCell::new(None) };
     static RECOVERY_WATCHDOG: RefCell<Option<WatchdogRegistration>> = const { RefCell::new(None) };
@@ -506,7 +539,7 @@ async fn handoff(
     MgmtOps::update_settings(&UpdateSettingsArgs {
         canister_id,
         settings: CanisterSettings {
-            controllers: Some(vec![root, recipient]),
+            controllers: Some(handoff_controllers(root, recipient)?),
             ..CanisterSettings::default()
         },
         sender_canister_version: None,
@@ -617,7 +650,9 @@ async fn observe_reset_asset_cycles(
 ) -> Result<Cycles, InternalError> {
     if preparation == CanisterPoolResetPreparation::Reinspect {
         let status = MgmtOps::canister_status(canister_id).await?;
-        if status.settings.controllers != [root] || status.module_hash.is_some() {
+        if !has_exact_root_controllers(root, &status.settings.controllers)?
+            || status.module_hash.is_some()
+        {
             return Err(InternalError::conflict());
         }
         return Cycles::try_from(status.cycles).map_err(|_error| InternalError::invariant());
@@ -629,7 +664,7 @@ async fn observe_reset_asset_cycles(
     MgmtOps::update_settings(&UpdateSettingsArgs {
         canister_id,
         settings: CanisterSettings {
-            controllers: Some(vec![root]),
+            controllers: Some(root_controllers(root)?),
             ..CanisterSettings::default()
         },
         sender_canister_version: None,

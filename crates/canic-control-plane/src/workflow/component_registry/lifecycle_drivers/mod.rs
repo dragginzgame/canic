@@ -280,13 +280,13 @@ async fn advance_component_child_allocation_step(
             Ok(false)
         }
         RootComponentChildAllocationProgressView::Verified { .. } => {
-            commit_child_allocation_for_parent(
+            Box::pin(commit_child_allocation_for_parent(
                 RootComponentChildCommitRequest {
                     operation_id,
                     component,
                 },
                 parent_canister_id,
-            )
+            ))
             .await?;
             Ok(false)
         }
@@ -303,13 +303,13 @@ async fn advance_component_child_allocation_step(
                 return Ok(false);
             }
             if !commitment.runtime_activated {
-                activate_child_runtime_for_parent(
+                Box::pin(activate_child_runtime_for_parent(
                     RootComponentChildRuntimeActivationRequest {
                         operation_id,
                         component,
                     },
                     parent_canister_id,
-                )
+                ))
                 .await?;
                 return Ok(false);
             }

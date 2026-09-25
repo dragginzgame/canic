@@ -410,6 +410,7 @@ fn managed_component_binding() -> ManagedCanisterBinding {
                     &[45; 29],
                 )),
                 coordinator: candid::Principal::from_slice(&[46; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

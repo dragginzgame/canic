@@ -18,6 +18,7 @@ fn current_manifest_canonical_shape_binds_all_child_digests() {
         infrastructure_artifact_manifest_sha256: [9; 32],
         release_build_id: id,
         schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,
+        transition_mode: ReleaseTransitionMode::ReinstallOnly,
     };
 
     let bytes = manifest.canonical_bytes().expect("canonical manifest");
@@ -25,6 +26,59 @@ fn current_manifest_canonical_shape_binds_all_child_digests() {
 
     assert_eq!(decoded, manifest);
     assert_eq!(decoded.build_network, canic_core::ids::BuildNetwork::Local);
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).unwrap()["transition_mode"],
+        "reinstall_only"
+    );
+}
+
+#[test]
+fn current_manifest_rejects_unqualified_transition_policy_without_mutating_authority() {
+    let root = temp_dir("release-transition-policy");
+    let plan = plan_release_build(&root).expect("plan release");
+    let release = plan.record.release_build_id;
+    let manifest = CurrentReleaseSetManifest {
+        application_artifact_union_sha256: [1; 32],
+        build_network: canic_core::ids::BuildNetwork::Local,
+        fixture_artifact_manifest_sha256: [2; 32],
+        infrastructure_artifact_manifest_sha256: [3; 32],
+        release_build_id: release,
+        schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,
+        transition_mode: ReleaseTransitionMode::ReinstallOnly,
+    };
+    let path = current_release_set_manifest_path(&root, release);
+    let bytes = manifest
+        .canonical_bytes()
+        .expect("qualified release policy");
+    std::fs::write(&path, &bytes).unwrap();
+    crate::release_build::finalize_release_build_from_manifest(&root, release, &path).unwrap();
+    let finalized_plan = std::fs::read(&plan.path).unwrap();
+
+    for mode in [None, Some("upgrade"), Some("adopt"), Some("mixed_version")] {
+        let mut document = serde_json::to_value(&manifest).unwrap();
+        if let Some(mode) = mode {
+            document["transition_mode"] = mode.into();
+        } else {
+            document.as_object_mut().unwrap().remove("transition_mode");
+        }
+        let rejected = serde_json::to_vec(&document).unwrap();
+        std::fs::write(&path, &rejected).unwrap();
+        assert!(matches!(
+            load_persisted_current_release_set_manifest(&root, release),
+            Err(CurrentReleaseSetManifestError::Invalid(_))
+        ));
+        assert_eq!(std::fs::read(&path).unwrap(), rejected);
+        assert_eq!(std::fs::read(&plan.path).unwrap(), finalized_plan);
+    }
+
+    std::fs::write(&path, &bytes).unwrap();
+    let recovered = load_persisted_current_release_set_manifest(&root, release).unwrap();
+    assert_eq!(recovered.manifest, manifest);
+    assert_eq!(recovered.digest, <[u8; 32]>::from(Sha256::digest(&bytes)));
+    crate::release_build::validate_finalized_release_build_manifest(&root, release, &path)
+        .expect("corrected same-release authority retains its original finalization");
+    assert_eq!(std::fs::read(&plan.path).unwrap(), finalized_plan);
+    std::fs::remove_dir_all(root).unwrap();
 }
 
 #[test]
@@ -75,6 +129,10 @@ fn complete_release_binds_fixture_bytes_and_rejects_substituted_receipts() {
     assert_eq!(
         bound.manifest.fixture_artifact_manifest_sha256,
         fixtures.digest
+    );
+    assert_eq!(
+        bound.manifest.transition_mode,
+        ReleaseTransitionMode::ReinstallOnly
     );
     assert_eq!(
         bound.manifest.verify_fixtures(&root, &topology).unwrap(),

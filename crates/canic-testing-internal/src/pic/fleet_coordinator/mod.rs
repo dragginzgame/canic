@@ -677,6 +677,7 @@ placement.minimum_distinct_roots = 2
                     fleet: fleet.clone(),
                     coordinator_subnet: SubnetId::from_principal(principal(2)),
                     coordinator,
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },

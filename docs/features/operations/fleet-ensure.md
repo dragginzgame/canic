@@ -307,7 +307,27 @@ or bypass host stall detection. Issued effects remain in their existing records.
 Do not hand-author the low-level Coordinator/Root/Store authority document.
 After a complete `canic build`, generate it from the protected high-level Fleet
 policy, the finalized release-build ID printed by that build, and an explicit
-current-estate identity seed in `deployments/<fleet>.estate.toml`:
+current-estate identity seed in `deployments/<fleet>.estate.toml`.
+
+For a new Fleet, put direct recovery controllers at the top level of the
+high-level Fleet policy, before any TOML table. The maintained default is
+explicitly empty until the developers' Principal IDs are supplied:
+
+```toml
+recovery_controllers = []
+```
+
+Set this to the three developers' distinct, non-anonymous Principal IDs before
+installing the Fleet to give each of them direct IC management authority over
+the Coordinator, Roots, Stores, pool reserves, Components, descendants and
+controlled treasury. An empty list adds no recovery controller. Each listed
+Principal can independently reinstall code, change controllers or delete any
+of those canisters; this is not threshold approval. Generation rejects
+duplicates, the operator Principal and more than eight entries. The exact set
+is carried through controller creation, observation and retry. This hard-cut
+contract is for new installations; it does not update an existing live Fleet.
+
+A retained estate seed has this shape:
 
 ```toml
 schema_version = 1
@@ -352,7 +372,8 @@ operator, controller and role relationships, Registry-backed placement,
 protected Root pool inventory and exact cycle balances before publishing
 `fleets/<fleet>.toml`. A Root-owned Store or pool asset is resolved through the
 Root's protected inventory; a retained Store controller handoff accepts only
-Root-only ownership or the exact Root-plus-operator set before installation.
+the exact Root-plus-recovery set or Root-plus-operator-plus-recovery set before
+installation.
 The live Root's identity authority and installed policy must match the current
 configuration exactly; policy drift fails closed. A seeded
 pool identity remains in the conservation set as it moves from idle bootstrap
@@ -674,6 +695,16 @@ observations in place. JSON emits every typed host event on stderr and
 the complete final report on stdout, without animation or milestone suppression.
 Receipt write failures stay inside the interactive screen and mark final timing
 evidence partial; they do not interrupt the display with a separate log line.
+The schema-1 receipt's `invocation_finished.data.timing_evidence_complete` is
+false when events were omitted, a timing start has no completion, or timing
+events contain duplicate starts or unmatched completions. A failed request with
+a retained completion still supplies complete
+timing evidence. The human timing summary uses the same check. A missing final
+record, truncated JSON line or receipt write failure also means the evidence is
+incomplete. This diagnostic completeness flag does not establish Fleet
+convergence, cycle conservation or a measured performance improvement. Compare
+timings only with matched inputs and conditions; nested and concurrent request
+durations cannot be summed into elapsed deployment time.
 Errors after ensure-option parsing use the `fleet_ensure_error` JSON event;
 invalid CLI syntax still follows the ordinary argument-parser error path.
 For detailed evidence, select `--json` on the intended invocation and redirect
@@ -944,10 +975,11 @@ treasury names one present desired canister and is always reused, never
 replaced. The active ICP identity must equal `operator`, and every
 host-controlled canister retains that Principal as a direct controller so
 interrupted effects remain
-observable and resumable. Root-owned pool assets remain solely under their
-Root and are observed through its protected bounded inventory. A Store retains
-its exact owning Root and protected operator; when a retained Store is still
-Root-only, the Root durably prepares that exact controller set before the host
+observable and resumable. Root-owned pool assets retain their Root and
+configured recovery controllers and are observed through its protected bounded
+inventory. A Store retains its exact owning Root, protected operator and
+configured recovery controllers; when a retained Store still lacks the
+operator, the Root durably prepares that exact controller set before the host
 installs the current Store artifact.
 
 ## Plan And Apply
@@ -1123,7 +1155,7 @@ Native pool funding records `pool_funding.root` and `pool_funding.lifecycle`
 in the reviewed action. Ready assets require an empty module. PendingReset and
 Failed assets may retain installed modules because funding precedes their
 separately journalled Root reset. Before funding, the adapter verifies exact
-pool membership, the reviewed lifecycle and sole-Root controllers. Retry keeps
+pool membership, the reviewed lifecycle and exact Root-plus-recovery controllers. Retry keeps
 the original Ledger withdrawal identity and receipt; it does not repeat an
 already completed credit. This is the current schema-1 hard cut.
 
@@ -1166,6 +1198,21 @@ exact typed status query proves terminal state; consecutive unchanged status
 observations consume the stall budget and genuine progress resets it.
 
 ## Hard-Cut Boundary
+
+The finalized `current-release-set-manifest.json` declares
+`"transition_mode":"reinstall_only"`. This required field is included in the
+canonical release digest. The authority loader rejects omitted or unsupported
+policies; there is no default or inferred upgrade mode. The field describes
+release policy and does not authorize a reinstall: the exact reviewed plan,
+controller authority and cycle-conservation checks still govern effects.
+Planning and apply validate this policy before paid platform observations,
+including terminal replay with no continuation work. A retained operation uses
+its reviewed release authority; rejection does not compact its journal.
+The exact Root-start prerequisite can still use retained installed authority
+when application build files are unavailable. It does not select or install a
+release; full release operations require the current manifest.
+That prerequisite's management reads remain paid. A present manifest with an
+omitted or unsupported policy is rejected before those reads.
 
 The reconciler does not read or migrate former install plans, role journals,
 repair receipts, recovery bundles, installed-Fleet caches, or version-pair

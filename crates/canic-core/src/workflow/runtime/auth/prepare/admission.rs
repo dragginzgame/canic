@@ -165,6 +165,7 @@ mod tests {
                     },
                     coordinator_subnet: SubnetId::from_principal(p(2)),
                     coordinator: p(3),
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },

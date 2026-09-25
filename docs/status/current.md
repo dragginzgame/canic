@@ -20,6 +20,196 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## CANIC-176 build-cache readability — complete locally, 2026-09-25
+
+The maintainer authorized the new Toko feedback from commit
+`6166d79c3b083892fb218114ac5af80b07bdf295`: one shared complete-build cache
+summary, early App/profile/network context, optional bounded details and a
+single checking/waiting display. Implementation is confined to CLI presentation;
+host cache admission, environment binding and artifact construction are unchanged.
+The CLI now prints App/profile/network first and one verified hit or rebuild
+summary with the artifact count. `--verbose` retains the complete bounded cache
+explanation and tool/configuration details. Checking/waiting use one live line;
+redirected logs emit plain phase events. Distinct rejection errors remain visible.
+
+All 40 focused checks pass: 27 build, nine display/cancellation, two recursive
+help and two existing cache-safety tests. Changed inputs and tampered outputs
+still reject reuse; unchanged inputs retain verified hits. Strict scoped CLI
+Clippy, formatting, document semantics and whitespace pass. The
+[qualification record](../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic176-readability.json)
+binds the final source, exact delta and retained logs. All recorded non-CLI
+product inputs still match B5; its original measurements are preserved, with
+this separately qualified CLI delta added to the closeout audit.
+
+The complete local `.42` batch and changelog surfaces are ready for the
+maintainer's release flow. Package metadata remains `.41`; changes are
+uncommitted. Toko release adoption and launcher acceptance remain downstream.
+Human acceptance of the exact 0.110 audit, including this delta, remains pending
+before 0.111 implementation. No broad gate, versioning, publication or deployment
+ran for this follow-up.
+
+## 0.110 closeout qualification complete — 2026-09-25
+
+The maintainer-requested [closeout audit](../audits/release-lines/0.110-closeout-audit.md#final-b5-qualification--2026-09-25)
+now concludes **pass with limitations; ready for human acceptance**. The
+explicitly authorized B5 qualification closes F1–F3 on the frozen local `.42`
+candidate. Its exact source, tools, methods and results are retained in the
+[qualification record](../audits/release-lines/supporting/0.110-fleet-runtime-contraction/b5-qualification.json).
+
+Both clean builds of all fifteen canonical/fixture artifacts pass and match.
+Root retains 2,970,855 code bytes and 39,944 functions of headroom. Interfaces,
+capabilities and table changes are accounted for. Two instruction runs agree;
+all maintained comparisons pass with only the four previously accepted B2
+exceptions. The final residual inventory identifies owners and dispositions
+against optimized artifacts without claiming deferred code is absent.
+
+The fresh-estate recovery proof, all seven lifecycle-boundary cases, real
+Root/Store initial-shard provisioning and the packaged public consumer pass.
+Mandatory `transition_mode: "reinstall_only"` remains bound into current
+release authority. Forty-nine native checks and an additional retained test-only
+PocketIC overlay prove typed rejection, unchanged module/stable/controller/
+cycle/version/workflow observations and corrected effect-free continuation.
+Paid management status observations are accounted separately from the exact
+rejection balance window. B5 caught and corrected an early-read ordering defect
+in terminal replay; exact Root-start recovery without application build files
+remains covered by the native regression.
+
+The registered test inventory and plan-only graph pass; serial membership is
+unchanged. Resource observations are retained without a full-suite performance
+claim. Qualification explicitly selects native ICP 1.6.0; the shell default
+still reports 1.5.0. This does not claim a personal tool installation update.
+
+The complete local `.42` batch is ready to push through the maintainer's release
+flow, and its changelog surfaces are ready. Package metadata remains `.41`;
+versioning, release publication, commits, pushes and deployment have not run.
+B1 remains accepted, B2 complete, B3 stopped and further B4 pruning deferred.
+**Human acceptance of this exact 0.110 verdict remains pending; do not begin
+0.111 implementation.** Earlier pending-B5/negative-audit statements below
+record their historical checkpoint and are superseded by this handoff.
+Downstream launcher/live-timing acceptance remains separately owned.
+
+## Roadmap: finish .42, then blob extraction — accepted 2026-09-25
+
+The maintainer accepts `.42` as the final planned 0.110 feature release and
+selects [standalone blob extraction for 0.111](../design/0.111-standalone-blob-service-extraction/status.md).
+The [0.110 scope amendment](../design/0.110-fleet-runtime-contraction/0.110-design.md#final-feature-boundary--accepted-2026-09-25)
+retains accepted B1 and complete B2, stops further B3 record/codec work and
+defers remaining B4 pruning. Deferred work is not claimed complete or absent.
+This current queue supersedes earlier B3/B4 continuation instructions below.
+
+B5 remains open against the final `.42` source: canonical/fixture reserves,
+interfaces, deterministic builds, maintained behavior and a generated-surface
+residual inventory with owners and explicit disposition. B2's earlier artifact
+measurements cannot qualify later runtime/controller changes. Necessary
+correctness, security, budget or recovery corrections may still require a
+follow-up patch. The local `.42` batch and its existing changelog surfaces
+remain ready for the maintainer's release flow; the complete minor is not yet
+ready for closeout. Downstream launcher/live-timing acceptance remains open.
+
+The former numbered multi-Fleet estate proposal is now a
+[deferred idea](../design/ideas/bounded-multi-fleet-estates/design.md), with no
+release position or automatic Q0 promotion. It does not gate blob extraction.
+The 0.111 plan separates provider/owner qualification, independently published
+service work, the complete Canic hard cut and final consumer/artifact evidence.
+The external owner, exact repository, consumer and package/publication plan
+remain to be assigned; no external repository mutation is authorized.
+
+This is a documentation-only roadmap change. It neither requests nor accepts
+the exact human 0.110 closeout audit. Finish B5, then obtain that requested
+audit and human acceptance before 0.111 implementation. No broad validation,
+version transaction, Git publication, deployment or runtime change is part of
+this amendment. The documentation-only planning change does not add a release
+changelog entry under changelog governance.
+
+Document semantics and whitespace checks pass; all 161 relative file links in
+the ten changed/new design documents and this new handoff resolve. The existing
+guard discovers numbered lines and idea topics dynamically, so the index moves
+need no new hard-coded path or prose check. Its two pre-existing layout
+advisories remain unchanged. Historical audit link inventories retain their
+original paths as checkpoint evidence. No code test suite ran.
+
+## Toko feedback timing correction — open .42, 2026-09-25
+
+The read-only Toko review still records .41 adoption and staging on .38.
+CANIC-150/160/176 retain downstream launcher and matched live-timing acceptance
+gaps. The Canic-side follow-up found a diagnostic defect: a request start without
+its completion could leave the human timing summary reporting retained evidence
+when no observation span remained open. A focused regression reproduced it.
+
+The CLI now accounts for both request and observation pairs. Unfinished pairs,
+duplicate starts, unmatched completions and omitted events mark evidence partial;
+failed requests with paired completions still retain valid timing evidence.
+The final schema-1 receipt exposes `timing_evidence_complete`. Finalized receipts
+ignore late callbacks. Pair tracking stops growing after an omission, and later
+request events leave the observation parent unknown rather than claiming stale
+attribution. The operator guide and open .42 changelog describe this boundary.
+Scoped lint also exposed an oversized CLI funding-status variant after the
+recovery-controller registry addition; boxing that field preserves its Candid
+shape and resolves the warning within the same batch.
+
+All 31 focused progress/receipt tests and the four-entry build-lock integration
+target pass, including interruption, bounded output, retry deadlines, terminal
+cleanup, normal owner handoff and controlled owner crash. Strict scoped CLI
+Clippy, formatting, whitespace and document semantics pass; document layout
+retains two existing advisories. A real PTY resize replay passes
+with one screen entry/exit and following output preserved; its transcript is in
+`.tmp/toko-feedback-42/`. Toko's ordinary build-launcher recovery matrix and a
+fresh live qualification with matched convergence/replay measurements remain
+downstream acceptance. Local fixtures do not establish an application speed-up.
+No Toko mutation, live deployment, broad gate, version bump or publication ran.
+The complete local .42 batch and both changelog surfaces are ready for the
+maintainer's release flow. Changes remain uncommitted; the downstream acceptance
+items above remain open after this local qualification.
+
+## New Fleet recovery controllers — open .42, 2026-09-25
+
+The new-install Fleet source accepts an optional top-level
+`recovery_controllers = []`. It remains empty until the three Toko developer
+Principals are supplied. When configured, generation carries those exact
+direct IC controllers to the Coordinator, Roots, Stores, pool reserves and
+controlled treasury. The protected Coordinator binding carries the same list
+to Root-created pool assets, Components and descendants, including refill,
+reset, Store adoption, install verification and terminal inventory/recovery.
+Principal lists are bounded and reject duplicates, anonymous identities and
+operator overlap; the generated desired document is checked before effects. Current
+canonical Candid changes in place. Existing live Fleets are outside this
+hard-cut change and receive no controller mutation.
+
+Focused source, fresh generation/creation-plan, pool, Store, funding-binding,
+terminal-inventory and Candid tests pass. A targeted PocketIC new-estate test
+proves each created canister grants the recovery Principal management access
+after interrupted creation and an effect-free replay. Strict scoped host and
+Root control-plane Clippy and targeted CLI/testing package compile checks pass.
+The three developer Principal IDs remain unset, so this checkout supplies no
+backup coverage until the new Fleet policy is populated before installation.
+Each listed Principal has full independent IC controller power; multi-party
+approval remains a future design. No live deployment or broad gate ran.
+
+## ICP CLI 1.6.0 pin — 2026-09-25
+
+The next 0.110 draft pins the maintainer and CI toolchain to ICP CLI 1.6.0.
+The official release archive digests match all four pinned platform hashes;
+the downloaded Linux x86_64 archive and binary verify independently. Focused
+1.6.0 help inspection retains every Canic-used canister, snapshot, identity and
+network flag checked. The maintained `>=1.5.0, <2.0.0` compatibility floor stays
+in place because upstream reports no command, flag or manifest change. No live
+network request or deployment was made. The local PATH still resolves 1.5.0;
+the 1.6.0 binary was exercised from `/tmp` without installing it externally.
+All 37 focused host ICP tests, the native ICP selection fixture, the CI
+prerequisite with the real 1.6.0 binary, document semantics and whitespace
+checks pass. The document guard retains two pre-existing layout advisories.
+
+`ic-query` is now pinned at 0.44.0, the new upstream release. Its library
+source and direct requirements keep the existing Subnet Catalog API and
+behavior; the release updates ICP CLI tooling, locked dependencies and a
+library test. The Canic integration still qualifies concurrent endpoint
+collection, typed retries and retained in-process history. A further pass is
+useful as a bounded cold-start history/checkpoint design and fault-injection
+review; this update does not establish a new Canic defect.
+All 10 focused host Subnet Catalog tests pass with 0.44.0, and the locked
+`canic-testing-internal` package check passes. No live catalog acquisition or
+broad validation ran for this dependency update.
+
 ## Release fixture diagnostic correction — 2026-09-24
 
 The reported missing `docs/status/current.md` message came from the
@@ -5932,7 +6122,7 @@ runtime or repository dependency.
 | --- | --- | --- |
 | [0.109](../design/0.109-fleet-wide-ingress-admission/status.md) | admission, Ensure and managed-App support | accepted and closed at `v0.109.35` |
 | [0.110](../design/0.110-fleet-runtime-contraction/status.md) | zero-capability runtime contraction | `v0.110.7` published; bounded authorization-persistence split active without accepting B1 or the remaining B2/B3 families |
-| [0.111](../design/0.111-bounded-multi-fleet-estates/status.md) | bounded cycle-safe multi-Fleet estates | blocked on 0.110 and Q0 capsule proof |
+| [0.111](../design/0.111-standalone-blob-service-extraction/status.md) | standalone blob service extraction | planned next; implementation follows accepted 0.110 closeout and explicit external-owner/provider dependencies |
 
 The cancelled stateful-adoption proposal remains archived. Pre-1.0 release
 transitions are reinstall-only; cycle conservation is the sole cross-release

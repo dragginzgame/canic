@@ -50,6 +50,7 @@ fn maximum_b3_current_plus_last_authority_fits_memory_id_64() {
         fleet,
         coordinator_subnet: SubnetId::from_principal(principal(300)),
         coordinator: principal(301),
+        recovery_controllers: Vec::new(),
     };
     let roots = (1..=4_096)
         .map(|index| FleetAdmissionCoordinatorRootProgressRecord {

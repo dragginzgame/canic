@@ -5808,6 +5808,7 @@ fn root_binding() -> FleetSubnetRootBinding {
                 },
                 coordinator_subnet,
                 coordinator: candid::Principal::from_slice(&[3; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

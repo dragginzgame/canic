@@ -5973,6 +5973,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 }
                 EnsureAction::Create {
                     requested_initial_cycles,
+                    controllers,
                     ..
                 } => {
                     let id = self
@@ -5982,9 +5983,14 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                             CreateCanisterParams {
                                 cycles: Some(*requested_initial_cycles),
                                 settings: Some(CanisterSettings {
-                                    controllers: Some(vec![
-                                        CONTROLLER.parse().expect("controller Principal"),
-                                    ]),
+                                    controllers: Some(
+                                        controllers
+                                            .iter()
+                                            .map(|value| {
+                                                value.parse().expect("controller Principal")
+                                            })
+                                            .collect(),
+                                    ),
                                     ..CanisterSettings::default()
                                 }),
                                 ..CreateCanisterParams::default()
@@ -6154,6 +6160,11 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
         canister.minimum_cycles = "500000000000".to_string();
         canisters.push(canister);
     }
+    let recovery = Principal::from_slice(&[90; 29]);
+    for canister in &mut canisters {
+        canister.controllers.push(recovery.to_text());
+        canister.controllers.sort();
+    }
     let desired = DesiredFleet {
         bootstrap: None,
         canisters,
@@ -6273,6 +6284,13 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
     );
     assert_eq!(restarted.mutations.get(&first_create), Some(&1));
     assert_eq!(restarted.known.len(), desired.canisters.len());
+    for principal in &restarted.known {
+        let status = restarted
+            .pic
+            .canister_status(principal.parse().unwrap(), Some(recovery))
+            .expect("recovery Principal can manage every created Fleet canister");
+        assert!(status.settings.controllers.contains(&recovery));
+    }
 
     let paid_before_replay = restarted.mutations.clone();
     restarted.pic.add_cycles(donated_to, donation);
@@ -6866,6 +6884,7 @@ pub(super) fn typed_protocol_action(operation_id: &str) -> EnsureAction {
                 SUBNET.parse().expect("fixture Subnet Principal"),
             ),
             coordinator: TREASURY.parse().expect("fixture Coordinator Principal"),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };
@@ -6914,6 +6933,7 @@ fn empty_active_registry() -> FleetRegistry {
                     SUBNET.parse().expect("fixture Subnet Principal"),
                 ),
                 coordinator: TREASURY.parse().expect("fixture Coordinator Principal"),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

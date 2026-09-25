@@ -603,6 +603,7 @@ mod tests {
                     &[4; 29],
                 )),
                 coordinator: candid::Principal::from_slice(&[5; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         }

@@ -34,6 +34,7 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     validate_path_identity(desired, requested_fleet)?;
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
+    verify_release_transition(root, desired, FleetEnsurePlanScope::ReinstallPreparation)?;
     let state = read_state(&paths, requested_fleet)?;
     // Source evidence is not an executable journal. Inspect it before requiring
     // current effect fields; the existing review still owns live reset admission.

@@ -337,6 +337,7 @@ fn authority(fleet: FleetBinding) -> crate::ids::FleetCoordinatorBinding {
         fleet,
         coordinator_subnet: SubnetId::from_principal(principal(21)),
         coordinator: principal(22),
+        recovery_controllers: Vec::new(),
     }
 }
 

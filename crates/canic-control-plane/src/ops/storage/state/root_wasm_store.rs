@@ -347,10 +347,11 @@ fn validate_adoption_authority(
     operation_id: [u8; 32],
     authority: &FleetSubnetWasmStoreAuthority,
 ) -> Result<(), InternalError> {
-    let mut controllers = vec![
+    let mut controllers = authority.authority.binding.recovery_controllers.clone();
+    controllers.extend([
         authority.installation_controller,
         authority.fleet_subnet_root,
-    ];
+    ]);
     controllers.sort();
     let expected = SiblingWasmStoreAdoptionAuthority {
         operation_id,

@@ -926,6 +926,7 @@ mod tests {
                 },
                 coordinator_subnet: subnet,
                 coordinator: Principal::from_slice(&[5; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         };

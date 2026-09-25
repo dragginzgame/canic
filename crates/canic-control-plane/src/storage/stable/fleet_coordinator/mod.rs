@@ -521,7 +521,7 @@ pub enum FleetComponentDirectoryConfirmationIntentRecord {
     ScaleOutSynchronization {
         root_index: u32,
         fleet_subnet_root: Principal,
-        request: RootComponentDirectorySynchronizationRequest,
+        request: Box<RootComponentDirectorySynchronizationRequest>,
         started_at_ns: u64,
     },
     ScaleOutPublication {
@@ -883,6 +883,7 @@ mod funding_capacity_tests {
                     },
                     coordinator_subnet: SubnetId::from_principal(principal(u32::MAX - 1)),
                     coordinator,
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: u64::MAX,
             },

@@ -1,6 +1,6 @@
 //! Module: support::build_lock
 //!
-//! Responsibility: render bounded lock wait progress and read-only recovery guidance.
+//! Responsibility: render bounded build checking/lock progress and read-only recovery guidance.
 //! Does not own: lock exclusion, cache admission, or owner termination.
 //! Boundary: live output is stderr-TTY-only; process snapshots never assert build progress.
 
@@ -18,25 +18,53 @@ use std::{
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
 
-/// CLI wait lifetime; clears live output before subsequent build messages or errors.
-pub struct LockWaitDisplay {
+/// CLI check lifetime; clears live output before subsequent build messages or errors.
+pub struct BuildCheckDisplay {
     cancel: Option<cancel::Cancellation>,
     painter: WaitPainter,
     started: Instant,
     finished: bool,
+    lock_elapsed: Duration,
 }
 
-impl LockWaitDisplay {
+impl BuildCheckDisplay {
     pub(crate) fn start() -> io::Result<Self> {
         let interactive = io::stderr().is_terminal()
             && std::env::var_os("NO_COLOR").is_none()
             && std::env::var("TERM").is_ok_and(|term| !term.is_empty() && term != "dumb");
-        Ok(Self {
+        let mut display = Self {
             cancel: Some(cancel::Cancellation::start()?),
             painter: WaitPainter::new(interactive),
             started: Instant::now(),
             finished: false,
-        })
+            lock_elapsed: Duration::ZERO,
+        };
+        let _ = display
+            .painter
+            .checking(&mut io::stderr(), terminal_width());
+        Ok(display)
+    }
+
+    pub(crate) fn acquired(&mut self, elapsed: Duration) -> io::Result<()> {
+        self.check_cancelled()?;
+        self.lock_elapsed = elapsed;
+        self.cancel.take();
+        let _ = self.painter.checking(&mut io::stderr(), terminal_width());
+        Ok(())
+    }
+
+    pub(crate) fn finish_checks(&mut self) {
+        if self.finished {
+            return;
+        }
+        let _ = self.painter.checked(
+            &mut io::stderr(),
+            self.started.elapsed().saturating_sub(self.lock_elapsed),
+            self.lock_elapsed,
+            terminal_width(),
+        );
+        self.finished = true;
+        self.cancel.take();
     }
 
     pub(crate) fn waiting(&mut self, wait: &BuildLockWait) -> io::Result<()> {
@@ -66,7 +94,7 @@ impl LockWaitDisplay {
     }
 }
 
-impl Drop for LockWaitDisplay {
+impl Drop for BuildCheckDisplay {
     fn drop(&mut self) {
         if !self.finished {
             self.finish("interrupted");
@@ -85,6 +113,7 @@ struct WaitPainter {
     last_owner: Option<BuildLockOwner>,
     reported: bool,
     next_log: Duration,
+    checking: bool,
 }
 
 impl WaitPainter {
@@ -95,7 +124,50 @@ impl WaitPainter {
             last_owner: None,
             reported: false,
             next_log: Duration::ZERO,
+            checking: false,
         }
+    }
+
+    fn checking(&mut self, writer: &mut impl Write, width: usize) -> io::Result<()> {
+        if self.checking {
+            return Ok(());
+        }
+        self.clear(writer, width)?;
+        self.paint(writer, "Checking build inputs/outputs...", width)?;
+        self.checking = true;
+        writer.flush()
+    }
+
+    fn checked(
+        &mut self,
+        writer: &mut impl Write,
+        elapsed: Duration,
+        lock_elapsed: Duration,
+        width: usize,
+    ) -> io::Result<()> {
+        self.clear(writer, width)?;
+        writeln!(
+            writer,
+            "Checks: {:.2}s | lock wait: {:.2}s",
+            elapsed.as_secs_f64(),
+            lock_elapsed.as_secs_f64()
+        )?;
+        writer.flush()
+    }
+
+    fn paint(&mut self, writer: &mut impl Write, line: &str, width: usize) -> io::Result<()> {
+        if self.interactive {
+            let line = line
+                .chars()
+                .filter(char::is_ascii)
+                .take(width.saturating_sub(1))
+                .collect::<String>();
+            write!(writer, "{line}")?;
+            self.painted_width = line.len();
+        } else {
+            writeln!(writer, "{line}")?;
+        }
+        Ok(())
     }
 
     fn clear(&mut self, writer: &mut impl Write, width: usize) -> io::Result<()> {
@@ -116,6 +188,7 @@ impl WaitPainter {
         wait: &BuildLockWait,
         width: usize,
     ) -> io::Result<()> {
+        self.checking = false;
         let changed = !self.reported || self.last_owner != wait.inspection.recorded_owner;
         if changed {
             self.clear(writer, width)?;
@@ -126,13 +199,7 @@ impl WaitPainter {
         let line = compact_wait(wait);
         if self.interactive {
             self.clear(writer, width)?;
-            let line = line
-                .chars()
-                .filter(char::is_ascii)
-                .take(width.saturating_sub(1))
-                .collect::<String>();
-            write!(writer, "{line}")?;
-            self.painted_width = line.len();
+            self.paint(writer, &line, width)?;
         } else if changed || wait.elapsed >= self.next_log {
             writeln!(writer, "{line}")?;
             self.next_log = wait.elapsed + Duration::from_secs(30);

@@ -73,6 +73,7 @@ fn component_binding(
                 },
                 coordinator_subnet: SubnetId::from_principal(p(240)),
                 coordinator: p(241),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

@@ -53,6 +53,54 @@ use std::os::unix::fs::{PermissionsExt, symlink};
 use std::{collections::BTreeSet, fs, io, io::Write as _};
 
 #[test]
+fn recovery_controller_source_is_active_and_rejects_unsafe_sets() {
+    let operator = Principal::from_slice(&[20; 29]);
+    let first = Principal::from_slice(&[21; 29]);
+    let second = Principal::from_slice(&[22; 29]);
+    let mut source = multi_component_source_toml(
+        &operator.to_text(),
+        &Principal::from_slice(&[23; 29]).to_text(),
+        &Principal::from_slice(&[24; 29]).to_text(),
+    );
+    assert!(
+        toml::from_str::<FleetSource>(&source)
+            .expect("empty recovery list remains valid")
+            .recovery_controllers
+            .is_empty()
+    );
+    source = source.replacen(
+        &format!("operator = \"{}\"", operator.to_text()),
+        &format!(
+            "operator = \"{}\"\nrecovery_controllers = [\"{}\", \"{}\"]",
+            operator.to_text(),
+            second.to_text(),
+            first.to_text(),
+        ),
+        1,
+    );
+    let parsed: FleetSource = toml::from_str(&source).expect("recovery source field");
+    let canonical = canonical_recovery_controllers(&parsed.recovery_controllers, operator)
+        .expect("two distinct recovery controllers");
+    let mut expected = vec![first.to_text(), second.to_text()];
+    expected.sort();
+    assert_eq!(canonical, expected);
+    for rejected in [
+        vec![first.to_text(), first.to_text()],
+        vec![operator.to_text()],
+        vec![Principal::anonymous().to_text()],
+    ] {
+        assert!(canonical_recovery_controllers(&rejected, operator).is_err());
+    }
+    assert!(canonical_recovery_controllers(&vec![first.to_text(); 9], operator).is_err());
+    assert!(
+        toml::from_str::<FleetSource>(
+            &source.replace("recovery_controllers", "unused_legacy_controllers")
+        )
+        .is_err()
+    );
+}
+
+#[test]
 fn fresh_pool_creation_funding_preserves_configured_readiness_floor() {
     assert_eq!(
         fresh_pool_creation_funding(1_900_000_000_000).expect("compile fresh pool funding"),
@@ -1095,6 +1143,59 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(fresh.observed_controlled_cycles, 0);
     assert_eq!(fresh.desired.treasury, "coordinator");
     assert_eq!(fresh.desired.management_creation_fee_cycles, "500B");
+    let recovery = Principal::from_slice(&[92; 29]);
+    let recovery_text = recovery.to_text();
+    let mut recovery_source = fresh_source.clone();
+    recovery_source
+        .as_table_mut()
+        .expect("source policy table")
+        .insert(
+            "recovery_controllers".to_string(),
+            toml::Value::Array(vec![toml::Value::String(recovery_text.clone())]),
+        );
+    let recovery_source_path = root.join("fleets/fresh-recovery-policy.toml");
+    fs::write(
+        &recovery_source_path,
+        toml::to_string(&recovery_source).expect("encode recovery policy"),
+    )
+    .expect("write recovery policy");
+    let recovery_seed_path = root.join("deployments/fresh-recovery.estate.toml");
+    initialize_fresh_estate_seed(&FreshEstateSeedRequest {
+        cycles_ledger: &mainnet_cycles_ledger(),
+        management_creation_fee_cycles: 500_000_000_000,
+        seed: &recovery_seed_path,
+        source: &recovery_source_path,
+    })
+    .expect("initialize recovery Fleet seed");
+    let protected = generate_desired_fleet(&FleetGenerateRequest {
+        catalog_progress: None,
+        app_config: &app_config,
+        environment: "local",
+        fleet: "fresh-recovery",
+        icp_executable: icp.to_str().expect("fake ICP path"),
+        signing_identity: None,
+        release_build_id,
+        root: &root,
+        seed: &recovery_seed_path,
+        source: &recovery_source_path,
+    })
+    .expect("generate a new Fleet with recovery authority");
+    assert!(
+        protected
+            .desired
+            .canisters
+            .iter()
+            .all(|canister| { canister.controllers.contains(&recovery_text) })
+    );
+    assert_eq!(
+        protected
+            .desired
+            .bootstrap
+            .as_ref()
+            .expect("recovery bootstrap")
+            .recovery_controllers,
+        vec![recovery],
+    );
     let fresh_seed = fs::read_to_string(&fresh_seed_path).expect("read fresh estate seed");
     assert!(fresh_seed.contains("management_creation_fee_cycles = \"500B\""));
     let invalid_fresh_seed_path = root.join("deployments/fresh-invalid-units.estate.toml");
@@ -1278,6 +1379,42 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         .subnet = bootstrap.coordinator_subnet.to_string();
     let fresh_plan = compile_fresh(&single_subnet)
         .expect("compile fresh estate creation on one reviewed fee subnet");
+    let mut protected_single_subnet = protected.desired;
+    protected_single_subnet
+        .protocol
+        .as_mut()
+        .expect("recovery protocol")
+        .component_group_placements
+        .clear();
+    let bootstrap = protected_single_subnet.bootstrap.as_mut().unwrap();
+    bootstrap.coordinator_subnet = bootstrap.roots[0].placement_subnet;
+    protected_single_subnet
+        .canisters
+        .iter_mut()
+        .find(|canister| canister.name == "coordinator")
+        .unwrap()
+        .subnet = bootstrap.coordinator_subnet.to_string();
+    let protected_plan = compile_fresh(&protected_single_subnet)
+        .expect("review new Fleet with recovery controllers");
+    let protected_pool_actions = protected_plan
+        .canisters
+        .iter()
+        .flat_map(|canister| &canister.actions)
+        .filter(|action| matches!(action, EnsureAction::Create { name, .. } | EnsureAction::SetControllers { name, .. } if name.contains("-pool-")))
+        .collect::<Vec<_>>();
+    assert!(!protected_pool_actions.is_empty());
+    for action in protected_pool_actions {
+        match action {
+            EnsureAction::Create { controllers, .. } => {
+                assert!(controllers.contains(&recovery_text));
+                assert!(controllers.contains(&operator));
+            }
+            EnsureAction::SetControllers { controllers, .. } => {
+                assert_eq!(controllers, &vec![recovery_text.clone()]);
+            }
+            _ => unreachable!("filtered pool controller action"),
+        }
+    }
     crate::fleet_ensure::policy::startup_funding::qualify_creation(
         &root,
         &single_subnet,
@@ -2040,6 +2177,13 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         &mut no_apply_platform,
     )
     .expect("plan public generated estate with the complete typed protocol");
+    assert_release_transition_policy_rejects_before_effects(
+        &root,
+        &no_apply_desired,
+        &observed,
+        &pool_one,
+        &no_apply.plan,
+    );
     assert_eq!(
         no_apply.plan.plan_sha256,
         crate::fleet_ensure::policy::expected_plan_sha256(&no_apply.plan)
@@ -3321,12 +3465,82 @@ fn assert_generated_retained_growth_fee(
     assert_eq!(platform.mutations, 0);
 }
 
+fn assert_release_transition_policy_rejects_before_effects(
+    root: &Path,
+    desired: &DesiredFleet,
+    observed: &BTreeMap<String, ObservedCanister>,
+    workload: &str,
+    plan: &crate::fleet_ensure::model::FleetEnsurePlan,
+) {
+    let release = desired.bootstrap.as_ref().unwrap().release_build_id;
+    let manifest = load_persisted_current_release_set_manifest(root, release).unwrap();
+    let bytes = fs::read(&manifest.path).unwrap();
+    let paths = EnsurePaths::under(root, &desired.environment, &desired.fleet);
+    let records = [&paths.plan, &paths.journal, &paths.state];
+    let before_records = records.map(|path| fs::read(path).ok());
+    let mut platform = RetainedEnsurePlatform::new(desired, observed, workload)
+        .with_terminal_observation_protocol();
+    let before_live = platform.live.clone();
+    let before_funding = platform.estate_funding_balance_cycles;
+
+    for mode in [None, Some("upgrade"), Some("adopt"), Some("mixed_version")] {
+        let mut document: serde_json::Value = serde_json::from_slice(&bytes).unwrap();
+        if let Some(mode) = mode {
+            document["transition_mode"] = mode.into();
+        } else {
+            document.as_object_mut().unwrap().remove("transition_mode");
+        }
+        fs::write(&manifest.path, serde_json::to_vec(&document).unwrap()).unwrap();
+        let planning = workflow::plan(
+            root,
+            desired,
+            &plan.desired_sha256,
+            &desired.fleet,
+            plan.planned_at_time,
+            &mut platform,
+        );
+        assert!(
+            matches!(
+                planning,
+                Err(workflow::EnsureWorkflowError::State(
+                    crate::fleet_ensure::ops::EnsureStateError::ContinuationAuthority { .. }
+                ))
+            ),
+            "unexpected planning result: {planning:?}"
+        );
+        let applying = workflow::apply(
+            root,
+            desired,
+            &plan.desired_sha256,
+            &desired.fleet,
+            &plan.plan_sha256,
+            &mut platform,
+        );
+        assert!(
+            matches!(
+                applying,
+                Err(workflow::EnsureWorkflowError::State(
+                    crate::fleet_ensure::ops::EnsureStateError::ContinuationAuthority { .. }
+                ))
+            ),
+            "unexpected application result: {applying:?}"
+        );
+        assert_eq!(platform.mutations, 0);
+        assert_eq!(platform.observations, 0);
+        assert_eq!(platform.live, before_live);
+        assert_eq!(platform.estate_funding_balance_cycles, before_funding);
+        assert_eq!(records.map(|path| fs::read(path).ok()), before_records);
+    }
+    fs::write(&manifest.path, bytes).unwrap();
+}
+
 struct RetainedEnsurePlatform {
     desired: DesiredFleet,
     estate_funding_balance_cycles: u128,
     ledger_fee_cycles: u128,
     live: BTreeMap<String, LiveCanister>,
     mutations: u32,
+    observations: u32,
     post_effect_protocol: bool,
     post_effect_protocol_applied: bool,
     terminal_observation_protocol: bool,
@@ -3485,6 +3699,7 @@ impl RetainedEnsurePlatform {
                 .expect("ledger fee"),
             live,
             mutations: 0,
+            observations: 0,
             post_effect_protocol: false,
             post_effect_protocol_applied: false,
             terminal_observation_protocol: false,
@@ -3498,6 +3713,7 @@ impl RetainedEnsurePlatform {
             ledger_fee_cycles: self.ledger_fee_cycles,
             live: self.live.clone(),
             mutations: 0,
+            observations: 0,
             post_effect_protocol: self.post_effect_protocol,
             post_effect_protocol_applied: self.post_effect_protocol_applied,
             terminal_observation_protocol: self.terminal_observation_protocol,
@@ -3516,6 +3732,22 @@ impl RetainedEnsurePlatform {
 
     fn total_cycles(&self) -> u128 {
         self.live.values().map(|canister| canister.cycles).sum()
+    }
+
+    fn observed_canisters(&self) -> BTreeMap<String, Option<LiveCanister>> {
+        self.desired
+            .canisters
+            .iter()
+            .map(|canister| {
+                (
+                    canister.name.clone(),
+                    canister
+                        .principal
+                        .as_ref()
+                        .and_then(|principal| self.live.get(principal).cloned()),
+                )
+            })
+            .collect()
     }
 
     fn infrastructure_ready(&self) -> bool {
@@ -3600,11 +3832,21 @@ impl EnsurePlatform for RetainedEnsurePlatform {
     ) {
     }
 
+    fn observe_root_management(
+        &mut self,
+        _state: &FleetEnsureStateRecord,
+        _targets: &BTreeSet<String>,
+    ) -> Result<Option<crate::fleet_ensure::model::RootManagementObservation>, Self::Error> {
+        self.observations += 1;
+        Ok(None)
+    }
+
     fn observe(
         &mut self,
         _operation_id: &str,
         state: &FleetEnsureStateRecord,
     ) -> Result<FleetObservation, Self::Error> {
+        self.observations += 1;
         if self.post_effect_protocol
             && !self.post_effect_protocol_applied
             && self.infrastructure_ready()
@@ -3613,20 +3855,7 @@ impl EnsurePlatform for RetainedEnsurePlatform {
         }
         Ok(FleetObservation {
             additional_controlled_cycles: BTreeMap::new(),
-            canisters: self
-                .desired
-                .canisters
-                .iter()
-                .map(|canister| {
-                    (
-                        canister.name.clone(),
-                        canister
-                            .principal
-                            .as_ref()
-                            .and_then(|principal| self.live.get(principal).cloned()),
-                    )
-                })
-                .collect(),
+            canisters: self.observed_canisters(),
             estate_funding_domains: self
                 .desired
                 .bootstrap
@@ -3931,6 +4160,7 @@ fn terminal_observation_protocol_actions(
             fleet: fleet.clone(),
             coordinator_subnet: bootstrap.coordinator_subnet,
             coordinator: coordinator.parse().expect("Coordinator Principal"),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };
@@ -4127,6 +4357,7 @@ fn multi_component_source(
         schema_version: 1,
         funding_profile: FleetFundingProfile::PreviewMultiSubnet,
         operator: operator.to_string(),
+        recovery_controllers: Vec::new(),
         admission: AdmissionSource {
             identity_origin: None,
             principals: vec![operator.to_string()],
@@ -4387,6 +4618,7 @@ fn persist_test_release_authority(
             .expect("infrastructure manifest digest"),
         release_build_id,
         schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,
+        transition_mode: crate::release_set::ReleaseTransitionMode::ReinstallOnly,
     };
     let current_path = directory.join("current-release-set-manifest.json");
     fs::write(
@@ -4458,6 +4690,7 @@ fn retained_root_authority(
             coordinator_subnet: parse_subnet("Coordinator", coordinator_subnet)
                 .expect("Coordinator Subnet"),
             coordinator,
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

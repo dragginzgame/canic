@@ -34,6 +34,14 @@ use thiserror::Error as ThisError;
 
 pub const CURRENT_RELEASE_SET_MANIFEST_FILE: &str = "current-release-set-manifest.json";
 
+/// Release-bound policy for crossing an installed Fleet's release boundary.
+/// Same-release interruption recovery remains governed by its existing journal.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ReleaseTransitionMode {
+    ReinstallOnly,
+}
+
 /// Canonical complete current release authority consumed by Fleet generation.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -44,6 +52,7 @@ pub struct CurrentReleaseSetManifest {
     pub infrastructure_artifact_manifest_sha256: [u8; 32],
     pub release_build_id: ReleaseBuildId,
     pub schema_version: u16,
+    pub transition_mode: ReleaseTransitionMode,
 }
 
 impl CurrentReleaseSetManifest {
@@ -167,6 +176,7 @@ pub fn compile_and_persist_current_release_set_manifest(
         infrastructure_artifact_manifest_sha256: infrastructure.digest,
         release_build_id,
         schema_version: CurrentReleaseSetManifest::SCHEMA_VERSION,
+        transition_mode: ReleaseTransitionMode::ReinstallOnly,
     };
     let path = current_release_set_manifest_path(root, release_build_id);
     let existing = load_optional(&path, release_build_id)?;

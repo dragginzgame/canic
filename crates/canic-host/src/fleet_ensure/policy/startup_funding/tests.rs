@@ -28,6 +28,7 @@ pub(in crate::fleet_ensure) fn funding_binding(
                     },
                     coordinator_subnet: SubnetId::from_principal(principal(1)),
                     coordinator: principal(2),
+                    recovery_controllers: Vec::new(),
                 },
                 epoch: 1,
             },

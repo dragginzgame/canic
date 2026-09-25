@@ -49,14 +49,22 @@ release-batch plan and explicit maintainer acceptance.
    enters remediation. That audit must then be superseded by an accepted
    passing immutable verdict before any 0.110 implementation or promotion.
 8. [0.110 Fleet runtime contraction](0.110-fleet-runtime-contraction/status.md)
-   creates absolute Wasm code-section and replica-validator function reserves
-   through a zero-capability storage, codec, whole generated-surface,
-   generic-instantiation, endpoint and recovery hard cut.
-9. [0.111 bounded multi-Fleet estates](0.111-bounded-multi-fleet-estates/status.md)
-   adds indexed Root-local estates, an ordinary reserve Fleet and one
-   cycle-safe source-disposition/destination-credit operation without data,
-   stable-memory or Principal preservation. B1 is held behind Q0 proof of the
-   finalized source-executed cycle-disposition capsule.
+   retains accepted B1/B2 contraction and targets `.42` as its final feature
+   release. Further B3 records/codecs stop and remaining B4 pruning is deferred.
+   B5 final-source budgets, behavior and residual disposition are qualified.
+   The [exact closeout verdict](../audits/release-lines/0.110-closeout-audit.md)
+   awaits human acceptance before the next minor begins.
+9. [0.111 standalone blob service extraction](0.111-standalone-blob-service-extraction/status.md)
+   is the maintainer's selected next major slice. An independently maintained
+   service owns blob semantics; Canic manages it as an ordinary Component and
+   removes its blob-specific production surfaces. Implementation follows
+   accepted 0.110 closeout; external ownership, repository, consumer and
+   provider qualification remain explicit dependencies.
+
+[Bounded multi-Fleet estates](ideas/bounded-multi-fleet-estates/design.md)
+is deferred and unnumbered. Its unproved Q0 capsule and indexed-estate work
+are not prerequisites for blob extraction. Neither roadmap promotion nor
+finishing `.42` substitutes for requested and accepted human minor closeout.
 
 The former stateful-retirement/release-adoption proposal is
 [cancelled and archived](archive/0.111-rescinded-stateful-fleet-release-adoption/status.md).

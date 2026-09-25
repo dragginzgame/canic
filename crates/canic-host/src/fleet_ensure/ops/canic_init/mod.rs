@@ -494,6 +494,7 @@ fn registry_authority(
             },
             coordinator_subnet: bootstrap.coordinator_subnet,
             coordinator,
+            recovery_controllers: bootstrap.recovery_controllers.clone(),
         },
         epoch: 1,
     }

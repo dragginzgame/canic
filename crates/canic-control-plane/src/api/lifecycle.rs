@@ -763,7 +763,7 @@ impl LifecycleApi {
     pub async fn commit_component_child(
         request: RootComponentChildCommitRequest,
     ) -> Result<RootComponentChildCommitResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::commit_child_allocation(request)
+        Box::pin(crate::workflow::component_registry::commit_child_allocation(request))
             .await
             .map_err(Into::into)
     }
@@ -779,9 +779,11 @@ impl LifecycleApi {
     pub async fn activate_component_child_runtime(
         request: RootComponentChildRuntimeActivationRequest,
     ) -> Result<RootComponentChildRuntimeActivationResponse, canic_core::dto::error::Error> {
-        crate::workflow::component_registry::activate_child_runtime(request)
-            .await
-            .map_err(Into::into)
+        Box::pin(crate::workflow::component_registry::activate_child_runtime(
+            request,
+        ))
+        .await
+        .map_err(Into::into)
     }
 
     pub async fn activate_component_child_membership(

@@ -26,12 +26,12 @@ pub(super) fn scale_out_synchronization_call(
     (
         FleetComponentDirectoryConfirmationCallView::ScaleOutSynchronization {
             fleet_subnet_root: root,
-            request: request.clone(),
+            request: Box::new(request.clone()),
         },
         FleetComponentDirectoryConfirmationIntentRecord::ScaleOutSynchronization {
             root_index,
             fleet_subnet_root: root,
-            request,
+            request: Box::new(request),
             started_at_ns,
         },
     )

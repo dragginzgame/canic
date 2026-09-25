@@ -1,6 +1,6 @@
-# ICP 1.5 integration
+# ICP CLI integration
 
-Canic requires ICP CLI `>=1.5.0, <2.0.0`; maintainer installation pins 1.5.0.
+Canic requires ICP CLI `>=1.5.0, <2.0.0`; maintainer installation pins 1.6.0.
 
 ## Environment and selective builds
 

@@ -207,7 +207,7 @@ pub enum FleetFundingPolicyRotationStatusPhase {
     ActivatingRoots {
         activated_root_count: u32,
         expected_root_count: u32,
-        successor_registry: FleetRegistryVersion,
+        successor_registry: Box<FleetRegistryVersion>,
     },
     Completed(Box<FleetFundingPolicyRotationReceipt>),
 }

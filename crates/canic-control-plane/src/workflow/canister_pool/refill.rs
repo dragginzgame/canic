@@ -156,7 +156,11 @@ async fn retry_intent(
         })?;
     let result = CyclesLedgerOps::create_canister(
         &permit,
-        creation.root,
+        FleetActivationWorkflow::root_authority()?
+            .binding
+            .authority
+            .binding
+            .root_controllers(creation.root),
         creation.placement_subnet,
         creation.ledger_amount.clone(),
         creation.created_at_time_ns,

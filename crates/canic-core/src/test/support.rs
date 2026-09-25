@@ -87,6 +87,7 @@ pub fn managed_component_binding() -> ManagedCanisterBinding {
                 fleet,
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[9; 29])),
                 coordinator: Principal::from_slice(&[10; 29]),
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

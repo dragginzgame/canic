@@ -705,6 +705,7 @@ fn init_payload_for_config(
             fleet: identity.fleet.clone(),
             coordinator_subnet: SubnetId::from_principal(Fake::principal(3)),
             coordinator: Fake::principal(4),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

@@ -14,6 +14,15 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.42` pins the maintainer and CI ICP CLI to 1.6.0 with verified release
+  checksums while retaining the supported 1.x command contract. Add optional
+  direct recovery controllers to every newly generated Fleet canister and its
+  runtime-created descendants, with exact controller checks through retry.
+  Update the host Subnet Catalog library to `ic-query` 0.44.0 and report
+  incomplete Fleet timing requests in invocation summaries. Bind an explicit
+  reinstall-only transition policy into finalized release authority and reject
+  invalid policy before paid platform observations. Summarize complete-build
+  cache results once, with bounded detail available through `--verbose`.
 - `0.110.41` reduces repeated deployment observation and query setup work while
   preserving authority checks and recovery. Keep interactive Fleet progress on
   a dedicated screen and expected test rejections out of successful validation

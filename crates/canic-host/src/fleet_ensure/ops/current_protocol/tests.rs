@@ -1665,6 +1665,7 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
         release_build_id: authorities[0].initial_release_set.release_build_id,
         root_funding: None,
         roots,
+        recovery_controllers: Vec::new(),
     });
 
     assert!(matches!(
@@ -2073,6 +2074,7 @@ fn active_registry(config: &canic_core::bootstrap::compiled::ConfigModel) -> Fle
             fleet: fleet.clone(),
             coordinator_subnet: subnet(1),
             coordinator: principal(30),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

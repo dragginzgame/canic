@@ -30,7 +30,7 @@ impl CyclesLedgerOps {
 
     pub async fn create_canister(
         _permit: &CostGuardPermit,
-        root: Principal,
+        controllers: Vec<Principal>,
         subnet: Principal,
         amount: Cycles,
         created_at_time: u64,
@@ -38,7 +38,9 @@ impl CyclesLedgerOps {
         Result<CyclesLedgerCreateCanisterSuccess, CyclesLedgerCreateCanisterError>,
         InternalError,
     > {
-        map_infra(CyclesLedgerInfra::create_canister(root, subnet, amount, created_at_time).await)
+        map_infra(
+            CyclesLedgerInfra::create_canister(controllers, subnet, amount, created_at_time).await,
+        )
     }
 
     pub async fn transfer(

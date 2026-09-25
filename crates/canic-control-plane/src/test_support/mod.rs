@@ -77,6 +77,7 @@ pub fn root_funding_request_fixture(operation_sequence: u64) -> FleetRootFunding
                 },
                 coordinator_subnet: SubnetId::from_principal(Principal::from_slice(&[73; 29])),
                 coordinator,
+                recovery_controllers: Vec::new(),
             },
             epoch: 1,
         },

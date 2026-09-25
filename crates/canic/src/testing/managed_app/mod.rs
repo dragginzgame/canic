@@ -447,6 +447,7 @@ fn compile_managed_app(
             fleet: fleet.clone(),
             coordinator_subnet,
             coordinator,
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

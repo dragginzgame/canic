@@ -136,6 +136,10 @@ and a new build is selected.
 
 Complete-build misses distinguish unavailable comparison evidence, changed
 source/dependency inputs, environment or toolchain/configuration, and rejected
+output. The CLI shows App/profile/network first and one shared cache result with
+the artifact count. `canic build <app> --verbose` shows tool/configuration details
+and the complete bounded explanation once, including key-name attribution and
+the comparison caveat. Distinct rejection errors remain visible without verbose
 output. The optional `last-input-diagnostics.json` compares against the last
 recorded successful build. It never supplies cache authority. Missing, corrupt
 or unwritable diagnostic evidence cannot invalidate an otherwise verified hit.
@@ -192,7 +196,9 @@ The existing exclusive complete-build reuse lock remains held through lookup,
 compilation and finalization. Contention is sampled after one second and every
 second thereafter. Interactive stderr uses one width-bounded updating line;
 redirected output reports owner/phase changes and a summary at most every 30
-seconds between changes, without terminal escapes. Acquisition, failure and
+seconds between changes, without terminal escapes. Input/output checking uses
+the same live line and emits one plain event per phase when redirected. Completed
+checks report verification time and lock wait separately; failure and
 SIGINT/SIGTERM cancellation leave a final wait summary. Cancellation stops only
 the waiter, and acquisition errors stop the build instead of bypassing exclusion.
 
@@ -217,9 +223,9 @@ progress nor a stall. Verify identity and namespace on the host before taking
 action; restarting a waiter does not fix its owner, and the lock file must never
 be deleted or replaced. Paths are escaped in human output.
 
-The next holder still verifies exact release/output evidence. Stderr reports
-lock acquisition separately;
-input/output verification time excludes it. These are phase observations, not
+The next holder still verifies exact release/output evidence. Stderr's check
+summary reports lock acquisition separately; input/output verification time
+excludes it. These are phase observations, not
 evidence that lock waiting caused an earlier slow build.
 
 Every runtime embeds the complete release identity. Changed inputs therefore
@@ -298,8 +304,9 @@ cannot return a successful complete build. Infrastructure elapsed times can
 overlap each other and configured-role time; they must not be added to infer
 total build wall time.
 
-Stderr reports each role's cache decision and the observed compilation and
-finalization phases. Runtime Cargo/link time includes linking; it is not a
+Stderr reports one shared complete-build cache decision and the observed
+compilation and finalization phases. Per-role declaration-cache observations
+remain distinct. Runtime Cargo/link time includes linking; it is not a
 separately measured LLVM LTO duration. Long Cargo children report a heartbeat every
 30 seconds with the declaration/runtime phase, batch index/total, bounded role
 names, child elapsed time and elapsed time across that phase's compatible batches.

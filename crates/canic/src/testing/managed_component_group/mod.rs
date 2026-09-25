@@ -1074,6 +1074,7 @@ fn compile_root(
                     fleet_id: FleetId::from_generated_bytes(derived_identity(b"fleet", seed)),
                 },
             },
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     };

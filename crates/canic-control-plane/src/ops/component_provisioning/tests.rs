@@ -89,6 +89,7 @@ fn authority() -> FleetRegistryAuthority {
             },
             coordinator_subnet: subnet(4),
             coordinator: principal(5),
+            recovery_controllers: Vec::new(),
         },
         epoch: 1,
     }

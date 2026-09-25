@@ -7853,6 +7853,7 @@ esac
                 root: "root".to_string(),
                 store: "store".to_string(),
             }],
+            recovery_controllers: Vec::new(),
         };
         let component_group_placements = configuration
             .deployment_topology

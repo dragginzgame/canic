@@ -1336,7 +1336,7 @@ async fn advance_root_component_directories(
             request,
         } => {
             let result = CallOps::unbounded_wait(fleet_subnet_root, protocol::CANIC_ROOT_COMMAND)
-                .with_arg(RemoteRootCommand::SynchronizeComponentDirectories(request))?
+                .with_arg(RemoteRootCommand::SynchronizeComponentDirectories(*request))?
                 .execute()
                 .await?;
             let response: Result<RemoteRootCommandResponse, Error> = result.candid()?;
