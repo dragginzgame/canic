@@ -22,30 +22,26 @@ open-draft statements describe that earlier development state.
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
-Latest release-gate follow-up: ordinary workspace tests passed in the maintainer's
-retry, then the governed PocketIC runner stopped before any case because new
-`.43` registrations displaced the required Fleet restore/Root removal prefix.
-Restored that order without dropping cases or weakening the inventory assertion.
-All three focused inventory/runner regressions pass; the full ignored PocketIC
-suite was not selected. Log: `.tmp/governed-suite-order-regression.log`.
-This correction is uncommitted and ready for the maintainer's release retry;
-package versions remain `.42`. The complete PocketIC release gate still needs
-that retry; the startup check does not establish full-suite success.
+Release-gate corrections are complete for the reported failures:
 
-Release-gate follow-up: the maintainer's ordinary test run exposed eight host
-failures after bootstrap authority changed. The completed `.38` evidence reader
-now owns a frozen Root declaration instead of sharing the current executable
-Root schema. Historical host and PocketIC fixtures omit current-only bootstrap
-fields, checking neutrality before projection; real Toko records remain unchanged.
-All 39 targeted terminal tests pass, including the eight reported failures.
-Both explicit read-only checks of Toko's receipts and full inventory pass.
-The connected completed-estate reset PocketIC case passes at 450.61s (618s runner),
-including interrupted publication, lost install response, exact archived evidence,
-retained IDs, cycle conservation and effect-free replay. Logs:
-`.tmp/terminal-evidence-regression.log`, `.tmp/terminal-toko-readonly.log`,
-`.tmp/terminal-reset-pocketic-regression.log`. Changed Rust files are formatted;
-no full gate was rerun. The correction is uncommitted, versions remain `.42`, and
-this batch is ready for the maintainer's commit and `.43` release-validation retry.
+- Frozen `.38` Root receipt/inventory evidence no longer shares the current
+  bootstrap schema. All 39 terminal regressions and both read-only Toko record
+  checks passed; the connected reset passed in 450.61s (618s runner).
+- The governed registry again retains the required recovery prefix without
+  dropping any cases. All three inventory/runner regressions passed. The
+  maintainer's next full run passed this boundary and the connected reset.
+- The operator Component CLI fixture now constructs a typed current plan instead
+  of decoding hand-written JSON that omitted `infrastructure_bootstrap`. Required
+  plan fields are compile-checked. Its real ICP/PocketIC plan/apply/export/terminal
+  replay case passes in 22.92s (41s runner). A scan found no other hand-written
+  current-plan fixture with the same omission; production decoding stays strict.
+
+Logs: `.tmp/terminal-evidence-regression.log`, `.tmp/terminal-toko-readonly.log`,
+`.tmp/terminal-reset-pocketic-regression.log`,
+`.tmp/governed-suite-order-regression.log`, `.tmp/operator-cli-plan-regression.log`.
+The latest correction is uncommitted and ready for the maintainer's commit and
+release retry. Changed Rust formatting and diff checks pass. No broad gate was
+rerun by the agent; the full PocketIC gate still requires a successful release run.
 
 Package versions remain `0.110.42`; the open release draft is `0.110.43`.
 CANIC-166 completed-estate reset and FI1 supplied-infrastructure bootstrap/import

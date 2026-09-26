@@ -6854,7 +6854,7 @@ exec icp "$@"
         fixture: &ActiveComponentRegistryFixture,
         operator: Principal,
     ) {
-        use canic_host::fleet_ensure::{model, ops, policy};
+        use canic_host::fleet_ensure::{ops, policy};
         let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
@@ -6907,19 +6907,7 @@ exec icp "$@"
             "maximum_update_burn_cycles": "0", "operator": operator.to_text(),
             "schema_version": 1, "treasury": "coordinator"
         });
-        let mut plan: model::FleetEnsurePlan = serde_json::from_value(serde_json::json!({
-            "recovery_review": null, "reinstall": null, "continuation": null, "canisters": [],
-            "conservation": {"estate_funding_domains": [], "expected_post_operation_cycles": "0",
-                "maximum_execution_burn_cycles": "0", "maximum_new_funding_cycles": "0",
-                "maximum_operator_debit_cycles": "0", "maximum_unavoidable_fee_cycles": "0",
-                "observed_controlled_cycles": "0", "retained_in_reused_canisters_cycles": "0",
-                "scheduled_transfer_cycles": "0"},
-            "desired_sha256": "operator-cli-starting-fixture", "environment": "ic", "fleet": "fixture",
-            "operation_id": "operator-cli-starting-fixture", "plan_sha256": "", "planned_at_time": 0,
-            "protocol_actions": [], "root_start_authority": null, "root_reinstall_bindings": [],
-            "reviewed_desired": {"desired": desired, "protocol_steps": []}, "schema_version": 1,
-            "scope": "full", "terminal_inventory_operation_id": null
-        })).unwrap();
+        let mut plan = operator_cli_terminal_plan(desired);
         plan.plan_sha256 = policy::expected_plan_sha256(&plan);
         let journal = serde_json::from_value(serde_json::json!({
             "funding_observations": {}, "funding_reviews": [], "successor_phases": [], "completion": "converged",
@@ -6939,6 +6927,50 @@ exec icp "$@"
         ops::write_plan(&paths, &plan).unwrap();
         ops::write_journal(&paths, &journal).unwrap();
         ops::write_state(&paths, &state).unwrap();
+    }
+
+    // Build current authority with typed fields so schema changes fail at compilation.
+    #[cfg(test)]
+    fn operator_cli_terminal_plan(desired: serde_json::Value) -> FleetEnsurePlan {
+        use canic_host::fleet_ensure::model::{
+            CycleConservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsurePlanScope,
+        };
+        FleetEnsurePlan {
+            infrastructure_bootstrap: None,
+            recovery_review: None,
+            reinstall: None,
+            continuation: None,
+            canisters: Vec::new(),
+            conservation: CycleConservation {
+                estate_funding_domains: Vec::new(),
+                expected_post_operation_cycles: 0,
+                maximum_execution_burn_cycles: 0,
+                maximum_new_funding_cycles: 0,
+                maximum_operator_debit_cycles: 0,
+                maximum_unavoidable_fee_cycles: 0,
+                observed_controlled_cycles: 0,
+                retained_in_reused_canisters_cycles: 0,
+                scheduled_transfer_cycles: 0,
+            },
+            desired_sha256: "operator-cli-starting-fixture".into(),
+            environment: "ic".into(),
+            fleet: "fixture".into(),
+            operation_id: "operator-cli-starting-fixture".into(),
+            plan_sha256: String::new(),
+            planned_at_time: 0,
+            protocol_actions: Vec::new(),
+            root_start_authority: None,
+            root_reinstall_bindings: Vec::new(),
+            reviewed_desired: Some(Box::new(
+                serde_json::from_value(serde_json::json!({
+                    "desired": desired, "protocol_steps": []
+                }))
+                .unwrap(),
+            )),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            scope: FleetEnsurePlanScope::Full,
+            terminal_inventory_operation_id: None,
+        }
     }
 
     #[cfg(test)]
