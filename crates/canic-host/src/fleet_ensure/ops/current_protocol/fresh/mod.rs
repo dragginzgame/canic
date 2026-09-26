@@ -5,9 +5,10 @@
 //! Boundary: resolves exact retained Principals and current protocol authority.
 
 use super::{
-    CurrentProtocolError, bind_action, canic_init, compile_current_protocol_sequence,
-    compile_current_registry_sequence, compile_current_store_sequence, current_protocol_stage,
-    desired_cycles, operation_bytes, retained_principal,
+    CurrentProtocolError, bind_action, canic_init, compile_current_infrastructure_sequence,
+    compile_current_protocol_sequence, compile_current_registry_sequence,
+    compile_current_store_sequence, current_protocol_stage, desired_cycles, operation_bytes,
+    retained_principal,
 };
 use crate::fleet_ensure::model::{
     CurrentFleetProtocolAction, DesiredFleet, EnsureAction, FleetEnsureStateRecord,
@@ -26,6 +27,26 @@ pub(in crate::fleet_ensure::ops) fn compile(
     state: &FleetEnsureStateRecord,
     operation_id: &str,
 ) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+    compile_selected(root, desired, state, operation_id, false)
+}
+
+/// Expand Store and Registry setup while supplied pool capacity remains fenced.
+pub(in crate::fleet_ensure::ops) fn compile_infrastructure(
+    root: &Path,
+    desired: &DesiredFleet,
+    state: &FleetEnsureStateRecord,
+    operation_id: &str,
+) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
+    compile_selected(root, desired, state, operation_id, true)
+}
+
+fn compile_selected(
+    root: &Path,
+    desired: &DesiredFleet,
+    state: &FleetEnsureStateRecord,
+    operation_id: &str,
+    infrastructure_only: bool,
+) -> Result<Vec<EnsureAction>, CurrentProtocolError> {
     let bootstrap = desired
         .bootstrap
         .as_ref()
@@ -34,15 +55,7 @@ pub(in crate::fleet_ensure::ops) fn compile(
         .protocol
         .as_ref()
         .ok_or(CurrentProtocolError::ResponseMismatch)?;
-    let principals = desired
-        .canisters
-        .iter()
-        .map(|canister| {
-            retained_principal(desired, state, &canister.name)
-                .map(|principal| (canister.name.clone(), principal))
-                .ok_or(CurrentProtocolError::ResponseMismatch)
-        })
-        .collect::<Result<BTreeMap<_, _>, _>>()?;
+    let principals = resolved_principals(desired, state)?;
     let named_authorities = canic_init::compile_root_authorities(root, desired, &principals)?;
     let mut authorities = named_authorities
         .iter()
@@ -86,21 +99,35 @@ pub(in crate::fleet_ensure::ops) fn compile(
             .map(|sequence| (authority.binding.fleet_subnet_root, sequence))
         })
         .collect::<Result<BTreeMap<_, _>, _>>()?;
-    let mut compiled = compile_current_protocol_sequence(
-        desired,
-        state,
-        configuration,
-        &registry,
-        &authorities,
-        &stores,
-        identity,
-    )?;
+    let mut compiled = if infrastructure_only {
+        compile_current_infrastructure_sequence(
+            configuration,
+            &registry,
+            &authorities,
+            &stores,
+            identity,
+        )?
+    } else {
+        compile_current_protocol_sequence(
+            desired,
+            state,
+            configuration,
+            &registry,
+            &authorities,
+            &stores,
+            identity,
+        )?
+    };
     compiled.sort_by_key(|step| current_protocol_stage(&step.action));
     let burn = desired_cycles(
         "maximum_update_burn_cycles",
         &desired.maximum_update_burn_cycles,
     )?;
-    let mut actions = compile_imports(root, desired, state, &principals, burn)?;
+    let mut actions = if infrastructure_only {
+        Vec::new()
+    } else {
+        compile_imports(root, desired, state, &principals, burn)?
+    };
     for step in compiled {
         actions.push(bind_action(
             root,
@@ -114,6 +141,21 @@ pub(in crate::fleet_ensure::ops) fn compile(
         )?);
     }
     Ok(actions)
+}
+
+fn resolved_principals(
+    desired: &DesiredFleet,
+    state: &FleetEnsureStateRecord,
+) -> Result<BTreeMap<String, String>, CurrentProtocolError> {
+    desired
+        .canisters
+        .iter()
+        .map(|canister| {
+            retained_principal(desired, state, &canister.name)
+                .map(|principal| (canister.name.clone(), principal))
+                .ok_or(CurrentProtocolError::ResponseMismatch)
+        })
+        .collect()
 }
 
 fn compile_imports(
@@ -133,6 +175,11 @@ fn compile_imports(
         .ok_or(CurrentProtocolError::ResponseMismatch)?;
     let mut actions = Vec::new();
     for input in &bootstrap.roots {
+        if input.capacity_import_bootstrap.is_some() {
+            // These sources have not entered Root custody. The reviewed import owner
+            // must hand them off and publish receipts before ordinary reconciliation.
+            continue;
+        }
         let target = Principal::from_text(
             principals
                 .get(&input.root)

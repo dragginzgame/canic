@@ -4,6 +4,8 @@
 //! Does not own: reset admission, remote effects or source-plan execution.
 //! Boundary: exact source documents are archived before replacement intent is committed.
 
+mod content;
+pub mod publication;
 #[cfg(test)]
 pub(in crate::fleet_ensure) mod tests;
 
@@ -36,19 +38,25 @@ pub(in crate::fleet_ensure) fn stage(
 pub(in crate::fleet_ensure) fn review(
     paths: &EnsurePaths,
 ) -> Result<Option<FleetEnsurePlan>, EnsureStateError> {
-    let Some(plan) = read_plan(&review_paths(paths))? else {
+    let review_path = review_paths(paths).plan;
+    let Some(bytes) = read_document_bytes(&review_path)? else {
         return Ok(None);
     };
-    validate_plan(&plan)?;
     if let Some(marker) = marker(paths)? {
         if !marker.complete {
             return Err(conflict());
         }
-        let bytes = read_document_bytes(&review_paths(paths).plan)?.ok_or_else(conflict)?;
         if marker.replacement_plan_sha256 == sha256_hex(&bytes) {
             return Ok(None);
         }
     }
+    // Completed reviews are immutable evidence. Only a new pending review is
+    // decoded into the current execution contract, using these same bytes.
+    let plan = serde_json::from_slice(&bytes).map_err(|source| EnsureStateError::Decode {
+        path: review_path,
+        source,
+    })?;
+    validate_plan(&plan)?;
     verify_source(paths, &plan)?;
     Ok(Some(plan))
 }
@@ -92,12 +100,18 @@ pub(in crate::fleet_ensure) fn adopt(
         retain(paths, digest, &bytes)?;
     }
     if let Some(source) = terminal_retirement(plan) {
+        content::retain(
+            paths,
+            &exact_bytes(&paths.plan, &intent.source_plan_sha256)?,
+        )?;
         for (label, digest) in &source.phase_document_sha256 {
             let path = paths
                 .plan
                 .with_file_name("phases")
                 .join(format!("{label}.json"));
-            retain(paths, digest, &exact_bytes(&path, digest)?)?;
+            let bytes = exact_bytes(&path, digest)?;
+            retain(paths, digest, &bytes)?;
+            content::retain(paths, &bytes)?;
         }
     }
     retain(paths, &intent.replacement_plan_sha256, &plan_bytes)?;
@@ -126,16 +140,15 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
         .ok_or_else(conflict)?;
     validate_plan(&replacement)?;
     if let Some(source) = terminal_retirement(&replacement) {
+        content::verify(
+            paths,
+            &exact_bytes(
+                &object_path(paths, &intent.source_plan_sha256),
+                &intent.source_plan_sha256,
+            )?,
+        )?;
         for (label, digest) in &source.phase_document_sha256 {
-            let mut phase_paths = paths.clone();
-            phase_paths.plan = object_path(paths, digest);
-            exact_bytes(&phase_paths.plan, digest)?;
-            let phase = read_plan(&phase_paths)
-                .map_err(|_| conflict())?
-                .ok_or_else(conflict)?;
-            if phase.plan_sha256 != *label || expected_plan_sha256(&phase) != *label {
-                return Err(conflict());
-            }
+            verify_archived_phase(paths, &replacement, source, label, digest)?;
         }
     }
     exact_bytes(&paths.state, &intent.source_state_sha256)?;
@@ -165,6 +178,45 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
     }
     intent.complete = true;
     write_current(&marker_path(paths), &intent)
+}
+
+/// Recovery authenticates the exact bytes admitted by the reviewed replacement.
+/// Source receipt and semantic digest checks belong to admission, before intent;
+/// decoding an archived phase as a current executable plan invents that dependency.
+fn verify_archived_phase(
+    paths: &EnsurePaths,
+    replacement: &FleetEnsurePlan,
+    source: &crate::fleet_ensure::model::FleetTerminalSourceRecord,
+    label: &str,
+    digest: &str,
+) -> Result<(), EnsureStateError> {
+    if !is_sha256(label) || !is_sha256(digest) {
+        return Err(conflict());
+    }
+    let bytes = exact_bytes(&object_path(paths, digest), digest)?;
+    let phase: ArchivedPhaseIdentity = serde_json::from_slice(&bytes).map_err(|_| conflict())?;
+    let expected = ArchivedPhaseIdentity {
+        schema_version: 1,
+        plan_sha256: label.to_string(),
+        operation_id: source.operation_id.clone(),
+        environment: replacement.environment.clone(),
+        fleet: replacement.fleet.clone(),
+    };
+    if phase != expected {
+        return Err(conflict());
+    }
+    content::verify(paths, &bytes)?;
+    Ok(())
+}
+
+/// Identity-only projection; the reviewed document hash binds all other fields.
+#[derive(serde::Deserialize, Eq, PartialEq)]
+struct ArchivedPhaseIdentity {
+    schema_version: u16,
+    plan_sha256: String,
+    operation_id: String,
+    environment: String,
+    fleet: String,
 }
 
 /// Borrow common byte bindings while preserving each source's distinct admission rules.

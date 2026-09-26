@@ -6,12 +6,16 @@
 
 #[cfg(test)]
 mod balance_observation;
+pub mod capacity_import;
+pub mod completed_preparation;
+pub mod completed_reset;
 mod continuation;
 mod funding;
 pub mod funding_observation;
 #[cfg(test)]
 mod funding_tests;
 mod independent_effects;
+pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod readiness;
 mod reinstall;
@@ -139,6 +143,13 @@ pub enum EnsureWorkflowError<E>
 where
     E: std::error::Error + 'static,
 {
+    #[error(transparent)]
+    InfrastructureBootstrap(
+        #[from] crate::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError,
+    ),
+    #[error(transparent)]
+    RetainedContract(#[from] crate::fleet_ensure::ops::retained_contract::RetainedContractError),
+
     #[error(transparent)]
     FundingObservation(
         #[from] crate::fleet_ensure::model::funding_observation::FundingObservationError,
@@ -545,6 +556,20 @@ where
         .map(verified_plan)
         .transpose()?;
     let prior_journal = retained_plan::journal(&paths, &desired.environment, requested_fleet)?;
+    if let Some(prior) = prior_plan
+        .as_ref()
+        .filter(|prior| prior.scope == FleetEnsurePlanScope::InfrastructureBootstrap)
+    {
+        crate::fleet_ensure::ops::infrastructure_bootstrap::convergence::prepare(
+            &paths,
+            prior,
+            prior_journal
+                .as_ref()
+                .ok_or(EnsureWorkflowError::JournalIntegrity)?,
+            &state,
+            desired,
+        )?;
+    }
     if let Some(prior) = &prior_plan {
         let recovery_ready = prior_journal
             .as_ref()
@@ -609,8 +634,12 @@ where
             retain_completed_reinstalls(&mut state, prior, journal);
         }
     }
-    let operation_id = matching_prior
-        .filter(|prior| prior.scope == FleetEnsurePlanScope::Full)
+    // Store and Component Registry preparation bind the setup operation identity.
+    // Its verified import boundary continues that identity into workload provisioning.
+    let operation_id = prior_plan
+        .as_ref()
+        .filter(|prior| prior.scope == FleetEnsurePlanScope::InfrastructureBootstrap)
+        .or_else(|| matching_prior.filter(|prior| prior.scope == FleetEnsurePlanScope::Full))
         .map_or_else(
             || operation_id(desired_sha256, &desired.environment, requested_fleet),
             |prior| prior.operation_id.clone(),
@@ -755,6 +784,13 @@ where
     let prior_plan = prior_plan.ok_or(EnsureWorkflowError::PlanMissing)?;
     let prior_journal = prior_journal.ok_or(EnsureWorkflowError::JournalIntegrity)?;
     verify_journal(prior_journal, prior_plan, requested_fleet, state)?;
+    // The separately receipted setup/import boundary has no workload inventory yet.
+    // Planning admitted and archived its exact completion before refreshing observations.
+    if prior_plan.scope == FleetEnsurePlanScope::InfrastructureBootstrap
+        && prior_journal.completion == FleetEnsureCompletion::Converged
+    {
+        return Ok(None);
+    }
     if prior_journal.completion != FleetEnsureCompletion::Converged
         || prior_plan.scope != FleetEnsurePlanScope::Full
     {
@@ -1075,7 +1111,49 @@ where
         }
         desired
     };
+    if let Some(journal) = &retained_journal
+        && let Some(actual) = crate::fleet_ensure::ops::infrastructure_bootstrap::terminal::read(
+            &paths,
+            &retained_plan,
+            journal,
+            &state,
+        )?
+    {
+        verify_journal(journal, &retained_plan, requested_fleet, &state)?;
+        if journal.completion != FleetEnsureCompletion::Converged {
+            let mut completed = journal.clone();
+            completed.completion = FleetEnsureCompletion::Converged;
+            completed.stalled_observations = 0;
+            write_journal(&paths, &completed)?;
+        }
+        return Ok(FleetEnsureReport {
+            funding_review: None,
+            actual_conservation: Some(actual),
+            effects_applied: 0,
+            plan: retained_plan,
+            terminal: true,
+        });
+    }
+    if retained_plan.scope == FleetEnsurePlanScope::InfrastructureBootstrap {
+        crate::fleet_ensure::ops::infrastructure_bootstrap::verify_plan(root, &retained_plan)?;
+    }
     verify_release_transition(root, operation_desired, retained_plan.scope)?;
+    if let Some(journal) = retained_journal.as_ref()
+        && let Some(actual) = crate::fleet_ensure::ops::completed_reset::terminal::read(
+            &paths,
+            &retained_plan,
+            journal,
+        )?
+    {
+        verify_journal(journal, &retained_plan, requested_fleet, &state)?;
+        return Ok(FleetEnsureReport {
+            funding_review: None,
+            actual_conservation: Some(actual),
+            effects_applied: 0,
+            plan: retained_plan,
+            terminal: true,
+        });
+    }
     if in_progress {
         compact_inline_plan(&paths, &retained_plan)?;
     }
@@ -1092,6 +1170,11 @@ where
     platform
         .bind_reviewed_desired(operation_desired)
         .map_err(EnsureWorkflowError::Platform)?;
+    if let Some(source) = &retained_plan.infrastructure_bootstrap {
+        platform
+            .bind_infrastructure_bootstrap(source)
+            .map_err(EnsureWorkflowError::Platform)?;
+    }
     let operation_desired_sha256 = retained_plan.desired_sha256.as_str();
     continuation::verify_inputs(root, operation_desired, &retained_plan)?;
     if let Some(journal) = &retained_journal {
@@ -1279,6 +1362,7 @@ where
         retain_estate_funding_pause(&paths, &mut journal, None)?;
     }
     let mut terminal_state;
+    let mut bootstrap_coordinator_verified = false;
     // Only the immediately following protocol phase may consume this evidence.
     // It is invocation-local and never survives interruption or a preceding effect.
     let mut continuation_observation: Option<ContinuationObservation> = None;
@@ -1302,13 +1386,30 @@ where
                     .flatten()
                     .filter(|evidence| evidence.first_action_sha256 == action_hash);
                 if retained_effect.is_none_or(|effect| effect.state != EffectState::Applied) {
+                    if retained_plan.infrastructure_bootstrap.is_some()
+                        && index < ordered_actions(&retained_plan).len()
+                        && !bootstrap_coordinator_verified
+                        && operation_desired
+                            .bootstrap
+                            .as_ref()
+                            .is_some_and(|bootstrap| action.name() != bootstrap.coordinator)
+                    {
+                        if !platform
+                            .verify_bootstrap_coordinator(&state)
+                            .map_err(EnsureWorkflowError::Platform)?
+                        {
+                            return Err(EnsureWorkflowError::ConvergenceDrift);
+                        }
+                        bootstrap_coordinator_verified = true;
+                    }
                     let phase = action_progress_phase(action);
                     if reported_phase != Some(phase) {
                         report_progress(platform, &retained_plan, &journal, phase);
                         reported_phase = Some(phase);
                     }
                 }
-                if matches!(action, EnsureAction::FleetProtocol { .. })
+                if retained_plan.infrastructure_bootstrap.is_none()
+                    && matches!(action, EnsureAction::FleetProtocol { .. })
                     && retained_effect.is_none_or(|effect| effect.state == EffectState::Intent)
                     && !prior_fleet_protocol_effect_started(&actions, &journal, index)
                 {
@@ -1346,6 +1447,11 @@ where
                     observation_policy.maximum_stalled_observations,
                 )?;
                 let mut initial_observation = if journal.effects.len() <= index {
+                    crate::fleet_ensure::ops::infrastructure_bootstrap::inspection::reserve_effect(
+                        &paths,
+                        &retained_plan,
+                        action,
+                    )?;
                     let prepared = prepare_effect(platform, &journal.operation_id, action, &state)
                         .map_err(EnsureWorkflowError::Platform)?;
                     journal.effects.push(prepared.record);
@@ -1388,11 +1494,15 @@ where
                         break;
                     }
 
-                    let observed = match initial_observation.take() {
-                        Some(observed) => observed,
-                        None => platform
+                    let observed = if let Some(observed) = initial_observation.take() {
+                        observed
+                    } else {
+                        crate::fleet_ensure::ops::infrastructure_bootstrap::inspection::reserve_effect(
+                            &paths, &retained_plan, action,
+                        )?;
+                        platform
                             .observe_effect(&journal.operation_id, action, record, &state)
-                            .map_err(EnsureWorkflowError::Platform)?,
+                            .map_err(EnsureWorkflowError::Platform)?
                     };
                     let source_cycles = if observed.post_cycles.is_some() {
                         observed.post_cycles
@@ -1779,6 +1889,74 @@ where
             &journal,
             FleetEnsurePhase::TerminalVerification,
         );
+        if retained_plan.scope == FleetEnsurePlanScope::InfrastructureBootstrap {
+            if infrastructure_bootstrap::advance(
+                root,
+                &retained_plan,
+                &mut journal,
+                &mut state,
+                platform,
+            )? {
+                continue;
+            }
+            let phase = journal
+                .successor_phases
+                .first()
+                .and_then(|phase| phase.plan.as_ref())
+                .ok_or(EnsureWorkflowError::JournalIntegrity)?;
+            let expected =
+                crate::fleet_ensure::ops::infrastructure_bootstrap::registration::registry(phase)?;
+            if !platform
+                .verify_bootstrap_registry(&expected)
+                .map_err(EnsureWorkflowError::Platform)?
+            {
+                return Err(EnsureWorkflowError::ConvergenceDrift);
+            }
+            let (actual, observed) = infrastructure_bootstrap::complete(
+                root,
+                &retained_plan,
+                &journal,
+                &state,
+                platform,
+            )?;
+            if !platform
+                .verify_bootstrap_registry(&expected)
+                .map_err(EnsureWorkflowError::Platform)?
+            {
+                return Err(EnsureWorkflowError::ConvergenceDrift);
+            }
+            publish_terminal_state(operation_desired, &retained_plan, &journal, &mut state)
+                .map_err(|_| EnsureWorkflowError::JournalIntegrity)?;
+            crate::fleet_ensure::ops::infrastructure_bootstrap::registration::bind_state(
+                root, &mut state, phase,
+            )?;
+            write_state(&paths, &state)?;
+            crate::fleet_ensure::ops::infrastructure_bootstrap::terminal::retain(
+                &paths,
+                &retained_plan,
+                &journal,
+                &state,
+                actual.clone(),
+                &observed,
+            )?;
+            journal.completion = FleetEnsureCompletion::Converged;
+            journal.stalled_observations = 0;
+            write_journal(&paths, &journal)?;
+            report_progress_state(
+                platform,
+                &retained_plan,
+                &journal,
+                FleetEnsurePhase::Infrastructure,
+                FleetEnsureProgressState::PrerequisiteComplete,
+            );
+            return Ok(FleetEnsureReport {
+                funding_review: None,
+                actual_conservation: Some(actual),
+                effects_applied: applied_count(&journal),
+                plan: retained_plan,
+                terminal: true,
+            });
+        }
         if retained_plan.scope == FleetEnsurePlanScope::ReinstallPreparation {
             let actual = reinstall::complete(&retained_plan, &journal, &state, platform)?;
             journal.completion = FleetEnsureCompletion::Prepared;
@@ -2059,11 +2237,19 @@ where
     attach_terminal_cycles(&mut final_observation, terminal_cycles)?;
     reinstall::verify_terminal_estate(&retained_plan, &final_observation)?;
     reinstall::verify_terminal_authority(&retained_plan, &terminal_state, platform)?;
+    let completed_balances =
+        completed_reset::sample(&paths, &retained_plan, &mut final_observation, platform)?;
     let actual_conservation = verify_terminal_conservation(
         &retained_plan,
         &journal,
         &terminal_state,
         &final_observation,
+    )?;
+    completed_reset::verify(
+        &retained_plan,
+        &journal,
+        &actual_conservation,
+        completed_balances.as_ref(),
     )?;
     terminal_state.completed_reinstall_action_sha256.clear();
     terminal_state.completed_reinstall_operation_id = None;
@@ -2073,6 +2259,14 @@ where
     journal.completion = FleetEnsureCompletion::Converged;
     journal.stalled_observations = 0;
     write_journal(&paths, &journal)?;
+    if let Some(balances) = completed_balances {
+        crate::fleet_ensure::ops::completed_reset::terminal::retain(
+            &paths,
+            &retained_plan,
+            &actual_conservation,
+            balances,
+        )?;
+    }
     report_progress(
         platform,
         &retained_plan,
@@ -2517,6 +2711,9 @@ fn verify_fresh_plan<P>(
 where
     P: EnsurePlatform,
 {
+    if retained_plan.scope == FleetEnsurePlanScope::InfrastructureBootstrap {
+        return infrastructure_bootstrap::verify_before_apply(root, retained_plan, state, platform);
+    }
     if retained_plan.reinstall.is_some() {
         return reinstall::verify_before_apply(root, desired, retained_plan, platform, state);
     }
@@ -2551,7 +2748,7 @@ where
         .observe(&retained_plan.operation_id, state)
         .map_err(EnsureWorkflowError::Platform)?;
     let terminal_inventory_operation_id =
-        reviewed_terminal_inventory_operation(retained_plan, state)?;
+        fresh_plan_inventory_operation(root, retained_plan, state)?;
     if let Some(operation_id) = terminal_inventory_operation_id {
         attach_terminal_inventory_cycles(operation_id, state, platform, &mut observation)?;
     }
@@ -2832,6 +3029,26 @@ where
             .ok_or(EnsureWorkflowError::PlanIntegrity)
     } else {
         Ok(&plan.operation_id)
+    }
+}
+
+fn fresh_plan_inventory_operation<'a, E>(
+    root: &Path,
+    plan: &'a FleetEnsurePlan,
+    state: &FleetEnsureStateRecord,
+) -> Result<Option<&'a str>, EnsureWorkflowError<E>>
+where
+    E: std::error::Error + 'static,
+{
+    if state.active_registry.is_some() && plan.terminal_inventory_operation_id.is_none() {
+        crate::fleet_ensure::ops::infrastructure_bootstrap::convergence::verify_origin(
+            &EnsurePaths::under(root, &plan.environment, &plan.fleet),
+            plan,
+            state,
+        )?;
+        Ok(None)
+    } else {
+        reviewed_terminal_inventory_operation(plan, state)
     }
 }
 
@@ -3355,9 +3572,24 @@ fn verify_terminal_conservation<E>(
 where
     E: std::error::Error + 'static,
 {
+    verify_terminal_conservation_with_total(
+        plan,
+        journal,
+        state,
+        terminal,
+        controlled_cycles(terminal)?,
+    )
+}
+
+fn verify_terminal_conservation_with_total<E: std::error::Error + 'static>(
+    plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
+    state: &FleetEnsureStateRecord,
+    terminal: &FleetObservation,
+    final_controlled_cycles: u128,
+) -> Result<ActualCycleConservation, EnsureWorkflowError<E>> {
     let funded = funding_plan(plan, journal)?;
     let conservation = &funded.conservation;
-    let final_controlled_cycles = controlled_cycles(terminal)?;
     let operator_source_cycles =
         crate::fleet_ensure::policy::operator_mint::operator_source(journal)
             .ok_or(EnsureWorkflowError::JournalIntegrity)?;
@@ -3849,7 +4081,10 @@ fn verified_plan<E>(plan: FleetEnsurePlan) -> Result<FleetEnsurePlan, EnsureWork
 where
     E: std::error::Error + 'static,
 {
-    if expected_plan_sha256(&plan) != plan.plan_sha256 {
+    if expected_plan_sha256(&plan) != plan.plan_sha256
+        || (plan.scope == FleetEnsurePlanScope::InfrastructureBootstrap)
+            != plan.infrastructure_bootstrap.is_some()
+    {
         return Err(EnsureWorkflowError::PlanIntegrity);
     }
     Ok(plan)
@@ -4159,18 +4394,34 @@ fn publish_terminal_state(
             }
         }
     }
+    publish_topology(desired, plan, &prior_topology, state);
+    retain_configured_principal_bindings(state);
+    Ok(())
+}
+
+fn publish_topology(
+    desired: &crate::fleet_ensure::model::DesiredFleet,
+    plan: &FleetEnsurePlan,
+    prior_topology: &BTreeMap<String, crate::fleet_ensure::model::FleetEnsureTopologyRecord>,
+    state: &mut FleetEnsureStateRecord,
+) {
     state.topology = desired
         .canisters
         .iter()
         .filter(|canister| {
             canister.presence == crate::fleet_ensure::model::DesiredPresence::Present
+                && (plan.scope != FleetEnsurePlanScope::InfrastructureBootstrap
+                    || plan
+                        .canisters
+                        .iter()
+                        .any(|target| target.name == canister.name))
         })
         .map(|canister| {
             (
                 canister.name.clone(),
                 crate::fleet_ensure::model::FleetEnsureTopologyRecord {
                     kind: canister.kind,
-                    module_hash: projected_module_hash(plan, &prior_topology, canister),
+                    module_hash: projected_module_hash(plan, prior_topology, canister),
                     parent: canister.parent.clone(),
                     protocol_binding: canister.protocol_binding.clone(),
                     role: canister
@@ -4181,8 +4432,6 @@ fn publish_terminal_state(
             )
         })
         .collect();
-    retain_configured_principal_bindings(state);
-    Ok(())
 }
 
 fn is_reviewed_dynamic_pool_funding(
@@ -4428,7 +4677,11 @@ pub(super) fn ordered_actions(plan: &FleetEnsurePlan) -> Vec<&EnsureAction> {
         actions.sort_by_key(|action| matches!(action, EnsureAction::Start { .. }));
         return actions;
     }
-    if plan.scope == FleetEnsurePlanScope::RootReinstallPrerequisite {
+    if matches!(
+        plan.scope,
+        FleetEnsurePlanScope::RootReinstallPrerequisite
+            | FleetEnsurePlanScope::InfrastructureBootstrap
+    ) {
         return actions;
     }
     let temporary_pool_observation_finalizations = plan
@@ -4569,7 +4822,7 @@ pub(super) const fn action_order(action: &EnsureAction) -> u8 {
             canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
             ..
         } => 4,
-        EnsureAction::Install { .. } => 5,
+        EnsureAction::Uninstall { .. } | EnsureAction::Install { .. } => 5,
         EnsureAction::Start { .. } => 6,
         EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 7,
         EnsureAction::Transfer { .. } => 8,
@@ -4808,6 +5061,7 @@ mod tests {
             protocol_actions: Vec::new(),
             recovery_review: None,
             reinstall: None,
+            infrastructure_bootstrap: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,
@@ -5483,6 +5737,7 @@ mod tests {
             target_artifacts_sha256: Some("11".repeat(32)),
             source: None,
             activation_reset: None,
+            completed_reset: None,
             operation_id: plan.operation_id.clone(),
             source_operation_id: "source-operation".into(),
             authorities: Vec::new(),

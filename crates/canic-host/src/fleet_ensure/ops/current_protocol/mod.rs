@@ -93,8 +93,12 @@ use std::{
 };
 use thiserror::Error as ThisError;
 
-pub(super) use fresh::compile as compile_fresh_protocol;
+pub(super) use fresh::{
+    compile as compile_fresh_protocol, compile_infrastructure as compile_infrastructure_protocol,
+};
 pub(super) use inactive_activation::observe as observe_inactive_activation;
+#[cfg(test)]
+pub(in crate::fleet_ensure::ops) use tests::qualify_supplied_bootstrap_protocol;
 
 const COMPONENT_PROVISIONING_ACTION: &str = "fleet-component-provisioning";
 const CURRENT_PROTOCOL_OPERATION_DOMAIN: &[u8] = b"canic.fleet-ensure.current-protocol.v1\0";
@@ -215,6 +219,10 @@ enum RootStatusResponseFragment {
 /// Typed current-protocol compilation or transport failure.
 #[derive(Debug, ThisError)]
 pub enum CurrentProtocolError {
+    #[error(
+        "authority {name} does not expose the exact maintained seal command and status contract"
+    )]
+    AuthoritySealContract { name: String },
     #[error("fixture Store rejected publication: {0:?}")]
     Fixture(canic_core::dto::fixture_provisioning::FixtureStoreError),
     #[error("current Fleet protocol app config is unavailable: {}", .0.display())]
@@ -586,13 +594,94 @@ fn is_pool_readiness_action(action: &EnsureAction) -> bool {
 }
 
 /// Compile the exact current Store, Registry, mirror and Component order without transport.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one closed compiler makes the complete Store-to-Component ordering reviewable"
-)]
 pub fn compile_current_protocol_sequence(
     desired: &DesiredFleet,
     state: &FleetEnsureStateRecord,
+    configuration: &ComponentDeploymentConfiguration,
+    registry_sequence: &CompiledCurrentRegistrySequence,
+    root_authorities: &[FleetSubnetRootAuthority],
+    stores: &BTreeMap<Principal, CompiledCurrentStoreSequence>,
+    operation_id: [u8; 32],
+) -> Result<Vec<CompiledCurrentProtocolStep>, CurrentProtocolError> {
+    let mut actions = compile_current_infrastructure_sequence(
+        configuration,
+        registry_sequence,
+        root_authorities,
+        stores,
+        operation_id,
+    )?;
+    let coordinator_principal = registry_sequence
+        .active_registry
+        .authority
+        .binding
+        .coordinator;
+    let placements = resolve_placements(desired, state, &registry_sequence.active_registry)?;
+    let CompiledCurrentComponentProvisioning { request, plan_hash } =
+        compile_current_component_provisioning(
+            configuration,
+            &registry_sequence.active_registry,
+            operation_id,
+            &placements,
+        )?;
+    if let Some(status) = &registry_sequence.component_status {
+        require_component_status_matches(status, &request, plan_hash)?;
+    }
+    actions.push(CompiledCurrentProtocolStep {
+        action: CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash },
+        name: COMPONENT_PROVISIONING_ACTION.to_string(),
+        target: coordinator_principal,
+    });
+    for authority in root_authorities {
+        let target = authority.binding.fleet_subnet_root;
+        let minimum_ready = authority.binding.limits.canister_pool.minimum_size;
+        let readiness_floor = authority
+            .binding
+            .limits
+            .canister_pool
+            .canister_cycles
+            .clone();
+        let action = if !desired
+            .bootstrap
+            .as_ref()
+            .is_some_and(|input| input.fresh_estate)
+            && authority
+                .binding
+                .authority
+                .binding
+                .fleet
+                .fleet
+                .canonical_network_id
+                == canic_core::ids::CanonicalNetworkId::ic_mainnet()
+        {
+            CurrentFleetProtocolAction::MaintainPoolReadiness {
+                maximum_updates: pool_maintenance_update_bound(minimum_ready),
+                minimum_ready,
+                readiness_floor,
+            }
+        } else {
+            CurrentFleetProtocolAction::ObservePoolReadiness {
+                minimum_ready,
+                readiness_floor,
+            }
+        };
+        actions.push(CompiledCurrentProtocolStep {
+            action,
+            name: format!("pool-readiness-{target}"),
+            target,
+        });
+    }
+    Ok(actions)
+}
+
+/// Compile Store setup and Registry activation before supplied-capacity import.
+///
+/// This phase never provisions workloads or starts pool maintenance. The bootstrap
+/// owner must publish and release its exact import before compiling the remaining work.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one shared compiler keeps Store setup and Registry activation in dependency order"
+)]
+pub fn compile_current_infrastructure_sequence(
     configuration: &ComponentDeploymentConfiguration,
     registry_sequence: &CompiledCurrentRegistrySequence,
     root_authorities: &[FleetSubnetRootAuthority],
@@ -762,61 +851,6 @@ pub fn compile_current_protocol_sequence(
         });
     }
     actions.sort_by_key(|step| current_protocol_stage(&step.action));
-    let placements = resolve_placements(desired, state, &registry_sequence.active_registry)?;
-    let CompiledCurrentComponentProvisioning { request, plan_hash } =
-        compile_current_component_provisioning(
-            configuration,
-            &registry_sequence.active_registry,
-            operation_id,
-            &placements,
-        )?;
-    if let Some(status) = &registry_sequence.component_status {
-        require_component_status_matches(status, &request, plan_hash)?;
-    }
-    actions.push(CompiledCurrentProtocolStep {
-        action: CurrentFleetProtocolAction::ProvisionComponents { request, plan_hash },
-        name: COMPONENT_PROVISIONING_ACTION.to_string(),
-        target: coordinator_principal,
-    });
-    for authority in root_authorities {
-        let target = authority.binding.fleet_subnet_root;
-        let minimum_ready = authority.binding.limits.canister_pool.minimum_size;
-        let readiness_floor = authority
-            .binding
-            .limits
-            .canister_pool
-            .canister_cycles
-            .clone();
-        let action = if !desired
-            .bootstrap
-            .as_ref()
-            .is_some_and(|input| input.fresh_estate)
-            && authority
-                .binding
-                .authority
-                .binding
-                .fleet
-                .fleet
-                .canonical_network_id
-                == canic_core::ids::CanonicalNetworkId::ic_mainnet()
-        {
-            CurrentFleetProtocolAction::MaintainPoolReadiness {
-                maximum_updates: pool_maintenance_update_bound(minimum_ready),
-                minimum_ready,
-                readiness_floor,
-            }
-        } else {
-            CurrentFleetProtocolAction::ObservePoolReadiness {
-                minimum_ready,
-                readiness_floor,
-            }
-        };
-        actions.push(CompiledCurrentProtocolStep {
-            action,
-            name: format!("pool-readiness-{target}"),
-            target,
-        });
-    }
     Ok(actions)
 }
 

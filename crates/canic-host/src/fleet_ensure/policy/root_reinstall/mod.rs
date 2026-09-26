@@ -215,6 +215,7 @@ pub(in crate::fleet_ensure) fn compile(
             discovery: crate::fleet_ensure::model::RecoveryDiscovery::PendingCurrentProtocol,
         })),
         reinstall: None,
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: bindings,
         root_start_authority: None,
         reviewed_desired: Some(Box::new(

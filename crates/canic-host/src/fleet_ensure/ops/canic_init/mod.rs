@@ -14,6 +14,7 @@ use crate::{
             DesiredFleetBootstrapRoot,
         },
         ops::protocol::{self, ProtocolEffectError},
+        policy::capacity_import::bootstrap::{self as capacity_bootstrap, CapacityBootstrapError},
     },
     release_build::validate_finalized_release_build_manifest,
     release_set::{
@@ -48,6 +49,9 @@ use thiserror::Error as ThisError;
 /// Typed failure while compiling one generated infrastructure initializer.
 #[derive(Debug, ThisError)]
 pub enum CanicInitError {
+    #[error(transparent)]
+    CapacityBootstrap(#[from] CapacityBootstrapError),
+
     #[error("generated Fleet bootstrap authority is missing")]
     MissingBootstrap,
 
@@ -109,6 +113,18 @@ pub struct CanicInitRequest<'a> {
     pub root: &'a Path,
     pub wasm: &'a str,
     pub wasm_sha256: &'a str,
+}
+
+fn bind_capacity_bootstrap(
+    bytes: &[u8],
+    hold: canic_core::dto::pool_import::PoolImportBootstrap,
+) -> Result<Vec<u8>, CanicInitError> {
+    let mut args: FleetSubnetRootInitArgs = candid::decode_one(bytes)?;
+    args.capacity_import_bootstrap = Some(hold);
+    canic_control_plane::api::canister_pool::CanisterPoolApi::validate_bootstrap(&args).map_err(
+        |error| CanicInitError::Authority(format!("invalid capacity bootstrap: {error}")),
+    )?;
+    encode_one(args).map_err(Into::into)
 }
 
 pub(super) fn write_arguments(request: CanicInitRequest<'_>) -> Result<PathBuf, CanicInitError> {
@@ -284,10 +300,10 @@ pub fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, Cani
                 &root_input.store,
                 DesiredCanisterKind::Store,
             )?;
-            encode_root_arguments(
+            encode_reviewed_root_arguments(
+                request,
+                root_input,
                 root_authority,
-                request.operation_id,
-                root,
                 store_controllers,
                 imports,
             )
@@ -320,6 +336,63 @@ pub fn compile_arguments(request: &CanicInitRequest<'_>) -> Result<Vec<u8>, Cani
             )
         }
     }
+}
+
+/// Resolve the reviewed hold through the same compiler used by journaled Ensure installs.
+fn encode_reviewed_root_arguments(
+    request: &CanicInitRequest<'_>,
+    input: &DesiredFleetBootstrapRoot,
+    authority: FleetSubnetRootAuthority,
+    store_controllers: Vec<Principal>,
+    mut imports: Vec<Principal>,
+) -> Result<Vec<u8>, CanicInitError> {
+    let Some(hold) = &input.capacity_import_bootstrap else {
+        return encode_root_arguments(
+            authority,
+            request.operation_id,
+            &input.root,
+            store_controllers,
+            imports,
+        );
+    };
+    capacity_bootstrap::validate(request.desired, input)?;
+    imports.sort_unstable();
+    if imports != hold.sources {
+        return Err(CapacityBootstrapError::Sources.into());
+    }
+    for canister in request
+        .desired
+        .canisters
+        .iter()
+        .filter(|canister| canister.kind != DesiredCanisterKind::Pool)
+    {
+        let resolved = resolve_principal(request.principals, "infrastructure", &canister.name)?;
+        if canister
+            .principal
+            .as_ref()
+            .is_some_and(|id| *id != resolved.to_text())
+        {
+            return Err(CapacityBootstrapError::Infrastructure.into());
+        }
+        if hold.sources.contains(&resolved) {
+            return Err(CapacityBootstrapError::Collision.into());
+        }
+    }
+    let bytes = encode_root_arguments(
+        authority,
+        request.operation_id,
+        &input.root,
+        store_controllers,
+        Vec::new(),
+    )?;
+    bind_capacity_bootstrap(
+        &bytes,
+        canic_core::dto::pool_import::PoolImportBootstrap {
+            review_sha256: hold.review_sha256,
+            operator: hold.operator,
+            sources: hold.sources.clone(),
+        },
+    )
 }
 
 fn encode_coordinator_arguments(
@@ -355,6 +428,7 @@ fn encode_root_arguments(
         manifest_digest: authority.initial_release_set.manifest_digest,
     };
     encode_one(FleetSubnetRootInitArgs {
+        capacity_import_bootstrap: None,
         authority,
         install_id: install_id(operation_id, "root", root),
         wasm_store_activation,

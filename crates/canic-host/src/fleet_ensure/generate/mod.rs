@@ -4,6 +4,9 @@
 //! Does not own: artifact builds, identity invention, paid effects, or convergence.
 //! Boundary: release artifacts are local authority; every retained Principal is explicit and live-verified.
 
+pub mod capacity_import;
+mod completed_source;
+pub mod infrastructure_bootstrap;
 mod startup_funding;
 #[cfg(test)]
 mod tests;
@@ -118,6 +121,8 @@ pub struct FreshEstateSeedRequest<'a> {
 
 /// Generated desired state plus its explicit observation summary.
 pub struct GeneratedDesiredFleet {
+    /// Completed-source native samples are bound to this preparation, not fresh usage queries.
+    pub completed_preparation_sha256: Option<String>,
     pub desired: DesiredFleet,
     pub observed_canisters: usize,
     pub observed_controlled_cycles: u128,
@@ -126,9 +131,27 @@ pub struct GeneratedDesiredFleet {
     pub startup_funding: crate::fleet_ensure::view::startup_funding::StartupFundingForecast,
 }
 
+enum GenerationOutput {
+    Ordinary(Box<GeneratedDesiredFleet>),
+    Bootstrap(Box<DesiredFleet>),
+}
+
+impl GenerationOutput {
+    fn ordinary(self) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
+        match self {
+            Self::Ordinary(generated) => Ok(*generated),
+            Self::Bootstrap(_) => Err(FleetGenerateError::Authority(
+                "unexpected bootstrap generation".into(),
+            )),
+        }
+    }
+}
+
 /// Typed no-effect Fleet generation failure.
 #[derive(Debug, ThisError)]
 pub enum FleetGenerateError {
+    #[error("completed-source generation failed: {0}")]
+    CompletedPreparation(#[from] Box<crate::fleet_ensure::ops::completed_preparation::CompletedPreparationError>),
     #[error("mainnet Subnet Catalog acquisition failed: {0}")]
     SubnetCatalog(#[from] Box<crate::subnet_catalog::acquisition::CatalogAcquisitionError>),
 
@@ -722,7 +745,7 @@ enum RootEstateStatusResponse {
 pub fn generate_desired_fleet(
     request: &FleetGenerateRequest<'_>,
 ) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
-    generate(request, None)
+    generate(request, None, None)?.ordinary()
 }
 
 /// Generate through the exact owned local gateway while retaining local network authority.
@@ -739,7 +762,7 @@ pub fn generate_local_fleet(
             "local Fleet generation requires a local network profile".into(),
         ));
     }
-    generate(request, Some(target))
+    generate(request, Some(target), None)?.ordinary()
 }
 
 #[expect(
@@ -749,12 +772,19 @@ pub fn generate_local_fleet(
 fn generate(
     request: &FleetGenerateRequest<'_>,
     local_replica: Option<&LocalReplicaTarget>,
-) -> Result<GeneratedDesiredFleet, FleetGenerateError> {
+    initialization: Option<
+        crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection,
+    >,
+) -> Result<GenerationOutput, FleetGenerateError> {
     let mut source: FleetSource = load_toml(request.source, "source")?;
     let seed: EstateSeed = load_toml(request.seed, "seed")?;
     require_schema(source.schema_version, "source")?;
     require_schema(seed.schema_version, "seed")?;
-    validate_identity_seed(&source, &seed)?;
+    if let Some(selection) = initialization {
+        infrastructure_bootstrap::validate_seed(&source, &seed, selection)?;
+    } else {
+        validate_identity_seed(&source, &seed)?;
+    }
     require_cycles_creation(&source.coordinator.creation_funding, "Coordinator")?;
     if source.coordinator.subnet.kind != "explicit" {
         return Err(FleetGenerateError::Authority(
@@ -856,7 +886,24 @@ fn generate(
     let subnet_catalog = catalog
         .as_ref()
         .map(|outcome| crate::subnet_catalog::ops::observation(outcome, generation_time));
-    let observed = if seed.fresh_estate {
+    let completed = if initialization.is_some() {
+        None
+    } else {
+        completed_source::observe(
+            request,
+            &source,
+            &seed,
+            config.model().app_id(),
+            local_replica,
+        )?
+    };
+    let preparing_reset = completed.is_some();
+    let completed_preparation_sha256 = completed
+        .as_ref()
+        .map(|estate| estate.review_sha256.clone());
+    let observed = if let Some(completed) = completed {
+        completed.balances
+    } else if seed.fresh_estate || initialization.is_some() {
         BTreeMap::new()
     } else {
         observe_estate(&EstateObservationRequest {
@@ -878,14 +925,14 @@ fn generate(
         .map_or(seed.coordinator.as_str(), |treasury| {
             treasury.principal.as_str()
         });
-    if !seed.fresh_estate && !observed.contains_key(treasury) {
+    if !seed.fresh_estate && initialization.is_none() && !observed.contains_key(treasury) {
         return Err(FleetGenerateError::Authority(
             "treasury must be the seeded Coordinator or another explicitly seeded controlled canister"
                 .to_string(),
         ));
     }
     let ledger_fee_cycles = observe_ledger_fee(request, &seed.cycles_ledger, local_replica)?;
-    let desired = compile_desired(CompileDesiredRequest {
+    let mut desired = compile_desired(CompileDesiredRequest {
         request,
         source: &source,
         seed: &seed,
@@ -903,38 +950,51 @@ fn generate(
         treasury,
         ledger_fee_cycles,
     })?;
+    if initialization == Some(crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection::Create) {
+        desired.canisters.iter_mut().find(|canister| canister.kind == DesiredCanisterKind::Coordinator)
+            .ok_or_else(|| FleetGenerateError::Authority("bootstrap requires one Coordinator".into()))?
+            .principal = None;
+    }
     crate::fleet_ensure::policy::validate_terminal_pool_capacity(&desired)?;
+    if initialization.is_some() {
+        return Ok(GenerationOutput::Bootstrap(Box::new(desired)));
+    }
     let observed_controlled_cycles = observed.values().try_fold(0_u128, |total, canister| {
         total.checked_add(canister.cycles).ok_or_else(|| {
             FleetGenerateError::Authority("observed controlled cycle total overflowed".to_string())
         })
     })?;
     let mut startup_funding = startup_funding::forecast(config.model(), &desired, &observed)?;
-    startup_funding.coordinator_usage = startup_funding::observe_usage(
-        request,
-        &desired,
-        &observed,
-        &coordinator_artifact.wasm_sha256_hex,
-        local_replica,
-    );
-    startup_funding::observe_children(
-        request,
-        &desired,
-        &observed,
-        &root_artifact.wasm_sha256_hex,
-        &coordinator_artifact.wasm_sha256_hex,
-        local_replica,
-        &mut startup_funding,
-    );
+    if !preparing_reset && initialization.is_none() {
+        startup_funding.coordinator_usage = startup_funding::observe_usage(
+            request,
+            &desired,
+            &observed,
+            &coordinator_artifact.wasm_sha256_hex,
+            local_replica,
+        );
+        startup_funding::observe_children(
+            request,
+            &desired,
+            &observed,
+            &root_artifact.wasm_sha256_hex,
+            &coordinator_artifact.wasm_sha256_hex,
+            local_replica,
+            &mut startup_funding,
+        );
+    }
     startup_funding::apply_allowances(config.model(), &desired, &mut startup_funding);
-    Ok(GeneratedDesiredFleet {
-        desired,
-        observed_canisters: observed.len(),
-        observed_controlled_cycles,
-        release_build_id: request.release_build_id,
-        subnet_catalog,
-        startup_funding,
-    })
+    Ok(GenerationOutput::Ordinary(Box::new(
+        GeneratedDesiredFleet {
+            completed_preparation_sha256,
+            desired,
+            observed_canisters: observed.len(),
+            observed_controlled_cycles,
+            release_build_id: request.release_build_id,
+            subnet_catalog,
+            startup_funding,
+        },
+    )))
 }
 
 fn validate_generation_authority(
@@ -1226,6 +1286,7 @@ fn compile_desired(input: CompileDesiredRequest<'_>) -> Result<DesiredFleet, Fle
             )));
         }
         bootstrap_roots.push(DesiredFleetBootstrapRoot {
+            capacity_import_bootstrap: None,
             canister_pool_imports: pool_names,
             component_admissions: planned.component_admissions.clone(),
             component_topology_digest: planned.component_topology_digest,
@@ -1941,6 +2002,14 @@ fn validate_identity_seed(
     source: &FleetSource,
     seed: &EstateSeed,
 ) -> Result<(), FleetGenerateError> {
+    validate_identity_seed_selection(source, seed, false)
+}
+
+fn validate_identity_seed_selection(
+    source: &FleetSource,
+    seed: &EstateSeed,
+    create_coordinator: bool,
+) -> Result<(), FleetGenerateError> {
     let fee = Cycles::from_human_config_str(&seed.management_creation_fee_cycles)
         .map_err(|_| {
             FleetGenerateError::SeedTopology(
@@ -1958,7 +2027,9 @@ fn validate_identity_seed(
         ));
     }
     let mut identities = BTreeSet::new();
-    insert_seed_identity(&mut identities, "Coordinator", &seed.coordinator)?;
+    if !create_coordinator {
+        insert_seed_identity(&mut identities, "Coordinator", &seed.coordinator)?;
+    }
     if let Some(treasury) = &seed.treasury {
         parse_subnet("treasury", &treasury.subnet)?;
         if treasury.principal != seed.coordinator {

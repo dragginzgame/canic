@@ -49,6 +49,7 @@ fn asynchronous_root_intents_are_replay_protected_by_operation_id() {
         "ActivateFundingPolicyRotation",
         "AdoptStore",
         "BootstrapStore",
+        "ImportPoolCapacity",
         "PrepareFundingPolicyRotation",
         "ProvisionChild",
         "ProvisionComponent",

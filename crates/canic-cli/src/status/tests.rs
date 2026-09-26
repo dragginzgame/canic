@@ -336,6 +336,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
             protocol_actions: Vec::new(),
             recovery_review: None,
             reinstall: None,
+            infrastructure_bootstrap: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,

@@ -139,6 +139,7 @@ fn fixture() -> (
         protocol_actions: Vec::new(),
         recovery_review: None,
         reinstall: None,
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: Some(Box::new(ReviewedDesiredFleetRecord::capture(&desired))),

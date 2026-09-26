@@ -287,6 +287,7 @@ pub(in crate::fleet_ensure) fn preparation(
         source_operation_id: input.source.operation_id.clone(),
         authorities,
         assets: input.assets.to_vec(),
+        completed_reset: None,
         activation_reset: Some(Box::new(FleetActivationResetRecord {
             preparation: None,
             source: input.source.clone(),

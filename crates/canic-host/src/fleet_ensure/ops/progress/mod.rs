@@ -46,6 +46,7 @@ const fn action_kind(action: &EnsureAction) -> FleetEnsureActionKind {
         EnsureAction::SetControllers { .. } => FleetEnsureActionKind::SetControllers,
         EnsureAction::Start { .. } => FleetEnsureActionKind::Start,
         EnsureAction::Stop { .. } => FleetEnsureActionKind::Stop,
+        EnsureAction::Uninstall { .. } => FleetEnsureActionKind::Uninstall,
         EnsureAction::Transfer { .. } => FleetEnsureActionKind::Transfer,
         EnsureAction::FleetProtocol { action, .. } => protocol_kind(action),
     }

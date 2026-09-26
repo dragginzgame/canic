@@ -4,9 +4,11 @@
 //! Does not own: storage, clocks, transport, live observation, or effects.
 //! Boundary: workflow supplies exact desired/live inputs and persists the returned immutable plan.
 
+pub mod capacity_import;
 pub mod continuation_forecast;
 mod creation_fee;
 pub(in crate::fleet_ensure) mod independent_effects;
+pub(in crate::fleet_ensure) mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub(super) mod recovery;
 pub(super) mod reinstall;
@@ -48,6 +50,10 @@ pub(super) use creation_fee::validate_creation_fee_scope;
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum EnsurePolicyError {
+    #[error(transparent)]
+    InfrastructureBootstrap(#[from] infrastructure_bootstrap::InfrastructureBootstrapError),
+    #[error(transparent)]
+    CapacityBootstrap(#[from] capacity_import::bootstrap::CapacityBootstrapError),
     #[error(
         "Root {root} startup role {role} cannot receive {shortfall_cycles} required cycles under its configured top-up/lifetime policy"
     )]
@@ -686,6 +692,19 @@ pub fn compile_plan(
         reinstall::funding_observation_count(desired, reinstall, &accumulator.canisters)?,
         "reinstall funding observations",
     )?;
+    let observation_count = checked_add(
+        observation_count,
+        if let Some(completed) = reinstall.and_then(|intent| intent.completed_reset.as_deref()) {
+            (desired.canisters.len() as u128)
+                .checked_mul(u128::from(completed.maximum_terminal_observations))
+                .ok_or(EnsurePolicyError::ArithmeticOverflow {
+                    field: "completed reset terminal inspections",
+                })?
+        } else {
+            0
+        },
+        "completed reset terminal inspections",
+    )?;
     accumulator.add_burn(
         bounds
             .observation_burn
@@ -792,6 +811,7 @@ pub fn compile_plan(
         protocol_actions,
         recovery_review,
         reinstall: reinstall.cloned().map(Box::new),
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: Some(Box::new(
@@ -1234,6 +1254,7 @@ fn compile_root_start_plan(
         protocol_actions: Vec::new(),
         recovery_review: None,
         reinstall: None,
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: retained_authority.map(|authority| Box::new(authority.clone())),
         reviewed_desired: Some(Box::new(
@@ -2256,6 +2277,9 @@ fn validate_canic_initializer(
         let bound = match initializer {
             DesiredCanisterInit::Coordinator => configured.name == bootstrap.coordinator,
             DesiredCanisterInit::Root { root } => {
+                if let Some(input) = bootstrap.roots.iter().find(|entry| entry.root == *root) {
+                    capacity_import::bootstrap::validate(desired, input)?;
+                }
                 root == &configured.name && bootstrap.roots.iter().any(|entry| entry.root == *root)
             }
             DesiredCanisterInit::Store { root } => bootstrap
@@ -3274,7 +3298,8 @@ fn maximum_observation_count(
                 | EnsureAction::Protocol { .. }
                 | EnsureAction::SetControllers { .. }
                 | EnsureAction::Start { .. }
-                | EnsureAction::Stop { .. } => 3,
+                | EnsureAction::Stop { .. }
+                | EnsureAction::Uninstall { .. } => 3,
             };
             checked_add(total, count, "effect observation count")
         })?;
@@ -4225,6 +4250,7 @@ mod tests {
     #[test]
     fn apply_policy_rejects_bootstrap_imports_above_the_root_maximum() {
         let root = DesiredFleetBootstrapRoot {
+            capacity_import_bootstrap: None,
             canister_pool_imports: vec![
                 "pool-0".to_string(),
                 "pool-1".to_string(),

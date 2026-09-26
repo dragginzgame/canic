@@ -4,10 +4,14 @@
 //! Does not own: reset intent, sequencing, inventory admission or retries.
 //! Boundary: one exact controller command or protected status read per call.
 
+pub(in crate::fleet_ensure) mod contract;
+#[cfg(test)]
+mod tests;
+
 use crate::{
     canister_protocol::{call_with_candid, query_with_candid},
     fleet_ensure::{
-        model::{DesiredCanisterKind, EnsureAction},
+        model::EnsureAction,
         ops::{
             EffectObservation, EffectOutcome, EffectRetry, current_protocol::CurrentProtocolError,
         },
@@ -15,11 +19,8 @@ use crate::{
     icp::IcpCli,
 };
 use candid::{CandidType, Principal};
-use canic_core::{
-    dto::authority_restore::{
-        AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
-    },
-    protocol,
+use canic_core::dto::authority_restore::{
+    AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
 };
 use serde::Deserialize;
 use std::path::Path;
@@ -69,19 +70,15 @@ fn authority<'a>(
         return Err(CurrentProtocolError::ResponseMismatch);
     };
     let path = root.join(candid);
-    let bytes = std::fs::read(&path)
+    let bytes = crate::durable_io::read_regular_bytes(&path, 1024 * 1024)
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
     if canic_core::cdk::utils::hash::sha256_hex(&bytes) != *candid_sha256 {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
-    let (command, status) = match authority_kind {
-        DesiredCanisterKind::Root => (protocol::CANIC_ROOT_COMMAND, protocol::CANIC_ROOT_STATUS),
-        DesiredCanisterKind::Coordinator => (
-            protocol::CANIC_COORDINATOR_COMMAND,
-            protocol::CANIC_OBSERVABILITY,
-        ),
-        _ => return Err(CurrentProtocolError::ResponseMismatch),
-    };
+    let invalid_contract = || CurrentProtocolError::AuthoritySealContract { name: name.clone() };
+    let text = std::str::from_utf8(&bytes).map_err(|_| invalid_contract())?;
+    contract::verify(text, *authority_kind).ok_or_else(invalid_contract)?;
+    let (command, status) = contract::methods(*authority_kind).ok_or_else(invalid_contract)?;
     Ok(Authority {
         candid: path,
         command,
@@ -93,7 +90,7 @@ fn authority<'a>(
     })
 }
 
-pub(super) fn apply(
+pub(in crate::fleet_ensure) fn apply(
     icp: &IcpCli,
     root: &Path,
     operation_id: &str,
@@ -109,6 +106,7 @@ pub(super) fn apply(
             operation_id: authority.operation,
         }),
     )?;
+    validate_status(authority.principal, &status)?;
     if !sealed(&authority, &status) {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
@@ -119,7 +117,7 @@ pub(super) fn apply(
     })
 }
 
-pub(super) fn observe(
+pub(in crate::fleet_ensure) fn observe(
     icp: &IcpCli,
     root: &Path,
     operation_id: &str,
@@ -133,21 +131,50 @@ pub(super) fn observe(
         authority.status,
         &Status::AuthorityRestore,
     )?;
-    if status.authority_canister != authority.principal
-        || (status.phase == AuthorityRestoreFencePhase::Sealed
-            && status.operation_id != Some(authority.operation))
+    observation(&authority, &status)
+}
+
+fn observation(
+    authority: &Authority<'_>,
+    status: &AuthorityRestoreFenceStatusResponse,
+) -> Result<EffectObservation, CurrentProtocolError> {
+    validate_status(authority.principal, status)?;
+    if status.phase == AuthorityRestoreFencePhase::Sealed
+        && status.operation_id != Some(authority.operation)
     {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
     Ok(EffectObservation {
         provisioning_progress: None,
         provisioning_failure: None,
-        applied: sealed(&authority, &status),
+        applied: sealed(authority, status),
         estate_funding_required: None,
         post_cycles: None,
         progress_identity: format!("authority-seal:{}:{:?}", authority.name, status.phase),
         retry: EffectRetry::ReplayExactIssuedCommand,
     })
+}
+
+/// A fence receipt is complete or absent; partial history cannot reconcile a lost reply.
+fn validate_status(
+    principal: Principal,
+    status: &AuthorityRestoreFenceStatusResponse,
+) -> Result<(), CurrentProtocolError> {
+    let receipt_fields = [
+        status.operation_id.is_some(),
+        status.history_total_num_changes.is_some(),
+        status.changed_at_ns.is_some(),
+    ];
+    let complete = receipt_fields.into_iter().all(|present| present);
+    let absent = receipt_fields.into_iter().all(|present| !present);
+    let valid = match status.phase {
+        AuthorityRestoreFencePhase::Open => absent || complete,
+        AuthorityRestoreFencePhase::Sealed => complete,
+    };
+    if principal != status.authority_canister || !valid {
+        return Err(CurrentProtocolError::ResponseMismatch);
+    }
+    Ok(())
 }
 
 fn sealed(authority: &Authority<'_>, status: &AuthorityRestoreFenceStatusResponse) -> bool {

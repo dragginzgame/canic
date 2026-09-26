@@ -7,6 +7,9 @@
 mod authority_seal;
 mod bounded_observations;
 mod canic_init;
+pub mod capacity_import;
+pub mod completed_preparation;
+pub mod completed_reset;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
@@ -14,6 +17,7 @@ pub(super) mod effect_preparation;
 pub(super) mod funding;
 pub(super) mod funding_observation;
 pub mod independent_effects;
+pub mod infrastructure_bootstrap;
 mod install_history;
 pub mod operator_mint;
 mod plan_content;
@@ -23,6 +27,7 @@ mod protocol;
 pub(super) mod readiness;
 pub(super) mod recovery;
 pub(super) mod reinstall;
+pub mod retained_contract;
 pub(super) mod startup_funding;
 
 use crate::{
@@ -63,6 +68,7 @@ pub(crate) use platform::{
     native_funding_applied,
 };
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
+pub use reinstall::adoption::publication as completed_handoff;
 
 /// Decode the reviewed bounds for Create execution and its first live observation.
 pub(crate) fn maximum_creation_observation_burn(desired: &DesiredFleet) -> Option<u128> {
@@ -183,6 +189,31 @@ pub enum ReinstallAssetCheck {
 /// Platform boundary used by the workflow and deterministic test adapters.
 pub trait EnsurePlatform {
     type Error: std::error::Error + Send + Sync + 'static;
+
+    /// Inspect explicitly supplied infrastructure without querying uninitialized Root protocols.
+    fn infrastructure_bootstrap_observation(
+        &mut self,
+        _record: &crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<
+        Option<
+            crate::fleet_ensure::view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
+        >,
+        Self::Error,
+    > {
+        Ok(None)
+    }
+
+    /// Current post-reset physical balances, including reserved cycles and every default account.
+    fn completed_reset_balances(
+        &mut self,
+        _intent: &crate::fleet_ensure::model::FleetReinstallRecord,
+    ) -> Result<
+        Option<crate::fleet_ensure::view::completed_reset::CompletedResetBalancesView>,
+        Self::Error,
+    > {
+        Ok(None)
+    }
 
     /// Optional exact external Ledger block requested for a new retirement review.
     fn retirement_debit_block(&self) -> Option<u64> {
@@ -321,6 +352,30 @@ pub trait EnsurePlatform {
     /// input before resuming an in-progress journal.
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error>;
 
+    /// Bind original supplied custody for infrastructure initialization.
+    fn bind_infrastructure_bootstrap(
+        &mut self,
+        _source: &crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+    ) -> Result<(), Self::Error> {
+        Ok(())
+    }
+
+    /// Verify exact current Coordinator genesis before dependent infrastructure effects.
+    fn verify_bootstrap_coordinator(
+        &mut self,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
+    /// Verify completed infrastructure registration before publication permits pool import.
+    fn verify_bootstrap_registry(
+        &mut self,
+        _expected: &canic_core::dto::fleet_registry::FleetRegistry,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
     /// Observe configured Roots through management authority only. Production
     /// returns this evidence before any protected Root-owned child query.
     fn observe_root_management(
@@ -365,6 +420,15 @@ pub trait EnsurePlatform {
 
     /// Expand the complete fresh protocol from reviewed init inputs, without remote effects.
     fn fresh_protocol_actions(
+        &mut self,
+        _operation_id: &str,
+        _state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<EnsureAction>, Self::Error> {
+        Ok(Vec::new())
+    }
+
+    /// Expand only Store and Registry setup from reviewed initialization authority.
+    fn infrastructure_protocol_actions(
         &mut self,
         _operation_id: &str,
         _state: &FleetEnsureStateRecord,
@@ -505,6 +569,37 @@ impl EnsurePaths {
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
     #[error(
+        "completed-source preparation owns this Fleet; resume its exact reviewed operation before other Fleet work"
+    )]
+    CompletedPreparationInProgress,
+    #[error("fresh certified source custody is required before committing local authority")]
+    CompletedHandoffCustodyRequired,
+
+    #[error("completed-estate certified custody admission failed: {0}")]
+    CompletedHandoffCustody(#[source] Box<retained_contract::CompletedCustodyError>),
+
+    #[error(
+        "completed-estate publication evidence changed; preserve its archive and resume the original reviewed handoff"
+    )]
+    CompletedHandoffConflict,
+
+    #[error(
+        "completed reset final accounting exhausted its reviewed observation allowance; preserve the journal and receipts"
+    )]
+    CompletedResetAccountingBudget,
+
+    #[error("completed-estate publication source inspection failed: {0}")]
+    CompletedHandoffSource(#[source] Box<retained_contract::RetainedContractError>),
+    #[error("approved Fleet capacity import at {} must resume under its original authority before other Fleet operations", path.display())]
+    CapacityImportInProgress { path: PathBuf },
+
+    #[error("invalid Fleet capacity import journal at {}: {source}", path.display())]
+    CapacityImportJournal {
+        path: PathBuf,
+        #[source]
+        source: Box<capacity_import::journal::CapacityImportJournalError>,
+    },
+    #[error(
         "retained terminal evidence is incomplete or inconsistent; preserve all source documents and paid-effect receipts"
     )]
     InvalidTerminalSource,
@@ -586,6 +681,45 @@ pub enum EnsureStateError {
 }
 
 pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
+    let lock = lock_fleet_file(paths)?;
+    capacity_import::journal::require_no_approved_import(paths)?;
+    completed_handoff::recover(paths)?;
+    completed_preparation::require_no_intent(paths)?;
+    reinstall::adoption::recover(paths)?;
+    Ok(lock)
+}
+
+/// The capacity owner resumes its retained journal while holding the ordinary Fleet lock.
+fn lock_capacity_import_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
+    let lock = lock_fleet_file(paths)?;
+    completed_preparation::require_no_intent(paths)?;
+    Ok(lock)
+}
+
+/// Preparation owns the same Fleet file lock while preserving the source operation.
+pub(in crate::fleet_ensure) fn lock_completed_preparation(
+    paths: &EnsurePaths,
+) -> Result<File, EnsureStateError> {
+    let lock = lock_completed_source(paths)?;
+    if completed_handoff::pending(paths)?.is_some() {
+        return Err(EnsureStateError::CompletedPreparationInProgress);
+    }
+    Ok(lock)
+}
+
+/// Local completed-source publication shares the Fleet lock and may recover its own intent.
+pub(in crate::fleet_ensure) fn lock_completed_source(
+    paths: &EnsurePaths,
+) -> Result<File, EnsureStateError> {
+    let lock = lock_fleet_file(paths)?;
+    capacity_import::journal::require_no_approved_import(paths)?;
+    if reinstall::adoption::review(paths)?.is_some() {
+        return Err(EnsureStateError::CompletedPreparationInProgress);
+    }
+    Ok(lock)
+}
+
+fn lock_fleet_file(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
     let lock = lock_regular_file_with_parents(&paths.lock).map_err(|error| match error {
         RegularFileLockError::Io(source) => EnsureStateError::Io {
             path: paths.lock.clone(),
@@ -599,7 +733,6 @@ pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
             path: paths.lock.clone(),
         },
     })?;
-    reinstall::adoption::recover(paths)?;
     Ok(lock)
 }
 

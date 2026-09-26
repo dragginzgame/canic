@@ -120,6 +120,18 @@ impl MgmtInfra {
         Ok(())
     }
 
+    /// Quote the exact destructive request before recording its paid intent.
+    pub fn uninstall_code_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
+        Ok(
+            Call::unbounded_wait(Principal::management_canister(), "uninstall_code")
+                .with_arg(InfraCanisterIdRecordExtended {
+                    canister_id: canister_pid,
+                    sender_canister_version: Some(api::canister_version()),
+                })?
+                .cost(),
+        )
+    }
+
     /// Uninstall code from a canister.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecordExtended {

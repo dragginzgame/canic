@@ -111,6 +111,40 @@ impl IcpCli {
         )
     }
 
+    /// Clear code and stable state while preserving the exact canister ID and cycles.
+    /// The caller must retain the reviewed uninstall intent before invoking this effect.
+    pub(crate) fn uninstall_canister(
+        &self,
+        canister_id: Principal,
+    ) -> Result<(), IcpManagementCallError> {
+        #[derive(CandidType)]
+        struct UninstallRequest {
+            canister_id: Principal,
+            sender_canister_version: Option<u64>,
+        }
+        self.measure_request(
+            crate::icp::IcpRequestKind::Update,
+            Some(&canister_id.to_text()),
+            Some("uninstall_code"),
+            || {
+                let argument = candid::encode_one(UninstallRequest {
+                    canister_id,
+                    sender_canister_version: None,
+                })
+                .map_err(IcpManagementCallError::CandidEncode)?;
+                let agent = self.authenticated_agent()?;
+                self.record_remote_call();
+                let response = call_management_update(
+                    &LiveAgentUpdateBoundary { agent: &agent },
+                    canister_id,
+                    "uninstall_code",
+                    argument,
+                )?;
+                candid::decode_args::<()>(&response).map_err(IcpManagementCallError::CandidResponse)
+            },
+        )
+    }
+
     /// Resolve an agent bound to the selected ICP environment and verified active identity.
     ///
     /// The caller owns reviewed effect authority and durable intent before using it.

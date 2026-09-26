@@ -618,6 +618,13 @@ enum RejectionCode {
 
 #[derive(Debug, ThisError)]
 pub enum IcpEnsurePlatformError {
+    #[error("bootstrap uninstall failed: {0}")]
+    BootstrapUninstall(#[source] Box<IcpManagementCallError>),
+    #[error(transparent)]
+    InfrastructureBootstrap(#[from] super::infrastructure_bootstrap::InfrastructureBootstrapError),
+    #[error("completed reset management-status observation failed: {0}")]
+    CompletedResetStatus(#[source] Box<IcpManagementCallError>),
+
     #[error(transparent)]
     RetirementDebit(#[from] crate::fleet_ensure::ops::reinstall::debit::RetirementDebitError),
     #[error(transparent)]
@@ -879,6 +886,8 @@ struct ObservationCounters {
 
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
+    infrastructure_bootstrap:
+        Option<crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord>,
     retirement_debit_block: Option<u64>,
     pub(super) desired: DesiredFleet,
     pub(super) icp: IcpCli,
@@ -921,6 +930,7 @@ impl IcpEnsurePlatform {
         Self {
             desired,
             icp,
+            infrastructure_bootstrap: None,
             retirement_debit_block: None,
             initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
@@ -3376,6 +3386,86 @@ impl IcpEnsurePlatform {
 impl EnsurePlatform for IcpEnsurePlatform {
     type Error = IcpEnsurePlatformError;
 
+    fn infrastructure_bootstrap_observation(
+        &mut self,
+        record: &crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<
+        Option<
+            crate::fleet_ensure::view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
+        >,
+        Self::Error,
+    > {
+        super::infrastructure_bootstrap::observe(&self.icp, &self.desired, record, state)
+            .map(Some)
+            .map_err(Into::into)
+    }
+
+    fn completed_reset_balances(
+        &mut self,
+        intent: &crate::fleet_ensure::model::FleetReinstallRecord,
+    ) -> Result<
+        Option<crate::fleet_ensure::view::completed_reset::CompletedResetBalancesView>,
+        Self::Error,
+    > {
+        let Some(completed) = &intent.completed_reset else {
+            return Ok(None);
+        };
+        self.require_operator()?;
+        let mut canisters = BTreeMap::new();
+        let mut ledger = BTreeMap::new();
+        let mut names = completed
+            .preparation
+            .inspection_roots
+            .keys()
+            .collect::<Vec<_>>();
+        names.sort_by_key(|name| {
+            (
+                completed.preparation.inspection_roots[*name].is_none(),
+                *name,
+            )
+        });
+        let candid = self.root_protocol_candid()?;
+        for name in names {
+            let binding = &completed.preparation.custody.canisters[name].binding;
+            let status: canic_core::dto::canister::CanisterStatusResponse =
+                if let Some(root) = &completed.preparation.inspection_roots[name] {
+                    super::current_inventory::inspect_root_controlled_canister(
+                        &self.icp,
+                        &candid,
+                        completed.preparation.custody.canisters[root]
+                            .binding
+                            .principal,
+                        binding.principal,
+                    )?
+                } else {
+                    self.icp
+                        .management_canister_status_candid(
+                            binding.principal,
+                            &canic_core::dto::canister::CanisterInspectionRequest {
+                                canister_id: binding.principal,
+                            },
+                        )
+                        .map_err(|error| {
+                            IcpEnsurePlatformError::CompletedResetStatus(Box::new(error))
+                        })?
+                };
+            let balance = super::completed_reset::terminal_balance(status).ok_or(
+                IcpEnsurePlatformError::Arithmetic("completed reset native/reserved balance"),
+            )?;
+            let principal = binding.principal.to_text();
+            ledger.insert(principal.clone(), self.cycles_ledger_balance(&principal)?);
+            canisters.insert(principal, balance);
+        }
+        Ok(Some(
+            crate::fleet_ensure::view::completed_reset::CompletedResetBalancesView {
+                canisters,
+                ledger,
+                operator_cycles: self.cycles_ledger_balance(&self.desired.operator)?,
+            },
+        ))
+    }
+
     fn retirement_debit_block(&self) -> Option<u64> {
         self.retirement_debit_block
     }
@@ -3459,9 +3549,53 @@ impl EnsurePlatform for IcpEnsurePlatform {
     }
 
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
+        self.infrastructure_bootstrap = None;
         self.invalidate_observation_snapshot();
         self.desired = desired.clone();
         Ok(())
+    }
+
+    fn bind_infrastructure_bootstrap(
+        &mut self,
+        source: &crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+    ) -> Result<(), Self::Error> {
+        self.infrastructure_bootstrap = Some(source.clone());
+        Ok(())
+    }
+
+    fn verify_bootstrap_coordinator(
+        &mut self,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<bool, Self::Error> {
+        let source = self
+            .infrastructure_bootstrap
+            .as_ref()
+            .ok_or(super::infrastructure_bootstrap::InfrastructureBootstrapError::Integrity)?;
+        super::infrastructure_bootstrap::verify_coordinator(
+            &self.icp,
+            &self.root,
+            &self.desired,
+            source,
+            state,
+        )?;
+        Ok(true)
+    }
+
+    fn verify_bootstrap_registry(
+        &mut self,
+        expected: &canic_core::dto::fleet_registry::FleetRegistry,
+    ) -> Result<bool, Self::Error> {
+        let source = self
+            .infrastructure_bootstrap
+            .as_ref()
+            .ok_or(super::infrastructure_bootstrap::InfrastructureBootstrapError::Integrity)?;
+        super::infrastructure_bootstrap::verify_registry(
+            &self.icp,
+            &self.desired,
+            source,
+            expected,
+        )?;
+        Ok(true)
     }
 
     fn with_activity<T, E>(
@@ -3529,7 +3663,39 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     IcpEnsurePlatformError::RootManagement("missing reset Root".to_string())
                 })?;
             let principal = parse_principal("reset Root", &binding.principal)?;
-            let candid = if let Some(source) = intent.source.as_deref()
+            let candid = if let Some(completed) = intent.completed_reset.as_deref()
+                && check == super::ReinstallAssetCheck::BeforeReset
+            {
+                let source_name = completed
+                    .source_names
+                    .get(root_name)
+                    .ok_or_else(|| pool_configuration_error("missing prepared Root".into()))?;
+                let (path, digest) = completed
+                    .preparation
+                    .actions
+                    .iter()
+                    .find_map(|action| match action {
+                        EnsureAction::SealAuthority {
+                            name,
+                            candid,
+                            candid_sha256,
+                            ..
+                        } if name == source_name => Some((candid, candid_sha256)),
+                        _ => None,
+                    })
+                    .ok_or_else(|| {
+                        pool_configuration_error("missing prepared Root interface".into())
+                    })?;
+                if super::artifact_sha256(&platform.root, path)
+                    .map_err(|error| pool_configuration_error(error.to_string()))?
+                    != *digest
+                {
+                    return Err(pool_configuration_error(
+                        "prepared Root interface changed".into(),
+                    ));
+                }
+                platform.root.join(path)
+            } else if let Some(source) = intent.source.as_deref()
                 && check == super::ReinstallAssetCheck::BeforeReset
             {
                 let path = source
@@ -3556,7 +3722,26 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 .assets
                 .iter()
                 .filter(|asset| asset.root == root_name)
-                .collect::<Vec<_>>();
+                .cloned()
+                .map(|mut asset| {
+                    if intent.completed_reset.is_some()
+                        && check == super::ReinstallAssetCheck::Terminal
+                    {
+                        let bootstrap = platform.desired.bootstrap.as_ref().ok_or_else(|| {
+                            pool_configuration_error("missing current controller authority".into())
+                        })?;
+                        asset.controllers = bootstrap
+                            .recovery_controllers
+                            .iter()
+                            .map(Principal::to_text)
+                            .chain([principal.to_text()])
+                            .collect();
+                        asset.controllers.sort();
+                    }
+                    Ok(asset)
+                })
+                .collect::<Result<Vec<_>, IcpEnsurePlatformError>>()?;
+            let assets = assets.iter().collect::<Vec<_>>();
             Self::reinstall_assets_match_bound(&platform.icp, &candid, principal, &assets, check)
         })
     }
@@ -4141,6 +4326,20 @@ impl EnsurePlatform for IcpEnsurePlatform {
         })
     }
 
+    fn infrastructure_protocol_actions(
+        &mut self,
+        operation_id: &str,
+        state: &FleetEnsureStateRecord,
+    ) -> Result<Vec<EnsureAction>, Self::Error> {
+        current_protocol::compile_infrastructure_protocol(
+            &self.root,
+            &self.desired,
+            state,
+            operation_id,
+        )
+        .map_err(Into::into)
+    }
+
     fn fresh_protocol_actions(
         &mut self,
         operation_id: &str,
@@ -4362,6 +4561,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                             });
                         }
                     }
+
                 } else {
                     live.as_ref().is_some_and(|live| {
                         install_effect_applied(
@@ -4486,6 +4686,14 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     live.as_ref()
                         .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
                     format!("start:{:?}", live.map(|live| live.status)),
+                )
+            }
+            EnsureAction::Uninstall { principal, .. } => {
+                let live = platform.install_status_optional(Self::action_principal(state, principal)?)?;
+                post_cycles = platform.direct_reconciliation_cycles(action.name(), live.as_ref());
+                (
+                    live.as_ref().is_some_and(|live| live.module_sha256.is_none()),
+                    format!("uninstall:{:?}", live.map(|live| live.module_sha256)),
                 )
             }
             EnsureAction::Stop { principal, .. } => {
@@ -4759,6 +4967,19 @@ impl EnsurePlatform for IcpEnsurePlatform {
                         .start_canister(Self::action_principal(state, principal)?)?;
                     Ok(empty_outcome())
                 }
+                EnsureAction::Uninstall { principal, .. } => {
+                    let principal = parse_principal(
+                        "bootstrap uninstall",
+                        Self::action_principal(state, principal)?,
+                    )?;
+                    platform
+                        .icp
+                        .uninstall_canister(principal)
+                        .map_err(|error| {
+                            IcpEnsurePlatformError::BootstrapUninstall(Box::new(error))
+                        })?;
+                    Ok(empty_outcome())
+                }
                 EnsureAction::Stop { principal, .. } => {
                     platform
                         .icp
@@ -4847,6 +5068,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             | EnsureAction::Stop {
                 name, principal, ..
             }
+            | EnsureAction::Uninstall { name, principal }
             | EnsureAction::Transfer {
                 name, principal, ..
             } => (name, Self::action_principal(state, principal)?),
@@ -9271,6 +9493,7 @@ esac
         let bootstrap = desired.bootstrap.as_mut().unwrap();
         bootstrap.fresh_estate = false;
         bootstrap.roots = vec![crate::fleet_ensure::model::DesiredFleetBootstrapRoot {
+            capacity_import_bootstrap: None,
             canister_pool_imports: vec![target.clone()],
             component_admissions: Vec::new(),
             component_topology_digest: canic_core::ids::ComponentTopologyDigest::from_bytes(

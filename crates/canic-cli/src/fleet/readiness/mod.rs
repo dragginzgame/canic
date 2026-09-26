@@ -51,6 +51,16 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
     let environment = string_option(&matches, "environment")
         .ok_or_else(|| FleetCommandError::Usage("readiness requires --environment".into()))?;
     let root = resolve_current_canic_icp_root()?;
+    canic_host::fleet_ensure::ops::retained_contract::check(
+        &root,
+        &environment,
+        &required_string(&matches, "fleet"),
+    )
+    .map_err(|error| {
+        FleetCommandError::Readiness(Box::new(
+            canic_host::fleet_ensure::workflow::readiness::FleetReadinessError::from(error),
+        ))
+    })?;
     let parse_principal = |key: &str| {
         Principal::from_text(required_string(&matches, key))
             .map_err(|_| FleetCommandError::Usage(format!("invalid {key} Principal")))

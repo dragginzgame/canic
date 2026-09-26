@@ -348,6 +348,9 @@ pub struct FleetSubnetRootFinalInventoryResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct FleetSubnetRootInitArgs {
+    /// Fence allocation until the exact externally controlled capacity has been imported.
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub capacity_import_bootstrap: Option<crate::dto::pool_import::PoolImportBootstrap>,
     pub authority: FleetSubnetRootAuthority,
     pub install_id: [u8; 32],
     pub wasm_store_activation: FleetSubnetWasmStoreActivationAuthority,

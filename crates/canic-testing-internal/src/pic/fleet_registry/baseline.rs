@@ -28,11 +28,19 @@ mod tests {
     #[cfg(test)]
     mod activation_reset;
     #[cfg(test)]
+    mod capacity_import;
+    #[cfg(test)]
     mod child_reserve;
+    #[cfg(test)]
+    mod completed_preparation;
+    #[cfg(test)]
+    mod completed_reset;
     #[cfg(test)]
     mod funding_deadline;
     #[cfg(test)]
     mod funding_inventory;
+    #[cfg(test)]
+    mod infrastructure_bootstrap;
     #[cfg(test)]
     mod native_funding;
     #[cfg(test)]
@@ -1816,6 +1824,15 @@ wrapper_root=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
 export XDG_CONFIG_HOME="$wrapper_root/xdg-config"
 export XDG_DATA_HOME="$wrapper_root/xdg-data"
 export DO_NOT_TRACK=1
+case " $* " in
+  *" canister call "*" canic_root_command "*)
+    if [ -f "$wrapper_root/lose-registration-response" ] && [ ! -e "$wrapper_root/lost-registration-response" ]; then
+      icp "$@"
+      : > "$wrapper_root/lost-registration-response"
+      exit 79
+    fi
+    ;;
+esac
 case " $* " in
   *" canister call "*" canic_wasm_store_publish_fixture "*)
     icp "$@"
@@ -6308,6 +6325,8 @@ exec icp "$@"
     #[derive(Clone, Copy)]
     enum FundingJourney {
         ActivationReset,
+        InfrastructureBootstrap,
+        CompletedReset,
         Fresh,
         Reinstall,
         FailedImports,
@@ -7715,7 +7734,10 @@ esac
             readiness_floor
                 .checked_sub(500_000_000_000)
                 .expect("fixture readiness floor")
-        } else if matches!(funding, FundingJourney::Fresh | FundingJourney::Reinstall) {
+        } else if matches!(
+            funding,
+            FundingJourney::Fresh | FundingJourney::Reinstall | FundingJourney::CompletedReset
+        ) {
             canic_host::fleet_ensure::fresh_pool_creation_funding(readiness_floor)
                 .expect("generator-owned initial pool funding")
         } else {
@@ -7845,6 +7867,7 @@ esac
             release_build_id: authority.initial_release_set.release_build_id,
             root_funding: Some(installed.coordinator_root_funding.clone()),
             roots: vec![DesiredFleetBootstrapRoot {
+                capacity_import_bootstrap: None,
                 canister_pool_imports: (0..pool_count)
                     .map(|index| format!("pool-{index}"))
                     .collect(),
@@ -7921,6 +7944,8 @@ esac
                 FundingJourney::NativeFunding
                     | FundingJourney::NativeChildFunding
                     | FundingJourney::Reinstall
+                    | FundingJourney::CompletedReset
+                    | FundingJourney::InfrastructureBootstrap
             )
         {
             pic.add_cycles(cycles_ledger, operator_balance);
@@ -7985,7 +8010,10 @@ esac
             root_key: hex_bytes(pic.root_key().expect("PocketIC local root key")),
             url: live_url.to_string(),
         };
-        let desired = if matches!(funding, FundingJourney::Fresh | FundingJourney::Reinstall) {
+        let desired = if matches!(
+            funding,
+            FundingJourney::Fresh | FundingJourney::Reinstall | FundingJourney::CompletedReset
+        ) {
             generate_journey_desired(GeneratedJourneyInput {
                 root: &adapter_root,
                 config: &config_path,
@@ -8002,6 +8030,24 @@ esac
         } else {
             desired
         };
+        if matches!(funding, FundingJourney::InfrastructureBootstrap) {
+            infrastructure_bootstrap::assert_journey(ReinstallJourney {
+                adapter_root: &adapter_root,
+                config: &config_path,
+                icp_wrapper: &icp_wrapper,
+                local_replica: &local_replica,
+                pic: &pic,
+                desired: &desired,
+                coordinator,
+                root,
+                store,
+                pools: &pools,
+            });
+            pic.stop_live();
+            phase.finish();
+            journey_span.finish();
+            return;
+        }
         let desired_identity = desired_sha256(&desired);
         let mut platform = literal_zero_journey_platform(
             &desired,
@@ -8082,6 +8128,7 @@ esac
             || matches!(
                 funding,
                 FundingJourney::Reinstall
+                    | FundingJourney::CompletedReset
                     | FundingJourney::NativeChildFunding
                     | FundingJourney::ActivationReset
             ) {
@@ -8182,7 +8229,16 @@ esac
             journey_span.finish();
             return;
         }
-        if matches!(funding, FundingJourney::Reinstall) {
+        if matches!(
+            funding,
+            FundingJourney::Reinstall | FundingJourney::CompletedReset
+        ) {
+            let desired = if matches!(funding, FundingJourney::CompletedReset) {
+                completed_reset::retained_desired(desired)
+            } else {
+                desired
+            };
+            let desired_identity = desired_sha256(&desired);
             phase = phase.next("initial_working_fleet");
             prepare_ready_imports(&pic, root, operator, &pools);
             let mut platform = literal_zero_journey_platform(
@@ -8192,7 +8248,7 @@ esac
                 local_replica.clone(),
                 true,
             );
-            let initial = fleet_ensure_workflow::plan(
+            let mut initial = fleet_ensure_workflow::plan(
                 &adapter_root,
                 &desired,
                 &desired_identity,
@@ -8201,6 +8257,34 @@ esac
                 &mut platform,
             )
             .expect("review the working Fleet used by reinstall");
+            if matches!(funding, FundingJourney::CompletedReset) {
+                completed_reset::prepare_source(
+                    &ReinstallJourney {
+                        adapter_root: &adapter_root,
+                        config: &config_path,
+                        icp_wrapper: &icp_wrapper,
+                        local_replica: &local_replica,
+                        pic: &pic,
+                        desired: &desired,
+                        coordinator,
+                        root,
+                        store,
+                        pools: &pools,
+                    },
+                    &initial.plan,
+                );
+                initial = fleet_ensure_workflow::plan(
+                    &adapter_root,
+                    &desired,
+                    &desired_identity,
+                    &desired.fleet,
+                    1_800_000_000_000_000_001,
+                    &mut platform,
+                )
+                .expect("review source Store installation with exact Root operation binding");
+                assert!(initial.plan.continuation.is_some());
+                assert!(initial.plan.protocol_actions.is_empty());
+            }
             let working = fleet_ensure_workflow::apply(
                 &adapter_root,
                 &desired,
@@ -8226,7 +8310,7 @@ esac
                 infrastructure_started_at,
             );
             phase = phase.next("retained_estate_reinstall");
-            assert_generated_reinstall_journey(ReinstallJourney {
+            let input = ReinstallJourney {
                 adapter_root: &adapter_root,
                 config: &config_path,
                 icp_wrapper: &icp_wrapper,
@@ -8237,7 +8321,12 @@ esac
                 root,
                 store,
                 pools: &pools,
-            });
+            };
+            if matches!(funding, FundingJourney::CompletedReset) {
+                completed_reset::assert_journey(input);
+            } else {
+                assert_generated_reinstall_journey(input);
+            }
             phase = phase.next("cleanup");
             pic.stop_live();
             std::fs::remove_dir_all(&adapter_root).expect("remove completed reinstall fixture");
@@ -18834,6 +18923,34 @@ cycles = "80T"
     )]
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
         vec![
+            (
+                "supplied infrastructure initializes and recovers through Ensure",
+                infrastructure_bootstrap::supplied_infrastructure_initializes_and_recovers,
+            ),
+            (
+                "supplied capacity fences bootstrap until publication",
+                capacity_import::supplied_capacity_fences_bootstrap_until_publication,
+            ),
+            (
+                "reviewed capacity import retains exact IDs and reset receipts",
+                capacity_import::reviewed_capacity_import_retains_exact_ids_and_reset_receipts,
+            ),
+            (
+                "host import transport recovers signed handoff and Root progress",
+                capacity_import::host_import_transport_recovers_signed_handoff_and_root_progress,
+            ),
+            (
+                "completed preparation seals reconcile lost responses",
+                completed_preparation::completed_preparation_seals_reconcile_lost_responses,
+            ),
+            (
+                "completed estate reset recovers and replays",
+                completed_reset::completed_estate_reset_recovers_and_replays,
+            ),
+            (
+                "completed reset stops and clears retained application once",
+                completed_preparation::completed_reset_stops_and_clears_retained_application_once,
+            ),
             (
                 "Fleet deployment restore",
                 restored_root_preserves_its_inventory_but_cannot_allocate,

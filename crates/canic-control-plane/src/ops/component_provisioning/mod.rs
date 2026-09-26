@@ -307,6 +307,7 @@ impl RootComponentProvisioningOps {
             };
         }
 
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let current = validated_aggregate_state()?;
         let next_placements = current
             .tracked_group_placements
@@ -1167,6 +1168,7 @@ impl RootComponentProvisioningOps {
 
     /// Fence unrelated top-level allocations while one aggregate batch owns root capacity.
     pub(crate) fn require_ordinary_allocation_open() -> Result<(), InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let state = validated_aggregate_state()?;
         if state.active_operation_id.is_some() {
             return Err(InternalError::conflict());
@@ -1176,6 +1178,7 @@ impl RootComponentProvisioningOps {
 
     /// Reject a different active aggregate operation before any fresh acceptance observation.
     pub(crate) fn require_acceptance_open(operation_id: [u8; 32]) -> Result<(), InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let state = validated_aggregate_state()?;
         match state.active_operation_id {
             None => Ok(()),
@@ -1186,6 +1189,7 @@ impl RootComponentProvisioningOps {
 
     /// Keep a root with retained group placements out of ordinary root draining.
     pub(crate) fn require_root_draining_open() -> Result<(), InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let state = validated_aggregate_state()?;
         if state.active_operation_id.is_some() || state.tracked_group_placements != 0 {
             return Err(InternalError::conflict());

@@ -228,7 +228,7 @@ pub fn load_persisted_application_artifact_union(
 }
 
 /// Read canonical retained evidence; the caller must bind its digest to a finalized release.
-pub(in crate::release_set) fn load_retained_application_artifact_union(
+pub fn load_retained_application_artifact_union(
     root: &Path,
     release_build_id: ReleaseBuildId,
 ) -> Result<PersistedApplicationArtifactUnion, ApplicationArtifactUnionPersistenceError> {

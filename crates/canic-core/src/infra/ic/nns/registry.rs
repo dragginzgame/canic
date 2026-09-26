@@ -62,6 +62,15 @@ pub enum NnsRegistryInfraError {
 pub struct NnsRegistryInfra;
 
 impl NnsRegistryInfra {
+    /// Quote the same subnet lookup before its owner reserves the paid call.
+    pub fn subnet_lookup_call_cost(pid: Principal) -> Result<u128, IcInfraError> {
+        Ok(
+            Call::unbounded_wait(*NNS_REGISTRY_CANISTER, "get_subnet_for_canister")
+                .with_arg(GetSubnetForCanisterRequest { principal: pid })?
+                .cost(),
+        )
+    }
+
     /// Query the NNS registry for the subnet of *this* canister.
     ///
     /// Infrastructure adapter:

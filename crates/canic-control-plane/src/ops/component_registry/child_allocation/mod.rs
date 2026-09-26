@@ -96,6 +96,7 @@ impl ComponentRegistryOps {
         application_init_args: Option<Vec<u8>>,
         reserved_against_registry: ComponentRegistryHead,
     ) -> Result<RootComponentChildAllocationView, InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let current =
             RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(decision.component)

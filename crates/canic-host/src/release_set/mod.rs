@@ -9,6 +9,8 @@ pub mod fixture;
 mod infrastructure;
 mod paths;
 
+pub(crate) use application::load_retained_application_artifact_union;
+
 pub use application::{
     ApplicationArtifactBuildOutput, ApplicationArtifactBuildTarget, ApplicationArtifactEntry,
     ApplicationArtifactFileBuildOutput, ApplicationArtifactUnion,

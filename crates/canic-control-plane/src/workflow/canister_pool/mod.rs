@@ -1,5 +1,6 @@
 //! Root-owned maintenance for prepaid empty Canisters on one physical Subnet.
 
+pub mod capacity_import;
 mod fixture;
 mod refill;
 
@@ -234,6 +235,11 @@ async fn maintain_once_inner() -> Result<PoolAdminResponse, InternalError> {
 async fn maintain_once_inner_for_target(
     ready_target: u32,
 ) -> Result<PoolAdminResponse, InternalError> {
+    if crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::is_active() {
+        return Ok(PoolAdminResponse::MaintenancePaused {
+            reason: "reviewed capacity import owns the pool".to_string(),
+        });
+    }
     let status = FleetActivationWorkflow::status()?;
     if !matches!(
         status.phase,
@@ -661,6 +667,12 @@ async fn observe_reset_asset_cycles(
         return Err(InternalError::invariant());
     }
     let recycling = CanisterPoolOps::pending_recycling_claim(canister_id)?;
+    // Settle outstanding application calls before discarding their callback state.
+    // PendingReset already owns this reset; retries may safely stop an already stopped asset.
+    MgmtOps::stop_canister(canister_id).await?;
+    if let Some(claim) = &recycling {
+        CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
+    }
     MgmtOps::update_settings(&UpdateSettingsArgs {
         canister_id,
         settings: CanisterSettings {

@@ -65,13 +65,25 @@ pub fn resolve_release_registry_protocol_binding(
     let mismatch = || ReleaseProtocolBindingError::ArtifactBindingMismatch {
         canister: entry.pid.clone(),
     };
-    let binding = entry.protocol_binding.as_ref().ok_or_else(mismatch)?;
     let artifact = infrastructure
         .manifest
         .entries
         .iter()
         .find(|artifact| entry.role.as_deref() == Some(artifact.protocol_role.as_str()))
         .ok_or_else(mismatch)?;
+    resolve_infrastructure_registry_protocol_binding(root, artifact, entry)
+}
+
+/// Bind a participant to an artifact after the caller has verified its manifest provenance.
+pub fn resolve_infrastructure_registry_protocol_binding(
+    root: &Path,
+    artifact: &crate::release_set::CanicInfrastructureArtifactEntry,
+    entry: &RegistryEntry,
+) -> Result<ResolvedProtocolBinding, ReleaseProtocolBindingError> {
+    let mismatch = || ReleaseProtocolBindingError::ArtifactBindingMismatch {
+        canister: entry.pid.clone(),
+    };
+    let binding = entry.protocol_binding.as_ref().ok_or_else(mismatch)?;
     let expected = RegistryProtocolBinding {
         release_identity: artifact.protocol_release_identity.clone(),
         role: artifact.protocol_role.clone(),
@@ -79,7 +91,10 @@ pub fn resolve_release_registry_protocol_binding(
         candid_sha256: artifact.candid_sha256,
         protocol_profile_digest: artifact.protocol_profile_digest,
     };
-    if binding != &expected || entry.module_hash.as_deref() != Some(&artifact.wasm_sha256_hex) {
+    if binding != &expected
+        || entry.role.as_deref() != Some(artifact.protocol_role.as_str())
+        || entry.module_hash.as_deref() != Some(&artifact.wasm_sha256_hex)
+    {
         return Err(mismatch());
     }
     let candid_path = root
@@ -89,7 +104,10 @@ pub fn resolve_release_registry_protocol_binding(
     Ok(resolve_protocol_binding(&entry.pid, expected, candid_path)?)
 }
 
-fn require_contained_sidecar(root: &Path, path: &Path) -> Result<(), ReleaseProtocolBindingError> {
+pub fn require_contained_sidecar(
+    root: &Path,
+    path: &Path,
+) -> Result<(), ReleaseProtocolBindingError> {
     let unsafe_path = || ReleaseProtocolBindingError::UnsafeCandid {
         path: path.to_path_buf(),
     };

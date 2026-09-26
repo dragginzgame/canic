@@ -357,6 +357,7 @@ impl MockPlatform {
             | EnsureAction::SetControllers { principal, .. }
             | EnsureAction::Start { principal, .. }
             | EnsureAction::Stop { principal, .. }
+            | EnsureAction::Uninstall { principal, .. }
             | EnsureAction::Transfer { principal, .. } => principal,
         };
         principal.strip_prefix("created:").map_or_else(
@@ -539,6 +540,9 @@ impl MockPlatform {
             EnsureAction::Start { .. } => principal
                 .and_then(|value| self.live.get(value))
                 .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
+            EnsureAction::Uninstall { .. } => {
+                panic!("bootstrap uninstall uses the production PocketIC adapter")
+            }
             EnsureAction::Stop { .. } => principal
                 .and_then(|value| self.live.get(value))
                 .is_some_and(|live| live.status == CanisterRuntimeStatus::Stopped),
@@ -763,6 +767,9 @@ impl MockPlatform {
                     .expect("start target")
                     .status = CanisterRuntimeStatus::Running;
                 empty_outcome()
+            }
+            EnsureAction::Uninstall { .. } => {
+                panic!("bootstrap uninstall uses the production PocketIC adapter")
             }
             EnsureAction::Stop { .. } => {
                 self.live
@@ -3402,6 +3409,7 @@ pub(super) fn retain_recorded_retirement(
     plan.reinstall = Some(Box::new(FleetReinstallRecord {
         target_artifacts_sha256: None,
         activation_reset: None,
+        completed_reset: None,
         operation_id: plan.operation_id.clone(),
         source_operation_id: source_operation.clone(),
         authorities,
@@ -5180,6 +5188,7 @@ fn current_plan_round_trips_registry_actions_with_bounded_decimal_cycles() {
         protocol_actions: actions,
         recovery_review: None,
         reinstall: None,
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: None,
@@ -5278,6 +5287,7 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         protocol_actions: actions,
         recovery_review: None,
         reinstall: None,
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: None,
@@ -5850,6 +5860,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::SetControllers { principal, .. }
                 | EnsureAction::Start { principal, .. }
                 | EnsureAction::Stop { principal, .. }
+                | EnsureAction::Uninstall { principal, .. }
                 | EnsureAction::Transfer { principal, .. } => Self::principal(state, principal),
                 EnsureAction::Create { .. } | EnsureAction::Fund { .. } => None,
             };
@@ -5878,6 +5889,9 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                     .is_some_and(|live| live.controllers == *controllers),
                 EnsureAction::Delete { .. } => {
                     principal.is_none_or(|value| self.live(value).is_none())
+                }
+                EnsureAction::Uninstall { .. } => {
+                    panic!("bootstrap uninstall uses the production PocketIC adapter")
                 }
                 EnsureAction::Stop { .. } => principal
                     .and_then(|value| self.live(value))
@@ -5920,6 +5934,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::SetControllers { principal, .. }
                 | EnsureAction::Start { principal, .. }
                 | EnsureAction::Stop { principal, .. }
+                | EnsureAction::Uninstall { principal, .. }
                 | EnsureAction::Transfer { principal, .. } => Self::principal(state, principal),
             };
             Ok(principal.and_then(|value| self.live(value).map(|live| live.cycles)))
@@ -6103,6 +6118,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 }
                 EnsureAction::Delete { .. }
                 | EnsureAction::Stop { .. }
+                | EnsureAction::Uninstall { .. }
                 | EnsureAction::Transfer { .. } => Err(std::io::Error::other(
                     "governed current-state journey does not retire canisters",
                 )),
@@ -7410,7 +7426,7 @@ fn terminal_retirement_payment_fixture(
     let mut plan = workflow::plan(
         &fixture.root,
         &fixture.desired,
-        "terminal-source",
+        &sha256_hex(b"terminal-source"),
         "test-fleet",
         1,
         &mut fixture.platform,
@@ -7718,6 +7734,7 @@ fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
         authorities: Vec::new(),
         assets: Vec::new(),
         activation_reset: None,
+        completed_reset: None,
     }));
     replacement.plan_sha256 = expected_plan_sha256(&replacement);
     ops::reinstall::adoption::tests::assert_terminal_handoff(&paths, replacement);

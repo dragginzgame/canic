@@ -10,6 +10,24 @@ use crate::dto::canister::{
 };
 
 impl MgmtOps {
+    /// Quote the exact history observation before its owner records a paid attempt.
+    pub fn canister_history_call_cost(canister_id: Principal) -> Result<u128, InternalError> {
+        MgmtInfra::canister_history_call_cost(canister_id)
+            .map_err(|error| OpsError::from(error).into())
+    }
+
+    /// Quote the exact controller update before its owning workflow records intent.
+    pub fn update_settings_call_cost(args: &UpdateSettingsArgs) -> Result<u128, InternalError> {
+        MgmtInfra::update_settings_call_cost(&update_settings_to_infra(args))
+            .map_err(|error| OpsError::from(error).into())
+    }
+
+    /// Quote the exact uninstall before its owning workflow records destructive intent.
+    pub fn uninstall_code_call_cost(canister_id: Principal) -> Result<u128, InternalError> {
+        MgmtInfra::uninstall_code_call_cost(canister_id)
+            .map_err(|error| OpsError::from(error).into())
+    }
+
     /// Sample native/liquid balances and the exact call reserve without an IC call.
     pub fn canister_inspection_reserve(
         canister_pid: Principal,

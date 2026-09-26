@@ -1586,7 +1586,7 @@ fn validate_complete_workload_coverage(
     Ok(())
 }
 
-fn inspect_root_controlled_canister(
+pub(in crate::fleet_ensure) fn inspect_root_controlled_canister(
     icp: &IcpCli,
     root_candid_path: &Path,
     root: Principal,

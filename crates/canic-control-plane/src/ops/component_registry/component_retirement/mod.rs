@@ -104,6 +104,7 @@ impl ComponentRegistryOps {
         maximum_component_registry_bytes: u64,
         fleet_directory: FleetDirectorySnapshot,
     ) -> Result<RootComponentDrainingView, InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let current =
             RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let partition = RootComponentRegistryStore::partition(component)

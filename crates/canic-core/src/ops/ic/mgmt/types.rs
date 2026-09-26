@@ -131,6 +131,7 @@ pub struct SignWithEcdsaResult {
 
 #[derive(Clone, Debug)]
 pub struct CanisterStatus {
+    pub version: u64,
     pub status: CanisterStatusType,
     pub settings: CanisterSettingsSnapshot,
     pub module_hash: Option<Vec<u8>>,
@@ -208,6 +209,7 @@ pub struct QueryStatsSnapshot {
 
 pub(super) fn canister_status_from_infra(status: InfraCanisterStatusResult) -> CanisterStatus {
     CanisterStatus {
+        version: status.version,
         status: status_type_from_infra(status.status),
         settings: settings_from_infra(status.settings),
         module_hash: status.module_hash,

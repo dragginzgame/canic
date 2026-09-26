@@ -20,6 +20,756 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## .43 implementation complete — ready for release gate, 2026-09-26
+
+Package versions remain `0.110.42`; the open release draft is `0.110.43`.
+CANIC-166 completed-estate reset and FI1 supplied-infrastructure bootstrap/import
+are implemented in the same batch. No Toko mutation, live IC effect, broad gate,
+version transaction, commit or push was performed.
+
+The connected bootstrap journey now passes: explicit supplied Coordinator,
+empty Root and old Store; lost install and registration replies; exact current
+Registry; interrupted local estate-seed publication; Root-owned capacity import
+using original native/reserved baselines; workload provisioning and Root activation
+with the same physical IDs. It preserves setup operation identity, hydrates
+archived phase evidence and proves every held import before ordinary Ensure can
+proceed without a prior workload inventory. Completed bootstrap/import receipts
+replay locally after provisioning. Ordinary Ensure retains live replay checks.
+Latest PocketIC result: 84.88s case, 121s runner;
+`.tmp/infrastructure-bootstrap-pocketic.log`.
+
+`fleet bootstrap` exposes separate review and exact-digest apply. Coordinator
+selection is explicit (`initialize`, `ready`, or `create`); only `create` admits
+the seed value `"create"`. Publication binds original seed bytes and records the
+receipted Coordinator ID without changing other physical identities. The complete
+publication envelope is bounded before paid effects. Wrong supplied authority,
+changed inputs and missing completion reject without replacement allocation.
+
+All 66 focused host regressions pass, including initial-import projection,
+publication/rejection recovery, bounded Coordinator creation and equality of
+bootstrap/current retained generation. Log: `.tmp/bootstrap-import-native.log`.
+The connected CANIC-166 completed `.38` record/reset proof remains qualified at
+`.tmp/completed-journey-pocketic.log`; source Toko evidence stays read-only.
+Plan report JSON includes the required nullable `infrastructure_bootstrap` field.
+All 67 focused CLI tests and both recursive help-surface checks pass; scoped
+warning-denied host/CLI/internal library/test Clippy passes. Logs:
+`.tmp/bootstrap-cli-tests.log`, `.tmp/bootstrap-cli-help.log`,
+`.tmp/bootstrap-import-clippy.log`. The final Clippy cleanup extracts two helpers
+and removes one fixture-only redundant clone; it changes no runtime behavior.
+Changed-file Rust formatting, document semantics and `.43` release-note preflight
+pass. Gabriel's completed-reset and supplied-ID commands are in
+`docs/features/operations/fleet-ensure.md`.
+
+The complete accepted `.43` implementation batch is ready for the maintainer's
+commit and release-validation flow; changelog/version surfaces are ready for the
+`.42` → `.43` transaction. The full release gate was not run in this continuation.
+B5's final matrix and the human-requested 0.110 closeout audit remain separate
+from implementation readiness; no 0.111 work is authorized by this continuation.
+
+## Earlier .43 implementation checkpoints
+
+Previous continuation, 2026-09-26: reviewed bootstrap initialization now retains
+the exact review/operator/supplied-source hold in current Root desired authority
+and uses the ordinary initialization compiler/argument-file writer. Generated
+ordinary authority emits explicit null. A shared Store/Registry setup compiler
+stops before workload provisioning and skips unowned held-source reconciliation.
+All 94 focused host tests passed (one existing ignored), with scoped warning-denied
+host/internal Clippy. Logs: `.tmp/bootstrap-reviewed-init-tests.log`,
+`.tmp/bootstrap-reviewed-init-clippy.log`.
+
+Previous continuation, 2026-09-26: the runtime bootstrap allocation fence is
+implemented and qualified. Typed Root initialization retains the infrastructure
+review digest, operator and exact supplied capacity IDs in the existing pool
+owner. Only the selected Store may initialize while this hold blocks ordinary
+allocation, refill, provisioning and retirement. Sources enter inventory only
+after Root proves custody. Import requires Active Coordinator registration;
+the held Root runtime remains Prepared until import publication and workload
+provisioning finish. The endpoint now admits this protected Prepared operation.
+Settlement retains the hold; only publication release clears it.
+
+All 91 focused native checks pass (26 control-plane and 65 host), including
+initialization encoding, stable persistence, invalid reservations and settlement
+fencing. Scoped warning-denied host/control-plane/internal library/test Clippy
+passes. The new PocketIC case passes in 16.37s (26s targeted runner, 27s wall):
+Coordinator on another subnet, no automatic capacity creation under the hold,
+unregistered context rejection, exact-source reservation, code/stable-memory
+clearing, publication release, workload provisioning onto both supplied IDs,
+Root runtime activation and replay without changing workload versions.
+Logs: `.tmp/capacity-bootstrap-tests.log`, `.tmp/capacity-bootstrap-clippy.log`,
+`.tmp/capacity-bootstrap-pocketic.log`.
+
+The runtime ordering blocker is closed. Next is the explicit operator bootstrap
+review/apply path using the existing typed initialization and Ensure effect
+owners: supplied empty Root/old Store, confirmed Coordinator setup or explicitly
+reviewed creation, retained effect/accounting receipts and durable estate
+publication for later generate/ensure. The runtime fixture exercises direct
+Root commands; it does not demonstrate that unfinished operator bootstrap path.
+Remaining acceptance/artifact qualification also stays in `.43`.
+
+The complete `.43` batch is not push-ready. Versions remain `.42`; the open
+changelog records this behavior. No broad gate, commit, live IC effect or Toko
+mutation occurred.
+
+Previous continuation, 2026-09-26: certified controller-handoff rejection recovery
+is connected. An authenticated terminal rejection is retained with its exact
+signed request before renewal. Fresh observation must match the original source
+version, controllers, code, placement and disposition, within the original
+native/reserved cycle allowance. Renewal returns Issued to Intent only with that
+retained rejection; history is append-only. Resubmissions and new envelopes share
+the existing two-submission budget. Uncertain outcomes keep the original ingress;
+pruned responses cannot authorize renewal. Journal admission reserves space for
+all bounded rejection history before effects.
+
+All 63 focused host import tests and scoped warning-denied host/internal
+library/test Clippy pass. Native regressions cover classified certified rejection,
+restart before and after renewal, original balance retention, exact witness
+binding, source changes, exhausted renewal and history-loss rejection. The real
+HTTP PocketIC journey passes in 31.12s (43s targeted runner, 44s wall): Coordinator
+and Root are on distinct subnets, both successful imports and lost-response replay
+still work, and an actual pre-admission management refusal cannot authorize new
+ingress after controllers are restored. This refusal has no certified request
+receipt; the fixture correctly keeps it unresolved. Positive certified-rejection
+renewal is qualified by native wire/journal tests, not a forced IC transient error.
+Logs: `.tmp/capacity-import-rejection-tests.log`,
+`.tmp/capacity-import-rejection-clippy.log`,
+`.tmp/capacity-import-rejection-pocketic.log`.
+
+The bootstrap runtime ordering gap identified during this continuation is now
+resolved above. Reuse the existing typed initialization and Ensure effect owners;
+do not represent uninitialized infrastructure as a completed Fleet. Coordinator
+setup remains explicit and independently placed.
+
+The complete `.43` batch is not push-ready. Changelog and operator guidance retain
+these completed items; package versions remain `.42`. No broad gate, commit,
+version change, live IC effect or Toko mutation occurred.
+
+Previous continuation, 2026-09-26: the operator `fleet import` review/apply path is
+connected and its real completed-Fleet PocketIC journey passes. The command
+requires exact supplied IDs, TOML disposition declarations and explicit source/Root
+debit and paid-call bounds. It verifies completed current plan/journal authority,
+current infrastructure artifact and Candid provenance, certified physical custody,
+complete Registry/pool membership and signer/network binding. Sources remain on
+the destination Root's subnet; Coordinator placement is independent.
+
+The production review builder now uses the durable initial-survey owner: reserve
+before each management status request, retain at most two attempts per ID, and
+reuse the first successful balance sample. Repeated review preserves its digest.
+Apply uses the existing signed handoff, Root wipe/accounting, paired publication
+and release workflow. Completed current or archived replay returns before ICP
+resolution. New review inputs cannot accompany `--apply`. Text and JSON expose
+review authority, controller transitions, bounds and the exact next command.
+
+The new proof extends the genuinely completed `.38`-shape hard-cut journey. After
+current reset convergence, it reviews one empty supplied source twice, checks no
+version change during review, applies through the public CLI workflow, verifies
+final custody and replays with a nonexistent ICP executable and unchanged journal
+bytes. It passed in 412.61s (438s targeted runner); the added import portion took
+6.51s. This is one targeted case, not a broad gate. Logs:
+`.tmp/capacity-import-cli-pocketic.log`, `.tmp/capacity-import-cli-tests.log`,
+`.tmp/capacity-import-cli-parsing-tests.log`, `.tmp/capacity-import-cli-clippy.log`.
+All 60 focused host import tests and 65 Fleet CLI tests pass. Final scoped
+warning-denied host/CLI/internal fixture library/test Clippy passes, including the
+finalized-release-to-infrastructure-manifest digest cross-check added after the
+PocketIC run. That final read-only provenance guard and concise help/constant
+cleanup were compile/lint checked; the PocketIC case was not redundantly rerun.
+
+Operator declarations and exact Gabriel command examples are in
+`docs/features/operations/fleet-ensure.md#add-supplied-capacity-to-a-current-fleet`.
+The current path requires initialized current infrastructure and a retained estate
+seed. It does not bootstrap an empty Root. The preexisting production-reader proof
+and survey interruption/rebase tests remain in place.
+
+Next in this same `.43` batch: explicit supplied-infrastructure bootstrap,
+known-rejection recovery and remaining affected-artifact/adversarial qualification.
+CLI review/apply and initial-survey wiring are no longer outstanding. The complete
+batch is not push-ready; versions remain `.42`, changes are uncommitted, and Toko
+records and live IC canisters are untouched.
+
+Previous continuation, 2026-09-26: FI1 host import orchestration now connects
+approval, bounded observations, Root reservation, signed controller handoff,
+Root-owned reset/settlement, recoverable paired estate/policy publication and
+allocation release. Its operation review binds exact before/after input bytes;
+all submission/inspection limits persist before calls. Completed operations archive
+unchanged before a later import and can replay without ICP or current input reads.
+Pre-build retained-contract checks reject unfinished approved imports.
+
+The 51 native import checks pass, including partial publication, concurrent edits,
+budget retention and archived replay. The extended HTTP PocketIC journey passes
+through lost handoff reply, interrupted Root progress, local publication, release,
+a second fresh host-driven import and replay of the original archived import with
+a nonexistent ICP executable. Final case: 26.13s test, 39s runner. An intermediate
+failure was the fixture's synchronous PocketIC API nested inside the async runtime;
+the adapter now performs its real reads on scoped threads. Production behavior
+was not replaced with test-only management behavior.
+
+Logs: `.tmp/capacity-import-workflow-tests.log`,
+`.tmp/capacity-import-workflow-pocketic.log` and
+`.tmp/capacity-import-workflow-clippy.log`. Final scoped host/internal library
+and test Clippy, the narrow pre-build fence regression, changed-file formatting,
+document semantics (two existing layout advisories), release-note preflight and
+`git diff --check` pass. The fence log is
+`.tmp/capacity-import-preflight-tests.log`. No broad gate ran.
+
+Still required for the full `.43`: production observation/disposition admission,
+CLI review/apply, explicit supplied-infrastructure bootstrap, known-rejection
+recovery and remaining adversarial/affected-artifact qualification. Rejected and
+pruned requests now have distinct blocked diagnostics; their journals remain
+unchanged rather than granting a fresh ingress. The public host apply workflow
+requires an authenticated observation owner; only the real PocketIC fixture
+adapter is connected so far. `.43` is not push-ready. CANIC-166's completed reset
+proof below remains valid. Versions are `.42`; no commits, live effects or Toko
+mutations occurred.
+
+Previous continuation, 2026-09-26: the connected completed-estate PocketIC journey
+passes through real source completion, historical `.38` record encoding, source
+receipt/interface/custody/membership admission, Coordinator/Root preparation,
+fresh current generation, reset review/publication, publication interruption
+recovery, a real lost reinstall response, pool clearing, provisioning and terminal
+conservation. It retains all 27 physical IDs and byte-identical source archives.
+Repeated completed apply succeeds with a nonexistent ICP executable and zero
+effects. Preparation replay and committed-publication recovery are also local.
+
+The fixture uses current production Wasms with historical record declarations;
+it neither runs predecessor executable authority nor mutates Toko's evidence.
+Applications are leaf roles. Existing native tests cover hub/child parentage and
+actual Toko `.38` source interfaces. Toko's external frontend remains outside this
+Fleet fixture; its original ICP asset ID must remain selected downstream.
+
+The single governed case
+`pic::fleet_registry::baseline::tests::completed_reset::completed_estate_reset_recovers_and_replays`
+passes in 327.51s (337s runner including compilation). Warning-denied all-feature
+internal library/test Clippy passes. Logs: `.tmp/completed-journey-pocketic.log`
+and `.tmp/completed-journey-clippy.log`. Earlier failed iterations corrected
+fixture setup (explicit retained imports, real successor phases and matching Root
+initialization) and duplicate local network arguments; temporary diagnostics are
+removed. No broad gate, version change, commit or live IC effect occurred.
+
+The connected CANIC-166 reset qualification is now established locally. Continue
+the remaining accepted FI1 bootstrap/import delivery; `.43` as a whole is still
+not push-ready. Package versions remain `.42`. Gabriel's implemented development
+commands and the historical-runtime/live-deployment limits are in the operations
+guide. Both changelog views retain this evidence in the existing `.43` draft.
+
+Previous continuation, 2026-09-26: completed-source application parentage is now
+connected to the shared survey used by preparation, generation and reset approval.
+Every installed application's protocol is bound to the exact source artifact
+union, installed gzip hash, Candid hash and profile digest. Read-only child pages
+must enumerate exactly the recorded children with matching roles and parents;
+parent and child must share the same Root Component allocation. Pagination,
+duplicates, incomplete membership and capability conflicts reject. Exact source
+capabilities distinguish provisioning hubs from leaves: Toko's leaf roles do not
+expose `Children`, and cannot carry recorded descendants. No guessed query or
+controller default is used. Archives now retain the application manifest and all
+installed interfaces, alongside the original infrastructure/source records.
+
+All 33 focused inventory regressions pass, including read-only inspection of the
+actual Toko `.38` records and hub/leaf interfaces. The final native command filters
+out separately governed PocketIC cases; no live IC calls or sibling writes occurred.
+Warning-denied host Clippy passes for all-feature library/test targets. Logs:
+`.tmp/completed-parentage-tests.log` and `.tmp/completed-parentage-clippy.log`.
+Release-note and current-document checks pass (two existing design-layout
+advisories). Full combined source-preparation/reset interruption/convergence qualification and remaining FI1 bootstrap/import work
+are still required before `.43` is push-ready. Package versions remain `.42`.
+The operator commands remain a development preview in the operations guide.
+
+Previous continuation, 2026-09-26: completed-reset review and approval are connected
+to the existing Ensure effect driver. Fresh current typed initialization and exact
+physical closure compile from the prepared source; approval commits the archived
+local-publication transaction and resumes current installs, funding, pool clearing
+and provisioning. No old executable desired/Registry document is synthesized.
+Source Root history witnesses remain bound for lost install responses. Terminal
+controller checks use current Root/recovery authority, allowing old application
+controller sets to be cleared.
+
+Final accounting now covers exact native/reserved and default-Ledger domains,
+original source loss, current operation loss and operator receipts. Two final
+sweep attempts persist before management reads. A terminal receipt binds completed
+journal/state bytes and supports immediate apply replay without an ICP executable.
+Completed publication stops preparation from intercepting later generate/Ensure.
+Gabriel's reset review/apply commands are in the operations guide.
+
+Pool reset now stops each retained application and waits for its outstanding
+calls before controller replacement and uninstall. Current provisioning already
+starts installed Workloads; Ready capacity can remain stopped. The single new
+PocketIC proof verifies a running canister's stable state is cleared, its ID and
+funded balance remain, exact current controllers replace the former set, and a
+repeated import does not change its version or duplicate the pool entry. It passed
+in 69.25s inside the test (279s runner including native/Wasm compilation).
+
+Final qualification: 17 focused native regressions pass (three terminal-accounting/
+replay, eight publication-crash and six source-preflight tests). The source run
+includes read-only inspection of Toko's actual `.38` records. Package-scoped,
+warning-denied all-feature library/test Clippy passes for host, CLI, control plane
+and internal fixtures. Logs: `.tmp/completed-reset-tests.log`,
+`.tmp/completed-reset-publication-tests.log`, `.tmp/completed-reset-source-tests.log`,
+`.tmp/completed-reset-pocketic.log` and `.tmp/completed-reset-clippy.log`.
+No broad gate ran. Full remote source-to-reset interruption/convergence, live
+source application parentage and remaining FI1 bootstrap/import remain. The
+complete `.43` batch is not push-ready. Versions remain `.42`; work is uncommitted,
+Toko records are untouched and no live IC effect occurred.
+
+Previous continuation, 2026-09-26: preparation now journals management inspections
+for every retained canister after the authority seals. Root-owned assets use the
+existing protected inspection transport and exact retained Candid binding;
+Coordinator/Root observations use direct operator management authority. Each
+asset has two durable attempts and a 2T inspection allowance. Root headroom
+includes the cost of inspecting its descendants, which are observed before the
+paying Root. Native and reserved balances remain separate. Original native
+baseline (excluding the separately reconciled original Root Ledger accounts),
+receipted funding and original burn allowance remain bound to review; fresh
+samples do not replace that baseline.
+
+`fleet generate` now accepts the completed preparation inventory and compiles
+current authority from current configuration/artifacts. It rechecks certified
+custody, membership, Ledger accounts and exact seals without paid observations,
+requires the explicit seed to cover all retained IDs on their original Root and
+subnet, and rejects omissions with the missing Principals. It does not decode
+old executable desired/Registry authority or fill recovery-controller defaults.
+Output identifies the preparation digest and distinguishes its native samples
+from live target-runtime usage. Current runtime usage queries are skipped until
+reset. Host/CLI library and test-target compilation passed. The final nine focused
+preparation regressions pass, including independent per-authority burn checks so
+the original source allowance cannot mask a new preparation overrun. Logs are
+`.tmp/completed-reset-check.log` and
+`.tmp/completed-reset-inventory-tests.log`. No PocketIC or broad gate was repeated.
+
+Still required: destructive reset/convergence and terminal reconciliation after
+applications stop, live application parentage, and remaining FI1 bootstrap/import
+delivery. Read-only inspection confirms Toko's frontend is an external ICP asset
+canister, outside the 27-ID Fleet closure. It needs no Fleet allocation pin;
+Toko's existing frontend ID must remain selected during later asset publication.
+The ordinary Ensure lock remains closed after preparation until the
+reset/publication successor is connected.
+This is working preparation-to-generation plumbing, not a qualified live Toko
+cutover. Versions remain `.42`; no sibling mutation or live effect occurred.
+
+Previous continuation, 2026-09-26: completed-source preparation is connected to
+`fleet ensure --reinstall` before desired-file decoding. Explicit environment,
+source receipt/interface checks and authenticated custody/membership/Ledger
+observations select a separate review. Coordinator seals precede Root seals.
+Original source evidence is archived unchanged; the original active documents
+are not replaced. The review binds the current CLI release, source bytes,
+observed controllers, exact interfaces, two seal submissions and four management
+observations per authority, with a 6T observed execution-burn allowance per
+authority and zero operator debit. Native and reserved balances remain separate.
+
+The same Fleet lock excludes capacity import and ordinary Ensure after intent.
+Every paid-call attempt is durable before submission. Reopening retains consumed
+limits and original balances; lost seal responses reconcile exact operation
+receipts. A previously applied seal that has reopened rejects during continuation.
+Completed preparation returns its local journal without IC calls. The CLI reports
+this as preparation only: apps remain running; no funding, handoff, install or
+wipe is authorized. The command preview is updated in `fleet-ensure.md`.
+
+Seven native preparation regressions and six retained-source preflight tests
+pass, including opt-in read-only inspection of Toko's actual `.38` records. The
+early check identifies retained preparation and its exact resume digest before
+source executable decoding. The single production Coordinator/Root PocketIC
+seal proof passes: real seals survive discarded responses and fresh adapters,
+foreign operations reject, and repeated receipt observations issue no further
+seal effects. Its first cold run took 220.38s inside the test (345s runner),
+including Root, Store, Coordinator and Candid fixture builds. The sandbox's
+initial localhost-bind denial was resolved with local-only escalation.
+
+Scoped host/CLI/internal library/test Clippy, changed-file formatting, document
+semantics (two existing advisory layout warnings) and draft preflight pass. Logs:
+`.tmp/completed-preparation-tests.log`,
+`.tmp/completed-preparation-source-preflight.log`,
+`.tmp/completed-preparation-pocketic.log`, `.tmp/completed-preparation-clippy.log`,
+`.tmp/completed-preparation-format.log`, `.tmp/completed-preparation-docs.log`
+and `.tmp/completed-preparation-draft.log`. Initial compile/lint issues were
+corrected before these final results; the PocketIC assertions were unchanged
+apart from removing an unused lint expectation. This is preparation/effect-owner
+qualification, not the complete `.38` reset journey. Toko remained read-only.
+
+Remaining delivery work is full estate native/reserved conservation and live
+application parentage, fresh target authority/reset publication and complete
+interrupted reset/convergence with retained frontend identity. The separate
+preparation journal is not yet connected to that successor; it intentionally
+blocks ordinary Ensure until that transition exists. Remaining FI1 bootstrap/
+import work still belongs to `.43`. The complete batch is not push-ready.
+Versions remain `.42`; work is uncommitted. No broad gate or release action ran.
+
+Previous continuation, 2026-09-26: the completed-estate survey now includes source
+Coordinator membership and default Cycles Ledger accounts. Before/after Registry
+reads compare exact Fleet/Coordinator/subnet identity, epoch, revision and all
+Root rows, including placement, release, limits, funding and lifecycle. Exact
+required query-field types are checked against the retained Coordinator interface
+before network access. This is a passive projection; it neither constructs an
+executable Registry nor supplies a missing recovery-controller declaration.
+
+Ledger observations require the same authenticated source signer and network.
+The operator's observed balance must equal its original starting balance minus
+audited debits, and every Root default account must retain its original baseline.
+Missing/extra/duplicated accounts, unexplained debits or credits, stale samples,
+malformed replies and arithmetic overflow reject. Coordinator, Store and other
+canister default-account balances remain separate observed funds; they are not
+assumed zero or used to excuse original native-cycle loss. Application-specific
+subaccounts are outside this default-account survey.
+
+The original Root Ledger baselines now also bind the exact declared Ledger and
+Root account owner. Matching numeric balances under substituted/missing owners,
+duplicate declarations or the wrong canister role reject. Completed-source
+preflight and the existing authority-seal transport now require exact maintained
+command/status types and modes. Seal reconciliation requires the selected
+canister's complete operation/history/timestamp receipt; foreign seals and partial
+receipts reject. This qualifies the existing effect boundary, not a newly enabled
+completed-source preparation route.
+
+Qualification: 40 focused completed-source tests and five seal-contract/receipt
+tests pass, including opt-in read-only checks against Toko's actual `.38`
+Coordinator, Pool and authority-seal contracts. The single governed
+production Cycles Ledger PocketIC HTTP proof passes in 1.01s (46s runner including
+compilation); repeat reads leave its canister version unchanged and wrong signer,
+network, baseline and expired samples reject. This is Ledger transport/accounting
+qualification, not a complete survey/reset journey. Host/CLI library/test Clippy
+passes; the runner selector/barrier regressions pass. The repository's `target/`
+was absent before the combined native check, which rebuilt artifacts in 2m37s.
+Latest source/seal logs: `.tmp/completed-terminal-account-tests.log`,
+`.tmp/completed-seal-contract-tests.log`, `.tmp/completed-seal-account-clippy.log`,
+`.tmp/completed-seal-account-docs.log`, `.tmp/completed-seal-account-draft.log`,
+`.tmp/completed-seal-account-format.log`. Changed-file formatting, document
+semantics (two existing advisory layout warnings) and draft preflight pass.
+Earlier survey logs: `.tmp/completed-inventory-ledger-tests.log`,
+`.tmp/completed-inventory-ledger-clippy.log`, `.tmp/completed-ledger-pocketic.log`,
+`.tmp/completed-ledger-runner-tests.log`.
+
+Next: journaled preparation for mutation fencing and bounded Root-proxied native/
+reserved balance inspection, full source conservation and live application
+parentage, then connect fresh reset authority, publication and interruption/replay.
+The authority seal suspends only Coordinator/Root owners; it does not stop
+application canisters. Preparation must account for application mutation and
+in-flight cycle movement before accepting aggregate balance evidence.
+The existing public local-publication primitive still binds custody only; the
+survey is not yet wired into a CLI reset/admission route. Remaining FI1 bootstrap/
+import work remains in `.43`. The complete batch is not push-ready. Toko stayed
+read-only, no live IC effect or broad gate ran, versions remain `.42` and changes
+are uncommitted. The `.43` changelog draft describes the implemented checks.
+
+Previous continuation, 2026-09-26: bounded Root pool enumeration is implemented in
+`ops::retained_contract::inspect_completed_membership`. Before any remote read,
+it verifies that each recorded Root's retained interface has the exact maintained
+Pool request, response, error and query mode. Certified custody passes bracket
+authenticated pool queries. Missing, extra, substituted or duplicate assets,
+role mismatches, unfinished creation/handoff/lifecycle work, stalled cursors and
+changing summaries reject. Pagination follows raw principal bytes. Results retain
+pool policy and Workload allocation identities; cached pool cycle values are
+excluded. No new CLI reset/apply route or publication admission gate is enabled.
+
+Eight native regressions and one opt-in read-only check against Toko's actual
+`.38` Pool interface pass. Scoped host library/test warning-denied Clippy,
+changed-file formatting, document semantics and release-draft preflight pass.
+Logs: `.tmp/completed-membership-tests.log`, `.tmp/completed-membership-clippy.log`,
+`.tmp/completed-membership-docs.log`, `.tmp/completed-membership-draft.log`.
+Initial fixture compilation/formatting and generated-Candid mutation issues were
+corrected before those final passes. No new PocketIC journey, live IC request,
+Toko mutation, broad gate, commit, version change or publication occurred.
+
+This survey covers recorded Roots; Coordinator membership, live application
+parentage, fresh native/reserved/Ledger balance admission and a journaled mutation
+fence remain required before reset authority. Then connect current plan generation,
+local publication and remote interruption/effect-free replay. Remaining FI1 work
+is still part of `.43`. The complete batch is not push-ready; versions remain
+`.42`, the `.43` draft is current and changes remain uncommitted.
+
+Previous continuation, 2026-09-26: certified custody sampling is implemented and
+bound into the local publication review. The public host reader
+`ops::retained_contract::inspect_completed_custody` authenticates the exact source
+operator and network, then reads controllers and module presence together from
+one verified IC certificate per recorded ID. Certificate delegation supplies the
+subnet. Coordinator/Root require direct operator control; Store, pool assets and
+application canisters require their physical Root as a controller, independently
+of application parentage. Extra observed controllers are retained for exact
+review, never inferred from an absent source declaration. No runtime query or
+management update is issued. Source document/interface evidence is rechecked
+when the complete pass returns.
+
+Samples expire 60 seconds after the pass starts, in addition to Agent certificate
+verification. Local publication staging requires that unforgeable read-only view;
+first commit requires a fresh matching sample, including every reviewed controller.
+Missing, stale or changed custody rejects before publication intent. Recovery after
+committed intent and completed replay remain local and require no new sample.
+The persisted review binds all physical observations and certificate tree hashes.
+These records remain current schema v1, with no historical-field defaults.
+
+Qualification: three native custody projection/ownership tests and 13 local
+publication/adoption regressions pass. The single governed PocketIC HTTP proof
+passes against installed and empty canisters on two application subnets; it checks
+additional controllers, changed module/placement/custody, wrong signer/network,
+and unchanged canister versions after successful observation. Test execution took
+0.63s (31s governed runner including compilation). The initial fixture omitted the
+NNS certification root; the corrected fixture includes it. Localhost binding needed
+sandbox escalation; no live IC request or Toko mutation occurred. Scoped host/CLI
+library/test Clippy, formatting, runner selector/barrier tests, document semantics
+and draft preflight pass. Logs: `.tmp/completed-custody-native.log`,
+`.tmp/completed-custody-publication.log`, `.tmp/completed-custody-pocketic.log`,
+`.tmp/completed-custody-clippy.log`, `.tmp/completed-custody-runner-tests.log`,
+`.tmp/completed-custody-docs.log`, `.tmp/completed-custody-draft.log`.
+
+This verifies the recorded physical IDs only, not complete live membership,
+balances, exclusive-controller policy or a mutation fence. No `.38` reset/apply CLI
+route has been enabled. Next: complete inventory and native/reserved/Ledger cycle
+admission, journaled fencing and fresh current reset authority, then interruption
+and effect-free remote replay. Remaining FI1 bootstrap/import work still belongs
+to `.43`. The complete batch is not ready to push; versions remain `.42` and all
+changes are uncommitted. No broad gate or release action ran.
+
+Previous continuation, 2026-09-26: the host now has a separately reviewed local
+transaction for replacing plan, journal and state together. Source documents,
+referenced phases/Store objects and source infrastructure finalization/interfaces
+are archived before durable intent. Every partial replacement resumes under the
+Fleet lock before current state decoding; all archives and active document hashes
+are checked before the first write. Completed replay leaves later progress alone.
+Read-only preflight reports a committed interrupted publication before mixed-file
+decoding. The retained completed activation review is recognized by its exact
+recorded byte hash before current execution decoding; Toko has this completed
+marker/review pair. No old authority is converted or defaulted.
+
+The new transaction is a local persistence primitive, not live source admission.
+No executable CLI route to reset `.38` has been enabled. Fresh live custody,
+mutation fencing, complete inventory/conservation, current plan generation and
+remote reset/replay qualification remain required, as does the remaining FI1
+bootstrap/import work below. The complete `.43` batch is not push-ready.
+Qualification: 17 focused native publication/adoption/preflight tests and six
+opt-in read-only Toko evidence checks pass. Scoped host/CLI library/test Clippy,
+changed-file formatting, document semantics and draft release-note preflight pass.
+Logs: `.tmp/completed-publication-tests.log`,
+`.tmp/completed-publication-preflight-tests.log`,
+`.tmp/completed-publication-toko-readonly.log`,
+`.tmp/completed-publication-clippy.log`, `.tmp/completed-publication-docs.log`
+and `.tmp/completed-publication-draft.log`. These are local persistence and
+read-only evidence checks, not PocketIC or live reset qualification. No sibling
+mutation, remote effect, broad gate, commit, version change or publication ran.
+
+Previous continuation: the early check now cross-checks source physical membership,
+Root ownership, descendant parentage, recorded module/protocol identities and
+balances. It binds infrastructure interfaces to finalized source manifest and
+Candid evidence, including the `.38` manifest without `transition_mode`; no
+current declaration is invented. Evidence data lives under `view/`, conversion
+and validation under `ops/`. This remains read-only local inspection: no live
+authority observation, mutation fence or current-state publication has occurred.
+The supplied Toko state has 27 physical canisters: three infrastructure, nine
+application canisters (including descendants), and 15 idle pool assets.
+They must not all be treated as empty Root-controlled capacity.
+
+The maintainer reconfirms the hard cut for Canic and Toko: fresh matching CLI and
+runtime release, fresh generated authority, rebuilt artifacts and reinstalled
+Canic/application state. No application migration, predecessor execution,
+fabricated defaults or configuration aliases. Source records remain unchanged
+audit evidence. Toko is still read-only; its wrapper/runtime changes remain
+downstream work. The operations guide records this and Gabriel's command preview.
+
+Receipt-audit checkpoint: evidence-only historical projections reproduce the
+`.38` source plan, both successor plan hashes and all 49 action hashes against
+Toko's supplied records. They have no Candid surface or conversion to executable
+current plans and never supply missing controllers. The audit checks Applied
+receipts, uniqueness, funding evidence, paid-attempt counters, continuation
+bounds, exact declared operator debits and original Root account baselines.
+Unsupported observation allowances and autonomous-creation debit reject;
+original journal balances and execution limits are retained without rebasing.
+The early retained-contract check invokes this audit and reports receipt/phase
+counts before its still-required authority-boundary rejection.
+
+The prior receipt checkpoint passed 16 focused native tests and four opt-in
+read-only Toko checks. The final inventory/source-interface rerun passes 27
+focused host native tests and five read-only evidence checks, including rejection
+of a substituted infrastructure module/interface from the same genuine source
+release. Scoped host/CLI library/test Clippy, formatting, document semantics and
+draft release-note preflight pass. These are targeted checks, not a broad gate.
+Logs: `.tmp/completed-inventory-tests.log`,
+`.tmp/toko-completed-inventory-readonly.log`, `.tmp/completed-inventory-clippy.log`.
+Documentation logs: `.tmp/completed-inventory-docs.log` and
+`.tmp/completed-inventory-draft.log`. No live effect, sibling mutation, commit,
+version change or publication occurred. The full `.43` batch remains unready.
+
+This completes local receipt/hash verification for the supplied evidence shape.
+It does not verify live controllers, modules, subnets, full physical inventory
+or fresh cycle conservation, and does not enable `.38` reinstall apply. Next:
+bind those live observations to fresh current authority and the recoverable
+state/plan/journal handoff, then qualify reset/interruption/effect-free replay.
+
+Continuation on 2026-09-26: completed document capture now binds exact source
+plan/journal/state and referenced phase bytes before execution-schema decoding.
+It checks shared identities and identical desired payloads, rejects duplicate
+or invalid phase references, and bounds reads to 32 MiB per document and 64 MiB
+per snapshot. Historical missing controller declarations remain absent. The
+current terminal reader consumes this snapshot; its executable source-authority
+decoder still cannot admit the `.38` source. The separate receipt audit above
+removes that dependency for local evidence verification only.
+
+Local adoption recovery now verifies reviewed archived phase byte hashes and
+common identities instead of parsing phases as current executable plans.
+Completed source archives include referenced Store chunk objects and verify them
+without relying on the workspace's shared object directory. Admission retains
+all these objects before committing handoff intent; a partial archive cannot
+replace the active plan or journal.
+Admission still owns semantic plan/receipt verification before durable intent.
+Tests simulate all plan/journal replacement boundaries with historical-shaped
+phases, reject tampered archives and preserve a completed journal on repeat.
+This is local transaction coverage, not end-to-end `.38` deployment or terminal
+remote-effect replay qualification.
+
+Gabriel's command preview is in the fleet-ensure operations guide. Toko's default
+identity is `toko-miner-mainnet`; its `staging-plan` wrapper currently omits
+`--reinstall` and needs downstream integration after qualification. The examples
+are explicitly unavailable as a `.38` apply procedure until the full route is
+finished. No downstream file was modified.
+
+Read-only investigation confirms the reported route is absent: the current
+terminal reader decodes historical desired authority, registry and successor
+plans into current types; `plan_reinstall` also reads current state first.
+The supplied journal declares convergence with 49 Applied effects; state records
+27 principals. These are local claims, not fresh live authority or conservation
+verification. Source pool canisters are controlled by Root, so a local record
+reset cannot establish safe destructive authority.
+
+Implemented first: a bounded no-follow local contract preflight before readiness
+desired decoding and before reinstall state/artifact access. It reports the
+completed source's authority boundary without filling recovery controllers,
+opening operation locks or invoking ICP. This diagnostic is not the requested
+deployment fix. Fresh current authority review, live inventory/conservation, recoverable handoff,
+reinstall and terminal replay remain required. The accepted scope is recorded in
+the 0.110 design's CANIC-166 section. The requested command examples are previews;
+do not present them as a supported `.38` apply route before qualification.
+
+Qualification for this diagnostic slice: 11 focused native checks pass, including
+readiness and reinstall entry ordering. The explicit read-only test against the
+supplied Toko directory passes, confirming the source-contract diagnostic without
+writing there or invoking ICP. Scoped host/CLI library/test Clippy, formatting,
+document semantics and draft preflight pass. Logs: `.tmp/completed-contract-tests.log`,
+`.tmp/toko-completed-source-readonly.log`, `.tmp/completed-contract-clippy.log`.
+The 2026-09-26 document/archive continuation has 18 passing focused native tests
+and three passing opt-in checks against the supplied Toko evidence. Publication
+archive checks copy source objects into private test scratch and then remove
+only those scratch copies to prove archive independence. Logs:
+`.tmp/completed-evidence-tests.log`, `.tmp/toko-completed-documents-readonly.log`.
+Scoped host library/test Clippy, formatting, document semantics and draft
+preflight pass; logs are `.tmp/completed-evidence-clippy.log`,
+`.tmp/completed-evidence-docs.log` and `.tmp/completed-evidence-draft.log`.
+No end-to-end interruption/apply/replay qualification exists for the requested
+new handoff yet. The full `.43` batch remains unready for push or publication.
+
+## FI1 implementation in progress — 2026-09-25
+
+Latest design decision: the operator establishes the Coordinator/Fleet authority
+first, then initializes Root/Store, registers the Root and completes activation.
+FI1 requires that infrastructure and only imports capacity on the destination
+Root's subnet. Coordinator placement may differ; it has no general pool import.
+Missing or mismatched prerequisites must reject before controller handoff or wipe.
+The maintainer now consolidates [explicit infrastructure bootstrap](../design/0.110-fleet-runtime-contraction/0.110-design.md#fi1-infrastructure-bootstrap--included-in-011043)
+and capacity import into the same accepted `.43` batch. Include the empty-Root /
+old-Store starting point using reviewed supplied IDs, explicit Coordinator setup
+or creation, cycle conservation and durable estate publication for generate/ensure.
+The bootstrap phase must finish before Root-local capacity import. No separate
+follow-up patch is planned. The managed blob-service design inherits the setup
+prerequisite; standalone service deployment remains independent. Continue the
+complete combined batch without changing package versions or making live effects.
+
+The maintainer has published `.42` and continued the accepted `.43` capacity
+import batch. Package versions remain `0.110.42`; restored planning changes
+and the maintainer's dependency updates are preserved. This handoff supersedes
+the planning-only statements below.
+
+Implemented so far: exact host review and admission, immutable source cycle
+baselines, approval and Root-reservation prerequisites, durable controller
+handoff intent under the shared Fleet lock. Signed handoff envelopes retain
+one ingress identity; controller observations require its certified completion.
+Approved imports fence ordinary ensure/reinstall across host restart. Journal
+publication rejects authority substitution, progress regression and records
+that cannot fit their completion evidence.
+
+Root now reserves capacity before taking physical custody, fences allocation,
+provisioning and retirement, and retains controller/reset progress in the pool
+singleton. Recovery binds management history to the exact Root sender version;
+a matching wipe by another controller does not establish completion. Sources
+must have stopped installed code and no retained snapshots. Source and terminal
+Root receipts account for native and reserved cycles separately; native balance
+must still meet the Ready floor. Paid-call budgets never reset on retry.
+
+Root command/status wiring authenticates both a controller and the exact
+retained operator. The authenticated host transport checks network, signer,
+reservation and source/Root conservation receipts. An exclusive transient guard
+prevents overlapping paid transitions and settlement; cancellation releases
+execution ownership while preserving stable issued intent and spent allowance.
+Before reservation and host handoff, transport now reads the protected
+Coordinator registry and Root context, compares complete authority/policy and
+requires unique Active Root registration. Before submitting the signed handoff,
+it also requires Root's current reservation to match this exact sequence/digest.
+Typed failures retain original intent; no infrastructure setup is inferred.
+
+Two focused PocketIC proofs pass: the generated Root endpoints perform the
+exact controller normalization, code/state wipe and settlement, then preserve
+newly installed source code/state on completed replay; the real HTTP Agent
+recovers the original signed handoff after reopening the journal with a fresh
+client, then advances and settles through protected Root evidence. The HTTP
+fixture binds Coordinator, Root and Store to the actual PocketIC trust key.
+Logs: `.tmp/fi1-root-pocketic.log` and `.tmp/fi1-host-pocketic.log`.
+
+The earlier 139-test native checkpoint passed, including pool-owner, component registry,
+provisioning, replay-policy, execution cancellation and receipt-tampering
+regressions. The current destination-check delta passes all 41 host import tests,
+host/testing scoped Clippy and the real HTTP PocketIC journey. That journey proves
+Coordinator access denial leaves the source unchanged, then continues with the
+same reviewed authority after access is granted. Native evidence covers differing
+Coordinator/Root subnets, inactive/missing/duplicate registration, changed policy
+and missing/substituted reservations. Current logs: `.tmp/fi1-destination-test.log`,
+`.tmp/fi1-destination-clippy.log` and `.tmp/fi1-destination-pocketic.log`.
+These are targeted checks, not full B5.
+
+The generator now projects paired retained-estate seed and policy replacements
+from the exact import review. It preserves all other values and existing IDs,
+binds original/replacement bytes, and reuses generator identity/capacity checks.
+Unknown configuration, another estate, controller mismatch, duplicate membership
+and capacity overflow reject without writes. All 46 host import tests pass,
+including five projection regressions (`.tmp/fi1-inventory-test.log`). This is
+also verified after final API/lint corrections by the five-case rerun and strict
+host library/test Clippy (`.tmp/fi1-inventory-final-test.log` and
+`.tmp/fi1-inventory-clippy.log`). Documentation semantics, draft preflight,
+formatting and whitespace checks pass. This is
+local projection only: binding these files into durable review/publication and
+releasing the Root/host operation fences remain unfinished.
+
+Remaining FI1 work: explicit infrastructure bootstrap, authenticated complete
+observation/provenance, apply
+orchestration and CLI, recoverable estate/policy publication, terminal host
+release/archive, known-rejection and pruned-ingress recovery, partial multi-source
+and actual workload-assignment journeys. Current non-replied ingress outcomes
+remain blocked under their original intent; no controller observation alone
+authorizes another signed request. No operator import command is available yet.
+The full `.43` batch is not ready to push or publish. Final affected artifact
+qualification and human 0.110 closeout remain required before 0.111.
+
+The maintainer authorized disabling automatic editor checks; the workspace now
+sets `rust-analyzer.checkOnSave = false`. Manifest changes can still trigger
+dependency refresh. Check the shared Cargo lock before source edits and targeted
+builds. No broad validation, versioning, Git publication, live import or deployment
+has run; package versions remain `.42`.
+
+## Fleet capacity import for .43 before blob extraction — accepted 2026-09-25
+
+The maintainer selects [FI1: reviewed Fleet capacity import](../design/0.110-fleet-runtime-contraction/0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043)
+as one complete `0.110.43` batch after `.42`, before blob storage extraction.
+This supersedes the earlier `.42` final-feature target and closeout-ready queue.
+The workflow accepts existing operator-controlled canisters, reviews the exact
+Root handoff and wipe, imports their IDs without replacement creation, proves
+cycle accounting and interruption recovery, and updates maintained Fleet inputs.
+Host/CLI, control-plane and testing owners share the complete batch. The design
+records authority/retirement gates and focused native/PocketIC acceptance.
+
+Finish the `.42` release flow, then implement FI1 for `.43`. Existing `.42`
+B5/audit evidence remains source-bound; final 0.110 qualification and the
+human-requested/accepted closeout must cover FI1 before 0.111 implementation.
+B1/B2 acceptance, the B3 stop and B4 deferral remain unchanged. The design
+records the maintainer's explicit decision to add this bounded operator batch
+on the over-guideline minor. The separate `ic-blob-storage` repository has been
+bootstrapped with maintainer authorization; that does not begin service delivery
+or remove the B1 service-contract gates.
+
+This update is planning only: no source, version, lockfile, live controller,
+canister state or external repository was changed. No broad validation, release
+or publication ran. `.43` is a scheduled target, not another open changelog
+draft while `.42` is untagged; its release notes will accompany implementation.
+
 ## .42 release-gate corrections — 2026-09-25
 
 Maintainer-run release validation exposed two stale expected hashes after the
