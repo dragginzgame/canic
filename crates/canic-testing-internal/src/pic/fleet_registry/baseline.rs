@@ -18924,6 +18924,14 @@ cycles = "80T"
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
         vec![
             (
+                "Fleet deployment restore",
+                restored_root_preserves_its_inventory_but_cannot_allocate,
+            ),
+            (
+                "autonomous Root removal",
+                published_draining_root_autonomously_reaches_external_deletion_readiness,
+            ),
+            (
                 "supplied infrastructure initializes and recovers through Ensure",
                 infrastructure_bootstrap::supplied_infrastructure_initializes_and_recovers,
             ),
@@ -18950,14 +18958,6 @@ cycles = "80T"
             (
                 "completed reset stops and clears retained application once",
                 completed_preparation::completed_reset_stops_and_clears_retained_application_once,
-            ),
-            (
-                "Fleet deployment restore",
-                restored_root_preserves_its_inventory_but_cannot_allocate,
-            ),
-            (
-                "autonomous Root removal",
-                published_draining_root_autonomously_reaches_external_deletion_readiness,
             ),
             (
                 "initial child failure reaches Coordinator and recovers same claim",

@@ -22,6 +22,16 @@ open-draft statements describe that earlier development state.
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Latest release-gate follow-up: ordinary workspace tests passed in the maintainer's
+retry, then the governed PocketIC runner stopped before any case because new
+`.43` registrations displaced the required Fleet restore/Root removal prefix.
+Restored that order without dropping cases or weakening the inventory assertion.
+All three focused inventory/runner regressions pass; the full ignored PocketIC
+suite was not selected. Log: `.tmp/governed-suite-order-regression.log`.
+This correction is uncommitted and ready for the maintainer's release retry;
+package versions remain `.42`. The complete PocketIC release gate still needs
+that retry; the startup check does not establish full-suite success.
+
 Release-gate follow-up: the maintainer's ordinary test run exposed eight host
 failures after bootstrap authority changed. The completed `.38` evidence reader
 now owns a frozen Root declaration instead of sharing the current executable

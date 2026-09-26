@@ -2,6 +2,12 @@
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Latest validation follow-up: restored the governed registry's required recovery
+prefix after new `.43` cases displaced Fleet restore and autonomous Root removal.
+All three focused inventory/runner tests pass, with every case retained. The
+maintainer's ordinary workspace tier passed; the complete PocketIC gate awaits
+retry after committing this correction. See [the handoff](../../status/current.md).
+
 Release-gate follow-up: corrected the eight host failures by freezing the `.38`
 Root receipt/inventory declaration and excluding neutral current-only bootstrap
 fields from disposable historical fixtures. All 39 targeted terminal tests and
