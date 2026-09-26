@@ -4,9 +4,11 @@
 //! Does not own: current executable contracts, defaults, conversion or IC interfaces.
 //! Boundary: omitted declaration fields remain bound by the separate receipt audit.
 
-use super::super::receipt_evidence::EvidenceFleetRegistryAuthority;
-use crate::fleet_ensure::model::{
-    DesiredCanister, DesiredFleetBootstrapRoot, FleetEnsureTopologyRecord,
+use crate::fleet_ensure::{
+    model::{DesiredCanister, FleetEnsureTopologyRecord},
+    view::terminal_source::receipt_evidence::{
+        EvidenceDesiredFleetBootstrapRoot, EvidenceFleetRegistryAuthority,
+    },
 };
 use canic_core::{
     dto::fleet_registry::FleetSubnetRootEntry,
@@ -31,7 +33,7 @@ pub(in crate::fleet_ensure) struct InventoryBootstrapEvidence {
     pub(in crate::fleet_ensure) coordinator_subnet: SubnetId,
     pub(in crate::fleet_ensure) fleet_id: FleetId,
     pub(in crate::fleet_ensure) release_build_id: ReleaseBuildId,
-    pub(in crate::fleet_ensure) roots: Vec<DesiredFleetBootstrapRoot>,
+    pub(in crate::fleet_ensure) roots: Vec<EvidenceDesiredFleetBootstrapRoot>,
 }
 
 /// Source registry identity and Root membership claims, not a current Registry.

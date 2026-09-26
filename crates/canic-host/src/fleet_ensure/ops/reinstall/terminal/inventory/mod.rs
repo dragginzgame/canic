@@ -12,10 +12,7 @@ pub(in crate::fleet_ensure) mod protocols;
 mod tests;
 
 use crate::fleet_ensure::{
-    model::{
-        DesiredCanister, DesiredCanisterKind, DesiredFleetBootstrapRoot, DesiredPresence,
-        MAX_FLEET_ENSURE_CANISTERS,
-    },
+    model::{DesiredCanister, DesiredCanisterKind, DesiredPresence, MAX_FLEET_ENSURE_CANISTERS},
     ops::{EnsurePaths, EnsureStateError, is_sha256},
     view::terminal_source::{
         CompletedReceiptAuditView,
@@ -26,7 +23,7 @@ use crate::fleet_ensure::{
                 RegistryInventoryEvidence,
             },
         },
-        receipt_evidence::EvidenceFleetCoordinatorBinding,
+        receipt_evidence::{EvidenceDesiredFleetBootstrapRoot, EvidenceFleetCoordinatorBinding},
     },
 };
 use candid::Principal;
@@ -235,7 +232,7 @@ fn project_canister(
 }
 
 fn bind_root(
-    root: &DesiredFleetBootstrapRoot,
+    root: &EvidenceDesiredFleetBootstrapRoot,
     bootstrap: &InventoryBootstrapEvidence,
     registry: &RegistryInventoryEvidence,
     assigned: &mut BTreeSet<String>,
@@ -293,7 +290,7 @@ fn bind_root(
 }
 
 fn validate_import_declarations(
-    root: &DesiredFleetBootstrapRoot,
+    root: &EvidenceDesiredFleetBootstrapRoot,
     declared: &[DesiredCanister],
 ) -> Result<(), EnsureStateError> {
     for name in &root.canister_pool_imports {

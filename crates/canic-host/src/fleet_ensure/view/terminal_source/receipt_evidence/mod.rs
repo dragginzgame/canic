@@ -7,9 +7,7 @@
 //! Only the authority-containing shapes are projected here. Unchanged passive
 //! value types retain their owning definitions; exact retained hashes detect drift.
 
-use crate::fleet_ensure::model::{
-    DesiredCanister, DesiredFleetBootstrapRoot, DesiredFleetProtocol,
-};
+use crate::fleet_ensure::model::{DesiredCanister, DesiredFleetProtocol};
 use candid::Principal;
 use canic_core::{
     dto::{
@@ -144,7 +142,21 @@ pub(in crate::fleet_ensure) struct EvidenceDesiredFleetBootstrap {
     #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
     pub(in crate::fleet_ensure) root_funding:
         Option<canic_core::ids::FleetCoordinatorRootFundingPolicy>,
-    pub(in crate::fleet_ensure) roots: Vec<DesiredFleetBootstrapRoot>,
+    pub(in crate::fleet_ensure) roots: Vec<EvidenceDesiredFleetBootstrapRoot>,
+}
+
+/// Frozen historical Root declaration; field order is part of the completed receipt hash.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::fleet_ensure) struct EvidenceDesiredFleetBootstrapRoot {
+    pub(in crate::fleet_ensure) canister_pool_imports: Vec<String>,
+    pub(in crate::fleet_ensure) component_admissions: Vec<ComponentSpecAdmission>,
+    pub(in crate::fleet_ensure) component_topology_digest: ComponentTopologyDigest,
+    pub(in crate::fleet_ensure) funding: FleetSubnetRootFundingAuthority,
+    pub(in crate::fleet_ensure) limits: FleetSubnetRootLimits,
+    pub(in crate::fleet_ensure) placement_subnet: SubnetId,
+    pub(in crate::fleet_ensure) root: String,
+    pub(in crate::fleet_ensure) store: String,
 }
 
 /// Frozen historical FleetComponentProvisioningPlan evidence; field order is hash-significant.
