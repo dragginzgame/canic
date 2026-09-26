@@ -2,6 +2,12 @@
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Latest operator CLI fixture correction: replace hand-written plan JSON with a
+typed current plan, including explicit absence of bootstrap authority. The exact
+public CLI PocketIC case passes in 22.92s (41s runner), covering plan, apply,
+export and terminal replay. The correction is uncommitted; full release validation
+remains outstanding. Production contract strictness is unchanged.
+
 Latest validation follow-up: restored the governed registry's required recovery
 prefix after new `.43` cases displaced Fleet restore and autonomous Root removal.
 All three focused inventory/runner tests pass, with every case retained. The
