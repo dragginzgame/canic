@@ -5,6 +5,7 @@
 //! Boundary: selected-build wipes and partial-activation repairs bind the complete physical estate.
 
 pub(in crate::fleet_ensure) mod activation;
+pub(in crate::fleet_ensure) mod completed;
 pub(in crate::fleet_ensure) mod terminal;
 
 use super::*;
@@ -40,6 +41,21 @@ pub(in crate::fleet_ensure) fn funding_authority_kind(
     });
     if !resets_target {
         return None;
+    }
+    if let Some(completed) = &intent.completed_reset {
+        let source_name = completed.source_names.get(name)?;
+        return completed
+            .preparation
+            .actions
+            .iter()
+            .find_map(|action| match action {
+                EnsureAction::SealAuthority {
+                    name,
+                    authority_kind,
+                    ..
+                } if name == source_name => Some(*authority_kind),
+                _ => None,
+            });
     }
     intent
         .source
@@ -236,11 +252,13 @@ pub(in crate::fleet_ensure) fn preparation(
             source: Some(Box::new(input.source.clone())),
             target_artifacts_sha256: Some(input.target_artifacts_sha256.to_string()),
             activation_reset: None,
+            completed_reset: None,
             operation_id: input.operation_id.to_string(),
             source_operation_id: input.source_operation_id.to_string(),
             authorities,
             assets: Vec::new(),
         })),
+        infrastructure_bootstrap: None,
         root_reinstall_bindings: Vec::new(),
         root_start_authority: None,
         reviewed_desired: Some(Box::new(
@@ -261,6 +279,7 @@ pub(in crate::fleet_ensure) fn validate_reset(
     intent: &FleetReinstallRecord,
     operation_id: &str,
 ) -> Result<BTreeSet<String>, EnsurePolicyError> {
+    validate_evidence_owner(intent)?;
     if let Some(source) = &intent.source {
         validate_selection(source.reviewed_desired.desired(), desired)?;
     }
@@ -357,12 +376,36 @@ pub(in crate::fleet_ensure) fn validate_reset(
     Ok(targets)
 }
 
+fn validate_evidence_owner(intent: &FleetReinstallRecord) -> Result<(), EnsurePolicyError> {
+    if intent.completed_reset.as_ref().is_some_and(|completed|
+        completed.maximum_terminal_observations != crate::fleet_ensure::model::completed_handoff::COMPLETED_RESET_MAXIMUM_TERMINAL_OBSERVATIONS)
+    {
+        return Err(conflict("completed reset observation allowance"));
+    }
+    let sources = usize::from(intent.source.is_some())
+        + usize::from(intent.activation_reset.is_some())
+        + usize::from(intent.completed_reset.is_some());
+    if sources != 1 {
+        return Err(conflict("exact reset evidence owner"));
+    }
+    Ok(())
+}
+
 fn source_module_matches(
     intent: &FleetReinstallRecord,
     binding: &RootManagementBinding,
     configured: &crate::fleet_ensure::model::DesiredCanister,
     artifacts: &DesiredFleetArtifacts,
 ) -> Result<bool, EnsurePolicyError> {
+    if let Some(completed) = &intent.completed_reset {
+        let source = completed
+            .source_names
+            .get(&configured.name)
+            .and_then(|name| completed.preparation.custody.canisters.get(name))
+            .ok_or_else(|| conflict("completed source module"))?;
+        return Ok(source.binding.principal.to_text() == binding.principal
+            && source.binding.module_sha256.as_deref() == Some(binding.module_sha256.as_str()));
+    }
     if let Some(source) = &intent.source {
         return Ok(intent.activation_reset.is_none()
             && source.wasm_sha256_by_canister.get(&configured.name)
@@ -463,7 +506,9 @@ pub(super) fn bind_history_witness(
             .continuation
             .as_ref()
             .ok_or_else(|| conflict("history witness hash"))?;
-        let (candid, candid_sha256) = if let Some(source) = &intent.source {
+        let (candid, candid_sha256) = if let Some(completed) = &intent.completed_reset {
+            completed_history_interface(completed, root_name)?
+        } else if let Some(source) = &intent.source {
             let source_protocol = source
                 .reviewed_desired
                 .desired()
@@ -513,6 +558,30 @@ pub(super) fn bind_history_witness(
         ));
     }
     Ok(())
+}
+
+fn completed_history_interface(
+    completed: &crate::fleet_ensure::model::completed_handoff::CompletedEstateResetRecord,
+    root_name: &str,
+) -> Result<(String, String), EnsurePolicyError> {
+    let source_name = completed
+        .source_names
+        .get(root_name)
+        .ok_or_else(|| conflict("completed history Root"))?;
+    completed
+        .preparation
+        .actions
+        .iter()
+        .find_map(|action| match action {
+            EnsureAction::SealAuthority {
+                name,
+                candid,
+                candid_sha256,
+                ..
+            } if name == source_name => Some((candid.clone(), candid_sha256.clone())),
+            _ => None,
+        })
+        .ok_or_else(|| conflict("completed history interface"))
 }
 
 /// Select an exact source witness, or the intended replacement while checking Root itself.

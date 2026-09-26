@@ -4,10 +4,13 @@
 //! Does not own: transport parsing, policy decisions, persistence, or IC effects.
 //! Boundary: workflow persists these records before and after every effect.
 
+pub mod capacity_import;
+pub mod completed_handoff;
 pub mod funding_observation;
+pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 mod retirement;
-mod serialization;
+pub(in crate::fleet_ensure) mod serialization;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -354,6 +357,8 @@ pub struct DesiredFleetBootstrap {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredFleetBootstrapRoot {
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub capacity_import_bootstrap: Option<capacity_import::CapacityImportBootstrapRecord>,
     pub canister_pool_imports: Vec<String>,
     pub component_admissions: Vec<canic_core::ids::ComponentSpecAdmission>,
     pub component_topology_digest: canic_core::ids::ComponentTopologyDigest,
@@ -571,6 +576,11 @@ pub enum EnsureAction {
         name: String,
         principal: String,
     },
+    /// Clear supplied infrastructure code and state without deleting the canister.
+    Uninstall {
+        name: String,
+        principal: String,
+    },
     Transfer {
         #[serde(with = "u128_text")]
         amount: u128,
@@ -618,6 +628,7 @@ impl EnsureAction {
             | Self::SetControllers { name, .. }
             | Self::Start { name, .. }
             | Self::Stop { name, .. }
+            | Self::Uninstall { name, .. }
             | Self::Transfer { name, .. } => name,
         }
     }
@@ -1004,6 +1015,9 @@ impl<'de> Deserialize<'de> for ReviewedDesiredFleetRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsurePlan {
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub infrastructure_bootstrap:
+        Option<Box<infrastructure_bootstrap::InfrastructureBootstrapRecord>>,
     /// Informational dependent work; grants no funding or effect authority.
     #[serde(deserialize_with = "serialization::required_option")]
     pub recovery_review: Option<Box<FleetRecoveryReview>>,
@@ -1041,6 +1055,8 @@ pub enum FleetEnsurePlanScope {
     /// Complete desired-state convergence after all protected roles are observable.
     #[default]
     Full,
+    /// Initialize supplied infrastructure before any Root-local capacity handoff.
+    InfrastructureBootstrap,
     /// Seal current allocation before reviewing the complete physical reset closure.
     ReinstallPreparation,
     /// Exact reviewed Root reset before current protected interfaces become available.
@@ -1055,6 +1071,7 @@ impl FleetEnsurePlanScope {
     pub const fn as_str(self) -> &'static str {
         match self {
             Self::Full => "full",
+            Self::InfrastructureBootstrap => "infrastructure_bootstrap",
             Self::ReinstallPreparation => "reinstall_preparation",
             Self::RootReinstallPrerequisite => "root_reinstall_prerequisite",
             Self::RootStartPrerequisite => "root_start_prerequisite",
@@ -1074,6 +1091,8 @@ pub struct FleetReinstallRecord {
     pub source: Option<Box<FleetReinstallSourceRecord>>,
     #[serde(deserialize_with = "serialization::required_option")]
     pub activation_reset: Option<Box<FleetActivationResetRecord>>,
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub completed_reset: Option<Box<completed_handoff::CompletedEstateResetRecord>>,
     pub operation_id: String,
     pub source_operation_id: String,
     pub authorities: Vec<RootManagementBinding>,

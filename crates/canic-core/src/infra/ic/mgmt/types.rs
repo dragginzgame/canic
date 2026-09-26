@@ -300,6 +300,7 @@ pub struct InfraQueryStats {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct InfraCanisterStatusResult {
+    pub version: u64,
     pub status: InfraCanisterStatusType,
     pub settings: InfraDefiniteCanisterSettings,
     pub module_hash: Option<Vec<u8>>,

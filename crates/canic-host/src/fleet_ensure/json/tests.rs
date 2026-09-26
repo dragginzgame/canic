@@ -82,6 +82,7 @@ fn report_projects_store_chunk_as_bounded_local_content_reference() {
             }],
             recovery_review: None,
             reinstall: None,
+            infrastructure_bootstrap: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,

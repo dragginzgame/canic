@@ -538,6 +538,7 @@ impl ComponentRegistryOps {
         reservation: &FleetSubnetRootDrainingReservationResponse,
         started_at_ns: u64,
     ) -> Result<RootFleetSubnetDrainingView, InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         if operation_id == [0; 32] {
             return Err(InternalError::invalid_input());
         }

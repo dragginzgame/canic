@@ -57,6 +57,8 @@ pub struct ReadinessConversionRequest {
 #[derive(Debug, Error)]
 pub enum FleetReadinessError {
     #[error(transparent)]
+    RetainedContract(#[from] crate::fleet_ensure::ops::retained_contract::RetainedContractError),
+    #[error(transparent)]
     Policy(#[from] EnsurePolicyError),
     #[error(transparent)]
     State(#[from] EnsureStateError),
@@ -82,8 +84,13 @@ impl From<OperatorMintTransportError> for FleetReadinessError {
 
 /// Observe current funding and local blockers without creating operator state.
 pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, FleetReadinessError> {
-    let started = now_ms()?;
     validate_path_labels(request.environment, request.fleet)?;
+    crate::fleet_ensure::ops::retained_contract::check(
+        request.workspace,
+        request.environment,
+        request.fleet,
+    )?;
+    let started = now_ms()?;
     let paths = EnsurePaths::under(request.workspace, request.environment, request.fleet);
     let retained_operation = retained(&paths, request)?;
     let expected_network =

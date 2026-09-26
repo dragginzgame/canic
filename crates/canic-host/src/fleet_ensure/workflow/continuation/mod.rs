@@ -50,6 +50,10 @@ where
     if journal.successor_phases.is_empty() {
         return Ok(());
     }
+    if plan.infrastructure_bootstrap.is_some() && journal.successor_phases.len() != 1 {
+        return Err(EnsureWorkflowError::JournalIntegrity);
+    }
+
     let authority = plan
         .continuation
         .as_ref()
@@ -142,12 +146,13 @@ pub(super) fn verify_canonical<P: EnsurePlatform>(
     if journal.successor_phases.is_empty() {
         return Ok(());
     }
-    let allowed = platform
-        .fresh_protocol_actions(&plan.operation_id, state)
-        .map_err(EnsureWorkflowError::Platform)?
-        .iter()
-        .map(action_sha256)
-        .collect::<BTreeSet<_>>();
+    let canonical = if plan.infrastructure_bootstrap.is_some() {
+        platform.infrastructure_protocol_actions(&plan.operation_id, state)
+    } else {
+        platform.fresh_protocol_actions(&plan.operation_id, state)
+    }
+    .map_err(EnsureWorkflowError::Platform)?;
+    let allowed = canonical.iter().map(action_sha256).collect::<BTreeSet<_>>();
     for phase in &journal.successor_phases {
         let phase = phase
             .plan
@@ -192,7 +197,7 @@ pub(super) fn replay<P: EnsurePlatform>(
     // This is one read-only replanning decision after the inventory's paid reads.
     // Share configured-owner status with protocol planning, then expire it before
     // the separate terminal authority checks or any later replay.
-    let (final_observation, current) = platform.with_planning_observations(|platform| {
+    let (mut final_observation, current) = platform.with_planning_observations(|platform| {
         let mut final_observation = platform
             .observe(&plan.operation_id, &verified_state)
             .map_err(EnsureWorkflowError::Platform)?;
@@ -218,7 +223,16 @@ pub(super) fn replay<P: EnsurePlatform>(
     }
     super::reinstall::verify_terminal_estate(plan, &final_observation)?;
     super::reinstall::verify_terminal_authority(plan, &verified_state, platform)?;
-    verify_terminal_conservation(plan, journal, &verified_state, &final_observation)
+    let paths = EnsurePaths::under(root, &plan.environment, &plan.fleet);
+    let balances = super::completed_reset::sample(&paths, plan, &mut final_observation, platform)?;
+    let actual = verify_terminal_conservation(plan, journal, &verified_state, &final_observation)?;
+    super::completed_reset::verify(plan, journal, &actual, balances.as_ref())?;
+    if let Some(balances) = balances {
+        crate::fleet_ensure::ops::completed_reset::terminal::retain(
+            &paths, plan, &actual, balances,
+        )?;
+    }
+    Ok(actual)
 }
 
 #[expect(
@@ -277,12 +291,16 @@ pub(super) fn append<P: EnsurePlatform>(
             .map_or(0, |phase| phase.execution_burn_before_phase),
     );
     let remaining = execution_bound::<P::Error>(plan, journal)?.saturating_sub(observed_debit);
+    let requested_count = phase.protocol_actions.len();
     let phase = crate::fleet_ensure::policy::recovery::affordable_successor(
         desired,
         phase.clone(),
         remaining,
     )?
     .ok_or_else(|| pause(FleetEnsureSuccessorReviewReason::BudgetExceeded))?;
+    if plan.infrastructure_bootstrap.is_some() && phase.protocol_actions.len() != requested_count {
+        return Err(pause(FleetEnsureSuccessorReviewReason::BudgetExceeded));
+    }
     let candidate = candidate_journal(journal, &phase, observed_debit);
     verify_records(plan, &candidate)?;
     verify_canonical(plan, &candidate, state, platform)?;
@@ -320,7 +338,8 @@ impl<'a> From<&'a FleetEnsurePlan> for PhaseInputAuthority<'a> {
 }
 
 fn phase_binding_matches(original: &FleetEnsurePlan, phase: &FleetEnsurePlan) -> bool {
-    let fresh_scope = phase.continuation.is_none()
+    let fresh_scope = phase.infrastructure_bootstrap.is_none()
+        && phase.continuation.is_none()
         && phase.scope == FleetEnsurePlanScope::Full
         && phase.root_start_authority.is_none()
         && phase.root_reinstall_bindings.is_empty()

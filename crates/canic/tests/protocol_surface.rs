@@ -1910,3 +1910,24 @@ fn store_preparation_command_matches_canonical_candid() {
             .expect("Store publication matches its canonical Candid contract");
     }
 }
+
+#[cfg(feature = "control-plane")]
+mod capacity_import_surface {
+    use candid::{decode_one, encode_one};
+    use canic::dto::pool_import::{PoolImportCommand, PoolImportIdentity};
+
+    canic::canic_emit_root_command_endpoint!();
+
+    #[test]
+    fn capacity_import_generated_root_command_preserves_operation_identity() {
+        let identity = PoolImportIdentity {
+            sequence: u64::MAX - 1,
+            plan_sha256: [42; 32],
+        };
+        let command = RootCommand::ImportPoolCapacity(PoolImportCommand::Settle(identity));
+        let restored = decode_one::<RootCommand>(&encode_one(command).unwrap()).unwrap();
+        assert!(matches!(restored,
+            RootCommand::ImportPoolCapacity(PoolImportCommand::Settle(found)) if found == identity
+        ));
+    }
+}

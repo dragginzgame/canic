@@ -32,6 +32,11 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     platform: &mut P,
 ) -> Result<FleetEnsureReport, EnsureWorkflowError<P::Error>> {
     validate_path_identity(desired, requested_fleet)?;
+    crate::fleet_ensure::ops::retained_contract::check(
+        root,
+        &desired.environment,
+        requested_fleet,
+    )?;
     let paths = EnsurePaths::under(root, &desired.environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
     verify_release_transition(root, desired, FleetEnsurePlanScope::ReinstallPreparation)?;
@@ -505,10 +510,28 @@ pub(super) fn verify_effect_authority<P: EnsurePlatform>(
         {
             return Err(EnsureWorkflowError::ConvergenceDrift);
         }
-        let seal = capture::funding_seal(source_authority(intent)?, binding, kind)
-            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+        let (seal, seal_operation) = if let Some(completed) = &intent.completed_reset {
+            let source_name = completed
+                .source_names
+                .get(&binding.name)
+                .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+            let seal = completed
+                .preparation
+                .actions
+                .iter()
+                .find(|action| action.name() == source_name)
+                .cloned()
+                .ok_or(EnsureWorkflowError::PlanIntegrity)?;
+            (seal, completed.preparation.operation_id.as_str())
+        } else {
+            (
+                capture::funding_seal(source_authority(intent)?, binding, kind)
+                    .ok_or(EnsureWorkflowError::PlanIntegrity)?,
+                plan.operation_id.as_str(),
+            )
+        };
         if !platform
-            .authority_sealed(&plan.operation_id, &seal)
+            .authority_sealed(seal_operation, &seal)
             .map_err(EnsureWorkflowError::Platform)?
         {
             return Err(EnsureWorkflowError::DriftedBeforeApply);

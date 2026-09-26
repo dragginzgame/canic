@@ -49,22 +49,33 @@ release-batch plan and explicit maintainer acceptance.
    enters remediation. That audit must then be superseded by an accepted
    passing immutable verdict before any 0.110 implementation or promotion.
 8. [0.110 Fleet runtime contraction](0.110-fleet-runtime-contraction/status.md)
-   retains accepted B1/B2 contraction and targets `.42` as its final feature
-   release. Further B3 records/codecs stop and remaining B4 pruning is deferred.
-   B5 final-source budgets, behavior and residual disposition are qualified.
-   The [exact closeout verdict](../audits/release-lines/0.110-closeout-audit.md)
-   awaits human acceptance before the next minor begins.
+   retains accepted B1/B2 contraction, finishes `.42`, then delivers
+   [reviewed Fleet capacity import in `.43`](0.110-fleet-runtime-contraction/0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043),
+   including explicit bootstrap of supplied infrastructure IDs.
+   Further B3 records/codecs stop and remaining B4 pruning is deferred.
+   B5's `.42` evidence remains a qualified checkpoint; the
+   [closeout audit](../audits/release-lines/0.110-closeout-audit.md) must cover
+   the final FI1 scope and receive human acceptance before the next minor.
 9. [0.111 standalone blob service extraction](0.111-standalone-blob-service-extraction/status.md)
    is the maintainer's selected next major slice. An independently maintained
    service owns blob semantics; Canic manages it as an ordinary Component and
    removes its blob-specific production surfaces. Implementation follows
-   accepted 0.110 closeout; external ownership, repository, consumer and
-   provider qualification remain explicit dependencies.
+   `.43` import completion and accepted final 0.110 closeout. The external
+   `ic-blob-storage` repository is bootstrapped; maintainer/consumer assignments,
+   package publication and provider qualification remain explicit dependencies.
 
 [Bounded multi-Fleet estates](ideas/bounded-multi-fleet-estates/design.md)
 is deferred and unnumbered. Its unproved Q0 capsule and indexed-estate work
 are not prerequisites for blob extraction. Neither roadmap promotion nor
-finishing `.42` substitutes for requested and accepted human minor closeout.
+finishing `.43` substitutes for requested and accepted human minor closeout.
+
+Future Fleet setup and managed-service slices follow the accepted
+[Coordinator setup prerequisite](0.110-fleet-runtime-contraction/0.110-design.md#infrastructure-prerequisites--accepted-2026-09-25):
+the operator establishes Coordinator authority, initializes/registers Root and
+Store, completes Root activation, then imports capacity on that Root's subnet.
+Coordinator placement is independent of its Roots; pool import does not bootstrap
+infrastructure implicitly. Explicit infrastructure bootstrap belongs to the same
+`.43` batch, with Coordinator setup confirmed before dependent Root/Store effects.
 
 The former stateful-retirement/release-adoption proposal is
 [cancelled and archived](archive/0.111-rescinded-stateful-fleet-release-adoption/status.md).

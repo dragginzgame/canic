@@ -2,6 +2,30 @@
 
 Canic requires ICP CLI `>=1.5.0, <2.0.0`; maintainer installation pins 1.6.0.
 
+## Configuration format boundary
+
+Canic-owned human-authored configuration uses TOML, including `canic.toml` and
+new configuration surfaces. Cargo manifests also use TOML. YAML configuration
+handling is confined to host-side inspection of ICP's `icp.yaml`; ICP owns that
+format and its interpretation. Canic does not offer interchangeable TOML and
+YAML forms of its own configuration. The contributor rule lives in
+[AGENTS.md](../../../AGENTS.md#configuration-formats).
+
+The shared `toml` dependency handles Canic configuration and Cargo documents.
+`canic-host` uses `serde-saphyr` with only deserialization enabled for ICP
+inspection. Neither parser belongs in a canister's Wasm dependency graph.
+Host build scripts parse configuration into generated typed runtime data; Root
+also embeds compact TOML source for configuration reporting. That source is
+text, not a runtime TOML parser. Host build-script and procedural-macro
+dependencies must be distinguished from dependencies compiled into Wasm when
+reviewing Cargo graphs.
+
+This choice applies to configuration formats. JSON remains part of the Root
+bootstrap release-manifest contract, CBOR serves stable storage, and Candid
+serves canister interfaces. Their runtime uses are separate from configuration
+parsing. Reuse the existing workspace format libraries for new Canic code;
+upstream transitive parsers do not justify introducing another direct parser.
+
 ## Environment and selective builds
 
 ICP script builds use `ICP_CLI_ENVIRONMENT`, which records the selection after

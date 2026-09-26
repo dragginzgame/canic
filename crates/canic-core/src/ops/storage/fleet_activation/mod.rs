@@ -1631,6 +1631,7 @@ mod tests {
         let wasm_store = Principal::from_slice(&[25; 29]);
         let installation_controller = Principal::from_slice(&[26; 29]);
         FleetSubnetRootInitArgs {
+            capacity_import_bootstrap: None,
             authority: FleetSubnetRootAuthority {
                 binding,
                 initial_release_set,

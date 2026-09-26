@@ -1,5 +1,7 @@
 //! Deterministic state access and DTO conversion for root-owned physical Canisters.
 
+pub mod capacity_import;
+
 use crate::storage::stable::canister_pool::{
     CanisterPoolAssetOriginRecord, CanisterPoolAssetRecord, CanisterPoolAssetStatusRecord,
     CanisterPoolClaimRecord, CanisterPoolCreationFailureRecord, CanisterPoolCreationProgressRecord,
@@ -67,6 +69,7 @@ pub struct CanisterPoolOps;
 
 impl CanisterPoolOps {
     pub fn initialize_store(canister_id: Principal, now_ns: u64) -> Result<(), InternalError> {
+        capacity_import::bootstrap::require_store_initialization(canister_id)?;
         match CanisterPoolStore::get(&canister_id) {
             Some(existing)
                 if existing.origin == CanisterPoolAssetOriginRecord::InfrastructureStore
@@ -102,6 +105,7 @@ impl CanisterPoolOps {
         imports: &[Principal],
         now_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         validate_config(config)?;
         if imports.len() > config.maximum_size as usize {
             return Err(InternalError::invalid_input());
@@ -111,28 +115,37 @@ impl CanisterPoolOps {
             return Err(InternalError::invalid_input());
         }
 
+        let mut additions = Vec::new();
         for canister_id in imports {
             match CanisterPoolStore::get(canister_id) {
                 Some(existing) if existing.origin == CanisterPoolAssetOriginRecord::Imported => {}
                 Some(_) => {
                     return Err(InternalError::conflict());
                 }
-                None => {
-                    validate_new_asset_capacity(config, *canister_id)?;
-                    CanisterPoolStore::insert(
-                        *canister_id,
-                        CanisterPoolAssetRecord {
-                            creation_receipt: None,
-                            cycles: Cycles::default(),
-                            origin: CanisterPoolAssetOriginRecord::Imported,
-                            status: CanisterPoolAssetStatusRecord::PendingReset,
-                            last_recycle: None,
-                            added_at_ns: now_ns,
-                            updated_at_ns: now_ns,
-                        },
-                    );
-                }
+                None => additions.push(*canister_id),
             }
+        }
+        // Validate the complete batch before publishing any rows. Returning an
+        // error from an update does not roll back earlier stable-memory writes.
+        let added_count = u64::try_from(additions.len()).map_err(|_| InternalError::invariant())?;
+        if added_count > 0
+            && Self::occupied_asset_capacity() + added_count > u64::from(config.maximum_size)
+        {
+            return Err(InternalError::resource_exhausted());
+        }
+        for canister_id in additions {
+            CanisterPoolStore::insert(
+                canister_id,
+                CanisterPoolAssetRecord {
+                    creation_receipt: None,
+                    cycles: Cycles::default(),
+                    origin: CanisterPoolAssetOriginRecord::Imported,
+                    status: CanisterPoolAssetStatusRecord::PendingReset,
+                    last_recycle: None,
+                    added_at_ns: now_ns,
+                    updated_at_ns: now_ns,
+                },
+            );
         }
         Ok(())
     }
@@ -141,6 +154,7 @@ impl CanisterPoolOps {
         canister_id: Principal,
         now_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         match &asset.status {
             CanisterPoolAssetStatusRecord::Workload(claim) => {
@@ -167,6 +181,7 @@ impl CanisterPoolOps {
         cycles: Cycles,
         now_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         retain_first_creation_observation(&mut asset, &cycles)?;
         asset.cycles = cycles;
@@ -194,6 +209,7 @@ impl CanisterPoolOps {
         reason: String,
         now_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         if let Some(cycles) = observed_cycles {
             retain_first_creation_observation(&mut asset, &cycles)?;
@@ -224,6 +240,7 @@ impl CanisterPoolOps {
         required_cycles: &Cycles,
         now_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         asset.status = match asset.status {
             CanisterPoolAssetStatusRecord::Ready if asset.cycles < *required_cycles => {
@@ -285,6 +302,7 @@ impl CanisterPoolOps {
         now_ns: u64,
         policy: ReadyReinspectionPolicy,
     ) -> Result<CanisterPoolResetPreparation, InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         match asset.status {
             CanisterPoolAssetStatusRecord::Ready
@@ -344,6 +362,7 @@ impl CanisterPoolOps {
         required_cycles: &Cycles,
         now_ns: u64,
     ) -> Result<Option<Principal>, InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let data = CanisterPoolStore::export();
         let expected_claim = claim_record(claim);
         let existing = data
@@ -542,6 +561,7 @@ impl CanisterPoolOps {
         authority: CanisterPoolCreationAuthority,
         prepared_at_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut state = CanisterPoolStore::state();
         if state.handoff.is_some() {
             return Err(InternalError::conflict());
@@ -939,7 +959,9 @@ impl CanisterPoolOps {
     #[must_use]
     pub fn has_pending_lifecycle_work() -> bool {
         let state = CanisterPoolStore::state();
-        state.creation.is_some() || state.handoff.is_some()
+        state.creation.is_some()
+            || state.handoff.is_some()
+            || capacity_import::CanisterPoolImportOps::is_active()
     }
 
     #[must_use]
@@ -1028,6 +1050,7 @@ impl CanisterPoolOps {
         recipient: Principal,
         prepared_at_ns: u64,
     ) -> Result<CanisterPoolHandoffView, InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         if CanisterPoolStore::handoff_receipt(&canister_id).is_some() {
             return Err(InternalError::conflict());
         }
@@ -1227,6 +1250,10 @@ impl CanisterPoolOps {
 
     #[must_use]
     pub fn asset_capacity_is_exhausted(config: &FleetSubnetCanisterPoolConfig) -> bool {
+        Self::occupied_asset_capacity() >= u64::from(config.maximum_size)
+    }
+
+    fn occupied_asset_capacity() -> u64 {
         let state = CanisterPoolStore::state();
         let pending_creation =
             u64::from(
@@ -1242,8 +1269,11 @@ impl CanisterPoolOps {
                         | CanisterPoolCreationProgressRecord::Blocked { .. } => true,
                     }),
             );
-        u64::from(Self::non_store_asset_count()) + pending_creation
-            >= u64::from(config.maximum_size)
+        let pending_imports = state.capacity_import.as_ref()
+            .filter(|record| !matches!(record.phase, crate::storage::stable::canister_pool::capacity_import::PoolImportPhaseRecord::Released { .. }))
+            .map_or(0, |record| record.reservation.sources.iter()
+                .filter(|source| CanisterPoolStore::get(&source.canister_id).is_none()).count() as u64);
+        u64::from(Self::non_store_asset_count()) + pending_creation + pending_imports
     }
 
     /// Return every pool-side physical asset represented in a compact root summary.
@@ -1365,6 +1395,7 @@ impl CanisterPoolOps {
         operation_id: [u8; 32],
         now_ns: u64,
     ) -> Result<(), InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         if asset.origin != CanisterPoolAssetOriginRecord::InfrastructureStore {
             return Err(InternalError::conflict());
@@ -1590,20 +1621,6 @@ const fn creation_is_known_unapplied_intent(creation: &CanisterPoolCreationRecor
             uncertain_result: false
         }
     )
-}
-
-fn validate_new_asset_capacity(
-    config: &FleetSubnetCanisterPoolConfig,
-    canister_id: Principal,
-) -> Result<(), InternalError> {
-    validate_config(config)?;
-    if CanisterPoolStore::get(&canister_id).is_some() {
-        return Ok(());
-    }
-    if CanisterPoolOps::asset_capacity_is_exhausted(config) {
-        return Err(InternalError::resource_exhausted());
-    }
-    Ok(())
 }
 
 fn required_asset(canister_id: Principal) -> Result<CanisterPoolAssetRecord, InternalError> {
@@ -2054,6 +2071,77 @@ mod tests {
         assert_eq!(
             CanisterPoolOps::next_creation_timestamp(10).expect("timestamp"),
             10
+        );
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn capacity_import_rejects_late_ownership_conflict_without_partial_inventory() {
+        CanisterPoolStore::clear();
+        CanisterPoolOps::initialize_store(principal(9), 1).unwrap();
+        let before = CanisterPoolOps::response(config(), None, 256);
+        let error =
+            CanisterPoolOps::initialize_imports(&config(), &[principal(1), principal(9)], 2)
+                .unwrap_err();
+        assert_eq!(error.public_code(), InternalError::conflict().public_code());
+        assert_eq!(CanisterPoolOps::response(config(), None, 256), before);
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn capacity_import_rejects_whole_overfull_batch_without_partial_inventory() {
+        CanisterPoolStore::clear();
+        for index in 1..=3 {
+            imported_ready(principal(index), Cycles::new(100), u64::from(index));
+        }
+        let before = CanisterPoolOps::response(config(), None, 256);
+        let error =
+            CanisterPoolOps::initialize_imports(&config(), &[principal(4), principal(5)], 10)
+                .unwrap_err();
+        assert!(error.is_public_resource_exhausted());
+        assert_eq!(CanisterPoolOps::response(config(), None, 256), before);
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn capacity_import_reserves_pending_creation_when_admitting_the_whole_batch() {
+        CanisterPoolStore::clear();
+        for index in 1..=2 {
+            imported_ready(principal(index), Cycles::new(100), u64::from(index));
+        }
+        CanisterPoolOps::begin_creation(&config(), creation_authority_for([5; 32]), 10).unwrap();
+        let before = CanisterPoolOps::response(config(), None, 256);
+        let error =
+            CanisterPoolOps::initialize_imports(&config(), &[principal(3), principal(4)], 11)
+                .unwrap_err();
+        assert!(error.is_public_resource_exhausted());
+        assert_eq!(CanisterPoolOps::response(config(), None, 256), before);
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn capacity_import_admits_only_new_rows_and_replays_without_rewriting_existing_state() {
+        CanisterPoolStore::clear();
+        imported_ready(principal(1), Cycles::new(100), 1);
+        imported_ready(principal(2), Cycles::new(150), 2);
+        CanisterPoolOps::initialize_imports(
+            &config(),
+            &[principal(1), principal(3), principal(4)],
+            3,
+        )
+        .unwrap();
+        assert!(CanisterPoolOps::asset_capacity_is_exhausted(&config()));
+        let before = CanisterPoolOps::response(config(), None, 256);
+        CanisterPoolOps::initialize_imports(
+            &config(),
+            &[principal(4), principal(3), principal(1)],
+            4,
+        )
+        .unwrap();
+        assert_eq!(CanisterPoolOps::response(config(), None, 256), before);
+        assert_eq!(
+            CanisterPoolOps::pending_reset_canisters(),
+            vec![principal(3), principal(4)]
         );
         CanisterPoolStore::clear();
     }

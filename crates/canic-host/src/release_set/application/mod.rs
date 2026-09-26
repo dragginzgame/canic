@@ -35,7 +35,7 @@ use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
-pub(super) use persistence::load_retained_application_artifact_union;
+pub use persistence::load_retained_application_artifact_union;
 
 pub use persistence::{
     ApplicationArtifactFileBuildOutput, ApplicationArtifactUnionPersistenceError,

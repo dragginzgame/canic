@@ -99,6 +99,7 @@ impl ComponentRegistryOps {
         reserved_against_registry: ComponentRegistryHead,
         maximum_component_registry_bytes: u64,
     ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         Self::begin_subtree_removal_with_origin(
             component,
             operation_id,

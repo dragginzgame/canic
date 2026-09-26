@@ -23,7 +23,10 @@ pub(crate) use generate::generate_local_fleet;
 
 pub use generate::{
     FleetGenerateError, FleetGenerateRequest, FreshEstateSeedRequest, GeneratedDesiredFleet,
-    fresh_pool_creation_funding, generate_desired_fleet, initialize_fresh_estate_seed,
+    capacity_import::{CapacityImportInventoryError, prepare_capacity_import_inventory},
+    fresh_pool_creation_funding, generate_desired_fleet,
+    infrastructure_bootstrap::generate_infrastructure_bootstrap,
+    initialize_fresh_estate_seed,
 };
 pub use inventory::{
     CurrentFleetDiscovery, CurrentFleetInventory, CurrentFleetInventoryError, CurrentFleetRegistry,
@@ -38,10 +41,25 @@ pub use ops::current_protocol::{
     CompiledCurrentComponentProvisioning, CompiledCurrentProtocolStep,
     CompiledCurrentRegistrySequence, CompiledCurrentStoreSequence, CurrentComponentGroupPlacement,
     CurrentRegistryStage, compile_current_component_provisioning,
-    compile_current_protocol_sequence, compile_current_registry_sequence,
-    compile_current_registry_sequence_with_status, compile_current_store_sequence_from_union,
+    compile_current_infrastructure_sequence, compile_current_protocol_sequence,
+    compile_current_registry_sequence, compile_current_registry_sequence_with_status,
+    compile_current_store_sequence_from_union,
 };
+pub use ops::reinstall::terminal::inventory::protocols::CompletedSourceProtocolError;
 pub use ops::{EnsurePaths, IcpEnsurePlatform, IcpEnsurePlatformError};
+pub use view::terminal_source::CompletedReceiptAuditView;
+pub use view::terminal_source::inventory::coordinator::CompletedCoordinatorMembershipView;
+pub use view::terminal_source::inventory::ledger::{
+    CompletedLedgerAccountView, CompletedLedgerBalancesView,
+};
+pub use view::terminal_source::inventory::membership::{
+    CompletedEstateMembershipView, CompletedPoolAssetView, CompletedRootMembershipView,
+    CompletedWorkloadAllocationView,
+};
+pub use view::terminal_source::inventory::{
+    CompletedCanisterCustodyView, CompletedCanisterInventoryView, CompletedEstateCustodyView,
+    CompletedEstateInventoryView, CompletedSourceInspectionView,
+};
 pub use workflow::{
     EnsureWorkflowError, apply, plan, plan_reinstall, retained_in_progress_plan,
     retained_reinstall_apply_plan,

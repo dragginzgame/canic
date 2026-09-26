@@ -858,6 +858,7 @@ fn managed_test_root_init_args(
     store_controllers.sort();
 
     Ok(FleetSubnetRootInitArgs {
+        capacity_import_bootstrap: None,
         authority: FleetSubnetRootAuthority {
             binding: FleetSubnetRootBinding {
                 authority: authority.clone(),

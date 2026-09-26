@@ -19,6 +19,11 @@ use crate::{
 pub struct NnsRegistryOps;
 
 impl NnsRegistryOps {
+    /// Quote the exact NNS lookup before its owner records a paid attempt.
+    pub fn subnet_lookup_call_cost(pid: Principal) -> Result<u128, InternalError> {
+        NnsRegistryInfra::subnet_lookup_call_cost(pid).map_err(|error| OpsError::from(error).into())
+    }
+
     pub async fn get_subnet_for_canister(
         pid: Principal,
     ) -> Result<Option<Principal>, InternalError> {

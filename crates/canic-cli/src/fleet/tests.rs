@@ -21,7 +21,10 @@ fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
         .get_subcommands()
         .map(clap::Command::get_name)
         .collect::<Vec<_>>();
-    assert_eq!(names, ["ensure", "generate", "readiness"]);
+    assert_eq!(
+        names,
+        ["bootstrap", "ensure", "generate", "import", "readiness"]
+    );
 }
 
 #[test]
@@ -322,6 +325,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     plan.reinstall = Some(Box::new(
         canic_host::fleet_ensure::model::FleetReinstallRecord {
             activation_reset: None,
+            completed_reset: None,
             source: Some(Box::new(
                 canic_host::fleet_ensure::model::FleetReinstallSourceRecord {
                     terminal_retirement: None,
@@ -494,6 +498,7 @@ fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
             protocol_actions: Vec::new(),
             recovery_review: None,
             reinstall: None,
+            infrastructure_bootstrap: None,
             root_reinstall_bindings: Vec::new(),
             root_start_authority: None,
             reviewed_desired: None,

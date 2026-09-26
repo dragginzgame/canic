@@ -5,6 +5,7 @@
 //! Boundary: domain workflows supply exact Canister, method, and arguments through explicit
 //! query or update operations.
 
+pub mod contract;
 pub mod inspection;
 
 use crate::{

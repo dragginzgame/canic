@@ -918,6 +918,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         source: &source_path,
     };
     let preserved_output = root.join("fleets/retained-multi-component.toml");
+    infrastructure_bootstrap::tests::qualify(&request);
     fs::create_dir_all(preserved_output.parent().expect("desired output parent"))
         .expect("create desired output parent");
     fs::write(&preserved_output, b"retained desired authority\n")
@@ -962,6 +963,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
 
     write_icp("running");
     let generated = generate_desired_fleet(&request).expect("generate from live retained estate");
+    assert_eq!(generated.desired, infrastructure_bootstrap::generate_infrastructure_bootstrap(
+        &request, crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection::Initialize, None,
+    ).unwrap());
     assert_eq!(generated.subnet_catalog, None);
     assert_eq!(generated.observed_canisters, 5);
     assert_eq!(generated.observed_controlled_cycles, 319_900_000_000_000);
@@ -4425,7 +4429,7 @@ fn multi_component_source(
     }
 }
 
-fn multi_component_source_toml(
+pub(super) fn multi_component_source_toml(
     operator: &str,
     coordinator_subnet: &str,
     placement: &str,
@@ -4570,6 +4574,9 @@ fn persist_test_release_authority(
     let role = CanisterRole::from("app");
     let wasm = [b"\0asm\x01\0\0\0".as_slice(), &[74]].concat();
     let wasm_gz = gzip(&wasm);
+    fs::write(root.join("artifacts/app.wasm"), &wasm).expect("write application artifact");
+    fs::write(root.join("artifacts/app.wasm.gz"), &wasm_gz)
+        .expect("write compressed application artifact");
     let application = ApplicationArtifactUnion::compile(
         config.component_topology(),
         release_build_id,

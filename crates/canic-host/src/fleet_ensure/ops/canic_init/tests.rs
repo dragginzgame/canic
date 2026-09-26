@@ -182,6 +182,7 @@ fn qualify_compiled_initializers(root: &Path, desired: &DesiredFleet) {
             DesiredCanisterInit::Root { .. } => {
                 let args: FleetSubnetRootInitArgs = candid::decode_one(&bytes).unwrap();
                 assert_eq!(args.authority, authorities[0].1);
+                qualify_reviewed_capacity_bootstrap(root, desired, &principals, artifact, &args);
             }
             DesiredCanisterInit::Store { .. } => {
                 let args: FleetSubnetWasmStoreInitArgs = candid::decode_one(&bytes).unwrap();
@@ -189,6 +190,161 @@ fn qualify_compiled_initializers(root: &Path, desired: &DesiredFleet) {
             }
         }
     }
+}
+
+fn qualify_reviewed_capacity_bootstrap(
+    root: &Path,
+    desired: &DesiredFleet,
+    principals: &BTreeMap<String, String>,
+    artifact: &CanicInfrastructureArtifactEntry,
+    original: &FleetSubnetRootInitArgs,
+) {
+    let mut candidate = desired.clone();
+    let input = &mut candidate.bootstrap.as_mut().unwrap().roots[0];
+    let mut sources = input
+        .canister_pool_imports
+        .iter()
+        .map(|name| Principal::from_text(&principals[name]).unwrap())
+        .collect::<Vec<_>>();
+    sources.sort_unstable();
+    let hold = crate::fleet_ensure::model::capacity_import::CapacityImportBootstrapRecord {
+        review_sha256: [43; 32],
+        operator: Principal::from_text(&desired.operator).unwrap(),
+        sources,
+    };
+    input.capacity_import_bootstrap = Some(hold.clone());
+    let init = DesiredCanisterInit::Root {
+        root: input.root.clone(),
+    };
+    let retained = crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(&candidate);
+    let bytes = serde_json::to_vec(&retained).unwrap();
+    let reopened: crate::fleet_ensure::model::ReviewedDesiredFleetRecord =
+        serde_json::from_slice(&bytes).unwrap();
+    candidate.bootstrap.as_mut().unwrap().roots[0].capacity_import_bootstrap = None;
+    let request = CanicInitRequest {
+        desired: reopened.desired(),
+        init: &init,
+        operation_id: "authority-input-reuse",
+        principals,
+        root,
+        wasm: &artifact.wasm_relative_path,
+        wasm_sha256: &artifact.wasm_sha256_hex,
+    };
+    let encoded = compile_arguments(&request).unwrap();
+    let decoded: FleetSubnetRootInitArgs = candid::decode_one(&encoded).unwrap();
+    assert!(decoded.canister_pool_imports.is_empty());
+    assert_eq!(decoded.authority, original.authority);
+    assert_eq!(decoded.install_id, original.install_id);
+    assert_eq!(
+        decoded.wasm_store_activation,
+        original.wasm_store_activation
+    );
+    assert_eq!(
+        decoded.capacity_import_bootstrap,
+        Some(canic_core::dto::pool_import::PoolImportBootstrap {
+            review_sha256: hold.review_sha256,
+            operator: hold.operator,
+            sources: hold.sources,
+        })
+    );
+    // This writer is the production IcpEnsurePlatform install path, including after restart.
+    let argument_file = write_arguments(request).unwrap();
+    assert_eq!(std::fs::read(&argument_file).unwrap(), encoded);
+    std::fs::remove_file(argument_file).unwrap();
+    qualify_bootstrap_rejections(reopened.desired());
+    super::super::infrastructure_bootstrap::tests::qualify_initialization(root, reopened.desired());
+    super::super::current_protocol::qualify_supplied_bootstrap_protocol(
+        root,
+        reopened.desired(),
+        principals,
+    );
+    let mut substituted = principals.clone();
+    let pool = &reopened.desired().bootstrap.as_ref().unwrap().roots[0].canister_pool_imports[0];
+    substituted.insert(pool.clone(), principal(99).to_text());
+    let changed = CanicInitRequest {
+        desired: reopened.desired(),
+        init: &init,
+        operation_id: "authority-input-reuse",
+        principals: &substituted,
+        root,
+        wasm: &artifact.wasm_relative_path,
+        wasm_sha256: &artifact.wasm_sha256_hex,
+    };
+    assert!(matches!(
+        compile_arguments(&changed),
+        Err(CanicInitError::CapacityBootstrap(
+            CapacityBootstrapError::Sources
+        ))
+    ));
+}
+
+fn qualify_bootstrap_rejections(desired: &DesiredFleet) {
+    let validate = |candidate: &DesiredFleet| {
+        capacity_bootstrap::validate(candidate, &candidate.bootstrap.as_ref().unwrap().roots[0])
+    };
+    assert_eq!(validate(desired), Ok(()));
+    let mut wrong = desired.clone();
+    wrong.bootstrap.as_mut().unwrap().roots[0]
+        .capacity_import_bootstrap
+        .as_mut()
+        .unwrap()
+        .operator = principal(99);
+    assert_eq!(validate(&wrong), Err(CapacityBootstrapError::Operator));
+    let mut wrong = desired.clone();
+    wrong.bootstrap.as_mut().unwrap().roots[0]
+        .capacity_import_bootstrap
+        .as_mut()
+        .unwrap()
+        .review_sha256 = [0; 32];
+    assert_eq!(validate(&wrong), Err(CapacityBootstrapError::Review));
+    let mut wrong = desired.clone();
+    wrong.bootstrap.as_mut().unwrap().roots[0]
+        .capacity_import_bootstrap
+        .as_mut()
+        .unwrap()
+        .sources
+        .pop();
+    assert_eq!(validate(&wrong), Err(CapacityBootstrapError::Sources));
+    let mut wrong = desired.clone();
+    wrong.bootstrap.as_mut().unwrap().roots[0]
+        .limits
+        .canister_pool
+        .maximum_size = 0;
+    assert_eq!(validate(&wrong), Err(CapacityBootstrapError::Sources));
+    for kind in [
+        DesiredCanisterKind::Root,
+        DesiredCanisterKind::Store,
+        DesiredCanisterKind::Pool,
+    ] {
+        let mut wrong = desired.clone();
+        wrong
+            .canisters
+            .iter_mut()
+            .find(|entry| entry.kind == kind)
+            .unwrap()
+            .principal = None;
+        assert_eq!(
+            validate(&wrong),
+            Err(CapacityBootstrapError::Infrastructure)
+        );
+    }
+    let mut wrong = desired.clone();
+    wrong
+        .canisters
+        .iter_mut()
+        .find(|entry| entry.kind == DesiredCanisterKind::Pool)
+        .unwrap()
+        .subnet = principal(99).to_text();
+    assert_eq!(validate(&wrong), Err(CapacityBootstrapError::Sources));
+    let mut wrong = desired.clone();
+    wrong.bootstrap.as_mut().unwrap().recovery_controllers.push(
+        desired.bootstrap.as_ref().unwrap().roots[0]
+            .capacity_import_bootstrap
+            .as_ref()
+            .unwrap()
+            .sources[0],
+    );
+    assert_eq!(validate(&wrong), Err(CapacityBootstrapError::Collision));
 }
 
 #[test]
@@ -293,6 +449,7 @@ fn fixture() -> InitFixture {
         release_build_id,
         root_funding: None,
         roots: vec![DesiredFleetBootstrapRoot {
+            capacity_import_bootstrap: None,
             canister_pool_imports: vec!["pool-0".to_string()],
             component_admissions: vec![admission.clone()],
             component_topology_digest: projected.digest().expect("Root topology digest"),
@@ -363,4 +520,58 @@ fn limits() -> FleetSubnetRootLimits {
             maximum_cycles: Cycles::new(15_000_000_000_000),
         },
     }
+}
+
+#[test]
+fn supplied_capacity_bootstrap_retains_typed_authority_and_rejects_ambiguous_sources() {
+    let fixture = fixture();
+    let bytes = encode_root_arguments(
+        fixture.root_authority.clone(),
+        &"ab".repeat(32),
+        "root-0",
+        vec![fixture.root_authority.binding.fleet_subnet_root],
+        Vec::new(),
+    )
+    .unwrap();
+    let original: FleetSubnetRootInitArgs = candid::decode_one(&bytes).unwrap();
+    let hold = canic_core::dto::pool_import::PoolImportBootstrap {
+        review_sha256: [43; 32],
+        operator: principal(9),
+        sources: vec![principal(5)],
+    };
+    let encoded = bind_capacity_bootstrap(&bytes, hold.clone()).unwrap();
+    let decoded: FleetSubnetRootInitArgs = candid::decode_one(&encoded).unwrap();
+    assert_eq!(decoded.capacity_import_bootstrap, Some(hold.clone()));
+    assert_eq!(decoded.authority, original.authority);
+    assert_eq!(decoded.install_id, original.install_id);
+    assert_eq!(
+        decoded.wasm_store_activation,
+        original.wasm_store_activation
+    );
+    for sources in [
+        Vec::new(),
+        vec![principal(5), principal(5)],
+        vec![original.authority.binding.fleet_subnet_root],
+        vec![original.authority.wasm_store_authority.wasm_store],
+        vec![Principal::anonymous()],
+    ] {
+        let mut invalid = hold.clone();
+        invalid.sources = sources;
+        assert!(matches!(
+            bind_capacity_bootstrap(&bytes, invalid),
+            Err(CanicInitError::Authority(_))
+        ));
+    }
+    let mixed = encode_root_arguments(
+        fixture.root_authority,
+        &"ab".repeat(32),
+        "root-0",
+        Vec::new(),
+        vec![principal(5)],
+    )
+    .unwrap();
+    assert!(matches!(
+        bind_capacity_bootstrap(&mixed, hold),
+        Err(CanicInitError::Authority(_))
+    ));
 }

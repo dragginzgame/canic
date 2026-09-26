@@ -27,6 +27,7 @@ macro_rules! canic_emit_root_command_endpoint {
             GetOrCreateDelegationProof,
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffRequest),
             ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
+            ImportPoolCapacity(::canic::dto::pool_import::PoolImportCommand),
             InspectCanister(::canic::dto::canister::CanisterInspectionRequest),
             InspectCanisterHistory(::canic::dto::canister::CanisterInspectionRequest),
             MaintainPool,
@@ -98,6 +99,7 @@ macro_rules! canic_emit_root_command_endpoint {
             GetOrCreateDelegationProof(::canic::dto::auth::RootDelegationProofBatchProof),
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
+            ImportPoolCapacity(::canic::dto::pool_import::PoolImportStatus),
             InspectCanister(::canic::dto::canister::CanisterStatusResponse),
             InspectionReserveRequired(::canic::dto::canister::CanisterInspectionReserveResponse),
             InspectCanisterHistory(::canic::dto::canister::CanisterHistoryResponse),
@@ -221,6 +223,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::PrepareStoreFixture(_)
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
+                    | RootCommand::ImportPoolCapacity(_)
                     | RootCommand::InspectCanister(_)
                     | RootCommand::InspectCanisterHistory(_)
                     | RootCommand::MaintainPool
@@ -248,6 +251,13 @@ macro_rules! canic_emit_root_command_endpoint {
                 $crate::__internal::core::access::auth::is_controller(caller)
                     .await
                     .map_err(::canic::Error::from)?;
+            }
+
+            if let RootCommand::ImportPoolCapacity(request) = &command {
+                let operator = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::import_operator(request)?;
+                if caller != operator {
+                    return Err($crate::__internal::core::control_plane_support::error::InternalError::forbidden().into());
+                }
             }
 
             if matches!(&command, RootCommand::RemoveRoot(_)) {
@@ -362,6 +372,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::PrepareStoreFixture(_)
                     | RootCommand::HandoffPoolCanister(_)
                     | RootCommand::ImportPoolCanister(_)
+                    | RootCommand::ImportPoolCapacity(_)
                     | RootCommand::InspectCanister(_)
                     | RootCommand::InspectCanisterHistory(_)
                     | RootCommand::MaintainPool
@@ -438,6 +449,10 @@ macro_rules! canic_emit_root_command_endpoint {
                         )),
                         _ => Err($crate::__internal::core::control_plane_support::error::InternalError::invariant().into()),
                     }
+                }
+                RootCommand::ImportPoolCapacity(request) => {
+                    $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::import_command(request)
+                        .await.map(RootCommandResponse::ImportPoolCapacity)
                 }
                 RootCommand::ImportPoolCanister(request) => {
                     let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(
@@ -1046,6 +1061,8 @@ macro_rules! canic_emit_root_status_endpoint {
             #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
             Pool(::canic::dto::pool::CanisterPoolStatusRequest),
+            PoolImport(::canic::dto::pool_import::PoolImportIdentity),
+            PoolImportContext,
             StoreOverview,
         }
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
@@ -1070,6 +1087,8 @@ macro_rules! canic_emit_root_status_endpoint {
             #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusResponse),
             Pool(::canic::dto::pool::CanisterPoolResponse),
+            PoolImport(::canic::dto::pool_import::PoolImportStatus),
+            PoolImportContext(::canic::dto::pool_import::PoolImportContext),
             StoreOverview(::canic::dto::template::WasmStoreOverviewResponse),
         }
         #[$crate::canic_query(requires(caller::is_controller()))]
@@ -1085,6 +1104,8 @@ macro_rules! canic_emit_root_status_endpoint {
                     | RootStatusRequest::ComponentRegistryPartition(_)
                     | RootStatusRequest::FleetAuthority
                     | RootStatusRequest::Pool(_)
+                    | RootStatusRequest::PoolImport(_)
+                    | RootStatusRequest::PoolImportContext
                     | RootStatusRequest::StoreOverview
             );
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(prepared)?;
@@ -1144,6 +1165,14 @@ macro_rules! canic_emit_root_status_endpoint {
                         request,
                     )
                     .map(RootStatusResponse::IssuerRenewal)
+                }
+                RootStatusRequest::PoolImport(identity) => {
+                    $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::import_status(identity)
+                        .map(RootStatusResponse::PoolImport)
+                }
+                RootStatusRequest::PoolImportContext => {
+                    $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::import_context()
+                        .map(RootStatusResponse::PoolImportContext)
                 }
                 RootStatusRequest::Pool(request) => {
                     $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(

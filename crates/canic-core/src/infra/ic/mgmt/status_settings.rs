@@ -21,6 +21,18 @@ use super::{
 };
 
 impl MgmtInfra {
+    /// Quote the same single-entry replicated history read used for effect recovery.
+    pub fn canister_history_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
+        Ok(
+            Call::bounded_wait(Principal::management_canister(), "canister_info")
+                .with_arg(InfraCanisterInfoArgs {
+                    canister_id: canister_pid,
+                    num_requested_changes: Some(1),
+                })?
+                .cost(),
+        )
+    }
+
     /// Observe the latest history entry through a replicated management call.
     pub async fn canister_history(canister_pid: Principal) -> Result<CallResult, IcInfraError> {
         Call::bounded_wait(Principal::management_canister(), "canister_info")
@@ -61,6 +73,15 @@ impl MgmtInfra {
     /// Quote the same encoded status call without scheduling an outbound effect.
     pub fn canister_status_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
         Ok(canister_status_call(canister_pid)?.cost())
+    }
+
+    /// Quote the same controller-update request before retaining its paid intent.
+    pub fn update_settings_call_cost(args: &InfraUpdateSettingsArgs) -> Result<u128, IcInfraError> {
+        Ok(
+            Call::unbounded_wait(Principal::management_canister(), "update_settings")
+                .with_arg(args.clone())?
+                .cost(),
+        )
     }
 
     /// Update canister settings through the management canister.

@@ -1,5 +1,7 @@
 //! Stable records for one Fleet Subnet Root's exclusive physical-Canister inventory.
 
+pub mod capacity_import;
+
 use canic_core::{
     cdk::{
         structures::{
@@ -16,6 +18,7 @@ use canic_core::{
         ROOT_CANISTER_POOL_STATE_ID,
     },
 };
+use capacity_import::PoolImportRecord;
 use serde::{Deserialize, Serialize};
 use std::cell::RefCell;
 
@@ -106,6 +109,11 @@ pub struct CanisterPoolCreationRecord {
 /// Singleton state required to recover exact pool refill and draining handoff effects.
 #[derive(Clone, Debug, Default, Deserialize, Eq, PartialEq, Serialize)]
 pub struct CanisterPoolStateRecord {
+    #[serde(deserialize_with = "capacity_import::required_bootstrap")]
+    pub bootstrap_import: Option<capacity_import::PoolImportBootstrapRecord>,
+    pub next_import_sequence: u64,
+    #[serde(deserialize_with = "capacity_import::required_record")]
+    pub capacity_import: Option<PoolImportRecord>,
     pub next_creation_sequence: u64,
     pub last_creation_timestamp_ns: u64,
     pub creation: Option<CanisterPoolCreationRecord>,
@@ -116,7 +124,14 @@ impl CanisterPoolStateRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "CanisterPoolStateRecord";
 }
 
-impl_storable_bounded!(CanisterPoolStateRecord, 4_096, false);
+// Complete source evidence shares the existing pool owner and memory identity.
+// Admission checks the fully expanded record before publishing a reservation.
+pub const CANISTER_POOL_STATE_MAX_BYTES: u32 = 524_288;
+impl_storable_bounded!(
+    CanisterPoolStateRecord,
+    CANISTER_POOL_STATE_MAX_BYTES,
+    false
+);
 
 /// Exact retry authority for one draining-root asset handoff.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -382,10 +397,10 @@ mod tests {
         assert_eq!(
             state_measurements,
             [
-                ("default", 73),
-                ("intent", 801),
-                ("created", 848),
-                ("blocked", 821),
+                ("default", 130),
+                ("intent", 866),
+                ("created", 913),
+                ("blocked", 886),
             ]
         );
         assert!(state_measurements.iter().all(|(_, bytes)| *bytes <= 4_096));
@@ -542,6 +557,9 @@ mod tests {
 
     fn maximum_state(progress: CanisterPoolCreationProgressRecord) -> CanisterPoolStateRecord {
         CanisterPoolStateRecord {
+            bootstrap_import: None,
+            next_import_sequence: u64::MAX,
+            capacity_import: None,
             next_creation_sequence: u64::MAX,
             last_creation_timestamp_ns: u64::MAX,
             creation: Some(CanisterPoolCreationRecord {

@@ -33,6 +33,12 @@ impl IcOps {
         ic_cdk::api::canister_self()
     }
 
+    /// Return the exact sender version bound into management effect history.
+    #[must_use]
+    pub fn canister_version() -> u64 {
+        ic_cdk::api::canister_version()
+    }
+
     /// Return the current canister's cycle balance.
     #[must_use]
     pub fn canister_cycle_balance() -> crate::cdk::types::Cycles {

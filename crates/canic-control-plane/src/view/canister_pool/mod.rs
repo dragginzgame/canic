@@ -62,3 +62,43 @@ pub struct CanisterPoolHandoffView {
     pub canister_id: Principal,
     pub recipient: Principal,
 }
+
+/// One coherent management observation supplied to the Root import effect owner.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PoolImportObservationView {
+    pub canister_id: Principal,
+    pub canister_version: u64,
+    pub stopped: bool,
+    pub snapshots_size_bytes: u64,
+    pub module_sha256: Option<[u8; 32]>,
+    pub controllers: Vec<Principal>,
+    pub cycles: u128,
+    pub reserved_cycles: u128,
+}
+
+/// Current Root balance and conservative debit reserved before a paid import effect.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PoolImportCallBudgetView {
+    pub sender_canister_version: u64,
+    pub maximum_debit_cycles: u128,
+    pub observed_root_cycles: u128,
+}
+
+/// Management-history effect that can prove one Root-issued import mutation.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum PoolImportHistoryKind {
+    Controllers,
+    Uninstall,
+}
+
+/// Replicated latest change, including the exact Root sender version that caused it.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct PoolImportHistoryView {
+    pub canister_id: Principal,
+    pub canister_version: u64,
+    pub module_sha256: Option<[u8; 32]>,
+    pub controllers: Vec<Principal>,
+    pub originator: Principal,
+    pub sender_canister_version: u64,
+    pub kind: PoolImportHistoryKind,
+}

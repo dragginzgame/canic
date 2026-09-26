@@ -4,15 +4,19 @@
 //! Does not own: retirement admission, remote observations, replacement or replay.
 //! Boundary: opaque forecast fields remain source bytes; only supported completed effects are inspected.
 
+pub(in crate::fleet_ensure) mod documents;
+pub(in crate::fleet_ensure) mod inventory;
+pub(in crate::fleet_ensure) mod receipt_audit;
+
 use crate::fleet_ensure::{
     model::{
         CanisterPlan, DesiredCanisterInit, EffectState, EnsureAction, FleetEnsureCompletion,
         FleetEnsureContinuationAuthority, FleetEnsurePlanScope, FleetReinstallSourceRecord,
-        FleetTerminalSourceRecord, MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
+        MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
     },
     ops::{
         EnsurePaths, EnsureStateError, action_sha256, continuation, is_sha256, plan_content,
-        read_document_bytes, read_state,
+        read_document_bytes,
     },
     policy::expected_plan_sha256,
     view::terminal_source::{TerminalJournalView, TerminalSourceView},
@@ -31,14 +35,13 @@ pub(in crate::fleet_ensure) fn read(
     environment: &str,
     fleet: &str,
 ) -> Result<TerminalSourceView, EnsureStateError> {
-    let plan_bytes = bytes(&paths.plan)?;
-    let journal_bytes = bytes(&paths.journal)?;
-    let state_bytes = bytes(&paths.state)?;
-    let mut raw: Value = serde_json::from_slice(&plan_bytes).map_err(|_| invalid())?;
+    let documents = documents::read(paths, environment, fleet)?;
+    let mut raw = documents.plan;
     plan_content::hydrate(paths, &mut raw)?;
-    let journal: Value = serde_json::from_slice(&journal_bytes).map_err(|_| invalid())?;
+    let journal = documents.journal;
     validate_journal_fields(&journal)?;
-    let state = read_state(paths, fleet)?;
+    let state: crate::fleet_ensure::model::FleetEnsureStateRecord =
+        serde_json::from_value(documents.state).map_err(|_| invalid())?;
     let operation_id: String = field(&raw, "operation_id")?;
     let plan_sha256: String = field(&raw, "plan_sha256")?;
     let identity = [
@@ -68,14 +71,7 @@ pub(in crate::fleet_ensure) fn read(
     }
     let mut source = TerminalSourceView {
         planned_at_time: field(&raw, "planned_at_time")?,
-        documents: FleetTerminalSourceRecord {
-            operation_id,
-            plan_sha256,
-            plan_document_sha256: sha256_hex(&plan_bytes),
-            journal_document_sha256: sha256_hex(&journal_bytes),
-            state_document_sha256: sha256_hex(&state_bytes),
-            phase_document_sha256: BTreeMap::new(),
-        },
+        documents: documents.bindings,
         reviewed_desired: field(&raw, "reviewed_desired")?,
         conservation: field(&raw, "conservation")?,
         actions: initial_actions(&raw)?,
@@ -268,8 +264,8 @@ fn phases(
         if source
             .documents
             .phase_document_sha256
-            .insert(record.plan_sha256.clone(), sha256_hex(&bytes(&path)?))
-            .is_some()
+            .get(&record.plan_sha256)
+            != Some(&sha256_hex(&bytes(&path)?))
         {
             return Err(invalid());
         }

@@ -58,6 +58,96 @@ placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 2
 "#;
 
+/// Qualify the bootstrap boundary using finalized release artifacts from the generator fixture.
+pub(in crate::fleet_ensure::ops) fn qualify_supplied_bootstrap_protocol(
+    root: &Path,
+    desired: &DesiredFleet,
+    principals: &BTreeMap<String, String>,
+) {
+    let bootstrap = desired.bootstrap.as_ref().unwrap();
+    let configuration = &bootstrap.component_deployment_configuration;
+    let authorities = canic_init::compile_root_authorities(root, desired, principals)
+        .unwrap()
+        .into_iter()
+        .map(|(_, authority)| authority)
+        .collect::<Vec<_>>();
+    let authority = authorities[0].binding.authority.clone();
+    let admission =
+        bind_initial_fleet_admission_policy(authority.binding.fleet.clone(), &bootstrap.admission)
+            .unwrap();
+    let genesis = FleetRegistryOps::compile_genesis(
+        &bootstrap.app,
+        authority,
+        &configuration.component_topology,
+        admission,
+    )
+    .unwrap();
+    let state = state();
+    let registry = compile_current_registry_sequence(
+        desired,
+        &state,
+        &configuration.component_topology,
+        &genesis,
+        &authorities,
+    )
+    .unwrap();
+    let identity = [43; 32];
+    let stores = authorities
+        .iter()
+        .map(|authority| {
+            (
+                authority.binding.fleet_subnet_root,
+                compile_current_store_sequence(
+                    root,
+                    &configuration.component_topology,
+                    authority,
+                    identity,
+                )
+                .unwrap(),
+            )
+        })
+        .collect();
+    let infrastructure = compile_current_infrastructure_sequence(
+        configuration,
+        &registry,
+        &authorities,
+        &stores,
+        identity,
+    )
+    .unwrap();
+    assert!(!infrastructure.is_empty());
+    let stages = infrastructure
+        .iter()
+        .map(|step| current_protocol_stage(&step.action))
+        .collect::<Vec<_>>();
+    assert!(stages.windows(2).all(|pair| pair[0] <= pair[1]));
+    assert!(infrastructure.iter().any(|step| matches!(
+        step.action,
+        CurrentFleetProtocolAction::ActivateRegistryMirror { .. }
+    )));
+    assert!(stages.iter().all(|stage| *stage < 6));
+    let complete = compile_current_protocol_sequence(
+        desired,
+        &state,
+        configuration,
+        &registry,
+        &authorities,
+        &stores,
+        identity,
+    )
+    .unwrap();
+    assert_eq!(&complete[..infrastructure.len()], infrastructure);
+    assert!(matches!(
+        complete[infrastructure.len()].action,
+        CurrentFleetProtocolAction::ProvisionComponents { .. }
+    ));
+    let bound = fresh::compile(root, desired, &state, &"2b".repeat(32)).unwrap();
+    assert!(!bound.iter().any(|step| matches!(step,
+        EnsureAction::FleetProtocol { action, .. }
+        if matches!(action.as_ref(), CurrentFleetProtocolAction::ReconcilePoolAsset { .. })
+    )));
+}
+
 #[cfg(unix)]
 struct AuthorityReadsFixture {
     root: PathBuf,
@@ -1630,6 +1720,7 @@ fn current_desired_state_rejects_component_demand_above_pool_target() {
     let mut roots = authorities
         .iter()
         .map(|authority| DesiredFleetBootstrapRoot {
+            capacity_import_bootstrap: None,
             canister_pool_imports: Vec::new(),
             component_admissions: authority.binding.component_admissions.clone(),
             component_topology_digest: authority.binding.component_topology_digest,

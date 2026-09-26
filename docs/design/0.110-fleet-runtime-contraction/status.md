@@ -1,6 +1,226 @@
 # Canic 0.110 Implementation Status
 
-## Closeout qualification complete — 2026-09-25
+## .43 implementation complete — ready for release gate, 2026-09-26
+
+CANIC-166 and FI1 are connected through their operator paths. The new
+`fleet bootstrap` review/apply initializes explicitly supplied infrastructure,
+publishes its estate identity, admits the exact held Root-local imports and
+continues the setup operation into workload convergence. Coordinator creation
+requires explicit selection and reviewed bounds. Original setup records and
+referenced phase evidence are retained; import does not duplicate seeded IDs.
+
+The production PocketIC journey passes empty Root/old code, lost installation
+and registration replies, interrupted seed publication, exact import, retained
+IDs, provisioning, Root activation and local bootstrap/import replay after
+convergence (84.88s case, 121s runner). All 66 focused host regressions pass,
+including bootstrap/ordinary generation equality. All 67 focused CLI tests, both
+recursive help checks and scoped warning-denied host/CLI/internal Clippy pass;
+details are in [the handoff](../../status/current.md). The complete accepted batch
+is ready for the maintainer's commit and release-validation flow. No full gate
+was run in this continuation.
+The implementation and Gabriel's commands are documented in the open `.43`
+changelog and Fleet operator guide. Package versions remain `.42`.
+
+The checkpoints below retain earlier evidence and progress. Their remaining-work
+statements are superseded by this current section. B5 final-source qualification
+and the human-owned 0.110 closeout audit remain separate; `.111` has not started.
+
+## Earlier completed-estate qualification checkpoints
+
+
+CANIC-166's completed `.38` Toko source remains the first `.43` priority, followed
+by the remaining FI1 bootstrap/import work below. Source receipts, membership,
+certified custody, Coordinator rows and default Ledger-account observations are
+implemented, together with interruption-safe local document publication.
+Original Root account identities and the maintained authority-seal command/status
+contracts now receive exact checks; incomplete or foreign seal receipts cannot
+reconcile a lost response. Focused evidence and logs are in
+[the current handoff](../../status/current.md).
+
+Journaled Coordinator/Root preparation is now connected to the explicit
+`fleet ensure --reinstall` review and exact-digest apply before old desired-file
+decoding. It archives source evidence, bounds submissions/management reads,
+retains separate native/reserved balances and resumes under the shared Fleet
+lock. Seven focused preparation and six source preflight tests pass, including
+read-only Toko evidence. The production Coordinator/Root lost-response seal proof
+and scoped Clippy pass. This is authority preparation only, with no wipes
+or payments and no claim that applications have stopped.
+
+Preparation now inspects native/reserved balances across the full source estate
+with durable per-asset attempts and Root inspection headroom. It retains the
+original native baseline and source burn ceiling. Current generation consumes
+these samples after rechecking custody/membership/Ledger/seals and requiring exact
+seed coverage. It compiles current authority from current configuration and
+artifacts without old desired decoding or current-runtime usage queries.
+
+Fresh completed-reset review and approval now publish current typed authority
+through the existing local transaction and invoke the normal Ensure driver. It
+retains source history witnesses for lost install responses, then uses current
+Root authority for pool clearing and terminal controller checks. Final accounting
+covers native/reserved balances and default Ledger accounts, with two durable
+sweep attempts and a receipt for local, effect-free replay. Source preparation
+no longer intercepts ordinary generation/Ensure after publication.
+
+Pool reset now stops applications before replacing controllers and clearing code,
+so outstanding callbacks settle before their state is discarded. The connected
+host/CLI route compiles; 17 focused native regressions, scoped all-feature Clippy
+and the single PocketIC retained-ID wipe/retry proof pass.
+
+Live application parentage admission is now connected to the shared source
+survey. Original application manifests and protocol profiles bind bounded child
+queries; exact IDs, roles, parent links and common Root allocations must agree.
+Leaf capability bindings require no child query and cannot own recorded children.
+All installed interfaces and the application manifest join the source archive.
+All 33 focused inventory regressions pass, including read-only Toko `.38` evidence.
+The connected production-adapter PocketIC journey now passes preparation, current
+generation, reset publication, publication interruption recovery, lost install
+response recovery, convergence, terminal cycle accounting and effect-free replay
+without an ICP executable. It checks all 27 retained IDs and unchanged source
+archives. The fixture runs current production Wasms with historical `.38` record
+declarations; it is not a deployment of Toko's historical runtime. Its applications
+are leaf roles; the earlier native parentage regressions cover hub/child admission.
+The case passes in 327.51s (337s runner including compilation), with the log at
+`.tmp/completed-journey-pocketic.log`. Remaining FI1 delivery still requires
+completion. Toko's frontend is an external ICP asset canister outside
+the 27-ID Fleet closure;
+frontend preservation needs its existing ICP selection, not Fleet allocation pins.
+`.43` is not ready to push. Toko records remain read-only; no live effects or
+version changes were made.
+
+The production supplied-infrastructure initialization journey also passes: empty
+Root, old Coordinator/Store code, explicit uninstall/install wipes, retained IDs,
+Coordinator-first authority, lost install response recovery, untouched pools and
+local terminal replay. Its receipt covers original native/reserved balances and
+final custody. The same journey now includes durable original survey capture and the bounded
+Store/Registry successor, including a lost registration-command reply. The exact
+active Registry is retained while pool capacity remains fenced. Pool enrollment,
+estate publication and the operator bootstrap command remain in the same batch.
+
+## Coordinator setup prerequisite — accepted 2026-09-25
+
+The operator establishes the Coordinator and Fleet authority first, then
+initializes/registers each Root and Store. Ordinary additions target an active
+Root. Explicit bootstrap imports its exact held capacity after Registry
+activation, before workload provisioning and Root runtime activation. FI1
+only imports eligible capacity on the destination Root's subnet; the
+Coordinator may be elsewhere and owns no general pool import. Missing or
+mismatched infrastructure must fail before handoff or wipe with a setup
+diagnostic. Infrastructure IDs and assigned workloads are not pool candidates.
+
+The maintainer includes [explicit infrastructure bootstrap](0.110-design.md#fi1-infrastructure-bootstrap--included-in-011043)
+in the same `.43` batch as capacity import. Supplied infrastructure IDs require
+reviewed authority, placement, wipes and bounded cycle accounting; Coordinator
+creation must be explicit when needed. Empty-Root/old-Store bootstrap, durable
+estate publication and subsequent generate/ensure recognition are part of batch
+completion. The operator establishes Coordinator authority before dependent
+Root/Store effects. This scope amendment authorizes in-repository implementation;
+versions remain `.42`, with no live deployment or broad validation implied.
+
+## Fleet capacity import in progress for .43 — 2026-09-25
+
+The maintainer selected [FI1: reviewed Fleet capacity import](0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043)
+for `0.110.43`, after the `.42` release flow and before blob extraction. This
+supersedes `.42` as the final planned feature target. The recurring journey
+starts with operator-controlled existing canisters, automates the Root
+controller handoff and destructive pool import, and retains their exact IDs
+with cycle accounting. The planned `canic fleet import` review/apply surface,
+authority/retirement gates, interruption recovery, inventory propagation and
+PocketIC acceptance are frozen in FI1. Host review, admission and durable
+handoff records are implemented, together with Root reservation/reset receipts,
+exclusive allocation ownership and operation-bound management-history proof.
+Source and Root accounting retains both native and reserved balances; signed
+host handoffs retain exact ingress identity. Root command/status wiring enforces
+controller and exact operator authentication. The authenticated host transport
+validates exact Root progress and conservation receipts; an execution guard
+excludes overlapping paid transitions and settlement without clearing stable
+intent on cancellation. Before reserving or handing off, the host also verifies
+exact Coordinator authority and unique Active Root registration; submission
+requires Root's current reservation for this sequence/digest. The latest 41 host
+import tests, scoped host/testing Clippy and real HTTP PocketIC proof pass,
+extending the earlier 139-test owner checkpoint and generated-Root proof.
+Paired estate/policy replacement projection is also implemented with exact byte
+bindings, preservation of unrelated values and generator identity/capacity checks;
+the host workflow now connects exact signed handoffs, Root transitions, settlement,
+paired publication and release. It retains finite management-observation and update
+submission budgets, archives completed operations unchanged, and replays old
+completion locally after a later import starts. Pre-build contract inspection
+blocks unfinished approved imports. Rejected and pruned ingress have distinct
+blocked diagnostics; neither authorizes a replacement request.
+
+The production IC observation owner now verifies exact infrastructure custody,
+complete bounded Fleet pool membership, current source management state and
+unchanged operator disposition declarations. It keeps IC-verified facts separate
+from operator assertions about outside obligations. Infrastructure is rechecked
+before Root effects, and competing provisioning/draining rejects at context
+inspection. The real HTTP journey now uses the production reader for its second
+import and passes through wipe, paired publication, release and archived replay
+without an ICP executable (32.44s test, 80s runner). Root reservations remain
+separate from physical pool rows until control is proved; unrelated pending
+physical assets reject.
+
+The production review builder and `fleet import` CLI now connect current module
+provenance, explicit declarations/debit bounds and durable initial surveys.
+Successful samples and finite attempts survive restart; repeated review preserves
+its approval digest. Apply consumes retained authority only and returns completed
+receipts before ICP resolution. Text/JSON and exact operator examples are present.
+
+The connected completed-source reset journey now continues into this public
+review/apply workflow: review twice, import one supplied ID, verify final custody
+and replay with no ICP executable and unchanged journal bytes. The targeted case
+passes (412.61s; import portion 6.51s), as do 60 host import tests, 65 Fleet CLI
+tests and final scoped host/CLI/internal fixture Clippy. Logs are named in the
+current handoff. The finalized manifest digest cross-check added after that run
+was compile/lint checked without rerunning the whole journey.
+
+Certified handoff-rejection recovery is implemented with append-only evidence,
+unchanged original source authority, preserved cycle baselines and the existing
+finite submission/observation limits. All 63 native import tests and scoped
+host/internal Clippy pass. The real HTTP journey passes in 31.12s with Coordinator
+and Root on distinct subnets; actual pre-admission refusal remains unresolved
+and cannot authorize renewal. Positive certified-rejection renewal is native
+wire/journal qualification, not an injected IC transient failure.
+
+The runtime bootstrap fence is implemented and qualified. Typed initialization
+holds the exact review/operator/source IDs, permits the selected Store's setup
+and blocks ordinary allocation, creation, provisioning and retirement. Active
+Coordinator registration admits the exact import while Root runtime is Prepared;
+the endpoint and workflow enforce this order. Settlement keeps the hold until
+publication release. The PocketIC journey then provisions both supplied IDs,
+activates Root and replays the import without changing workload versions
+(16.37s test, 26s targeted runner). All 91 focused native checks and scoped
+host/control-plane/internal Clippy pass; logs are in the current handoff.
+
+Reviewed desired Root authority now retains the exact bootstrap hold through the
+normal Ensure initialization compiler and argument writer. Strict source/placement
+validation rejects substituted IDs; held sources are omitted from direct initial
+imports and ordinary fresh-pool reconciliation. Store/Registry setup is a shared
+compiler phase ending before workload provisioning and pool maintenance. Native
+qualification covers retained bytes, the production writer and this phase boundary:
+94 focused host tests pass (one existing ignored), as does scoped host/internal
+Clippy. Logs: `.tmp/bootstrap-reviewed-init-tests.log` and
+`.tmp/bootstrap-reviewed-init-clippy.log`.
+
+Explicit operator bootstrap review/apply, durable estate publication and remaining
+affected-artifact/adversarial qualification remain open. Its initialization and
+paid effects must reuse the existing typed compiler and Ensure owners. The
+operator import command requires completed current infrastructure; it does not
+bootstrap an empty Root. The connected CANIC-166 reset path remains qualified.
+
+This is one complete host/CLI, control-plane and testing batch. Pool import
+creates no canisters; bootstrap creates a Coordinator only when explicitly
+reviewed. Neither path silently replaces a supplied ID or imports old state or
+authority. B1/B2 remain accepted, B3 stopped and B4 deferred. The explicit
+cadence reassessment accepts this one additional release on the over-guideline
+0.110 line for the recurring operator need.
+
+The maintainer has published `.42`; package metadata remains `.42` during
+`.43` development. Continue the complete FI1 implementation and qualification,
+then obtain the human-requested final 0.110 audit and acceptance. Existing `.42`
+measurements retain their source boundary. Current focused evidence and
+remaining work are recorded in [the handoff](../../status/current.md).
+No broad gate, versioning, Git publication or live import ran in this work.
+
+## .42 closeout qualification checkpoint — 2026-09-25
 
 The maintainer-requested [closeout audit](../../audits/release-lines/0.110-closeout-audit.md#final-b5-qualification--2026-09-25)
 now concludes **pass with limitations; ready for human acceptance**. The
@@ -28,11 +248,12 @@ acceptance of this exact 0.110 verdict remains pending; 0.111 implementation
 must wait.** This section supersedes the earlier negative audit checkpoint.
 
 
-## Final feature target .42 — accepted 2026-09-25
+## Release scope and batch tracker — amended 2026-09-25
 
 The maintainer accepts the [scope amendment](0.110-design.md#final-feature-boundary--accepted-2026-09-25):
-finish `.42` as the last planned feature release, stop B3, defer remaining B4
-and prioritize [blob extraction in 0.111](../0.111-standalone-blob-service-extraction/status.md).
+finish `.42`, deliver FI1 as the last planned feature batch in `.43`, stop B3,
+defer remaining B4 and then prioritize
+[blob extraction in 0.111](../0.111-standalone-blob-service-extraction/status.md).
 B1 acceptance and complete B2 evidence remain intact. Stopped/deferred work
 is not complete and carries no new claim of absent code or measured savings.
 
@@ -42,7 +263,8 @@ is not complete and carries no new claim of absent code or measured savings.
 | B2 | Complete with the specifically accepted cold-query tradeoff |
 | B3 | Stopped; no further record/codec restructuring selected |
 | B4 | Remaining pruning deferred and unscheduled; B5 records residuals and owners |
-| B5 | Qualified on final source; exact closeout verdict awaits human acceptance |
+| FI1 | Implementation and direct qualification complete for .43; explicit bootstrap, capacity import, controller handoff and ordinary convergence are ready for the maintainer release gate |
+| B5 | .42 checkpoint qualified; final scope requires FI1 evidence and human closeout acceptance |
 
 The complete local `.42` implementation and changelog surfaces are ready for
 the maintainer's release flow. Final-source B5 now qualifies the recovery-controller
@@ -51,9 +273,9 @@ remains separately open; any discovered Canic-owned defect must be assessed on
 its merits. Necessary correctness, security or recovery follow-ups may still
 require a patch on this line.
 
-The requested exact 0.110 closeout audit is complete. Await human acceptance of
-its pass-with-limitations verdict before 0.111 implementation. No release or
-publication follows automatically. Dated checkpoints below retain historical
+The requested `.42` closeout checkpoint is complete. The final 0.110 audit must
+cover FI1 and receive human acceptance before 0.111 implementation. No release
+or publication follows automatically. Dated checkpoints below retain historical
 evidence; the current handoff supersedes their pending B5 and B3/B4 queues.
 
 ## B1 accepted; B2 complete — 2026-09-23

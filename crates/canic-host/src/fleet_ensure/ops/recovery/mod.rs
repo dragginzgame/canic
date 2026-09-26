@@ -40,6 +40,7 @@ fn action_review(action: &EnsureAction) -> FleetReviewAction {
         EnsureAction::SetControllers { principal, .. } => ("set_controllers", Some(principal)),
         EnsureAction::Start { principal, .. } => ("start", Some(principal)),
         EnsureAction::Stop { principal, .. } => ("stop", Some(principal)),
+        EnsureAction::Uninstall { principal, .. } => ("uninstall", Some(principal)),
         EnsureAction::Transfer { principal, .. } => ("transfer", Some(principal)),
         EnsureAction::FleetProtocol {
             action, principal, ..

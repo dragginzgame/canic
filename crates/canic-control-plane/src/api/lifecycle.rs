@@ -233,7 +233,12 @@ impl LifecycleApi {
         config_source: &str,
         config_path: &str,
     ) {
+        let bootstrap_initialization = args
+            .capacity_import_bootstrap
+            .as_ref()
+            .map(|_| args.clone());
         let canister_pool_config = args.authority.binding.limits.canister_pool.clone();
+        let awaiting_capacity = args.capacity_import_bootstrap.is_some();
         let canister_pool_imports = args.canister_pool_imports.clone();
         let wasm_store = args.authority.wasm_store_authority.wasm_store;
         crate::runtime::install::register_template_module_source_resolver();
@@ -246,6 +251,12 @@ impl LifecycleApi {
             config_source,
             config_path,
         );
+        if let Some(args) = bootstrap_initialization {
+            crate::ops::canister_pool::capacity_import::bootstrap::initialize(&args)
+                .unwrap_or_else(|error| {
+                    ic_cdk::trap(format!("Capacity bootstrap initialization failed: {error}"))
+                });
+        }
         crate::workflow::root_funding::initialize().unwrap_or_else(|error| {
             ic_cdk::trap(format!("Root funding initialization failed: {error}"))
         });
@@ -253,6 +264,9 @@ impl LifecycleApi {
         let now_ns = canic_core::control_plane_support::ops::ic::IcOps::now_nanos();
         crate::ops::canister_pool::CanisterPoolOps::initialize_store(wasm_store, now_ns)
             .and_then(|()| {
+                if awaiting_capacity {
+                    return Ok(());
+                }
                 crate::ops::canister_pool::CanisterPoolOps::initialize_imports(
                     &canister_pool_config,
                     &canister_pool_imports,

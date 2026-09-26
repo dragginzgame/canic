@@ -4,7 +4,11 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod bootstrap;
+mod completed_preparation;
+mod completed_reset;
 mod funding_observation;
+mod import;
 mod operator_mint;
 mod progress;
 mod readiness;
@@ -59,15 +63,23 @@ Examples:
   canic fleet ensure staging --desired fleets/staging.toml
   canic fleet generate staging --app-config apps/demo/canic.toml --release-build <sha256>
 
-Planning is read-only. Review `plan_sha256`, then repeat the command with
-`--apply <plan_sha256>`. A funding pause adds a separate funding review digest
-for the exact additional transfer.";
+Ensure planning is read-only; import review retains bounded status observations.
+Review the printed digest, then repeat with `--apply <digest>`. Funding pauses
+require a separate funding review for the exact additional transfer.";
 const DEFAULT_CYCLES_LEDGER: &str = "um5iw-rqaaa-aaaaq-qaaba-cai";
 
 /// CLI failure for current Fleet convergence.
 
 #[derive(Debug, ThisError)]
 pub enum FleetCommandError {
+    #[error(transparent)]
+    InfrastructureBootstrap(Box<canic_host::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError>),
+    #[error(transparent)]
+    CapacityImport(Box<canic_host::fleet_ensure::ops::capacity_import::journal::CapacityImportJournalError>),
+    #[error(transparent)]
+    CompletedReset(Box<canic_host::fleet_ensure::workflow::completed_reset::CompletedResetError>),
+    #[error(transparent)]
+    CompletedPreparation(Box<canic_host::fleet_ensure::workflow::completed_preparation::CompletedPreparationError>),
     #[error(transparent)]
     FundingObservationStatus(Box<EnsureWorkflowError<io::Error>>),
     #[error(transparent)]
@@ -283,8 +295,10 @@ fn fleet_command() -> Command {
         .about("Converge one Fleet from current desired state")
         .disable_help_flag(true)
         .subcommand_required(true)
+        .subcommand(bootstrap::command())
         .subcommand(ensure_command())
         .subcommand(generate_command())
+        .subcommand(import::command())
         .subcommand(readiness::command())
         .after_help(FLEET_HELP_AFTER)
 }
@@ -442,6 +456,9 @@ where
     if print_help_or_version(&args, usage, version_text()) {
         return Ok(());
     }
+    if args.first().and_then(|arg| arg.to_str()) == Some("bootstrap") {
+        return bootstrap::run(args[1..].to_vec());
+    }
     if args.first().and_then(|arg| arg.to_str()) == Some("ensure")
         && print_help_or_version(&args[1..], ensure_usage, version_text())
     {
@@ -454,6 +471,9 @@ where
     }
     if args.first().and_then(|arg| arg.to_str()) == Some("generate") {
         return run_generate(GenerateOptions::parse(args)?);
+    }
+    if args.first().and_then(|arg| arg.to_str()) == Some("import") {
+        return import::run(args[1..].to_vec());
     }
     if args.first().and_then(|arg| arg.to_str()) == Some("readiness") {
         return readiness::run(args[1..].to_vec());
@@ -472,6 +492,12 @@ fn json_error(source: FleetCommandError) -> FleetCommandError {
 
 fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
     let root = resolve_current_canic_icp_root()?;
+    if completed_reset::run_if_selected(&root, &options)? {
+        return Ok(());
+    }
+    if completed_preparation::run_if_selected(&root, &options)? {
+        return Ok(());
+    }
     let desired_path = if options.desired.is_absolute() {
         options.desired.clone()
     } else {
@@ -718,6 +744,12 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
     let (generated, output) = result?;
     println!("fleet: {}", options.fleet);
     println!("release_build: {}", generated.release_build_id);
+    if let Some(preparation) = &generated.completed_preparation_sha256 {
+        println!("completed_preparation: {preparation}");
+        println!(
+            "balances: retained preparation samples; target runtime usage is not yet available"
+        );
+    }
     println!("observed_canisters: {}", generated.observed_canisters);
     println!(
         "observed_controlled_cycles: {}",
@@ -1182,6 +1214,7 @@ const fn action_label(action: &EnsureAction) -> &'static str {
         EnsureAction::SetControllers { .. } => "set_controllers",
         EnsureAction::Start { .. } => "start",
         EnsureAction::Stop { .. } => "stop",
+        EnsureAction::Uninstall { .. } => "uninstall",
         EnsureAction::Transfer { .. } => "transfer",
     }
 }

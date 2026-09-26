@@ -91,6 +91,7 @@ impl ComponentRegistryOps {
         provisioning_origin: ComponentProvisioningOrigin,
         root_runtime_active: bool,
     ) -> Result<RootComponentAllocationView, InternalError> {
+        crate::ops::canister_pool::capacity_import::CanisterPoolImportOps::require_idle()?;
         let current =
             RootComponentRegistryStore::current().ok_or_else(InternalError::unavailable)?;
         let record = RootComponentAllocationRecord {

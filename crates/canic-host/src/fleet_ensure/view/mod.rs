@@ -4,7 +4,10 @@
 //! Does not own: persisted authority, funding admission or cycle effects.
 //! Boundary: projections describe assumptions and never authorize spending.
 
+pub mod capacity_import;
+pub mod completed_reset;
 pub mod continuation;
+pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod readiness;
 pub mod startup_funding;

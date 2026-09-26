@@ -77,6 +77,13 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(DEPLOYMENT_QUOTA_V1),
         Some(DEPLOYMENT_RESERVE_V1),
     ),
+    replay_protected(
+        "ImportPoolCapacity",
+        "canister_pool.capacity_import.v1",
+        CostClass::ManagementDeployment,
+        Some(DEPLOYMENT_QUOTA_V1),
+        Some(DEPLOYMENT_RESERVE_V1),
+    ),
     query_or_read_only("InspectCanister"),
     query_or_read_only("InspectCanisterHistory"),
     snapshot_convergent(

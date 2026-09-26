@@ -157,6 +157,17 @@ policy and ops independently; ops may call model. Policy never calls ops.
 - `export()` and `import()` are reserved for canonical `*Data` snapshots.
 - Cross-layer data should use named structs/enums, not boundary type aliases.
 
+## Configuration Formats
+- Use TOML for Canic-owned human-authored configuration, including new surfaces.
+- Keep YAML configuration handling at the host-side ICP integration boundary;
+  `icp.yaml` belongs to ICP. Do not add a parallel YAML form of Canic config.
+- TOML and YAML parsers must stay out of canister Wasm dependencies. Host build
+  scripts may parse configuration and generate typed runtime data; Root may
+  retain compact TOML text for reporting without a runtime parser.
+- This configuration rule does not replace JSON, CBOR or Candid protocol and
+  persistence contracts. See the [ICP integration guide](docs/features/operations/icp-integration.md#configuration-format-boundary)
+  for the current implementation boundary.
+
 ## Lifecycle
 - `canic::start!` must stay thin.
 - Lifecycle adapters restore synchronously and schedule async work; no `await`.

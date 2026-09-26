@@ -92,6 +92,9 @@ pub const FLEET_SUBNET_ROOT_ICP_REFILL_FLOOR_CYCLES: u128 = 42_200_000_000;
 /// Maximum registered roots represented by the bounded Coordinator funding ledger.
 pub const MAX_FLEET_ROOT_FUNDING_SLOTS: usize = 4_096;
 
+/// Maximum physical sources in one reviewed Root capacity import.
+pub const MAX_FLEET_CAPACITY_IMPORT_SOURCES: usize = 256;
+
 ///
 /// FleetCoordinatorRootFundingPolicy
 ///

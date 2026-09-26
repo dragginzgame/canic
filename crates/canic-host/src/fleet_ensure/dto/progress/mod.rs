@@ -105,4 +105,5 @@ pub enum FleetEnsureActionKind {
     Stop,
     SynchronizeRegistry,
     Transfer,
+    Uninstall,
 }

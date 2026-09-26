@@ -271,6 +271,7 @@ const fn action_label(kind: FleetEnsureActionKind) -> &'static str {
         FleetEnsureActionKind::Stop => "Stop canister",
         FleetEnsureActionKind::SynchronizeRegistry => "Synchronize registry",
         FleetEnsureActionKind::Transfer => "Transfer cycles",
+        FleetEnsureActionKind::Uninstall => "Clear code and state",
     }
 }
 

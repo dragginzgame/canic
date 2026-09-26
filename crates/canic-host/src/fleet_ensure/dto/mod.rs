@@ -4,6 +4,8 @@
 //! Does not own: policy, persistence, observations, or effects.
 //! Boundary: returns passive model input plus the canonical source digest.
 
+pub mod capacity_import;
+pub mod infrastructure_bootstrap;
 mod observation;
 mod progress;
 

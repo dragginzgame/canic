@@ -104,6 +104,7 @@ fn fixture(
         target_artifacts_sha256: Some("41".repeat(32)),
         source: Some(Box::new(source)),
         activation_reset: None,
+        completed_reset: None,
         operation_id: plan.operation_id.clone(),
         source_operation_id: "51".repeat(32),
         authorities: bindings,
