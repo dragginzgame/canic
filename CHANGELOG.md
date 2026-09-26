@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.43` adds reviewed completed-estate hard cuts and `fleet bootstrap` /
   `fleet import` for explicitly supplied infrastructure and capacity. Preserve
-  original evidence and physical IDs while clearing disposable state, establishing
+  original evidence through frozen receipt shapes and retain physical IDs while
+  clearing disposable state, establishing
   current authority and provisioning workloads. Require explicit Coordinator
   setup, Root-local ownership checks, bounded cycle accounting and durable estate
   publication. Recover interrupted effects and publication without duplicate

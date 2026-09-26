@@ -22,6 +22,21 @@ open-draft statements describe that earlier development state.
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Release-gate follow-up: the maintainer's ordinary test run exposed eight host
+failures after bootstrap authority changed. The completed `.38` evidence reader
+now owns a frozen Root declaration instead of sharing the current executable
+Root schema. Historical host and PocketIC fixtures omit current-only bootstrap
+fields, checking neutrality before projection; real Toko records remain unchanged.
+All 39 targeted terminal tests pass, including the eight reported failures.
+Both explicit read-only checks of Toko's receipts and full inventory pass.
+The connected completed-estate reset PocketIC case passes at 450.61s (618s runner),
+including interrupted publication, lost install response, exact archived evidence,
+retained IDs, cycle conservation and effect-free replay. Logs:
+`.tmp/terminal-evidence-regression.log`, `.tmp/terminal-toko-readonly.log`,
+`.tmp/terminal-reset-pocketic-regression.log`. Changed Rust files are formatted;
+no full gate was rerun. The correction is uncommitted, versions remain `.42`, and
+this batch is ready for the maintainer's commit and `.43` release-validation retry.
+
 Package versions remain `0.110.42`; the open release draft is `0.110.43`.
 CANIC-166 completed-estate reset and FI1 supplied-infrastructure bootstrap/import
 are implemented in the same batch. No Toko mutation, live IC effect, broad gate,

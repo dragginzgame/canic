@@ -108,6 +108,12 @@ impl Ordered {
                     if key == "recovery_controllers" {
                         assert!(matches!(value, Self::Array(values) if values.is_empty()));
                         false
+                    } else if matches!(
+                        key.as_str(),
+                        "infrastructure_bootstrap" | "capacity_import_bootstrap"
+                    ) {
+                        assert!(matches!(value, Self::Scalar(serde_json::Value::Null)));
+                        false
                     } else {
                         true
                     }

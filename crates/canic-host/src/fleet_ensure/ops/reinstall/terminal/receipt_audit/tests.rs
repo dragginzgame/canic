@@ -20,6 +20,12 @@ fn historical_fixture() -> (PathBuf, EnsurePaths) {
     let (fixture, paths, _) = crate::fleet_ensure::tests::terminal_retirement_fixture();
     let mut plan = read_json(&paths.plan);
     remove_recovery_declarations(&mut plan);
+    assert_eq!(
+        plan.as_object_mut()
+            .unwrap()
+            .remove("infrastructure_bootstrap"),
+        Some(Value::Null)
+    );
     plan["recovery_review"] = Value::Null;
     plan["reviewed_desired"]["desired"]["bootstrap"] = serde_json::json!({
         "admission_identity_origin": null,
@@ -50,6 +56,13 @@ fn historical_fixture() -> (PathBuf, EnsurePaths) {
                 .join(format!("{old}.json")),
         );
         remove_recovery_declarations(&mut phase);
+        assert_eq!(
+            phase
+                .as_object_mut()
+                .unwrap()
+                .remove("infrastructure_bootstrap"),
+            Some(Value::Null)
+        );
         phase["reviewed_desired"] = json::to_value(&plan.reviewed_desired).unwrap();
         let mut phase: CompletedPhaseEvidence = decode(phase).unwrap();
         phase.plan_sha256 = phase_hash(&phase).unwrap();

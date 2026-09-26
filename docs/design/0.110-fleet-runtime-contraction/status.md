@@ -2,6 +2,15 @@
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Release-gate follow-up: corrected the eight host failures by freezing the `.38`
+Root receipt/inventory declaration and excluding neutral current-only bootstrap
+fields from disposable historical fixtures. All 39 targeted terminal tests and
+both read-only Toko receipt/inventory checks pass. The connected reset PocketIC
+case passes (450.61s case, 618s runner), including interruption recovery and
+zero-effect replay. Details and logs are in [the handoff](../../status/current.md).
+The correction is ready for commit and a maintainer-run release-validation retry;
+no broad gate or version transaction was run by the agent.
+
 CANIC-166 and FI1 are connected through their operator paths. The new
 `fleet bootstrap` review/apply initializes explicitly supplied infrastructure,
 publishes its estate identity, admits the exact held Root-local imports and
