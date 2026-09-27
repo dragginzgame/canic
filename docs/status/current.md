@@ -22,6 +22,25 @@ open-draft statements describe that earlier development state.
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Latest mixed-topology correction, 2026-09-27: generated desired TOML now reloads
+with an absent capacity-import hold (TOML omits `None`). Required recovery-controller
+authority and complete nonempty hold records remain strict. Historical-contract
+preflight now defers current authority to the workflow, allowing a newly reviewed
+reinstall plan alongside the completed source journal until apply. The ordinary
+workflow still rejects a second unapplied review with `ReinstallConflict`.
+Seven focused native regressions pass (one external-evidence test ignored), in
+1.55s. The exact previously failing mixed-topology PocketIC case passes in 578.97s
+(650s targeted runner),
+including two deliberate wipes, lost-response/interruption recovery, application
+state clearing, retained IDs, cycle conservation and effect-free terminal replay.
+Logs: `.tmp/desired-preflight-regression.log` and
+`.tmp/mixed-topology-toml-regression.log`. Scoped warning-denied host/internal
+library/test Clippy passes (`.tmp/mixed-topology-correction-clippy.log`), as do
+changed-file formatting and diff checks. The accepted `.43` implementation batch
+and changelog are ready for the maintainer's commit and release-gate retry; no
+full suite was rerun. The changes remain uncommitted and package versions remain
+`.42` for the planned `.43` transaction.
+
 Latest compiler-cache correction, 2026-09-27: the dependency-risk fixture's
 Cargo metadata probe failed on sccache's initial server connection (`EPERM`).
 The wrapper now falls back to the exact compiler command only for sccache-owned

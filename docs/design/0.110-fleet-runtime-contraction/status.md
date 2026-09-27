@@ -2,6 +2,16 @@
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Mixed-topology follow-up, 2026-09-27: fix generated TOML loading without an import
+hold and historical preflight rejecting a current reinstall review before journal
+replacement. Keep required controller authority and current workflow admission
+strict. Seven focused native regressions pass (one external-evidence test ignored);
+the exact PocketIC journey passes in 578.97s through two wipes, interruption
+recovery, state clearing, cycle conservation and terminal replay. Scoped
+warning-denied host/internal library/test Clippy and formatting pass. The batch
+is ready for the maintainer's commit and release-gate retry. The correction
+remains in `.43`; package versions remain `.42`. See the current handoff for logs.
+
 Compiler-cache follow-up, 2026-09-27: optional sccache infrastructure failures
 now fall back to the compiler; genuine compiler failures are preserved. Shell
 regressions, ShellCheck and a real offline Cargo lockfile/compile/error probe

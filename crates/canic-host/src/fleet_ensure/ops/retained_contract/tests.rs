@@ -79,6 +79,29 @@ fn current_controller_declaration_does_not_authorize_or_block_source_execution()
 }
 
 #[test]
+fn current_review_may_replace_the_plan_before_apply_replaces_the_completed_journal() {
+    let root = temp_dir("current-review-completed-source-journal");
+    let paths = completed(&root);
+    let journal_before = fs::read(&paths.journal).unwrap();
+    let mut plan: Value = serde_json::from_slice(&fs::read(&paths.plan).unwrap()).unwrap();
+    plan["reviewed_desired"]["desired"]["bootstrap"]["recovery_controllers"] =
+        serde_json::json!([]);
+    plan["operation_id"] = "ef".repeat(32).into();
+    plan["plan_sha256"] = "12".repeat(32).into();
+    plan["scope"] = "reinstall_preparation".into();
+    fs::write(&paths.plan, serde_json::to_vec(&plan).unwrap()).unwrap();
+    let plan_before = fs::read(&paths.plan).unwrap();
+
+    // This diagnostic check defers current-plan admission to the workflow; it
+    // must neither combine two operations nor rewrite the completed receipts.
+    check(&root, "staging", "fleet").unwrap();
+    assert_eq!(fs::read(&paths.plan).unwrap(), plan_before);
+    assert_eq!(fs::read(&paths.journal).unwrap(), journal_before);
+    assert!(!paths.lock.exists());
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn incomplete_work_remains_with_its_existing_recovery_owner() {
     let root = temp_dir("completed-contract-incomplete");
     let paths = completed(&root);

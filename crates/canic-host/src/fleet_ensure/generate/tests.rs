@@ -1018,6 +1018,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         );
     }
     let desired = generated.desired;
+    crate::fleet_ensure::dto::tests::qualify_generated_toml(&root, &desired);
     crate::fleet_ensure::ops::qualify_release_input_reuse(&root, &desired);
     crate::fleet_ensure::policy::startup_funding::live_binding::qualify_selected(&desired);
     assert_eq!(
