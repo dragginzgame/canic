@@ -1,9 +1,8 @@
-//! Qualify a completed estate through historical evidence, current reset and recovery.
+//! Qualify a completed estate through current receipts, current reset and recovery.
 //!
 //! All remote effects use production adapters against disposable PocketIC canisters.
 
 mod capacity_import;
-mod evidence;
 
 use super::*;
 use canic_core::cdk::utils::hash::sha256_hex;
@@ -15,7 +14,7 @@ use std::collections::BTreeMap;
 
 #[test]
 pub(super) fn completed_estate_reset_recovers_and_replays() {
-    assert_literal_zero_host_journey(FundingJourney::CompletedReset, 19);
+    assert_literal_zero_host_journey(FundingJourney::CompletedReset, RETAINED_ESTATE_WORKLOADS);
 }
 
 fn paths(input: &ReinstallJourney<'_>) -> EnsurePaths {
@@ -23,8 +22,7 @@ fn paths(input: &ReinstallJourney<'_>) -> EnsurePaths {
 }
 
 pub(super) fn retained_desired(mut desired: DesiredFleet) -> DesiredFleet {
-    // The source operation begins with supplied Ready capacity, as the historical
-    // completed estate did. Declare it before review and execution, not in receipts.
+    // Declare supplied Ready capacity before reviewing and executing the source.
     for root in &mut desired.bootstrap.as_mut().unwrap().roots {
         root.canister_pool_imports = desired
             .canisters
@@ -94,20 +92,16 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         .unwrap()
         .principals;
     let replacement = selected_reinstall_artifacts(&input);
-    evidence::retain_historical_shape(&input);
     retained_contract::inspect_completed_receipts(root, "local", &input.desired.fleet)
         .expect("audit original paid receipts separately from physical inventory");
     let source = retained_contract::inspect_completed_source(root, "local", &input.desired.fleet)
-        .expect("audit historical completed records before any source effect");
+        .expect("audit completed records before any source effect");
     let source_documents = [&old_paths.plan, &old_paths.journal, &old_paths.state]
         .into_iter()
         .map(|path| (path.clone(), std::fs::read(path).unwrap()))
         .collect::<BTreeMap<_, _>>();
     assert_eq!(source.inventory.canisters.len(), originals.len());
-    assert!(matches!(
-        retained_contract::check(root, "local", &input.desired.fleet),
-        Err(retained_contract::RetainedContractError::CompletedAuthorityContract { .. })
-    ));
+    retained_contract::check(root, "local", &input.desired.fleet).unwrap();
     let executable = local_icp(&input);
     let icp = canic_host::icp::IcpCli::new(executable.to_str().unwrap(), Some("local".into()))
         .with_cwd(root)
@@ -143,7 +137,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     let desired = generate(&input, &executable, replacement.release_build_id);
     let digest = desired_sha256(&desired);
     let review = completed_reset::plan(root, &desired, &digest, 1_800_000_000_000_000_050, &icp)
-        .expect("review current typed authority over the prepared historical closure");
+        .expect("review current typed authority over the prepared completed estate");
     assert!(!review.committed);
     let plan = completed_reset::approve(
         root,

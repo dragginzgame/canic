@@ -19,10 +19,6 @@ use crate::fleet_ensure::{
 };
 
 /// Plan a new deliberate wipe selecting a build for the currently converged Fleet.
-#[expect(
-    clippy::too_many_lines,
-    reason = "one entry point selects partial, terminal or current-source review before preparation"
-)]
 pub fn plan_reinstall<P: EnsurePlatform>(
     root: &Path,
     desired: &DesiredFleet,
@@ -65,35 +61,24 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     let journal = match retained_plan::journal(&paths, &desired.environment, requested_fleet) {
         Ok(Some(journal)) => journal,
         Ok(None) => return Err(EnsureWorkflowError::JournalIntegrity),
-        Err(EnsureWorkflowError::RetainedTerminalReviewRequired { .. }) => {
-            return terminal::plan_preparation(
-                root,
-                &paths,
-                desired,
-                desired_sha256,
-                created_at_time,
-                &state,
-                platform,
-            );
-        }
         Err(error) => return Err(error),
     };
     let prior = match read_plan(&paths) {
         Ok(Some(plan)) => verified_plan(plan)?,
         Ok(None) => return Err(EnsureWorkflowError::PlanMissing),
-        Err(EnsureStateError::Decode { .. }) => {
-            return terminal::plan_preparation(
-                root,
-                &paths,
-                desired,
-                desired_sha256,
-                created_at_time,
-                &state,
-                platform,
-            );
-        }
         Err(error) => return Err(error.into()),
     };
+    if completed_receipt_source(&prior, &journal) {
+        return terminal::plan_preparation(
+            root,
+            &paths,
+            desired,
+            desired_sha256,
+            created_at_time,
+            &state,
+            platform,
+        );
+    }
     if platform.retirement_debit_block().is_some() {
         return Err(EnsureWorkflowError::ReinstallConflict);
     }
@@ -144,6 +129,36 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     )?;
     write_plan(&paths, &plan)?;
     Ok(report(plan))
+}
+
+/// Completed install receipts have their own fresh inventory and conservation review.
+fn completed_receipt_source(plan: &FleetEnsurePlan, journal: &FleetEnsureJournalRecord) -> bool {
+    let completed = plan.scope == FleetEnsurePlanScope::Full
+        && journal.completion == FleetEnsureCompletion::Converged
+        && journal.plan_sha256 == plan.plan_sha256
+        && journal.operation_id == plan.operation_id;
+    let receipt_plan = plan.continuation.is_some()
+        && plan.reinstall.is_none()
+        && plan.infrastructure_bootstrap.is_none()
+        && !journal.successor_phases.is_empty();
+    let install_only = !plan.canisters.is_empty()
+        && plan
+            .canisters
+            .iter()
+            .flat_map(|canister| &canister.actions)
+            .all(|action| {
+                matches!(
+                    action,
+                    EnsureAction::Fund {
+                        pool_funding: None,
+                        ..
+                    } | EnsureAction::Install {
+                        reinstall_witness: None,
+                        ..
+                    }
+                )
+            });
+    completed && receipt_plan && install_only
 }
 
 fn source_authority<E: std::error::Error + 'static>(

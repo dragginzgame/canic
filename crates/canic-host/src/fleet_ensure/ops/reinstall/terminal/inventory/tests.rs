@@ -1,4 +1,4 @@
-//! Membership validation uses a reduced historical record shape, without simulating IC calls.
+//! Membership validation uses a reduced current record shape, without simulating IC calls.
 
 use super::*;
 use crate::fleet_ensure::model::FleetTerminalSourceRecord;
@@ -162,6 +162,10 @@ fn inventory_cannot_overflow_or_replace_the_original_account_baselines() {
 #[test]
 fn broken_parentage_modules_registry_and_subnet_bindings_reject() {
     for (pointer, value) in [
+        (
+            "/desired/bootstrap/recovery_controllers",
+            json!(["aaaaa-aa"]),
+        ),
         (
             "/state/topology/root-0-pool-20/parent",
             json!("root-0-pool-20"),

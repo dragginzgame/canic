@@ -13,7 +13,7 @@ enabled = false
 
 [component_specs.default]
 component_role = "app"
-maximum_instances = 4
+maximum_instances = 2
 initial_cycles = "1.9T"
 
 [component_groups.qualification.components.default]
@@ -21,7 +21,7 @@ component_spec = "default"
 
 [component_group_deployments.qualification]
 component_group = "qualification"
-initial_placements = 4
-maximum_placements = 4
-placement.maximum_per_root = 4
+initial_placements = 2
+maximum_placements = 2
+placement.maximum_per_root = 2
 placement.minimum_distinct_roots = 1

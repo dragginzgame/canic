@@ -21,6 +21,8 @@ SCCACHE_START_REQUESTS=0
 SCCACHE_START_HITS=0
 SCCACHE_START_MISSES=0
 PRECOMPILE_ONLY=0
+TEST_LOG_DIR=""
+TEST_LOG_SEQUENCE=0
 
 case "$MODE" in
     fast | full | ordinary | pocketic) ;;
@@ -294,6 +296,39 @@ require_ordinary_success_before_pocketic() {
     finish_test_run
 }
 
+# Keep complete evidence on disk without streaming high-volume diagnostics.
+# Failure excerpts are bounded; the full log survives test-scratch cleanup.
+run_test_command() {
+    if [[ -z "$TEST_LOG_DIR" ]]; then
+        mkdir -p "$ROOT/target/test-runs" || return 1
+        TEST_LOG_DIR="$(mktemp -d "$ROOT/target/test-runs/$(date -u +%Y%m%dT%H%M%SZ)-$$.XXXXXX")" || return 1
+    fi
+    TEST_LOG_SEQUENCE=$((TEST_LOG_SEQUENCE + 1))
+    local log="$TEST_LOG_DIR/$TEST_LOG_SEQUENCE.log"
+    local trace_pattern='\[CANIC-(REQUEST|OBSERVATION|TIMING)\]'
+    local statuses=()
+    : > "$log" || return 1
+    echo "==> complete test output: $log"
+    if "$@" 2>&1 | tee "$log" | awk '
+        !/\[CANIC-(REQUEST|OBSERVATION|TIMING)\]/ { print; fflush() }
+    '; then
+        statuses=("${PIPESTATUS[@]}")
+    else
+        statuses=("${PIPESTATUS[@]}")
+    fi
+    local status="${statuses[0]}"
+    if [[ "${statuses[1]}" -ne 0 || "${statuses[2]}" -ne 0 ]]; then
+        echo "test output capture failed: $log" >&2
+        [[ "$status" -ne 0 ]] || status=1
+    fi
+    if [[ "$status" -ne 0 ]]; then
+        echo "==> failure diagnostics (last 100 trace lines; full output: $log)" >&2
+        # No matching traces is normal for compiler or early startup failures.
+        { rg --color never "$trace_pattern" "$log" | tail -n 100; } >&2 || true
+    fi
+    return "$status"
+}
+
 run_test() {
     local execution="$1"
     local label="$2"
@@ -361,18 +396,18 @@ run_test() {
     local status=0
     case "$execution" in
         compile)
-            cargo test --locked --no-run "${cargo_args[@]}" || status=$?
+            run_test_command cargo test --locked --no-run "${cargo_args[@]}" || status=$?
             ;;
         parallel)
             if [[ "${#libtest_args[@]}" -eq 0 ]]; then
-                cargo test --locked --no-fail-fast "${cargo_args[@]}" || status=$?
+                run_test_command cargo test --locked --no-fail-fast "${cargo_args[@]}" || status=$?
             else
-                cargo test --locked --no-fail-fast "${cargo_args[@]}" -- \
+                run_test_command cargo test --locked --no-fail-fast "${cargo_args[@]}" -- \
                     "${libtest_args[@]}" || status=$?
             fi
             ;;
         pocketic-serial)
-            cargo test --locked "${cargo_args[@]}" -- --test-threads=1 --nocapture \
+            run_test_command cargo test --locked "${cargo_args[@]}" -- --test-threads=1 --nocapture \
                 "${libtest_args[@]}" || status=$?
             ;;
         *)

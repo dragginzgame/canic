@@ -197,9 +197,11 @@
           },
           "placement_subnet": "pae4o-o6dxf-xki7q-ezclx-znyd6-fnk6w-vkv5z-5lfwh-xym2i-otrrw-fqe",
           "root": "root-0",
-          "store": "store-0"
+          "store": "store-0",
+          "capacity_import_bootstrap": null
         }
-      ]
+      ],
+      "recovery_controllers": []
     },
     "canisters": [
       {
@@ -346,7 +348,8 @@
             "app": "toko_miner"
           },
           "coordinator_subnet": "pzp6e-ekpqk-3c5x7-2h6so-njoeq-mt45d-h3h6c-q3mxf-vpeq5-fk5o7-yae",
-          "coordinator": "jesds-iaaaa-aaaar-qcbgq-cai"
+          "coordinator": "jesds-iaaaa-aaaar-qcbgq-cai",
+          "recovery_controllers": []
         },
         "epoch": 1
       },

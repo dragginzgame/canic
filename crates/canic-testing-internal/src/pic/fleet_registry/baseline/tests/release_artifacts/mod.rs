@@ -4,6 +4,7 @@
 //! Boundary: cache build helpers and Cargo inputs independently of journey assertions.
 
 mod audit_root;
+mod host_inputs;
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -48,7 +49,8 @@ use std::{
     time::Instant,
 };
 
-const BUILD_HELPERS: [&str; 3] = [
+const BUILD_HELPERS: [&str; 4] = [
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/mod.rs",
     "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs",
     "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/audit_root/mod.rs",
     "crates/canic-testing-internal/src/pic/artifacts.rs",
@@ -90,7 +92,7 @@ pub(super) fn build_literal_zero_release_artifacts(
     let mut outputs =
         literal_zero_release_artifact_outputs(adapter_root, release_build_id, configured_roles);
     append_generated_fixture_outputs(adapter_root, &fixtures, &mut outputs);
-    let cache = literal_zero_release_artifact_cache_spec(
+    let mut cache = literal_zero_release_artifact_cache_spec(
         workspace_root,
         &workspace_root.join("target/test-artifacts/external-artifact-cache"),
         config_path,
@@ -99,10 +101,10 @@ pub(super) fn build_literal_zero_release_artifacts(
         build_network,
         release_build_id,
     );
-    let cache = bind_generated_fixture_cache_inputs(cache, adapter_root, &fixtures);
+    cache.spec = bind_generated_fixture_cache_inputs(cache.spec, adapter_root, &fixtures);
     phase = phase.next("artifact_cache_lookup");
     let started_at = Instant::now();
-    let outcome = match prepare_artifact_cache(&cache)
+    let outcome = match prepare_artifact_cache(&cache.spec)
         .expect("prepare literal-zero release artifact cache")
     {
         ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
@@ -125,11 +127,13 @@ pub(super) fn build_literal_zero_release_artifacts(
                         panic!("import literal-zero release artifact `{name}`: {error}")
                     });
             }
+            cache.require_unchanged();
             transaction
                 .commit()
                 .expect("commit literal-zero release artifact cache")
         }
     };
+    cache.require_unchanged();
     crate::pic::progress::timed(
         "FLEET",
         if outcome.is_reused() {
@@ -170,10 +174,10 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
     outputs: &BTreeMap<String, PathBuf>,
     build_network: BuildNetwork,
     release_build_id: ReleaseBuildId,
-) -> ArtifactCacheSpec {
+) -> host_inputs::FixtureArtifactCache {
     let snapshot = AppConfigSnapshot::load(config_path)
         .expect("load literal-zero release build config for Cargo inputs");
-    let mut packages = BTreeSet::from(["canic".to_string(), "canic-host".to_string()]);
+    let mut packages = BTreeSet::from(["canic".to_string()]);
     if audit_root::uses_audit_root(config_path) {
         packages.insert("root_probe".to_string());
     }
@@ -260,7 +264,31 @@ pub(super) fn literal_zero_release_artifact_cache_spec(
     for (name, path) in outputs {
         cache = cache.with_output(name, path);
     }
-    cache
+    bind_host_producer_inputs(cache, workspace_root, &environment)
+}
+
+fn bind_host_producer_inputs(
+    cache: ArtifactCacheSpec,
+    workspace_root: &Path,
+    environment: &[(&str, &str)],
+) -> host_inputs::FixtureArtifactCache {
+    // Host code produces and seals the artifacts, but standalone cfg(test) modules
+    // are not linked into the native producer. Keep every other resolved input.
+    let host_build = WasmBuildSpec::new(
+        workspace_root,
+        &canic_host::canister_build::canister_build_target_root(workspace_root),
+        &["canic-host"],
+        CanisterBuildProfile::Fast.target_dir_name(),
+    )
+    .with_cargo_profile_args(["--profile", "fast", "--locked"])
+    .with_extra_env(environment.iter().copied());
+    let host_inputs = resolve_cargo_build_inputs(&host_build)
+        .expect("resolve native artifact producer Cargo inputs");
+    host_inputs::FixtureArtifactCache::bind(
+        cache,
+        &workspace_root.join("crates/canic-host"),
+        host_inputs,
+    )
 }
 
 pub(super) fn prepare_generated_fixture_artifacts(

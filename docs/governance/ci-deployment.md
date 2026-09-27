@@ -71,7 +71,13 @@ turn wording cleanup into a failed compile/test release cycle.
 Ordinary parallel Rust suites retain libtest's default output capture. Passing
 tests therefore do not print expected panic hooks or fixture chatter as live
 validation errors; Cargo emits captured output for a failed test. Long-running
-governed PocketIC suites keep live progress output. Document-layout preferences
+governed PocketIC suites keep live progress output. The workspace test runner
+retains complete command output under `target/test-runs/` and prints each log
+path before execution. Request, observation and structured timing traces stay
+out of live output; a failed command prints the last 100 trace lines. Complete
+logs survive invocation-owned scratch cleanup, including partial logs from
+interrupted runs. Expected rejected requests inside passing cases do not trigger
+trace output. Document-layout preferences
 and drift in transitive informational advisory inventories are warnings. Missing
 required authority documents, known vulnerabilities, yanked dependencies and
 unmaintained direct dependencies remain blocking.
@@ -182,6 +188,24 @@ receipts, payment identities, policy limits and ledger accounting exact; replay
 must not credit the recipient again. Exercise normal charging deliberately when
 qualifying this allowance, rather than relying on incidental scheduler timing. Capacity arithmetic and rejection
 boundaries remain covered independently of expensive deployment cardinality.
+Retained-estate reinstall and completed-source reset each use two Workloads and
+one Ready asset. Underfunding both Workloads must exhaust replacement capacity
+and require an explicitly reviewed successor; exact import identities, controller
+drift, lost replies, conservation and terminal replay remain real-canister proofs.
+Native policy checks own the 19-Workload/five-Ready arithmetic boundary. Neither
+reset journey is a deployment-scale qualification.
+The default gate excludes audit cohort-size experiments and arithmetic for their
+external qualification budgets. Product Ledger/CMC replay, funding, import/reset
+and controller-routing proofs remain required. Completed-source receipt and
+manifest inspection uses the maintained schema and canonical hash owners;
+fixtures must not rewrite current records into a predecessor format.
+Release-test artifact identity separates native producer inputs from canister
+inputs through the existing Cargo resolver and sealed-artifact cache. Standalone
+host `cfg(test)` Rust modules may be omitted when they are not embedded producer
+inputs; inline tests, production sources, Cargo manifests and locks remain bound.
+Ambiguous source inclusion retains the complete host input set. The complete
+producer snapshot, including excluded test files, must remain unchanged during
+acquisition and publication. This reuses artifacts only, never test results.
 The ordinary integration inventory joins workspace unit/lib/bin coverage in
 one Cargo invocation, using explicit integration target names. This preserves
 the workspace feature graph through the ordinary tier instead of recompiling

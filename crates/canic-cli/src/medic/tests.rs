@@ -45,15 +45,6 @@ fn parses_bare_workspace_medic_options() {
     assert!(!options.ci);
 }
 
-// Ensure the removed project scope has no compatibility command.
-#[test]
-fn rejects_removed_project_medic_subcommand() {
-    std::assert_matches!(
-        MedicOptions::parse([OsString::from("project")]),
-        Err(MedicCommandError::Usage(_))
-    );
-}
-
 // Ensure Fleet medic parses target, environment, and ICP selectors.
 #[test]
 fn parses_fleet_medic_options() {

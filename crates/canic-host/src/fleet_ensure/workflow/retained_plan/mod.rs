@@ -6,10 +6,7 @@
 
 use crate::fleet_ensure::{
     model::{FleetEnsureJournalRecord, FleetEnsurePlan},
-    ops::{
-        EnsurePaths, EnsureStateError, read_journal, read_plan,
-        reinstall::{source, terminal},
-    },
+    ops::{EnsurePaths, EnsureStateError, read_journal, read_plan, reinstall::source},
     workflow::EnsureWorkflowError,
 };
 
@@ -42,15 +39,8 @@ fn diagnose<E: std::error::Error + 'static>(
             source_document_sha256: evidence.plan_document_sha256,
             source: Box::new(error),
         },
-        Err(_) => match terminal::read(paths, environment, fleet) {
-            Ok(evidence) => EnsureWorkflowError::RetainedTerminalReviewRequired {
-                operation_id: evidence.documents.operation_id,
-                source_document_sha256: evidence.documents.plan_document_sha256,
-                source: Box::new(error),
-            },
-            Err(_) => EnsureWorkflowError::RetainedPlanUnreadable {
-                source: Box::new(error),
-            },
+        Err(_) => EnsureWorkflowError::RetainedPlanUnreadable {
+            source: Box::new(error),
         },
     }
 }

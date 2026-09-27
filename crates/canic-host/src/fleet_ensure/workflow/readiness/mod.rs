@@ -163,24 +163,8 @@ fn retained(
     paths: &EnsurePaths,
     request: &FleetReadinessRequest<'_>,
 ) -> Result<Option<RetainedReadinessOperation>, FleetReadinessError> {
-    let journal = match read_journal(paths) {
-        Ok(Some(journal)) => journal,
-        Ok(None) => return Ok(None),
-        Err(error @ EnsureStateError::Decode { .. }) => {
-            let source = crate::fleet_ensure::ops::reinstall::terminal::read(
-                paths,
-                request.environment,
-                request.fleet,
-            )
-            .map_err(|_| FleetReadinessError::State(error))?;
-            return Ok(Some(RetainedReadinessOperation {
-                operation_id: source.documents.operation_id,
-                plan_sha256: source.documents.plan_sha256,
-                completion: FleetEnsureCompletion::Converged,
-                terminal_review_required: true,
-            }));
-        }
-        Err(error) => return Err(error.into()),
+    let Some(journal) = read_journal(paths)? else {
+        return Ok(None);
     };
     if journal.fleet != request.fleet {
         return Err(FleetReadinessError::RetainedEvidence);
@@ -199,7 +183,6 @@ fn retained(
         operation_id: journal.operation_id,
         plan_sha256: journal.plan_sha256,
         completion: journal.completion,
-        terminal_review_required: false,
     }))
 }
 
@@ -218,12 +201,6 @@ fn report(
         .is_some_and(|operation| operation.completion != FleetEnsureCompletion::Converged)
     {
         blockers.push(ReadinessBlocker::RetainedOperation);
-    }
-    if retained_operation
-        .as_ref()
-        .is_some_and(|operation| operation.terminal_review_required)
-    {
-        blockers.push(ReadinessBlocker::RetainedTerminalReview);
     }
     if estimated_shortfall_cycles.is_some_and(|shortfall| shortfall > 0) {
         blockers.push(ReadinessBlocker::EstimatedFundingShortfall);

@@ -150,99 +150,46 @@ lease; every fact can change immediately afterward. Success means the known earl
 checks passed, not that deployment is affordable or approved.
 
 Non-converged retained work blocks a new operation. Preserve its plan, journal
-and selected build and use the existing recovery flow. A supported completed
-source whose current journal cannot decode reports `retained_terminal_review`
-and requires the separate `fleet ensure --reinstall` review without `--apply`.
-Other unreadable or inconsistent evidence fails closed. Do not patch missing
-journal fields or delete retained evidence.
+and selected build and use the existing recovery flow. Completed-source review
+requires the current plan and journal contracts, valid canonical hashes and
+complete receipts. Unreadable or inconsistent evidence fails closed.
 
-Completed records from before generated recovery-controller authority cannot
-use that current-contract retirement reader. Readiness checks this boundary
-before loading `--desired` and before signer/network access. For the historical
-completed shape, it verifies source and successor plan hashes, action hashes,
-Applied receipts, paid-attempt bounds and declared operator debits through
-evidence-only projections. It preserves original journal balances and rejects
-unsupported paid-observation or autonomous-creation exposure. It reports the
-verified local receipt, phase and physical-canister counts without treating
-historical authority as executable current state. Source inventory checks retain
-Root pool ownership and application parentage separately: an allocated descendant
-is not idle capacity. The check binds Coordinator, Root and Store interfaces to
-the finalized source manifest and exact Candid bytes. Historical manifests are
-read as immutable evidence; a missing `transition_mode` is never filled in.
-The reinstall planner performs the same check before opening its operation
-lock or resolving target artifacts. An optional operator-configuration field does not
-make the corresponding generated authority field optional. Preserve the source
-bytes; adding an empty array would invent authority and alter receipt bindings.
-The dedicated completed-estate hard-cut handoff is still under implementation;
-the local receipt audit does not establish a supported reset route or verify
-live controller authority and cycle conservation.
+Completed-source inspection uses the maintained desired, plan, protocol-action,
+Registry and release-manifest contracts. Required recovery-controller declarations
+and the reinstall-only transition mode must be present. Receipt audit verifies
+source and successor plan hashes using the ordinary plan hasher, exact action
+hashes, Applied receipts, attempt bounds and declared operator debits. It preserves
+original journal balances and rejects unaccounted payments or creation exposure.
+Reading a completed record grants no execution or reset authority.
 
-The local publication transaction now retains exact source and replacement bytes
-before committing intent, then replaces plan, journal and state under the Fleet
-lock. If interrupted, the pre-build check identifies the approved review and
-target plan instead of decoding mixed records. Recovery verifies all archives and
-active files before completing the replacement; completed replay preserves later
-progress. Completed activation reviews are recognized by their recorded byte
-hash and remain unchanged. The completed-reset route now uses this transaction; full live admission and
-reinstall qualification remain pending.
+For an explicit `fleet ensure --reinstall`, a converged current operation with
+supplied capacity selects completed-source preparation. An in-progress operation
+or a newly reviewed plan keeps its existing workflow owner. Pending preparation,
+reset review and local publication must resume their exact recorded operation.
+Current schema decoding is strict; hand-editing source records cannot repair an
+invalid declaration or receipt hash.
 
-The host's completed-source custody reader now uses authenticated IC certificates
-to check recorded IDs, controllers, module presence and subnet placement without
-calling the source runtime. It requires the source operator to control Coordinator
-and Root, and each recorded asset's Root to remain a controller. Every additional
-observed controller is retained for exact review; no old controller declaration is
-filled in. The new local publication review binds those samples and requires fresh,
-unchanged custody before its first commit. Samples expire 60 seconds after the
-pass starts, in addition to the Agent's certificate verification rules. Already
-committed local recovery and completed replay use the retained intent.
+The source inspector cross-checks recorded IDs, Root ownership, application
+parentage and balances. It binds installed interfaces to the finalized source
+manifest and exact Candid bytes. Fresh certified custody samples verify operator,
+network, controllers, module presence and subnet placement. Live Pool, Coordinator,
+child-directory and Ledger observations must agree with the source inventory.
+Additional controlled accounts cannot conceal a missing native balance.
 
-This check covers the recorded IDs only. It neither enumerates unrecorded assets
-nor establishes cycle balances, application parentage or a mutation fence.
-The separate completed-source membership reader now enumerates each recorded
-Root's entire pool with bounded authenticated queries. Before querying, it
-requires the retained interface to match the maintained Pool request, response,
-error and query mode exactly. It rejects missing or extra assets, role changes,
-unfinished pool work and inconsistent pages. Certified custody is checked before
-and after the survey. Cached pool balances are excluded from its result.
-The survey also checks Coordinator identity, epoch, revision and complete Root
-rows before and after enumeration. Its read-only projection never constructs
-executable Registry authority or supplies a missing recovery-controller field.
-It observes the source operator's and every recorded canister's default Cycles
-Ledger account. Operator and Root balances must reconcile with original receipts;
-other canister balances are retained separately, including nonzero balances.
-Unknown balance movement rejects instead of rebasing the original journal.
-The original Root baseline must also name the exact declared Ledger and Root
-account owner. Source preflight verifies the maintained Coordinator/Root seal
-command and status types. A complete fence receipt must bind its canister,
-operation, history count and timestamp; incomplete receipts cannot prove a seal.
-These are sampled observations. The preparation below owns journaled authority
-seals and native/reserved inspection; reset requires a final conservation pass
-after pool clearing and provisioning. Application-specific Ledger subaccounts
-are not enumerated by these default-account queries. The source records and
-pre-build command remain read-only.
+Preparation uses reviewed authority seals and bounded management observations,
+with intent persisted before effects and exact reconciliation after lost replies.
+A separate reset review binds the selected current artifacts, original source
+bytes, fresh authority and balances, destructive effects and debit bounds. Local
+publication archives original plan, journal, state and successor phases unchanged,
+then replaces authority under the Fleet lock. Interrupted publication recovers
+before ordinary execution; completed replay preserves later progress.
 
-For the reported Toko staging estate, this early check is:
+The production-adapter PocketIC proof starts from genuinely completed current
+records and unmodified current release manifests. It retains preparation,
+interrupted publication, lost install-response recovery, exact selected IDs,
+cycle conservation and effect-free terminal replay. This is disposable local
+qualification; it does not establish a live downstream deployment.
 
-```sh
-canic --environment staging fleet readiness toko-miner-staging-001 \
-  --identity toko-miner-mainnet \
-  --operator yafbw-zwrsx-ivoo6-m5alg-hwsf5-f4zfo-wqzsh-yueqw-kfixx-osvof-aqe \
-  --json
-```
-
-Run it in the Toko workspace with the corrected CLI. It uses the selected ICP
-identity, which must match the explicit operator when live readiness is reached.
-Published `.42` predates this diagnostic. A completed-source contract rejection
-requires the separate preparation review below before building or funding;
-it grants no apply authority and does not permit editing or discarding journals.
-
-### Toko completed-estate command preview
-
-The following describes the implemented development CLI for Gabriel. A connected
-PocketIC journey passes source preparation, current generation, interrupted reset,
-retained IDs, unchanged archives, conservation and local terminal replay using
-current production Wasms with the `.38` completed-record shape. This is local
-qualification, not a live Toko deployment or historical-runtime replay.
 The `toko-miner-mainnet` identity is Toko's configured default; an override must
 still resolve to the source operator Principal. The corrected CLI and the
 application runtime must select the same published Canic release. Installing
@@ -1050,8 +997,9 @@ and any durable pending creation. When retained Failed or PendingReset assets
 can satisfy the reserve, planning reviews their exact native funding and Root
 reconciliation before forecasting additional creation. Apply repairs only
 those reviewed identities; a subsequent protected inventory must establish
-their readiness. This supports a full pool with four Workloads and four Failed
-reserve assets without funding the Root account or creating another canister.
+their readiness. The focused proof fills the pool with two Workloads and two
+Failed reserve assets, then repairs them without funding the Root account or
+creating another canister.
 If the protected inventory cannot satisfy the required capacity through those
 repairs, planning returns the typed capacity failure before funding.
 
@@ -1676,14 +1624,11 @@ receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
 
-The completed-source retirement inspector reads an immutable evidence projection,
-not an executable current journal. For a proven converged supported source,
-missing `funding_observations` contributes no additional execution allowance.
-Present observations must validate; null/malformed observations, unknown paid-work
-fields, unfinished effects and inconsistent source identities reject review.
-Original document hashes bind the existing terminal inventory, conservation,
-archive and handoff checks. This permits a separate review without importing the
-source state into a current execution contract or rewriting source bytes.
+The completed-source retirement inspector decodes the maintained plan and journal
+and verifies the canonical plan hash. Required funding observations cannot be
+omitted; an empty map adds no allowance. Malformed observations, unknown paid-work
+fields, unfinished effects and inconsistent identities reject review. Original
+document hashes bind inventory, conservation, archive and handoff checks.
 
 This boundary also applies to read-only commands such as `canic info env`.
 A working frontend does not prove that the retained operation completed, and
@@ -1738,13 +1683,12 @@ not replace their selected input. Completion requires terminal conservation
 and immediate effect-free replay. No successful local diagnostic or preview
 establishes those completion properties.
 
-A completed operation has a separate bounded assessment. Ordinary Ensure reports
-`RetainedTerminalReviewRequired` when the receipt inspector recognizes a
-converged full operation with supported native funding/install effects and
-immutable protocol successor phases. An explicit `--reinstall` review can then
-inspect those completed effects without decoding the source plan as current
-executable authority. Informational recovery forecasts remain opaque source
-bytes; no missing field or replacement source digest is manufactured.
+A completed current operation has a separate bounded assessment. An explicit
+`--reinstall` review selects supported native funding/install receipts with
+immutable protocol successor phases. Selection requires a valid current plan
+and journal with matching completed operation identities. All plan fields,
+including recovery forecasts and continuation bounds, must decode and hash
+correctly before the review can inspect fresh inventory and conservation.
 
 This assessment requires every action hash and Applied receipt to match, native
 payments to retain their original recorded balance evidence, and exact phase
@@ -1785,21 +1729,11 @@ and source artifacts too. Interrupted handoff selects the same replacement pair;
 a completed handoff never rolls back subsequent progress. Subsequent preparation
 and full reset use the existing journaled effect owner and their selected digests.
 
-CANIC-166's September 17 staging report is this completed-source case: the missing
-`maximum_successor_actions` is in its informational forecast. Its two phase files
-and 61 Applied effects pass local source inspection. This host correction does
-not change canister runtime contracts or inherently require rebuilding the
-already-qualified game release. Actual source artifacts, Candid contracts, live
-authority and conservation must still pass review. Local inspection and handoff
-regressions do not establish staging admission, successful deployment or terminal
-effect-free replay after deployment.
-
-If neither bounded inspection succeeds, `RetainedPlanUnreadable` preserves the
-underlying error. There is no general force-reset, predecessor executable decoder
-or journal-supersession command. Resolve issued effects under their exact original
-authority before changing release contracts. The earlier
-[partial-activation recovery evidence](../../audits/reports/2026-09/2026-09-08/activation-feedback.md#final-installed-source-proof)
-remains evidence for that distinct source shape.
+If a retained document cannot decode and the bounded partial-activation inspection
+cannot establish its supported recovery shape, `RetainedPlanUnreadable` preserves
+the underlying error. Completed-source review never uses decode failure to select
+an alternative contract. Resolve issued effects under their exact original
+authority before changing release contracts.
 
 ## Deliberate selected-build database wipe
 

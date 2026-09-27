@@ -1,8 +1,8 @@
 //! Module: fleet_ensure::ops::reinstall::terminal::receipt_audit
 //!
-//! Responsibility: verify completed historical plan/action hashes and original payment bounds.
+//! Responsibility: verify completed current plan/action hashes and original payment bounds.
 //! Does not own: predecessor execution, live completion, authority conversion or handoff approval.
-//! Boundary: historical data can produce audit facts only, never current executable actions.
+//! Boundary: completed data can produce audit facts only, never current executable actions.
 
 #[cfg(test)]
 mod tests;
@@ -12,7 +12,8 @@ use crate::{
     fleet_ensure::{
         json,
         model::{
-            DesiredCanisterInit, DesiredCanisterKind, EffectRecord, EffectState,
+            CanisterPlan, CurrentFleetProtocolAction, DesiredCanisterInit, DesiredCanisterKind,
+            DesiredFleet, EffectRecord, EffectState, EnsureAction, FleetEnsurePlan,
             FleetEnsurePlanScope, FleetEnsureSuccessorPhaseRecord, MAX_FLEET_ENSURE_CANISTERS,
             MAX_FLEET_ENSURE_PROTOCOL_STEPS,
         },
@@ -20,24 +21,18 @@ use crate::{
             EnsurePaths, EnsureStateError, NativeFundingObservation, native_funding_applied,
             plan_content,
         },
-        view::terminal_source::{
-            CompletedReceiptAuditView,
-            receipt_evidence::{
-                CompletedActionEvidence, CompletedCanisterEvidence, CompletedPhaseEvidence,
-                CompletedProtocolEvidence, EvidenceDesiredFleet,
-            },
-        },
+        policy::expected_plan_sha256,
+        view::terminal_source::CompletedReceiptAuditView,
     },
 };
-use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
+use canic_core::cdk::utils::hash::sha256_hex;
 use serde_json::Value;
-use sha2_host::{Digest, Sha256};
 use std::{
     collections::{BTreeMap, BTreeSet},
     str::FromStr,
 };
 
-/// Verify the completed evidence shape whose generated authority has no recovery declaration.
+/// Verify completed receipts using the maintained plan and action schema.
 /// This checks local retained receipts; fresh live authority/conservation are separate gates.
 pub(in crate::fleet_ensure) fn inspect(
     paths: &EnsurePaths,
@@ -48,11 +43,12 @@ pub(in crate::fleet_ensure) fn inspect(
     super::validate_journal_fields(&snapshot.journal)?;
     let mut raw = snapshot.plan;
     plan_content::hydrate(paths, &mut raw)?;
-    let plan: CompletedPhaseEvidence = decode(raw)?;
+    let plan: FleetEnsurePlan = decode(raw)?;
     verify_hash(&plan)?;
     let desired = plan.reviewed_desired.as_ref().ok_or_else(invalid)?;
-    let declaration = desired.desired.bootstrap.as_ref().ok_or_else(invalid)?;
+    let declaration = desired.desired().bootstrap.as_ref().ok_or_else(invalid)?;
     let source_complete = plan.scope == FleetEnsurePlanScope::Full
+        && plan.infrastructure_bootstrap.is_none()
         && plan.continuation.is_some()
         && plan.protocol_actions.is_empty()
         && plan.reinstall.is_none()
@@ -66,17 +62,15 @@ pub(in crate::fleet_ensure) fn inspect(
             .is_some_and(Value::is_object)
         && snapshot.journal.get("estate_funding_required") == Some(&Value::Null)
         && snapshot.journal.get("funding_reviews") == Some(&serde_json::json!([]));
-    // An absent observation adds no allowance. Paid-observation evidence needs its
-    // own admission owner; this closed audit never discards or rebases it.
-    let observations_empty = snapshot
-        .journal
-        .get("funding_observations")
-        .is_none_or(|value| value == &serde_json::json!({}));
+    // Paid-observation evidence needs its own admission owner; this receipt-only
+    // audit requires the current explicit empty map.
+    let observations_empty =
+        snapshot.journal.get("funding_observations") == Some(&serde_json::json!({}));
     if !source_complete
         || !claims_complete
         || !observations_empty
-        || desired.desired.environment != environment
-        || desired.desired.fleet != fleet
+        || desired.desired().environment != environment
+        || desired.desired().fleet != fleet
         || declaration.fresh_estate
     {
         return Err(invalid());
@@ -89,8 +83,8 @@ pub(in crate::fleet_ensure) fn inspect(
     }
     actions.extend(phase_actions(paths, &plan, &phases, &snapshot.bindings)?);
     let effects: Vec<EffectRecord> = field(&snapshot.journal, "effects")?;
-    let funding = verify_receipts(&actions, &effects, &desired.desired.cycles_ledger)?;
-    let fees = canic_core::cdk::types::Cycles::from_str(&desired.desired.ledger_fee_cycles)
+    let funding = verify_receipts(&actions, &effects, &desired.desired().cycles_ledger)?;
+    let fees = canic_core::cdk::types::Cycles::from_str(&desired.desired().ledger_fee_cycles)
         .map_err(|_| invalid())?
         .to_u128()
         .checked_mul(funding.payments)
@@ -113,13 +107,13 @@ pub(in crate::fleet_ensure) fn inspect(
         .checked_sub(debit)
         .ok_or_else(invalid)?;
     let initial_estate_funding_cycles_by_root =
-        initial_root_accounts(&snapshot.journal, bounds, &desired.desired)?;
+        initial_root_accounts(&snapshot.journal, bounds, desired.desired())?;
     Ok(CompletedReceiptAuditView {
         documents: snapshot.bindings,
         effect_count: effects.len(),
         phase_count: phases.len(),
-        source_operator: desired.desired.operator.clone(),
-        cycles_ledger: desired.desired.cycles_ledger.clone(),
+        source_operator: desired.desired().operator.clone(),
+        cycles_ledger: desired.desired().cycles_ledger.clone(),
         initial_controlled_cycles,
         initial_operator_cycles,
         initial_estate_funding_cycles_by_root,
@@ -137,7 +131,7 @@ fn amount_field(value: &Value, name: &str) -> Result<u128, EnsureStateError> {
 fn initial_root_accounts(
     journal: &Value,
     bounds: &crate::fleet_ensure::model::CycleConservation,
-    desired: &EvidenceDesiredFleet,
+    desired: &DesiredFleet,
 ) -> Result<BTreeMap<String, u128>, EnsureStateError> {
     let amounts: BTreeMap<String, String> =
         field(journal, "initial_estate_funding_cycles_by_root")?;
@@ -185,10 +179,10 @@ fn initial_root_accounts(
 
 fn phase_actions(
     paths: &EnsurePaths,
-    plan: &CompletedPhaseEvidence,
+    plan: &FleetEnsurePlan,
     phases: &[FleetEnsureSuccessorPhaseRecord],
     bindings: &crate::fleet_ensure::model::FleetTerminalSourceRecord,
-) -> Result<Vec<CompletedActionEvidence>, EnsureStateError> {
+) -> Result<Vec<EnsureAction>, EnsureStateError> {
     let desired = plan.reviewed_desired.as_ref().ok_or_else(invalid)?;
     let authority = plan.continuation.as_ref().ok_or_else(invalid)?;
     let mut actions = Vec::new();
@@ -206,9 +200,10 @@ fn phase_actions(
         }
         let mut raw: Value = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
         plan_content::hydrate(paths, &mut raw)?;
-        let phase: CompletedPhaseEvidence = decode(raw)?;
+        let phase: FleetEnsurePlan = decode(raw)?;
         verify_hash(&phase)?;
         let empty_authority = phase.scope == FleetEnsurePlanScope::Full
+            && phase.infrastructure_bootstrap.is_none()
             && phase.continuation.is_none()
             && phase.reinstall.is_none()
             && phase.root_start_authority.is_none()
@@ -226,7 +221,7 @@ fn phase_actions(
             || !phase
                 .protocol_actions
                 .iter()
-                .all(|action| matches!(action, CompletedActionEvidence::FleetProtocol { .. }))
+                .all(auditable_protocol_receipt)
         {
             return Err(invalid());
         }
@@ -242,28 +237,38 @@ fn phase_actions(
     Ok(actions)
 }
 
-fn verify_hash(plan: &CompletedPhaseEvidence) -> Result<(), EnsureStateError> {
-    if plan.plan_sha256 != phase_hash(plan)? {
+// These receipt-only operations have no additional native payment authority.
+fn auditable_protocol_receipt(action: &EnsureAction) -> bool {
+    let EnsureAction::FleetProtocol { action, .. } = action else {
+        return false;
+    };
+    matches!(
+        action.as_ref(),
+        CurrentFleetProtocolAction::ObservePoolReadiness { .. }
+            | CurrentFleetProtocolAction::MaintainPoolReadiness { .. }
+            | CurrentFleetProtocolAction::ReconcilePoolAsset { .. }
+            | CurrentFleetProtocolAction::ActivateRegistry { .. }
+            | CurrentFleetProtocolAction::ActivateRegistryMirror { .. }
+            | CurrentFleetProtocolAction::AdoptStore { .. }
+            | CurrentFleetProtocolAction::BootstrapStore { .. }
+            | CurrentFleetProtocolAction::JoinRoot { .. }
+            | CurrentFleetProtocolAction::PrepareStoreFixture { .. }
+            | CurrentFleetProtocolAction::PublishStoreFixtureChunk { .. }
+            | CurrentFleetProtocolAction::PrepareComponentRegistry { .. }
+            | CurrentFleetProtocolAction::ProvisionComponents { .. }
+            | CurrentFleetProtocolAction::PublishStoreChunk { .. }
+            | CurrentFleetProtocolAction::SynchronizeRegistry { .. }
+    )
+}
+
+fn verify_hash(plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
+    if plan.plan_sha256 != expected_plan_sha256(plan) {
         return Err(invalid());
     }
     Ok(())
 }
 
-fn phase_hash(plan: &CompletedPhaseEvidence) -> Result<String, EnsureStateError> {
-    let mut canonical = plan.clone();
-    canonical.plan_sha256.clear();
-    let bytes = json::to_vec(&canonical).map_err(|_| invalid())?;
-    let mut hash = Sha256::new();
-    for field in [b"canic:fleet-ensure:plan:v1".as_slice(), bytes.as_slice()] {
-        hash.update((field.len() as u64).to_be_bytes());
-        hash.update(field);
-    }
-    Ok(hex_bytes(hash.finalize()))
-}
-
-fn initial_actions(
-    canisters: &[CompletedCanisterEvidence],
-) -> Result<Vec<CompletedActionEvidence>, EnsureStateError> {
+fn initial_actions(canisters: &[CanisterPlan]) -> Result<Vec<EnsureAction>, EnsureStateError> {
     if canisters.is_empty() || canisters.len() > MAX_FLEET_ENSURE_CANISTERS {
         return Err(invalid());
     }
@@ -275,13 +280,17 @@ fn initial_actions(
         }
         for action in &canister.actions {
             let (name, principal, rank) = match action {
-                CompletedActionEvidence::Fund {
-                    name, principal, ..
+                EnsureAction::Fund {
+                    name,
+                    principal,
+                    pool_funding: None,
+                    ..
                 } => (name, principal, 0),
-                CompletedActionEvidence::Install {
+                EnsureAction::Install {
                     name,
                     principal,
                     canic_init,
+                    reinstall_witness: None,
                     ..
                 } => {
                     let rank = match canic_init {
@@ -291,7 +300,7 @@ fn initial_actions(
                     };
                     (name, principal, rank)
                 }
-                CompletedActionEvidence::FleetProtocol { .. } => return Err(invalid()),
+                _ => return Err(invalid()),
             };
             if name != &canister.name || canister.principal.as_ref() != Some(principal) {
                 return Err(invalid());
@@ -312,7 +321,7 @@ struct CompletedFunding {
 }
 
 fn verify_receipts(
-    actions: &[CompletedActionEvidence],
+    actions: &[EnsureAction],
     effects: &[EffectRecord],
     ledger: &str,
 ) -> Result<CompletedFunding, EnsureStateError> {
@@ -333,7 +342,7 @@ fn verify_receipts(
         {
             return Err(invalid());
         }
-        if let CompletedActionEvidence::Fund {
+        if let EnsureAction::Fund {
             amount,
             expected_post_cycles,
             funding_deficit_cycles,
@@ -363,15 +372,15 @@ fn verify_receipts(
     Ok(funding)
 }
 
-fn attempts_match(action: &CompletedActionEvidence, effect: &EffectRecord) -> bool {
+fn attempts_match(action: &EnsureAction, effect: &EffectRecord) -> bool {
     let mut publication_limit = 0;
     let mut maintenance_limit = 0;
-    if let CompletedActionEvidence::FleetProtocol { action, .. } = action {
+    if let EnsureAction::FleetProtocol { action, .. } = action {
         match action.as_ref() {
-            CompletedProtocolEvidence::PrepareStoreFixture {
+            CurrentFleetProtocolAction::PrepareStoreFixture {
                 maximum_attempts, ..
             }
-            | CompletedProtocolEvidence::PublishStoreFixtureChunk {
+            | CurrentFleetProtocolAction::PublishStoreFixtureChunk {
                 maximum_attempts, ..
             } => {
                 if *maximum_attempts == 0 {
@@ -379,7 +388,7 @@ fn attempts_match(action: &CompletedActionEvidence, effect: &EffectRecord) -> bo
                 }
                 publication_limit = *maximum_attempts;
             }
-            CompletedProtocolEvidence::MaintainPoolReadiness {
+            CurrentFleetProtocolAction::MaintainPoolReadiness {
                 maximum_updates, ..
             } => maintenance_limit = *maximum_updates,
             _ => {}

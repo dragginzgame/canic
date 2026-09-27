@@ -2,7 +2,7 @@
 //!
 //! Responsibility: bind every installed source interface to immutable completed-release evidence.
 //! Does not own: current release admission, predecessor execution or live module verification.
-//! Boundary: a historical manifest is hashed evidence; no missing contract field is supplied.
+//! Boundary: the maintained manifest binds reinstall-only release authority and exact artifacts.
 
 mod application;
 #[cfg(test)]
@@ -10,10 +10,7 @@ mod tests;
 
 use crate::{
     durable_io::read_regular_bytes,
-    fleet_ensure::{
-        CompletedEstateInventoryView, model::DesiredCanisterKind, ops::authority_seal,
-        view::terminal_source::inventory::evidence::CompletedReleaseManifestEvidence,
-    },
+    fleet_ensure::{CompletedEstateInventoryView, model::DesiredCanisterKind, ops::authority_seal},
     protocol_binding::{
         ReleaseProtocolBindingError, ResolvedProtocolBinding,
         resolve_infrastructure_registry_protocol_binding,
@@ -22,7 +19,7 @@ use crate::{
     release_build::{ReleaseBuildPlanError, validate_finalized_release_build_manifest},
     release_set::{
         CanicInfrastructureArtifactPersistenceError, CanicInfrastructureRole,
-        load_persisted_canic_infrastructure_artifact_manifest,
+        CurrentReleaseSetManifest, load_persisted_canic_infrastructure_artifact_manifest,
     },
 };
 use canic_core::ids::ReleaseBuildId;
@@ -137,8 +134,8 @@ pub(in crate::fleet_ensure) fn inspect(
 fn manifest(
     bytes: &[u8],
     release: ReleaseBuildId,
-) -> Result<CompletedReleaseManifestEvidence, CompletedSourceProtocolError> {
-    let evidence: CompletedReleaseManifestEvidence = serde_json::from_slice(bytes)?;
+) -> Result<CurrentReleaseSetManifest, CompletedSourceProtocolError> {
+    let evidence: CurrentReleaseSetManifest = serde_json::from_slice(bytes)?;
     if evidence.schema_version != 1
         || evidence.release_build_id != release
         || serde_json::to_vec(&evidence)? != bytes

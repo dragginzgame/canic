@@ -61,6 +61,18 @@ else
 fi
 printf '%s\n' "${graph_args[@]}" > "$CANIC_TEST_SCRATCH/$phase-$stage.args"
 printf '%s\t%s\t%s\n' "$phase" "$stage" "$fail_fast" >> "$RUNNER_TEST_TRACE"
+# Successful tests can contain rejected requests; only the command outcome
+# decides whether these diagnostics belong in the console.
+printf '[CANIC-REQUEST] %s/%s succeeded=false\n' "$phase" "$stage"
+printf '[CANIC-OBSERVATION] %s/%s\n' "$phase" "$stage" >&2
+printf '[CANIC-TIMING] %s/%s\n' "$phase" "$stage" >&2
+printf 'fixture progress %s/%s\n' "$phase" "$stage"
+if [[ "$phase/$stage" == "$RUNNER_TEST_FAIL_STAGE" ]]; then
+    for ((index=0; index<120; index++)); do
+        printf '[CANIC-REQUEST] failure-context-%s\n' "$index" >&2
+    done
+    echo 'error: fixture test failed' >&2
+fi
 [[ "$phase/$stage" != "$RUNNER_TEST_FAIL_STAGE" ]] || exit 101
 SH
 chmod +x "$fixture/bin/"*
@@ -92,6 +104,22 @@ for mode in full pocketic; do
             [[ "$selected" != "$failure" ]] || break
         done > "$scratch/expected.tsv"
         diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
+        logs="$fixture/target/test-runs"
+        # The original streams survive even when the successful console is quiet.
+        rg -q '\[CANIC-REQUEST\].*succeeded=false' "$logs"
+        rg -q '\[CANIC-OBSERVATION\]' "$logs"
+        rg -q '\[CANIC-TIMING\]' "$logs"
+        rg -q 'fixture progress' "$scratch/output.log"
+        if [[ "$failure" == none ]]; then
+            if rg -q '\[CANIC-(REQUEST|OBSERVATION|TIMING)\]' "$scratch/output.log"; then exit 1; fi
+        else
+            rg -q '^error: fixture test failed$' "$scratch/output.log"
+            rg -q '^\[CANIC-REQUEST\] failure-context-119$' "$scratch/output.log"
+            if rg -q '^\[CANIC-REQUEST\] failure-context-0$' "$scratch/output.log"; then exit 1; fi
+            [[ "$(rg -c '\[CANIC-(REQUEST|OBSERVATION|TIMING)\]' "$scratch/output.log")" -eq 100 ]]
+            rg -q '^\[CANIC-REQUEST\] failure-context-0$' "$logs"
+        fi
+        rm -rf "$logs"
         if [[ "$failure" == execute/ordinary || "$failure" == compile/* ]]; then
             [[ ! -e "$scratch/server.pid" ]]
         else
@@ -130,5 +158,6 @@ for mode in ordinary fast targeted-pocketic; do
         [[ ! -e "$scratch/server.pid" ]]
     fi
     diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
+    if rg -q '\[CANIC-(REQUEST|OBSERVATION|TIMING)\]' "$scratch/output.log"; then exit 1; fi
 done
-echo 'workspace test runner compilation barriers, selectors, failure ordering and cleanup passed'
+echo 'workspace test runner barriers, selectors, failure ordering, quiet output, retained diagnostics and cleanup passed'

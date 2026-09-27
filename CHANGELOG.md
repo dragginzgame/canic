@@ -14,6 +14,13 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.44` reduces retained-estate recovery fixtures to two workloads and one
+  reserve while retaining interruption, conservation and replay checks. Reuse
+  release-test artifacts across standalone host-test edits. Cut historical receipt
+  schemas and audit-size experiments from maintained validation. Consolidate
+  funding recovery into two-asset fixtures with generated growth coverage. Keep
+  detailed test traces in retained logs, showing a bounded diagnostic excerpt
+  only on failure while preserving live progress and results.
 - `0.110.43` adds reviewed completed-estate hard cuts and `fleet bootstrap` /
   `fleet import` for explicitly supplied infrastructure and capacity. Preserve
   original evidence through frozen receipt shapes and retain physical IDs while

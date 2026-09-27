@@ -1,8 +1,8 @@
 //! Module: fleet_ensure::ops::reinstall::terminal
 //!
-//! Responsibility: bind completed receipts and phase evidence without decoding an executable source plan.
+//! Responsibility: bind completed current-schema receipts and immutable phase evidence.
 //! Does not own: retirement admission, remote observations, replacement or replay.
-//! Boundary: opaque forecast fields remain source bytes; only supported completed effects are inspected.
+//! Boundary: current plan hashes and bounded completed effects remain authoritative.
 
 pub(in crate::fleet_ensure) mod documents;
 pub(in crate::fleet_ensure) mod inventory;
@@ -11,8 +11,8 @@ pub(in crate::fleet_ensure) mod receipt_audit;
 use crate::fleet_ensure::{
     model::{
         CanisterPlan, DesiredCanisterInit, EffectState, EnsureAction, FleetEnsureCompletion,
-        FleetEnsureContinuationAuthority, FleetEnsurePlanScope, FleetReinstallSourceRecord,
-        MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
+        FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope,
+        FleetReinstallSourceRecord, MAX_FLEET_ENSURE_CANISTERS, MAX_FLEET_ENSURE_PROTOCOL_STEPS,
     },
     ops::{
         EnsurePaths, EnsureStateError, action_sha256, continuation, is_sha256, plan_content,
@@ -29,7 +29,7 @@ use std::{
     path::Path,
 };
 
-/// Inspect completed evidence only. The original plan is never reconstructed or executed.
+/// Inspect current completed evidence without executing or rewriting the source.
 pub(in crate::fleet_ensure) fn read(
     paths: &EnsurePaths,
     environment: &str,
@@ -38,43 +38,48 @@ pub(in crate::fleet_ensure) fn read(
     let documents = documents::read(paths, environment, fleet)?;
     let mut raw = documents.plan;
     plan_content::hydrate(paths, &mut raw)?;
+    let plan: FleetEnsurePlan = serde_json::from_value(raw).map_err(|_| invalid())?;
+    if expected_plan_sha256(&plan) != plan.plan_sha256 {
+        return Err(invalid());
+    }
     let journal = documents.journal;
     validate_journal_fields(&journal)?;
     let state: crate::fleet_ensure::model::FleetEnsureStateRecord =
         serde_json::from_value(documents.state).map_err(|_| invalid())?;
-    let operation_id: String = field(&raw, "operation_id")?;
-    let plan_sha256: String = field(&raw, "plan_sha256")?;
+    let operation_id = &plan.operation_id;
+    let plan_sha256 = &plan.plan_sha256;
     let identity = [
-        field::<u16>(&raw, "schema_version")? == 1,
-        field::<String>(&raw, "scope")? == "full",
-        field::<String>(&raw, "environment")? == environment,
-        field::<String>(&raw, "fleet")? == fleet,
+        plan.schema_version == 1,
+        plan.scope == FleetEnsurePlanScope::Full,
+        plan.environment == environment,
+        plan.fleet == fleet,
         field::<String>(&journal, "fleet")? == fleet,
         field::<u16>(&journal, "schema_version")? == 1,
-        field::<String>(&journal, "operation_id")? == operation_id,
-        field::<String>(&journal, "plan_sha256")? == plan_sha256,
+        &field::<String>(&journal, "operation_id")? == operation_id,
+        &field::<String>(&journal, "plan_sha256")? == plan_sha256,
         field::<FleetEnsureCompletion>(&journal, "completion")? == FleetEnsureCompletion::Converged,
-        is_sha256(&operation_id),
-        is_sha256(&plan_sha256),
+        is_sha256(operation_id),
+        is_sha256(plan_sha256),
         state.active_registry.is_some(),
         state.pending_principals.is_empty(),
         field::<Vec<Value>>(&journal, "funding_reviews")?.is_empty(),
         journal.get("estate_funding_required") == Some(&Value::Null),
-        raw.get("reinstall") == Some(&Value::Null),
-        raw.get("root_start_authority") == Some(&Value::Null),
-        raw.get("terminal_inventory_operation_id") == Some(&Value::Null),
-        field::<Vec<Value>>(&raw, "root_reinstall_bindings")?.is_empty(),
-        field::<Vec<Value>>(&raw, "protocol_actions")?.is_empty(),
+        plan.reinstall.is_none(),
+        plan.infrastructure_bootstrap.is_none(),
+        plan.root_start_authority.is_none(),
+        plan.terminal_inventory_operation_id.is_none(),
+        plan.root_reinstall_bindings.is_empty(),
+        plan.protocol_actions.is_empty(),
     ];
     if !identity.into_iter().all(|valid| valid) {
         return Err(invalid());
     }
     let mut source = TerminalSourceView {
-        planned_at_time: field(&raw, "planned_at_time")?,
+        planned_at_time: plan.planned_at_time,
         documents: documents.bindings,
-        reviewed_desired: field(&raw, "reviewed_desired")?,
-        conservation: field(&raw, "conservation")?,
-        actions: initial_actions(&raw)?,
+        reviewed_desired: *plan.reviewed_desired.clone().ok_or_else(invalid)?,
+        conservation: plan.conservation.clone(),
+        actions: initial_actions(&plan.canisters)?,
         journal: journal_evidence(paths, &journal)?,
     };
     if source.reviewed_desired.desired().environment != environment
@@ -82,55 +87,28 @@ pub(in crate::fleet_ensure) fn read(
     {
         return Err(invalid());
     }
-    // Absence supplies no additional allowance. Present evidence must validate;
-    // null, malformed or unbound observations are never treated as absent.
-    let allowance = match journal.get("funding_observations") {
-        None => 0,
-        Some(value) => crate::fleet_ensure::ops::funding_observation::validation::source_allowance(
-            &crate::fleet_ensure::ops::funding_observation::resolved_from_state(
-                source.reviewed_desired.desired(),
-                &state,
-            ),
-            &source.documents.operation_id,
-            &source.documents.plan_sha256,
-            &serde_json::from_value(value.clone()).map_err(|_| invalid())?,
-        )
-        .map_err(|_| invalid())?,
-    };
+    let allowance = crate::fleet_ensure::ops::funding_observation::validation::source_allowance(
+        &crate::fleet_ensure::ops::funding_observation::resolved_from_state(
+            source.reviewed_desired.desired(),
+            &state,
+        ),
+        &source.documents.operation_id,
+        &source.documents.plan_sha256,
+        &field(&journal, "funding_observations")?,
+    )
+    .map_err(|_| invalid())?;
     source.conservation.maximum_execution_burn_cycles = source
         .conservation
         .maximum_execution_burn_cycles
         .checked_add(allowance)
         .ok_or_else(invalid)?;
-    phases(paths, &raw, &mut source)?;
+    phases(paths, &plan, &mut source)?;
     receipts(&source)?;
     Ok(source)
 }
 
 fn validate_journal_fields(journal: &Value) -> Result<(), EnsureStateError> {
-    // Unrecognised journal fields may describe paid work. Do not silently omit
-    // them from a terminal conservation assessment.
-    if journal.as_object().ok_or_else(invalid)?.keys().any(|key| {
-        !matches!(
-            key.as_str(),
-            "completion"
-                | "effects"
-                | "estate_funding_required"
-                | "fleet"
-                | "funding_observations"
-                | "funding_reviews"
-                | "initial_controlled_cycles"
-                | "initial_estate_funding_cycles_by_root"
-                | "initial_operator_cycles"
-                | "operation_id"
-                | "plan_sha256"
-                | "schema_version"
-                | "stalled_observations"
-                | "successor_phases"
-        )
-    }) {
-        return Err(invalid());
-    }
+    serde_json::from_value::<FleetEnsureJournalRecord>(journal.clone()).map_err(|_| invalid())?;
     Ok(())
 }
 
@@ -160,8 +138,7 @@ fn journal_evidence(
     })
 }
 
-fn initial_actions(raw: &Value) -> Result<Vec<EnsureAction>, EnsureStateError> {
-    let canisters: Vec<CanisterPlan> = field(raw, "canisters")?;
+fn initial_actions(canisters: &[CanisterPlan]) -> Result<Vec<EnsureAction>, EnsureStateError> {
     if canisters.is_empty() || canisters.len() > MAX_FLEET_ENSURE_CANISTERS {
         return Err(invalid());
     }
@@ -171,20 +148,20 @@ fn initial_actions(raw: &Value) -> Result<Vec<EnsureAction>, EnsureStateError> {
         if !names.insert(canister.name.clone()) {
             return Err(invalid());
         }
-        for action in canister.actions {
+        for action in &canister.actions {
             let (EnsureAction::Fund {
                 principal,
                 pool_funding: None,
                 ..
             }
-            | EnsureAction::Install { principal, .. }) = &action
+            | EnsureAction::Install { principal, .. }) = action
             else {
                 return Err(invalid());
             };
             if action.name() != canister.name || canister.principal.as_ref() != Some(principal) {
                 return Err(invalid());
             }
-            let rank = match &action {
+            let rank = match action {
                 EnsureAction::Fund { .. } => 0,
                 EnsureAction::Install {
                     canic_init: Some(DesiredCanisterInit::Coordinator),
@@ -197,7 +174,7 @@ fn initial_actions(raw: &Value) -> Result<Vec<EnsureAction>, EnsureStateError> {
                 EnsureAction::Install { .. } => 3,
                 _ => return Err(invalid()),
             };
-            actions.push((rank, action));
+            actions.push((rank, action.clone()));
         }
     }
     if actions.len() > MAX_FLEET_ENSURE_PROTOCOL_STEPS {
@@ -209,10 +186,10 @@ fn initial_actions(raw: &Value) -> Result<Vec<EnsureAction>, EnsureStateError> {
 
 fn phases(
     paths: &EnsurePaths,
-    raw: &Value,
+    plan: &FleetEnsurePlan,
     source: &mut TerminalSourceView,
 ) -> Result<(), EnsureStateError> {
-    let authority: FleetEnsureContinuationAuthority = field(raw, "continuation")?;
+    let authority = plan.continuation.as_ref().ok_or_else(invalid)?;
     if source.journal.successor_phases.is_empty()
         || source.journal.successor_phases.len() > MAX_FLEET_ENSURE_PROTOCOL_STEPS
     {
@@ -228,8 +205,8 @@ fn phases(
             phase.operation_id == source.documents.operation_id,
             phase.environment == source.reviewed_desired.desired().environment,
             phase.fleet == source.reviewed_desired.desired().fleet,
-            phase.desired_sha256 == field::<String>(raw, "desired_sha256")?,
-            phase.planned_at_time == field::<u64>(raw, "planned_at_time")?,
+            phase.desired_sha256 == plan.desired_sha256,
+            phase.planned_at_time == plan.planned_at_time,
             phase.reviewed_desired.as_deref() == Some(&source.reviewed_desired),
             phase.scope == FleetEnsurePlanScope::Full,
             phase.continuation.is_none(),

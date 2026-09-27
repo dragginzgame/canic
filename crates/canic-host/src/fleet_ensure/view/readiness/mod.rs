@@ -40,7 +40,6 @@ pub struct RetainedReadinessOperation {
     pub operation_id: String,
     pub plan_sha256: String,
     pub completion: FleetEnsureCompletion,
-    pub terminal_review_required: bool,
 }
 
 ///
@@ -53,7 +52,6 @@ pub struct RetainedReadinessOperation {
 #[serde(rename_all = "snake_case")]
 pub enum ReadinessBlocker {
     RetainedOperation,
-    RetainedTerminalReview,
     EstimatedFundingShortfall,
     RootNativeShortfall,
     StartupFundingPolicy,

@@ -6,15 +6,12 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    durable_io::read_regular_bytes,
-    fleet_ensure::{
-        ops::{EnsurePaths, is_sha256},
-        policy::{EnsurePolicyError, validate_path_labels},
-    },
+use crate::fleet_ensure::{
+    model::{FleetEnsureCompletion, FleetEnsurePlanScope},
+    ops::{EnsurePaths, read_journal, read_plan},
+    policy::{EnsurePolicyError, validate_path_labels},
 };
-use serde_json::Value;
-use std::{io, path::Path};
+use std::path::Path;
 use thiserror::Error;
 
 pub use crate::fleet_ensure::ops::reinstall::terminal::inventory::custody::{
@@ -25,8 +22,6 @@ pub use crate::fleet_ensure::ops::reinstall::terminal::inventory::membership::{
     CompletedCoordinatorError, CompletedMembershipError, CompletedParentageError,
     inspect as inspect_completed_membership,
 };
-
-const MAXIMUM_DOCUMENT_BYTES: usize = 32 * 1024 * 1024;
 
 /// Bind local source membership and all installed interfaces before any live inspection.
 /// Uses the finalized source release; current-release interfaces cannot substitute for it.
@@ -63,7 +58,7 @@ pub fn inspect_completed_inventory(
     )
 }
 
-/// Audit completed historical receipts without building, writing or contacting the IC.
+/// Audit completed current-schema receipts without building, writing or contacting the IC.
 /// Successful local audit still requires fresh live authority and cycle verification.
 pub fn inspect_completed_receipts(
     workspace: &Path,
@@ -115,26 +110,11 @@ pub enum RetainedContractError {
     ReceiptAudit(#[from] crate::fleet_ensure::ops::EnsureStateError),
     #[error(transparent)]
     Policy(#[from] EnsurePolicyError),
-    #[error("cannot read retained Fleet contract before build: {0}")]
-    Read(#[from] io::Error),
-    #[error("cannot inspect retained Fleet JSON before build: {0}")]
-    Decode(#[from] serde_json::Error),
     #[error("retained Fleet completion identity is inconsistent; preserve its evidence")]
     IdentityMismatch,
-    #[error(
-        "Fleet {fleet} retains completed operation {operation_id} under a different generated authority contract (plan {plan_sha256}). Verified {effect_count} local action receipts across {phase_count} successor phases, cross-checked {canister_count} recorded physical canisters and bound infrastructure interfaces to the finalized source release. The source has no recovery-controller declaration. Updating operator configuration cannot rewrite this evidence. Preserve the original desired document, plan, journal, state, phases and artifacts. A reviewed completed-estate hard-cut handoff is required before current Fleet execution; this check does not authorize a reset or validate live completion."
-    )]
-    CompletedAuthorityContract {
-        fleet: String,
-        operation_id: String,
-        plan_sha256: String,
-        effect_count: usize,
-        phase_count: usize,
-        canister_count: usize,
-    },
 }
 
-/// Reject a completed authority-contract boundary before current-schema decoding.
+/// Require pending publication and preparation to use their existing recovery owner.
 ///
 /// This is a diagnostic preflight. Passing it does not establish completion,
 /// controller authority, receipt integrity or permission to replace local files.
@@ -177,60 +157,41 @@ pub fn check(
     } else {
         crate::fleet_ensure::ops::completed_preparation::require_no_intent(&paths)?;
     }
-    let Some(journal) = read(&paths.journal)? else {
-        return Ok(());
-    };
-    if journal.get("completion").and_then(Value::as_str) != Some("converged") {
-        return Ok(());
-    }
-    let plan = read(&paths.plan)?.ok_or(RetainedContractError::IdentityMismatch)?;
-    let Some(bootstrap) = plan.pointer("/reviewed_desired/desired/bootstrap") else {
-        return Ok(());
-    };
-    // Current reviews may replace the plan while the completed source journal
-    // remains until apply. Their identity belongs to the current workflow guard.
-    if !bootstrap.is_object() || bootstrap.get("recovery_controllers").is_some() {
-        return Ok(());
-    }
-    let operation_id = text(&journal, "operation_id")?;
-    let plan_sha256 = text(&journal, "plan_sha256")?;
-    let matching_identity = journal.get("schema_version") == Some(&Value::from(1))
-        && plan.get("schema_version") == Some(&Value::from(1))
-        && text(&journal, "fleet")? == fleet
-        && text(&plan, "fleet")? == fleet
-        && text(&plan, "environment")? == environment
-        && text(&plan, "operation_id")? == operation_id
-        && text(&plan, "plan_sha256")? == plan_sha256;
-    if !matching_identity || !is_sha256(operation_id) || !is_sha256(plan_sha256) {
-        return Err(RetainedContractError::IdentityMismatch);
-    }
-    let source = inspect_completed_source(workspace, environment, fleet)?;
-    let audit = &source.inventory.receipts;
-    // Bind the audit to the first observation as well as its own coherent snapshot.
-    if audit.documents.operation_id != operation_id || audit.documents.plan_sha256 != plan_sha256 {
-        return Err(RetainedContractError::IdentityMismatch);
-    }
-    Err(RetainedContractError::CompletedAuthorityContract {
-        fleet: fleet.to_string(),
-        operation_id: operation_id.to_string(),
-        plan_sha256: plan_sha256.to_string(),
-        effect_count: audit.effect_count,
-        phase_count: audit.phase_count,
-        canister_count: source.inventory.canisters.len(),
-    })
+    Ok(())
 }
 
-fn read(path: &Path) -> Result<Option<Value>, RetainedContractError> {
-    match read_regular_bytes(path, MAXIMUM_DOCUMENT_BYTES) {
-        Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
-        Err(error) if error.kind() == io::ErrorKind::NotFound => Ok(None),
-        Err(error) => Err(error.into()),
+/// Select explicit preparation only for a completed operation in the current schema.
+/// Receipt, custody and conservation checks still belong to the preparation workflow.
+pub fn completed_source_available(
+    workspace: &Path,
+    environment: &str,
+    fleet: &str,
+) -> Result<bool, RetainedContractError> {
+    validate_path_labels(environment, fleet)?;
+    let paths = EnsurePaths::under(workspace, environment, fleet);
+    let Some(journal) = read_journal(&paths)? else {
+        return Ok(false);
+    };
+    if journal.completion != FleetEnsureCompletion::Converged {
+        return Ok(false);
     }
-}
-
-fn text<'a>(value: &'a Value, field: &str) -> Result<&'a str, RetainedContractError> {
-    value
-        .get(field)
-        .and_then(Value::as_str)
-        .ok_or(RetainedContractError::IdentityMismatch)
+    let Some(plan) = read_plan(&paths)? else {
+        return Err(RetainedContractError::IdentityMismatch);
+    };
+    let same_operation =
+        plan.operation_id == journal.operation_id && plan.plan_sha256 == journal.plan_sha256;
+    let same_scope =
+        plan.fleet == fleet && journal.fleet == fleet && plan.environment == environment;
+    Ok(same_operation
+        && same_scope
+        && plan.scope == FleetEnsurePlanScope::Full
+        && plan.reinstall.is_none()
+        && plan.continuation.is_some()
+        && plan.reviewed_desired.as_ref().is_some_and(|reviewed| {
+            reviewed
+                .desired()
+                .bootstrap
+                .as_ref()
+                .is_some_and(|bootstrap| !bootstrap.fresh_estate)
+        }))
 }

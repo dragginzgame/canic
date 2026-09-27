@@ -442,7 +442,7 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
         &root,
         "docs/status/current.md",
         &format!(
-            "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 -->\n"
+            "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 gate=complete -->\n"
         ),
     );
     (root, source)
@@ -879,7 +879,7 @@ fn release_candidate_does_not_parse_descriptive_release_prose() {
         "# Descriptive root changelog without a release-summary schema\n",
     );
     let validation_marker = format!(
-        "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 -->"
+        "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 gate=complete -->"
     );
     for pending_status in [
         "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.",

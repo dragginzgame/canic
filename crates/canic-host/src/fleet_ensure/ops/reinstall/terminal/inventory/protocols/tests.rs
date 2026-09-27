@@ -1,20 +1,20 @@
 //! Frozen release-manifest evidence remains byte-exact and cannot become transition authority.
 
 use super::*;
-use canic_core::{cdk::utils::hash::sha256_hex, ids::BuildNetwork};
+use canic_core::ids::BuildNetwork;
 
 const BYTES: &[u8] = include_bytes!("manifest.json");
 
 #[test]
-fn completed_release_manifest_retains_its_original_contract() {
+fn completed_release_manifest_binds_current_reinstall_authority() {
     let raw: serde_json::Value = serde_json::from_slice(BYTES).unwrap();
     let release = raw["release_build_id"].as_str().unwrap().parse().unwrap();
     let evidence = manifest(BYTES, release).unwrap();
     assert_eq!(serde_json::to_vec(&evidence).unwrap(), BYTES);
     assert_eq!(evidence.build_network, BuildNetwork::Ic);
     assert_eq!(
-        sha256_hex(BYTES),
-        "481dbce8daa31c59e10637ba60acc327a7d0e182804696ade19dfc5c4b4714f3"
+        evidence.transition_mode,
+        crate::release_set::ReleaseTransitionMode::ReinstallOnly
     );
 }
 
