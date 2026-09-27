@@ -165,3 +165,24 @@ The targeted compiled registry/runner check passes all four native tests, with t
 two real PocketIC entrypoints ignored. It confirms the renamed entrypoint exists,
 case partition/order remains exact and failure stops subsequent cases. No broad
 PocketIC suite was rerun for this identifier-only correction.
+
+## Maintainer ordinary-gate failure and correction
+
+The run at `target/test-runs/20260927T202301Z-4656.I9OKSf/1.log` passed 1103 host
+tests and failed three. The completion-envelope preflight preceded pending local
+publication inspection, which could encounter a partly replaced document set.
+Pending publication is now selected first and preserves its exact review/plan
+recovery diagnostic. Existing crash-boundary tests exercise all four publication
+checkpoints without rewriting records during preflight.
+
+The consumed-publication fixture now installs its current replacement documents
+before asserting that its completed publication consumed the opaque preparation.
+The unreadable-readiness assertion checks the exact decode error and journal path
+from the earlier retained-contract preflight. Both retain their no-mutation and
+no-network requirements.
+
+All 32 tests across publication/retirement, readiness, retained-contract and
+operation-selection groups pass; the explicitly external audit remains ignored.
+Scoped host library/test Clippy with warnings denied passes in 58.82s. Formatting
+and whitespace checks pass. This correction stays in `.45`; it adds no predecessor
+execution adapter and does not rerun the complete gate or PocketIC.

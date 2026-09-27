@@ -20,6 +20,25 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Release-gate host selection correction — ready for retry, .45, 2026-09-27
+
+The maintainer's ordinary gate reported 1103 passing host tests and three failures
+in `target/test-runs/20260927T202301Z-4656.I9OKSf/1.log`. Completion selection ran
+before an unfinished local publication owner, so partially replaced records could
+hide the exact recovery diagnostic. Pending publication now takes precedence over
+completion inspection. The completed-publication fixture now installs the current
+document set before checking consumed approvals; malformed-readiness evidence
+asserts its exact typed decode failure at the earlier preflight boundary.
+
+All 32 focused publication, readiness, retained-contract and operation-selection
+tests pass, including every previously failing case; one external read-only audit
+is intentionally ignored. Scoped host library/test warning-denied Clippy passes
+(58.82s), along with formatting and whitespace checks. No PocketIC or broad gate
+was rerun for this local selection correction. The complete `.45` batch remains
+ready for the maintainer's commit and release-gate retry; the failed complete gate
+has not been replaced by a passing complete result. Package versions remain `.44`,
+this follow-up is uncommitted, and no live or sibling effects ran.
+
 ## Urgent clean reinstall correction — .45 ready for review, 2026-09-27
 
 The normal completed-Fleet path generates a qualified current build from the
