@@ -372,6 +372,7 @@ release-validation-matrix-gate:
 	bash scripts/ci/check-release-validation-matrix.sh
 
 validation-runner-gate:
+	bash scripts/ci/test-sccache-wrapper.sh
 	bash scripts/ci/test-validation-target-runner.sh
 	bash scripts/ci/test-workspace-test-runner.sh
 	bash scripts/ci/test-native-icp.sh

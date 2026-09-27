@@ -22,6 +22,20 @@ open-draft statements describe that earlier development state.
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Latest compiler-cache correction, 2026-09-27: the dependency-risk fixture's
+Cargo metadata probe failed on sccache's initial server connection (`EPERM`).
+The wrapper now falls back to the exact compiler command only for sccache-owned
+errors; real compiler failures and cache-management failures retain their exit
+status. No server reset, cache deletion or permanent disabling is required.
+Focused shell regressions and ShellCheck pass. A real offline Cargo fixture
+reproduced the cache permission failure and successfully generated its lockfile
+and compiled through fallback; an intentional compiler error still returned 101.
+Log: `.tmp/sccache-cargo-probe.log`. The full dependency-risk script was not run
+because it creates a Git fixture commit, which the agent commit prohibition
+includes. Its failing Cargo boundary was exercised directly without commits.
+The wrapper regression is included in `validation-runner-gate`. Changes remain
+uncommitted, versions remain `.42`, and no broad release gate was rerun.
+
 Latest correction, 2026-09-27: the Prepared Root funding test assumed a stopped
 recipient paid no idle storage rent. Its live balances now admit one observed
 daily-burn allowance across an interval bounded below one day, smaller than the

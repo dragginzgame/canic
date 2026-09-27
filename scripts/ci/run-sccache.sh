@@ -33,4 +33,24 @@ chmod 700 "$SCCACHE_RUNTIME_ROOT" "$SCCACHE_RUNTIME_TMPDIR" ||
 export SCCACHE_SERVER_UDS="$SCCACHE_RUNTIME_ROOT/server.sock"
 export TMPDIR="$SCCACHE_RUNTIME_TMPDIR"
 
-exec "$SCCACHE_BIN" "$@"
+# Cache-management commands have no underlying compiler to fall back to.
+if [[ $# -eq 0 || "$1" == -* ]]; then
+    exec "$SCCACHE_BIN" "$@"
+fi
+
+# sccache 0.17 reports its own failures with exit 2 and this diagnostic prefix.
+# Compiler failures are forwarded separately, even when the compiler exits 2.
+# Its built-in I/O fallback does not cover the initial server connection.
+diagnostics="$(mktemp "$SCCACHE_RUNTIME_TMPDIR/client-error.XXXXXX")"
+trap 'rm -f -- "$diagnostics"' EXIT
+status=0
+"$SCCACHE_BIN" "$@" 2>"$diagnostics" || status=$?
+if [[ "$status" -eq 2 ]] && grep -q '^sccache: error:' "$diagnostics"; then
+    echo "sccache: warning: cache unavailable; running compiler directly" >&2
+    sed 's/^sccache: error:/sccache: warning:/' "$diagnostics" >&2
+    rm -f -- "$diagnostics"
+    trap - EXIT
+    exec "$@"
+fi
+cat "$diagnostics" >&2
+exit "$status"
