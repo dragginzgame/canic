@@ -73,6 +73,7 @@ fn provisioning_changes_are_meaningful_but_elapsed_time_is_not() {
     let mut progress = waiting(0);
     assert!(output.should_emit(&progress, start));
     let mut provisioning = FleetProvisioningProgress {
+        components: Vec::new(),
         pending_root_failure: None,
         phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
         root_batch_count: 2,
@@ -130,6 +131,7 @@ fn activating() -> FleetEnsureProgress {
     event.state = FleetEnsureProgressState::AwaitingProgress {
         elapsed_seconds: 33,
         provisioning: Some(FleetProvisioningProgress {
+            components: Vec::new(),
             pending_root_failure: None,
             phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
             root_batch_count: 1,
@@ -142,6 +144,71 @@ fn activating() -> FleetEnsureProgress {
         }),
     };
     event
+}
+
+#[test]
+fn named_components_preserve_instances_unknown_state_and_current_owner() {
+    use canic_host::fleet_ensure::dto::{FleetComponentProgress, FleetComponentProgressState};
+    let mut event = activating();
+    let FleetEnsureProgressState::AwaitingProgress {
+        provisioning: Some(detail),
+        ..
+    } = &mut event.state
+    else {
+        unreachable!()
+    };
+    detail.components = (0..6)
+        .map(|placement| FleetComponentProgress {
+            component_spec: "miner".into(),
+            deployment: "cells".into(),
+            placement,
+            member_path: vec!["worker".into()],
+            root: candid::Principal::from_slice(&[u8::try_from(placement).unwrap()]),
+            state: FleetComponentProgressState::Unknown,
+            current: placement == 5,
+        })
+        .collect();
+    let rows = detail.components.clone();
+    let plain = render::plain(&event);
+    for row in &rows {
+        assert!(plain.contains(&format!("cells[{}]/worker (miner): unknown", row.placement)));
+        assert!(plain.contains(&row.root.to_text()));
+    }
+    let panel = render::panel(&event, Duration::from_secs(31), Duration::from_secs(40));
+    let visible = panel
+        .iter()
+        .filter(|line| line.starts_with("cells["))
+        .collect::<Vec<_>>();
+    assert_eq!(visible.len(), 4);
+    assert!(visible[0].contains("cells[5]/worker (miner): unknown [current]"));
+    assert!(panel.iter().any(|line| line.contains("2 more components")));
+    assert!(panel.iter().any(|line| line.contains("31s old (stale)")));
+    let json: serde_json::Value = serde_json::from_str(&render_progress(&event, true)).unwrap();
+    assert_eq!(
+        json["progress"]["state"]["provisioning"]["components"],
+        serde_json::to_value(&rows).unwrap()
+    );
+    let mut output = ProgressOutput::default();
+    let now = Instant::now();
+    assert!(output.should_emit(&event, now));
+    assert!(!output.should_emit(&event, now + Duration::from_secs(1)));
+    let FleetEnsureProgressState::AwaitingProgress {
+        provisioning: Some(detail),
+        ..
+    } = &mut event.state
+    else {
+        unreachable!()
+    };
+    detail.components[5].state = FleetComponentProgressState::RuntimePending;
+    assert!(output.should_emit(&event, now + Duration::from_secs(2)));
+    let mut painter = terminal::Painter::default();
+    let mut bytes = Vec::new();
+    painter.paint(&mut bytes, &panel, (24, 14)).unwrap();
+    let rendered = String::from_utf8(bytes).unwrap();
+    let (_, frame) = rendered.split_once("\x1b[H\x1b[2J").unwrap();
+    assert!(frame.lines().all(|line| line.len() <= 23));
+    assert!(frame.lines().count() <= 14);
+    painter.clear(&mut Vec::new(), (24, 14)).unwrap();
 }
 
 #[test]
@@ -418,7 +485,7 @@ fn live_screen_keeps_callbacks_inside_and_restores_before_output_or_termination(
             _ => {}
         }
         if mode == "generation" {
-            session.finish_generation(true);
+            session.finish_without_report(true);
         } else {
             session.finish(None);
         }

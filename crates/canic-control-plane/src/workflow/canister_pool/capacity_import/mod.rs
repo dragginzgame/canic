@@ -120,7 +120,14 @@ pub async fn advance(
     let observed = CanisterPoolImportOps::observe_source(canister_id).await?;
     require_destination(&retained.reservation)?;
     match progress {
-        PoolImportSourceProgress::AwaitingHandoff => {
+        PoolImportSourceProgress::AwaitingHandoff
+            if !retained.reservation.sources[index].stopped =>
+        {
+            let budget = budget(MgmtOps::stop_canister_call_cost(canister_id)?);
+            CanisterPoolImportOps::issue_stop(identity, &observed, budget, IcOps::now_nanos())?;
+            MgmtOps::stop_canister(canister_id).await?;
+        }
+        PoolImportSourceProgress::AwaitingHandoff | PoolImportSourceProgress::Stopped => {
             let args = UpdateSettingsArgs {
                 canister_id,
                 settings: CanisterSettings {
@@ -143,6 +150,9 @@ pub async fn advance(
             let history = CanisterPoolImportOps::observe_history(canister_id).await?;
             require_destination(&retained.reservation)?;
             CanisterPoolImportOps::observe_controllers(identity, &observed, &history)?;
+        }
+        PoolImportSourceProgress::StopIssued => {
+            CanisterPoolImportOps::observe_stopped(identity, &observed)?;
         }
         PoolImportSourceProgress::ControllersConfirmed => {
             let budget = budget(MgmtOps::uninstall_code_call_cost(canister_id)?);

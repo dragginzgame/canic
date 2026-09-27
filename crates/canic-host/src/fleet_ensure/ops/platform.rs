@@ -9,7 +9,7 @@ use crate::icp::cycles_ledger::{
     CreateCanisterSuccess, SubnetSelection,
 };
 use crate::{
-    canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
+    canister_protocol::{CanisterProtocolError, call_with_candid, query_authenticated},
     fleet_ensure::{
         dto::{FleetEnsureProgress, FleetObservationStage, FleetObservationTiming},
         model::{
@@ -886,6 +886,7 @@ struct ObservationCounters {
 
 /// Production ICP adapter for the current desired Fleet.
 pub struct IcpEnsurePlatform {
+    pool_reader: RootPoolReader,
     infrastructure_bootstrap:
         Option<crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord>,
     retirement_debit_block: Option<u64>,
@@ -902,6 +903,15 @@ pub struct IcpEnsurePlatform {
     estate_observations: BTreeMap<String, EstateFundingDomainObservation>,
     pub(super) root: PathBuf,
 }
+
+/// One typed read boundary; observation caching and authority stay in the platform.
+struct RootPoolReader(
+    fn(
+        &IcpCli,
+        Principal,
+        &RootPoolStatusRequest,
+    ) -> Result<RootPoolStatusResponse, CanisterProtocolError>,
+);
 
 static NEXT_SPAN: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
@@ -928,6 +938,9 @@ impl IcpEnsurePlatform {
         let icp = IcpCli::new(icp_executable, Some(desired.environment.clone()))
             .with_cwd(root.to_path_buf());
         Self {
+            pool_reader: RootPoolReader(|icp, root, request| {
+                query_authenticated(icp, root, canic_protocol::CANIC_ROOT_STATUS, request)
+            }),
             desired,
             icp,
             infrastructure_bootstrap: None,
@@ -1322,12 +1335,12 @@ impl IcpEnsurePlatform {
         if self.required_root_status(root_name, root)? != CanisterRuntimeStatus::Running {
             return Ok(None);
         }
-        let candid = self.root_protocol_candid()?;
+        self.root_protocol_candid()?;
         let root_principal = parse_principal("Fleet Subnet Root", root)?;
         let mut start_after = None;
         let mut inventory = EstatePoolInventoryAccumulator::default();
         loop {
-            let page = self.query_estate_pool_page(&candid, root_principal, start_after)?;
+            let page = self.query_estate_pool_page(root_principal, start_after)?;
             let next = inventory.observe_page(root_name, page)?;
             if next.is_none() {
                 break;
@@ -1344,7 +1357,6 @@ impl IcpEnsurePlatform {
 
     pub(super) fn query_estate_pool_page(
         &self,
-        candid: &Path,
         root: Principal,
         start_after: Option<Principal>,
     ) -> Result<CanisterPoolResponse, IcpEnsurePlatformError> {
@@ -1358,11 +1370,9 @@ impl IcpEnsurePlatform {
             self.record_cached_read();
             return Ok(page);
         }
-        let response: RootPoolStatusResponse = query_with_candid(
+        let response = (self.pool_reader.0)(
             &self.icp,
-            candid,
             root,
-            canic_protocol::CANIC_ROOT_STATUS,
             &RootPoolStatusRequest::Pool(CanisterPoolStatusRequest {
                 start_after,
                 limit: 256,
@@ -2107,7 +2117,7 @@ impl IcpEnsurePlatform {
         principal: &'a str,
         state: &'a FleetEnsureStateRecord,
     ) -> Result<PreparedRootOwnedObservation<'a>, IcpEnsurePlatformError> {
-        let candid = self.root_protocol_candid()?;
+        self.root_protocol_candid()?;
         let parent = configured.parent.as_deref().ok_or_else(|| {
             current_protocol::CurrentProtocolError::Configuration(format!(
                 "Root-owned canister {} has no Root parent",
@@ -2128,11 +2138,8 @@ impl IcpEnsurePlatform {
         let target = parse_principal("Root-owned canister", principal)?;
         let mut start_after = None;
         loop {
-            let page = self.query_estate_pool_page(
-                &candid,
-                parse_principal("Fleet Subnet Root", root)?,
-                start_after,
-            )?;
+            let page = self
+                .query_estate_pool_page(parse_principal("Fleet Subnet Root", root)?, start_after)?;
             if let Some(asset) = page
                 .entries
                 .into_iter()
@@ -2437,12 +2444,12 @@ impl IcpEnsurePlatform {
         authority: &crate::fleet_ensure::model::PoolFundingAuthority,
         principal: &str,
     ) -> Result<InspectedModule, IcpEnsurePlatformError> {
-        let candid = self.root_protocol_candid()?;
+        self.root_protocol_candid()?;
         let root = parse_principal("Fleet Subnet Root", &authority.root)?;
         let target = parse_principal("pool funding target", principal)?;
         let mut start_after = None;
         loop {
-            let page = self.query_estate_pool_page(&candid, root, start_after)?;
+            let page = self.query_estate_pool_page(root, start_after)?;
             if let Some(asset) = page
                 .entries
                 .iter()
@@ -3965,7 +3972,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             let mut inventory = EstatePoolInventoryAccumulator::default();
             let mut cursor = None;
             loop {
-                let page = self.query_estate_pool_page(&candid, root, cursor)?;
+                let page = self.query_estate_pool_page(root, cursor)?;
                 if !inactive_source_pool_has_full_inventory(&page, &evidence) {
                     return Err(pool_configuration_error(
                         "source pool has unsettled work or spare creation capacity".to_string(),
@@ -4053,7 +4060,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
             let mut inventory = EstatePoolInventoryAccumulator::default();
             let mut cursor = None;
             loop {
-                let page = self.query_estate_pool_page(&candid, root, cursor)?;
+                let page = self.query_estate_pool_page(root, cursor)?;
                 let next = inventory.observe_page(&configured.name, page)?;
                 if next.is_none() {
                     break;
@@ -6231,7 +6238,8 @@ echo effect >> effects
                 "schema_version": 1, "treasury": "treasury",
             }))
             .unwrap();
-            let platform = IcpEnsurePlatform::new(desired, executable.to_str().unwrap(), &root);
+            let platform = IcpEnsurePlatform::new(desired, executable.to_str().unwrap(), &root)
+                .with_process_fixture_pool_reader();
             let paths = crate::fleet_ensure::ops::EnsurePaths::under(&root, "local", "owners");
             let state = crate::fleet_ensure::ops::read_state(&paths, "owners").unwrap();
             let fixture = Self {
@@ -6796,8 +6804,22 @@ if"#,
     }
 
     // Exercise preparation and completion directly when checking scope expiry.
-    #[cfg(unix)]
     impl IcpEnsurePlatform {
+        /// Native projection fixtures supply passive query records; PocketIC owns transport proof.
+        pub(in crate::fleet_ensure) fn with_process_fixture_pool_reader(mut self) -> Self {
+            self.pool_reader = RootPoolReader(|icp, root, request| {
+                crate::canister_protocol::query_with_candid(
+                    icp,
+                    Path::new("fixture-root.did"),
+                    root,
+                    canic_protocol::CANIC_ROOT_STATUS,
+                    request,
+                )
+            });
+            self
+        }
+
+        #[cfg(unix)]
         fn inspect_pending_pool_balance(
             &self,
             configured: &crate::fleet_ensure::model::DesiredCanister,

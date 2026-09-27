@@ -26,6 +26,9 @@ TEST_LOG_SEQUENCE=0
 
 case "$MODE" in
     fast | full | ordinary | pocketic) ;;
+    native-pocketic)
+        [[ -x "$TARGETED_POCKETIC_TEST" && -s "${CANIC_GOVERNED_CASE_FILE:-}" ]] || exit 2
+        ;;
     targeted-pocketic)
         if [[ -z "$TARGETED_POCKETIC_TEST" ]]; then
             echo "targeted-pocketic requires one exact governed test" >&2
@@ -305,12 +308,15 @@ run_test_command() {
     fi
     TEST_LOG_SEQUENCE=$((TEST_LOG_SEQUENCE + 1))
     local log="$TEST_LOG_DIR/$TEST_LOG_SEQUENCE.log"
-    local trace_pattern='\[CANIC-(REQUEST|OBSERVATION|TIMING)\]'
+    local trace_pattern='\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]'
     local statuses=()
     : > "$log" || return 1
     echo "==> complete test output: $log"
-    if "$@" 2>&1 | tee "$log" | awk '
-        !/\[CANIC-(REQUEST|OBSERVATION|TIMING)\]/ { print; fflush() }
+    if "$@" 2>&1 | tee "$log" | awk -v worker="${CANIC_POCKETIC_WORKER:-}" '
+        !/\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]/ {
+            if (worker != "" && $0 !~ /^\[CANIC-TEST:/) printf "[worker %s] ", worker
+            print; fflush()
+        }
     '; then
         statuses=("${PIPESTATUS[@]}")
     else
@@ -588,13 +594,13 @@ run_pic_inventory_tests() {
 
 run_pocketic_suites() {
     # Use the same selectors and feature graphs for preparation and execution.
-    # The internal harness owns case ordering and stops at its first failure.
+    # The internal harness owns the recovery barrier and ordered worker groups.
     run_serial_pocketic_test \
-        "canic-testing-internal ordered PocketIC suite" \
+        "canic-testing-internal governed PocketIC suite" \
         -p canic-testing-internal \
         --features governed-pocketic-tests \
         --lib \
-        pic::governed_suite::governed_serial_pocketic_suite \
+        pic::governed_suite::governed_internal_pocketic_suite \
         -- --exact --ignored
 
     # Full ordinary tests already selected the workspace lib/bin graph. Keep
@@ -619,6 +625,19 @@ run_pocketic_suites() {
 trap cleanup_workspace_test_run EXIT
 trap 'exit 130' INT
 trap 'exit 143' TERM
+
+# The governed parent compiled this binary; workers need no native Cargo
+# recursion and own independent servers, ICP shims, scratch and test logs.
+if [[ "$MODE" == "native-pocketic" ]]; then
+    start_owned_pocketic_server
+    status=0
+    run_test_command "$TARGETED_POCKETIC_TEST" \
+        pic::governed_suite::governed_internal_pocketic_suite \
+        --exact --ignored --nocapture --test-threads=1 || status=$?
+    report_owned_pocketic_server_resources "internal worker"
+    if [[ "$status" -ne 0 ]]; then report_owned_pocketic_server_output; fi
+    exit "$status"
+fi
 
 bash scripts/ci/check-workspace-test-inventory.sh
 start_compiler_cache_observation
@@ -685,7 +704,7 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
             "targeted canic-tests PocketIC integration proof" \
             -p canic-tests \
             --test "$TARGETED_POCKETIC_TEST"
-    elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_serial_pocketic_suite" ]]; then
+    elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_internal_pocketic_suite" ]]; then
         run_serial_pocketic_test \
             "targeted governed canic-testing-internal PocketIC suite" \
             -p canic-testing-internal \

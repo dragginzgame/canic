@@ -332,7 +332,7 @@ fn children(
     let mut seen = BTreeSet::new();
     let mut children = Vec::new();
     loop {
-        let page = platform.query_estate_pool_page(&protocol.candid_path, root, cursor)?;
+        let page = platform.query_estate_pool_page(root, cursor)?;
         for entry in page.entries {
             if !seen.insert(entry.canister_id) || seen.len() > MAX_FLEET_ENSURE_CANISTERS {
                 return Err(FundingObservationError::AuthorityMismatch.into());

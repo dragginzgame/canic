@@ -2,7 +2,8 @@
 
 Canic distinguishes the local workspace, an App, and a Fleet. App commands own
 source roles and artifacts. `canic fleet ensure` owns current live convergence.
-No other command owns Fleet installation or recovery.
+Explicit [infrastructure bootstrap and capacity import](../features/operations/fleet-ensure.md#supplied-infrastructure-bootstrap)
+prepare supplied canisters through their own reviewed operations before Ensure.
 
 ## Prepare The Workspace
 

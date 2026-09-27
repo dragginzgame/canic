@@ -29,7 +29,7 @@ pub(super) fn observe(
     local_replica: Option<&LocalReplicaTarget>,
 ) -> Result<Option<PreparedEstate>, FleetGenerateError> {
     let paths = EnsurePaths::under(request.root, request.environment, request.fleet);
-    if ops::completed_handoff::committed(&paths)
+    if ops::completed_handoff::completed(&paths)
         .map_err(|error| FleetGenerateError::Authority(error.to_string()))?
         .is_some()
     {

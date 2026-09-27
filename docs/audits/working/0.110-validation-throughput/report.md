@@ -1,5 +1,105 @@
 # Release-test throughput qualification
 
+The [implemented cache-attribution follow-up](../../reports/2026-09/2026-09-27/deployment-test-latency.md#implemented-follow-up-cache-attribution-and-worker-qualification)
+adds quiet upstream cache phase timings and splits replay/planning spans. A warmed
+completed-reset/refill pair passes at 262.03s serial versus 145.26s with the current
+two-worker launcher. All measured acquisitions are hits; observed coordination
+waiting is at most 0.51s. This qualifies that pair, not full catalogue balance or
+a new complete release duration.
+
+Preceding read-only audit: [deployment and test latency audit, 2026-09-27](../../reports/2026-09/2026-09-27/deployment-test-latency.md).
+It separates the `.44` full-stage observation from pending `.45`, records current
+warm request counts and cancelled CI case timings, and prioritizes worker balance,
+artifact-wait attribution and scoped observation/setup review. No new benchmark
+or full-suite result is claimed.
+
+## Two isolated workers and consolidated recovery — .45, 2026-09-27
+
+A controlled warmed pair used the same compiled binary, refill/repair cases and
+artifact sets. Serial wall time was **188s**, parallel **114s**: **39.4% less**.
+Individual command times were 114.92s/72.69s serial and 114.41s/73.06s parallel.
+The warm-up included a cold 352.458s artifact resolution after Cargo cleanup and
+is excluded from the comparison. One resource sample saw about 825 MiB combined
+server RSS; this is not a peak or a memory bound for larger cases.
+
+The default internal suite now completes source-bound recovery first, then uses
+two process-isolated workers: registered regular/coordinator/lifecycle cases and
+full Fleet journeys, preserving order within each group. Membership derives from
+the catalogue and must be nonempty, disjoint and complete. Workers reuse the
+compiled executable without native Cargo recursion, own servers/ports/shims and
+scratch, and cancel owned process groups on failure or interruption. The outer
+failure barrier and exact-case serial path remain. The measured pair qualifies
+concurrency; it does not measure the complete default partition or release gate.
+
+The mixed-topology test retains its changed-build application-row wipe, interrupted
+funding/install recovery and terminal replay. Its second same-build wipe now reuses
+the existing two-Workload/one-Ready reinstall estate, preserving distinct intent,
+lost identical-Wasm reconciliation, no duplicate installs, exact Ledger accounting,
+bounded native-cycle debit and effect-free replay. Final warmed cases pass in
+approximately 355s (mixed) and 234s (small including repeat). These changed cases
+are qualification observations, not controlled before/after performance pairs.
+
+The standalone synthetic native funding estate and branch are removed. The real
+blocked child claim now carries nonzero Ledger/management fees and owns shared
+withdrawal and receipt-loss recovery, exact operation/child identity, conservation
+and replay. It passed in approximately 446s including cold artifact work.
+
+An initial new small-estate assertion compared two live conservation snapshots
+exactly and failed on 183,840,158 cycles of observation charges after successful
+reset recovery. The corrected test bounds observation debit at 10B (below 1% of
+the smallest 1.9T credit), reconciles only the two debit-related fields, and keeps
+all payment, mutation and remaining conservation fields exact. Both final reset
+proofs pass. Native partition/selection tests, scoped Clippy, shell failure and
+interruption checks pass. The final parent-launcher proof passes in 118.91s,
+including both real worker selections and cleanup. Its initial sandboxed attempt
+could not bind localhost; the loopback-enabled rerun passed without a code change.
+Evidence is retained under `.tmp/pocketic-workers45/` outside Cargo cleanup and
+bound in `hard-cut-cleanup.json` under `worker_consolidation`.
+
+Upstream PID feedback is resolved by `ic-testkit 0.10.1` (2026-09-27), now selected
+in Canic's workspace dependency and lockfile. `PocketIcManagedServer::process_id()`
+identifies the owned server child for resource monitoring alongside its URL/output.
+The upstream regression checks that identity against the child's reported PID and
+checks cleanup on drop. The PID alone does not prove liveness or retain ownership;
+it can be reused after the child exits and is reaped.
+
+Canic's shell runners already retain their directly spawned server PIDs, so this
+adoption does not change worker monitoring or scheduling. The accessor is available
+to the host's managed local-Fleet server owner. Artifact cache lock timing already
+exists upstream; distinguishing lock waits from cache hits in Canic progress remains
+a Canic presentation follow-up. No sibling edits or external messages were made.
+No new full-gate duration is claimed.
+
+Adoption qualification: locked offline library/test compilation passes for
+`canic-host`, `canic-testing-internal` and `canic-tests`, with the governed
+PocketIC fixture feature enabled (including host `local-fleet` and the public
+`canic/testing` facade). Log: `.tmp/ic-testkit-0.10.1-check.log`. The lockfile
+changes only the `ic-testkit` version/checksum; no transitive package changed.
+This is compile verification; no PocketIC suite was rerun for the accessor update.
+
+
+## Complete .44 release observation — 2026-09-27
+
+The successful `.44` test stage took **55m04s**, down from **63m40s** for the
+previous successful `.43` run: **8m36s / 13.5% less**. Both runs completed all selected
+release suites successfully. The internal serial PocketIC stage fell from
+3,294s to 2,934s; ordinary tests fell from 169s to 78s and serial compilation
+from 88s to 19s. Source, artifact caches and load differ between these runs, so
+this is an observed full test-stage improvement, not a controlled estimate of
+savings from individual cuts. Publication and post-release cleanup time are
+outside these test-stage totals.
+
+Evidence: `target/validation-runs/20260927T090937Z-63129.moEFNt/timings.tsv`
+and `target/validation-runs/20260927T140355Z-30970.TKDPAU/timings.tsv`, with stage
+breakdowns in each directory's `0.log`. The validated source is `a77f2e9bb`;
+remote `main` and peeled `v0.110.44` were checked at release commit `2d8c9b387`.
+
+The latest console still contained 590 `FLEET-MEASURE` lines. The `.45` output
+correction adds that exact record family to the existing quiet trace filter
+and bounded failure excerpt, retaining complete logs. The focused fake-command
+runner regression covers both streams, successful output, mixed failure traces
+and narrow lanes; scoped ShellCheck passes. No additional real test gate ran.
+
 ## Release-gate fixture correction — .44, 2026-09-27
 
 The maintainer's `make release-patch` on `411fe1dae` stopped in the host-import

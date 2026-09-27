@@ -26,13 +26,21 @@ This document is the single source of truth for test configuration policy.
 
 Tests in `canic-core` MUST follow exactly one configuration strategy.
 Mixing configuration mechanisms is forbidden.
-Workspace test runs should use single-threaded rust test execution (`-- --test-threads=1`)
-to avoid PocketIC startup races under parallel harness execution.
+Ordinary Rust tests run in parallel. The governed runner separates PocketIC
+execution from ordinary tests and controls its process isolation and ordering.
 
 ### PocketIC Stability Guard (Required)
 
 - Never run workspace PocketIC tests with parallel rust test threads.
-- Use `make test` (or explicitly pass `-- --test-threads=1`).
+- Use the governed runner. Full runs execute ordinary tests first and stop at
+  that barrier if they fail. The internal PocketIC catalogue runs source-bound
+  activation recovery first, then two isolated workers, each serial within its
+  own process. Later PocketIC suites remain ordered.
+- Workers share compiled artifacts and locked caches, with private servers,
+  ports and scratch. A worker failure cancels its cohort and blocks later suites.
+- For one regression, use `make test-pocketic-case CASE='<exact registered case or integration target>'`.
+  Exact case selection stays serial. `--test-threads=1` alone does not set up
+  the governed runner's scratch, fixtures and server lifecycle.
 - Keep a writable temp directory with enough free space. PocketIC allocates runtime
   state under `TMPDIR`; this repo's `make test` assigns one private
   `.tmp/test-runtime.<suffix>` directory per invocation.
@@ -42,6 +50,16 @@ to avoid PocketIC startup races under parallel harness execution.
   - `KeyAlreadyExists { key: "nns_subnet_id", version: 2 }`
   - `ERROR: Failed to initialize PocketIC ... connection closed before message completed`
   - `HTTP failure ... hyper::Error(IncompleteMessage)`
+
+During implementation, run only checks scoped to the changed behavior. The
+maintainer selects broad gates such as `make test`, `make test-ordinary` and
+`make test-pocketic`; see [CI governance](docs/governance/ci-deployment.md).
+Check for an active build using the shared `target/` before starting another.
+
+The runner prints progress and results while retaining complete output under
+`target/test-runs/`. High-volume `CANIC-REQUEST`, `CANIC-OBSERVATION`,
+`CANIC-TIMING`, `CANIC-CACHE` and `FLEET-MEASURE` records stay in those logs on
+success; failure prints at most the last 100 trace lines plus the full log path.
 
 ### Configuration Categories
 

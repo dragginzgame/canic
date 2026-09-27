@@ -13,8 +13,12 @@ const CANIC_MANAGED_RUNTIME_CRATES: &[&str] =
 #[test]
 fn canic_runtime_memory_has_one_package_identity() {
     let mut command = Command::new(env!("CARGO"));
+    // Exercise machine-readable output even when CI forces terminal colors.
+    command.env("CARGO_TERM_COLOR", "always");
     command.current_dir(workspace_root()).args([
         "tree",
+        "--color",
+        "never",
         "--locked",
         "--offline",
         "--target",

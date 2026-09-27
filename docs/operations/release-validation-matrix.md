@@ -62,7 +62,7 @@ Clippy, and the complete workspace test target. It collects every independent
 failure within a cheap preflight barrier, admits a compile/lint barrier only
 after preflight passes, and admits the complete test barrier only after check
 and warning-denied Clippy pass. Within the complete workspace test target, all
-ordinary suites finish first and any ordinary failure skips the serial
+ordinary suites finish first and any ordinary failure skips the governed
 PocketIC suites. The primitive targets remain independently runnable and do
 not invoke unrelated validation operations.
 
@@ -98,9 +98,10 @@ command inventory here. The maintained outcome categories are:
 - pinned preflight, ShellCheck, formatting, lint, default-example, layering,
   feature, dependency, secret, audit, release-contract, and current-document
   checks for pull requests and `main`;
-- separately reported ordinary and ordered serial PocketIC test lanes for pull
-  requests and `main`, including Fleet deployment restore as the first case in
-  the one-process internal harness plus per-suite PocketIC resource evidence;
+- separately reported ordinary and governed PocketIC test lanes for pull
+  requests and `main`: source-bound activation recovery runs before two isolated
+  internal workers; cases within each worker and subsequent suites remain
+  ordered, with retained PocketIC resource evidence;
   and
 - the locked release workspace build for a `Release ...` commit on `main`.
 

@@ -40,6 +40,39 @@ fn restart(record: &CapacityImportJournalRecord) -> CapacityImportJournalRecord 
 }
 
 #[test]
+fn reviewed_root_custody_restarts_without_fabricated_host_effects() {
+    let mut plan = plan();
+    plan.sources[0].binding.controllers = vec![plan.authority.root];
+    plan.sources[0].binding.stopped = false;
+    let plan = prepare_review(plan.authority, plan.sources, plan.root_budget).unwrap();
+    let record = reviewed(plan.clone()).unwrap();
+    let record = approve(
+        &record,
+        plan.plan_sha256,
+        &destination(&plan),
+        &sources(&plan),
+    )
+    .unwrap();
+    let record = reserve(
+        &record,
+        CapacityImportReservationRecord {
+            plan_sha256: plan.plan_sha256,
+            authority: plan.authority.clone(),
+            sources: vec![plan.sources[0].binding.canister_id],
+        },
+    )
+    .unwrap();
+    let restored = restart(&record);
+    assert!(all_custody_ready(&restored));
+    assert!(restored.handoffs[0].effect.is_none());
+    assert!(restored.handoffs[0].request.is_none());
+    assert!(matches!(
+        prepare_handoff(&restored, &sources(&plan)[0]),
+        Err(CapacityImportJournalError::Integrity)
+    ));
+}
+
+#[test]
 fn capacity_import_requires_approval_and_reservation_before_handoff_intent() {
     let plan = plan();
     let record = reviewed(plan.clone()).unwrap();

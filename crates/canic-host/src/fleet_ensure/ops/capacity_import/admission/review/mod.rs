@@ -130,7 +130,7 @@ impl ReviewSurvey {
             declarations_toml: text,
         };
         let inventory = inventory::observe(&transport.agent, &admission, root, registry).await?;
-        verify_sources(&transport.agent, &inventory, operator, &bindings).await?;
+        verify_sources(&transport.agent, &inventory, operator, root, &bindings).await?;
         let authority = CapacityImportAuthority {
             fleet: registry.authority.binding.fleet.clone(),
             network_root_key_sha256: key_hash,
@@ -174,6 +174,12 @@ impl ReviewSurvey {
             .sources
             .values()
             .map(|source| source.sample.binding.canister_id)
+            .chain(
+                source
+                    .held_sources
+                    .values()
+                    .map(|source| source.custody.canister),
+            )
             .collect::<BTreeSet<_>>();
         let original_review_matches = hold.review_sha256 == source.source_sha256;
         if !original_review_matches
@@ -205,7 +211,22 @@ impl ReviewSurvey {
         &self,
         canister: Principal,
     ) -> Result<CapacityImportSampleRecord, CapacityImportJournalError> {
-        management::observe(&self.transport.agent, canister).await
+        let declarations = declarations::parse(&self.admission.declarations_toml)?;
+        let held = declarations
+            .canisters
+            .iter()
+            .map(declarations::CapacityImportDeclaration::binding)
+            .collect::<Result<Vec<_>, _>>()?
+            .iter()
+            .any(|source| {
+                source.canister_id == canister && source.controllers.contains(&self.authority.root)
+            });
+        if held {
+            management::observe_root_owned(&self.transport.agent, self.authority.root, canister)
+                .await
+        } else {
+            management::observe(&self.transport.agent, canister).await
+        }
     }
 
     /// Construct the exact original review and recheck free admission after all paid samples.
@@ -344,6 +365,7 @@ async fn verify_sources(
     agent: &ic_agent::Agent,
     inventory: &inventory::Inventory,
     operator: Principal,
+    root: Principal,
     bindings: &[CapacityImportSourceBinding],
 ) -> Result<(), CapacityImportJournalError> {
     for binding in bindings {
@@ -376,7 +398,7 @@ async fn verify_sources(
             }
             .into());
         }
-        if !binding.controllers.contains(&operator) {
+        if !binding.controllers.contains(&operator) && !binding.controllers.contains(&root) {
             return Err(CapacityImportPolicyError::OperatorNotController {
                 canister: binding.canister_id,
             }

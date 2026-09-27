@@ -52,6 +52,7 @@ pub struct CanisterInfo {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct CanisterStatusResponse {
+    pub version: u64,
     pub status: CanisterStatusType,
     pub settings: CanisterSettings,
     pub module_hash: Option<Vec<u8>>,

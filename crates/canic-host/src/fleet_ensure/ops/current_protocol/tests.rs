@@ -261,12 +261,34 @@ cat "$id.json"
     }
 
     fn read(&self) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
-        query_current_root_authorities(
-            &self.icp,
-            &self.desired,
+        self.read_desired(&self.desired)
+    }
+
+    fn read_desired(
+        &self,
+        desired: &DesiredFleet,
+    ) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
+        read_root_authorities(
+            desired,
             &state(),
-            &self.root.join("root.did"),
-            &self.root.join("store.did"),
+            |root| {
+                query_with_candid(
+                    &self.icp,
+                    &self.root.join("root.did"),
+                    root,
+                    protocol::CANIC_ROOT_STATUS,
+                    &RootStatusRequestFragment::FleetAuthority,
+                )
+            },
+            |store| {
+                query_with_candid(
+                    &self.icp,
+                    &self.root.join("store.did"),
+                    store,
+                    protocol::CANIC_WASM_STORE_STATUS,
+                    &StoreStatusRequest::Authority,
+                )
+            },
         )
     }
 }
@@ -351,14 +373,7 @@ fn root_authority_reads_matched_latency_measurement() {
                         .flat_map(|root| {
                             let mut desired = fixture.desired.clone();
                             desired.canisters = vec![root.clone()];
-                            query_current_root_authorities(
-                                &fixture.icp,
-                                &desired,
-                                &state(),
-                                &fixture.root.join("root.did"),
-                                &fixture.root.join("store.did"),
-                            )
-                            .unwrap()
+                            fixture.read_desired(&desired).unwrap()
                         })
                         .collect()
                 };
@@ -1448,6 +1463,7 @@ fn provisioned_registry_requires_its_exact_component_operation_receipt() {
             runtimes_activated_at_ns: Some(6),
         };
 
+    component_progress::tests::qualify(&compiled.request.plan, &status);
     assert_retry_timestamp_is_not_durable_progress(&status);
     assert_provisioning_progress_is_bounded(&status);
 
@@ -1507,6 +1523,7 @@ fn assert_provisioning_progress_is_bounded(
     assert_eq!(
         observed.provisioning_progress,
         Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
+            components: Vec::new(),
             pending_root_failure: None,
             phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
             root_batch_count: 2,

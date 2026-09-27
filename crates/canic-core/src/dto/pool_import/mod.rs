@@ -3,7 +3,7 @@
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
-/// Initialization hold for supplied capacity that Root does not yet control.
+/// Initialization hold for supplied capacity awaiting reviewed clearing and publication.
 /// The host review binds this declaration; only its exact import may release allocation.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -17,6 +17,8 @@ pub struct PoolImportBootstrap {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct PoolImportSource {
     pub canister_id: Principal,
+    /// Actual source custody before any optional operator handoff.
+    pub controllers: Vec<Principal>,
     #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
     pub module_sha256: Option<[u8; 32]>,
     pub canister_version: u64,
@@ -60,6 +62,7 @@ pub struct PoolImportSourceReceipt {
     pub root_sender_canister_version: u64,
     pub canister_id: Principal,
     pub canister_version: u64,
+    pub before_uninstall_canister_version: u64,
     pub retained_cycles: u128,
     pub retained_reserved_cycles: u128,
     pub observed_debit_cycles: u128,
@@ -71,6 +74,8 @@ pub enum PoolImportSourceProgress {
     AwaitingHandoff,
     ControllersIssued,
     ControllersConfirmed,
+    StopIssued,
+    Stopped,
     UninstallIssued,
     Ready(PoolImportSourceReceipt),
 }

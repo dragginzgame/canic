@@ -1,9 +1,33 @@
 # Fleet Ensure
 
-`canic fleet ensure <fleet>` is the sole maintained Fleet installation and
-convergence workflow. It reads one current desired-state document, observes the
+`canic fleet ensure <fleet>` owns desired-state Fleet installation and
+convergence. It reads one current desired-state document, observes the
 configured controlled estate, and either writes a reviewed plan or applies the
 exact retained plan digest.
+
+For other starting points, see [supplied infrastructure bootstrap](#supplied-infrastructure-bootstrap)
+and [capacity import](#add-supplied-capacity-to-a-current-fleet). These explicitly
+reviewed setup operations publish authority for subsequent Ensure convergence.
+
+Clean reinstall is the normal pre-1.0 release transition. Select the complete
+physical inventory and a qualified current build; `fleet ensure --reinstall`
+reviews replacement infrastructure, child clearing and fresh workload convergence.
+Completed operations become immutable history before current execution authority
+is created. Their old desired documents, application interfaces and executable
+schemas do not participate in the replacement decision. Unfinished paid work
+retains its recovery owner.
+
+Current certified controllers and subnet placement authorize the reset. The
+operator must control the supplied Coordinator, Root and Store. Root-controlled
+children remain held while current infrastructure is installed, then the current
+Root observes their cycles and clears their code/state through reviewed import.
+The archive under `.canic/fleet-ensure/history/<environment>/<fleet>/` retains
+original operation bytes and available referenced objects. Retirement is local,
+journaled and recoverable; it grants no live effect authority.
+
+The `.45` focused qualification covers successive resets, interruption recovery
+and offline terminal replay; see [current status](../../status/current.md) for
+evidence and release status.
 
 Use `--identity <name>` on `fleet generate`, `fleet readiness` and `fleet ensure`
 to select the ICP signing identity without reading or changing ICP's global
@@ -24,12 +48,27 @@ resuming an operation; generated successor-review commands retain it. Without
 the option, the existing default-selection behavior applies. This option does
 not select an identity for unrelated Canic command groups.
 
-Normal `fleet ensure` review/apply and `fleet generate` commands print a timing
+Normal `fleet ensure` review/apply, completed-source preparation, completed-estate
+reset review/apply/replay, and `fleet generate` commands print a timing
 receipt path under `.canic/diagnostics/fleet/` before measured work. `--json`
 Ensure output emits a `fleet_ensure_timing_receipt` event with that path. These
 private JSONL diagnostics supplement the retained plan and journal; they never
 prove deployment completion or authorize continuation. Funding-observation and
 operator-mint subcommands retain their existing output owners.
+
+Completed-source routes select their local retained owner before opening the
+receipt; local route selection is outside the measured interval. The receipt
+opens before remote preparation, reset planning or publication approval.
+`invocation_started.command` distinguishes `completed_preparation` and
+`completed_reset`. `applied_review_sha256` records the supplied preparation or
+publication digest; it is not an execution plan hash. A
+`completed_preparation_authority` event binds the source operation/plan and
+prepared result. A `completed_reset_authority` event binds the publication digest
+to the current desired, plan and operation hashes. Preparation completion does
+not mean the Fleet deployment is terminal. Failed invocations close as failed;
+abrupt interruption retains incomplete evidence. Same-digest continuation and
+terminal publication-digest replay each create a separate receipt. Keep all of
+them; a terminal execution replay reports zero effects and issues no IC calls.
 
 Each line has UTC Unix milliseconds and monotonic elapsed microseconds. Existing
 progress DTOs bind operation, plan and phase; stage and request identifiers link
@@ -80,6 +119,28 @@ count. A partial final line, absent outcome, omitted events or diagnostic I/O
 error means incomplete evidence. Interrupted files are retained; continuation
 creates a new file. Keep both when reporting a deployment issue. No automatic
 cross-invocation pruning is performed.
+
+Provisioning progress includes `components`: each entry names the component spec,
+deployment, placement ordinal, member path and exact Root Principal. Repeated
+instances remain separate. States come from the Coordinator's exact sequential
+member cursors (`reserved`, `claimed`, `installed`, `registered`,
+`published`, `runtime_pending`, `active`); absent or inconsistent member evidence stays
+`unknown`, even when aggregate Root counts have advanced. `current` identifies
+the observed member cursor, not proof of failure. Root retry reasons and deadlines
+remain separately attributed to their reported owner. The live panel prioritizes
+current members and shows up to four occurrences; plain/JSON milestones and
+receipts include the full list. Terminal clipping and observation age apply to
+these rows. Animation adds no reads.
+
+Fleet apply's Root status reads (authority, registry and pool observations) use
+the authenticated query transport with at most three logical attempts, ten
+seconds per attempt and thirty seconds total after local identity/network
+resolution. Retries keep the same signer, network, target, method and argument.
+Only typed transient timeouts, connection/body failures and HTTP
+408/429/502/503/504 qualify. Authentication, certificate, rejection and decode
+failures propagate immediately. Mutation retries remain governed by retained
+intent and receipt reconciliation. Exhausted read retries leave the same reviewed
+operation resumable; they do not replace its authority or reset paid-effect limits.
 
 Human output ends with an invocation summary of completed outer observation
 costs, remote attempt counts and the latest persisted effect count. Nested
@@ -149,98 +210,22 @@ reject the snapshot. Observations are sequential and have no retained freshness
 lease; every fact can change immediately afterward. Success means the known early
 checks passed, not that deployment is affordable or approved.
 
-Non-converged retained work blocks a new operation. Preserve its plan, journal
-and selected build and use the existing recovery flow. Completed-source review
-requires the current plan and journal contracts, valid canonical hashes and
-complete receipts. Unreadable or inconsistent evidence fails closed.
+## Clean reinstall of a completed Fleet
 
-Completed-source inspection uses the maintained desired, plan, protocol-action,
-Registry and release-manifest contracts. Required recovery-controller declarations
-and the reinstall-only transition mode must be present. Receipt audit verifies
-source and successor plan hashes using the ordinary plan hasher, exact action
-hashes, Applied receipts, attempt bounds and declared operator debits. It preserves
-original journal balances and rejects unaccounted payments or creation exposure.
-Reading a completed record grants no execution or reset authority.
-
-For an explicit `fleet ensure --reinstall`, a converged current operation with
-supplied capacity selects completed-source preparation. An in-progress operation
-or a newly reviewed plan keeps its existing workflow owner. Pending preparation,
-reset review and local publication must resume their exact recorded operation.
-Current schema decoding is strict; hand-editing source records cannot repair an
-invalid declaration or receipt hash.
-
-The source inspector cross-checks recorded IDs, Root ownership, application
-parentage and balances. It binds installed interfaces to the finalized source
-manifest and exact Candid bytes. Fresh certified custody samples verify operator,
-network, controllers, module presence and subnet placement. Live Pool, Coordinator,
-child-directory and Ledger observations must agree with the source inventory.
-Additional controlled accounts cannot conceal a missing native balance.
-
-Preparation uses reviewed authority seals and bounded management observations,
-with intent persisted before effects and exact reconciliation after lost replies.
-A separate reset review binds the selected current artifacts, original source
-bytes, fresh authority and balances, destructive effects and debit bounds. Local
-publication archives original plan, journal, state and successor phases unchanged,
-then replaces authority under the Fleet lock. Interrupted publication recovers
-before ordinary execution; completed replay preserves later progress.
-
-The production-adapter PocketIC proof starts from genuinely completed current
-records and unmodified current release manifests. It retains preparation,
-interrupted publication, lost install-response recovery, exact selected IDs,
-cycle conservation and effect-free terminal replay. This is disposable local
-qualification; it does not establish a live downstream deployment.
-
-The `toko-miner-mainnet` identity is Toko's configured default; an override must
-still resolve to the source operator Principal. The corrected CLI and the
-application runtime must select the same published Canic release. Installing
-the corrected CLI alone cannot make a `.42` application build current.
-
-The development CLI now selects completed-source **authority preparation** before
-loading the old desired document. It requires an explicit environment and verifies
-source receipts, live custody, membership, application parentage and default
-Ledger accounts without building Wasm. Parent queries use the original application
-manifest and Candid profiles. Each provisioning role must enumerate exactly its
-recorded children with matching roles and Root allocations; leaf roles must have
-no recorded descendants. Review this first stage with:
+Run readiness before building. Do not supply a historical desired document to
+this pre-build check; it inspects completion metadata without decoding the old
+executable contracts. An unresolved paid operation must resume its recorded
+operation before another reset can begin.
 
 ```sh
-canic --environment staging fleet ensure toko-miner-staging-001 \
-  --identity toko-miner-mainnet --reinstall --json
+canic --environment staging fleet readiness toko-miner-staging-001 \
+  --identity toko-miner-mainnet \
+  --operator '<CURRENT_OPERATOR_PRINCIPAL>'
 ```
 
-The preparation review lists Coordinator then Root seals, original document and
-interface hashes, exact observed controllers, maximum seal submissions and
-management observations, and the execution-burn allowance. It also lists every
-retained ID, subnet, module and inspection owner. Each asset has two inspection
-attempts and a 2T allowance; a Root must cover its descendants' inspection costs
-from native headroom. Operator debit is zero;
-this stage authorizes no payments, controller handoffs, installs or wipes.
-Original plan, journal, state, phases and referenced artifacts are archived
-unchanged. It creates a separate preparation review and journal under the Fleet's
-existing directory. It does not supply missing recovery-controller declarations.
-
-The matching preparation apply command is:
-
-```sh
-canic --environment staging fleet ensure toko-miner-staging-001 \
-  --identity toko-miner-mainnet --apply '<PREPARATION_REVIEW_SHA256>' --json
-```
-
-Interrupted preparation repeats that exact digest. Paid-call intent and consumed
-allowances survive process restarts; an uncertain seal response is reconciled
-against its exact operation receipt before another submission. Native and reserved
-balances remain separate, and reserved cycles cannot supply execution headroom.
-Exhausted allowances reject without rebasing or refreshing the journal. A terminal
-preparation replay performs no IC calls or payments.
-
-After the seals, preparation samples every retained native/reserved balance,
-inspecting descendants before the paying Root. It checks native funds against
-the original starting baseline plus receipted funding and the original/preparation
-burn ceilings. Original Root Ledger accounts are reconciled separately, and
-reserved or unrelated Ledger funds cannot hide missing native funds. A terminal
-conservation pass is still required after application mutation stops.
-
-With current-release artifacts finalized, generation can use this preparation:
+Build Toko against the same current Canic release as the CLI, using the normal
+`canic build` command. Keep the selected build's artifacts. Generate fresh current
+authority from the explicit estate seed and current policy:
 
 ```sh
 canic --environment staging fleet generate toko-miner-staging-001 \
@@ -252,82 +237,58 @@ canic --environment staging fleet generate toko-miner-staging-001 \
   --output fleets/toko-miner-staging-001-current.toml
 ```
 
-Use a new output path and the retained seed, without `--fresh`. The seed must
-cover every source ID, including allocated application descendants in their
-Root's `pool_imports`; omitted Principals are listed in the diagnostic. Generation
-rechecks custody/membership/Ledger/seals and compiles current recovery controllers
-from current operator configuration. It reports the preparation digest alongside
-the retained balance sample and does not query the old runtime as the new build.
-This command performs no IC updates and does not authorize reset effects.
+Use a new output path, or the explicit replacement digest when replacing an
+existing output. Do not use `--fresh`: the seed supplies the retained Coordinator,
+Roots, Stores and every child ID, including allocated workloads. Generation of a
+completed Fleet compiles the replacement without querying its old runtime. It
+does not claim observed cycle balances; those are sampled during current review.
 
-Review destructive reset against that newly generated document:
+Review the first phase:
 
 ```sh
 canic --environment staging fleet ensure toko-miner-staging-001 \
   --identity toko-miner-mainnet \
-  --desired fleets/toko-miner-staging-001-current.toml --reinstall --json
+  --desired fleets/toko-miner-staging-001-current.toml \
+  --source deployments/toko-miner-staging-001.toml \
+  --seed deployments/toko-miner-staging-001.estate.toml \
+  --reinstall --json
 ```
 
-This is a separate review from preparation. Its publication digest binds fresh
-current typed initialization, exact retained infrastructure and pool IDs, original
-controller evidence, current Root/recovery controller authority, wipe scope,
-funding and the maximum debit. Applying it archives the original records unchanged
-and publishes current plan/journal/state under the existing Fleet lock:
+Follow the returned `next_command`. Each phase shows its exact digest and debit
+bounds before apply. Infrastructure installs the qualified current Coordinator,
+Root and Store under typed initialization. Import observes the held children
+through the new Root, stops running application code, clears it and publishes the
+exact retained capacity. The final phase provisions the fresh workloads.
 
 ```sh
 canic --environment staging fleet ensure toko-miner-staging-001 \
-  --identity toko-miner-mainnet --apply '<RESET_REVIEW_SHA256>' --json
+  --identity toko-miner-mainnet --apply '<REVIEW_SHA256>' --json
 ```
 
-Repeat that exact command after an interruption. Once publication has committed,
-it resumes the current Ensure operation without decoding or reapproving the source.
-The existing effect driver owns funding, infrastructure reinstalls, Root-owned
-pool clearing and current Component provisioning. Pool clearing stops the old
-application and waits for outstanding calls before replacing controllers and
-uninstalling its code. Current provisioning starts the newly installed Workload. Follow any separately printed
-funding review; a reset digest does not approve additional funding. Source
-application state is disposable. Physical IDs remain in the same Root/subnet
-closure; application roles may be reassigned within it.
+After a phase completes, the returned command reviews the next phase. Current
+build authority and input paths are retained for retries. Repeat the same apply
+digest after interruption; do not regenerate artifacts or edit journals. Every
+paid effect retains intent before submission and reconciles uncertain responses.
+Additional funding requires its own bounded review. `fleet_completed: true`
+marks completion of the whole reset; infrastructure or import completion alone
+does not. Immediate completed apply replays the retained receipt locally.
 
-Final accounting observes native and reserved cycles and every retained canister's
-default Ledger account. Its two reviewed sweep attempts are journaled before any
-paid inspection. The terminal receipt binds exact completed journal/state bytes;
-immediate repeated apply returns that receipt without IC calls or payments.
-Completed publication also releases the preparation block for subsequent ordinary
-`fleet generate` and `fleet ensure` operations.
+A later explicit `--reinstall` starts a distinct reset, archiving the completed
+operation. Ordinary `fleet ensure` does not discard a completed Fleet. Historical
+records remain evidence; they are never repaired into executable authority and
+missing controller fields are never filled with guessed defaults.
 
-Toko's frontend is an external ICP asset canister outside this Fleet closure.
-Keep its existing ID selected when publishing the new frontend assets; these
-commands neither allocate nor replace that frontend.
+These commands clear Canic and application state. Supplied IDs and their cycles
+remain controlled, subject to the reviewed protocol debit. Application roles may
+be reassigned within the selected Root/subnet inventory. Toko's frontend is a
+separate ICP asset canister outside that inventory: publish its new assets to its
+existing ID to retain the origin. No Canic command here changes Toko's wrapper or
+frontend configuration.
 
-**Preparation completion is not Fleet convergence.** Continue through the separate
-reset review and apply. The connected completed-record reset journey is qualified
-locally; a live Toko cutover remains an operator deployment decision. Generate its
-authority from current configuration and artifacts using the corrected release.
-
-Toko's current `make staging-plan` wrapper invokes ordinary planning without
-`--reinstall`, so it does not yet implement this sequence. Its frontend asset
-publication is a separate downstream step after Fleet convergence and must
-retain the existing frontend ID and origin. Toko's `frontend` is a separate ICP
-asset canister and is absent from the 27-ID Fleet evidence; it is not a Fleet
-pool allocation and does not need a new allocator pin. These Canic changes do
-not modify Toko's wrapper, evidence or frontend.
-
-The hard cut applies to both Canic and Toko. The target Toko release must pin the
-same published Canic release as its CLI, regenerate current authority from its
-current configuration and rebuild its sealed artifacts. Reinstall clears Canic
-control-plane state and disposable Toko application state; application hooks
-must initialize fresh state. There is no application migration, old-plan execution,
-missing-field default or old configuration alias. Archived source evidence remains
-unchanged and is only used for custody, receipts and conservation checks. Retained
-physical IDs and the separately published frontend origin require explicit review;
-their retention does not preserve application state or predecessor authority.
-
-Downstream orchestration should call readiness before `canic build`. Offline
-artifact-only builds do not acquire a Fleet identity or query Ledgers
-automatically. Readiness does not predict full lifecycle convergence, validate
-application hooks, authorize payment or approve reset scope. Exact plan and
-funding admission still run immediately before effects.
+Downstream orchestration should call readiness before `canic build`, use the
+current release consistently for CLI and runtime, and follow the phase commands
+until Fleet completion. Readiness does not authorize payment or predict complete
+application initialization.
 
 After convergence, `canic admission plan`, `apply` and `status` use the selected
 release retained in the terminal Fleet plan to locate Coordinator and Root Candid
@@ -1016,10 +977,12 @@ pre-finalization shortfalls.
 ## Supplied Infrastructure Bootstrap
 
 `fleet bootstrap` initializes a new, untracked current-release Fleet using explicit
-physical IDs. It supports an empty Root and a Store with disposable old code. Use
-the completed-estate reinstall procedure above for Toko Miner's completed `.38`
-records; bootstrap is a different starting point and refuses an existing tracked
-operation. Neither path loads old application state into the new release.
+physical IDs. It supports an empty Root and a Store with disposable old code.
+For a tracked completed estate, use the completed-estate reinstall procedure
+above, which requires valid current-schema records and receipts. Bootstrap
+refuses an existing tracked operation. Neither path supplies missing fields or
+decodes a historical contract; see [unreadable retained plan](#unreadable-retained-plan)
+when retained evidence cannot be read. Application state is disposable.
 
 Start with the normal Fleet policy and a retained identity seed (`fresh_estate =
 false`). Supply every Root, Store and held pool ID. Each pool must be on its Root's
@@ -1142,15 +1105,26 @@ old completed estate. Use `fleet bootstrap` above for the empty-Root starting po
 Retain the current build's infrastructure manifest and Candid sidecars. The review
 checks the completed Fleet or setup plan/journal, exact live installed modules,
 Registry, controllers and complete pool membership. An absent or unsuitable supplied ID
-rejects; the command never allocates a replacement. The selected operator must
-control each source. Stop installed sources and remove their snapshots before
-reviewing import. Clearing code and application state is destructive.
+rejects; the command never allocates a replacement. Each source must be controlled
+by the selected operator or already by the destination Root. Operator-held
+installed sources must be stopped before review. Root-held sources may be running:
+the reviewed Root operation journals and reconciles a stop, normalizes controllers,
+then clears their code and state. It retains the observed stopped version for the
+later effects instead of assuming a fixed version throughout application activity.
+It does not invent an operator handoff receipt.
+Remove snapshots before reviewing import. Clearing code and application state is
+destructive.
 
 Create `deployments/capacity-import.toml` with the original physical identities and
 an explicit disposition for every `--canister`. All fields below are required;
 repeat `[[canisters]]` for additional sources. Use `module_sha256 = "empty"`
 only for a canister with no module. `retired` is the other disposition value.
 Neither value is an application-state import or migration.
+
+For a running Root-controlled source, `canister_version` is an observed lower
+bound: application activity may advance it before the stop. Subnet, controllers,
+module and snapshot checks remain exact. After stopping, Root retains the actual
+version and requires exact subsequent controller and uninstall history.
 
 ```toml
 schema_version = 1

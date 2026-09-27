@@ -323,5 +323,284 @@
       "The maintainer release failed before versioning or publication; package versions remain 0.110.43.",
       "Targeted passing result is not complete release validation or a full-suite throughput measurement."
     ]
+  },
+  "worker_consolidation": {
+    "date": "2026-09-27",
+    "open_batch": "0.110.45",
+    "package_version": "0.110.44",
+    "outcome": "Two isolated internal workers after recovery barrier; same-build repeat moved to small estate; synthetic native funding estate removed in favor of paid real child claim",
+    "benchmark": {
+      "serial_seconds": 188,
+      "parallel_seconds": 114,
+      "rows": [
+        {
+          "label": "warm-0",
+          "command_seconds": 472.9,
+          "case_seconds": 470.32,
+          "spans": [
+            {
+              "name": "release_artifact_resolution",
+              "seconds": 352.458253
+            },
+            {
+              "name": "production_adapter_journey",
+              "seconds": 470.249458
+            }
+          ],
+          "log": ".tmp/pocketic-workers45/warm-0.log",
+          "sha256": "e83f3673ae6706182de7093b151a8ee5b59295a2339e65c75b0f8d6f18a64a96"
+        },
+        {
+          "label": "warm-1",
+          "command_seconds": 66.41,
+          "case_seconds": 65.36,
+          "spans": [
+            {
+              "name": "release_artifact_resolution",
+              "seconds": 8.137257
+            },
+            {
+              "name": "production_adapter_journey",
+              "seconds": 65.300709
+            }
+          ],
+          "log": ".tmp/pocketic-workers45/warm-1.log",
+          "sha256": "1069c6d330731b041c6c86a393a8c915964ec46db64310fc82de5ead9b82712c"
+        },
+        {
+          "label": "serial-0",
+          "command_seconds": 114.92,
+          "case_seconds": 114.01,
+          "spans": [
+            {
+              "name": "release_artifact_resolution",
+              "seconds": 9.106232
+            },
+            {
+              "name": "production_adapter_journey",
+              "seconds": 113.926142
+            }
+          ],
+          "log": ".tmp/pocketic-workers45/serial-0.log",
+          "sha256": "22fba3a6378df6bc393ce1d617714bc2a8b1c4f216f9e28b27932767bf19d710"
+        },
+        {
+          "label": "serial-1",
+          "command_seconds": 72.69,
+          "case_seconds": 71.59,
+          "spans": [
+            {
+              "name": "release_artifact_resolution",
+              "seconds": 8.866324
+            },
+            {
+              "name": "production_adapter_journey",
+              "seconds": 71.541166
+            }
+          ],
+          "log": ".tmp/pocketic-workers45/serial-1.log",
+          "sha256": "cc8b11dabb879a0de358d54479475248e3c6e6c8a5cc6873ff161686a5fb28bf"
+        },
+        {
+          "label": "parallel-0",
+          "command_seconds": 114.41,
+          "case_seconds": 113.48,
+          "spans": [
+            {
+              "name": "release_artifact_resolution",
+              "seconds": 9.46041
+            },
+            {
+              "name": "production_adapter_journey",
+              "seconds": 113.396737
+            }
+          ],
+          "log": ".tmp/pocketic-workers45/parallel-0.log",
+          "sha256": "db28d79d24703291cc1a3ba2492efee1bd933ac37e000fa952127f395fab90f0"
+        },
+        {
+          "label": "parallel-1",
+          "command_seconds": 73.06,
+          "case_seconds": 72.17,
+          "spans": [
+            {
+              "name": "release_artifact_resolution",
+              "seconds": 11.9666
+            },
+            {
+              "name": "production_adapter_journey",
+              "seconds": 72.109058
+            }
+          ],
+          "log": ".tmp/pocketic-workers45/parallel-1.log",
+          "sha256": "3984928a899d8598613725c3e06ae81fcbf78d4d1cfa484954af3e8d4a2ec9d4"
+        }
+      ],
+      "reduction_percent": 39.36170212765957
+    },
+    "resource_sample": [
+      {
+        "log": ".tmp/pocketic-workers45/parallel-1.log",
+        "pid": 13314,
+        "scratch": "/home/adam/projects/canic/.tmp/test-runtime.0V8Azz",
+        "server_pid": 13500,
+        "url": "http://127.0.0.1:33975/",
+        "VmRSS": "416664 kB",
+        "VmHWM": "417296 kB",
+        "Threads": "190"
+      },
+      {
+        "log": ".tmp/pocketic-workers45/parallel-0.log",
+        "pid": 13315,
+        "scratch": "/home/adam/projects/canic/.tmp/test-runtime.4Vlieq",
+        "server_pid": 13499,
+        "url": "http://127.0.0.1:42555/",
+        "VmRSS": "426232 kB",
+        "VmHWM": "426232 kB",
+        "Threads": "191"
+      }
+    ],
+    "cases": [
+      {
+        "name": "native withdrawal recovers the same initial child claim",
+        "seconds": 446.513226,
+        "log": ".tmp/pocketic-workers45/first-recovery-20260927T153422Z-39072.KjVWSd.log",
+        "result": "pass"
+      },
+      {
+        "name": "selected_build_wipe",
+        "seconds": 177.475577,
+        "log": ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58026.ATAwJg.log",
+        "result": "pass"
+      },
+      {
+        "name": "generated mixed topology and Ready reserve retain one reviewed operation",
+        "seconds": 355.660594,
+        "log": ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58026.ATAwJg.log",
+        "result": "pass"
+      },
+      {
+        "name": "small_estate_same_build_reset",
+        "seconds": 82.980034,
+        "log": ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58024.mjfaFN.log",
+        "result": "pass"
+      },
+      {
+        "name": "generated reinstall recovers and converges",
+        "seconds": 234.612748,
+        "log": ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58024.mjfaFN.log",
+        "result": "pass"
+      },
+      {
+        "name": "two Workloads refill two Ready assets with lost funding and creation responses",
+        "seconds": 113.739177,
+        "log": ".tmp/pocketic-workers45/parent-proof-20260927T160414Z-60650.795R2o.log",
+        "result": "pass"
+      },
+      {
+        "name": "two Workloads and two Failed assets repair without new creation",
+        "seconds": 62.830265,
+        "log": ".tmp/pocketic-workers45/parent-proof-20260927T160414Z-60652.7HHf00.log",
+        "result": "pass"
+      }
+    ],
+    "parent_launcher_seconds": 118.91,
+    "reset_pair_runner_seconds": 359.25,
+    "native_validation": {
+      "inventory": "4 passed; 2 ignored tooling/PocketIC entries",
+      "selection": "1 passed",
+      "scoped_clippy": "pass, warnings denied",
+      "worker_shell": "pass: success, either-worker failure, interruption, isolated environment, cleanup, quiet logs, error markers",
+      "workspace_runner_shell": "pass: full/PocketIC/ordinary/fast/exact selection and failure barriers with fake commands",
+      "formatting_and_shellcheck": "pass",
+      "document_semantics": "pass; two existing layout advisories"
+    },
+    "initial_failure": {
+      "kind": "new test assertion",
+      "observed_replay_debit_cycles": 183840158,
+      "correction": "Bound live execution/storage observation debit at 10B; keep exact Ledger payments, mutation log and all other conservation fields",
+      "final_reset_rerun": "pass"
+    },
+    "parent_initial_environment_failure": "Sandbox prohibited localhost bind; exact loopback-enabled rerun passed without source changes",
+    "source_before_sha256": {
+      "Makefile": "fc3b229258e4c3938a00521c978484e3879671687521380af8454782b2d335bc",
+      "scripts/ci/run-workspace-tests.sh": "1968ec91e3d281a1c2ae255f2c3027d6026274366d6f44fbccdc304b0e22c525",
+      "scripts/ci/run-pocketic-workers.sh": null,
+      "scripts/ci/test-pocketic-workers.sh": null,
+      "scripts/ci/check-release-integrity-contract.sh": "3d8d2e2c87edb0e9f21b3968fc3784fa275399c794f7f3135dce98420ea36c23",
+      "crates/canic-testing-internal/src/pic/mod.rs": "65173faa7b4fbd69056e55cdee6294a3aff525214bd02b1ca21770b163be2b9d",
+      "crates/canic-testing-internal/src/pic/workers/mod.rs": null,
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "8f689976d0128c572a6c756156157fbadc27cb1b13587e198300b88e8932f202",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/native_funding/mod.rs": "a2e541c5e001665978485668d0b243115e4e83a0009ca6f3e4ceae5f2a24a781",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/repeat_reset/mod.rs": null
+    },
+    "source_after_sha256": {
+      "Makefile": "1039cf91749448332eaf66fc060ecc946bc6273f220fd6e8c5386218700a960d",
+      "scripts/ci/run-workspace-tests.sh": "91ad86a8a5ed0aa21e653fec64bb908d462b0ee444b6e6a7aebfec0b981c6ee0",
+      "scripts/ci/run-pocketic-workers.sh": "c9c58d4fbdab44d44184c0740f6f82cc213a4b6730927f7a9859de735c15c1c2",
+      "scripts/ci/test-pocketic-workers.sh": "89a458499e71bf445bf89c347a6a1cf465223b4c481b5cc1facb6c98811b33b8",
+      "scripts/ci/check-release-integrity-contract.sh": "9a80e18a7f3c9ea00781cb7a550fe38a820d08602a7c391dcf36a4e40c4aaeec",
+      "crates/canic-testing-internal/src/pic/mod.rs": "f10385b26c569c1190e65ee89c655dcfbf862ca69d4b9efacaaaca928ccd7a0c",
+      "crates/canic-testing-internal/src/pic/workers/mod.rs": "94a2d0fe1757f895c44a07f7d7be7140d8ab8c017d8581857e585168e3962760",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "f390d0965b7220c10189e41e4d126c8ee1d6bb0fc16f30d06a80dbaea76de784",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/native_funding/mod.rs": "b3b84aeb35cb0aff2045467bcac8db69bd0f1fb5d42d9b49951baea891351259",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/repeat_reset/mod.rs": "e71d582ab306115f72d5f9996f892684f5a375768a6300f51e0cd62560147d29",
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/activation_reset/mod.rs": "ae930c61879da577e091d3389fcf27ac8bfceb6ba0b377254d29ca9861b4da75",
+      "scripts/ci/test-workspace-test-runner.sh": "6b9832f104683f82bb6ad89441f5d2c9786d0f7987ddc6cd6bca65e68f83d546",
+      "docs/governance/ci-deployment.md": "b92d4a5ff4171c9b6733af027b185155c95f259751067a36a23d293303b57275"
+    },
+    "logs_sha256": {
+      ".tmp/pocketic-workers45/candidate-build.log": "d681a77012ddf1ede2fa21d267baa61c1d89d8832d454ca9c89b5db9a111bc44",
+      ".tmp/pocketic-workers45/clippy.log": "e41148e4cebfaf050b115b45827f8aab1a012950beb3e52465250cc989591faf",
+      ".tmp/pocketic-workers45/comparison.json": "81fbb3723dd3de0b13c6d973998161414f3add4b9c55da3e0b2732e99d9dbb38",
+      ".tmp/pocketic-workers45/docs.log": "ba489fa36fca2aebe455ebd0797935ca7007461de877dcdc822633d5d33b607d",
+      ".tmp/pocketic-workers45/first-recovery-20260927T153422Z-39072.KjVWSd.log": "164554c64f117deb1bb3dfd50ad0144f4a5f2eccc6b6bf6fe755d75209c4e649",
+      ".tmp/pocketic-workers45/first-recovery-20260927T153422Z-39074.tPvdc4.log": "a4e6131779258fec5912f4ac10e7a4c02d7cad3426567cfde420ef20725a1cbd",
+      ".tmp/pocketic-workers45/inventory-tests.log": "6b257901f9f3dcd66408f85ab33d380f457d2db398d40f36e9df0e0aa98c79c4",
+      ".tmp/pocketic-workers45/measure.log": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      ".tmp/pocketic-workers45/measure.sh": "e4423f00be6605b21e7d3a85f5e9c29fa41fef54dd774582dfcbd191dddfd392",
+      ".tmp/pocketic-workers45/parallel-0.log": "db28d79d24703291cc1a3ba2492efee1bd933ac37e000fa952127f395fab90f0",
+      ".tmp/pocketic-workers45/parallel-0.seconds": "fa66ea37c69342aa675356b7dccfc1745500f2a93ff00f210e9ac99353afc869",
+      ".tmp/pocketic-workers45/parallel-1.log": "3984928a899d8598613725c3e06ae81fcbf78d4d1cfa484954af3e8d4a2ec9d4",
+      ".tmp/pocketic-workers45/parallel-1.seconds": "5087e1eb7e4b2378136573666e334095c31e63b2b133fd67506033cacff526c6",
+      ".tmp/pocketic-workers45/parallel-resources.json": "2b1194a988c6e640d9e3a915994763b59699269212a1813be756fe615934cff4",
+      ".tmp/pocketic-workers45/parallel.seconds": "e15cb49f231c64265cbcf05790aa5291ab7ee9f2efc092fbcafea2d58e5f83a8",
+      ".tmp/pocketic-workers45/parent-proof-20260927T160414Z-60650.795R2o.log": "055ba4b24053b89bbb9fb34bc56fdb015f822a7ffaaa49360b738a08589ae2d5",
+      ".tmp/pocketic-workers45/parent-proof-20260927T160414Z-60652.7HHf00.log": "3a7ffcb98a2e745e531ce4b2fdf9b249ec37ac9a229ccabf11ca294bfbd1d1f5",
+      ".tmp/pocketic-workers45/parent-proof.log": "e626bab5df3b6cca33577eb1344c0c7bdf4592871d03af89cb72124219bdd111",
+      ".tmp/pocketic-workers45/parent-proof.seconds": "d202743a83d5d9dc976d745407a43196fca4e1f9fe6d78335c4f622da07c0620",
+      ".tmp/pocketic-workers45/recovery-left.cases": "b446e60d08aa21bdc8f7b6f376088d6cc371007d51c5a8212b7cf1f022afa79d",
+      ".tmp/pocketic-workers45/recovery-right.cases": "6586493d8e0e12dca55b8349f5aedc8f2b3f8f66eac4f53084cfdcea73debdd9",
+      ".tmp/pocketic-workers45/recovery.log": "a06007541bf842c0e4a980ef1ed03c4cf7502666a82a74222220397ad14d979f",
+      ".tmp/pocketic-workers45/recovery.seconds": "c3e437e12de268977545566e44bd68750afd36092ebc88fcd38a30ebc2730eb1",
+      ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58024.mjfaFN.log": "9170569805f3f666cbdadf1eb49a2a697201b5a30568d7fa2013590cd373882d",
+      ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58026.ATAwJg.log": "ab5f9b9d3b61e782312f8b18b3031622a4af3a12c67325753ceabc9176c2dc9c",
+      ".tmp/pocketic-workers45/reset-final.log": "c5c362ae62b32f83d3d6aad78bc9253b06118abc01404e8c3044253a36c274dc",
+      ".tmp/pocketic-workers45/reset-final.seconds": "9c2a40ab5d70eb846c34edd803c82c48d8432f0882963414a9912a8ff88cec25",
+      ".tmp/pocketic-workers45/reset-left.cases": "b778c4d918181b15f6c2069f42a1d55e1b253e1f4545e27d8197ddad667c7f7c",
+      ".tmp/pocketic-workers45/reset-right.cases": "6586493d8e0e12dca55b8349f5aedc8f2b3f8f66eac4f53084cfdcea73debdd9",
+      ".tmp/pocketic-workers45/selection-tests.log": "7a8d730ccd550150f8b5188374fef9ed0f13cd777d535c81e4b9d6468cb58e8a",
+      ".tmp/pocketic-workers45/serial-0.log": "22fba3a6378df6bc393ce1d617714bc2a8b1c4f216f9e28b27932767bf19d710",
+      ".tmp/pocketic-workers45/serial-0.seconds": "24716356fa8a7deda3f07a1acc27ef04ac71ea475fec45691279e748254f567b",
+      ".tmp/pocketic-workers45/serial-1.log": "cc8b11dabb879a0de358d54479475248e3c6e6c8a5cc6873ff161686a5fb28bf",
+      ".tmp/pocketic-workers45/serial-1.seconds": "55a0f513737ab5178209206043e0fcb94b98f078ee99d40d1b14b16b351d5d41",
+      ".tmp/pocketic-workers45/serial.seconds": "7ffa842bcdc9ae5580846bb8073b7177dfe024604a9a57ee675b73d73ce29f28",
+      ".tmp/pocketic-workers45/warm-0.log": "e83f3673ae6706182de7093b151a8ee5b59295a2339e65c75b0f8d6f18a64a96",
+      ".tmp/pocketic-workers45/warm-0.seconds": "0030a445ded424722b5526d14f9d12c2f35c4ecfc9d2c8ff949370e3be88f5df",
+      ".tmp/pocketic-workers45/warm-1.log": "1069c6d330731b041c6c86a393a8c915964ec46db64310fc82de5ead9b82712c",
+      ".tmp/pocketic-workers45/warm-1.seconds": "934444b3c8894c339e35defb9e24c7d4cd856cf462152f3bb6e4c2d0b3d726e3",
+      ".tmp/pocketic-workers45/worker-shell-final.log": "3bdc2090874a873e43ed421a51419de64a3b66df6c5fce3b4df076d139562072",
+      ".tmp/pocketic-workers45/worker-shell-tests.log": "3bdc2090874a873e43ed421a51419de64a3b66df6c5fce3b4df076d139562072",
+      ".tmp/pocketic-workers45/worker.sh": "9490c7ad368f698e1b2f73e72f6a8cdc75025fced2e72a72d00a8e47d453c912",
+      ".tmp/pocketic-workers45/workspace-shell-final.log": "26e49d5fdd02384a8e5c677b93cdcbfe4bacc676e39e3ebec37f977f251b86f2"
+    },
+    "upstream_feedback": "Expose managed PocketIC server PID/resource observations; cache-lock timings already exist upstream and Canic owns progress presentation",
+    "limits": [
+      "Controlled pair is not complete default-partition or full-release timing",
+      "Cold artifact work is excluded only from controlled warmed comparison",
+      "Resource sample is not peak or a bound",
+      "All changes uncommitted; no broad gate, version transaction, publication or sibling edits",
+      "Other pre-existing CLI/completed-reset edits are outside this throughput evidence"
+    ]
   }
 }

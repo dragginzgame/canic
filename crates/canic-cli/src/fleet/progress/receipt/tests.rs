@@ -15,6 +15,7 @@ fn fixture() -> (PathBuf, Receipt, PathBuf) {
             environment: "local",
             desired_sha256: Some("desired"),
             applied_plan_sha256: Some("reviewed"),
+            applied_review_sha256: None,
             reinstall: false,
             next_review_command: "canic fleet ensure fleet --desired desired.toml",
         },
@@ -150,6 +151,7 @@ fn process_interruption_keeps_partial_receipt_and_continuation_uses_a_new_file()
                 environment: "local",
                 desired_sha256: Some("desired"),
                 applied_plan_sha256: Some("reviewed"),
+                applied_review_sha256: None,
                 reinstall: false,
                 next_review_command: "review",
             },
@@ -190,6 +192,7 @@ fn process_interruption_keeps_partial_receipt_and_continuation_uses_a_new_file()
             environment: "local",
             desired_sha256: Some("desired"),
             applied_plan_sha256: Some("reviewed"),
+            applied_review_sha256: None,
             reinstall: false,
             next_review_command: "review",
         },
@@ -268,6 +271,7 @@ fn retry_deadline_changes_are_retained_without_claiming_remote_advancement() {
             state: FleetEnsureProgressState::AwaitingProgress {
                 elapsed_seconds: 30,
                 provisioning: Some(FleetProvisioningProgress {
+                    components: Vec::new(),
                     phase: FleetComponentProvisioningPhase::ActivatingRuntimes,
                     root_batch_count: 1,
                     accepted_root_count: 1,

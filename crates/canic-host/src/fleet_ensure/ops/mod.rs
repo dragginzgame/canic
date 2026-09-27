@@ -8,6 +8,7 @@ mod authority_seal;
 mod bounded_observations;
 mod canic_init;
 pub mod capacity_import;
+pub(super) mod clean_reinstall;
 pub mod completed_preparation;
 pub mod completed_reset;
 pub(super) mod continuation;
@@ -19,6 +20,7 @@ pub(super) mod funding_observation;
 pub mod independent_effects;
 pub mod infrastructure_bootstrap;
 mod install_history;
+pub(super) mod operation_selection;
 pub mod operator_mint;
 mod plan_content;
 mod platform;
@@ -682,6 +684,7 @@ pub enum EnsureStateError {
 
 pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
     let lock = lock_fleet_file(paths)?;
+    completed_handoff::retirement::recover(paths)?;
     capacity_import::journal::require_no_approved_import(paths)?;
     completed_handoff::recover(paths)?;
     completed_preparation::require_no_intent(paths)?;
@@ -712,6 +715,7 @@ pub(in crate::fleet_ensure) fn lock_completed_source(
     paths: &EnsurePaths,
 ) -> Result<File, EnsureStateError> {
     let lock = lock_fleet_file(paths)?;
+    completed_handoff::retirement::recover(paths)?;
     capacity_import::journal::require_no_approved_import(paths)?;
     if reinstall::adoption::review(paths)?.is_some() {
         return Err(EnsureStateError::CompletedPreparationInProgress);
@@ -733,6 +737,7 @@ fn lock_fleet_file(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
             path: paths.lock.clone(),
         },
     })?;
+    operation_selection::retirement::recover(paths)?;
     Ok(lock)
 }
 

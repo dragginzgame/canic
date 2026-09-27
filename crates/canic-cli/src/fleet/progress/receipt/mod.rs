@@ -29,6 +29,8 @@ static NEXT_FILE: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(in crate::fleet) enum CommandKind {
+    CompletedPreparation,
+    CompletedReset,
     Ensure,
     Generate,
 }
@@ -41,6 +43,8 @@ pub(in crate::fleet) struct Invocation<'a> {
     pub environment: &'a str,
     pub desired_sha256: Option<&'a str>,
     pub applied_plan_sha256: Option<&'a str>,
+    /// Approval of preparation/publication, distinct from an execution plan digest.
+    pub applied_review_sha256: Option<&'a str>,
     pub reinstall: bool,
     pub next_review_command: &'a str,
 }

@@ -130,6 +130,15 @@ with this file, the code is wrong.
   an identity, controller set or topology across releases.
 - Same-release interruption recovery, retry, idempotency, backup, and restore
   remain required. They are operational safety, not compatibility behavior.
+- Clean reinstall is the normal pre-1.0 deployment path. A completed previous
+  release must not require repair, migration, its old CLI, or decoding its
+  executable/application schema before it can be discarded. Completed records
+  are historical evidence; only genuinely unfinished paid effects retain
+  reconciliation authority. Reset authority comes from the selected current
+  build, explicit physical inventory and current controllers. Qualify replacement
+  artifacts before destructive effects and retain the exact bytes across retries.
+  When the maintainer selects ID-preserving reset, retain those IDs and their
+  controlled cycles while clearing application and framework state.
 - Do not add anti-resurrection tests for removed legacy behavior or command
   forms. Current behavior tests should cover the maintained surface only.
 - When deleting stale code, remove the old path completely and update active

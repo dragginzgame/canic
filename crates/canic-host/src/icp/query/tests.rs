@@ -83,6 +83,12 @@ fn read_query_never_retries_authentication_integrity_or_decode_failures() {
 
 #[test]
 fn authenticated_query_http_502_retries_only_the_same_read_request() {
+    for method in ["read_status", canic_core::protocol::CANIC_ROOT_STATUS] {
+        assert_http_502_read_retry(method);
+    }
+}
+
+fn assert_http_502_read_retry(method: &'static str) {
     let listener = TcpListener::bind("127.0.0.1:0").unwrap();
     let url = format!("http://{}/", listener.local_addr().unwrap());
     listener.set_nonblocking(true).unwrap();
@@ -109,7 +115,10 @@ fn authenticated_query_http_502_retries_only_the_same_read_request() {
                 body.windows(expected_argument.len())
                     .any(|bytes| bytes == expected_argument)
             );
-            assert!(body.windows(11).any(|bytes| bytes == b"read_status"));
+            assert!(
+                body.windows(method.len())
+                    .any(|bytes| bytes == method.as_bytes())
+            );
             connection
                 .write_all(
                     b"HTTP/1.1 502 Bad Gateway\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
@@ -126,7 +135,7 @@ fn authenticated_query_http_502_retries_only_the_same_read_request() {
         .build()
         .unwrap();
     let icp = IcpCli::new("unused-icp", Some("local".into()));
-    let result = query_bytes(&icp, &agent, target, "read_status", &argument);
+    let result = query_bytes(&icp, &agent, target, method, &argument);
     server.join().unwrap();
     assert!(
         matches!(result, Err(IcpQueryError::Agent(error)) if matches!(*error, AgentError::HttpError(HttpErrorPayload { status: 502, .. })))

@@ -280,6 +280,16 @@ impl ProgressSink {
         });
     }
 
+    /// Bind selected authority to diagnostics without changing execution ownership.
+    pub(super) fn record(&self, event: &str, data: &impl serde::Serialize) {
+        self.update(|display| {
+            if let Some(receipt) = &mut display.receipt {
+                receipt.record(event, data);
+            }
+            Ok(())
+        });
+    }
+
     pub(super) fn catalog(
         &self,
         progress: &canic_host::subnet_catalog::view::CatalogAcquisitionProgress,
@@ -450,7 +460,7 @@ impl ProgressSession {
         });
     }
 
-    pub(super) fn finish_generation(&self, succeeded: bool) {
+    pub(super) fn finish_without_report(&self, succeeded: bool) {
         self.sink.update(|display| {
             display.finished = true;
             display.latest = None;

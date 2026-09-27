@@ -18,6 +18,7 @@ cycles
 diagnostic
 evidence
 fleet
+frontend
 info
 inspect
 medic
@@ -94,7 +95,13 @@ plain phase events and separate check/lock timing.
 
 ## Fleet Ensure
 
-`canic fleet ensure` is the sole Fleet installation and convergence workflow.
+`canic fleet ensure` owns desired-state installation and convergence.
+`fleet bootstrap` prepares explicitly supplied infrastructure; `fleet import`
+adds supplied capacity through an initialized Root. Their reviewed receipts
+feed ordinary Ensure. See the [bootstrap](../../docs/features/operations/fleet-ensure.md#supplied-infrastructure-bootstrap)
+and [capacity import](../../docs/features/operations/fleet-ensure.md#add-supplied-capacity-to-a-current-fleet)
+procedures for those starting points.
+
 For a retained estate, generate its low-level desired document from protected
 Fleet policy, one finalized release build, and an explicit live-verified
 estate seed:
@@ -116,9 +123,10 @@ empty estate. Every paid Root-owned pool asset must be seeded, including idle,
 claimed and workload assets, so no controlled balance falls outside the
 reviewed conservation equation. A workload remains the same conserved identity
 without receiving idle-pool funding or being counted again by terminal
-inventory. The generated contract binds the live Cycles Ledger fee and has zero
-creation-fee authority: a missing seeded canister is a blocker, never a request
-to create a replacement.
+inventory. The generated contract binds the live Cycles Ledger fee and the seed's
+explicit `management_creation_fee_cycles` for future capacity growth. Use `0B`
+only when it is the exact applicable fee. A missing seeded canister is a blocker,
+never a request to create a replacement.
 
 For a literally empty estate, create or replay a durable no-effect seed before
 generating the same desired-state contract:

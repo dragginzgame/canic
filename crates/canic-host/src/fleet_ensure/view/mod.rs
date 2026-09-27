@@ -5,6 +5,7 @@
 //! Boundary: projections describe assumptions and never authorize spending.
 
 pub mod capacity_import;
+pub mod clean_reinstall;
 pub mod completed_reset;
 pub mod continuation;
 pub mod infrastructure_bootstrap;

@@ -73,8 +73,8 @@ tests therefore do not print expected panic hooks or fixture chatter as live
 validation errors; Cargo emits captured output for a failed test. Long-running
 governed PocketIC suites keep live progress output. The workspace test runner
 retains complete command output under `target/test-runs/` and prints each log
-path before execution. Request, observation and structured timing traces stay
-out of live output; a failed command prints the last 100 trace lines. Complete
+path before execution. Request, observation, artifact-cache and structured timing
+traces stay out of live output; a failed command prints the last 100 trace lines. Complete
 logs survive invocation-owned scratch cleanup, including partial logs from
 interrupted runs. Expected rejected requests inside passing cases do not trigger
 trace output. Document-layout preferences
@@ -162,9 +162,9 @@ provisioning journeys within that target. It is a test consumer, not a deployed
 Canic dependency; its separate dependency schedule does not block Canic releases.
 The production Wasm dependency graph still requires exactly one memory runtime.
 Ordinary tests
-retain libtest's default parallelism; PocketIC suites remain explicitly
-single-threaded and ordered until a measured narrower concurrency policy is
-proven stable. Complete and PocketIC-only runs compile every selected serial
+retain libtest's default parallelism. PocketIC suites remain ordered, with two
+isolated internal workers after the source-bound recovery barrier. Each worker
+executes its own cases serially. Complete and PocketIC-only runs compile every selected serial
 suite before starting the shared server. Preparation and execution use the same
 package, feature and target selectors; a compilation failure stops before any
 PocketIC case. The ordinary-test barrier still leads complete runs, and narrow
@@ -194,6 +194,12 @@ and require an explicitly reviewed successor; exact import identities, controlle
 drift, lost replies, conservation and terminal replay remain real-canister proofs.
 Native policy checks own the 19-Workload/five-Ready arithmetic boundary. Neither
 reset journey is a deployment-scale qualification.
+The mixed-topology journey owns the changed-build wipe, application-row reset,
+interruption and replay proof. The small retained-estate journey owns a second
+same-build reset with a distinct operation, lost identical-Wasm response,
+conservation and replay. Native supplementary funding uses one real blocked
+child claim with nonzero Ledger fees; its withdrawal and receipt-loss recovery
+also cover the native funding pause without a separate synthetic-minimum estate.
 The default gate excludes audit cohort-size experiments and arithmetic for their
 external qualification budgets. Product Ledger/CMC replay, funding, import/reset
 and controller-routing proofs remain required. Completed-source receipt and
@@ -234,27 +240,35 @@ while retaining failure logs, timing summaries and invocation cleanup.
 A failed ordinary tier is a hard barrier in the combined local
 runner: it reports all ordinary failures and skips the serial PocketIC tier.
 Plan-only inventory resolution still enumerates both tiers, and the explicit
-PocketIC-only mode remains independently runnable. In CI, one ignored governed
-`canic-testing-internal` harness calls every internal PocketIC case in explicit
-order inside one Rust process. Source-bound activation-reset recovery runs first,
-followed by Fleet deployment restore and autonomous Root removal. Short internal
-regressions then run before the remaining complete Fleet journeys, retaining
-every registered case and the same process-local caches. The harness reports each result immediately,
-prints the ten slowest executed cases, stops after the first failed case and
-retains the process-local Fleet
-baseline and artifact owners. The restore proof uses that baseline, while the
-destructive Root-removal case uses an exclusive fresh instance because canister
-deletion is outside the snapshot-reset contract. The matching pure internal
-cases run once through ordinary libtest discovery before PocketIC. This keeps stateful deployment
-recovery locally attributable while avoiding three cold process-local Fleet
-baselines. The PocketIC lane clears transient heavy Wasm targets once before
-its integration-suite group and once at
-invocation cleanup; it retains Cargo freshness between the ordered suites.
+PocketIC-only mode remains independently runnable. The governed internal harness
+runs source-bound activation-reset recovery before starting two isolated workers.
+One worker retains Fleet deployment restore, autonomous Root removal and the
+remaining short regressions in catalogue order, keeping their process-local
+baseline. The other retains the complete Fleet journeys in catalogue order.
+Partition membership derives from the registered cases; native tests require
+exact coverage, unique identities, nonempty groups and the recovery prefix.
+
+Workers execute the parent's already compiled binary, with independent servers,
+ports, native ICP shims and invocation-owned scratch. Only validated immutable
+artifact caches and their locked build targets are shared. Each worker reports
+case progress and its slowest cases. A failed worker cancels both owned process
+groups, stops their servers and CLI children, joins them and clears their scratch;
+handled interruption follows the same boundary. The failed internal suite still
+blocks every later suite. Exact single-case selection stays serial.
+The measured two-case qualification uses identical warmed artifacts and retains
+success, cancellation and interruption evidence. It does not establish the
+elapsed time of a complete release gate.
+
+The restore proof uses the process-local baseline; destructive Root removal uses
+an exclusive fresh instance because deletion is outside snapshot reset. Pure
+internal tests run through ordinary libtest discovery before PocketIC. The lane
+clears transient heavy Wasm targets once before its integration-suite group and
+once at invocation cleanup, retaining Cargo freshness between ordered suites.
 The ignored instruction-audit target shares the runtime Cargo invocation for
 compile coverage. Only its explicit audit runner executes the audit; release
 validation does not report it as a separately completed PocketIC audit.
 CI may run the ordinary and PocketIC lanes in separate jobs; it must not
-parallelize the PocketIC suites themselves without replacing this measured
+add concurrency beyond the two internal workers without replacing this measured
 policy. Cheap source/governance preflight and security jobs gate the Rust checks
 job. That job runs formatting and warning-denied Clippy before the control-plane
 feature matrix. Ordinary tests, PocketIC tests and the release-profile build all

@@ -1,5 +1,45 @@
 # Canic 0.110 Implementation Status
 
+## Clean reinstall correction — .45 ready for review, 2026-09-27
+
+Completed-Fleet generation and explicit reinstall now use explicit inventory,
+certified current controller authority and qualified replacement artifacts.
+Completed executable records are archived unchanged before fresh authority is
+created. Current infrastructure setup, Root-owned child clearing and workload
+convergence retain IDs/cycles while discarding application/framework state.
+Unfinished paid work keeps its recovery owner. Frozen artifacts, bounded spending,
+lost-response reconciliation and offline terminal replay remain required.
+
+The real connected proof passes a changed-build reset followed by another reset
+using identical artifacts, with distinct operation identities, lost install
+responses, cleared state, exact Ledger accounting and interrupted completion
+publication: 197.99s test / 215s runner. Thirteen selection/archive/retirement tests,
+the existing generation/recovery omnibus, 27 Fleet CLI parser/report tests and
+scoped warning-denied host/CLI/internal Clippy pass. No broad gate or live effect ran. The read-only Toko audit confirms
+archive correctness, not live deployment acceptance.
+
+The complete accepted `.45` batch and changelog are ready for maintainer review
+and the chosen release gate. Versions remain `.44`, changes remain uncommitted.
+The [correction report](../../audits/reports/2026-09/2026-09-27/clean-reinstall-selection.md)
+and current handoff retain evidence and limits. No new minor is begun.
+
+## Throughput follow-up — .45, 2026-09-27
+
+Keep the three maintainer-accepted performance changes in one current-minor batch:
+measured two-process internal PocketIC execution, one mixed-topology wipe with the
+repeat moved to the small estate, and one real native child-funding recovery case.
+The warmed worker trial is 188s serial / 114s parallel; all three affected real
+recovery cases pass. Native and failure/interruption cleanup checks pass; the real
+parent-launcher proof passes in 118.91s. The complete accepted throughput batch
+and its changelog are ready for maintainer review and push preparation.
+
+This bounded follow-up belongs with the affected release tooling despite the
+12-release guideline. It neither begins another minor nor substitutes for the
+human-owned closeout audit. Versions remain `.44`; the changes extend the `.45`
+draft, uncommitted. No broad release gate or publication ran. The current handoff
+and throughput audit own final readiness and measurement limits.
+
+
 ## Release-gate fixture correction — .44, 2026-09-27
 
 The maintainer's `make release-patch` on `411fe1dae` stopped in the host-import

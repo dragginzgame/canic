@@ -6,6 +6,10 @@ Component, and that Component asks the root to create one direct `registry`
 child.
 Use this as the reference before adapting a product canister layout.
 
+The Fleet also requires its Coordinator and one Wasm Store for the Root. Canic
+generates those infrastructure packages and their typed initialization; the
+layout below contains only application source packages.
+
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
 `canic app create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses

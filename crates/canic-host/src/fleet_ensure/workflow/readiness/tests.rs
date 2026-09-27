@@ -47,6 +47,7 @@ fn retained_work_is_reported_without_rewriting_evidence_or_opening_a_lock() {
     let request = request(&root);
     let paths = EnsurePaths::under(&root, "local", "fleet");
     let mut plan = super::super::tests::estate_funding_plan();
+    plan.operation_id = "ab".repeat(32);
     plan.reviewed_desired = Some(Box::new(
         crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(&fixture.desired),
     ));
@@ -80,6 +81,43 @@ fn retained_work_is_reported_without_rewriting_evidence_or_opening_a_lock() {
         retained(&paths, &request),
         Err(FleetReadinessError::State(_))
     ));
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn completed_readiness_ignores_retired_execution_payloads() {
+    let root = temp_dir("readiness-completed-contract");
+    let paths = EnsurePaths::under(&root, "local", "fleet");
+    let operation = "ab".repeat(32);
+    let digest = "cd".repeat(32);
+    fs::create_dir_all(paths.plan.parent().unwrap()).unwrap();
+    fs::write(
+        &paths.plan,
+        serde_json::to_vec(&serde_json::json!({
+            "environment": "local", "fleet": "fleet", "operation_id": operation,
+            "plan_sha256": digest, "reviewed_desired": {"release": "0.110.38"}
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    fs::write(
+        &paths.journal,
+        serde_json::to_vec(&serde_json::json!({
+            "fleet": "fleet", "operation_id": operation, "plan_sha256": digest,
+            "completion": "converged", "effects": [{"state": "applied"}],
+            "successor_phases": [{"unreadable_as_current_contract": true}]
+        }))
+        .unwrap(),
+    )
+    .unwrap();
+    let selected = retained(&paths, &request(&root)).unwrap();
+    let report = report(&request(&root), "network".into(), 1000, selected);
+    assert!(
+        !report
+            .blockers
+            .contains(&ReadinessBlocker::RetainedOperation)
+    );
+    assert!(!paths.lock.exists());
     fs::remove_dir_all(root).unwrap();
 }
 

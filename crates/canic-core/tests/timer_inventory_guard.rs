@@ -538,8 +538,12 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
         .filter(|version| !version.is_empty())
         .expect("ic-timers must use an exact workspace version pin");
     let mut command = Command::new(env!("CARGO"));
+    // Exercise machine-readable output even when CI forces terminal colors.
+    command.env("CARGO_TERM_COLOR", "always");
     command.current_dir(&root).args([
         "tree",
+        "--color",
+        "never",
         "--locked",
         "--offline",
         "--target",

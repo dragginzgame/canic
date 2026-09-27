@@ -163,6 +163,13 @@ fn retained(
     paths: &EnsurePaths,
     request: &FleetReadinessRequest<'_>,
 ) -> Result<Option<RetainedReadinessOperation>, FleetReadinessError> {
+    if let Some(completed) = crate::fleet_ensure::ops::operation_selection::completed(
+        paths,
+        request.environment,
+        request.fleet,
+    )? {
+        return Ok(Some(completed));
+    }
     let Some(journal) = read_journal(paths)? else {
         return Ok(None);
     };

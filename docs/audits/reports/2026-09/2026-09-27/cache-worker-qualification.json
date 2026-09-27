@@ -1,0 +1,331 @@
+{
+  "schema_version": 1,
+  "seconds": {
+    "serial-regular": 144.56,
+    "warm": 700.0,
+    "warm-regular": 382.8,
+    "serial-journey": 117.47,
+    "parallel": 145.26,
+    "serial": 262.0,
+    "warm-journey": 316.92
+  },
+  "rows": [
+    {
+      "cohort": "warm-regular",
+      "trace": "/home/adam/projects/canic/target/test-runs/20260927T165918Z-1112.virmrt/1.log",
+      "sha256": "14a201d65661f7cb9e8c9e14c87fa5d95a50e562e690a5d83acd49a40784a33d",
+      "cases": [
+        {
+          "name": "completed estate reset recovers and replays",
+          "seconds": 324.712613
+        }
+      ],
+      "cache_acquisitions": [
+        {
+          "schema_version": 1,
+          "process_id": 1228,
+          "worker": 1,
+          "parent_id": 11,
+          "cache": "literal-zero-release-artifacts",
+          "reused": false,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 3,
+          "namespace_lock_wait_us": 5,
+          "input_capture_us": 2113187,
+          "cache_lookup_us": 11,
+          "caller_build_us": 144283324,
+          "output_validation_us": 19578,
+          "publication_us": 10154,
+          "materialization_us": 202003,
+          "maintenance_us": 264,
+          "total_us": 146719877
+        },
+        {
+          "schema_version": 1,
+          "process_id": 1228,
+          "worker": 1,
+          "parent_id": 30,
+          "cache": "literal-zero-release-artifacts",
+          "reused": false,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 3,
+          "namespace_lock_wait_us": 5,
+          "input_capture_us": 2111620,
+          "cache_lookup_us": 11,
+          "caller_build_us": 37137838,
+          "output_validation_us": 19506,
+          "publication_us": 10313,
+          "materialization_us": 195923,
+          "maintenance_us": 22,
+          "total_us": 39565952
+        }
+      ],
+      "replay_phases": [],
+      "retained_trace": ".tmp/cache-worker-audit45/warm-regular-0.trace.log"
+    },
+    {
+      "cohort": "warm-journey",
+      "trace": "/home/adam/projects/canic/target/test-runs/20260927T170541Z-28318.ZyLdWl/1.log",
+      "sha256": "1e5e69c5aa9e4feeac81d7eb587125664f88d159f850522c6074186d76de868a",
+      "cases": [
+        {
+          "name": "two Workloads refill two Ready assets with lost funding and creation responses",
+          "seconds": 314.072448
+        }
+      ],
+      "cache_acquisitions": [
+        {
+          "schema_version": 1,
+          "process_id": 28423,
+          "worker": 2,
+          "parent_id": 11,
+          "cache": "literal-zero-release-artifacts",
+          "reused": false,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 3,
+          "namespace_lock_wait_us": 5,
+          "input_capture_us": 2162036,
+          "cache_lookup_us": 13,
+          "caller_build_us": 204986812,
+          "output_validation_us": 19625,
+          "publication_us": 10974,
+          "materialization_us": 432625,
+          "maintenance_us": 33,
+          "total_us": 207693821
+        }
+      ],
+      "replay_phases": [],
+      "retained_trace": ".tmp/cache-worker-audit45/warm-journey-1.trace.log"
+    },
+    {
+      "cohort": "serial-regular",
+      "trace": "/home/adam/projects/canic/target/test-runs/20260927T171058Z-47843.mxpYbF/1.log",
+      "sha256": "2aad3d9e875374895b193932e4995083dac9a977577de53fcf0ef9da9907a5ac",
+      "cases": [
+        {
+          "name": "completed estate reset recovers and replays",
+          "seconds": 141.438257
+        }
+      ],
+      "cache_acquisitions": [
+        {
+          "schema_version": 1,
+          "process_id": 47949,
+          "worker": 1,
+          "parent_id": 7,
+          "cache": "literal-zero-release-artifacts",
+          "reused": true,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 3,
+          "namespace_lock_wait_us": 2,
+          "input_capture_us": 2136754,
+          "cache_lookup_us": 21430,
+          "caller_build_us": null,
+          "output_validation_us": 0,
+          "publication_us": 0,
+          "materialization_us": 93078,
+          "maintenance_us": 24,
+          "total_us": 2342326
+        },
+        {
+          "schema_version": 1,
+          "process_id": 47949,
+          "worker": 1,
+          "parent_id": 22,
+          "cache": "literal-zero-release-artifacts",
+          "reused": true,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 2,
+          "namespace_lock_wait_us": 2,
+          "input_capture_us": 2136233,
+          "cache_lookup_us": 22919,
+          "caller_build_us": null,
+          "output_validation_us": 0,
+          "publication_us": 0,
+          "materialization_us": 92998,
+          "maintenance_us": 56,
+          "total_us": 2334698
+        }
+      ],
+      "replay_phases": [],
+      "retained_trace": ".tmp/cache-worker-audit45/serial-regular-2.trace.log"
+    },
+    {
+      "cohort": "serial-journey",
+      "trace": "/home/adam/projects/canic/target/test-runs/20260927T171323Z-14988.qfsxRd/1.log",
+      "sha256": "029d8a62d180695da9ded194654e0912f2bf92bf3c39ec33fdf783150b09ea75",
+      "cases": [
+        {
+          "name": "two Workloads refill two Ready assets with lost funding and creation responses",
+          "seconds": 114.375295
+        }
+      ],
+      "cache_acquisitions": [
+        {
+          "schema_version": 1,
+          "process_id": 15145,
+          "worker": 2,
+          "parent_id": 7,
+          "cache": "literal-zero-release-artifacts",
+          "reused": true,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 2,
+          "namespace_lock_wait_us": 3,
+          "input_capture_us": 2099160,
+          "cache_lookup_us": 19699,
+          "caller_build_us": null,
+          "output_validation_us": 0,
+          "publication_us": 0,
+          "materialization_us": 104204,
+          "maintenance_us": 29,
+          "total_us": 2303914
+        }
+      ],
+      "replay_phases": [],
+      "retained_trace": ".tmp/cache-worker-audit45/serial-journey-3.trace.log"
+    },
+    {
+      "cohort": "parallel",
+      "trace": "/home/adam/projects/canic/target/test-runs/20260927T171709Z-45265.Eg6RLb/1.log",
+      "sha256": "071a2e3392c61243212fbfcf0291d88c20ac02f0430f2ce30d4caec032572ae5",
+      "cases": [
+        {
+          "name": "completed estate reset recovers and replays",
+          "seconds": 142.319604
+        }
+      ],
+      "cache_acquisitions": [
+        {
+          "schema_version": 1,
+          "process_id": 45484,
+          "worker": 1,
+          "parent_id": 7,
+          "cache": "literal-zero-release-artifacts",
+          "reused": true,
+          "coordination_lock_wait_us": 2,
+          "content_lock_wait_us": 2,
+          "namespace_lock_wait_us": 2,
+          "input_capture_us": 2209313,
+          "cache_lookup_us": 26572,
+          "caller_build_us": null,
+          "output_validation_us": 0,
+          "publication_us": 0,
+          "materialization_us": 80223,
+          "maintenance_us": 30,
+          "total_us": 2407786
+        },
+        {
+          "schema_version": 1,
+          "process_id": 45484,
+          "worker": 1,
+          "parent_id": 22,
+          "cache": "literal-zero-release-artifacts",
+          "reused": true,
+          "coordination_lock_wait_us": 3,
+          "content_lock_wait_us": 2,
+          "namespace_lock_wait_us": 2,
+          "input_capture_us": 2080300,
+          "cache_lookup_us": 27098,
+          "caller_build_us": null,
+          "output_validation_us": 0,
+          "publication_us": 0,
+          "materialization_us": 80180,
+          "maintenance_us": 16,
+          "total_us": 2269503
+        }
+      ],
+      "replay_phases": [],
+      "retained_trace": ".tmp/cache-worker-audit45/parallel-4.trace.log"
+    },
+    {
+      "cohort": "parallel",
+      "trace": "/home/adam/projects/canic/target/test-runs/20260927T171709Z-45267.ERQIa3/1.log",
+      "sha256": "89569710881c0c893907930000eb83aa9171c6703a25593533423625e45e64a3",
+      "cases": [
+        {
+          "name": "two Workloads refill two Ready assets with lost funding and creation responses",
+          "seconds": 114.648259
+        }
+      ],
+      "cache_acquisitions": [
+        {
+          "schema_version": 1,
+          "process_id": 45575,
+          "worker": 2,
+          "parent_id": 7,
+          "cache": "literal-zero-release-artifacts",
+          "reused": true,
+          "coordination_lock_wait_us": 510281,
+          "content_lock_wait_us": 2,
+          "namespace_lock_wait_us": 3,
+          "input_capture_us": 2371557,
+          "cache_lookup_us": 21309,
+          "caller_build_us": null,
+          "output_validation_us": 0,
+          "publication_us": 0,
+          "materialization_us": 81634,
+          "maintenance_us": 18,
+          "total_us": 3071775
+        }
+      ],
+      "replay_phases": [],
+      "retained_trace": ".tmp/cache-worker-audit45/parallel-5.trace.log"
+    }
+  ],
+  "limits": [
+    "Two exact cases only; no full-suite result",
+    "Sibling Toko qualification was active during initial warm-up",
+    "Cache stages are upstream measured durations; do not sum nested case spans",
+    "Single warmed comparison, not a full-suite speedup or a claim of balanced complete partitions",
+    "Corrected measured cohorts both set RUSTC_WRAPPER to scripts/ci/run-sccache.sh",
+    "Nested replay subdivisions compile and use the existing tested Span owner; these two selected cases do not execute the mixed-topology replay sections"
+  ],
+  "comparison": {
+    "serial_command_seconds": 262.03,
+    "parallel_command_seconds": 145.26,
+    "wall_reduction_percent": 44.56359958783345,
+    "selection": "completed-estate reset from regular group and two-Workload refill from journey group",
+    "complete_default_partition": false
+  },
+  "excluded_attempts": [
+    {
+      "stage": "initial launcher setup",
+      "reason": "The private measurement harness omitted POCKET_IC_BIN; no selected test ran. Supplied the checksum-verified binary before qualification."
+    },
+    {
+      "stage": "first parallel cohort",
+      "reason": "The private harness inherited no RUSTC_WRAPPER while serial used run-with-test-scratch, which selects the repository wrapper. Cache misses made this cohort incomparable. Stopped its owned process groups, retained partial logs, and reran parallel with the same explicit wrapper as serial.",
+      "log": ".tmp/cache-worker-audit45/parallel-unmatched.log"
+    }
+  ],
+  "binary": {
+    "path": "/home/adam/projects/canic/target/debug/deps/canic_testing_internal-d8d0a029974619db",
+    "sha256": "97ededd9118de1348fedcf00ba5dc70b156ed2e50cfddf71c6feb08ca336ff77"
+  },
+  "source_sha256": {
+    "crates/canic-testing-internal/src/pic/timing/mod.rs": "1df99f1ec184a751d9df7ae842916ec7c46843fba1efa0c4662aecb692b6e4c1",
+    "crates/canic-testing-internal/src/pic/timing/cache/mod.rs": "1c06aec10ebdb7f54f02de49bf5b2669da45266cb146ca24d3c850236b6de710",
+    "crates/canic-testing-internal/src/pic/timing/tests.rs": "fde2dbe0fbdce61ef85a5d0fb7e7cb6d8389a7931fd861983659e59ec5d2cacf",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "8e579a8c6e106e2a11ecff46c44ccced785ee85fe13bb233c25f2773df49e12c",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs": "2e9aaacbfaaa4dd89873b20f9014a8338f27230fd8a17df7abff2a4cf443d74d",
+    "scripts/ci/run-workspace-tests.sh": "63cbe121d7596340d6d9e77065aadc3ab2d1635f2bc5889f93665d7f27b57fb9",
+    "scripts/ci/test-workspace-test-runner.sh": "ae62fcc0e47f8fe86387590028abcac6a76732eb4879c4a905551fbff31dc17a"
+  },
+  "qualification": {
+    "native_timing_tests": "4 passed",
+    "quiet_runner_regression": "passed; successful traces retained only in full logs; bounded failure excerpt includes cache events",
+    "clippy": "internal library/tests with governed-pocketic-tests, warnings denied: passed",
+    "formatting_shellcheck_whitespace": "passed",
+    "full_suite_run": false
+  },
+  "logs": {
+    ".tmp/cache-timing-native.log": "f5f8584d6e8a4763033c9dd2ba084297dd5ba7079d47c49e58c4730ccd0b3851",
+    ".tmp/cache-timing-runner.log": "26e49d5fdd02384a8e5c677b93cdcbfe4bacc676e39e3ebec37f977f251b86f2",
+    ".tmp/cache-timing-clippy.log": "0452a48ce6756503affa07eba17dc579b111e09c56161f0f49a1a43116323aff",
+    ".tmp/cache-timing-governed-build.log": "b973aaa862f5ad975ed55ed1a934706dea7e3b03dbcf44403628a091386d6735",
+    ".tmp/cache-worker-audit45/compare.sh": "17717c123bae5b8b7d421fd044592ab59b320ce0f0a785b40bf033fffb68ace1",
+    ".tmp/cache-worker-audit45/serial-regular.log": "93cc25f397bf513e36cb958b32837c8d158e04b4293884b9e25d6d7b86e7fe06",
+    ".tmp/cache-worker-audit45/serial-journey.log": "b74e49d4b9115cf5481e0e2b4d4d213ff4e72b218beb21bab7bcdba0dd8af8bb",
+    ".tmp/cache-worker-audit45/parallel.log": "1c146bd244c7529b43da0964c9841fff16c966c2caeeea4ba10e298d06220c28"
+  }
+}

@@ -8,6 +8,13 @@ use crate::fleet_ensure::{
     },
 };
 use candid::{CandidType, Nat, Principal};
+use canic_core::{
+    dto::{
+        canister::{CanisterInspectionRequest, CanisterStatusResponse, CanisterStatusType},
+        error::Error,
+    },
+    protocol,
+};
 use ic_agent::Agent;
 use serde::Deserialize;
 use std::time::Duration;
@@ -46,6 +53,93 @@ struct Settings {
 #[derive(CandidType, Deserialize)]
 struct Memory {
     snapshots_size: Nat,
+}
+
+#[derive(CandidType)]
+enum RootRequest {
+    InspectCanister(CanisterInspectionRequest),
+}
+
+#[derive(CandidType, Deserialize)]
+enum RootResponse {
+    InspectCanister(Box<CanisterStatusResponse>),
+    InspectionReserveRequired(canic_core::dto::canister::CanisterInspectionReserveResponse),
+}
+
+/// Inspect a held child through current Root, bracketed by certified custody.
+/// The caller reserves the observation attempt before entering this paid boundary.
+pub(in crate::fleet_ensure) async fn observe_root_owned(
+    agent: &Agent,
+    root: Principal,
+    canister: Principal,
+) -> Result<CapacityImportSampleRecord, CapacityImportJournalError> {
+    let invalid = || CapacityImportJournalError::ObservationUnavailable { canister };
+    let before = custody::observe_one(agent, canister)
+        .await
+        .map_err(|_| invalid())?;
+    if !before.controllers.contains(&root) {
+        return Err(invalid());
+    }
+    let argument = candid::encode_one(RootRequest::InspectCanister(CanisterInspectionRequest {
+        canister_id: canister,
+    }))
+    .map_err(|_| invalid())?;
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(45),
+        agent
+            .update(&root, protocol::CANIC_ROOT_COMMAND)
+            .with_arg(argument)
+            .call_and_wait(),
+    )
+    .await
+    .map_err(|_| invalid())?
+    .map_err(|_| invalid())?;
+    let response: Result<RootResponse, Error> =
+        candid::decode_one(&bytes).map_err(|_| invalid())?;
+    let RootResponse::InspectCanister(mut status) =
+        response.map_err(CapacityImportJournalError::RootRejected)?
+    else {
+        return Err(invalid());
+    };
+    status.settings.controllers.sort_unstable();
+    let module_sha256 = status
+        .module_hash
+        .map(|value| value.try_into().map_err(|_| invalid()))
+        .transpose()?;
+    let after = custody::observe_one(agent, canister)
+        .await
+        .map_err(|_| invalid())?;
+    let expected = (
+        before.subnet,
+        &before.controllers,
+        before.module_sha256.as_deref().map(hash).transpose()?,
+    );
+    let actual = (after.subnet, &status.settings.controllers, module_sha256);
+    if expected != actual
+        || after.controllers != status.settings.controllers
+        || after.module_sha256.as_deref().map(hash).transpose()? != module_sha256
+        || status.status == CanisterStatusType::Stopping
+    {
+        return Err(invalid());
+    }
+    Ok(CapacityImportSampleRecord {
+        binding: CapacityImportSourceBinding {
+            canister_id: canister,
+            subnet: after.subnet,
+            controllers: status.settings.controllers,
+            module_sha256,
+            canister_version: status.version,
+            stopped: status.status == CanisterStatusType::Stopped,
+            snapshots_size_bytes: status
+                .memory_metrics
+                .snapshots_size
+                .0
+                .try_into()
+                .map_err(|_| invalid())?,
+        },
+        cycles: status.cycles.0.try_into().map_err(|_| invalid())?,
+        reserved_cycles: status.reserved_cycles.0.try_into().map_err(|_| invalid())?,
+    })
 }
 
 pub(in crate::fleet_ensure) async fn observe(

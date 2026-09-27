@@ -21,6 +21,29 @@ use std::path::Path;
 
 pub use reset::CompletedResetError;
 
+/// Archive consumed approvals before a new explicit reinstall; resume interrupted local retirement.
+/// No canister state, current operation, payment or artifact is changed.
+pub fn retire_completed_authority(
+    workspace: &Path,
+    environment: &str,
+    fleet: &str,
+    new_reinstall: bool,
+) -> Result<(), CompletedResetError> {
+    crate::fleet_ensure::policy::validate_path_labels(environment, fleet)?;
+    let paths = EnsurePaths::under(workspace, environment, fleet);
+    if !new_reinstall && !publication::retirement::pending(&paths) {
+        return Ok(());
+    }
+    let _lock = ops::lock_completed_source(&paths)?;
+    if new_reinstall {
+        ops::operation_selection::archive::capture(&paths, environment, fleet)?;
+        publication::retirement::retire(&paths)?;
+    } else {
+        publication::retirement::recover(&paths)?;
+    }
+    Ok(())
+}
+
 /// Read staged or committed current authority without decoding predecessor executable records.
 pub fn review(
     workspace: &Path,

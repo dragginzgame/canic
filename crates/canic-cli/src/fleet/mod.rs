@@ -5,6 +5,7 @@
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
 mod bootstrap;
+mod clean_reinstall;
 mod completed_preparation;
 mod completed_reset;
 mod funding_observation;
@@ -239,6 +240,8 @@ impl GenerateOptions {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 struct EnsureOptions {
+    seed: PathBuf,
+    source: PathBuf,
     observe_funding: Option<String>,
     operator_mint: bool,
     mint_cmc: String,
@@ -272,6 +275,14 @@ impl EnsureOptions {
         );
         Ok(Self {
             observe_funding: string_option(ensure, "observe-funding"),
+            seed: string_option(ensure, "seed").map_or_else(
+                || PathBuf::from(format!("deployments/{fleet}.estate.toml")),
+                PathBuf::from,
+            ),
+            source: string_option(ensure, "source").map_or_else(
+                || PathBuf::from(format!("deployments/{fleet}.toml")),
+                PathBuf::from,
+            ),
             reinstall: ensure.get_flag("reinstall"),
             retirement_debit_block: ensure.get_one::<u64>("retirement-debit-block").copied(),
             operator_mint: ensure.get_flag("operator-mint"),
@@ -428,9 +439,11 @@ fn ensure_command() -> Command {
                 .conflicts_with("apply")
                 .conflicts_with("operator-mint")
                 .help(
-                    "Review a selected-build database wipe or supported partial-activation recovery",
+                    "Review a clean current-build reinstall, retaining supplied IDs and cycles",
                 ),
         )
+        .arg(value_arg("seed").long("seed").value_name("PATH").requires("reinstall").help("Explicit retained canister inventory; defaults to deployments/<fleet>.estate.toml"))
+        .arg(value_arg("source").long("source").value_name("PATH").requires("reinstall").help("Current Fleet policy for reset/import publication; defaults to deployments/<fleet>.toml"))
         .arg(Arg::new("retirement-debit-block").long("retirement-debit-block").value_name("BLOCK")
             .value_parser(clap::value_parser!(u64)).requires("reinstall")
             .help("Verify one external operator withdrawal during completed-source retirement review"))
@@ -492,17 +505,17 @@ fn json_error(source: FleetCommandError) -> FleetCommandError {
 
 fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
     let root = resolve_current_canic_icp_root()?;
+    if clean_reinstall::run_if_selected(&root, &options)? {
+        return Ok(());
+    }
+    completed_reset::retire_if_selected(&root, &options)?;
     if completed_reset::run_if_selected(&root, &options)? {
         return Ok(());
     }
     if completed_preparation::run_if_selected(&root, &options)? {
         return Ok(());
     }
-    let desired_path = if options.desired.is_absolute() {
-        options.desired.clone()
-    } else {
-        root.join(&options.desired)
-    };
+    let desired_path = resolve_from_root(&root, &options.desired);
     let loaded = load_ensure_authority(&root, &desired_path, &options)?;
     if let Some(root_name) = &options.observe_funding {
         return funding_observation::run(&root, &loaded, &options, root_name);
@@ -522,6 +535,7 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
             environment: &loaded.desired.environment,
             desired_sha256: Some(&loaded.sha256),
             applied_plan_sha256: options.apply.as_deref(),
+            applied_review_sha256: None,
             reinstall: options.reinstall,
             next_review_command: &next_review,
         },
@@ -712,6 +726,7 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
             environment,
             desired_sha256: None,
             applied_plan_sha256: None,
+            applied_review_sha256: None,
             reinstall: false,
             next_review_command: "",
         },
@@ -739,11 +754,17 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         publish_generated(&output, &bytes, options.replace.as_deref())?;
         Ok((generated, output))
     })();
-    timing.finish_generation(result.is_ok());
+    timing.finish_without_report(result.is_ok());
     drop(timing);
     let (generated, output) = result?;
     println!("fleet: {}", options.fleet);
     println!("release_build: {}", generated.release_build_id);
+    if generated.clean_reinstall {
+        println!("deployment: clean reinstall; completed records are historical evidence");
+        println!(
+            "balances: not sampled during generation; review current custody with fleet ensure --reinstall"
+        );
+    }
     if let Some(preparation) = &generated.completed_preparation_sha256 {
         println!("completed_preparation: {preparation}");
         println!(
@@ -760,7 +781,9 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         "{}",
         subnet_catalog::render(generated.subnet_catalog.as_ref())
     );
-    print!("{}", startup_funding::render(&generated.startup_funding));
+    if let Some(forecast) = &generated.startup_funding {
+        print!("{}", startup_funding::render(forecast));
+    }
     Ok(())
 }
 

@@ -78,6 +78,7 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
     qualify_funding_order(root, &desired, &source);
     qualify_ready_coordinator(root, &desired, &source);
     qualify_terminal_publication(root, &plan, &source);
+    qualify_held_sources(root, &desired, &source);
 
     let mut missing = desired.clone();
     missing
@@ -125,6 +126,7 @@ fn source_record(desired: &DesiredFleet) -> InfrastructureBootstrapRecord {
         })
     }).collect();
     InfrastructureBootstrapRecord {
+        held_sources: BTreeMap::new(),
         schema_version: 1,
         operator,
         network_root_key_sha256: [43; 32],
@@ -145,7 +147,29 @@ fn source_record(desired: &DesiredFleet) -> InfrastructureBootstrapRecord {
 }
 
 fn reseal(desired: &mut DesiredFleet, source: &mut InfrastructureBootstrapRecord) {
-    let document = CapacityImportDeclarations {
+    let document = declarations::BootstrapDeclarations {
+        root_owned: source
+            .held_sources
+            .values()
+            .map(|source| declarations::HeldDeclaration {
+                canister: source.custody.canister.to_text(),
+                subnet: source.custody.subnet.to_string(),
+                controllers: source
+                    .custody
+                    .controllers
+                    .iter()
+                    .map(Principal::to_text)
+                    .collect(),
+                module_sha256: source
+                    .custody
+                    .module_sha256
+                    .map_or_else(|| "empty".into(), hex_bytes),
+                disposition: CapacityImportDispositionKind::Absence,
+                no_external_obligations: true,
+                no_other_fleet_ownership: true,
+                evidence: "explicit disposable staging child".into(),
+            })
+            .collect(),
         schema_version: 1,
         operator: source.operator.to_text(),
         network_root_key_sha256: hex_bytes(source.network_root_key_sha256),
@@ -174,6 +198,9 @@ fn reseal(desired: &mut DesiredFleet, source: &mut InfrastructureBootstrapRecord
     source.declarations_toml = toml::to_string(&document).unwrap();
     source.declarations_sha256 = Sha256::digest(source.declarations_toml.as_bytes()).into();
     for entry in source.sources.values_mut() {
+        entry.disposition = crate::fleet_ensure::model::capacity_import::CapacityImportDisposition::AbsenceEvidence { evidence_sha256: source.declarations_sha256 };
+    }
+    for entry in source.held_sources.values_mut() {
         entry.disposition = crate::fleet_ensure::model::capacity_import::CapacityImportDisposition::AbsenceEvidence { evidence_sha256: source.declarations_sha256 };
     }
     *source = seal_sources(source.clone()).unwrap();
@@ -206,6 +233,7 @@ fn qualify_declarations(source: &InfrastructureBootstrapRecord) {
 
 fn qualify_initial_observation(plan: &FleetEnsurePlan, source: &InfrastructureBootstrapRecord) {
     let observed = InfrastructureBootstrapObservation {
+        held_sources: BTreeMap::new(),
         canisters: source
             .sources
             .iter()
@@ -216,6 +244,14 @@ fn qualify_initial_observation(plan: &FleetEnsurePlan, source: &InfrastructureBo
         ledger_fee_cycles: source.ledger_fee_cycles,
     };
     verify_initial(plan, &observed).unwrap();
+    let mut funded = observed.clone();
+    funded.operator_cycles += 1;
+    verify_initial(plan, &funded).unwrap();
+    funded.operator_cycles = source.operator_cycles - 1;
+    assert!(matches!(
+        verify_initial(plan, &funded),
+        Err(InfrastructureBootstrapError::Integrity)
+    ));
     let mut drifted = observed.clone();
     drifted
         .canisters
@@ -225,10 +261,14 @@ fn qualify_initial_observation(plan: &FleetEnsurePlan, source: &InfrastructureBo
         .unwrap()
         .binding
         .canister_version += 1;
-    assert!(matches!(
-        verify_initial(plan, &drifted),
-        Err(InfrastructureBootstrapError::Integrity)
-    ));
+    if source.sources["root-0"].sample.binding.stopped {
+        assert!(matches!(
+            verify_initial(plan, &drifted),
+            Err(InfrastructureBootstrapError::Integrity)
+        ));
+    } else {
+        verify_initial(plan, &drifted).unwrap();
+    }
     let mut drifted = observed;
     drifted
         .canisters
@@ -322,15 +362,14 @@ fn qualify_funding_order(
     reseal(&mut desired, &mut source);
     let plan = prepare(root, &desired, &source, "fund-stopped-coordinator", 45).unwrap();
     let actions = &plan.canisters[0].actions;
-    assert!(matches!(actions[0], EnsureAction::Stop { .. }));
-    assert!(matches!(actions[1], EnsureAction::Fund { .. }));
+    assert!(matches!(actions[0], EnsureAction::Fund { .. }));
+    assert!(matches!(actions[1], EnsureAction::Stop { .. }));
     source.sources.get_mut("coordinator").unwrap().sample.cycles = 0;
     reseal(&mut desired, &mut source);
+    let funded = prepare(root, &desired, &source, "fund-empty-native-balance", 45).unwrap();
     assert!(matches!(
-        prepare(root, &desired, &source, "insufficient-native-headroom", 45),
-        Err(InfrastructureBootstrapError::Policy(
-            EnsurePolicyError::InfrastructureBootstrap(_)
-        ))
+        funded.canisters[0].actions[0],
+        EnsureAction::Fund { .. }
     ));
 }
 
@@ -457,6 +496,7 @@ fn qualify_terminal_publication(
         })
         .collect();
     let observed = InfrastructureBootstrapObservation {
+        held_sources: BTreeMap::new(),
         canisters,
         coordinator_registry: None,
         operator_cycles: source.operator_cycles,
@@ -588,6 +628,71 @@ fn qualify_survey_identity(
     let changed = format!("{}\n", source.declarations_toml);
     assert!(matches!(
         BootstrapSurvey::begin(&paths, desired, source.coordinator, &changed),
+        Err(InfrastructureBootstrapError::Integrity)
+    ));
+}
+
+fn qualify_held_sources(
+    root: &Path,
+    desired: &DesiredFleet,
+    original: &InfrastructureBootstrapRecord,
+) {
+    let mut desired = desired.clone();
+    let mut source = original.clone();
+    let child = desired
+        .canisters
+        .iter()
+        .find(|entry| entry.kind == DesiredCanisterKind::Pool)
+        .unwrap()
+        .clone();
+    let parent_name = child.parent.as_ref().unwrap();
+    let parent_id = source.sources[parent_name].sample.binding.canister_id;
+    let mut held = source.sources.remove(&child.name).unwrap();
+    held.sample.binding.controllers = vec![parent_id];
+    source.held_sources.insert(child.name.clone(), crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapHeldSourceRecord {
+        root: parent_id, custody: declarations::custody_from_binding(&held.sample.binding), disposition: held.disposition,
+    });
+    reseal(&mut desired, &mut source);
+    let plan = prepare(root, &desired, &source, "held-children", 46).unwrap();
+    verify_plan(root, &plan).unwrap();
+    assert!(plan.canisters.iter().all(|entry| entry.name != child.name));
+    let observed = InfrastructureBootstrapObservation {
+        held_sources: source
+            .held_sources
+            .iter()
+            .map(|(name, source)| (name.clone(), source.custody.clone()))
+            .collect(),
+        canisters: desired
+            .canisters
+            .iter()
+            .map(|entry| {
+                (
+                    entry.name.clone(),
+                    source
+                        .sources
+                        .get(&entry.name)
+                        .map(|source| source.sample.clone()),
+                )
+            })
+            .collect(),
+        coordinator_registry: None,
+        operator_cycles: source.operator_cycles,
+        ledger_fee_cycles: source.ledger_fee_cycles,
+    };
+    verify_initial(&plan, &observed).unwrap();
+    let mut drifted = observed;
+    drifted
+        .held_sources
+        .get_mut(&child.name)
+        .unwrap()
+        .controllers = vec![Principal::from_slice(&[99])];
+    assert!(matches!(
+        verify_initial(&plan, &drifted),
+        Err(InfrastructureBootstrapError::Integrity)
+    ));
+    source.held_sources.get_mut(&child.name).unwrap().root = Principal::from_slice(&[99]);
+    assert!(matches!(
+        seal_sources(source),
         Err(InfrastructureBootstrapError::Integrity)
     ));
 }

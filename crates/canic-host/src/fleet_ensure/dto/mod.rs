@@ -18,8 +18,9 @@ use thiserror::Error as ThisError;
 
 pub use observation::{FleetObservationStage, FleetObservationTiming};
 pub use progress::{
-    FleetEnsureActionKind, FleetEnsureActionProgress, FleetEnsurePhase, FleetEnsureProgress,
-    FleetEnsureProgressState, FleetProvisioningProgress,
+    FleetComponentProgress, FleetComponentProgressState, FleetEnsureActionKind,
+    FleetEnsureActionProgress, FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState,
+    FleetProvisioningProgress,
 };
 
 /// Parsed current desired state and its exact source identity.

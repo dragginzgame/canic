@@ -121,6 +121,8 @@ pub struct FreshEstateSeedRequest<'a> {
 
 /// Generated desired state plus its explicit observation summary.
 pub struct GeneratedDesiredFleet {
+    /// Current replacement authority compiled without querying the completed release.
+    pub clean_reinstall: bool,
     /// Completed-source native samples are bound to this preparation, not fresh usage queries.
     pub completed_preparation_sha256: Option<String>,
     pub desired: DesiredFleet,
@@ -128,7 +130,7 @@ pub struct GeneratedDesiredFleet {
     pub observed_controlled_cycles: u128,
     pub release_build_id: ReleaseBuildId,
     pub subnet_catalog: Option<crate::subnet_catalog::view::SubnetCatalogObservation>,
-    pub startup_funding: crate::fleet_ensure::view::startup_funding::StartupFundingForecast,
+    pub startup_funding: Option<crate::fleet_ensure::view::startup_funding::StartupFundingForecast>,
 }
 
 enum GenerationOutput {
@@ -776,6 +778,26 @@ fn generate(
         crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection,
     >,
 ) -> Result<GenerationOutput, FleetGenerateError> {
+    let clean_reinstall = initialization.is_none()
+        && crate::fleet_ensure::ops::operation_selection::completed_fleet(
+            &crate::fleet_ensure::ops::EnsurePaths::under(
+                request.root,
+                request.environment,
+                request.fleet,
+            ),
+            request.environment,
+            request.fleet,
+        )
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    if clean_reinstall {
+        crate::fleet_ensure::ops::retained_contract::check(
+            request.root,
+            request.environment,
+            request.fleet,
+        )
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    }
+    let initialization = initialization.or_else(|| clean_reinstall.then_some(crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection::Initialize));
     let mut source: FleetSource = load_toml(request.source, "source")?;
     let seed: EstateSeed = load_toml(request.seed, "seed")?;
     require_schema(source.schema_version, "source")?;
@@ -956,8 +978,22 @@ fn generate(
             .principal = None;
     }
     crate::fleet_ensure::policy::validate_terminal_pool_capacity(&desired)?;
-    if initialization.is_some() {
+    if initialization.is_some() && !clean_reinstall {
         return Ok(GenerationOutput::Bootstrap(Box::new(desired)));
+    }
+    if clean_reinstall {
+        return Ok(GenerationOutput::Ordinary(Box::new(
+            GeneratedDesiredFleet {
+                clean_reinstall: true,
+                completed_preparation_sha256: None,
+                desired,
+                observed_canisters: 0,
+                observed_controlled_cycles: 0,
+                release_build_id: request.release_build_id,
+                subnet_catalog,
+                startup_funding: None,
+            },
+        )));
     }
     let observed_controlled_cycles = observed.values().try_fold(0_u128, |total, canister| {
         total.checked_add(canister.cycles).ok_or_else(|| {
@@ -986,13 +1022,14 @@ fn generate(
     startup_funding::apply_allowances(config.model(), &desired, &mut startup_funding);
     Ok(GenerationOutput::Ordinary(Box::new(
         GeneratedDesiredFleet {
+            clean_reinstall,
             completed_preparation_sha256,
             desired,
             observed_canisters: observed.len(),
             observed_controlled_cycles,
             release_build_id: request.release_build_id,
             subnet_catalog,
-            startup_funding,
+            startup_funding: Some(startup_funding),
         },
     )))
 }

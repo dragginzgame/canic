@@ -49,9 +49,12 @@ release-batch plan and explicit maintainer acceptance.
    enters remediation. That audit must then be superseded by an accepted
    passing immutable verdict before any 0.110 implementation or promotion.
 8. [0.110 Fleet runtime contraction](0.110-fleet-runtime-contraction/status.md)
-   retains accepted B1/B2 contraction, finishes `.42`, then delivers
-   [reviewed Fleet capacity import in `.43`](0.110-fleet-runtime-contraction/0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043),
-   including explicit bootstrap of supplied infrastructure IDs.
+   retains accepted B1/B2 contraction and the published `.42` checkpoint.
+   [Reviewed Fleet capacity import](0.110-fleet-runtime-contraction/0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043)
+   and supplied-infrastructure bootstrap shipped in `.43`; `.44` cut historical
+   receipt schemas and consolidated qualification. The open `.45` batch covers
+   operator feedback, CI corrections and test throughput; see the
+   [current handoff](../status/current.md) for evidence and remaining limits.
    Further B3 records/codecs stop and remaining B4 pruning is deferred.
    B5's `.42` evidence remains a qualified checkpoint; the
    [closeout audit](../audits/release-lines/0.110-closeout-audit.md) must cover
@@ -60,7 +63,7 @@ release-batch plan and explicit maintainer acceptance.
    is the maintainer's selected next major slice. An independently maintained
    service owns blob semantics; Canic manages it as an ordinary Component and
    removes its blob-specific production surfaces. Implementation follows
-   `.43` import completion and accepted final 0.110 closeout. The external
+   completion of the current 0.110 corrections and accepted final closeout. The external
    `ic-blob-storage` repository is bootstrapped; maintainer/consumer assignments,
    package publication and provider qualification remain explicit dependencies.
 

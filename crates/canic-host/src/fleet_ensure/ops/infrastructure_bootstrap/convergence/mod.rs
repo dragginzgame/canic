@@ -160,6 +160,17 @@ fn verify_imports(
             return Err(invalid());
         }
         for imported in &matching[0].plan.sources {
+            if let Some(original) = source
+                .held_sources
+                .values()
+                .find(|entry| entry.custody.canister == imported.binding.canister_id)
+            {
+                let actual = super::declarations::custody_from_binding(&imported.binding);
+                if actual != original.custody || original.root != target {
+                    return Err(invalid());
+                }
+                continue;
+            }
             let original = source
                 .sources
                 .values()

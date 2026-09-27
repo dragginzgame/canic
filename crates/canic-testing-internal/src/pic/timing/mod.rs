@@ -3,8 +3,11 @@
 //! Responsibility: retain nested monotonic phase evidence for governed journeys.
 //! Boundary: diagnostic records do not change test outcomes or runtime pacing.
 
+mod cache;
 #[cfg(test)]
 mod tests;
+
+pub(super) use cache::artifact_cache;
 
 use std::{
     cell::RefCell,

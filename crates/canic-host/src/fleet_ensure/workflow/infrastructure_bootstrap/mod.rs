@@ -2,6 +2,8 @@
 //!
 //! This phase stops before pool handoff; it never reports a completed workload Fleet.
 
+mod automatic;
+
 use crate::fleet_ensure::{
     model::{
         ActualCycleConservation, DesiredFleet, EffectState, EnsureAction, FleetEnsureJournalRecord,
@@ -33,6 +35,7 @@ pub fn survey(
 ) -> Result<InfrastructureBootstrapRecord, InfrastructureBootstrapError> {
     crate::fleet_ensure::policy::validate_path_labels(&desired.environment, &desired.fleet)?;
     let paths = EnsurePaths::under(root, &desired.environment, &desired.fleet);
+    ops::operation_selection::retirement::prepare_bootstrap(&paths, desired)?;
     let owner = CapacityImportJournalStore::open(&paths)?;
     let mut survey = BootstrapSurvey::begin(&paths, desired, coordinator, declarations_toml)?;
     if let Some(source) = survey.completed() {
@@ -115,11 +118,6 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         .infrastructure_bootstrap
         .as_ref()
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-    let desired = plan
-        .reviewed_desired
-        .as_ref()
-        .ok_or(EnsureWorkflowError::PlanIntegrity)?
-        .desired();
     let paths = EnsurePaths::under(root, &plan.environment, &plan.fleet);
     bootstrap::inspection::reserve(&paths, plan, bootstrap::inspection::InspectionPhase::Apply)?;
     let observed = platform
@@ -128,7 +126,7 @@ pub(super) fn verify_before_apply<P: EnsurePlatform>(
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     bootstrap::verify_initial(plan, &observed)?;
     Ok((
-        bootstrap::original_observation(desired, source),
+        bootstrap::fleet_observation(&observed),
         plan.conservation.observed_controlled_cycles,
     ))
 }
@@ -267,12 +265,36 @@ pub fn review<P: EnsurePlatform>(
         request.declarations_toml,
         icp,
     )?;
+    review_source(request, &source, platform)
+}
+
+/// Review a normal disposable reset from current authority, without interpreting old records.
+pub fn review_clean<P: EnsurePlatform>(
+    workspace: &Path,
+    desired: &DesiredFleet,
+    seed: &Path,
+    time: u64,
+    platform: &mut P,
+    icp: &crate::icp::IcpCli,
+) -> Result<FleetEnsurePlan, EnsureWorkflowError<P::Error>> {
+    let source = automatic::survey(workspace, desired, icp)?;
+    review_source(&crate::fleet_ensure::dto::infrastructure_bootstrap::InfrastructureBootstrapReviewRequest {
+        workspace, desired, coordinator: crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection::Initialize,
+        declarations_toml: &source.declarations_toml, seed, planned_at_time: time,
+    }, &source, platform)
+}
+
+fn review_source<P: EnsurePlatform>(
+    request: &crate::fleet_ensure::dto::infrastructure_bootstrap::InfrastructureBootstrapReviewRequest<'_>,
+    source: &InfrastructureBootstrapRecord,
+    platform: &mut P,
+) -> Result<FleetEnsurePlan, EnsureWorkflowError<P::Error>> {
     let paths = EnsurePaths::under(
         request.workspace,
         &request.desired.environment,
         &request.desired.fleet,
     );
-    let source = bootstrap::publication::bind(&paths, request.desired, &source, request.seed)?;
+    let source = bootstrap::publication::bind(&paths, request.desired, source, request.seed)?;
     let desired = bootstrap::publication::bind_holds(request.desired, &source)?;
     let digest = canic_core::cdk::utils::hash::sha256_hex(
         toml::to_string_pretty(&desired)

@@ -39,13 +39,13 @@ pub(in crate::fleet_ensure::ops) fn observe(
     else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
-    let RootStatusResponseFragment::ComponentRegistry(registry) = query_with_candid(
-        icp,
-        &resolved.candid_path,
-        root,
-        protocol::CANIC_ROOT_STATUS,
-        &RootStatusRequestFragment::ComponentRegistry(request.clone()),
-    )?
+    let RootStatusResponseFragment::ComponentRegistry(registry) =
+        crate::canister_protocol::query_authenticated(
+            icp,
+            root,
+            protocol::CANIC_ROOT_STATUS,
+            &RootStatusRequestFragment::ComponentRegistry(request.clone()),
+        )?
     else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };
@@ -121,13 +121,13 @@ pub(in crate::fleet_ensure::ops) fn observe(
     {
         return Err(CurrentProtocolError::ResponseMismatch);
     }
-    let RootStatusResponseFragment::FleetAuthority(authority) = query_with_candid(
-        icp,
-        &resolved.candid_path,
-        root,
-        protocol::CANIC_ROOT_STATUS,
-        &RootStatusRequestFragment::FleetAuthority,
-    )?
+    let RootStatusResponseFragment::FleetAuthority(authority) =
+        crate::canister_protocol::query_authenticated(
+            icp,
+            root,
+            protocol::CANIC_ROOT_STATUS,
+            &RootStatusRequestFragment::FleetAuthority,
+        )?
     else {
         return Err(CurrentProtocolError::ResponseMismatch);
     };

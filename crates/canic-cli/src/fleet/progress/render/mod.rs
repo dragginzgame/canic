@@ -7,8 +7,8 @@
 use crate::support::path_stamp::utc_timestamp_ns;
 use canic_core::dto::component_provisioning::FleetComponentProvisioningPhase;
 use canic_host::fleet_ensure::dto::{
-    FleetEnsureActionKind, FleetEnsurePhase, FleetEnsureProgress, FleetEnsureProgressState,
-    FleetProvisioningProgress,
+    FleetComponentProgress, FleetComponentProgressState, FleetEnsureActionKind, FleetEnsurePhase,
+    FleetEnsureProgress, FleetEnsureProgressState, FleetProvisioningProgress,
 };
 use std::{fmt::Write as _, time::Duration};
 
@@ -47,6 +47,14 @@ pub(in crate::fleet) fn plain(progress: &FleetEnsureProgress) -> String {
             );
             if let Some(retry) = detail.pending_root_failure {
                 let _ = write!(line, "; {}", pending_retry(retry).join("; "));
+            }
+            for component in &detail.components {
+                let _ = write!(
+                    line,
+                    "; {}; Root {}",
+                    component_label(component),
+                    component.root
+                );
             }
         } else {
             line.push_str("; readiness detail unavailable");
@@ -128,6 +136,18 @@ pub(super) fn panel(
                 "Waiting: {elapsed_seconds}s; Components in scope: {}",
                 detail.component_count
             ));
+            let mut components = detail.components.iter().collect::<Vec<_>>();
+            components.sort_by_key(|component| !component.current);
+            for component in components.iter().take(4) {
+                lines.push(component_label(component));
+                lines.push(format!("  Root {}", component.root));
+            }
+            if components.len() > 4 {
+                lines.push(format!(
+                    "{} more components in --json output and timing receipt",
+                    components.len() - 4
+                ));
+            }
         } else {
             lines.push("Readiness detail unavailable".into());
             lines.push(format!("Waiting: {elapsed_seconds}s (last reported)"));
@@ -144,6 +164,27 @@ pub(super) fn panel(
         if stale { " (stale)" } else { "" }
     ));
     lines
+}
+
+fn component_label(component: &FleetComponentProgress) -> String {
+    let state = match component.state {
+        FleetComponentProgressState::Unknown => "unknown",
+        FleetComponentProgressState::Reserved => "reserved",
+        FleetComponentProgressState::Claimed => "claimed",
+        FleetComponentProgressState::Installed => "installed",
+        FleetComponentProgressState::Registered => "registered",
+        FleetComponentProgressState::Published => "directory published",
+        FleetComponentProgressState::RuntimePending => "awaiting activation",
+        FleetComponentProgressState::Active => "active",
+    };
+    format!(
+        "{}[{}]/{} ({}): {state}{}",
+        safe_text(&component.deployment),
+        component.placement,
+        safe_text(&component.member_path.join("/")),
+        safe_text(&component.component_spec),
+        if component.current { " [current]" } else { "" }
+    )
 }
 
 fn stages(detail: &FleetProvisioningProgress) -> [String; 3] {

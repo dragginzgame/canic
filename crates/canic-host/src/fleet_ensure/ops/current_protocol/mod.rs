@@ -4,6 +4,7 @@
 //! Does not own: journal sequencing, generic canister convergence, or historical recovery.
 //! Boundary: the reviewed action binds one exact Coordinator, Candid contract, Registry, and plan.
 
+mod component_progress;
 mod fixture;
 mod fresh;
 mod inactive_activation;
@@ -491,10 +492,9 @@ pub(super) fn compile(
         .model()
         .compile_component_deployment_configuration()
         .map_err(|error| CurrentProtocolError::Configuration(error.to_string()))?;
-    let root_candid_path = resolve_path(root, &protocol_intent.root_candid);
     let store_candid_path = resolve_path(root, &protocol_intent.store_candid);
     let mut root_authorities =
-        query_current_root_authorities(icp, desired, state, &root_candid_path, &store_candid_path)?;
+        query_current_root_authorities(icp, desired, state, &store_candid_path)?;
     root_authorities.sort_unstable_by_key(|authority| authority.binding.placement_subnet);
     let component_status = query_operation(icp, coordinator_principal, operation_id)?;
     let registry_sequence = compile_current_registry_sequence_with_status(
@@ -913,8 +913,37 @@ pub(super) fn query_current_root_authorities(
     icp: &IcpCli,
     desired: &DesiredFleet,
     state: &FleetEnsureStateRecord,
-    root_candid: &Path,
     store_candid: &Path,
+) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
+    read_root_authorities(
+        desired,
+        state,
+        |root| {
+            crate::canister_protocol::query_authenticated(
+                icp,
+                root,
+                protocol::CANIC_ROOT_STATUS,
+                &RootStatusRequestFragment::FleetAuthority,
+            )
+        },
+        |store| {
+            query_with_candid(
+                icp,
+                store_candid,
+                store,
+                protocol::CANIC_WASM_STORE_STATUS,
+                &StoreStatusRequest::Authority,
+            )
+        },
+    )
+}
+
+// Keep bounded scheduling separate from the transport; neither owner caches authority.
+fn read_root_authorities(
+    desired: &DesiredFleet,
+    state: &FleetEnsureStateRecord,
+    read_root: impl Fn(Principal) -> Result<RootStatusResponseFragment, CanisterProtocolError> + Sync,
+    read_store: impl Fn(Principal) -> Result<StoreStatusResponse, CanisterProtocolError> + Sync,
 ) -> Result<Vec<FleetSubnetRootAuthority>, CurrentProtocolError> {
     let roots = desired
         .canisters
@@ -933,23 +962,11 @@ pub(super) fn query_current_root_authorities(
                 kind: DesiredCanisterKind::Root,
                 name: configured.name.clone(),
             })?;
-        let response: RootStatusResponseFragment = query_with_candid(
-            icp,
-            root_candid,
-            principal,
-            protocol::CANIC_ROOT_STATUS,
-            &RootStatusRequestFragment::FleetAuthority,
-        )?;
+        let response = read_root(principal)?;
         let RootStatusResponseFragment::FleetAuthority(authority) = response else {
             return Err(CurrentProtocolError::ResponseMismatch);
         };
-        let store_response: StoreStatusResponse = query_with_candid(
-            icp,
-            store_candid,
-            authority.wasm_store_authority.wasm_store,
-            protocol::CANIC_WASM_STORE_STATUS,
-            &StoreStatusRequest::Authority,
-        )?;
+        let store_response = read_store(authority.wasm_store_authority.wasm_store)?;
         let StoreStatusResponse::Authority(store_authority) = store_response else {
             return Err(CurrentProtocolError::ResponseMismatch);
         };
@@ -1074,18 +1091,18 @@ pub(super) fn observe_with_staging(
         } => {
             let mut start_after = None;
             for _ in 0..crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS {
-                let response: RootStatusResponseFragment = query_with_candid(
-                    icp,
-                    &resolved.candid_path,
-                    resolved.target,
-                    protocol::CANIC_ROOT_STATUS,
-                    &RootStatusRequestFragment::Pool(
-                        canic_core::dto::pool::CanisterPoolStatusRequest {
-                            start_after,
-                            limit: 256,
-                        },
-                    ),
-                )?;
+                let response: RootStatusResponseFragment =
+                    crate::canister_protocol::query_authenticated(
+                        icp,
+                        resolved.target,
+                        protocol::CANIC_ROOT_STATUS,
+                        &RootStatusRequestFragment::Pool(
+                            canic_core::dto::pool::CanisterPoolStatusRequest {
+                                start_after,
+                                limit: 256,
+                            },
+                        ),
+                    )?;
                 let RootStatusResponseFragment::Pool(page) = response else {
                     return Err(CurrentProtocolError::ResponseMismatch);
                 };
@@ -1175,9 +1192,8 @@ pub(super) fn observe_with_staging(
         } => fixture::observe_upload(icp, &resolved, expected, *source_bytes),
         CurrentFleetProtocolAction::PrepareComponentRegistry { expected, request } => {
             let response: Result<RootStatusResponseFragment, CanisterProtocolError> =
-                query_with_candid(
+                crate::canister_protocol::query_authenticated(
                     icp,
-                    &resolved.candid_path,
                     resolved.target,
                     protocol::CANIC_ROOT_STATUS,
                     &RootStatusRequestFragment::ComponentRegistry(request.clone()),
@@ -1204,7 +1220,11 @@ pub(super) fn observe_with_staging(
             let applied = status.phase == FleetComponentProvisioningPhase::RuntimesActivated
                 && status.published_fleet_registry.is_some()
                 && status.pending_root_failure.is_none();
-            component_provisioning_observation(applied, &status)
+            let mut observed = component_provisioning_observation(applied, &status)?;
+            if let Some(progress) = &mut observed.provisioning_progress {
+                progress.components = component_progress::project(&request.plan, &status);
+            }
+            Ok(observed)
         }
         CurrentFleetProtocolAction::PublishStoreChunk { request } => {
             let status = staging.query(icp, &resolved, &request.template_id, &request.version)?;
@@ -1269,6 +1289,7 @@ fn component_provisioning_observation(
     durable_progress.pending_root_failure = None;
     let mut observation = observation(applied, &durable_progress)?;
     observation.provisioning_progress = Some(crate::fleet_ensure::dto::FleetProvisioningProgress {
+        components: Vec::new(),
         pending_root_failure: status.pending_root_failure,
         phase: status.phase,
         root_batch_count: status.root_batch_count,
@@ -1506,9 +1527,8 @@ fn observe_pool_readiness(
     let mut assets = Vec::new();
     let mut identities = std::collections::BTreeSet::new();
     for _ in 0..crate::fleet_ensure::model::MAX_FLEET_ENSURE_CANISTERS {
-        let response: RootStatusResponseFragment = query_with_candid(
+        let response: RootStatusResponseFragment = crate::canister_protocol::query_authenticated(
             icp,
-            &resolved.candid_path,
             resolved.target,
             protocol::CANIC_ROOT_STATUS,
             &RootStatusRequestFragment::Pool(canic_core::dto::pool::CanisterPoolStatusRequest {
@@ -2753,9 +2773,8 @@ pub(super) fn require_store_installation_binding(
             )),
         });
     }
-    let response: RootStatusResponseFragment = query_with_candid(
+    let response: RootStatusResponseFragment = crate::canister_protocol::query_authenticated(
         icp,
-        candid_path,
         root,
         protocol::CANIC_ROOT_STATUS,
         &RootStatusRequestFragment::FleetAuthority,

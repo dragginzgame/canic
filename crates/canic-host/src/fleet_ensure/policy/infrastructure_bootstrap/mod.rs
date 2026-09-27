@@ -101,15 +101,6 @@ pub(in crate::fleet_ensure) fn compile(
         )?;
         accumulator.add_burn(reserve.observation_burn)?;
         if let Some(live) = live {
-            let before_funding = reserve.before_funding;
-            if live.cycles < before_funding {
-                return Err(InfrastructureBootstrapError::Headroom {
-                    name: configured.name.clone(),
-                    required: before_funding,
-                    available: live.cycles,
-                }
-                .into());
-            }
             append_target_funding(
                 desired,
                 configured,
@@ -221,7 +212,6 @@ fn include_lifecycle(
 /// Native headroom includes finite inspection retries before funding or completion.
 struct BootstrapReserve {
     required: u128,
-    before_funding: u128,
     observation_burn: u128,
 }
 
@@ -251,24 +241,16 @@ fn local_reserve(
                 field: "bootstrap effect debit",
             })?;
     let reserve = checked_add(observation_burn, updates, "bootstrap local reserve")?;
-    let before_funding = bounds
-        .observation_burn
-        .checked_mul(32)
-        .and_then(|n| n.checked_add(bounds.update_burn))
-        .ok_or(EnsurePolicyError::ArithmeticOverflow {
-            field: "bootstrap pre-funding reserve",
-        })?;
     Ok(BootstrapReserve {
         required: checked_add(minimum, reserve, "bootstrap retained floor")?,
-        before_funding,
         observation_burn,
     })
 }
 
 const fn effect_order(action: &EnsureAction) -> u8 {
     match action {
-        EnsureAction::Stop { .. } => 0,
-        EnsureAction::Create { .. } | EnsureAction::Fund { .. } => 1,
+        EnsureAction::Create { .. } | EnsureAction::Fund { .. } => 0,
+        EnsureAction::Stop { .. } => 1,
         EnsureAction::Uninstall { .. } => 2,
         EnsureAction::Install { .. } => 3,
         EnsureAction::Start { .. } => 4,
@@ -369,6 +351,7 @@ fn validate_sources(
         || bootstrap.fresh_estate
         || bootstrap.roots.is_empty()
         || record.sources.len()
+            + record.held_sources.len()
             + usize::from(record.coordinator == BootstrapCoordinatorSelection::Create)
             != desired.canisters.len()
         || (record.coordinator == BootstrapCoordinatorSelection::Ready)
@@ -407,6 +390,15 @@ fn validate_sources(
             if configured.principal.is_some()
                 || observation.canisters[&configured.name].is_some()
                 || record.sources.contains_key(&configured.name)
+            {
+                return Err(invalid().into());
+            }
+            continue;
+        }
+        if let Some(source) = record.held_sources.get(&configured.name) {
+            validate_held_source(desired, configured, source)?;
+            if record.sources.contains_key(&configured.name)
+                || observation.canisters[&configured.name].is_some()
             {
                 return Err(invalid().into());
             }
@@ -458,6 +450,42 @@ fn validate_source(
         || !binding.controllers.windows(2).all(|pair| pair[0] < pair[1])
     {
         return Err(invalid());
+    }
+    Ok(())
+}
+
+fn validate_held_source(
+    desired: &DesiredFleet,
+    configured: &DesiredCanister,
+    source: &crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapHeldSourceRecord,
+) -> Result<(), InfrastructureBootstrapError> {
+    let binding = &source.custody;
+    let parent = desired
+        .canisters
+        .iter()
+        .find(|entry| Some(&entry.name) == configured.parent.as_ref());
+    let parent_matches = parent.is_some_and(|entry| {
+        entry.kind == DesiredCanisterKind::Root
+            && entry
+                .principal
+                .as_deref()
+                .and_then(|id| Principal::from_text(id).ok())
+                == Some(source.root)
+            && entry.subnet == configured.subnet
+    });
+    let custody_matches = configured
+        .principal
+        .as_deref()
+        .and_then(|id| Principal::from_text(id).ok())
+        == Some(binding.canister)
+        && Principal::from_text(&configured.subnet).ok() == Some(binding.subnet.into_principal())
+        && binding.controllers.contains(&source.root)
+        && binding.controllers.len() <= 10
+        && binding.controllers.windows(2).all(|pair| pair[0] < pair[1]);
+    if configured.kind != DesiredCanisterKind::Pool || !parent_matches || !custody_matches {
+        return Err(InfrastructureBootstrapError::Source {
+            name: configured.name.clone(),
+        });
     }
     Ok(())
 }

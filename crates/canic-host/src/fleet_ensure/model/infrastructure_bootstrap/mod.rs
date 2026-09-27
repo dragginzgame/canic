@@ -6,6 +6,7 @@ use crate::fleet_ensure::model::capacity_import::{
     CapacityImportDisposition, survey::CapacityImportSampleRecord,
 };
 use candid::Principal;
+use canic_core::ids::SubnetId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
@@ -36,6 +37,26 @@ pub struct InfrastructureBootstrapSourceRecord {
     pub disposition: CapacityImportDisposition,
 }
 
+/// Certified physical custody without inventing a management version or cycle balance.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct InfrastructureBootstrapCustodyRecord {
+    pub canister: Principal,
+    pub subnet: SubnetId,
+    pub controllers: Vec<Principal>,
+    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
+    pub module_sha256: Option<[u8; 32]>,
+}
+
+/// A child remains controlled by its exact Root while current infrastructure is installed.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct InfrastructureBootstrapHeldSourceRecord {
+    pub root: Principal,
+    pub custody: InfrastructureBootstrapCustodyRecord,
+    pub disposition: CapacityImportDisposition,
+}
+
 /// Exact no-replacement initialization authority sealed by the enclosing Ensure plan.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -54,6 +75,7 @@ pub struct InfrastructureBootstrapRecord {
     pub declarations_toml: String,
     pub declarations_sha256: [u8; 32],
     pub sources: BTreeMap<String, InfrastructureBootstrapSourceRecord>,
+    pub held_sources: BTreeMap<String, InfrastructureBootstrapHeldSourceRecord>,
     #[serde(with = "crate::fleet_ensure::model::u128_text")]
     pub operator_cycles: u128,
     #[serde(with = "crate::fleet_ensure::model::u128_text")]
