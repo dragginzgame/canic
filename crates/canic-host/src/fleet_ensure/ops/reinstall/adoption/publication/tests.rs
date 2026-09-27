@@ -218,6 +218,18 @@ fn completed_publication_retires_preparation_before_current_release_decoding() {
         .with_file_name("completed-preparation-journal.json");
     write_current(&preparation_path, &preparation).unwrap();
     write_current(&prepared_path, &prepared).unwrap();
+    // A completed publication has installed the replacement document set;
+    // only the archived source and consumed approval remain opaque history.
+    for (path, bytes) in [
+        &fixture.paths.plan,
+        &fixture.paths.journal,
+        &fixture.paths.state,
+    ]
+    .into_iter()
+    .zip(&fixture.after)
+    {
+        write_bytes(path, bytes).unwrap();
+    }
     let files = [
         &fixture.paths.plan,
         &fixture.paths.journal,

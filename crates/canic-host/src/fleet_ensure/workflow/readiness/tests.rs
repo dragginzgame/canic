@@ -137,7 +137,11 @@ fn unsafe_paths_and_unreadable_retained_evidence_fail_before_signer_or_network_a
     fs::write(&paths.journal, b"incomplete").unwrap();
     assert!(matches!(
         inspect(&request),
-        Err(FleetReadinessError::State(_))
+        Err(FleetReadinessError::RetainedContract(
+            crate::fleet_ensure::ops::retained_contract::RetainedContractError::ReceiptAudit(
+                EnsureStateError::Decode { path, .. }
+            )
+        )) if path == paths.journal
     ));
     assert_eq!(fs::read(&paths.journal).unwrap(), b"incomplete");
     fs::remove_dir_all(root).unwrap();
