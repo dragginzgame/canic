@@ -18,7 +18,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   reserve while retaining interruption, conservation and replay checks. Reuse
   release-test artifacts across standalone host-test edits. Cut historical receipt
   schemas and audit-size experiments from maintained validation. Consolidate
-  funding recovery into two-asset fixtures with generated growth coverage. Keep
+  funding recovery into two-asset fixtures with generated growth coverage. Cover
+  ungrouped import-policy fixtures before PocketIC. Keep
   detailed test traces in retained logs, showing a bounded diagnostic excerpt
   only on failure while preserving live progress and results.
 - `0.110.43` adds reviewed completed-estate hard cuts and `fleet bootstrap` /

@@ -34,6 +34,8 @@ mod fleet_coordinator;
     any(not(test), feature = "governed-pocketic-tests")
 ))]
 mod fleet_registry;
+#[cfg(test)]
+mod journey_policy;
 mod lifecycle;
 mod progress;
 mod root;
