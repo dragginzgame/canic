@@ -3530,10 +3530,75 @@ exec icp "$@"
         let per_request = funding.max_per_request.to_u128();
         let total = funding.max_per_child.to_u128();
         assert!(per_request > 0 && total > 0 && funding.cooldown_secs > 0);
-        // Stop only the recipient so exact balance assertions exclude its timer execution.
-        // Root remains live and executes the actual management transfer and durable receipt.
+        // Stop recipient execution; idle storage charges still apply while Root funds it.
         pic.stop_canister(hub, Some(root)).unwrap();
+        let status = pic.canister_status(hub, Some(root)).unwrap();
+        let idle_allowance = u128::try_from(status.idle_cycles_burned_per_day.0).unwrap();
+        let started_at = pic.get_time().as_nanos_since_unix_epoch();
         let initial_balance = pic.cycle_balance(hub);
+        let grants = total.div_ceil(per_request);
+        assert!(idle_allowance > 0 && idle_allowance < total - (grants - 1) * per_request);
+        assert_pending_fixture_funding_rejections(pic, root, hub);
+        assert_stopped_fixture_balance(pic, hub, initial_balance, idle_allowance);
+        let mut granted = 0;
+        for index in 0..grants {
+            // Deliberately incur idle rent, rather than depending on charge timing.
+            pic.advance_time(Duration::from_secs(funding.cooldown_secs.max(60)));
+            pic.tick();
+            let mut request = descendant_funding_request(pic, 0xb1);
+            request.metadata.request_id[..16].copy_from_slice(&index.to_be_bytes());
+            let canic::dto::rpc::Request::Cycles(ref mut cycles) = request.capability else {
+                unreachable!();
+            };
+            cycles.cycles = total.checked_add(1).unwrap();
+            let amount = request_descendant_funding(pic, root, hub, request.clone());
+            assert_eq!(amount, per_request.min(total - granted));
+            granted += amount;
+            let funded =
+                assert_stopped_fixture_balance(pic, hub, initial_balance + granted, idle_allowance);
+            // Discard the first receipt and replay its exact identity during cooldown.
+            assert_eq!(
+                request_descendant_funding(pic, root, hub, request.clone()),
+                amount
+            );
+            assert!(pic.cycle_balance(hub) <= funded);
+            request.metadata.request_id[31] = 0xb2;
+            assert!(
+                matches!(descendant_funding_response(pic, root, hub, request),
+                CyclesResponse::PreflightRejected(
+                    CyclesFundingPreflightResponse::CooldownActive { retry_after_secs }
+                ) if retry_after_secs > 0 && retry_after_secs <= funding.cooldown_secs)
+            );
+            assert!(pic.cycle_balance(hub) <= funded);
+        }
+        assert_eq!(granted, total);
+        pic.advance_time(Duration::from_secs(funding.cooldown_secs));
+        pic.tick();
+        let exhausted_balance = pic.cycle_balance(hub);
+        assert_eq!(
+            descendant_funding_response(pic, root, hub, descendant_funding_request(pic, 0xb3)),
+            CyclesResponse::PreflightRejected(
+                CyclesFundingPreflightResponse::ChildBudgetExhausted {
+                    remaining_child_budget: 0,
+                    max_per_child: total,
+                }
+            )
+        );
+        assert!(pic.cycle_balance(hub) <= exhausted_balance);
+        // One observed day of idle rent bounds the whole stopped interval, not each replay.
+        assert!(pic.get_time().as_nanos_since_unix_epoch() - started_at < 86_400_000_000_000);
+        let terminal =
+            assert_stopped_fixture_balance(pic, hub, initial_balance + total, idle_allowance);
+        assert!(
+            terminal < initial_balance + total,
+            "exercise actual idle rent"
+        );
+        pic.start_canister(hub, Some(root)).unwrap();
+    }
+
+    /// Prepared fixture funding cannot authorize an unknown caller or recycling.
+    #[cfg(test)]
+    fn assert_pending_fixture_funding_rejections(pic: &PocketIc, root: Principal, hub: Principal) {
         let error = root_command_as(
             pic,
             root,
@@ -3564,54 +3629,25 @@ exec icp "$@"
             error.code(),
             canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
-        assert_eq!(pic.cycle_balance(hub), initial_balance);
-        let mut granted = 0;
-        let grants = total.div_ceil(per_request);
-        for index in 0..grants {
-            pic.advance_time(Duration::from_secs(funding.cooldown_secs));
-            // Measure each effect separately from earlier elapsed-time charges.
-            pic.tick();
-            let before_transfer = pic.cycle_balance(hub);
-            let mut request = descendant_funding_request(pic, 0xb1);
-            request.metadata.request_id[..16].copy_from_slice(&index.to_be_bytes());
-            let canic::dto::rpc::Request::Cycles(ref mut cycles) = request.capability else {
-                unreachable!();
-            };
-            cycles.cycles = total.checked_add(1).unwrap();
-            let amount = request_descendant_funding(pic, root, hub, request.clone());
-            assert_eq!(amount, per_request.min(total - granted));
-            granted += amount;
-            assert_eq!(pic.cycle_balance(hub), before_transfer + amount);
-            // Discard the first receipt and replay its exact identity during cooldown.
-            assert_eq!(
-                request_descendant_funding(pic, root, hub, request.clone()),
-                amount
-            );
-            assert_eq!(pic.cycle_balance(hub), before_transfer + amount);
-            request.metadata.request_id[31] = 0xb2;
-            assert!(
-                matches!(descendant_funding_response(pic, root, hub, request),
-                CyclesResponse::PreflightRejected(
-                    CyclesFundingPreflightResponse::CooldownActive { retry_after_secs }
-                ) if retry_after_secs > 0 && retry_after_secs <= funding.cooldown_secs)
-            );
-            assert_eq!(pic.cycle_balance(hub), before_transfer + amount);
-        }
-        assert_eq!(granted, total);
-        pic.advance_time(Duration::from_secs(funding.cooldown_secs));
-        pic.tick();
-        let exhausted_balance = pic.cycle_balance(hub);
-        assert_eq!(
-            descendant_funding_response(pic, root, hub, descendant_funding_request(pic, 0xb3)),
-            CyclesResponse::PreflightRejected(
-                CyclesFundingPreflightResponse::ChildBudgetExhausted {
-                    remaining_child_budget: 0,
-                    max_per_child: total,
-                }
-            )
+    }
+
+    /// Bound actual idle debit while rejecting extra credit or a missing grant.
+    #[cfg(test)]
+    fn assert_stopped_fixture_balance(
+        pic: &PocketIc,
+        hub: Principal,
+        expected_without_rent: u128,
+        idle_allowance: u128,
+    ) -> u128 {
+        let actual = pic.cycle_balance(hub);
+        let debit = expected_without_rent
+            .checked_sub(actual)
+            .expect("unexpected extra funding");
+        assert!(
+            debit <= idle_allowance,
+            "idle debit {debit} exceeds observed allowance {idle_allowance}"
         );
-        assert_eq!(pic.cycle_balance(hub), exhausted_balance);
-        pic.start_canister(hub, Some(root)).unwrap();
+        actual
     }
 
     /// A later application allocation uses retained sources after publication authority leaves.
@@ -13398,6 +13434,11 @@ cycles = "80T"
         assert_eq!(status.automatic_icp_refill_e8s, refill.amount_e8s);
         assert!(fixture.pic.cycle_balance(fixture.root) > fixture.root_balance_before_activation);
 
+        let recipient_status = fixture
+            .pic
+            .canister_status(fixture.descendant, Some(fixture.root))
+            .unwrap();
+        let idle_allowance = u128::try_from(recipient_status.idle_cycles_burned_per_day.0).unwrap();
         let descendant_cycles_before = fixture.pic.cycle_balance(fixture.descendant);
         let request_id = [0x5a; 32];
         let issued_at_ns = fixture.pic.get_time().as_nanos_since_unix_epoch();
@@ -13422,17 +13463,25 @@ cycles = "80T"
             request.clone(),
         );
         assert_eq!(transferred, 5_000_000_000_000);
-        let descendant_cycles_after = fixture.pic.cycle_balance(fixture.descendant);
-        assert_eq!(
-            descendant_cycles_after,
-            descendant_cycles_before + transferred
+        assert!(idle_allowance < transferred);
+        let descendant_cycles_after = assert_stopped_fixture_balance(
+            &fixture.pic,
+            fixture.descendant,
+            descendant_cycles_before + transferred,
+            idle_allowance,
         );
         let replayed =
             request_descendant_funding(&fixture.pic, fixture.root, fixture.descendant, request);
         assert_eq!(replayed, transferred);
-        assert_eq!(
-            fixture.pic.cycle_balance(fixture.descendant),
-            descendant_cycles_after
+        assert!(fixture.pic.cycle_balance(fixture.descendant) <= descendant_cycles_after);
+        assert!(
+            fixture.pic.get_time().as_nanos_since_unix_epoch() - issued_at_ns < 86_400_000_000_000
+        );
+        assert_stopped_fixture_balance(
+            &fixture.pic,
+            fixture.descendant,
+            descendant_cycles_before + transferred,
+            idle_allowance,
         );
     }
 

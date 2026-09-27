@@ -22,6 +22,22 @@ open-draft statements describe that earlier development state.
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Latest correction, 2026-09-27: the Prepared Root funding test assumed a stopped
+recipient paid no idle storage rent. Its live balances now admit one observed
+daily-burn allowance across an interval bounded below one day, smaller than the
+smallest grant. It deliberately advances time to incur rent and retains exact
+grant/cooldown/budget assertions plus no-extra-credit replay checks. The related
+real ICP fallback proof uses the same balance bound. Both targeted PocketIC cases
+pass: Prepared Root 98.36s case/118s runner (including fixture rebuilds), and ICP
+fallback 20s runner. Logs: `.tmp/prepared-root-funding-regression.log` and
+`.tmp/icp-fallback-funding-regression.log`. Production funding policy is unchanged.
+Related balance assertions were scanned; immediate fixture credits, ledger
+balances and entirely local/query-only replay checks keep their exact semantics.
+The testing rule is now recorded in CI/deployment governance. Scoped warning-denied
+internal-library/test Clippy passes (`.tmp/funding-balance-clippy.log`), as do
+changed-file formatting and diff checks. This correction remains uncommitted;
+package versions remain `.42`, and the full release gate was not rerun.
+
 Release-gate corrections are complete for the reported failures:
 
 - Frozen `.38` Root receipt/inventory evidence no longer shares the current
