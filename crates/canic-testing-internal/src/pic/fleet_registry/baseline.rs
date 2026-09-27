@@ -12377,26 +12377,9 @@ esac
             .max()
             .unwrap()
             .to_config_string();
-        let admissions = configuration
-            .model()
-            .component_specs
-            .keys()
-            .map(|spec| {
-                let members = configuration
-                    .model()
-                    .component_groups
-                    .values()
-                    .map(|group| {
-                        group
-                            .components
-                            .values()
-                            .filter(|member| &member.component_spec == spec)
-                            .count()
-                    })
-                    .max()
-                    .unwrap();
-                format!("{spec} = {members}")
-            })
+        let admissions = crate::pic::journey_policy::component_admissions(&configuration)
+            .into_iter()
+            .map(|(spec, instances)| format!("{spec} = {instances}"))
             .collect::<Vec<_>>()
             .join(", ");
         let capacity = workloads + ready;

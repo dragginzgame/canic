@@ -1,5 +1,29 @@
 # Release-test throughput qualification
 
+## Release-gate fixture correction — .44, 2026-09-27
+
+The maintainer's `make release-patch` on `411fe1dae` stopped in the host-import
+transport PocketIC case before versioning or publication. The shared test policy
+helper introduced by the fixture reduction assumed component groups were
+nonempty; the valid import fixture declares a component spec without groups.
+The correction uses the declared spec limit for that shape and preserves
+member-derived admission for grouped fixtures. The shared calculation now has
+ordinary native regression coverage, so this configuration boundary is checked
+before any PocketIC execution.
+
+Two ordinary native regressions and scoped warning-denied internal library/test
+Clippy pass. The exact failed host-import transport PocketIC case passes in
+35.13s (54s complete targeted runner, including compilation and artifact work).
+Logs: `.tmp/import-policy-native.log`, `.tmp/import-policy-clippy.log`,
+`.tmp/import-policy-pocketic.log`; exact trace and source hashes are recorded in
+the throughput audit's `hard-cut-cleanup.json` under `import_policy_regression`.
+This confirms the correction, not a full-suite result or throughput benchmark.
+
+The full accepted `.44` batch and changelog are ready for the maintainer's commit
+and release-gate retry. The correction remains uncommitted; versions remain
+`.43`. No broad gate, version transaction or Git publication was run by the
+agent. The failed full run did not establish release validation.
+
 ## Funding recovery consolidation, 2026-09-27
 
 The accepted continuation removes the redundant single-workload funded-estate

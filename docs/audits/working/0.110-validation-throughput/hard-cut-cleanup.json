@@ -275,5 +275,53 @@
       "Only tests and fixtures changed; current product recovery invariants remain covered.",
       "No broad gate, versioning, Git publication, live IC effect or sibling edits."
     ]
+  },
+  "import_policy_regression": {
+    "date": "2026-09-27",
+    "failed_source_commit": "411fe1dae",
+    "failure": "generated_journey_policy unwrapped the maximum over an empty component-group iterator for the valid host import fixture",
+    "correction": "Ungrouped fixtures use each component spec maximum_instances; grouped fixtures retain largest group membership. Shared test-only helper runs in ordinary native tests.",
+    "native_passed": 2,
+    "clippy": "passed; internal library/tests with governed-pocketic-tests; warnings denied",
+    "pocketic": {
+      "case": "pic::fleet_registry::baseline::tests::capacity_import::transport::host_import_transport_recovers_signed_handoff_and_root_progress",
+      "result": "passed",
+      "case_seconds": 35.13,
+      "targeted_runner_seconds": 54
+    },
+    "logs": {
+      "native": {
+        "path": ".tmp/import-policy-native.log",
+        "sha256": "9b207acf26f5f3892c84c6a09907ad420c7be4cf9345a4fabdfde9633090567f"
+      },
+      "clippy": {
+        "path": ".tmp/import-policy-clippy.log",
+        "sha256": "d9f64f99727b92d5955b2e9cace5ecbbfa81fcdac55e7d4c382e762160fd366e"
+      },
+      "pocketic": {
+        "path": ".tmp/import-policy-pocketic.log",
+        "sha256": "363b92e7b49eca7c826eb1d6d260c19e6f474ababd8eed5d75f097b62ac6ebc3"
+      },
+      "pocketic_trace": {
+        "path": "target/test-runs/20260927T135810Z-60127.WF6IFm/1.log",
+        "sha256": "ce129af90e28aea1bafd2fc296931945586c41d2c182678295422743bdef6a9a"
+      },
+      "failed_release_trace": {
+        "path": "target/test-runs/20260927T133513Z-12234.xzOTqp/7.log",
+        "sha256": "6f834305b537bb7e618586d251948195a495b127e6f545868ea50bf7f21b588c"
+      }
+    },
+    "source_files_sha256": {
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "8f689976d0128c572a6c756156157fbadc27cb1b13587e198300b88e8932f202",
+      "crates/canic-testing-internal/src/pic/mod.rs": "65173faa7b4fbd69056e55cdee6294a3aff525214bd02b1ca21770b163be2b9d",
+      "crates/canic-testing-internal/src/pic/journey_policy/mod.rs": "8e8418baa54d0c06d85248620af1eeac875aa704cddd362c9e6172f571bafd69",
+      "crates/canic-testing-internal/src/pic/journey_policy/tests/mod.rs": "e9d448d6c9032c977dc7c8ce346505b72f321a53cc017ece7b3cdd896db3625e"
+    },
+    "limits": [
+      "No production runtime change.",
+      "No agent broad-gate rerun, version transaction or Git publication.",
+      "The maintainer release failed before versioning or publication; package versions remain 0.110.43.",
+      "Targeted passing result is not complete release validation or a full-suite throughput measurement."
+    ]
   }
 }
