@@ -8,6 +8,8 @@ pub mod capacity_import;
 pub mod infrastructure_bootstrap;
 mod observation;
 mod progress;
+#[cfg(test)]
+pub(in crate::fleet_ensure) mod tests;
 
 use crate::fleet_ensure::model::DesiredFleet;
 use canic_core::cdk::utils::hash::sha256_hex;

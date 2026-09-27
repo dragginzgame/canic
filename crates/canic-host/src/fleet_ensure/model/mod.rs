@@ -357,7 +357,7 @@ pub struct DesiredFleetBootstrap {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct DesiredFleetBootstrapRoot {
-    #[serde(deserialize_with = "serialization::required_option")]
+    /// No import hold is represented by an omitted TOML field (TOML has no null).
     pub capacity_import_bootstrap: Option<capacity_import::CapacityImportBootstrapRecord>,
     pub canister_pool_imports: Vec<String>,
     pub component_admissions: Vec<canic_core::ids::ComponentSpecAdmission>,

@@ -24,6 +24,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   payments; completed reset, bootstrap and import receipts replay locally.
   Funding proofs allow bounded IC charges while retaining exact payment accounting.
   Cache infrastructure failures fall back to the compiler without masking build errors.
+  Restore generated TOML loading and current reinstall review before journal replacement.
 - `0.110.42` pins the maintainer and CI ICP CLI to 1.6.0 with verified release
   checksums while retaining the supported 1.x command contract. Add optional
   direct recovery controllers to every newly generated Fleet canister and its

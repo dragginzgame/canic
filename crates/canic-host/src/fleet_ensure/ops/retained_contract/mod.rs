@@ -184,6 +184,14 @@ pub fn check(
         return Ok(());
     }
     let plan = read(&paths.plan)?.ok_or(RetainedContractError::IdentityMismatch)?;
+    let Some(bootstrap) = plan.pointer("/reviewed_desired/desired/bootstrap") else {
+        return Ok(());
+    };
+    // Current reviews may replace the plan while the completed source journal
+    // remains until apply. Their identity belongs to the current workflow guard.
+    if !bootstrap.is_object() || bootstrap.get("recovery_controllers").is_some() {
+        return Ok(());
+    }
     let operation_id = text(&journal, "operation_id")?;
     let plan_sha256 = text(&journal, "plan_sha256")?;
     let matching_identity = journal.get("schema_version") == Some(&Value::from(1))
@@ -196,28 +204,20 @@ pub fn check(
     if !matching_identity || !is_sha256(operation_id) || !is_sha256(plan_sha256) {
         return Err(RetainedContractError::IdentityMismatch);
     }
-    let Some(bootstrap) = plan.pointer("/reviewed_desired/desired/bootstrap") else {
-        return Ok(());
-    };
-    if bootstrap.is_object() && bootstrap.get("recovery_controllers").is_none() {
-        let source = inspect_completed_source(workspace, environment, fleet)?;
-        let audit = &source.inventory.receipts;
-        // Bind the audit to the first observation as well as its own coherent snapshot.
-        if audit.documents.operation_id != operation_id
-            || audit.documents.plan_sha256 != plan_sha256
-        {
-            return Err(RetainedContractError::IdentityMismatch);
-        }
-        return Err(RetainedContractError::CompletedAuthorityContract {
-            fleet: fleet.to_string(),
-            operation_id: operation_id.to_string(),
-            plan_sha256: plan_sha256.to_string(),
-            effect_count: audit.effect_count,
-            phase_count: audit.phase_count,
-            canister_count: source.inventory.canisters.len(),
-        });
+    let source = inspect_completed_source(workspace, environment, fleet)?;
+    let audit = &source.inventory.receipts;
+    // Bind the audit to the first observation as well as its own coherent snapshot.
+    if audit.documents.operation_id != operation_id || audit.documents.plan_sha256 != plan_sha256 {
+        return Err(RetainedContractError::IdentityMismatch);
     }
-    Ok(())
+    Err(RetainedContractError::CompletedAuthorityContract {
+        fleet: fleet.to_string(),
+        operation_id: operation_id.to_string(),
+        plan_sha256: plan_sha256.to_string(),
+        effect_count: audit.effect_count,
+        phase_count: audit.phase_count,
+        canister_count: source.inventory.canisters.len(),
+    })
 }
 
 fn read(path: &Path) -> Result<Option<Value>, RetainedContractError> {

@@ -9994,17 +9994,18 @@ esac
                 Some(&preparation.plan.operation_id)
             );
             previous_operation = Some(preparation.plan.operation_id.clone());
-            assert!(matches!(
-                fleet_ensure_workflow::plan_reinstall(
-                    root,
-                    desired,
-                    &digest,
-                    &desired.fleet,
-                    1_800_000_000_000_000_110 + wipe,
-                    &mut first
-                ),
-                Err(EnsureWorkflowError::ReinstallConflict)
-            ));
+            let repeated = fleet_ensure_workflow::plan_reinstall(
+                root,
+                desired,
+                &digest,
+                &desired.fleet,
+                1_800_000_000_000_000_110 + wipe,
+                &mut first,
+            );
+            assert!(
+                matches!(&repeated, Err(EnsureWorkflowError::ReinstallConflict)),
+                "an unapplied preparation must prevent another reset review: {repeated:?}"
+            );
             phase = phase.next("preparation_seal_and_replay");
             let sealed = fleet_ensure_workflow::apply(
                 root,
