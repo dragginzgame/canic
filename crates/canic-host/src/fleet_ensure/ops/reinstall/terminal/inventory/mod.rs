@@ -12,7 +12,10 @@ pub(in crate::fleet_ensure) mod protocols;
 mod tests;
 
 use crate::fleet_ensure::{
-    model::{DesiredCanister, DesiredCanisterKind, DesiredPresence, MAX_FLEET_ENSURE_CANISTERS},
+    model::{
+        DesiredCanister, DesiredCanisterKind, DesiredFleetBootstrapRoot, DesiredPresence,
+        MAX_FLEET_ENSURE_CANISTERS,
+    },
     ops::{EnsurePaths, EnsureStateError, is_sha256},
     view::terminal_source::{
         CompletedReceiptAuditView,
@@ -23,13 +26,12 @@ use crate::fleet_ensure::{
                 RegistryInventoryEvidence,
             },
         },
-        receipt_evidence::{EvidenceDesiredFleetBootstrapRoot, EvidenceFleetCoordinatorBinding},
     },
 };
 use candid::Principal;
 use canic_core::{
     dto::fleet_registry::FleetSubnetRootStatus,
-    ids::{FleetBinding, FleetKey, SubnetId},
+    ids::{FleetBinding, FleetCoordinatorBinding, FleetKey, SubnetId},
 };
 use std::collections::{BTreeMap, BTreeSet};
 
@@ -72,10 +74,11 @@ fn project(
             .get(&bootstrap.coordinator)
             .ok_or_else(invalid)?,
     )?;
-    let expected_binding = EvidenceFleetCoordinatorBinding {
+    let expected_binding = FleetCoordinatorBinding {
         fleet: fleet.clone(),
         coordinator,
         coordinator_subnet: bootstrap.coordinator_subnet,
+        recovery_controllers: bootstrap.recovery_controllers.clone(),
     };
     let declared_count = desired.canisters.len();
     let membership_counts_match = [
@@ -232,7 +235,7 @@ fn project_canister(
 }
 
 fn bind_root(
-    root: &EvidenceDesiredFleetBootstrapRoot,
+    root: &DesiredFleetBootstrapRoot,
     bootstrap: &InventoryBootstrapEvidence,
     registry: &RegistryInventoryEvidence,
     assigned: &mut BTreeSet<String>,
@@ -290,7 +293,7 @@ fn bind_root(
 }
 
 fn validate_import_declarations(
-    root: &EvidenceDesiredFleetBootstrapRoot,
+    root: &DesiredFleetBootstrapRoot,
     declared: &[DesiredCanister],
 ) -> Result<(), EnsureStateError> {
     for name in &root.canister_pool_imports {

@@ -186,16 +186,6 @@ where
     },
 
     #[error(
-        "completed retained Fleet operation {operation_id} requires a separate retirement review (source document {source_document_sha256}): {source}; preserve plan, journal, state, phases and paid receipts; request --reinstall without --apply; fresh inventory, authority and conservation checks must pass before any reset; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
-    )]
-    RetainedTerminalReviewRequired {
-        operation_id: String,
-        source_document_sha256: String,
-        #[source]
-        source: Box<EnsureStateError>,
-    },
-
-    #[error(
         "retained Fleet operation is unreadable: {source}; preserve plan, journal, state, artifacts and paid-effect receipts; local evidence does not establish a supported separate recovery review; resolve issued effects under their exact authority before a release transition; do not edit fields, replace digests or discard the operation; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan"
     )]
     RetainedPlanUnreadable {

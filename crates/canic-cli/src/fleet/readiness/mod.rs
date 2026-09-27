@@ -179,15 +179,7 @@ fn print_report(report: &canic_host::fleet_ensure::view::readiness::FleetReadine
         );
     }
     println!("unresolved: {:?}", report.funding.unresolved);
-    if report
-        .retained_operation
-        .as_ref()
-        .is_some_and(|operation| operation.terminal_review_required)
-    {
-        println!(
-            "Completed source needs a separate Fleet ensure --reinstall review without --apply; preserve all retained evidence."
-        );
-    }
+
     println!(
         "Read-only snapshot. Resume retained work through Fleet ensure; preserve its plan, journal and selected build. Exact funding and authority are checked again before effects."
     );

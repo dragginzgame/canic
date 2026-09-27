@@ -99,9 +99,7 @@ fn unsafe_paths_and_unreadable_retained_evidence_fail_before_signer_or_network_a
     fs::write(&paths.journal, b"incomplete").unwrap();
     assert!(matches!(
         inspect(&request),
-        Err(FleetReadinessError::RetainedContract(
-            crate::fleet_ensure::ops::retained_contract::RetainedContractError::Decode(_)
-        ))
+        Err(FleetReadinessError::State(_))
     ));
     assert_eq!(fs::read(&paths.journal).unwrap(), b"incomplete");
     fs::remove_dir_all(root).unwrap();
@@ -123,30 +121,6 @@ fn readiness_requires_exact_signer_and_network_without_anonymous_authority() {
             Err(FleetReadinessError::AuthorityMismatch)
         ));
     }
-}
-
-#[test]
-fn terminal_evidence_reports_required_review_without_mutation_or_network_access() {
-    let (fixture, paths, _) = crate::fleet_ensure::tests::terminal_retirement_fixture();
-    let mut request = request(&fixture.root);
-    request.fleet = "test-fleet";
-    let mut journal: serde_json::Value =
-        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
-    journal
-        .as_object_mut()
-        .unwrap()
-        .remove("funding_observations");
-    let before = serde_json::to_vec(&journal).unwrap();
-    fs::write(&paths.journal, &before).unwrap();
-    let operation = retained(&paths, &request).unwrap().unwrap();
-    assert!(operation.terminal_review_required);
-    let report = report(&request, "network".into(), 1000, Some(operation));
-    assert_eq!(
-        report.blockers,
-        vec![ReadinessBlocker::RetainedTerminalReview]
-    );
-    assert_eq!(fs::read(&paths.journal).unwrap(), before);
-    fs::remove_dir_all(fixture.root).unwrap();
 }
 
 #[test]

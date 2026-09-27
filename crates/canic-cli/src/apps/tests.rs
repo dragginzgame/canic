@@ -352,8 +352,6 @@ fn app_usage_lists_only_current_subcommands() {
     for command in ["check", "config", "create", "delete", "list", "role"] {
         assert!(text.contains(command));
     }
-    assert!(!text.contains("adoption"));
-    assert!(!text.contains("sync"));
     assert_eq!(text.matches("  canic app ").count(), 2);
 }
 

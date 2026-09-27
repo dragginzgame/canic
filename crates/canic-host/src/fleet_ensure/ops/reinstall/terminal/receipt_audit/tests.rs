@@ -1,7 +1,7 @@
-//! Completed receipt audit checks historical bytes without external mutation.
+//! Completed receipt audit checks current-schema receipts without external mutation.
 
 use super::*;
-use crate::fleet_ensure::ops::retained_contract::{RetainedContractError, check};
+use crate::fleet_ensure::ops::retained_contract::check;
 use std::{fs, path::PathBuf};
 
 #[test]
@@ -16,16 +16,9 @@ fn inspect_supplied_completed_receipts_without_external_mutation() {
     assert!(audit.phase_count > 0);
 }
 
-fn historical_fixture() -> (PathBuf, EnsurePaths) {
+fn completed_fixture() -> (PathBuf, EnsurePaths) {
     let (fixture, paths, _) = crate::fleet_ensure::tests::terminal_retirement_fixture();
     let mut plan = read_json(&paths.plan);
-    remove_recovery_declarations(&mut plan);
-    assert_eq!(
-        plan.as_object_mut()
-            .unwrap()
-            .remove("infrastructure_bootstrap"),
-        Some(Value::Null)
-    );
     plan["recovery_review"] = Value::Null;
     plan["reviewed_desired"]["desired"]["bootstrap"] = serde_json::json!({
         "admission_identity_origin": null,
@@ -41,9 +34,10 @@ fn historical_fixture() -> (PathBuf, EnsurePaths) {
         "coordinator_subnet": fixture.desired.canisters[0].subnet,
         "fleet_id": "22".repeat(32), "fresh_estate": false,
         "release_build_id": "33".repeat(32), "root_funding": null, "roots": [],
+        "recovery_controllers": [],
     });
-    let mut plan: CompletedPhaseEvidence = decode(plan).unwrap();
-    plan.plan_sha256 = phase_hash(&plan).unwrap();
+    let mut plan: FleetEnsurePlan = decode(plan).unwrap();
+    plan.plan_sha256 = expected_plan_sha256(&plan);
     let mut journal = read_json(&paths.journal);
     journal["plan_sha256"] = plan.plan_sha256.clone().into();
     let mut actions = initial_actions(&plan.canisters).unwrap();
@@ -55,17 +49,9 @@ fn historical_fixture() -> (PathBuf, EnsurePaths) {
                 .with_file_name("phases")
                 .join(format!("{old}.json")),
         );
-        remove_recovery_declarations(&mut phase);
-        assert_eq!(
-            phase
-                .as_object_mut()
-                .unwrap()
-                .remove("infrastructure_bootstrap"),
-            Some(Value::Null)
-        );
         phase["reviewed_desired"] = json::to_value(&plan.reviewed_desired).unwrap();
-        let mut phase: CompletedPhaseEvidence = decode(phase).unwrap();
-        phase.plan_sha256 = phase_hash(&phase).unwrap();
+        let mut phase: FleetEnsurePlan = decode(phase).unwrap();
+        phase.plan_sha256 = expected_plan_sha256(&phase);
         reference["plan_sha256"] = phase.plan_sha256.clone().into();
         write_json(
             &paths
@@ -84,9 +70,6 @@ fn historical_fixture() -> (PathBuf, EnsurePaths) {
     {
         effect["action_sha256"] = sha256_hex(&json::to_vec(action).unwrap()).into();
     }
-    let mut state = read_json(&paths.state);
-    remove_recovery_declarations(&mut state);
-    write_json(&paths.state, &state);
     write_json(&paths.plan, &json::to_value(&plan).unwrap());
     write_json(&paths.journal, &journal);
     (fixture.root, paths)
@@ -98,22 +81,10 @@ fn read_json(path: &std::path::Path) -> Value {
 fn write_json(path: &std::path::Path, value: &Value) {
     fs::write(path, serde_json::to_vec_pretty(value).unwrap()).unwrap();
 }
-fn remove_recovery_declarations(value: &mut Value) {
-    match value {
-        Value::Object(fields) => {
-            fields.remove("recovery_controllers");
-            fields.values_mut().for_each(remove_recovery_declarations);
-        }
-        Value::Array(values) => {
-            values.iter_mut().for_each(remove_recovery_declarations);
-        }
-        _ => {}
-    }
-}
 
 #[test]
-fn historical_receipt_audit_does_not_supply_missing_estate_authority() {
-    let (root, paths) = historical_fixture();
+fn completed_receipt_audit_does_not_supply_missing_estate_authority() {
+    let (root, paths) = completed_fixture();
     let before: Vec<_> = [&paths.plan, &paths.journal, &paths.state]
         .into_iter()
         .map(|path| fs::read(path).unwrap())
@@ -124,9 +95,18 @@ fn historical_receipt_audit_does_not_supply_missing_estate_authority() {
     assert_eq!(audit.original_maximum_execution_burn_cycles, 200);
     // This receipt-only fixture has no complete Root inventory. A valid receipt
     // audit cannot manufacture that separate authority or pass the full preflight.
+    check(&root, "local", "test-fleet").unwrap();
+    assert!(
+        crate::fleet_ensure::ops::retained_contract::completed_source_available(
+            &root,
+            "local",
+            "test-fleet"
+        )
+        .unwrap()
+    );
     assert!(matches!(
-        check(&root, "local", "test-fleet"),
-        Err(RetainedContractError::ReceiptAudit(_))
+        super::super::inventory::inspect(&paths, "local", "test-fleet"),
+        Err(EnsureStateError::InvalidTerminalSource)
     ));
     assert_eq!(fs::read(&paths.plan).unwrap(), before[0]);
     assert_eq!(fs::read(&paths.journal).unwrap(), before[1]);
@@ -138,9 +118,9 @@ fn historical_receipt_audit_does_not_supply_missing_estate_authority() {
 fn original_root_balances_bind_the_declared_ledger_and_exact_owner() {
     use crate::fleet_ensure::model::EstateFundingDomainPlan;
 
-    let (root, paths) = historical_fixture();
-    let plan: CompletedPhaseEvidence = decode(read_json(&paths.plan)).unwrap();
-    let mut desired = plan.reviewed_desired.unwrap().desired;
+    let (root, paths) = completed_fixture();
+    let plan: FleetEnsurePlan = decode(read_json(&paths.plan)).unwrap();
+    let mut desired = plan.reviewed_desired.unwrap().into_desired();
     desired.canisters[0].kind = DesiredCanisterKind::Root;
     let declaration = &desired.canisters[0];
     let domain = EstateFundingDomainPlan {
@@ -223,7 +203,7 @@ fn incomplete_changed_and_overbudget_receipts_reject() {
             Value::from("201"),
         ),
     ] {
-        let (root, paths) = historical_fixture();
+        let (root, paths) = completed_fixture();
         let mut journal = read_json(&paths.journal);
         *journal.pointer_mut(pointer).unwrap() = value;
         write_json(&paths.journal, &journal);
@@ -243,7 +223,7 @@ fn extra_receipts_unknown_paid_fields_and_invented_controllers_reject() {
         "controller-declaration",
         "budget",
     ] {
-        let (root, paths) = historical_fixture();
+        let (root, paths) = completed_fixture();
         let mut journal = read_json(&paths.journal);
         let mut plan = read_json(&paths.plan);
         match mutation {
@@ -256,7 +236,7 @@ fn extra_receipts_unknown_paid_fields_and_invented_controllers_reject() {
             }
             "controller-declaration" => {
                 plan["reviewed_desired"]["desired"]["bootstrap"]["recovery_controllers"] =
-                    serde_json::json!([]);
+                    serde_json::json!(["aaaaa-aa"]);
             }
             "budget" => {
                 plan["conservation"]["maximum_execution_burn_cycles"] = "999".into();
@@ -274,18 +254,8 @@ fn extra_receipts_unknown_paid_fields_and_invented_controllers_reject() {
 }
 
 #[test]
-fn frozen_source_store_adoption_hash_matches_its_independent_receipt() {
-    let fixture: Value = serde_json::from_str(include_str!("store-adoption.json")).unwrap();
-    let action: CompletedActionEvidence = decode(fixture["action"].clone()).unwrap();
-    assert_eq!(
-        sha256_hex(&json::to_vec(&action).unwrap()),
-        fixture["action_sha256"].as_str().unwrap()
-    );
-}
-
-#[test]
 fn changed_successor_payload_cannot_reuse_its_completed_phase_digest() {
-    let (root, paths) = historical_fixture();
+    let (root, paths) = completed_fixture();
     let journal = read_json(&paths.journal);
     let label = journal["successor_phases"][0]["plan_sha256"]
         .as_str()

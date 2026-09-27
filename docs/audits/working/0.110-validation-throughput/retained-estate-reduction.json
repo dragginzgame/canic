@@ -1,0 +1,197 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-27",
+  "batch": "retained-estate recovery fixture reduction",
+  "candidate_base_commit": "7623ef8eb1f049758b9ba3bce86acedad9e6ef08",
+  "controlled_benchmark": false,
+  "full_candidate_suite_run": false,
+  "limits": [
+    "The retained baseline and focused candidate use different source versions, cache states and concurrent machine workloads.",
+    "Candidate output uses the separately implemented quiet trace runner.",
+    "Artifact resolution is nested within journey time; other spans and request durations can also overlap.",
+    "These measurements do not establish a full-suite speedup.",
+    "The first candidate reinstall filled cold native and Wasm caches; its complete command took 672 seconds."
+  ],
+  "fixture": {
+    "before": {
+      "workloads": 19,
+      "ready": 5,
+      "controlled_identities": 27
+    },
+    "after": {
+      "workloads": 2,
+      "ready": 1,
+      "controlled_identities": 6
+    }
+  },
+  "baseline": {
+    "log": {
+      "path": "target/validation-runs/20260927T090937Z-63129.moEFNt/0.log",
+      "sha256": "21548a63a4865a980527867c1e66457ce7939bec32d8b7d9af7673c032bf319e"
+    },
+    "full_runner_seconds": 3819,
+    "cases": {
+      "generated_reinstall": {
+        "journey_seconds": 346.376763,
+        "artifact_resolution_seconds": 11.000285,
+        "journey_excluding_artifact_resolution_seconds": 335.376478,
+        "completed_requests_by_kind": {
+          "identity": 1251,
+          "query": 758,
+          "update": 370,
+          "management_status": 589,
+          "agent_query": 355,
+          "canister_inspection": 289,
+          "stop": 1,
+          "install": 3,
+          "start": 1
+        },
+        "spans_seconds": {
+          "initial_working_fleet": 95.789724,
+          "root_reinstall_review_and_authority_rejection": 4.897485,
+          "root_reinstall_lost_response_and_recovery": 11.619442,
+          "successor_reviews_and_convergence": 173.971531,
+          "retained_estate_reinstall": 232.116536
+        }
+      },
+      "completed_reset": {
+        "journey_seconds": 469.192786,
+        "artifact_resolution_seconds": 62.951677,
+        "journey_excluding_artifact_resolution_seconds": 406.241109,
+        "completed_requests_by_kind": {
+          "identity": 813,
+          "query": 384,
+          "update": 212,
+          "management_status": 443,
+          "agent_query": 248,
+          "install": 4,
+          "canister_inspection": 135,
+          "canister_history": 6
+        },
+        "spans_seconds": {
+          "initial_working_fleet": 102.801537,
+          "completed_source_reset_journey": 322.097499,
+          "retained_estate_reinstall": 322.107962
+        }
+      }
+    }
+  },
+  "candidate": {
+    "cases": {
+      "generated_reinstall": {
+        "journey_seconds": 141.311191,
+        "artifact_resolution_seconds": 10.434231,
+        "journey_excluding_artifact_resolution_seconds": 130.87696,
+        "completed_requests_by_kind": {
+          "identity": 432,
+          "query": 336,
+          "update": 71,
+          "management_status": 241,
+          "agent_query": 78,
+          "canister_inspection": 36,
+          "stop": 1,
+          "install": 3,
+          "start": 1
+        },
+        "spans_seconds": {
+          "initial_working_fleet": 29.463052,
+          "root_reinstall_review_and_authority_rejection": 4.594996,
+          "root_reinstall_lost_response_and_recovery": 10.610186,
+          "successor_reviews_and_convergence": 56.03226,
+          "retained_estate_reinstall": 96.64875
+        },
+        "trace_log": {
+          "path": "target/test-runs/20260927T104631Z-50652.MEsxCL/1.log",
+          "sha256": "c7958d337eda9437904c19cd786c61b8bca39e5a35870a5eae762ad009f27a8c"
+        }
+      },
+      "completed_reset": {
+        "journey_seconds": 189.538861,
+        "artifact_resolution_seconds": 59.782323,
+        "journey_excluding_artifact_resolution_seconds": 129.756538,
+        "completed_requests_by_kind": {
+          "identity": 324,
+          "query": 169,
+          "update": 52,
+          "management_status": 193,
+          "agent_query": 61,
+          "install": 4,
+          "canister_inspection": 17,
+          "canister_history": 6
+        },
+        "spans_seconds": {
+          "initial_working_fleet": 33.879174,
+          "completed_source_reset_journey": 117.677613,
+          "retained_estate_reinstall": 117.677834
+        },
+        "trace_log": {
+          "path": "target/test-runs/20260927T104229Z-15213.F4XOR6/1.log",
+          "sha256": "786bbea7ae7a252d6aed23f74a34a65a77f30ec446f6456ec31bb6ba427a635b"
+        }
+      }
+    },
+    "first_cold_reinstall": {
+      "journey_seconds": 456.071524,
+      "artifact_resolution_seconds": 318.983413,
+      "journey_excluding_artifact_resolution_seconds": 137.088111,
+      "completed_requests_by_kind": {
+        "identity": 436,
+        "query": 336,
+        "update": 71,
+        "management_status": 243,
+        "agent_query": 80,
+        "canister_inspection": 36,
+        "stop": 1,
+        "install": 3,
+        "start": 1
+      },
+      "trace_log": {
+        "path": "target/test-runs/20260927T102852Z-11300.WL1FUq/1.log",
+        "sha256": "4ed5089f5f9c25cc077d6f3277566fd1ff367c8e738a1ccf38eb2fdbd6e9ce2c"
+      },
+      "runner_seconds": 672
+    },
+    "capacity_test_log": {
+      "path": ".tmp/retained-estate-speed-capacity.log",
+      "sha256": "3cd36fd3a98d8ee5f737f51c025dad16fafb5981bdca82b4551ab9aebd444aa5"
+    },
+    "source_files": [
+      {
+        "path": "canisters/audit/root_probe/retained-estate.toml",
+        "sha256": "d3f839425970cbd776fa84fa5f0a88affd909c19a445608e46b6818447ebb06e"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs",
+        "sha256": "39c6164c4f4f3188b77da7c45db5248c19864b5e16d41b407308ddac6c7e2374"
+      },
+      {
+        "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/completed_reset/mod.rs",
+        "sha256": "ddc1c3c99aae1ca9774d1d132cccf83edf65533638b1eaf8cca6179bbcc33ce6"
+      },
+      {
+        "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+        "sha256": "7505530b970a116a7c3c6e1856a925b5be9206a05aee1b7cc88edb736a142eea"
+      }
+    ],
+    "clippy": {
+      "result": "pass",
+      "log": {
+        "path": ".tmp/retained-estate-speed-clippy.log",
+        "sha256": "185afa38ccf558d47765f4ad4f87d0b15fb800a3797a36a87cbda95091af03e9"
+      },
+      "packages": [
+        "canic-host",
+        "canic-testing-internal"
+      ],
+      "warnings_denied": true
+    }
+  },
+  "comparison": {
+    "baseline_journey_seconds": 815.569549,
+    "candidate_journey_seconds": 330.850052,
+    "baseline_excluding_artifacts_seconds": 741.617587,
+    "candidate_excluding_artifacts_seconds": 260.633498,
+    "baseline_management_status_calls": 1032,
+    "candidate_management_status_calls": 434
+  }
+}

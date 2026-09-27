@@ -265,8 +265,8 @@ mod governed_suite {
             "generated reinstall recovers and converges",
             "generated mixed topology and Ready reserve retain one reviewed operation",
             "four initial Shards preserve sealed Root activation",
-            "four Workloads refill four Ready assets with lost funding and creation responses",
-            "four Workloads and four Failed assets repair without new creation",
+            "two Workloads refill two Ready assets with lost funding and creation responses",
+            "two Workloads and two Failed assets repair without new creation",
         ] {
             assert!(
                 journey_names.contains(&required),

@@ -6,20 +6,19 @@ use crate::{
     fleet_ensure::{
         CompletedEstateInventoryView, model::DesiredCanisterKind,
         ops::reinstall::terminal::inventory::protocols::CompletedSourceProtocolError,
-        view::terminal_source::inventory::evidence::CompletedReleaseManifestEvidence,
     },
     protocol_binding::{
         ReleaseProtocolBindingError, ResolvedProtocolBinding, require_contained_sidecar,
         resolve_protocol_binding,
     },
-    release_set::load_retained_application_artifact_union,
+    release_set::{CurrentReleaseSetManifest, load_retained_application_artifact_union},
 };
 use std::{collections::BTreeMap, path::Path};
 
 pub(super) fn inspect(
     workspace: &Path,
     inventory: &CompletedEstateInventoryView,
-    manifest: &CompletedReleaseManifestEvidence,
+    manifest: &CurrentReleaseSetManifest,
     builder: &str,
 ) -> Result<BTreeMap<String, ResolvedProtocolBinding>, CompletedSourceProtocolError> {
     let application =

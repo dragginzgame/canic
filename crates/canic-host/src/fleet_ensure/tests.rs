@@ -3297,7 +3297,7 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
     assert!(!workflow::operator_mint::fresh_quote_available(&paths).unwrap());
     assert!(workflow::operator_mint::status(&paths).unwrap().is_none());
     let mut tampered: serde_json::Value = serde_json::from_slice(&original_plan).unwrap();
-    tampered["reinstall"]["source"]["terminal_retirement"]["conservation"]["measured_execution_burn_cycles"] =
+    tampered["reinstall"]["source"]["terminal_retirement"]["conservation"]["observed_net_cycle_debit_cycles"] =
         serde_json::json!("0");
     fs::write(&paths.plan, serde_json::to_vec(&tampered).unwrap()).unwrap();
     assert!(matches!(
@@ -3427,14 +3427,20 @@ pub(super) fn retain_recorded_retirement(
                     state_document_sha256: sha256_hex(b"source state bytes"),
                     phase_document_sha256: BTreeMap::new(),
                 },
-                conservation: serde_json::from_value(serde_json::json!({
-                    "estate_funding_cycles": "0", "exact_estate_creation_fee_cycles": "0",
-                    "exact_unavoidable_fee_cycles": "10", "final_controlled_cycles": "600",
-                    "measured_execution_burn_cycles": "10", "observed_starting_cycles": "500",
-                    "observed_settlement_credit_cycles": "0", "operator_debit_cycles": "120",
-                    "received_new_funding_cycles": "110",
-                }))
-                .unwrap(),
+                conservation:
+                    crate::fleet_ensure::model::FleetRetirementConservationRecord::NetBalance(
+                        crate::fleet_ensure::model::ActualCycleConservation {
+                            estate_funding_cycles: 0,
+                            exact_estate_creation_fee_cycles: 0,
+                            exact_unavoidable_fee_cycles: 10,
+                            final_controlled_cycles: 600,
+                            observed_net_cycle_debit_cycles: 10,
+                            observed_starting_cycles: 500,
+                            observed_net_cycle_credit_cycles: 0,
+                            operator_debit_cycles: 120,
+                            received_new_funding_cycles: 110,
+                        },
+                    ),
             })),
         })),
     }));
@@ -7396,7 +7402,7 @@ fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
     fs::remove_dir_all(fixture.root).unwrap();
 }
 
-/// A deliberately non-executable completed source with a current immutable phase.
+/// A completed current-contract source with an immutable receipted phase.
 pub(super) fn terminal_retirement_fixture() -> (
     Fixture,
     crate::fleet_ensure::ops::EnsurePaths,
@@ -7478,19 +7484,6 @@ fn terminal_retirement_payment_fixture(
         .join(format!("{}.json", phase.plan_sha256));
     ops::write_plan(&phase_paths, &phase).unwrap();
     ops::write_plan(&paths, &plan).unwrap();
-    let mut raw: serde_json::Value =
-        serde_json::from_slice(&fs::read(&paths.plan).unwrap()).unwrap();
-    // Match the reported completed staging source: the informational forecast
-    // lacks successor/retry/startup fields, while continuation authority retains
-    // its exact action bound. No field may be filled in to execute this source.
-    raw["recovery_review"] = serde_json::json!({
-        "base_execution_burn_cycles": "0",
-        "continuation_reserve_cycles": "0",
-        "whole_continuation_ceiling_cycles": "0",
-        "known_pool_funding": [],
-        "discovery": "pending_current_protocol",
-    });
-    fs::write(&paths.plan, serde_json::to_vec(&raw).unwrap()).unwrap();
     let effects = plan.canisters[0]
         .actions
         .iter()
@@ -7538,29 +7531,17 @@ fn terminal_retirement_payment_fixture(
 }
 
 #[test]
-fn terminal_retirement_reads_receipts_without_making_source_executable() {
+fn terminal_retirement_reads_current_receipts_without_reauthorizing_execution() {
     use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let (mut fixture, paths, _) = terminal_retirement_fixture();
-    assert!(matches!(
-        ops::read_plan(&paths),
-        Err(ops::EnsureStateError::Decode { .. })
-    ));
+    let (fixture, paths, _) = terminal_retirement_fixture();
+    let plan = ops::read_plan(&paths).unwrap().unwrap();
+    assert_eq!(
+        plan.plan_sha256,
+        crate::fleet_ensure::policy::expected_plan_sha256(&plan)
+    );
     let source = terminal::read(&paths, "local", "test-fleet").unwrap();
     assert_eq!(source.actions.len(), 2);
     assert_eq!(source.documents.phase_document_sha256.len(), 1);
-    let before = fs::read(&paths.plan).unwrap();
-    assert!(matches!(
-        workflow::plan(
-            &fixture.root,
-            &fixture.desired,
-            "changed",
-            "test-fleet",
-            2,
-            &mut fixture.platform
-        ),
-        Err(workflow::EnsureWorkflowError::RetainedTerminalReviewRequired { .. })
-    ));
-    assert_eq!(fs::read(&paths.plan).unwrap(), before);
     assert!(fixture.platform.mutations.is_empty());
     fs::remove_dir_all(fixture.root).unwrap();
 }
@@ -7597,7 +7578,7 @@ fn terminal_retirement_requires_the_retained_continuation_action_bound() {
             &mut fixture.platform,
         ),
         Err(workflow::EnsureWorkflowError::State(
-            ops::EnsureStateError::InvalidTerminalSource
+            ops::EnsureStateError::Decode { .. }
         ))
     ));
     assert!(fixture.platform.mutations.is_empty());
@@ -7698,13 +7679,6 @@ fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
         policy::expected_plan_sha256,
     };
     let (fixture, paths, mut replacement) = terminal_retirement_fixture();
-    let mut journal: serde_json::Value =
-        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
-    journal
-        .as_object_mut()
-        .unwrap()
-        .remove("funding_observations");
-    fs::write(&paths.journal, serde_json::to_vec(&journal).unwrap()).unwrap();
     let source = terminal::read(&paths, "local", "test-fleet").unwrap();
     replacement.operation_id = sha256_hex(b"new reviewed operation");
     replacement.scope = FleetEnsurePlanScope::ReinstallPreparation;
@@ -7749,13 +7723,6 @@ fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
 fn terminal_retirement_review_binds_fresh_inventory_and_rechecks_before_apply() {
     use crate::fleet_ensure::{model::*, ops};
     let (mut fixture, paths, phase) = terminal_retirement_fixture();
-    let mut journal: serde_json::Value =
-        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
-    journal
-        .as_object_mut()
-        .unwrap()
-        .remove("funding_observations");
-    fs::write(&paths.journal, serde_json::to_vec(&journal).unwrap()).unwrap();
     let mut state = ops::read_state(&paths, "test-fleet").unwrap();
     state.principals.insert("treasury".into(), TREASURY.into());
     state.topology.insert(
@@ -8321,12 +8288,11 @@ fn store_chunks_stall_bound_reports_the_failed_chunk_after_draining() {
 }
 
 #[test]
-fn terminal_retirement_missing_observations_cannot_add_allowance_or_hide_invalid_evidence() {
+fn terminal_retirement_funding_observations_cannot_add_allowance_or_hide_invalid_evidence() {
     use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let (mut fixture, paths, _) = terminal_retirement_fixture();
-    let mut raw: serde_json::Value =
+    let (fixture, paths, _) = terminal_retirement_fixture();
+    let raw: serde_json::Value =
         serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
-    raw.as_object_mut().unwrap().remove("funding_observations");
     let original = serde_json::to_vec(&raw).unwrap();
     fs::write(&paths.journal, &original).unwrap();
     let source = terminal::read(&paths, "local", "test-fleet").unwrap();
@@ -8335,23 +8301,19 @@ fn terminal_retirement_missing_observations_cannot_add_allowance_or_hide_invalid
         source.documents.journal_document_sha256,
         sha256_hex(&original)
     );
-    assert!(matches!(
-        ops::read_journal(&paths),
-        Err(ops::EnsureStateError::Decode { .. })
-    ));
-    assert!(matches!(
-        workflow::plan(
-            &fixture.root,
-            &fixture.desired,
-            "target",
-            "test-fleet",
-            2,
-            &mut fixture.platform
-        ),
-        Err(workflow::EnsureWorkflowError::RetainedTerminalReviewRequired { .. })
-    ));
+    assert!(ops::read_journal(&paths).unwrap().is_some());
     assert_eq!(fs::read(&paths.journal).unwrap(), original);
     assert!(fixture.platform.mutations.is_empty());
+    let mut missing = raw.clone();
+    missing
+        .as_object_mut()
+        .unwrap()
+        .remove("funding_observations");
+    fs::write(&paths.journal, serde_json::to_vec(&missing).unwrap()).unwrap();
+    assert!(matches!(
+        terminal::read(&paths, "local", "test-fleet"),
+        Err(ops::EnsureStateError::InvalidTerminalSource)
+    ));
     for (field, value) in [
         ("funding_observations", serde_json::Value::Null),
         ("funding_observations", serde_json::json!({"root": {}})),

@@ -1,0 +1,279 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-27",
+  "open_batch": "0.110.44",
+  "package_version": "0.110.43",
+  "git_head": "7623ef8eb1f049758b9ba3bce86acedad9e6ef08",
+  "outcome": "Current-contract hard cut; targeted validation passed; uncommitted",
+  "removed_files": [
+    {
+      "path": "crates/canic-host/src/fleet_ensure/view/terminal_source/receipt_evidence/mod.rs",
+      "lines": 456
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/receipt_audit/store-adoption.json",
+      "lines": 105
+    },
+    {
+      "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/completed_reset/evidence/mod.rs",
+      "lines": 264
+    }
+  ],
+  "removed_default_cases": [
+    {
+      "name": "qualification Ledger cohort isolation",
+      "previous_seconds": 4.67
+    },
+    {
+      "name": "qualification reset cohort isolation",
+      "previous_seconds": 19.43
+    },
+    {
+      "name": "qualification effect arithmetic",
+      "previous_seconds": 0.0
+    }
+  ],
+  "previous_removed_case_seconds": 24.1,
+  "retained_behavior": [
+    "current plan/journal schemas and canonical hashes",
+    "receipt and payment bounds",
+    "fresh custody and inventory",
+    "cycle conservation and external-debit reconciliation",
+    "pending-operation recovery",
+    "interrupted publication/handoff",
+    "lost-install-response recovery",
+    "immediate effect-free replay",
+    "production Ledger/CMC and funding proofs"
+  ],
+  "native_validation": {
+    "unique_host_passed": 81,
+    "host_passed_executions": 83,
+    "facade_passed": 2,
+    "cli_passed": 1,
+    "catalogue_passed": 3,
+    "release_guard_scenarios_passed": 10,
+    "clippy": "passed with warnings denied"
+  },
+  "pocketic": [
+    {
+      "case": "pic::fleet_registry::baseline::tests::completed_reset::completed_estate_reset_recovers_and_replays",
+      "case_seconds": 216.16,
+      "runner_seconds": 218,
+      "journey_seconds": 216.062704,
+      "nested_artifact_resolution_seconds": 91.810553,
+      "reset_journey_seconds": 122.231309,
+      "result": "passed"
+    },
+    {
+      "case": "pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet",
+      "case_seconds": 142.88,
+      "runner_seconds": 145,
+      "result": "passed"
+    }
+  ],
+  "limits": [
+    "No new full-suite timing or broad gate. Historical case costs are not a new measured full-gate saving.",
+    "Artifact cache and concurrent load differ between runs.",
+    "Release guard checked with read-only fake Git responses; Git-commit-creating release_flow_guard tests were not executed.",
+    "An initial CLI binary invocation selected zero tests; the corrected library invocation passed its one test.",
+    "Second PocketIC startup initially rejected shared scratch before test execution; an independent invocation with fresh owned scratch passed.",
+    "No versioning, Git staging/commit/publication, live IC effects or sibling mutation."
+  ],
+  "logs": {
+    "host": {
+      "path": ".tmp/hard-cut-host-final.log",
+      "sha256": "216c6e23020cf41276a18ef2d18437e2b6d75719018488f2bc51c133ec6c7491"
+    },
+    "clippy": {
+      "path": ".tmp/hard-cut-clippy.log",
+      "sha256": "3cdb0d279c620ba815acf24f2c9d8518c1c5cec07aacca518cc68fb81b2027b1"
+    },
+    "facade": {
+      "path": ".tmp/hard-cut-surfaces.log",
+      "sha256": "389d78b36ff643f1ecb34b3144f9c136d3fa34d51ccb5b0d50f05cad1da00bbb"
+    },
+    "cli": {
+      "path": ".tmp/hard-cut-cli.log",
+      "sha256": "a5d134d5d1610562a1b696de0df752cd3f6eb88f3e2661c42bd685748b738f7a"
+    },
+    "catalogue": {
+      "path": ".tmp/hard-cut-catalogue.log",
+      "sha256": "dcb19e02cb80bc8db4d8ccd0df87dcb3de8c0e557787eb8361510caea71280d3"
+    },
+    "release_guard": {
+      "path": ".tmp/hard-cut-release-guard.log",
+      "sha256": "bd693027e53ac75fb56d92304575477ff6985b87b2a8654c15ff810d0ce38da9"
+    },
+    "completed_reset": {
+      "path": ".tmp/hard-cut-completed-reset.log",
+      "sha256": "2e54d8ea1e59a342f7a1c0ab4de30b6ac34819daf683a8cd98ca85172cfd4a38"
+    },
+    "reinstall": {
+      "path": ".tmp/hard-cut-reinstall.log",
+      "sha256": "ece1a88f7948f95b0eb860eb7d889b05c619159b16634a804408725e092476c0"
+    },
+    "completed_reset_trace": {
+      "path": "target/test-runs/20260927T124402Z-30100.0DE85f/1.log",
+      "sha256": "ba98ba9245eaa8a03e5731ac6ef469ec6627de4357fb5533395ff370acfbb200"
+    },
+    "reinstall_trace": {
+      "path": "target/test-runs/20260927T124805Z-57266.OLt1w2/1.log",
+      "sha256": "a557d65dade5f98f4954bfaba3375667ab7830b39734b858ce11fb0a86db5172"
+    },
+    "prior_full_run": {
+      "path": "target/validation-runs/20260927T090937Z-63129.moEFNt/0.log",
+      "sha256": "21548a63a4865a980527867c1e66457ce7939bec32d8b7d9af7673c032bf319e"
+    }
+  },
+  "source_files_sha256": {
+    "Cargo.lock": "525f29e2fe6edccd0698b05959bd153b03360885dca33c46ea5e58973c7c5e10",
+    "canisters/audit/root_probe/retained-estate.toml": "d3f839425970cbd776fa84fa5f0a88affd909c19a445608e46b6818447ebb06e",
+    "crates/canic-cli/src/apps/tests.rs": "d0017bedfae17d1e298b8b737c6e42218812a3381bb2717ff272b8723eff44ea",
+    "crates/canic-cli/src/fleet/completed_preparation/mod.rs": "d90568d3361f32cd8e9ebdfc0845028c42fccbb785731b688b8e692f01542d51",
+    "crates/canic-cli/src/fleet/readiness/mod.rs": "ba66608272729d5143bef8852b476fcad7b5871977dd2e96b30ba44c51012657",
+    "crates/canic-host/src/fleet_ensure/model/retirement/mod.rs": "46b76bfe830f412f18afd170ba4773f7e8a4531ddffc2b68f791676229469d7f",
+    "crates/canic-host/src/fleet_ensure/model/retirement/tests.rs": "441ba0a9149d495272ce39229a2124035b3f75416da3e94a2006f6e9f77b7fdd",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/fixture.json": "f75f49e1cd1175f5e3f55a19e4906a4d2340142921cd7653ef330b1f09110c55",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/mod.rs": "94b054637db38a468748fbfec438062acdc1934fc35bc47e099388472e9713ab",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/protocols/application/mod.rs": "858897b55c60e253f469c090a0b2460b2106e8e2a5533c6954caab746417a3ac",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/protocols/manifest.json": "dcd8d1b69b5d4cb736af320e221b3291f72691f2504405bcba6f0913e4e4f96e",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/protocols/mod.rs": "6ce3f0868cf8f1cc247a0f00638d8ee8bf5f73d0bf06e9193164e3261f20fea4",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/protocols/tests.rs": "4ecfb2af282f86a3c05dc588c89140e8b1d82a7d913104000a07a625d930be11",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/inventory/tests.rs": "1e2f07440913ce4928f1ceb2841d330f27dc112ba59290840ea7dacecd21f031",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/mod.rs": "ef91d2663c79005f58c3bf3a9585c35a666ba79264b086c419fd63b4b6354c12",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/receipt_audit/mod.rs": "06c9de2ab2dc898cc123ada93c5c05f605f93efa584095381904942f66f4b16f",
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/receipt_audit/store-adoption.json": null,
+    "crates/canic-host/src/fleet_ensure/ops/reinstall/terminal/receipt_audit/tests.rs": "8023b0060753de7ef3448d2b878e8bb0fecdec6aebace6b6c22ec43799cd2bd4",
+    "crates/canic-host/src/fleet_ensure/ops/retained_contract/mod.rs": "bb3c0764321bdd87c8863396730f484bfa451343fff2d00027b1696afad87c36",
+    "crates/canic-host/src/fleet_ensure/ops/retained_contract/tests.rs": "bff9578e715eddc43ffb0856df14c96df6e04f733443a918324b9e9314f648c8",
+    "crates/canic-host/src/fleet_ensure/policy/mod.rs": "af4724ca2cebcc0c6e3431bef700a2d28d140ab9a76ebc526ac806955355448b",
+    "crates/canic-host/src/fleet_ensure/policy/tests.rs": "3d99f3fb2cb383b2953e6492ebd232d0e148c9cb6ad219fcf08605148100357d",
+    "crates/canic-host/src/fleet_ensure/tests.rs": "ba4ad3813d36e674bf342a3917119108c95373818c81a6d8f26dcfc32ea25db5",
+    "crates/canic-host/src/fleet_ensure/view/readiness/mod.rs": "7ae316165d247299aefe4f4e1314da63f224197efa21fde019192453475fd47c",
+    "crates/canic-host/src/fleet_ensure/view/terminal_source/inventory/evidence/mod.rs": "9f92465d70bdab7732bcb5c206fd8602dc89f94f54143ab0a38c59d1007498f1",
+    "crates/canic-host/src/fleet_ensure/view/terminal_source/mod.rs": "cf60b24f323274f02eb1c29fed54e6794e96620c408d7512be47cc7a9989568a",
+    "crates/canic-host/src/fleet_ensure/view/terminal_source/receipt_evidence/mod.rs": null,
+    "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "a9899e9428b0b4a20f42f012963b4569296b601f63447ed211263e05e566fa6c",
+    "crates/canic-host/src/fleet_ensure/workflow/readiness/mod.rs": "aa6510de7df8ce8a222eb7b62976246e2298242622486312e1eea40bf18ad7b0",
+    "crates/canic-host/src/fleet_ensure/workflow/readiness/tests.rs": "f2e4f2c5c32d7b5c945d64d9740758d1290d9591d881191a1ea6202f039ae409",
+    "crates/canic-host/src/fleet_ensure/workflow/reinstall/mod.rs": "9beef72dae0861afc0be05a9f6b414434a90206511d467bece50269c31902715",
+    "crates/canic-host/src/fleet_ensure/workflow/retained_plan/mod.rs": "56ed4dbec4efb342024b0494b575409626be946ea1a7a4952cd2c1b812bdbc24",
+    "crates/canic-testing-internal/Cargo.toml": "adadf36b0f5fb5e649204ea735c74b4d4a281dfd7261438d254b9e1b68eadf2b",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "70e3cdff4efd43d16062514e859c22d52a42557e5fa947b8b326e516ca38ca99",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/completed_reset/evidence/mod.rs": null,
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/completed_reset/mod.rs": "abdf5950d66526b25e8ace3833f91948266e4df2fb6f5c883992b665f47f3c98",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/mod.rs": "ceb2a9b1e7ca223663cb649388ff5590b4e9bf987a0a044bbfadaa8a4934239b",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/tests.rs": "ce7d6f7950d7fd4da3e19392035edd8e89a729c2b4cfefd7ede4f538d86ce4b5",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs": "ba887d17f7380f052fca4a89871657ed5525212a32b7ab5116b0c7e5d05be631",
+    "crates/canic/tests/build_cfg_surface.rs": "781ff6092575200728a2ac880ebe065190af88ead49c2ee80440d5e239dbedb3",
+    "crates/canic/tests/managed_endpoint_gate.rs": "22938e14cb4e29d6c316a8c6313ea79d84290262b1e1e11c9867028f8d6a44b7",
+    "crates/canic/tests/release_flow_guard.rs": "e1ef266c4397fb799836b26dedcbdc7294f434edf819db89f82425ced78692e8",
+    "scripts/ci/check-release-candidate.sh": "7043a5648c87b71e298f258c0e11cf709889c196e87ccbb3fdaaa66589a40738",
+    "scripts/ci/run-workspace-tests.sh": "88ac7f12c261de549c776b7138ec1576609b412c7da9e357e75187d2a372b011",
+    "scripts/ci/test-workspace-test-runner.sh": "330259893d89c11968e93dea7ac339d7069d8358f35d168b0f1dd51ec0b09fc2"
+  },
+  "funding_consolidation": {
+    "date": "2026-09-27",
+    "result": "complete; targeted checks passed; uncommitted",
+    "removed_cases": [
+      "funded_estate_recovers_transfer_and_autonomous_creation_responses",
+      "qualification_controller_transition_requires_exact_routing_evidence",
+      "rejects_removed_project_medic_subcommand"
+    ],
+    "fixture": {
+      "workloads": 2,
+      "ready_or_failed_reserve": 2,
+      "growth_generator": "production generation retained in multi-asset refill"
+    },
+    "before": [
+      {
+        "name": "funded estate recovers transfer and autonomous creation responses",
+        "artifact_seconds": 54.413946,
+        "journey_seconds": 97.130311,
+        "case_seconds": 97.192863,
+        "excluding_artifact_seconds": 42.716365
+      },
+      {
+        "name": "four Workloads refill four Ready assets with lost funding and creation responses",
+        "artifact_seconds": 66.84996,
+        "journey_seconds": 187.949765,
+        "case_seconds": 188.071267,
+        "excluding_artifact_seconds": 121.09980500000002
+      },
+      {
+        "name": "four Workloads and four Failed assets repair without new creation",
+        "artifact_seconds": 6.733023,
+        "journey_seconds": 90.956778,
+        "case_seconds": 91.022775,
+        "excluding_artifact_seconds": 84.223755
+      }
+    ],
+    "after": [
+      {
+        "name": "refill",
+        "case_seconds": 380.12,
+        "runner_seconds": 382,
+        "journey_seconds": 380.056708,
+        "artifact_seconds": 279.12503,
+        "log": {
+          "path": ".tmp/funding-consolidation-refill.log",
+          "sha256": "97d2c00c10a5d97fe6c745525e9fde502e5ccc32fee781cbc6366cfff7601ea3"
+        },
+        "trace": {
+          "path": "target/test-runs/20260927T131324Z-14725.Mb44Ws/1.log",
+          "sha256": "12b24529f69fb5aa4b0cb0094ae830e0b597ba33b132425ee87ccb1254e2f635"
+        },
+        "result": "passed",
+        "excluding_artifact_seconds": 100.93167800000003
+      },
+      {
+        "name": "repair",
+        "case_seconds": 64.88,
+        "runner_seconds": 67,
+        "journey_seconds": 64.835024,
+        "artifact_seconds": 6.786557,
+        "log": {
+          "path": ".tmp/funding-consolidation-repair.log",
+          "sha256": "557fbf35f21f2003722d44897c74017b0d6948d6214dce520512f4b6c0f1e88c"
+        },
+        "trace": {
+          "path": "target/test-runs/20260927T131946Z-29504.uwT5RZ/1.log",
+          "sha256": "df7acf1170b8e92d539df02b0f16600052bf71ea70b45f53e359d3ec10313cc2"
+        },
+        "result": "passed",
+        "excluding_artifact_seconds": 58.048467
+      }
+    ],
+    "before_excluding_artifacts_seconds": 248.039925,
+    "after_excluding_artifacts_seconds": 158.98014500000005,
+    "removed_controller_experiment_seconds": 0.488087,
+    "native": {
+      "medic_passed": 4,
+      "catalogue_passed": 3,
+      "clippy": "warnings denied; passed",
+      "logs": {
+        "native": {
+          "path": ".tmp/funding-consolidation-native.log",
+          "sha256": "f7ab831dc4801dd29e7d734de9a7b18ff7bf58dc8cfc4729bbeaafeb7c3dd0d2"
+        },
+        "clippy": {
+          "path": ".tmp/funding-consolidation-clippy.log",
+          "sha256": "2610f1426b6969780b4ba3f5532e5cc9df5acc1089eb0cb2fb99e40cbaffeff6"
+        }
+      }
+    },
+    "source_files_sha256": {
+      "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "60f8fe26831eb6b007578888632c0d585b85a79f6c21485f27d7d6d952a59085",
+      "crates/canic-testing-internal/src/pic/mod.rs": "b87e4ff9fd79d86bd168be3e6adba5be7d34787bc6aa030f531fa9b55f41d4a1",
+      "crates/canic-cli/src/medic/tests.rs": "526f7ef2f308b64404044746f9b568f24cad9f3c172e7aa3354962a3eb6aa326",
+      "canisters/audit/root_probe/two-workloads.toml": "ad9161173f2f36edf345df967c7a2d2e66c82710f957520f2c71e6b0c4918a55",
+      "canisters/audit/root_probe/four-workloads.toml": null
+    },
+    "limits": [
+      "Different source, cache and load conditions; no full-suite benchmark or guaranteed saving.",
+      "First resized-fixture artifact resolution was cold and made the validation run longer overall.",
+      "Only tests and fixtures changed; current product recovery invariants remain covered.",
+      "No broad gate, versioning, Git publication, live IC effect or sibling edits."
+    ]
+  }
+}

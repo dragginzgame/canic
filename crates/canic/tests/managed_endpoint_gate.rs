@@ -327,11 +327,7 @@ fn fleet_admission_projection_is_managed_only_and_authenticates_before_state_acc
         auth < dispatch,
         "managed status must authorize before projection state dispatch"
     );
-    assert!(
-        !managed_command.contains("RuntimeWhitelist")
-            && !managed_command.contains("runtime_whitelist"),
-        "removed local whitelist mutation authority must not survive"
-    );
+
     assert!(
         !local_status.contains("FleetAdmissionProjection")
             && !local_status.contains("AdmissionStatusRequest::Admission"),

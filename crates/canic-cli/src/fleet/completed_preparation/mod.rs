@@ -41,17 +41,10 @@ pub(super) fn run_if_selected(
     let selected = if retained.is_some() {
         options.reinstall || options.apply.is_some()
     } else if options.reinstall {
-        match retained_contract::check(workspace, environment, &options.fleet) {
-            Err(retained_contract::RetainedContractError::CompletedAuthorityContract {
-                ..
-            }) => true,
-            Err(error) => {
-                return Err(failure(workflow::CompletedPreparationError::Source(
-                    Box::new(error),
-                )));
-            }
-            Ok(()) => false,
-        }
+        retained_contract::completed_source_available(workspace, environment, &options.fleet)
+            .map_err(|error| {
+                failure(workflow::CompletedPreparationError::Source(Box::new(error)))
+            })?
     } else {
         false
     };

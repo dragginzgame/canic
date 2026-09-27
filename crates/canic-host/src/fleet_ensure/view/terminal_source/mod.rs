@@ -5,7 +5,6 @@
 //! Boundary: completed actions describe receipts; they never enter the effect driver.
 
 pub(in crate::fleet_ensure) mod inventory;
-pub(in crate::fleet_ensure) mod receipt_evidence;
 
 /// Locally verified historical receipts, never live authority or permission to reinstall.
 #[derive(Debug)]

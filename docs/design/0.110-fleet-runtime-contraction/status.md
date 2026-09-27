@@ -1,5 +1,61 @@
 # Canic 0.110 Implementation Status
 
+## Funding recovery consolidation — .44 follow-up, 2026-09-27
+
+The accepted continuation removes the redundant single-workload funded-estate
+journey and moves its production growth-generator coverage into the retained
+multiple-asset refill proof. Refill and full-pool repair now use two Workloads
+and two Ready/Failed assets instead of four plus four. The renamed fixture and
+catalogue retain exact current identities, changed-fee rejection, lost transfer,
+creation, withdrawal and reset responses, conservation and terminal replay.
+Expected membership, fee totals and creation/withdrawal counts derive from the
+actual fixture members. The isolated controller-transfer experiment exercised
+only its private helper and is deleted, as is the removed `medic project` test.
+
+Four current medic parser checks, three catalogue/runner checks and scoped
+warning-denied Clippy pass. The two exact PocketIC cases pass: refill 380.12s
+(382s runner), repair 64.88s (67s runner). Refill includes 279.125s
+of artifact resolution for the new fixture; repair reuses it in 6.787s.
+Combined journey time excluding artifact resolution is 158.980s versus 248.040s
+for the previous three-case set. These are different source/cache/load conditions;
+the cold build made this validation run longer overall. This is measured work
+reduction, not a new full-suite duration or guaranteed steady-state saving.
+
+The complete accepted `.44` batch and changelog are ready for maintainer review
+and push/release preparation. Versions remain `.43`; changes are uncommitted.
+No broad gate, version transaction, publication, live IC effect or sibling edit
+ran. Historical timing below does not establish a new full-suite duration.
+
+## .44 test throughput and hard-cut cleanup — complete, 2026-09-27
+
+The accepted batch now removes historical receipt/schema support from the
+completed-estate path. Receipt auditing shares current model types and the normal
+plan hasher; inventory uses current authority and manifests. The historical
+fixture converter and obsolete accounting alternative are deleted. Required
+current declarations stay strict, with fresh custody, receipt integrity, cycle
+conservation, pending-operation recovery and effect-free replay retained.
+
+The default catalogue no longer runs audit cohort-size and experiment-budget
+cases; their private harnesses are removed. Production Ledger/CMC, funding,
+import/reset and controller-routing proofs remain. Removed-surface assertions
+and legacy release-marker acceptance are deleted. This supersedes earlier dated
+checkpoints requiring `.38` record shapes or 1/8/16/32 audit cohorts below.
+
+Scoped warning-denied Clippy passes. Eighty-one distinct host regressions, three
+facade/CLI checks, three catalogue/runner checks and ten release-marker guard
+scenarios pass. The completed-estate reset PocketIC case passes in 216.16s
+(218s runner); generated reinstall passes in 142.88s (145s runner). Both retain
+interruption recovery, conservation and terminal effect-free replay. The first
+case includes 91.811s of nested artifact resolution; these are scoped validation
+results, not a comparable full-suite benchmark.
+
+Earlier retained-estate fixture cuts and standalone host-test artifact reuse
+remain in this batch, alongside quiet test output. The complete `.44` batch and
+changelog are ready for review and push/release preparation. Versions remain
+`.43`; changes are uncommitted. No broad gate ran, and no full-suite duration is
+promised. See the [throughput record](../../audits/working/0.110-validation-throughput/report.md).
+The human-owned minor closeout boundary remains.
+
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
 Mixed-topology follow-up, 2026-09-27: fix generated TOML loading without an import

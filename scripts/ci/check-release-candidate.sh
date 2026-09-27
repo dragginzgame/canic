@@ -37,7 +37,6 @@ if [ "$head_subject" = "Release $workspace_version" ]; then
 else
     validated_source="$(git -C "$ROOT" rev-parse HEAD)"
 fi
-legacy_validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date -->"
 complete_validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date gate=complete -->"
 fast_validation_marker="<!-- canic-release-validation: version=$workspace_version source=$validated_source date=$release_date gate=fast -->"
 marker_count() {
@@ -46,8 +45,7 @@ marker_count() {
     printf '%s\n' "${count:-0}"
 }
 validation_marker_count="$((
-    $(marker_count "$legacy_validation_marker")
-    + $(marker_count "$complete_validation_marker")
+    $(marker_count "$complete_validation_marker")
     + $(marker_count "$fast_validation_marker")
 ))"
 [ "$validation_marker_count" -eq 1 ] ||

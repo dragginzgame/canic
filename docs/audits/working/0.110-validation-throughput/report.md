@@ -1,5 +1,173 @@
 # Release-test throughput qualification
 
+## Funding recovery consolidation, 2026-09-27
+
+The accepted continuation removes the redundant single-workload funded-estate
+journey and moves its production growth-generator coverage into the retained
+multiple-asset refill proof. Refill and full-pool repair now use two Workloads
+and two Ready/Failed assets instead of four plus four. The renamed fixture and
+catalogue retain exact current identities, changed-fee rejection, lost transfer,
+creation, withdrawal and reset responses, conservation and terminal replay.
+Expected membership, fee totals and creation/withdrawal counts derive from the
+actual fixture members. The isolated controller-transfer experiment exercised
+only its private helper and is deleted, as is the removed `medic project` test.
+
+Four current medic parser checks, three catalogue/runner checks and scoped
+warning-denied Clippy pass. The two exact PocketIC cases pass: refill 380.12s
+(382s runner), repair 64.88s (67s runner). Refill includes 279.125s
+of artifact resolution for the new fixture; repair reuses it in 6.787s.
+Combined journey time excluding artifact resolution is 158.980s versus 248.040s
+for the previous three-case set. These are different source/cache/load conditions;
+the cold build made this validation run longer overall. This is measured work
+reduction, not a new full-suite duration or guaranteed steady-state saving.
+
+| Funding journey | Journey | Artifact resolution | Excluding artifacts |
+| --- | ---: | ---: | ---: |
+| funded estate recovers transfer and autonomous creation responses | 97.130s | 54.414s | 42.716s |
+| four Workloads refill four Ready assets with lost funding and creation responses | 187.950s | 66.850s | 121.100s |
+| four Workloads and four Failed assets repair without new creation | 90.957s | 6.733s | 84.224s |
+| refill | 380.057s | 279.125s | 100.932s |
+| repair | 64.835s | 6.787s | 58.048s |
+
+The existing [hard-cut evidence](hard-cut-cleanup.json) retains this continuation
+as `funding_consolidation`, with exact logs and source hashes. The removed
+controller experiment accounted for another 0.488s in the retained full run.
+
+
+The complete accepted `.44` batch and changelog are ready for maintainer review
+and push/release preparation. Versions remain `.43`; changes are uncommitted.
+No broad gate, version transaction, publication, live IC effect or sibling edit
+ran. Historical timing below does not establish a new full-suite duration.
+
+## Current-contract hard cut — 2026-09-27
+
+The maintainer authorized removal of obsolete flows after the throughput review.
+Completed-source review now uses the maintained plan, action, authority and release
+manifest types, with the canonical plan hasher. The frozen receipt model, its
+old store-adoption fixture and the PocketIC converter that stripped current
+fields and rewrote source hashes are deleted (825 lines across three files).
+The completed-reset journey consumes original current records and manifests.
+The historical retirement accounting variant is also removed.
+
+Both completed-state readers require the complete current plan/journal contracts.
+Explicit reset review selects valid converged receipt sources. Decode failures
+no longer select terminal retirement or readiness fallbacks, and their obsolete
+diagnostic, readiness flag and blocker are removed. Current empty funding
+observations add no allowance; omitted required observations reject. Retained
+operation recovery, receipt/payment bounds, source custody, fresh inventory,
+external-debit reconciliation, interrupted handoff and effect-free replay remain.
+
+Three audit experiment cases and their private harnesses are deleted from the
+default PocketIC catalogue: Ledger cohort isolation, reset cohort isolation and
+experiment-budget arithmetic. The retained full-run log attributed 4.67s, 19.43s
+and 0.00s to them, respectively: 24.10s of previously measured case work.
+Production Ledger/CMC, funding, import/reset and controller-routing cases remain.
+This is removal of repeated audit qualification, not a new full-gate timing.
+Assertions policing removed build variables, whitelist symbols and app commands
+are deleted. Release markers require the maintained explicit complete/fast gate.
+
+Scoped warning-denied Clippy passes. Eighty-one distinct host regressions, three
+facade/CLI checks, three catalogue/runner checks and ten release-marker guard
+scenarios pass. The completed-estate reset PocketIC case passes in 216.16s
+(218s runner); generated reinstall passes in 142.88s (145s runner). Both retain
+interruption recovery, conservation and terminal effect-free replay. The first
+case includes 91.811s of nested artifact resolution; these are scoped validation
+results, not a comparable full-suite benchmark.
+
+The [hard-cut evidence](hard-cut-cleanup.json) records scoped checks, exact logs,
+hashes and measurement limits. Prior measurements below remain historical results
+for their recorded source/cache/load conditions. No complete workspace gate,
+version transaction, Git publication or external-repository mutation ran.
+
+## Host test edits and artifact reuse — 2026-09-27
+
+The accepted `.44` follow-up keeps the five-role mixed-topology journey and both
+wipes intact. Native artifact-producer inputs are resolved separately from the
+canister Cargo inputs, using the existing resolver and sealed-artifact cache.
+Standalone host `cfg(test)` source modules no longer invalidate those artifacts.
+Native convergence-policy tests have moved into one such module. Production
+sources, inline tests, manifests, locks, embedded data and directory membership
+remain bound. Unknown includes or module paths conservatively retain the host
+input set. Complete raw producer snapshots still reject concurrent source edits,
+including excluded tests, before publication and after acquisition. Test results
+are never reused. This changes cache admission, not recovery coverage.
+
+Six focused cache/build-helper regressions pass, with one existing metadata
+benchmark ignored. They cover test-edit reuse, producer/file/directory changes,
+embedded source, uncertain includes, long paths and a test edit during a cache
+transaction that must not publish its candidate. Twelve extracted native policy
+tests and scoped warning-denied Clippy pass. The final exact mixed-topology
+PocketIC proof passes with its original production transport.
+
+| Exact mixed-topology journey | Before follow-up | Discarded pooling trial | Final cache-only candidate |
+| --- | ---: | ---: | ---: |
+| Journey wall time | 816.218 s | 586.472 s | 577.882 s |
+| Nested artifact resolution | 357.111 s | 103.484 s | 94.737 s |
+| Journey excluding artifact resolution | 459.108 s | 482.987 s | 483.145 s |
+
+The pooling trial added shared native HTTP/runtime setup but did not improve
+non-artifact time, so all transport edits were removed. Artifact output sets in
+the trial and final candidate match the before-run outputs byte for byte. These
+runs have different compiler-cache and concurrent-load conditions: the reduced
+artifact time is not evidence that the new cache caused that complete wall-time
+difference. The cache regressions establish the narrower benefit: subsequent
+standalone test edits avoid a fixture cache miss. No fixed full-suite saving or
+mixed-topology runtime improvement is claimed.
+
+The [follow-up evidence](mixed-cache-followup.json) records exact phases, request
+counts, artifact comparisons, source/log hashes and checks. The earlier
+retained-estate hard cut below remains the measured reduction in test workload.
+The complete accepted `.44` batch is ready for maintainer review, with no broad
+gate or version/Git publication action performed.
+
+
+## Retained-estate fixture hard cut — 2026-09-27
+
+The maintainer authorized implementation after the 3,819-second release test
+run. This bounded `.44` batch removes deployment cardinality from the two
+retained-estate recovery fixtures: each now owns two Workloads and one Ready
+asset, six controlled identities including infrastructure, instead of nineteen
+Workloads, five Ready assets and 27 identities. No governed case is removed.
+The five-role mixed topology and both deliberate wipes remain unchanged.
+
+Both real PocketIC journeys pass. Generated reinstall retains incomplete-import
+and controller-drift rejection, interrupted payment, restarted-source refusal,
+lost payment/install responses, bounded successor reviews, conservation and both
+replay boundaries. Missing imports are compared by exact identity. Underfunding
+both Workloads exceeds the single Ready replacement, preserving the additional
+funding requirement. Completed reset retains genuinely completed source receipts,
+historical record projection, interrupted publication, lost install reply, exact
+retained IDs, source archive integrity, local replay and subsequent capacity import.
+
+Native policy checks now explicitly own exact-fit and insufficient-reserve
+capacity at 2+1, 19+5 and 32+5, plus checked-add overflow. Existing real Ledger/reset
+cohorts retain widths 1/8/16/32. The removed 27-canister deployment size is no
+longer a recovery acceptance requirement; the active design records this cut.
+
+| Journey | Retained run | Candidate | Excluding artifact resolution, before → after | Management-status calls, before → after |
+| --- | ---: | ---: | ---: | ---: |
+| Generated reinstall | 346.377 s | 141.311 s | 335.377 → 130.877 s | 589 → 241 |
+| Completed-source reset | 469.193 s | 189.539 s | 406.241 → 129.757 s | 443 → 193 |
+| Combined | 815.570 s | 330.850 s | 741.618 → 260.633 s | 1,032 → 434 |
+
+These are observed reductions of 484.719 seconds in the two journeys and 598
+management-status calls. The baseline and candidate have different source
+versions, cache states, trace rendering and concurrent machine workloads. This
+is not a controlled benchmark or a measured full-suite saving. Artifact spans
+are nested inside journey time; do not add them again. The first candidate
+reinstall command took 672 seconds, including native recompilation and 318.983
+seconds of artifact resolution inside the journey. Its successful repeat took
+143 seconds as a complete command; completed reset took 283 seconds including
+native recompilation. Cold-build cost remains explicit.
+
+The exact two PocketIC cases, native capacity regression and warning-denied
+host/internal library/test Clippy pass. Source/log hashes, the cold first run
+and per-kind request counts are in [the evidence record](retained-estate-reduction.json).
+No broad suite or version/Git publication action ran. The `.44` notes also retain
+the separately implemented quiet-output change. The accepted artifact-cache
+follow-up is recorded above; mixed-topology runtime and broader fixture reuse
+remain unchanged.
+
 ## Post-.37 attribution and early compilation — 2026-09-22
 
 Published .37 is the new base. Its retained successful test command takes

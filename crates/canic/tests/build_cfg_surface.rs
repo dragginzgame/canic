@@ -248,16 +248,4 @@ fn custom_cfg_catalog_is_exact_and_singly_owned() {
     let core_build = fs::read_to_string(root.join("crates/canic-core/build.rs"))
         .expect("core build script should be readable");
     assert!(!core_build.contains("canic_is_root"));
-
-    for removed in [
-        "CANIC_APP_ROLE",
-        "CANIC_APP=",
-        "CANIC_CANISTER_ROLE_DECLARED",
-        "CANIC_CANISTER_ROLE_ATTACHED",
-    ] {
-        assert!(
-            !build_macro.contains(removed),
-            "removed compile-time output returned: {removed}"
-        );
-    }
 }

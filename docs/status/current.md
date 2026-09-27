@@ -20,6 +20,91 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Funding recovery consolidation — .44 follow-up, 2026-09-27
+
+The accepted continuation removes the redundant single-workload funded-estate
+journey and moves its production growth-generator coverage into the retained
+multiple-asset refill proof. Refill and full-pool repair now use two Workloads
+and two Ready/Failed assets instead of four plus four. The renamed fixture and
+catalogue retain exact current identities, changed-fee rejection, lost transfer,
+creation, withdrawal and reset responses, conservation and terminal replay.
+Expected membership, fee totals and creation/withdrawal counts derive from the
+actual fixture members. The isolated controller-transfer experiment exercised
+only its private helper and is deleted, as is the removed `medic project` test.
+
+Four current medic parser checks, three catalogue/runner checks and scoped
+warning-denied Clippy pass. The two exact PocketIC cases pass: refill 380.12s
+(382s runner), repair 64.88s (67s runner). Refill includes 279.125s
+of artifact resolution for the new fixture; repair reuses it in 6.787s.
+Combined journey time excluding artifact resolution is 158.980s versus 248.040s
+for the previous three-case set. These are different source/cache/load conditions;
+the cold build made this validation run longer overall. This is measured work
+reduction, not a new full-suite duration or guaranteed steady-state saving.
+
+The complete accepted `.44` batch and changelog are ready for maintainer review
+and push/release preparation. Versions remain `.43`; changes are uncommitted.
+No broad gate, version transaction, publication, live IC effect or sibling edit
+ran. Historical timing below does not establish a new full-suite duration.
+
+## Test throughput and hard-cut cleanup — .44 batch complete, 2026-09-27
+
+The maintainer authorized removal of obsolete flows after the initial speed work.
+Completed-source auditing now uses current plan/action/authority types, the normal
+plan hasher and the current release manifest. Frozen `.38` receipt models, the
+old accounting alternative and the fixture converter that stripped authority and
+transition fields are removed. Explicit preparation selects a converged current
+supplied estate; pending publication/recovery still uses its exact recorded owner.
+The completed-reset proof now consumes untouched current receipts and manifests.
+Current plan/journal decoding and canonical hashes replace decode-failure routing;
+the obsolete readiness flag and blocker are removed.
+
+Three audit experiment cases and their private harnesses are removed from the
+default catalogue: Ledger/reset cohort widths 1/8/16/32 and their experiment-budget
+arithmetic. They accounted for about 24 seconds in the retained full run. Product
+Ledger/CMC replay, funding, import/reset and controller-routing proofs remain.
+Removed-surface assertions are deleted; release markers require an explicit
+`complete` or `fast` gate. No historical compatibility shim or replacement
+anti-resurrection test was added.
+
+Scoped warning-denied Clippy passes. Eighty-one distinct host regressions, three
+facade/CLI checks, three catalogue/runner checks and ten release-marker guard
+scenarios pass. The completed-estate reset PocketIC case passes in 216.16s
+(218s runner); generated reinstall passes in 142.88s (145s runner). Both retain
+interruption recovery, conservation and terminal effect-free replay. The first
+case includes 91.811s of nested artifact resolution; these are scoped validation
+results, not a comparable full-suite benchmark.
+
+The earlier `.44` cuts remain: two retained-estate reset fixtures use two
+Workloads and one Ready asset instead of nineteen and five. Their combined
+observed journey time fell from 815.570s to 330.850s, with different source/cache/
+load conditions. Standalone host test edits reuse sealed artifacts while complete
+producer snapshots guard concurrent changes. The transport pooling experiment
+was removed after showing no gain. Quiet output retains complete test logs.
+See the [throughput report](../audits/working/0.110-validation-throughput/report.md)
+for the current evidence and measurement limits. No full-suite saving is claimed.
+
+The complete accepted `.44` batch and changelog are ready for maintainer review
+and push/release preparation. Package versions remain `.43` for the governed
+version transaction; changes are uncommitted. No broad gate, Git publication,
+version transaction, live IC effect or sibling mutation ran. Minor closeout
+remains human-owned.
+
+## Quiet test output — 2026-09-27
+
+The workspace runner now retains complete command output in `target/test-runs/`
+while hiding request, observation and structured timing traces from the live
+console. Progress, results and errors remain visible. A failed command prints
+the last 100 trace lines and the full log path; successful expected rejection
+cases remain quiet. Logs are outside disposable test scratch.
+
+The focused runner regression passes across full, PocketIC, ordinary, fast and
+targeted modes using fake commands: no canister builds or broad suite execution.
+It covers trace suppression, retained stdout/stderr, bounded failure context,
+failure barriers, selectors and server cleanup. Scoped ShellCheck and diff
+checks pass. This requested output change is complete and ready for review;
+changes remain uncommitted. `.43` is now tagged, so its published notes remain
+unchanged and the new notes are in the `.44` draft. Package versions remain `.43`.
+
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
 Latest mixed-topology correction, 2026-09-27: generated desired TOML now reloads

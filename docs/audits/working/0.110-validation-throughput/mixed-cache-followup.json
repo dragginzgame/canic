@@ -1,0 +1,1609 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-27",
+  "batch": "0.110.44",
+  "case": "pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+  "command": "make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_mixed_topology_and_ready_reserve_recover_one_reviewed_operation",
+  "environment": {
+    "ICP_ENVIRONMENT": "local",
+    "CARGO_INCREMENTAL": "0",
+    "CARGO_TARGET_DIR": "/home/adam/projects/canic/target"
+  },
+  "conclusion": "Standalone host test module edits reuse sealed release-test artifacts. Full producer snapshots guard concurrent mutations. No production transport change remains; pooling was discarded after failing to improve non-artifact time. Both wipes and all recovery assertions remain.",
+  "limitations": [
+    "Different compiler/cache states and concurrent machine load; not a controlled performance comparison.",
+    "Final total time reduction cannot be attributed to the cache change; both artifact sets were built in this final run. Native regressions establish reuse after eligible test edits.",
+    "Inline host tests, production sources, manifests and locks still invalidate.",
+    "Request durations include nested work and are not additive wall time.",
+    "No broad gate or measured full-suite saving.",
+    "Cache-manifest fingerprints use the upstream cache encoding; artifact equality was checked directly against file bytes and the SHA-256 values below hash raw output bytes."
+  ],
+  "runs": {
+    "before": {
+      "trace": {
+        "path": "target/test-runs/20260927T110044Z-8404.8FegJ4/1.log",
+        "sha256": "a6adf87f5ef9f66f1318ce773172c234f48277d16b574babbf69978a9b1c734c"
+      },
+      "runner": {
+        "path": ".tmp/mixed-transport-before.log",
+        "sha256": "289f33865bb7399d0a6bf4d12d15d959fa871526f2db7ae8dd08969ef4c1a208"
+      },
+      "passed": true,
+      "journey_us": 816218374,
+      "artifact_resolution_us": 357110671,
+      "journey_excluding_artifacts_us": 459107703,
+      "completed_phases": [
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 2,
+          "parent_id": 1,
+          "name": "source_and_fixture_recipe",
+          "state": "completed",
+          "elapsed_us": 9726
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 5,
+          "parent_id": 4,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 7019191
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 6,
+          "parent_id": 4,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1072679
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 8,
+          "parent_id": 7,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 298326260
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 9,
+          "parent_id": 7,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 236293
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 7,
+          "parent_id": 4,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 298565186
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 10,
+          "parent_id": 4,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1339989
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 11,
+          "parent_id": 4,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 11203
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 4,
+          "parent_id": 3,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 308008441
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 3,
+          "parent_id": 1,
+          "name": "initial_artifacts",
+          "state": "completed",
+          "elapsed_us": 309118347
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 12,
+          "parent_id": 1,
+          "name": "replica_and_transport_setup",
+          "state": "completed",
+          "elapsed_us": 545007
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 13,
+          "parent_id": 1,
+          "name": "generation_and_initial_review",
+          "state": "completed",
+          "elapsed_us": 5306607
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 14,
+          "parent_id": 1,
+          "name": "initial_recovery_and_convergence",
+          "state": "completed",
+          "elapsed_us": 119165674
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 15,
+          "parent_id": 1,
+          "name": "initial_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 27141813
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 18,
+          "parent_id": 17,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 4439032
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 19,
+          "parent_id": 17,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1089746
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 21,
+          "parent_id": 20,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 42086028
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 22,
+          "parent_id": 20,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 195255
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 20,
+          "parent_id": 17,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 42284121
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 23,
+          "parent_id": 17,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1282546
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 24,
+          "parent_id": 17,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 6581
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 17,
+          "parent_id": 16,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 49102230
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 26,
+          "parent_id": 25,
+          "name": "seed_and_preparation_review",
+          "state": "completed",
+          "elapsed_us": 5946354
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 27,
+          "parent_id": 25,
+          "name": "preparation_seal_and_replay",
+          "state": "completed",
+          "elapsed_us": 5784178
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 28,
+          "parent_id": 25,
+          "name": "reset_review",
+          "state": "completed",
+          "elapsed_us": 6417315
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 29,
+          "parent_id": 25,
+          "name": "reset_interruptions_and_recovery",
+          "state": "completed",
+          "elapsed_us": 128975767
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 30,
+          "parent_id": 25,
+          "name": "reset_state_and_conservation",
+          "state": "completed",
+          "elapsed_us": 139485
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 31,
+          "parent_id": 25,
+          "name": "reset_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 23684476
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 25,
+          "parent_id": 16,
+          "name": "first_deliberate_wipe",
+          "state": "completed",
+          "elapsed_us": 170947841
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 33,
+          "parent_id": 32,
+          "name": "seed_and_preparation_review",
+          "state": "completed",
+          "elapsed_us": 4846611
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 34,
+          "parent_id": 32,
+          "name": "preparation_seal_and_replay",
+          "state": "completed",
+          "elapsed_us": 5773494
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 35,
+          "parent_id": 32,
+          "name": "reset_review",
+          "state": "completed",
+          "elapsed_us": 6428632
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 36,
+          "parent_id": 32,
+          "name": "reset_interruptions_and_recovery",
+          "state": "completed",
+          "elapsed_us": 88283027
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 37,
+          "parent_id": 32,
+          "name": "reset_state_and_conservation",
+          "state": "completed",
+          "elapsed_us": 114926
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 38,
+          "parent_id": 32,
+          "name": "reset_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 27216651
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 32,
+          "parent_id": 16,
+          "name": "second_deliberate_wipe",
+          "state": "completed",
+          "elapsed_us": 132663551
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 16,
+          "parent_id": 1,
+          "name": "selected_build_reinstall",
+          "state": "completed",
+          "elapsed_us": 352751002
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 39,
+          "parent_id": 1,
+          "name": "public_memory_allocation_qualification",
+          "state": "completed",
+          "elapsed_us": 2113696
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 40,
+          "parent_id": 1,
+          "name": "cleanup",
+          "state": "completed",
+          "elapsed_us": 66044
+        },
+        {
+          "schema_version": 1,
+          "process_id": 8887,
+          "span_id": 1,
+          "parent_id": null,
+          "name": "production_adapter_journey",
+          "state": "completed",
+          "elapsed_us": 816218374
+        }
+      ],
+      "request_counts": {
+        "identity": 1230,
+        "query": 1112,
+        "update": 343,
+        "management_status": 722,
+        "install": 11,
+        "canister_inspection": 234,
+        "set_controllers": 6,
+        "agent_query": 179,
+        "canister_history": 14
+      },
+      "inclusive_request_duration_us": {
+        "identity": 24590399,
+        "query": 61712870,
+        "update": 151649369,
+        "management_status": 165331713,
+        "install": 34959553,
+        "canister_inspection": 117046640,
+        "set_controllers": 1151992,
+        "agent_query": 24349296,
+        "canister_history": 6884082
+      }
+    },
+    "discarded_transport_trial": {
+      "trace": {
+        "path": "target/test-runs/20260927T112929Z-12233.RjO2mL/1.log",
+        "sha256": "0c252e5f3a18865cdbbf30c5acf6eb7a61712c706146d2abcc627bed18abfc3f"
+      },
+      "runner": {
+        "path": ".tmp/mixed-transport-trial.log",
+        "sha256": "ef2772616b342a3f7b245d92c01e9a9bdf17cbe49889b7c0d23626bde467cc8b"
+      },
+      "passed": true,
+      "journey_us": 586471664,
+      "artifact_resolution_us": 103484445,
+      "journey_excluding_artifacts_us": 482987219,
+      "completed_phases": [
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 2,
+          "parent_id": 1,
+          "name": "source_and_fixture_recipe",
+          "state": "completed",
+          "elapsed_us": 1807
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 5,
+          "parent_id": 4,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 6147963
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 6,
+          "parent_id": 4,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1149623
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 8,
+          "parent_id": 7,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 45554488
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 9,
+          "parent_id": 7,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 216415
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 7,
+          "parent_id": 4,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 45773393
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 10,
+          "parent_id": 4,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1568055
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 11,
+          "parent_id": 4,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 8621
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 4,
+          "parent_id": 3,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 54647853
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 3,
+          "parent_id": 1,
+          "name": "initial_artifacts",
+          "state": "completed",
+          "elapsed_us": 55838459
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 12,
+          "parent_id": 1,
+          "name": "replica_and_transport_setup",
+          "state": "completed",
+          "elapsed_us": 598438
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 13,
+          "parent_id": 1,
+          "name": "generation_and_initial_review",
+          "state": "completed",
+          "elapsed_us": 5999499
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 14,
+          "parent_id": 1,
+          "name": "initial_recovery_and_convergence",
+          "state": "completed",
+          "elapsed_us": 122206993
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 15,
+          "parent_id": 1,
+          "name": "initial_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 27708826
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 18,
+          "parent_id": 17,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 5638178
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 19,
+          "parent_id": 17,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1107384
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 21,
+          "parent_id": 20,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 40240392
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 22,
+          "parent_id": 20,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 218345
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 20,
+          "parent_id": 17,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 40461310
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 23,
+          "parent_id": 17,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1621710
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 24,
+          "parent_id": 17,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 7751
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 17,
+          "parent_id": 16,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 48836592
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 26,
+          "parent_id": 25,
+          "name": "seed_and_preparation_review",
+          "state": "completed",
+          "elapsed_us": 6071914
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 27,
+          "parent_id": 25,
+          "name": "preparation_seal_and_replay",
+          "state": "completed",
+          "elapsed_us": 6264900
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 28,
+          "parent_id": 25,
+          "name": "reset_review",
+          "state": "completed",
+          "elapsed_us": 7251993
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 29,
+          "parent_id": 25,
+          "name": "reset_interruptions_and_recovery",
+          "state": "completed",
+          "elapsed_us": 134484142
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 30,
+          "parent_id": 25,
+          "name": "reset_state_and_conservation",
+          "state": "completed",
+          "elapsed_us": 157168
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 31,
+          "parent_id": 25,
+          "name": "reset_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 25956571
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 25,
+          "parent_id": 16,
+          "name": "first_deliberate_wipe",
+          "state": "completed",
+          "elapsed_us": 180186918
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 33,
+          "parent_id": 32,
+          "name": "seed_and_preparation_review",
+          "state": "completed",
+          "elapsed_us": 5343808
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 34,
+          "parent_id": 32,
+          "name": "preparation_seal_and_replay",
+          "state": "completed",
+          "elapsed_us": 6074998
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 35,
+          "parent_id": 32,
+          "name": "reset_review",
+          "state": "completed",
+          "elapsed_us": 7446038
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 36,
+          "parent_id": 32,
+          "name": "reset_interruptions_and_recovery",
+          "state": "completed",
+          "elapsed_us": 93817200
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 37,
+          "parent_id": 32,
+          "name": "reset_state_and_conservation",
+          "state": "completed",
+          "elapsed_us": 159883
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 38,
+          "parent_id": 32,
+          "name": "reset_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 29702240
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 32,
+          "parent_id": 16,
+          "name": "second_deliberate_wipe",
+          "state": "completed",
+          "elapsed_us": 142544414
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 16,
+          "parent_id": 1,
+          "name": "selected_build_reinstall",
+          "state": "completed",
+          "elapsed_us": 371608936
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 39,
+          "parent_id": 1,
+          "name": "public_memory_allocation_qualification",
+          "state": "completed",
+          "elapsed_us": 2445930
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 40,
+          "parent_id": 1,
+          "name": "cleanup",
+          "state": "completed",
+          "elapsed_us": 62233
+        },
+        {
+          "schema_version": 1,
+          "process_id": 12789,
+          "span_id": 1,
+          "parent_id": null,
+          "name": "production_adapter_journey",
+          "state": "completed",
+          "elapsed_us": 586471664
+        }
+      ],
+      "request_counts": {
+        "identity": 1242,
+        "query": 1112,
+        "update": 343,
+        "management_status": 728,
+        "install": 11,
+        "canister_inspection": 234,
+        "set_controllers": 6,
+        "agent_query": 185,
+        "canister_history": 14
+      },
+      "inclusive_request_duration_us": {
+        "identity": 27821989,
+        "query": 68854548,
+        "update": 156138781,
+        "management_status": 166545923,
+        "install": 36762447,
+        "canister_inspection": 123031269,
+        "set_controllers": 1145804,
+        "agent_query": 26090098,
+        "canister_history": 7183421
+      }
+    },
+    "final": {
+      "trace": {
+        "path": "target/test-runs/20260927T114232Z-60441.etaIxm/1.log",
+        "sha256": "200a7da43dc6f9170d94b4ce2c12b19cc1b986c8df49720dcf3ad9bbf1abff9d"
+      },
+      "runner": {
+        "path": ".tmp/mixed-cache-final.log",
+        "sha256": "27d9af2c0445977551dea464752ae4d6906469c3e44d16933a475490dd4aede0"
+      },
+      "passed": true,
+      "runner_wall_seconds": 686,
+      "journey_us": 577882040,
+      "artifact_resolution_us": 94737444,
+      "journey_excluding_artifacts_us": 483144596,
+      "completed_phases": [
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 2,
+          "parent_id": 1,
+          "name": "source_and_fixture_recipe",
+          "state": "completed",
+          "elapsed_us": 1671
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 5,
+          "parent_id": 4,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 6275478
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 6,
+          "parent_id": 4,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1170226
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 8,
+          "parent_id": 7,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 40272865
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 9,
+          "parent_id": 7,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 198635
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 7,
+          "parent_id": 4,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 40473912
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 10,
+          "parent_id": 4,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1458478
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 11,
+          "parent_id": 4,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 7262
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 4,
+          "parent_id": 3,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 49385537
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 3,
+          "parent_id": 1,
+          "name": "initial_artifacts",
+          "state": "completed",
+          "elapsed_us": 50790902
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 12,
+          "parent_id": 1,
+          "name": "replica_and_transport_setup",
+          "state": "completed",
+          "elapsed_us": 539586
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 13,
+          "parent_id": 1,
+          "name": "generation_and_initial_review",
+          "state": "completed",
+          "elapsed_us": 5324250
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 14,
+          "parent_id": 1,
+          "name": "initial_recovery_and_convergence",
+          "state": "completed",
+          "elapsed_us": 118208321
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 15,
+          "parent_id": 1,
+          "name": "initial_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 28219039
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 18,
+          "parent_id": 17,
+          "name": "artifact_recipe",
+          "state": "completed",
+          "elapsed_us": 5345846
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 19,
+          "parent_id": 17,
+          "name": "artifact_cache_lookup",
+          "state": "completed",
+          "elapsed_us": 1065160
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 21,
+          "parent_id": 20,
+          "name": "app_artifacts_build",
+          "state": "completed",
+          "elapsed_us": 37225925
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 22,
+          "parent_id": 20,
+          "name": "seal_release_manifests",
+          "state": "completed",
+          "elapsed_us": 212125
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 20,
+          "parent_id": 17,
+          "name": "artifact_build_and_seal",
+          "state": "completed",
+          "elapsed_us": 37440742
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 23,
+          "parent_id": 17,
+          "name": "artifact_cache_commit",
+          "state": "completed",
+          "elapsed_us": 1492453
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 24,
+          "parent_id": 17,
+          "name": "artifact_load",
+          "state": "completed",
+          "elapsed_us": 7454
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 17,
+          "parent_id": 16,
+          "name": "release_artifact_resolution",
+          "state": "completed",
+          "elapsed_us": 45351907
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 26,
+          "parent_id": 25,
+          "name": "seed_and_preparation_review",
+          "state": "completed",
+          "elapsed_us": 5728375
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 27,
+          "parent_id": 25,
+          "name": "preparation_seal_and_replay",
+          "state": "completed",
+          "elapsed_us": 5957692
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 28,
+          "parent_id": 25,
+          "name": "reset_review",
+          "state": "completed",
+          "elapsed_us": 6721165
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 29,
+          "parent_id": 25,
+          "name": "reset_interruptions_and_recovery",
+          "state": "completed",
+          "elapsed_us": 129502925
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 30,
+          "parent_id": 25,
+          "name": "reset_state_and_conservation",
+          "state": "completed",
+          "elapsed_us": 143383
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 31,
+          "parent_id": 25,
+          "name": "reset_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 26151697
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 25,
+          "parent_id": 16,
+          "name": "first_deliberate_wipe",
+          "state": "completed",
+          "elapsed_us": 174205448
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 33,
+          "parent_id": 32,
+          "name": "seed_and_preparation_review",
+          "state": "completed",
+          "elapsed_us": 14425664
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 34,
+          "parent_id": 32,
+          "name": "preparation_seal_and_replay",
+          "state": "completed",
+          "elapsed_us": 11927815
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 35,
+          "parent_id": 32,
+          "name": "reset_review",
+          "state": "completed",
+          "elapsed_us": 6939859
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 36,
+          "parent_id": 32,
+          "name": "reset_interruptions_and_recovery",
+          "state": "completed",
+          "elapsed_us": 90999074
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 37,
+          "parent_id": 32,
+          "name": "reset_state_and_conservation",
+          "state": "completed",
+          "elapsed_us": 129498
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 38,
+          "parent_id": 32,
+          "name": "reset_terminal_replay",
+          "state": "completed",
+          "elapsed_us": 28385456
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 32,
+          "parent_id": 16,
+          "name": "second_deliberate_wipe",
+          "state": "completed",
+          "elapsed_us": 152807579
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 16,
+          "parent_id": 1,
+          "name": "selected_build_reinstall",
+          "state": "completed",
+          "elapsed_us": 372414874
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 39,
+          "parent_id": 1,
+          "name": "public_memory_allocation_qualification",
+          "state": "completed",
+          "elapsed_us": 2271032
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 40,
+          "parent_id": 1,
+          "name": "cleanup",
+          "state": "completed",
+          "elapsed_us": 111947
+        },
+        {
+          "schema_version": 1,
+          "process_id": 4855,
+          "span_id": 1,
+          "parent_id": null,
+          "name": "production_adapter_journey",
+          "state": "completed",
+          "elapsed_us": 577882040
+        }
+      ],
+      "request_counts": {
+        "identity": 1254,
+        "query": 1112,
+        "update": 341,
+        "management_status": 735,
+        "install": 11,
+        "canister_inspection": 234,
+        "set_controllers": 6,
+        "agent_query": 192,
+        "canister_history": 14
+      },
+      "inclusive_request_duration_us": {
+        "identity": 28195284,
+        "query": 65876453,
+        "update": 151913859,
+        "management_status": 177865220,
+        "install": 35500822,
+        "canister_inspection": 119308327,
+        "set_controllers": 1143428,
+        "agent_query": 21985797,
+        "canister_history": 6827834
+      }
+    }
+  },
+  "artifact_comparisons": {
+    "initial": {
+      "keys": {
+        "before": "42a35e4e0187fd46d93129b4805eae7ae220857fc615de3affa85ba0fdd5438a",
+        "discarded_transport_trial": "d61ef6408068240a9e9f88dd3e096345b9939a14f10fd0b7877d1a72da4f1f07",
+        "final": "c5af77584da019b1d4c3dc0f27042823317c27f9c03c36ee9cc6c0c1d1f4adef"
+      },
+      "all_output_bytes_equal": true,
+      "outputs": [
+        {
+          "name": "app-did",
+          "size": 41568,
+          "sha256": "52960b89c7447af1f3b62a50ae77638d484a7451ce55a1a62603fd19d4fef9d5"
+        },
+        {
+          "name": "app-wasm",
+          "size": 3934737,
+          "sha256": "d1dc55458fd6c2506459b608aad9bbeb09ad01d0ccccce4bb180f8763f533abd"
+        },
+        {
+          "name": "app-wasm.gz",
+          "size": 1024435,
+          "sha256": "6d209f886470e37e807c01f2444e5710c4c8be81a31da9e23cbb18af940515a6"
+        },
+        {
+          "name": "application-manifest",
+          "size": 4901,
+          "sha256": "608ea3c0804abcddaf2f9a1e74828dd49676b0389e7cef1138a473b1d954d6dd"
+        },
+        {
+          "name": "current-manifest",
+          "size": 634,
+          "sha256": "033ecc1a62693d077e7107b77cf8f0330af51cfde4b66932232affd3a34b61fb"
+        },
+        {
+          "name": "fixture-faa7931a285b1ec5b6665c93bacb3752dc68fc3b90effa364dfc142aaf7e193b-0",
+          "size": 23,
+          "sha256": "655828475fb4544fc52c038c9bd68ae07ae1e2fc7f447cf64c19e2395630efe8"
+        },
+        {
+          "name": "fixture-manifest",
+          "size": 786,
+          "sha256": "37c84872166e4176a30755aa797f1ab7a28f749683c437dcd1504bdce8c44a3e"
+        },
+        {
+          "name": "fleet_coordinator-did",
+          "size": 47538,
+          "sha256": "a85bc9944ee90a765849f4220b2cf1f0c6cf289e0c4f649595eca543b61a94ac"
+        },
+        {
+          "name": "fleet_coordinator-wasm",
+          "size": 5337957,
+          "sha256": "df056e3c02191419f11e3e41b6b15090cb6f3e7af0ed2cf488ce5e39bbe860db"
+        },
+        {
+          "name": "fleet_coordinator-wasm.gz",
+          "size": 1352117,
+          "sha256": "c42eddefb6977faa9590e5007913d4d8fefa950d4234ca07c7c1b5b20b2eff33"
+        },
+        {
+          "name": "infrastructure-manifest",
+          "size": 3369,
+          "sha256": "5fb486709bfe6e9e1ff56c53b35b6c1f9bdea606d5845c422eb612b598352ce9"
+        },
+        {
+          "name": "release-plan",
+          "size": 125,
+          "sha256": "37187bf5a90778a2275a920d9ef0d90c384c3c85fe283accda3a7ece54d9a708"
+        },
+        {
+          "name": "root-did",
+          "size": 111049,
+          "sha256": "097082423fc789802560537d06fee7e6671663d3f785e76824aad960285b7ed5"
+        },
+        {
+          "name": "root-wasm",
+          "size": 10533018,
+          "sha256": "9134e4f51b1583ca2a4c12b6371a2e3b452007605be78dc1c1475561a24a5fa1"
+        },
+        {
+          "name": "root-wasm.gz",
+          "size": 2681362,
+          "sha256": "57ea990736b221e46c9a44730f2e86e7019d5a33d4a5e348f57b31f732e05da3"
+        },
+        {
+          "name": "scale_hub-did",
+          "size": 43312,
+          "sha256": "004fe1589b57cf376ced06381e871ada9e9a9708d5080692af55e5441636ac51"
+        },
+        {
+          "name": "scale_hub-wasm",
+          "size": 4061745,
+          "sha256": "bee6479c88c605794d3bc0592e49f967cf66906acae5b180133077fe3cef7d40"
+        },
+        {
+          "name": "scale_hub-wasm.gz",
+          "size": 1060510,
+          "sha256": "c205deb80a8e1221eb90cbf8a0d6e1da7d132e13f2ccc3c98691e45716715a19"
+        },
+        {
+          "name": "scale_replica-did",
+          "size": 42151,
+          "sha256": "8dddd793c2cde5240e1b75fafbec842d6ab94f1f0754530ee45af97490a34439"
+        },
+        {
+          "name": "scale_replica-wasm",
+          "size": 3945707,
+          "sha256": "7c051208f7a9fddf30bbcdfbc28a4036cd4a7b1eb9e268107bc48e06caac60c5"
+        },
+        {
+          "name": "scale_replica-wasm.gz",
+          "size": 1027794,
+          "sha256": "cc80bfec820b828e320be5943f01ebeed093fc0e77598d3cc840c86c00215de4"
+        },
+        {
+          "name": "user_hub-did",
+          "size": 44676,
+          "sha256": "3352bc301d04410549c334bafdef1164a0b627d6d3a60330e61292bfc9bfc688"
+        },
+        {
+          "name": "user_hub-wasm",
+          "size": 4213280,
+          "sha256": "d9849f2f69072a76566c25196a448b3ac14f28f35d2f997264544a514e2d3f4b"
+        },
+        {
+          "name": "user_hub-wasm.gz",
+          "size": 1103830,
+          "sha256": "19bdde4f7b8b93fa54a10b7fad53a51916dfedba248f13e69874d745fdc7b6e9"
+        },
+        {
+          "name": "user_shard-did",
+          "size": 48572,
+          "sha256": "6e33643c0443cf6b3787c83830475fe118a4a832b500d214a75756cf73e5dcf9"
+        },
+        {
+          "name": "user_shard-wasm",
+          "size": 4587995,
+          "sha256": "1cad4ab0e1aeab63370c2ef5e83e6f7a93c235ca9fc5e441ea57fa9e6c839e21"
+        },
+        {
+          "name": "user_shard-wasm.gz",
+          "size": 1194307,
+          "sha256": "7d902dd9fb80b0ee855a0eddfeff47a4419c912b3617831928df73d479e7b686"
+        },
+        {
+          "name": "wasm_store-did",
+          "size": 20920,
+          "sha256": "e1c4b81922a3db87f82eb2c5068575239c991ccc530ee8794e63a016933eac12"
+        },
+        {
+          "name": "wasm_store-wasm",
+          "size": 3777486,
+          "sha256": "a6a3be3d8078e550bca55986091884d3781bf2dd04eaf320bc879320e0002ac6"
+        },
+        {
+          "name": "wasm_store-wasm.gz",
+          "size": 989693,
+          "sha256": "bca36e37a6db77e12b0ac1cefc2589d2a756ffc660a263e6d4d8e4dc46f51228"
+        }
+      ]
+    },
+    "reinstall": {
+      "keys": {
+        "before": "3544c37c2bf000e13f061daec24096af8d45afe81a7ba43da2a6617b568ccd71",
+        "discarded_transport_trial": "ff2c786fe6843c2f6e7eb68cef3552da93f6c904800a177e6772f703fb66675c",
+        "final": "7073acd1dcfaf09a8c0b813d66e41ea3da79aaa03b9c925a0fcb2ce2a4a090e2"
+      },
+      "all_output_bytes_equal": true,
+      "outputs": [
+        {
+          "name": "app-did",
+          "size": 41568,
+          "sha256": "52960b89c7447af1f3b62a50ae77638d484a7451ce55a1a62603fd19d4fef9d5"
+        },
+        {
+          "name": "app-wasm",
+          "size": 3934737,
+          "sha256": "461bec70b110d1d411ad3b2e6fbcb2df42f9f7379bc19f44902e613932f28495"
+        },
+        {
+          "name": "app-wasm.gz",
+          "size": 1024436,
+          "sha256": "2e2594bb086c59ac3f75af5a732606b26f44ad1128490f63671e2449b1a8a2a9"
+        },
+        {
+          "name": "application-manifest",
+          "size": 4901,
+          "sha256": "a3d0aba16ec0512fbeccf14928eb1d266e865c2b8131f2928cb4fe7e1cfa0f6a"
+        },
+        {
+          "name": "current-manifest",
+          "size": 632,
+          "sha256": "1f97692f7a9507c289d69c040701e439f2dc02d644afdfd4a9eec0eb1d4bcf6a"
+        },
+        {
+          "name": "fixture-faa7931a285b1ec5b6665c93bacb3752dc68fc3b90effa364dfc142aaf7e193b-0",
+          "size": 23,
+          "sha256": "655828475fb4544fc52c038c9bd68ae07ae1e2fc7f447cf64c19e2395630efe8"
+        },
+        {
+          "name": "fixture-manifest",
+          "size": 786,
+          "sha256": "0a39b6ae191d11dc291776b92c36aec27bb11c0fb4f380c14345d0dc218f46bc"
+        },
+        {
+          "name": "fleet_coordinator-did",
+          "size": 47538,
+          "sha256": "a85bc9944ee90a765849f4220b2cf1f0c6cf289e0c4f649595eca543b61a94ac"
+        },
+        {
+          "name": "fleet_coordinator-wasm",
+          "size": 5337957,
+          "sha256": "aff546c375ca3bf1a3c56d1913f3c8b594028f039b82338b269dc546a18fbb9c"
+        },
+        {
+          "name": "fleet_coordinator-wasm.gz",
+          "size": 1352119,
+          "sha256": "7b0a83ac128314632c2f66749b904c0d6780fb0f8d3ded5fcf8a384a391919df"
+        },
+        {
+          "name": "infrastructure-manifest",
+          "size": 3369,
+          "sha256": "cffea77995277270f8fdbf71e7e878cca7b30229374b31af937d203fc2f72fbe"
+        },
+        {
+          "name": "release-plan",
+          "size": 125,
+          "sha256": "b73cadb2c86789543799c5e6aff7b57f0ca7c1ba7c6c117aa26e4b5c17292de9"
+        },
+        {
+          "name": "root-did",
+          "size": 111049,
+          "sha256": "097082423fc789802560537d06fee7e6671663d3f785e76824aad960285b7ed5"
+        },
+        {
+          "name": "root-wasm",
+          "size": 10533018,
+          "sha256": "61169aaabeddb64ce099e11cc5ee7dd9b22fac7666ac3744e4d50d09e18c3c8c"
+        },
+        {
+          "name": "root-wasm.gz",
+          "size": 2681360,
+          "sha256": "363de2de07677ba5bc5b69a74ad4dcbddcd3ebfe7ae2ace0362e63385f770240"
+        },
+        {
+          "name": "scale_hub-did",
+          "size": 43312,
+          "sha256": "004fe1589b57cf376ced06381e871ada9e9a9708d5080692af55e5441636ac51"
+        },
+        {
+          "name": "scale_hub-wasm",
+          "size": 4061745,
+          "sha256": "785db88dccfc0b5fce9bc30a869c65c291423642ec70e1a7827dfbedfb78b972"
+        },
+        {
+          "name": "scale_hub-wasm.gz",
+          "size": 1060510,
+          "sha256": "3a03599b53dbcc6de7add468dd873ed37e3e398522f6940017e584313c67c873"
+        },
+        {
+          "name": "scale_replica-did",
+          "size": 42151,
+          "sha256": "8dddd793c2cde5240e1b75fafbec842d6ab94f1f0754530ee45af97490a34439"
+        },
+        {
+          "name": "scale_replica-wasm",
+          "size": 3945707,
+          "sha256": "9336412ae5c73a636724d3453892c96cb72685a311b55d3859183a5fa5c46a28"
+        },
+        {
+          "name": "scale_replica-wasm.gz",
+          "size": 1027796,
+          "sha256": "1d4f58ccd794d20aaa6aae6a2527cdce22a67cfc4999efa16314a41b85e3632e"
+        },
+        {
+          "name": "user_hub-did",
+          "size": 44676,
+          "sha256": "3352bc301d04410549c334bafdef1164a0b627d6d3a60330e61292bfc9bfc688"
+        },
+        {
+          "name": "user_hub-wasm",
+          "size": 4213280,
+          "sha256": "ae95ea9af96441c3463c352b5bc99117b725050947588f54941b881dff10c8fb"
+        },
+        {
+          "name": "user_hub-wasm.gz",
+          "size": 1103828,
+          "sha256": "3c58e5b9249c1081b83dbafb18c37daeeec69613610714e96fb9f9e0f30d27c4"
+        },
+        {
+          "name": "user_shard-did",
+          "size": 48572,
+          "sha256": "6e33643c0443cf6b3787c83830475fe118a4a832b500d214a75756cf73e5dcf9"
+        },
+        {
+          "name": "user_shard-wasm",
+          "size": 4587995,
+          "sha256": "84279350741832b4e1d5de1d7174f7d873442644b7c1327c8947d5814bb3b5b0"
+        },
+        {
+          "name": "user_shard-wasm.gz",
+          "size": 1194311,
+          "sha256": "f1e933a7424ab66bceea93a5ff8033052b6fde242b10467b75f01458c9592189"
+        },
+        {
+          "name": "wasm_store-did",
+          "size": 20920,
+          "sha256": "e1c4b81922a3db87f82eb2c5068575239c991ccc530ee8794e63a016933eac12"
+        },
+        {
+          "name": "wasm_store-wasm",
+          "size": 3777486,
+          "sha256": "13deac5aaf6131d2092d4d7a359b5fb6f2e2eaab04f3baebaa52f27ef752c3de"
+        },
+        {
+          "name": "wasm_store-wasm.gz",
+          "size": 989693,
+          "sha256": "4d554199090b6db3ddc5b1d137e6e703abcc0035cc2af1f2c7f87edccf0bdb59"
+        }
+      ]
+    }
+  },
+  "before_source_sha256": {
+    "crates/canic-host/src/icp/mod.rs": "52ea7b388c70a13bbc2b74a7a2b9fc69b7fdca3c9a9cfe1ec8d387f4162fbf01",
+    "crates/canic-host/src/icp/model.rs": "a9f999efe1b5f2f366651681c68c6a43cf93ce4e66ea02d6c0481c8541224cad",
+    "crates/canic-host/src/icp/command.rs": "852c7c0c257ec0ea7cbe2720b20f036b2fdad94f5e2d53bcff9fde005472bc7a",
+    "crates/canic-host/src/icp/query/mod.rs": "c0da4bf298373765d280cedd3b1bfd0e16fd87ff8d7757917a38762fd174bf1a",
+    "crates/canic-host/src/icp/query/tests.rs": "ed348a0c26458e128dcc5b0248bb8a3c4639edc7256111cd9932fed69e7f3312",
+    "crates/canic-host/src/icp/management.rs": "ef29ad238a9ddb2f7fddc29fa588202d6692dc139a9585bb7f5f8984f6107a98",
+    "crates/canic-testing-internal/Cargo.toml": "6bb531579b4f6151a927193d2f8161367cde0a3666e013d3eb83d0724f6450ca",
+    "Cargo.lock": "665a663eef27238ed0e89d9853b0d3898ea6a25b473d0d5df526db0e69586f98",
+    "crates/canic-host/src/fleet_ensure/policy/mod.rs": "7505530b970a116a7c3c6e1856a925b5be9206a05aee1b7cc88edb736a142eea",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "39c6164c4f4f3188b77da7c45db5248c19864b5e16d41b407308ddac6c7e2374",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs": "79681e05c6935ea3228c517cd444caf25143ca98e1906556ea95de09ed5726ba"
+  },
+  "final_pocketic_source_sha256": {
+    "Cargo.lock": "525f29e2fe6edccd0698b05959bd153b03360885dca33c46ea5e58973c7c5e10",
+    "crates/canic-testing-internal/Cargo.toml": "adadf36b0f5fb5e649204ea735c74b4d4a281dfd7261438d254b9e1b68eadf2b",
+    "crates/canic-host/src/fleet_ensure/policy/mod.rs": "af4724ca2cebcc0c6e3431bef700a2d28d140ab9a76ebc526ac806955355448b",
+    "crates/canic-host/src/fleet_ensure/policy/tests.rs": "a3dbefccca20b7cff333c0d7126b525fb5d01b9c62066d2458d1e549fa1da5f5",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "1b48179b37de0fe1c92b2c2a1287407c4088c22882f10a0d7db1385745dcbd2e",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs": "ba887d17f7380f052fca4a89871657ed5525212a32b7ab5116b0c7e5d05be631",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/mod.rs": "ceb2a9b1e7ca223663cb649388ff5590b4e9bf987a0a044bbfadaa8a4934239b",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/tests.rs": "ce7d6f7950d7fd4da3e19392035edd8e89a729c2b4cfefd7ede4f538d86ce4b5"
+  },
+  "final_review_source_sha256": {
+    "Cargo.lock": "525f29e2fe6edccd0698b05959bd153b03360885dca33c46ea5e58973c7c5e10",
+    "crates/canic-testing-internal/Cargo.toml": "adadf36b0f5fb5e649204ea735c74b4d4a281dfd7261438d254b9e1b68eadf2b",
+    "crates/canic-host/src/fleet_ensure/policy/mod.rs": "af4724ca2cebcc0c6e3431bef700a2d28d140ab9a76ebc526ac806955355448b",
+    "crates/canic-host/src/fleet_ensure/policy/tests.rs": "3d99f3fb2cb383b2953e6492ebd232d0e148c9cb6ad219fcf08605148100357d",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "1b48179b37de0fe1c92b2c2a1287407c4088c22882f10a0d7db1385745dcbd2e",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs": "ba887d17f7380f052fca4a89871657ed5525212a32b7ab5116b0c7e5d05be631",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/mod.rs": "ceb2a9b1e7ca223663cb649388ff5590b4e9bf987a0a044bbfadaa8a4934239b",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/host_inputs/tests.rs": "ce7d6f7950d7fd4da3e19392035edd8e89a729c2b4cfefd7ede4f538d86ce4b5"
+  },
+  "post_run_source_cleanup": "Only regrouped imports in extracted policy tests; no executable behavior changed.",
+  "restored_transport_sha256": {
+    "crates/canic-host/src/icp/mod.rs": "52ea7b388c70a13bbc2b74a7a2b9fc69b7fdca3c9a9cfe1ec8d387f4162fbf01",
+    "crates/canic-host/src/icp/model.rs": "a9f999efe1b5f2f366651681c68c6a43cf93ce4e66ea02d6c0481c8541224cad",
+    "crates/canic-host/src/icp/command.rs": "852c7c0c257ec0ea7cbe2720b20f036b2fdad94f5e2d53bcff9fde005472bc7a",
+    "crates/canic-host/src/icp/query/mod.rs": "c0da4bf298373765d280cedd3b1bfd0e16fd87ff8d7757917a38762fd174bf1a",
+    "crates/canic-host/src/icp/query/tests.rs": "ed348a0c26458e128dcc5b0248bb8a3c4639edc7256111cd9932fed69e7f3312",
+    "crates/canic-host/src/icp/management.rs": "ef29ad238a9ddb2f7fddc29fa588202d6692dc139a9585bb7f5f8984f6107a98"
+  },
+  "checks": [
+    {
+      "path": ".tmp/host-artifact-cache-native.log",
+      "sha256": "34cfb1a1c4ba704bb65a560cb3280b4a77ca990f344852c1a5328ab5b98cd361",
+      "description": "Final cache/build-helper regressions: 6 passed, one existing benchmark ignored."
+    },
+    {
+      "path": ".tmp/extracted-policy-native.log",
+      "sha256": "2062def85a0eaf92cff7c2ca93822b24cc3e64cac5762d25517be2cdafde3fc2",
+      "description": "Extracted policy regressions: 12 passed."
+    },
+    {
+      "path": ".tmp/host-artifact-cache-final-clippy.log",
+      "sha256": "e3658de9e363f6b75939b631808a32197089b3cdd098b303a0cdc83dcd5c207b",
+      "description": "Final internal library/test Clippy with warnings denied passed."
+    },
+    {
+      "path": ".tmp/shared-agent-cache-clippy.log",
+      "sha256": "2d02c756ca508583c84f38070319d4d7d714fabdcd92479a592e8de500a980c0",
+      "description": "Scoped host/internal library/test Clippy with warnings denied passed before reverting the pooling experiment."
+    }
+  ],
+  "hygiene": {
+    "changed_rustfmt": "passed",
+    "git_diff_check": "passed",
+    "current_document_semantics": "passed; two existing advisory design-layout warnings"
+  }
+}

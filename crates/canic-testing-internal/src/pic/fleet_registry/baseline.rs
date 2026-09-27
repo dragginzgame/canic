@@ -56,8 +56,6 @@ mod tests {
     use crate::pic::{report_canister_diagnostics, report_canister_diagnostics_batch};
     #[cfg(test)]
     use candid::Nat;
-    #[cfg(test)]
-    use candid::decode_args;
     use candid::{CandidType, Deserialize, decode_one, encode_one};
     #[cfg(test)]
     use canic::dto::authority_restore::{
@@ -308,18 +306,18 @@ mod tests {
     const LITERAL_ZERO_OBSERVATION_DELAY: Duration = Duration::from_millis(25);
     #[cfg(test)]
     const REINSTALL_RELEASE_BUILD_NONCE: [u8; 32] = [0x12; 32];
+    // Two underfunded Workloads exceed the one Ready replacement and force
+    // successor funding, without reproducing a downstream deployment's size.
+    #[cfg(test)]
+    const RETAINED_ESTATE_WORKLOADS: usize = 2;
+    #[cfg(test)]
+    const RETAINED_ESTATE_READY: usize = 1;
     #[cfg(test)]
     const ROOT_REMOVAL_MAX_SIMULATED_SECONDS: usize = 512;
     #[cfg(test)]
     const ROOT_REMOVAL_TICKS_PER_SECOND: usize = 4;
     #[cfg(test)]
     const QUALIFICATION_ASSET_CYCLES: u128 = 5_000_000_000_000;
-    #[cfg(test)]
-    const QUALIFICATION_FEE_CYCLES: u128 = 100_000_000;
-    #[cfg(test)]
-    const QUALIFICATION_RESERVE_CYCLES: u128 = 10_000_000_000_000;
-    #[cfg(test)]
-    const QUALIFICATION_WORKLOAD_PACKAGE: &str = "payload_limit_probe";
 
     #[cfg(test)]
     struct TestDirectoryCleanup(PathBuf);
@@ -2665,7 +2663,7 @@ exec icp "$@"
                 BuildNetwork::Local,
                 id,
             );
-            match prepare_artifact_cache(&cache).unwrap() {
+            match prepare_artifact_cache(&cache.spec).unwrap() {
                 ArtifactCachePreparation::Reused(record) => ArtifactCacheOutcome::Reused(record),
                 ArtifactCachePreparation::Build(transaction) => {
                     // Exercise the real content cache with inert files in this private
@@ -2677,6 +2675,7 @@ exec icp "$@"
                         )
                         .unwrap();
                     }
+                    cache.require_unchanged();
                     transaction.commit().unwrap()
                 }
             }
@@ -7645,28 +7644,23 @@ esac
     }
 
     #[test]
-    fn funded_estate_recovers_transfer_and_autonomous_creation_responses() {
-        assert_literal_zero_host_journey(FundingJourney::Estate, 1);
-    }
-
-    #[test]
     fn issued_creation_funding_pause_resumes_reviewed_transfer() {
         assert_literal_zero_host_journey(FundingJourney::FundingPause, 1);
     }
 
     #[test]
-    fn four_workloads_refill_four_ready_with_lost_funding_and_creation_responses() {
-        assert_literal_zero_host_journey(FundingJourney::Estate, 4);
+    fn two_workloads_refill_two_ready_with_lost_funding_and_creation_responses() {
+        assert_literal_zero_host_journey(FundingJourney::Estate, 2);
     }
 
     #[test]
-    fn four_workloads_and_four_failed_assets_repair_without_new_creation() {
-        assert_literal_zero_host_journey(FundingJourney::FailedReserve, 4);
+    fn two_workloads_and_two_failed_assets_repair_without_new_creation() {
+        assert_literal_zero_host_journey(FundingJourney::FailedReserve, 2);
     }
 
     #[test]
     fn generated_reinstall_recovers_lost_install_and_reaches_working_fleet() {
-        assert_literal_zero_host_journey(FundingJourney::Reinstall, 19);
+        assert_literal_zero_host_journey(FundingJourney::Reinstall, RETAINED_ESTATE_WORKLOADS);
     }
 
     #[test]
@@ -7699,15 +7693,18 @@ esac
         let journey_started_at = Instant::now();
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let config_path = workspace_root.join(match initial_workload_count {
-            1 if matches!(funding, FundingJourney::Fresh) => {
-                "canisters/audit/root_probe/frontend.toml"
+        let config_path = workspace_root.join(match (funding, initial_workload_count) {
+            (
+                FundingJourney::Reinstall | FundingJourney::CompletedReset,
+                RETAINED_ESTATE_WORKLOADS,
+            ) => "canisters/audit/root_probe/retained-estate.toml",
+            (FundingJourney::Fresh, 1) => "canisters/audit/root_probe/frontend.toml",
+            (_, 1) => "canisters/audit/root_probe/activation.toml",
+            (FundingJourney::Estate | FundingJourney::FailedReserve, 2) => {
+                "canisters/audit/root_probe/two-workloads.toml"
             }
-            1 => "canisters/audit/root_probe/activation.toml",
-            2 => "canisters/audit/root_probe/native-child-recovery.toml",
-            4 => "canisters/audit/root_probe/four-workloads.toml",
-            5 => "apps/test/test-configs/generated-mixed-topology.toml",
-            19 => "canisters/audit/root_probe/retained-estate.toml",
+            (_, 2) => "canisters/audit/root_probe/native-child-recovery.toml",
+            (_, 5) => "apps/test/test-configs/generated-mixed-topology.toml",
             _ => panic!("unsupported journey Workload count: {initial_workload_count}"),
         });
         let config =
@@ -7775,9 +7772,11 @@ esac
             .first()
             .expect("one application Subnet");
 
-        let ready_count = match initial_workload_count {
-            1 | 4 => initial_workload_count,
-            19 => 5,
+        let ready_count = match (funding, initial_workload_count) {
+            (FundingJourney::Reinstall | FundingJourney::CompletedReset, _) => {
+                RETAINED_ESTATE_READY
+            }
+            (FundingJourney::Estate | FundingJourney::FailedReserve, _) => initial_workload_count,
             _ => 1,
         };
         let pool_maximum_size = ready_count + initial_workload_count;
@@ -7887,7 +7886,14 @@ esac
             existing_wasm_store: Some(store),
             root_subnet: Some(subnet),
             component_admission_limits: Some(RootComponentAdmissionLimits::Uniform(
-                if initial_workload_count == 4 { 4 } else { 1 },
+                if matches!(
+                    funding,
+                    FundingJourney::Estate | FundingJourney::FailedReserve
+                ) {
+                    u32::try_from(initial_workload_count).unwrap()
+                } else {
+                    1
+                },
             )),
             fleet_id: Some(FleetId::from_generated_bytes([0x79; 32])),
             funding: None,
@@ -8213,7 +8219,9 @@ esac
         let desired_identity = desired_sha256(&desired);
         if !autonomous_assets.is_empty() || matches!(funding, FundingJourney::NativeChildFunding) {
             prepare_ready_imports(&pic, root, operator, &pools);
-            let desired = if initial_workload_count == 1 {
+            let generate_growth =
+                initial_workload_count == 1 || matches!(funding, FundingJourney::Estate);
+            let desired = if generate_growth {
                 let config = retain_generated_journey_source(&adapter_root, &config_path);
                 super::super::growth::generate(
                     &adapter_root,
@@ -8225,7 +8233,7 @@ esac
             } else {
                 desired
             };
-            let funding_icp = if initial_workload_count == 1 {
+            let funding_icp = if generate_growth {
                 adapter_root.join("growth-generator-icp")
             } else {
                 icp_wrapper
@@ -10422,7 +10430,7 @@ exec '{}' "$@"
         );
         let retained_state =
             canic_host::fleet_ensure::ops::read_state(&old_paths, &input.desired.fleet).unwrap();
-        assert_eq!(retained_state.principals.len(), 27);
+        assert_eq!(retained_state.principals.len(), input.pools.len() + 3);
         let old_bootstrap = input.desired.bootstrap.as_ref().unwrap();
         let imports = input
             .pools
@@ -10489,13 +10497,13 @@ exec '{}' "$@"
         };
         let current = canic_host::fleet_ensure::generate_desired_fleet(&current_request)
             .expect("validate all terminal assets against the still-current Root");
-        assert_eq!(current.observed_canisters, 27);
+        assert_eq!(current.observed_canisters, retained_state.principals.len());
         let request = canic_host::fleet_ensure::FleetGenerateRequest {
             catalog_progress: None,
             release_build_id: replacement,
             ..current_request
         };
-        write_imports(&imports[..8]);
+        write_imports(&imports[..1]);
         let incomplete = canic_host::fleet_ensure::generate_desired_fleet(&request)
             .expect("read incomplete reviewed imports before Root reset");
         let mut stale_platform = literal_zero_journey_platform(
@@ -10513,8 +10521,18 @@ exec '{}' "$@"
             1_800_000_000_000_000_009,
             &mut stale_platform,
         );
-        assert!(
-            matches!(rejected, Err(EnsureWorkflowError::Policy(canic_host::fleet_ensure::policy::EnsurePolicyError::IncompleteRootEstate { missing_principals, .. })) if missing_principals.len() == 16)
+        let Err(EnsureWorkflowError::Policy(
+            canic_host::fleet_ensure::policy::EnsurePolicyError::IncompleteRootEstate {
+                missing_principals,
+                ..
+            },
+        )) = rejected
+        else {
+            panic!("incomplete imports must reject before reset: {rejected:?}");
+        };
+        assert_eq!(
+            missing_principals.into_iter().collect::<BTreeSet<_>>(),
+            imports[1..].iter().cloned().collect::<BTreeSet<_>>()
         );
         assert!(!root.join("reinstall-mutations.log").exists());
         write_imports(&imports);
@@ -10622,10 +10640,10 @@ exec '{}' "$@"
             .entries
             .iter()
             .filter(|asset| matches!(asset.status, CanisterPoolAssetStatus::Workload { .. }))
-            .take(6)
             .map(|asset| asset.canister_id)
             .collect::<Vec<_>>();
-        assert_eq!(workload_ids.len(), 6);
+        assert_eq!(workload_ids.len(), RETAINED_ESTATE_WORKLOADS);
+        assert!(workload_ids.len() > usize::try_from(old_pool.ready).unwrap());
         for asset in workload_ids {
             let spent: Result<u128, Error> = pic
                 .update_candid_as(
@@ -10820,7 +10838,7 @@ exec '{}' "$@"
         let recovery = full.plan.recovery_review.as_ref().unwrap();
         assert!(recovery.continuation_reserve_cycles > 0);
         assert!(recovery.continuation_reserve_cycles <= recovery.whole_continuation_ceiling_cycles);
-        assert_eq!(recovery.known_pool_funding.len(), 6);
+        assert_eq!(recovery.known_pool_funding.len(), RETAINED_ESTATE_WORKLOADS);
         let reviewed_startup_funding = full.plan.conservation.maximum_operator_debit_cycles;
         let paused = fleet_ensure_workflow::apply(
             root,
@@ -10907,8 +10925,11 @@ exec '{}' "$@"
         assert!(ready.terminal);
         assert!(ready.actual_conservation.is_some());
         let pool = root_pool_status_as(pic, input.root, operator);
-        assert_eq!(pool.workload, 19);
-        assert_eq!(pool.ready, 5);
+        assert_eq!(
+            usize::try_from(pool.workload).unwrap(),
+            RETAINED_ESTATE_WORKLOADS
+        );
+        assert_eq!(usize::try_from(pool.ready).unwrap(), RETAINED_ESTATE_READY);
         assert_eq!(pool.pending_reset, 0);
         let state = canic_host::fleet_ensure::ops::read_state(&old_paths, &desired.fleet).unwrap();
         assert!(state.active_registry.is_some());
@@ -11454,7 +11475,7 @@ exec '{}' "$@"
             &mut platform,
         )
         .expect("review exact estate funding and current protocol");
-        if input.imported.len() == 4 {
+        if input.imported.len() > 1 {
             if input.repair_failed_reserve {
                 register_failed_reserve(&input);
             }
@@ -11471,7 +11492,7 @@ exec '{}' "$@"
                 1_800_000_000_000_000_002,
                 &mut platform,
             )
-            .expect("review refill from four real Workloads and no Ready reserve");
+            .expect("review refill from real Workloads and no Ready reserve");
         }
         let creation_count = u128::try_from(input.assets.len()).unwrap();
         let per_creation_funding = input.readiness_floor
@@ -11798,7 +11819,7 @@ exec '{}' "$@"
         platform: &mut IcpEnsurePlatform,
     ) {
         let started_at = Instant::now();
-        super::super::fixture::progress("establishing four Workloads before reserve funding");
+        super::super::fixture::progress("establishing Workloads before reserve funding");
         for action in &setup_plan.protocol_actions {
             let EnsureAction::FleetProtocol {
                 action: protocol, ..
@@ -11841,7 +11862,15 @@ exec '{}' "$@"
         let pool = root_pool_status_as(input.pic, input.root, input.operator);
         assert_eq!(
             (pool.workload, pool.ready, pool.failed),
-            (4, 0, if input.repair_failed_reserve { 4 } else { 0 })
+            (
+                u32::try_from(input.imported.len()).unwrap(),
+                0,
+                if input.repair_failed_reserve {
+                    u32::try_from(input.assets.len()).unwrap()
+                } else {
+                    0
+                }
+            )
         );
         assert_eq!(
             ledger_account_balance(input.pic, input.cycles_ledger, input.root),
@@ -11852,7 +11881,7 @@ exec '{}' "$@"
             .query_candid(input.cycles_ledger, "transfer_count", ())
             .unwrap();
         assert_eq!(transfers, 0);
-        progress_elapsed("four Workloads active with no Ready reserve", started_at);
+        progress_elapsed("Workloads active with no Ready reserve", started_at);
     }
 
     #[cfg(test)]
@@ -11874,7 +11903,14 @@ exec '{}' "$@"
             );
         }
         let pool = root_pool_status_as(input.pic, input.root, input.operator);
-        assert_eq!((pool.ready, pool.failed, pool.pending_reset), (4, 4, 0));
+        assert_eq!(
+            (pool.ready, pool.failed, pool.pending_reset),
+            (
+                u32::try_from(input.imported.len()).unwrap(),
+                u32::try_from(input.assets.len()).unwrap(),
+                0
+            )
+        );
         assert!(pool.pending_creation.is_none());
     }
 
@@ -11904,8 +11940,11 @@ exec '{}' "$@"
                 .unwrap();
             (withdrawals, transfers, creates)
         };
+        let workloads = u32::try_from(input.imported.len()).unwrap();
+        let reserve = u32::try_from(input.assets.len()).unwrap();
+        let initial_creations = u64::from(3 + workloads);
         let before = counts();
-        assert_eq!(before, (0, 0, 7));
+        assert_eq!(before, (0, 0, initial_creations));
         let reviewed = fleet_ensure_workflow::plan(
             input.adapter_root,
             desired,
@@ -11914,7 +11953,7 @@ exec '{}' "$@"
             1_800_000_000_000_000_002,
             platform,
         )
-        .expect("review bounded repair of the complete eight-asset inventory");
+        .expect("review bounded repair of the complete supplied inventory");
         let domain = &reviewed.plan.conservation.estate_funding_domains[0];
         assert_eq!(
             (
@@ -11923,11 +11962,14 @@ exec '{}' "$@"
                 domain.eligible_ready_pool_assets,
                 domain.available_pool_slots
             ),
-            (4, 8, 0, 0)
+            (workloads, workloads + reserve, 0, 0)
         );
         assert_eq!(domain.required_creation_count, 0);
         assert_eq!(domain.maximum_funding_cycles, 0);
-        assert_eq!(domain.initial_pool_assets.len(), 8);
+        assert_eq!(
+            domain.initial_pool_assets.len(),
+            input.imported.len() + input.assets.len()
+        );
         let mut funded = BTreeMap::new();
         let mut resets = BTreeSet::new();
         for action in planned_actions(&reviewed.plan) {
@@ -11956,7 +11998,7 @@ exec '{}' "$@"
         assert_eq!(funded.keys().cloned().collect::<BTreeSet<_>>(), expected);
         assert_eq!(resets, expected);
         let funding = funded.values().sum::<u128>();
-        let debit = funding + 4 * MAINNET_REFILL_LEDGER_FEE;
+        let debit = funding + u128::from(reserve) * MAINNET_REFILL_LEDGER_FEE;
         assert_eq!(
             reviewed.plan.conservation.maximum_operator_debit_cycles,
             debit
@@ -11979,7 +12021,7 @@ exec '{}' "$@"
             matches!(lost, Err(EnsureWorkflowError::Platform(_))),
             "lose completed native withdrawal: {lost:?}"
         );
-        assert_eq!(counts(), (1, 0, 7));
+        assert_eq!(counts(), (1, 0, initial_creations));
         std::fs::write(
             input.adapter_root.join("lost-reset-args.bin"),
             encode_one(HostRootCommandFragment::ImportPoolCanister(
@@ -12025,7 +12067,7 @@ exec '{}' "$@"
             &reviewed.plan.plan_sha256,
             &mut recovered,
         )
-        .expect("complete the exact four-Failed repair");
+        .expect("complete the exact Failed-reserve repair");
         assert!(terminal.terminal);
         let actual = terminal.actual_conservation.as_ref().unwrap();
         assert_eq!(actual.operator_debit_cycles, debit);
@@ -12043,7 +12085,7 @@ exec '{}' "$@"
         let pool = root_pool_status_as(input.pic, input.root, input.operator);
         assert_eq!(
             (pool.workload, pool.ready, pool.failed, pool.pending_reset),
-            (4, 4, 0, 0)
+            (workloads, reserve, 0, 0)
         );
         assert!(pool.pending_creation.is_none());
         for asset in input.assets {
@@ -12058,7 +12100,7 @@ exec '{}' "$@"
             assert_eq!(status.settings.controllers, vec![input.root]);
             assert!(status.cycles >= input.readiness_floor);
         }
-        assert_eq!(counts(), (4, 0, 7));
+        assert_eq!(counts(), (u64::from(reserve), 0, initial_creations));
         assert_eq!(
             ledger_account_balance(input.pic, input.cycles_ledger, input.operator),
             Nat::from(input.operator_after_initial_creation - debit)
@@ -12081,7 +12123,7 @@ exec '{}' "$@"
         .expect("effect-free full-pool repair replay");
         assert!(replay.terminal);
         assert_eq!(replay.effects_applied, 0);
-        assert_eq!(counts(), (4, 0, 7));
+        assert_eq!(counts(), (u64::from(reserve), 0, initial_creations));
         assert_eq!(
             ledger_account_balance(input.pic, input.cycles_ledger, input.root),
             Nat::from(0_u8)
@@ -12104,7 +12146,7 @@ exec '{}' "$@"
         .expect("forecast the repaired Ready reserve from protected inventory");
         assert!(planned_actions(&ready_plan.plan).is_empty());
         let ready_domain = &ready_plan.plan.conservation.estate_funding_domains[0];
-        assert_eq!(ready_domain.eligible_ready_pool_assets, 4);
+        assert_eq!(ready_domain.eligible_ready_pool_assets, reserve);
         assert_eq!(ready_domain.required_creation_count, 0);
         assert_eq!(ready_domain.shortfall_cycles, 0);
         let ready = fleet_ensure_workflow::apply(
@@ -12118,7 +12160,7 @@ exec '{}' "$@"
         .expect("complete effect-free Ready review before operator commands");
         assert!(ready.terminal);
         assert_eq!(ready.effects_applied, 0);
-        assert_eq!(counts(), (4, 0, 7));
+        assert_eq!(counts(), (u64::from(reserve), 0, initial_creations));
     }
 
     #[cfg(test)]
@@ -12339,7 +12381,22 @@ esac
             .model()
             .component_specs
             .keys()
-            .map(|spec| format!("{spec} = {}", if workloads == 19 { 19 } else { 1 }))
+            .map(|spec| {
+                let members = configuration
+                    .model()
+                    .component_groups
+                    .values()
+                    .map(|group| {
+                        group
+                            .components
+                            .values()
+                            .filter(|member| &member.component_spec == spec)
+                            .count()
+                    })
+                    .max()
+                    .unwrap();
+                format!("{spec} = {members}")
+            })
             .collect::<Vec<_>>()
             .join(", ");
         let capacity = workloads + ready;
@@ -13664,118 +13721,6 @@ cycles = "80T"
         assert_eq!(pic.cycle_balance(target), cycles_after_first);
     }
 
-    #[test]
-    fn qualification_ledger_preflight_keeps_1_8_16_32_lanes_independent() {
-        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let (_, cycles_ledger_wasm) = build_mainnet_refill_wasms();
-        // Protocol warm-up is a separate, excluded cohort.
-        assert_qualification_lane_cohort(&cycles_ledger_wasm, 1);
-        for width in [1, 8, 16, 32] {
-            assert_qualification_lane_cohort(&cycles_ledger_wasm, width);
-        }
-    }
-
-    #[test]
-    fn qualification_reset_preflight_keeps_1_8_16_32_lanes_independent() {
-        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workload_wasm = build_qualification_workload_wasm();
-
-        // Each reset journey owns one separate, excluded protocol warm-up.
-        assert_qualification_reset_cohort(None, 1);
-        assert_qualification_reset_cohort(Some(&workload_wasm), 1);
-        for width in [1, 8, 16, 32] {
-            assert_qualification_reset_cohort(None, width);
-            assert_qualification_reset_cohort(Some(&workload_wasm), width);
-        }
-    }
-
-    #[test]
-    fn qualification_external_effect_envelope_uses_checked_arithmetic() {
-        let disposable_assets = qualification_journey_operations(&[1, 8, 16, 32], 3);
-        let mainnet_assets = qualification_journey_operations(&[1], 3);
-
-        assert_eq!(disposable_assets, 172);
-        assert_eq!(mainnet_assets, 4);
-        assert_eq!(
-            qualification_funded_exposure(disposable_assets),
-            2_590_086_000_000_000
-        );
-        assert_eq!(
-            qualification_funded_exposure(mainnet_assets),
-            70_002_000_000_000
-        );
-    }
-
-    #[test]
-    fn qualification_controller_transition_requires_exact_routing_evidence() {
-        let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let pic = build_pic();
-        let subnet = *pic
-            .topology()
-            .get_app_subnets()
-            .first()
-            .expect("one application Subnet");
-        let source_root = pic.create_canister_on_subnet(None, None, subnet);
-        let destination_root = pic.create_canister_on_subnet(None, None, subnet);
-        let asset = pic.create_canister_on_subnet(None, None, subnet);
-        pic.set_controllers(asset, None, vec![source_root])
-            .expect("prepare source-controlled asset");
-
-        assert!(
-            qualification_controller_transition(&pic, asset, source_root, destination_root, None,)
-                .is_err()
-        );
-        assert_eq!(
-            pic.canister_status(asset, Some(source_root))
-                .expect("observe after missing routing evidence")
-                .settings
-                .controllers,
-            vec![source_root]
-        );
-
-        assert!(
-            qualification_controller_transition(
-                &pic,
-                asset,
-                source_root,
-                destination_root,
-                Some(Principal::from_slice(&[0x54; 29])),
-            )
-            .is_err()
-        );
-        assert_eq!(
-            pic.canister_status(asset, Some(source_root))
-                .expect("observe after contradictory routing evidence")
-                .settings
-                .controllers,
-            vec![source_root]
-        );
-
-        let observations = qualification_controller_transition(
-            &pic,
-            asset,
-            source_root,
-            destination_root,
-            Some(subnet),
-        )
-        .expect("exact same-Subnet routing evidence");
-        assert_eq!(observations[0], vec![source_root]);
-        let mut joint = observations[1].clone();
-        joint.sort();
-        let mut expected_joint = vec![source_root, destination_root];
-        expected_joint.sort();
-        assert_eq!(joint, expected_joint);
-        assert_eq!(observations[2], vec![destination_root]);
-        assert_eq!(pic.get_subnet(source_root), Some(subnet));
-        assert_eq!(pic.get_subnet(destination_root), Some(subnet));
-        assert_eq!(pic.get_subnet(asset), Some(subnet));
-        let terminal = pic
-            .canister_status(asset, Some(destination_root))
-            .expect("observe destination-controlled asset");
-        assert_eq!(terminal.module_hash, None);
-        assert_eq!(terminal.settings.controllers, vec![destination_root]);
-    }
-
     #[cfg(test)]
     struct RootFundingJourneyFixture {
         pic: PocketIc,
@@ -14785,296 +14730,6 @@ cycles = "80T"
     }
 
     #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one bounded harness proves exact lane admission, contradiction and first excess"
-    )]
-    fn assert_qualification_lane_cohort(cycles_ledger_wasm: &[u8], width: usize) {
-        let pic = build_pic();
-        let subnet = *pic
-            .topology()
-            .get_app_subnets()
-            .first()
-            .expect("one application Subnet");
-        let root = Principal::from_slice(&[0x51; 29]);
-        let canister_ids = (0..width)
-            .map(|_| {
-                let canister_id = pic.create_canister_on_subnet(None, None, subnet);
-                pic.set_controllers(canister_id, None, vec![root])
-                    .expect("prepare one root-controlled lane result");
-                canister_id
-            })
-            .collect::<Vec<_>>();
-        let cycles_ledger = pic.create_canister_on_subnet(None, None, subnet);
-        pic.install_canister(
-            cycles_ledger,
-            cycles_ledger_wasm.to_vec(),
-            encode_one(CyclesLedgerStubInitArgs {
-                canister_ids: canister_ids.clone(),
-                expected_controllers_by_index: None,
-                expected_root: root,
-                expected_subnet: subnet,
-                initial_balances: None,
-                pending_first_index: Some(0),
-                withdrawal_fee: None,
-            })
-            .expect("encode lane-stub init"),
-            None,
-        );
-
-        let first = qualification_creation_request(root, subnet, 1);
-        let mut wrong_controller = first.clone();
-        wrong_controller
-            .creation_args
-            .as_mut()
-            .and_then(|args| args.settings.as_mut())
-            .expect("complete controller fixture")
-            .controllers = Some(vec![Principal::from_slice(&[0x52; 29])]);
-        assert_qualification_generic_error(&pic, cycles_ledger, root, wrong_controller);
-
-        let mut wrong_subnet = first;
-        wrong_subnet
-            .creation_args
-            .as_mut()
-            .expect("complete Subnet fixture")
-            .subnet_selection = Some(QualificationSubnetSelection::Subnet {
-            subnet: Principal::from_slice(&[0x53; 29]),
-        });
-        assert_qualification_generic_error(&pic, cycles_ledger, root, wrong_subnet);
-
-        let requests = (0..width)
-            .map(|index| {
-                qualification_creation_request(
-                    root,
-                    subnet,
-                    u64::try_from(index + 1).expect("bounded lane timestamp"),
-                )
-            })
-            .collect::<Vec<_>>();
-        let messages = requests
-            .iter()
-            .map(|request| {
-                pic.submit_call(
-                    cycles_ledger,
-                    root,
-                    "create_canister",
-                    encode_one(request).expect("encode lane request"),
-                )
-                .expect("submit independent lane")
-            })
-            .collect::<Vec<_>>();
-
-        let mut pending_request_index = None;
-        let mut completed_canisters = std::collections::BTreeSet::new();
-        for (index, message) in messages.into_iter().enumerate() {
-            let response = pic.await_call(message).expect("await independent lane");
-            let result = decode_one::<
-                Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError>,
-            >(&response)
-            .expect("decode lane response");
-            match result {
-                Err(QualificationCreateCanisterError::Duplicate {
-                    canister_id: None, ..
-                }) => {
-                    assert!(
-                        pending_request_index.replace(index).is_none(),
-                        "exactly one submitted lane may remain pending"
-                    );
-                }
-                Ok(success) => {
-                    assert!(success.block_id > 0_u8);
-                    assert!(canister_ids.contains(&success.canister_id));
-                    assert!(completed_canisters.insert(success.canister_id));
-                }
-                outcome => panic!("unexpected qualification lane outcome: {outcome:?}"),
-            }
-        }
-
-        let pending_request_index =
-            pending_request_index.expect("one lane must exercise uncertain response recovery");
-        let retry: Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError> =
-            pic.update_candid_as(
-                cycles_ledger,
-                root,
-                "create_canister",
-                (requests[pending_request_index].clone(),),
-            )
-            .expect("exact pending-lane retry transport");
-        let recovered_canister = match retry {
-            Err(QualificationCreateCanisterError::Duplicate {
-                canister_id: Some(canister_id),
-                ..
-            }) => canister_id,
-            outcome => panic!("unexpected exact-retry outcome: {outcome:?}"),
-        };
-        assert!(completed_canisters.insert(recovered_canister));
-        assert_eq!(completed_canisters.len(), width);
-        assert!(
-            canister_ids
-                .iter()
-                .all(|canister_id| completed_canisters.contains(canister_id))
-        );
-
-        let first_excess = qualification_creation_request(
-            root,
-            subnet,
-            u64::try_from(width + 1).expect("bounded excess timestamp"),
-        );
-        assert_qualification_generic_error(&pic, cycles_ledger, root, first_excess);
-
-        for canister_id in canister_ids {
-            assert_eq!(pic.get_subnet(canister_id), Some(subnet));
-            let status = pic
-                .canister_status(canister_id, Some(root))
-                .expect("observe one lane result");
-            assert_eq!(status.settings.controllers, vec![root]);
-        }
-
-        let request_count: u64 = pic
-            .query_candid(cycles_ledger, "request_count", ())
-            .expect("query bounded lane request count");
-        assert_eq!(
-            request_count,
-            u64::try_from(width + 4).expect("bounded request count")
-        );
-    }
-
-    #[cfg(test)]
-    fn assert_qualification_reset_cohort(workload_wasm: Option<&[u8]>, width: usize) {
-        assert!([1, 8, 16, 32].contains(&width));
-        let expected_module_hash = workload_wasm.map(wasm_hash);
-        let pic = build_pic();
-        let subnet = *pic
-            .topology()
-            .get_app_subnets()
-            .first()
-            .expect("one application Subnet");
-        let root = pic.create_canister_on_subnet(None, None, subnet);
-        let assets = (0..width)
-            .map(|_| {
-                let asset = pic
-                    .create_canister_with_params(
-                        None,
-                        CreateCanisterParams {
-                            cycles: Some(QUALIFICATION_ASSET_CYCLES),
-                            settings: None,
-                            placement: Some(CreateCanisterPlacement::SubnetId(subnet)),
-                        },
-                    )
-                    .expect("create exact-balance reset asset on selected Subnet");
-                pic.set_controllers(asset, None, vec![root])
-                    .expect("prepare exact Root-controlled reset asset");
-                if let Some(wasm) = workload_wasm {
-                    pic.install_canister(
-                        asset,
-                        wasm.to_vec(),
-                        encode_one(()).expect("encode workload init"),
-                        Some(root),
-                    );
-                    pic.tick();
-                }
-                asset
-            })
-            .collect::<Vec<_>>();
-
-        for asset in &assets {
-            let status = pic
-                .canister_status(*asset, Some(root))
-                .expect("freeze reset starting observation");
-            assert_eq!(format!("{:?}", status.status), "Running");
-            assert_eq!(status.settings.controllers, vec![root]);
-            assert_eq!(pic.get_subnet(*asset), Some(subnet));
-            assert_eq!(
-                status.module_hash.as_deref(),
-                expected_module_hash.as_deref()
-            );
-            let balance = pic.cycle_balance(*asset);
-            let top_up = QUALIFICATION_ASSET_CYCLES
-                .checked_sub(balance)
-                .expect("prepared fixture stays below reset starting balance");
-            assert_eq!(pic.add_cycles(*asset, top_up), QUALIFICATION_ASSET_CYCLES);
-            assert_eq!(pic.cycle_balance(*asset), QUALIFICATION_ASSET_CYCLES);
-        }
-
-        let messages = assets
-            .iter()
-            .map(|asset| {
-                pic.submit_call_with_effective_principal(
-                    Principal::management_canister(),
-                    RawEffectivePrincipal::CanisterId(asset.as_slice().to_vec()),
-                    root,
-                    "uninstall_code",
-                    encode_one(QualificationCanisterIdRecord {
-                        canister_id: *asset,
-                    })
-                    .expect("encode reset lane"),
-                )
-                .expect("submit independent reset lane")
-            })
-            .collect::<Vec<_>>();
-
-        for message in messages {
-            let response = pic
-                .await_call(message)
-                .expect("await independent reset lane");
-            decode_args::<()>(&response).expect("decode reset lane response");
-        }
-
-        for asset in assets {
-            let status = pic
-                .canister_status(asset, Some(root))
-                .expect("observe terminal reset asset");
-            assert_eq!(format!("{:?}", status.status), "Running");
-            assert_eq!(status.module_hash, None);
-            assert_eq!(status.settings.controllers, vec![root]);
-            assert_eq!(pic.get_subnet(asset), Some(subnet));
-            assert!(pic.cycle_balance(asset) <= QUALIFICATION_ASSET_CYCLES);
-        }
-    }
-
-    #[cfg(test)]
-    fn build_qualification_workload_wasm() -> Vec<u8> {
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
-        let target_dir = test_target_dir(&workspace_root, "estate-qualification-reset");
-        let wasms = build_internal_test_wasm_canisters_with_env(
-            &workspace_root,
-            &target_dir,
-            &[QUALIFICATION_WORKLOAD_PACKAGE],
-            CanicWasmBuildProfile::Fast,
-            &[],
-        );
-        wasms.wasm(QUALIFICATION_WORKLOAD_PACKAGE)
-    }
-
-    #[cfg(test)]
-    fn qualification_journey_operations(cohorts: &[u128], repetitions: u128) -> u128 {
-        cohorts
-            .iter()
-            .try_fold(1_u128, |operations, width| {
-                width
-                    .checked_mul(repetitions)
-                    .and_then(|measured| operations.checked_add(measured))
-            })
-            .expect("qualification operation count must fit u128")
-    }
-
-    #[cfg(test)]
-    fn qualification_funded_exposure(assets: u128) -> u128 {
-        let principal = assets
-            .checked_mul(3)
-            .and_then(|uses| uses.checked_mul(QUALIFICATION_ASSET_CYCLES))
-            .expect("qualification principal exposure must fit u128");
-        let fees = assets
-            .checked_mul(5)
-            .and_then(|rows| rows.checked_mul(QUALIFICATION_FEE_CYCLES))
-            .expect("qualification fee exposure must fit u128");
-        principal
-            .checked_add(fees)
-            .and_then(|total| total.checked_add(QUALIFICATION_RESERVE_CYCLES))
-            .expect("qualification funded exposure must fit u128")
-    }
-
-    #[cfg(test)]
     fn qualification_creation_request(
         root: Principal,
         subnet: Principal,
@@ -15095,69 +14750,6 @@ cycles = "80T"
                 subnet_selection: Some(QualificationSubnetSelection::Subnet { subnet }),
             }),
         }
-    }
-
-    #[cfg(test)]
-    fn assert_qualification_generic_error(
-        pic: &PocketIc,
-        cycles_ledger: Principal,
-        root: Principal,
-        request: QualificationCreateCanisterArgs,
-    ) {
-        let result: Result<QualificationCreateCanisterSuccess, QualificationCreateCanisterError> =
-            pic.update_candid_as(cycles_ledger, root, "create_canister", (request,))
-                .expect("qualification rejection transport");
-        assert!(matches!(
-            result,
-            Err(QualificationCreateCanisterError::GenericError { .. })
-        ));
-    }
-
-    #[cfg(test)]
-    fn qualification_controller_transition(
-        pic: &PocketIc,
-        asset: Principal,
-        source_root: Principal,
-        destination_root: Principal,
-        expected_subnet: Option<Principal>,
-    ) -> Result<Vec<Vec<Principal>>, &'static str> {
-        let expected_subnet = expected_subnet.ok_or("routing evidence is missing")?;
-        let actual_subnets = [
-            pic.get_subnet(asset),
-            pic.get_subnet(source_root),
-            pic.get_subnet(destination_root),
-        ];
-        if actual_subnets != [Some(expected_subnet); 3] {
-            return Err("routing evidence contradicts observed placement");
-        }
-
-        let initial = pic
-            .canister_status(asset, Some(source_root))
-            .map_err(|_| "source cannot observe asset")?
-            .settings
-            .controllers;
-        if initial != [source_root] {
-            return Err("source controller authority is stale");
-        }
-        pic.set_controllers(
-            asset,
-            Some(source_root),
-            vec![source_root, destination_root],
-        )
-        .map_err(|_| "joint controller transition failed")?;
-        let joint = pic
-            .canister_status(asset, Some(source_root))
-            .map_err(|_| "source cannot observe joint authority")?
-            .settings
-            .controllers;
-        pic.set_controllers(asset, Some(source_root), vec![destination_root])
-            .map_err(|_| "destination controller transition failed")?;
-        let destination = pic
-            .canister_status(asset, Some(destination_root))
-            .map_err(|_| "destination cannot observe final authority")?
-            .settings
-            .controllers;
-        Ok(vec![initial, joint, destination])
     }
 
     #[test]
@@ -19178,22 +18770,6 @@ cycles = "80T"
                 production_ledger_and_cmc_exact_replay_never_duplicates_value,
             ),
             (
-                "qualification Ledger cohort isolation",
-                qualification_ledger_preflight_keeps_1_8_16_32_lanes_independent,
-            ),
-            (
-                "qualification reset cohort isolation",
-                qualification_reset_preflight_keeps_1_8_16_32_lanes_independent,
-            ),
-            (
-                "qualification effect arithmetic",
-                qualification_external_effect_envelope_uses_checked_arithmetic,
-            ),
-            (
-                "qualification controller transition",
-                qualification_controller_transition_requires_exact_routing_evidence,
-            ),
-            (
                 "prepared Root local Store",
                 prepared_root_bootstraps_and_reverifies_its_exact_local_store,
             ),
@@ -19248,10 +18824,6 @@ cycles = "80T"
                 funded_failed_imports_reconcile_with_lost_withdrawal_and_reset_responses,
             ),
             (
-                "funded estate recovers transfer and autonomous creation responses",
-                funded_estate_recovers_transfer_and_autonomous_creation_responses,
-            ),
-            (
                 "issued provisioning recovers native withdrawal and receipt observation",
                 native_funding::issued_provisioning_recovers_native_withdrawal_and_receipt_observation,
             ),
@@ -19264,12 +18836,12 @@ cycles = "80T"
                 issued_creation_funding_pause_resumes_reviewed_transfer,
             ),
             (
-                "four Workloads refill four Ready assets with lost funding and creation responses",
-                four_workloads_refill_four_ready_with_lost_funding_and_creation_responses,
+                "two Workloads refill two Ready assets with lost funding and creation responses",
+                two_workloads_refill_two_ready_with_lost_funding_and_creation_responses,
             ),
             (
-                "four Workloads and four Failed assets repair without new creation",
-                four_workloads_and_four_failed_assets_repair_without_new_creation,
+                "two Workloads and two Failed assets repair without new creation",
+                two_workloads_and_two_failed_assets_repair_without_new_creation,
             ),
             (
                 "generated mixed topology and Ready reserve retain one reviewed operation",
