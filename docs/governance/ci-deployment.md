@@ -171,7 +171,13 @@ Fleet tests use synthetic, application-neutral topologies sized to exercise
 the relevant contract. A complete generated journey owns fresh provisioning,
 interruption and replay; focused recovery tests prepare their real canister
 preconditions without repeating that entire journey. Application deployment
-sizes belong in downstream qualification. Capacity arithmetic and rejection
+sizes belong in downstream qualification. Native cycle balances sampled across
+IC calls or simulated-time advances must allow bounded execution and idle-storage
+charges. Use an explicit observed-cost or reviewed test burn allowance, smaller
+than the payment whose absence or duplication the test must detect. Keep grant
+receipts, payment identities, policy limits and ledger accounting exact; replay
+must not credit the recipient again. Exercise normal charging deliberately when
+qualifying this allowance, rather than relying on incidental scheduler timing. Capacity arithmetic and rejection
 boundaries remain covered independently of expensive deployment cardinality.
 The ordinary integration inventory joins workspace unit/lib/bin coverage in
 one Cargo invocation, using explicit integration target names. This preserves

@@ -2,6 +2,12 @@
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Funding-proof follow-up, 2026-09-27: replace exact stopped-recipient balances
+with bounded observed idle debit in Prepared Root bootstrap and real ICP fallback.
+Exact grants, budget/cooldown rejection and no-duplicate-credit replay remain.
+Both focused PocketIC cases pass; production funding policy is unchanged. The
+complete batch remains ready for the maintainer's commit and release-gate retry.
+
 Latest operator CLI fixture correction: replace hand-written plan JSON with a
 typed current plan, including explicit absence of bootstrap authority. The exact
 public CLI PocketIC case passes in 22.92s (41s runner), covering plan, apply,
