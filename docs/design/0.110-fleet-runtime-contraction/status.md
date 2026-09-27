@@ -2,6 +2,12 @@
 
 ## .43 implementation complete — ready for release gate, 2026-09-26
 
+Compiler-cache follow-up, 2026-09-27: optional sccache infrastructure failures
+now fall back to the compiler; genuine compiler failures are preserved. Shell
+regressions, ShellCheck and a real offline Cargo lockfile/compile/error probe
+pass. The correction remains in the same `.43` batch; see the current handoff
+for evidence and the unrun full release-gate boundary.
+
 Funding-proof follow-up, 2026-09-27: replace exact stopped-recipient balances
 with bounded observed idle debit in Prepared Root bootstrap and real ICP fallback.
 Exact grants, budget/cooldown rejection and no-duplicate-credit replay remain.

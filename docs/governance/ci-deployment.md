@@ -87,7 +87,10 @@ and no explicit `RUSTC_WRAPPER` is set, Make selects it through the repository
 wrapper and disables Rust incremental compilation so compiler results remain
 cacheable. The wrapper gives the persistent cache server a stable
 `.tmp/sccache-runtime/` socket and temporary directory; it never inherits an
-invocation-owned `test-runtime.*` directory that cleanup removes. Without a
+invocation-owned `test-runtime.*` directory that cleanup removes. Cache infrastructure
+errors fall back to the original compiler command with a warning. Genuine compiler
+failures retain their diagnostics and exit codes without another compile attempt;
+cache-management commands retain their own failure status. Without a
 wrapper, Make leaves Cargo's profile defaults intact: local dev/test work may
 remain incremental while `release` and `fast` artifacts stay non-incremental.
 Explicit `CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values

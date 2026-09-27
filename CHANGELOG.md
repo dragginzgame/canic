@@ -23,6 +23,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   publication. Recover interrupted effects and publication without duplicate
   payments; completed reset, bootstrap and import receipts replay locally.
   Funding proofs allow bounded IC charges while retaining exact payment accounting.
+  Cache infrastructure failures fall back to the compiler without masking build errors.
 - `0.110.42` pins the maintainer and CI ICP CLI to 1.6.0 with verified release
   checksums while retaining the supported 1.x command contract. Add optional
   direct recovery controllers to every newly generated Fleet canister and its
