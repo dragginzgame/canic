@@ -185,7 +185,13 @@ impl CapacityImportObserver for CapacityImportLiveObserver {
         if inventory.assigned.contains(&canister) {
             return Err(CapacityImportJournalError::InventoryInvalid);
         }
-        let status = management::observe(&self.transport.agent, canister).await?;
+        let status = if crate::fleet_ensure::policy::capacity_import::requires_handoff(plan, source)
+        {
+            management::observe(&self.transport.agent, canister).await?
+        } else {
+            management::observe_root_owned(&self.transport.agent, plan.authority.root, canister)
+                .await?
+        };
         // A concurrent membership or infrastructure change cannot be hidden by a paid sample.
         let refreshed = inventory::observe(
             &self.transport.agent,

@@ -66,10 +66,19 @@ printf '%s\t%s\t%s\n' "$phase" "$stage" "$fail_fast" >> "$RUNNER_TEST_TRACE"
 printf '[CANIC-REQUEST] %s/%s succeeded=false\n' "$phase" "$stage"
 printf '[CANIC-OBSERVATION] %s/%s\n' "$phase" "$stage" >&2
 printf '[CANIC-TIMING] %s/%s\n' "$phase" "$stage" >&2
+printf '[CANIC-CACHE] %s/%s\n' "$phase" "$stage" >&2
+printf '[FLEET-MEASURE] %s/%s stdout\n' "$phase" "$stage"
+printf '[FLEET-MEASURE] %s/%s stderr\n' "$phase" "$stage" >&2
 printf 'fixture progress %s/%s\n' "$phase" "$stage"
 if [[ "$phase/$stage" == "$RUNNER_TEST_FAIL_STAGE" ]]; then
     for ((index=0; index<120; index++)); do
-        printf '[CANIC-REQUEST] failure-context-%s\n' "$index" >&2
+        if ((index % 3 == 0)); then
+            printf '[CANIC-REQUEST] failure-context-%s\n' "$index" >&2
+        elif ((index % 3 == 1)); then
+            printf '[CANIC-CACHE] failure-context-%s\n' "$index" >&2
+        else
+            printf '[FLEET-MEASURE] failure-context-%s\n' "$index" >&2
+        fi
     done
     echo 'error: fixture test failed' >&2
 fi
@@ -109,14 +118,18 @@ for mode in full pocketic; do
         rg -q '\[CANIC-REQUEST\].*succeeded=false' "$logs"
         rg -q '\[CANIC-OBSERVATION\]' "$logs"
         rg -q '\[CANIC-TIMING\]' "$logs"
+        rg -q '\[CANIC-CACHE\]' "$logs"
+        rg -q '\[FLEET-MEASURE\].*stdout' "$logs"
+        rg -q '\[FLEET-MEASURE\].*stderr' "$logs"
         rg -q 'fixture progress' "$scratch/output.log"
         if [[ "$failure" == none ]]; then
-            if rg -q '\[CANIC-(REQUEST|OBSERVATION|TIMING)\]' "$scratch/output.log"; then exit 1; fi
+            if rg -q '\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]' "$scratch/output.log"; then exit 1; fi
         else
             rg -q '^error: fixture test failed$' "$scratch/output.log"
-            rg -q '^\[CANIC-REQUEST\] failure-context-119$' "$scratch/output.log"
+            rg -q '^\[FLEET-MEASURE\] failure-context-119$' "$scratch/output.log"
+            rg -q '^\[CANIC-CACHE\] failure-context-118$' "$scratch/output.log"
             if rg -q '^\[CANIC-REQUEST\] failure-context-0$' "$scratch/output.log"; then exit 1; fi
-            [[ "$(rg -c '\[CANIC-(REQUEST|OBSERVATION|TIMING)\]' "$scratch/output.log")" -eq 100 ]]
+            [[ "$(rg -c '\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]' "$scratch/output.log")" -eq 100 ]]
             rg -q '^\[CANIC-REQUEST\] failure-context-0$' "$logs"
         fi
         rm -rf "$logs"
@@ -158,6 +171,6 @@ for mode in ordinary fast targeted-pocketic; do
         [[ ! -e "$scratch/server.pid" ]]
     fi
     diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
-    if rg -q '\[CANIC-(REQUEST|OBSERVATION|TIMING)\]' "$scratch/output.log"; then exit 1; fi
+    if rg -q '\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]' "$scratch/output.log"; then exit 1; fi
 done
 echo 'workspace test runner barriers, selectors, failure ordering, quiet output, retained diagnostics and cleanup passed'

@@ -23,8 +23,8 @@ under `docs/architecture/`, and operator procedures remain under
 - [Builds and evidence](build-and-evidence/README.md) — artifacts, provenance,
   evidence envelopes, comparison, policy gates, and the published managed-App
   qualification surface.
-- [Backup domain](backup-and-restore/README.md) — retained Rust contracts; the
-  former CLI workflow is not part of the current hard-cut surface.
+- [Backup and restore](backup-and-restore/README.md) — host-side snapshots,
+  verification and journaled same-release recovery through the CLI.
 - [Blob storage](blob-storage/README.md) — optional product-data storage and
   billing integration.
 - [Operations and diagnostics](operations/README.md) — current CLI workflows,

@@ -138,12 +138,7 @@ pub fn validate_plan(plan: &CapacityImportPlanRecord) -> Result<(), CapacityImpo
             return Err(CapacityImportPolicyError::SourceSnapshots { canister });
         }
         source_total(source.observed_cycles, source.observed_reserved_cycles)?;
-        if source.binding.module_sha256.is_some() && !source.binding.stopped {
-            return Err(CapacityImportPolicyError::SourceRunning { canister });
-        }
-        if source.binding.canister_version.checked_add(3).is_none() {
-            return Err(CapacityImportPolicyError::VersionExhausted { canister });
-        }
+        validate_source_lifecycle(plan, source)?;
         if canister == plan.authority.root
             || canister == plan.authority.coordinator
             || canister == plan.authority.operator
@@ -157,10 +152,11 @@ pub fn validate_plan(plan: &CapacityImportPlanRecord) -> Result<(), CapacityImpo
         if !canonical_controllers(&source.binding.controllers) {
             return Err(CapacityImportPolicyError::InvalidAuthority);
         }
-        if !source
-            .binding
-            .controllers
-            .contains(&plan.authority.operator)
+        if requires_handoff(plan, source)
+            && !source
+                .binding
+                .controllers
+                .contains(&plan.authority.operator)
         {
             return Err(CapacityImportPolicyError::OperatorNotController { canister });
         }
@@ -179,6 +175,48 @@ pub fn validate_plan(plan: &CapacityImportPlanRecord) -> Result<(), CapacityImpo
         maximum_debit = maximum_debit
             .checked_add(source.maximum_debit_cycles)
             .ok_or(CapacityImportPolicyError::InvalidCycleBounds)?;
+    }
+    Ok(())
+}
+
+/// Existing Root custody needs no operator ingress or invented handoff receipt.
+#[must_use]
+pub fn requires_handoff(
+    plan: &CapacityImportPlanRecord,
+    source: &CapacityImportSourceRecord,
+) -> bool {
+    !source.binding.controllers.contains(&plan.authority.root)
+}
+
+/// Minimum version advance before uninstall, excluding running activity and stop transitions.
+#[must_use]
+pub fn controller_version_delta(
+    plan: &CapacityImportPlanRecord,
+    source: &CapacityImportSourceRecord,
+) -> u64 {
+    1 + u64::from(requires_handoff(plan, source))
+}
+
+fn validate_source_lifecycle(
+    plan: &CapacityImportPlanRecord,
+    source: &CapacityImportSourceRecord,
+) -> Result<(), CapacityImportPolicyError> {
+    let canister = source.binding.canister_id;
+    if source.binding.module_sha256.is_some()
+        && !source.binding.stopped
+        && requires_handoff(plan, source)
+    {
+        return Err(CapacityImportPolicyError::SourceRunning { canister });
+    }
+    if source
+        .binding
+        .canister_version
+        .checked_add(
+            controller_version_delta(plan, source) + if source.binding.stopped { 1 } else { 3 },
+        )
+        .is_none()
+    {
+        return Err(CapacityImportPolicyError::VersionExhausted { canister });
     }
     Ok(())
 }
@@ -243,7 +281,11 @@ pub fn admit_handoffs(
         if destination.assigned_canisters.contains(&canister) {
             return Err(CapacityImportPolicyError::SourceAssigned { canister });
         }
-        admit_source_handoff(reviewed, observed)?;
+        admit_source(
+            reviewed,
+            observed,
+            !requires_handoff(plan, reviewed) && !reviewed.binding.stopped,
+        )?;
     }
     Ok(())
 }
@@ -253,8 +295,21 @@ pub fn admit_source_handoff(
     reviewed: &CapacityImportSourceRecord,
     observed: &CapacityImportSourceView,
 ) -> Result<(), CapacityImportPolicyError> {
+    admit_source(reviewed, observed, false)
+}
+
+fn admit_source(
+    reviewed: &CapacityImportSourceRecord,
+    observed: &CapacityImportSourceView,
+    running_versions: bool,
+) -> Result<(), CapacityImportPolicyError> {
     let canister = reviewed.binding.canister_id;
-    if reviewed.binding != observed.binding {
+    let version_matches = if running_versions {
+        observed.binding.canister_version >= reviewed.binding.canister_version
+    } else {
+        observed.binding.canister_version == reviewed.binding.canister_version
+    };
+    if !version_matches || custody(&reviewed.binding) != custody(&observed.binding) {
         return Err(CapacityImportPolicyError::SourceChanged { canister });
     }
     if observed.ownership != CapacityImportOwnershipView::Unassigned {
@@ -267,6 +322,29 @@ pub fn admit_source_handoff(
     // funding review is required before admitting any additional credit.
     retained_source_debit(reviewed, observed.cycles, observed.reserved_cycles)?;
     Ok(())
+}
+
+#[derive(Eq, PartialEq)]
+struct SourceCustody<'a> {
+    canister: Principal,
+    subnet: SubnetId,
+    controllers: &'a [Principal],
+    module: Option<[u8; 32]>,
+    stopped: bool,
+    snapshots: u64,
+}
+
+fn custody(
+    binding: &crate::fleet_ensure::model::capacity_import::CapacityImportSourceBinding,
+) -> SourceCustody<'_> {
+    SourceCustody {
+        canister: binding.canister_id,
+        subnet: binding.subnet,
+        controllers: &binding.controllers,
+        module: binding.module_sha256,
+        stopped: binding.stopped,
+        snapshots: binding.snapshots_size_bytes,
+    }
 }
 
 /// Account from the original review, including after process restart.

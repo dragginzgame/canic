@@ -269,13 +269,30 @@ impl CanisterPoolImportOps {
         let mut state = CanisterPoolStore::state();
         let record = required_mut(&mut state, identity)?;
         let index = source_index(record, observed.canister_id)?;
-        if record.phase != PoolImportPhaseRecord::Reserved
-            || record.progress[index] != PoolImportResetProgressRecord::AwaitingHandoff
-            || CanisterPoolStore::get(&observed.canister_id).is_some()
-        {
+        if record.phase != PoolImportPhaseRecord::Reserved {
             return Err(InternalError::conflict());
         }
-        require_observation(record, index, observed, 1, false, true)?;
+        match record.progress[index] {
+            PoolImportResetProgressRecord::AwaitingHandoff
+                if record.reservation.sources[index].stopped =>
+            {
+                if CanisterPoolStore::get(&observed.canister_id).is_some() {
+                    return Err(InternalError::conflict());
+                }
+            }
+            PoolImportResetProgressRecord::Stopped {
+                retained_total_cycles,
+                ..
+            } => {
+                required_reserved_asset(observed.canister_id)?;
+                if source_total(observed.cycles, observed.reserved_cycles)? > retained_total_cycles
+                {
+                    return Err(InternalError::conflict());
+                }
+            }
+            _ => return Err(InternalError::conflict()),
+        }
+        require_observation(record, index, observed, false, true)?;
         reserve_call(
             record,
             budget.maximum_debit_cycles,
@@ -283,18 +300,10 @@ impl CanisterPoolImportOps {
         )?;
         record.progress[index] = PoolImportResetProgressRecord::ControllersIssued {
             before_total_cycles: source_total(observed.cycles, observed.reserved_cycles)?,
+            before_canister_version: observed.canister_version,
             sender_canister_version: budget.sender_canister_version,
         };
-        let asset = CanisterPoolAssetRecord {
-            creation_receipt: None,
-            cycles: Cycles::new(observed.cycles),
-            origin: CanisterPoolAssetOriginRecord::Imported,
-            status: CanisterPoolAssetStatusRecord::PendingReset,
-            last_recycle: None,
-            added_at_ns: now_ns,
-            updated_at_ns: now_ns,
-        };
-        CanisterPoolStore::insert(observed.canister_id, asset);
+        insert_reserved_asset(observed, now_ns);
         CanisterPoolStore::set_state(state);
         Ok(())
     }
@@ -309,6 +318,7 @@ impl CanisterPoolImportOps {
             let PoolImportResetProgressRecord::ControllersIssued {
                 before_total_cycles,
                 sender_canister_version,
+                ..
             } = record.progress[index]
             else {
                 return Err(InternalError::conflict());
@@ -320,12 +330,13 @@ impl CanisterPoolImportOps {
                 sender_canister_version,
                 PoolImportHistoryKind::Controllers,
             )?;
-            require_observation(record, index, observed, 2, false, false)?;
+            require_observation(record, index, observed, false, false)?;
             if source_total(observed.cycles, observed.reserved_cycles)? > before_total_cycles {
                 return Err(InternalError::conflict());
             }
             record.progress[index] = PoolImportResetProgressRecord::ControllersConfirmed {
                 retained_total_cycles: source_total(observed.cycles, observed.reserved_cycles)?,
+                canister_version: observed.canister_version,
             };
             Ok(())
         })
@@ -340,11 +351,12 @@ impl CanisterPoolImportOps {
         advance(identity, observed, |record, index| {
             let PoolImportResetProgressRecord::ControllersConfirmed {
                 retained_total_cycles,
+                ..
             } = record.progress[index]
             else {
                 return Err(InternalError::conflict());
             };
-            require_observation(record, index, observed, 2, false, false)?;
+            require_observation(record, index, observed, false, false)?;
             if source_total(observed.cycles, observed.reserved_cycles)? > retained_total_cycles {
                 return Err(InternalError::conflict());
             }
@@ -355,7 +367,66 @@ impl CanisterPoolImportOps {
             )?;
             record.progress[index] = PoolImportResetProgressRecord::UninstallIssued {
                 before_total_cycles: source_total(observed.cycles, observed.reserved_cycles)?,
+                before_canister_version: observed.canister_version,
                 sender_canister_version: budget.sender_canister_version,
+            };
+            Ok(())
+        })
+    }
+
+    /// Persist stop intent before quiescing running disposable application state.
+    pub fn issue_stop(
+        identity: PoolImportIdentity,
+        observed: &PoolImportObservationView,
+        budget: PoolImportCallBudgetView,
+        now_ns: u64,
+    ) -> Result<(), InternalError> {
+        let mut state = CanisterPoolStore::state();
+        let record = required_mut(&mut state, identity)?;
+        let index = source_index(record, observed.canister_id)?;
+        if record.phase != PoolImportPhaseRecord::Reserved
+            || record.progress[index] != PoolImportResetProgressRecord::AwaitingHandoff
+            || record.reservation.sources[index].stopped
+            || CanisterPoolStore::get(&observed.canister_id).is_some()
+        {
+            return Err(InternalError::conflict());
+        }
+        require_observation(record, index, observed, false, true)?;
+        reserve_call(
+            record,
+            budget.maximum_debit_cycles,
+            budget.observed_root_cycles,
+        )?;
+        record.progress[index] = PoolImportResetProgressRecord::StopIssued {
+            before_total_cycles: source_total(observed.cycles, observed.reserved_cycles)?,
+            before_canister_version: observed.canister_version,
+        };
+        insert_reserved_asset(observed, now_ns);
+        CanisterPoolStore::set_state(state);
+        Ok(())
+    }
+
+    /// Reconcile the stop before controller normalization; the stopped version owns later effects.
+    pub fn observe_stopped(
+        identity: PoolImportIdentity,
+        observed: &PoolImportObservationView,
+    ) -> Result<(), InternalError> {
+        advance(identity, observed, |record, index| {
+            let PoolImportResetProgressRecord::StopIssued {
+                before_total_cycles,
+                ..
+            } = record.progress[index]
+            else {
+                return Err(InternalError::conflict());
+            };
+            require_observation(record, index, observed, false, true)?;
+            let retained_total_cycles = source_total(observed.cycles, observed.reserved_cycles)?;
+            if retained_total_cycles > before_total_cycles {
+                return Err(InternalError::conflict());
+            }
+            record.progress[index] = PoolImportResetProgressRecord::Stopped {
+                retained_total_cycles,
+                canister_version: observed.canister_version,
             };
             Ok(())
         })
@@ -376,6 +447,7 @@ impl CanisterPoolImportOps {
         }
         let PoolImportResetProgressRecord::UninstallIssued {
             before_total_cycles,
+            before_canister_version,
             sender_canister_version,
         } = record.progress[index]
         else {
@@ -388,7 +460,7 @@ impl CanisterPoolImportOps {
             sender_canister_version,
             PoolImportHistoryKind::Uninstall,
         )?;
-        require_observation(record, index, observed, 3, true, false)?;
+        require_observation(record, index, observed, true, false)?;
         if source_total(observed.cycles, observed.reserved_cycles)? > before_total_cycles {
             return Err(InternalError::conflict());
         }
@@ -397,6 +469,7 @@ impl CanisterPoolImportOps {
             root_sender_canister_version: sender_canister_version,
             canister_id: observed.canister_id,
             canister_version: observed.canister_version,
+            before_uninstall_canister_version: before_canister_version,
             retained_cycles: observed.cycles,
             retained_reserved_cycles: observed.reserved_cycles,
             observed_debit_cycles: source_total(
@@ -551,14 +624,30 @@ fn validate_reservation(
     }
     for source in &request.sources {
         source_total(source.observed_cycles, source.observed_reserved_cycles)?;
+        let version_headroom = 2
+            + u64::from(!source.controllers.contains(&request.root))
+            + 2 * u64::from(!source.stopped);
         if !valid_principal(source.canister_id)
             || source.canister_id == request.root
             || source.canister_id == request.operator
             || request.final_controllers.contains(&source.canister_id)
             || source.disposition_sha256 == [0; 32]
             || source.maximum_debit_cycles == 0
-            || source.canister_version.checked_add(3).is_none()
-            || (source.module_sha256.is_some() && !source.stopped)
+            || source
+                .canister_version
+                .checked_add(version_headroom)
+                .is_none()
+            || source.controllers.is_empty()
+            || source.controllers.len() > 10
+            || !source.controllers.windows(2).all(|pair| pair[0] < pair[1])
+            || !source.controllers.iter().copied().all(valid_principal)
+            || !source
+                .controllers
+                .iter()
+                .any(|id| *id == request.root || *id == request.operator)
+            || (source.module_sha256.is_some()
+                && !source.stopped
+                && !source.controllers.contains(&request.root))
             || source.minimum_ready_cycles < config.canister_cycles.to_u128()
         {
             return Err(InternalError::invalid_input());
@@ -647,6 +736,60 @@ fn advance(
     Ok(())
 }
 
+fn insert_reserved_asset(observed: &PoolImportObservationView, now_ns: u64) {
+    let asset = CanisterPoolAssetRecord {
+        creation_receipt: None,
+        cycles: Cycles::new(observed.cycles),
+        origin: CanisterPoolAssetOriginRecord::Imported,
+        status: CanisterPoolAssetStatusRecord::PendingReset,
+        last_recycle: None,
+        added_at_ns: now_ns,
+        updated_at_ns: now_ns,
+    };
+    CanisterPoolStore::insert(observed.canister_id, asset);
+}
+
+/// Ordinary running-message versions are disposable; effects after the stop bind exact versions.
+fn observation_version(
+    record: &PoolImportRecord,
+    index: usize,
+    actual: u64,
+) -> Result<u64, InternalError> {
+    let source = &record.reservation.sources[index];
+    let handed = u64::from(!source.controllers.contains(&record.reservation.root));
+    let initial = source
+        .canister_version
+        .checked_add(handed)
+        .ok_or_else(InternalError::conflict)?;
+    match record.progress[index] {
+        PoolImportResetProgressRecord::AwaitingHandoff if !source.stopped && actual >= initial => {
+            Ok(actual)
+        }
+        PoolImportResetProgressRecord::AwaitingHandoff => Ok(initial),
+        PoolImportResetProgressRecord::StopIssued {
+            before_canister_version,
+            ..
+        } if actual > before_canister_version => Ok(actual),
+        PoolImportResetProgressRecord::Stopped {
+            canister_version, ..
+        }
+        | PoolImportResetProgressRecord::ControllersConfirmed {
+            canister_version, ..
+        } => Ok(canister_version),
+        PoolImportResetProgressRecord::ControllersIssued {
+            before_canister_version,
+            ..
+        }
+        | PoolImportResetProgressRecord::UninstallIssued {
+            before_canister_version,
+            ..
+        } => before_canister_version
+            .checked_add(1)
+            .ok_or_else(InternalError::conflict),
+        _ => Err(InternalError::conflict()),
+    }
+}
+
 fn required_reserved_asset(
     id: Principal,
 ) -> Result<crate::storage::stable::canister_pool::CanisterPoolAssetRecord, InternalError> {
@@ -662,27 +805,26 @@ fn require_observation(
     record: &PoolImportRecord,
     index: usize,
     observed: &PoolImportObservationView,
-    version_delta: u64,
     cleared: bool,
     transitional: bool,
 ) -> Result<(), InternalError> {
     let source: &PoolImportSource = &record.reservation.sources[index];
-    let expected_controllers = if transitional {
+    let root_owned = source.controllers.contains(&record.reservation.root);
+    let expected_controllers = if transitional && root_owned {
+        &source.controllers
+    } else if transitional {
         &record.reservation.transitional_controllers
     } else {
         &record.reservation.final_controllers
     };
     let expected_module = if cleared { None } else { source.module_sha256 };
-    let expected_version = source
-        .canister_version
-        .checked_add(version_delta)
-        .ok_or_else(InternalError::invariant)?;
+    let expected_version = observation_version(record, index, observed.canister_version)?;
     let expected = (
         source.canister_id,
         expected_version,
         expected_module,
         expected_controllers,
-        source.stopped,
+        source.stopped || record.progress[index] != PoolImportResetProgressRecord::AwaitingHandoff,
     );
     let actual = (
         observed.canister_id,
@@ -728,6 +870,7 @@ fn require_completion_fits(state: &CanisterPoolStateRecord) -> Result<(), Intern
             PoolImportResetProgressRecord::Ready(PoolImportSourceReceipt {
                 canister_id: source.canister_id,
                 canister_version: u64::MAX,
+                before_uninstall_canister_version: u64::MAX,
                 root_sender_canister_version: u64::MAX,
                 retained_cycles: u128::MAX,
                 retained_reserved_cycles: u128::MAX,
@@ -760,6 +903,10 @@ fn status(record: &PoolImportRecord) -> PoolImportStatus {
                 PoolImportResetProgressRecord::ControllersConfirmed { .. } => {
                     PoolImportSourceProgress::ControllersConfirmed
                 }
+                PoolImportResetProgressRecord::StopIssued { .. } => {
+                    PoolImportSourceProgress::StopIssued
+                }
+                PoolImportResetProgressRecord::Stopped { .. } => PoolImportSourceProgress::Stopped,
                 PoolImportResetProgressRecord::UninstallIssued { .. } => {
                     PoolImportSourceProgress::UninstallIssued
                 }

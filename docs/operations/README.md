@@ -28,8 +28,16 @@ validation procedures only.
 
 ## Fleet Operations
 
+- [Supplied infrastructure bootstrap](../features/operations/fleet-ensure.md#supplied-infrastructure-bootstrap)
+  reviews explicit infrastructure IDs and Coordinator setup.
+- [Capacity import](../features/operations/fleet-ensure.md#add-supplied-capacity-to-a-current-fleet)
+  adds supplied canisters on an initialized Root's subnet.
 - [Fleet funding](fleet-funding.md) documents Coordinator funding, direct
   cycle top-up, and manual Root ICP conversion and recovery.
+- [Backup and restore](../features/backup-and-restore/README.md) covers verified
+  snapshots and journaled same-release recovery.
+- [Local development Fleet](../features/operations/local-development-fleet.md)
+  covers persistent PocketIC sessions and exact-session reset.
 
 ## Wasm Diagnostics
 

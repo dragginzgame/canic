@@ -5,7 +5,9 @@
 //! Boundary: workflow persists these records before and after every effect.
 
 pub mod capacity_import;
+pub mod clean_reinstall;
 pub mod completed_handoff;
+pub mod completed_operation;
 pub mod funding_observation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;

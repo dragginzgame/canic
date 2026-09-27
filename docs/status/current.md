@@ -20,6 +20,248 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Urgent clean reinstall correction — .45 ready for review, 2026-09-27
+
+The normal completed-Fleet path generates a qualified current build from the
+explicit estate seed without querying predecessor runtime contracts. Explicit
+`fleet ensure --reinstall` archives and retires completed execution records, then
+reviews current infrastructure setup, Root-owned child clearing and fresh workload
+convergence. Artifacts and input paths remain frozen through retries. Finished
+records are opaque history; unfinished paid work keeps its recovery owner.
+
+Certified current custody admits running Root-owned children without invented
+management versions or balances. Infrastructure receives reviewed funding before
+stop/wipe; the replacement Root samples and clears children. Exact terminal
+accounting is retained before completion publication, allowing interrupted local
+publication and offline replay. Repeating the reset with identical artifacts gets
+a distinct operation identity. The CLI reports each next phase command; exact
+Toko commands are in the [Fleet Ensure guide](../features/operations/fleet-ensure.md#clean-reinstall-of-a-completed-fleet).
+
+The connected real PocketIC proof passes: changed-build reset followed by same-build
+reset, lost install response on both, exact IDs, cleared modules/stable memory,
+exact Ledger debit, bounded native debit, interrupted completion publication and
+replay with an unavailable IC executable. Test: **197.99s**; runner: **215s**.
+Log: `target/test-runs/20260927T193921Z-56353.s4QDba/1.log`.
+Earlier retained-ID import qualification also passes (203.53s test, 321s runner),
+including direct operator and running Root-owned sources, clearing and replay:
+`target/test-runs/20260927T184029Z-12714.xuFhUF/1.log`.
+
+Thirteen native selection/archive/retirement tests pass, including a `.38`-shaped
+completed envelope and every local removal interruption boundary. The existing
+native generation/recovery omnibus passes after correcting stale query fixtures.
+All 27 focused Fleet CLI parser/report tests pass (0.05s). Final scoped
+host/CLI/internal-test warning-denied Clippy passes (7.04s). Scoped formatting
+and whitespace checks pass. Earlier failed connected attempts exposed an insufficient fixture Ledger reserve
+and an invalid PocketIC stable-memory read after uninstall; both are corrected.
+No full workspace gate ran. Further evidence is recorded in the
+[correction report](../audits/reports/2026-09/2026-09-27/clean-reinstall-selection.md).
+
+The complete accepted `.45` batch and both changelog surfaces are ready for
+maintainer review and the chosen release gate. Package versions remain `.44`;
+all changes are uncommitted. This is focused qualification, not a live Toko
+acceptance result or a new full-suite timing claim. Read-only CANIC-184 evidence
+confirms consumed `.43` preparation and 27 IDs; the separate archive audit retained
+191 evidence files/blobs in Canic scratch with unchanged source records. No Toko
+files changed, no live IC effects ran, and no version/Git publication was performed.
+
+Push-readiness follow-up caught and fixed a test-entrypoint collision with the
+reserved host `governed_pocketic_` filter. The internal runner now selects
+`pic::governed_suite::governed_internal_pocketic_suite`. Four native registry/runner
+tests pass; the two real suite entrypoints stayed ignored. Release-integrity,
+workspace-runner and isolated-worker regressions, scoped ShellCheck, formatting,
+whitespace and local `.45` release-notes preflight pass. The dry command plan
+resolves without running suites. No deployment implementation changed after its
+connected proof. The normal release gate and maintainer commit remain; include
+new source files in that commit. No remote-state check or publication ran.
+
+## Documentation refresh — .45, 2026-09-27
+
+The README now points to maintained reference Apps instead of Prequel Wars.
+A [documentation index](../README.md) links current guides and distinguishes
+historical evidence from supported procedures. Installation, CLI/host guides,
+feature navigation, architecture/roadmap pointers and testing guidance now match
+generated infrastructure, backup/restore, frontend commands, supplied-ID setup,
+explicit creation fees, current-schema receipt inspection and the two-worker
+runner. Release transitions remain reinstall-only; stale historical-record
+support claims are removed from operator guidance.
+
+Local Markdown file/heading links and the documented CLI family list were
+checked against repository files and dispatch. Whitespace checks pass. This
+refresh changes documentation only; no build, test suite or live effect ran.
+Both `.45` changelog surfaces include it. The current batch remains ready for
+review and the maintainer's chosen release gate; versions remain `.44` and
+changes are uncommitted. Existing full-suite timing limits still apply.
+
+## Cache attribution and recovery-pair qualification — .45, 2026-09-27
+
+Fixture cache acquisitions now retain upstream lock, verification, build and
+publication durations as quiet `CANIC-CACHE` records with process/worker/phase
+identity. Success keeps them in full logs; failure excerpts remain bounded.
+Existing replay groups now distinguish same-plan apply, fresh planning and
+fresh-plan apply without dropping any operation or assertion.
+
+A same-binary warmed completed-reset/refill pair passes in 262.03s serial versus
+145.26s through the two-worker launcher (44.6% less wall time for this pair).
+Each case changes by less than one second; all measured acquisitions are hits.
+Observed coordination waiting peaks at 0.51s for these acquisitions. Cold build
+work is excluded. A mismatched-wrapper parallel attempt was stopped and excluded;
+the measured rerun uses the same explicit wrapper as serial. The complete default
+partition and full-suite speedup remain unmeasured; no scheduling change follows
+from this pair alone.
+
+Four native timing tests, quiet-runner failure/success regression, scoped internal
+warning-denied Clippy, formatting, ShellCheck and whitespace checks pass. No full
+suite, release command, live deployment or downstream edit ran. Evidence and
+limits are in the [latency follow-up](../audits/reports/2026-09/2026-09-27/deployment-test-latency.md#implemented-follow-up-cache-attribution-and-worker-qualification).
+The complete current `.45` batch and both changelog surfaces are ready for review
+and the maintainer's chosen release gate. Package versions remain `.44`; changes
+are uncommitted. Broader performance acceptance remains open.
+
+## Deployment/test latency audit — 2026-09-27
+
+Read-only Toko feedback and GitHub issue checks found no new actionable request
+beyond the current `.45` operator fixes; downstream `.44` qualification continues.
+The [latency audit](../audits/reports/2026-09/2026-09-27/deployment-test-latency.md)
+and its structured evidence distinguish the 55m04s local `.44` result from pending
+`.45` and the cancelled cold CI run. Internal PocketIC owns 88.8% of the recorded
+local test stage. The nominal regular worker includes substantial Fleet journeys;
+its mapped `.44` CI cases took 42m54s, so current worker balance needs measurement.
+
+Recommended next work: expose existing artifact lock timings, qualify actual
+worker balance, then trace repeated observations/setup within their current
+authority scopes. Replay spans currently include fresh plan/apply work and must
+be split before treating them as replay latency. Separate CI jobs also allow
+PocketIC to continue after an ordinary failure. The report records that cost and
+the green-run sequencing tradeoff. No test/build, runtime edit, broader validation,
+publication, deployment or downstream modification ran for this audit. No new
+full-suite saving is claimed; `.45` remains ready for review and its chosen gate.
+
+## CI dependency-guard correction — .45, 2026-09-27
+
+The `.44` [ordinary CI job](https://github.com/dragginzgame/canic/actions/runs/36327889446/job/108645249412)
+failed because forced Cargo color wrapped the duplicate `(*)` marker in ANSI
+escapes. The timer guard then counted the same `ic-timers v0.8.0` as two package
+identities. The exact assertion reproduces locally with `CARGO_TERM_COLOR=always`;
+the default local run passes.
+
+Both timer and stable-memory graph guards now request `--color never` and exercise
+that override against forced color in their child environment. All 20 tests pass
+with forced parent color as well; scoped rustfmt and whitespace checks pass.
+Logs: `.tmp/ci-timer-ordinary.log`, `.tmp/timer-inventory-color-before.log`,
+`.tmp/timer-memory-color-after.log`. No timer/runtime behavior changed and no broad
+gate ran. This correction extends both `.45` changelogs; the batch remains ready
+for maintainer review and the release gate, with package versions still `.44` and
+changes uncommitted.
+
+## ic-testkit adoption — .45, 2026-09-27
+
+The workspace and lockfile now select `ic-testkit 0.10.1`; no transitive dependency
+changed. The upstream managed-server PID request is resolved by
+`PocketIcManagedServer::process_id()`. Existing shell-owned test server monitoring
+is unchanged. The [throughput feedback](../audits/working/0.110-validation-throughput/report.md)
+records the delivered API, PID lifetime limits and the remaining Canic cache-lock
+timing presentation follow-up.
+
+Locked offline library/test compilation passes for host, internal testing and
+runtime tests with governed PocketIC fixtures enabled, covering host `local-fleet`
+and the public testing facade. Log: `.tmp/ic-testkit-0.10.1-check.log`. No PocketIC
+suite or broad gate was rerun. The complete `.45` batch remains ready for review
+and the maintainer's release gate; both changelogs include this adoption. Package
+versions remain `.44`, all changes are uncommitted and sibling repositories were
+read-only.
+
+## Toko operator feedback — .45 batch ready, 2026-09-27
+
+CANIC-183 now uses the common bounded timing receipt for completed-source
+preparation and completed-estate reset review/apply/failure/replay. Diagnostics
+bind the preparation/publication review digest separately from current plan and
+operation hashes, and finalize before output. CANIC-150 now names every reviewed
+component occurrence and its Root with exact observed member state/current cursor;
+missing evidence remains unknown. CANIC-160 routes Fleet apply Root status reads,
+including the pool-reconciliation call that failed in Toko's retained log,
+through the existing bounded authenticated transient retry transport. Mutation
+reconciliation and authority checks remain unchanged.
+
+The 67 CLI and 301 host targeted native tests pass, as does scoped warning-denied
+host/CLI/internal library/test Clippy. The exact completed-reset PocketIC case
+passes in 139.46s (156s test stage including compilation, 157s runner). Actual CLI
+invocations run in fresh child processes, retain success/failure/continuation
+receipts and replay both plain and JSON without effects. Original evidence,
+physical IDs, state clearing, conservation and lost-response recovery remain
+asserted. Successful CLI JSON is captured so the test stays quiet; failures show
+diagnostics. Logs: `.tmp/upstream-native.log`, `.tmp/upstream-feedback-clippy.log`,
+`.tmp/upstream-reset-pocketic-final.log`.
+
+CANIC-176 remains an application performance follow-up. The existing frozen .39
+matrix proves unchanged-build reuse, while the newer .14 capture has different
+source/tool/cache conditions. No new cache defect or current-release build saving
+is established. The [feedback report](../audits/reports/2026-09/2026-09-27/toko-operator-feedback.md)
+records evidence, qualification and the matched measurement still needed.
+
+The complete bounded operator correction and the separately qualified throughput
+batch below are ready for maintainer review and the chosen release gate. Both
+changelog surfaces extend `.45`; package versions remain `.44`. Changes are
+uncommitted. No full suite, version transaction, Git publication, live IC effect
+or sibling edit ran. Toko adoption and broader performance acceptance remain open;
+this does not start another minor or accept minor closeout. The temporary detached
+feedback checkout under `.tmp/` is only a preserved draft; the main checkout owns
+all final changes.
+
+
+## Two-worker throughput and fixture consolidation — .45, 2026-09-27
+
+The three accepted throughput changes are implemented. Source-bound activation
+recovery remains the first barrier, then two isolated processes execute the
+registered short cases and full Fleet journeys respectively. They share compiled
+code and locked artifact caches, with private servers, ports, shims and scratch.
+Failure or interruption cancels both owned process groups and blocks later suites.
+Exact single-case selection remains serial; progress identifies each worker.
+
+One warmed, same-binary refill/repair pair measured 188s serial versus 114s with
+two workers (39.4% less wall time), without material individual slowdown. This is
+scoped concurrency evidence, not a full-suite speedup estimate. The mixed topology
+now performs one changed-build wipe; the small existing reinstall estate owns the
+same-build repeat. Their final real cases pass in 355s and 234s respectively.
+The consolidated real blocked-child funding case passes with nonzero fees and
+lost-response recovery; the synthetic-minimum estate and branch are removed.
+
+Native registry/selection checks, scoped warning-denied Clippy and fake-command
+success/failure/interruption/cleanup checks pass. A newly added exact live-balance
+replay assertion initially failed on observed execution/storage debit; the final
+proof bounds that debit below 1% of the smallest credit while keeping payment and
+mutation assertions exact. The corrected reset cases both pass. The parent
+launcher qualification passes in 118.91s, including both real workers and cleanup.
+The complete accepted throughput batch is ready for maintainer review and push
+preparation; its changelog surfaces are ready for the governed version flow.
+
+This bounded follow-up stays in the open `.45` draft on the affected minor despite
+the release-count guideline; it does not begin the next minor or accept closeout.
+Package versions remain `.44`, changes are uncommitted, and no broad gate, version
+transaction, Git publication or sibling modification ran. See the
+[throughput report](../audits/working/0.110-validation-throughput/report.md).
+
+
+## Quiet Fleet measurements and .44 release result — 2026-09-27
+
+The complete `.44` validation passed on `a77f2e9bb`; remote `main` and the peeled
+`v0.110.44` tag both resolve to release commit `2d8c9b387`. The successful test
+stage took 3,304s (55m04s), versus 3,820s (63m40s) for the prior successful `.43`
+run: 516s / 13.5% less. The internal PocketIC stage fell from 3,294s to 2,934s
+(six minutes); ordinary tests and compilation also benefited from cache reuse.
+These are observed complete test-stage times under differing source/cache/load
+conditions, not a controlled benchmark or end-to-end publication duration.
+The latest console contained 590 Fleet measurement records.
+
+The output correction includes `FLEET-MEASURE` in the existing quiet trace
+filter and bounded failure excerpt. Complete stdout/stderr evidence remains on
+disk, with progress and errors visible. The focused runner regression and scoped
+ShellCheck pass; no Cargo/PocketIC or broad validation was rerun. This requested
+output batch is complete and ready for review, with uncommitted changes in the
+`.45` changelog draft. Package versions remain `.44`; no version or Git mutation
+was performed. This is an output follow-up on the affected minor, not new minor
+implementation or closeout acceptance.
+
+
 ## Release-gate fixture correction — .44, 2026-09-27
 
 The maintainer's `make release-patch` on `411fe1dae` stopped in the host-import

@@ -11,14 +11,11 @@ use crate::{
         generate::capacity_import::{
             prepare_capacity_import_inventory, prepare_initial_import_inventory,
         },
-        model::{
-            EffectState,
-            capacity_import::{
-                CapacityImportJournalRecord,
-                operation::{
-                    CapacityImportDocumentRecord, CapacityImportOperationRecord,
-                    CapacityImportOperationReviewRecord, CapacityImportPublicationKind,
-                },
+        model::capacity_import::{
+            CapacityImportJournalRecord,
+            operation::{
+                CapacityImportDocumentRecord, CapacityImportOperationRecord,
+                CapacityImportOperationReviewRecord, CapacityImportPublicationKind,
             },
         },
         ops::{
@@ -170,12 +167,7 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
             || status.root_receipt.is_none()
             || !journal.approved
             || journal.reservation.is_none()
-            || journal.handoffs.iter().any(|handoff| {
-                handoff
-                    .effect
-                    .as_ref()
-                    .is_none_or(|effect| effect.state != EffectState::Applied)
-            })
+            || !crate::fleet_ensure::ops::capacity_import::journal::all_custody_ready(journal)
         {
             return Err(conflict());
         }
@@ -322,9 +314,17 @@ fn consume(
 fn valid_step(journal: &CapacityImportJournalRecord, step: &str) -> bool {
     matches!(step, "reserve" | "settle" | "release")
         || journal.plan.sources.iter().enumerate().any(|(index, _)| {
-            ["handoff", "controllers", "confirm", "uninstall", "cleared"]
-                .iter()
-                .any(|phase| step == format!("{index}:{phase}"))
+            [
+                "handoff",
+                "controllers",
+                "confirm",
+                "uninstall",
+                "confirm_stop",
+                "stop",
+                "cleared",
+            ]
+            .iter()
+            .any(|phase| step == format!("{index}:{phase}"))
         })
 }
 

@@ -56,6 +56,7 @@ fn bootstrap_capacity_hold_rejects_substituted_reservation_without_consuming_seq
     assert_conflict(CanisterPoolImportOps::reserve(wrong, &config(), 1));
     let mut wrong = reservation();
     wrong.operator = principal(6);
+    wrong.sources[0].controllers = vec![wrong.operator];
     wrong.transitional_controllers = vec![principal(1), principal(4), principal(6)];
     assert_conflict(CanisterPoolImportOps::reserve(wrong, &config(), 1));
     assert_eq!(CanisterPoolStore::state(), before);

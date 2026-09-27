@@ -2,7 +2,7 @@
 //!
 //! Host workflow owns evidence, approval, journalling and effects.
 
-use crate::fleet::{EnsureOptions, FleetCommandError, quote_review_argument};
+use crate::fleet::{EnsureOptions, FleetCommandError, progress, quote_review_argument};
 use std::path::Path;
 
 use canic_host::{
@@ -24,20 +24,6 @@ pub(super) fn run_if_selected(
         return Ok(false);
     }
     let retained = workflow::review(workspace, environment, &options.fleet).map_err(failure)?;
-    let published = canic_host::fleet_ensure::ops::completed_handoff::committed(
-        &canic_host::fleet_ensure::EnsurePaths::under(workspace, environment, &options.fleet),
-    )
-    .map_err(|error| failure(workflow::CompletedPreparationError::State(error)))?
-    .is_some();
-    if published
-        && !options.apply.as_ref().is_some_and(|approval| {
-            retained
-                .as_ref()
-                .is_some_and(|review| &review.review_sha256 == approval)
-        })
-    {
-        return Ok(false);
-    }
     let selected = if retained.is_some() {
         options.reinstall || options.apply.is_some()
     } else if options.reinstall {
@@ -56,22 +42,62 @@ pub(super) fn run_if_selected(
             "completed-source preparation permits no external Ledger debit".into(),
         ));
     }
+    let session = progress::ProgressSession::new(options.json);
+    session.retain_receipt(
+        workspace,
+        &progress::receipt::Invocation {
+            command: progress::receipt::CommandKind::CompletedPreparation,
+            fleet: &options.fleet,
+            environment,
+            desired_sha256: None,
+            applied_plan_sha256: None,
+            applied_review_sha256: options.apply.as_deref(),
+            reinstall: true,
+            next_review_command: "",
+        },
+    );
+    let request_sink = session.sink();
     let icp = IcpCli::new(&options.icp, Some(environment.into()))
         .with_identity(options.identity.as_deref())
-        .with_cwd(workspace);
-    let (review, journal) = if let Some(approval) = options.apply.as_deref() {
-        let review =
-            retained.ok_or_else(|| failure(workflow::CompletedPreparationError::Conflict))?;
-        let journal = workflow::apply(workspace, environment, &options.fleet, approval, &icp)
-            .map_err(failure)?;
-        (review, Some(journal))
-    } else {
-        (
-            workflow::plan(workspace, environment, &options.fleet, &icp).map_err(failure)?,
-            None,
-        )
-    };
-    let command = apply_command(options, &review);
+        .with_cwd(workspace)
+        .with_timing_handler(move |event| request_sink.request(event));
+    let result = (|| -> Result<_, FleetCommandError> {
+        let (review, journal) = if let Some(approval) = options.apply.as_deref() {
+            let review =
+                retained.ok_or_else(|| failure(workflow::CompletedPreparationError::Conflict))?;
+            let journal = workflow::apply(workspace, environment, &options.fleet, approval, &icp)
+                .map_err(failure)?;
+            (review, Some(journal))
+        } else {
+            (
+                workflow::plan(workspace, environment, &options.fleet, &icp).map_err(failure)?,
+                None,
+            )
+        };
+        session.sink().record(
+            "completed_preparation_authority",
+            &serde_json::json!({
+                "review_sha256": review.review_sha256,
+                "source_operation_id": review.source.operation_id,
+                "source_plan_sha256": review.source.plan_sha256,
+                "prepared": journal.as_ref().is_some_and(|journal| journal.prepared),
+            }),
+        );
+        Ok((review, journal))
+    })();
+    session.finish_without_report(result.is_ok());
+    drop(session);
+    let (review, journal) = result?;
+    render_result(options, &review, journal.as_ref())?;
+    Ok(true)
+}
+
+fn render_result(
+    options: &EnsureOptions,
+    review: &CompletedPreparationReviewRecord,
+    journal: Option<&canic_host::fleet_ensure::model::completed_handoff::preparation::CompletedPreparationJournalRecord>,
+) -> Result<(), FleetCommandError> {
+    let command = apply_command(options, review);
     if options.json {
         println!(
             "{}",
@@ -86,9 +112,9 @@ pub(super) fn run_if_selected(
             }))?
         );
     } else {
-        println!("{}", render(&review, journal.is_some(), &command));
+        println!("{}", render(review, journal.is_some(), &command));
     }
-    Ok(true)
+    Ok(())
 }
 
 fn failure(error: workflow::CompletedPreparationError) -> FleetCommandError {

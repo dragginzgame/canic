@@ -15,6 +15,15 @@ use std::collections::BTreeMap;
 /// Bounded final accounting sweeps, including a lost response or interrupted local publication.
 pub const COMPLETED_RESET_MAXIMUM_TERMINAL_OBSERVATIONS: u32 = 2;
 
+/// Exact archive/removal intent for consumed local approvals; excludes the active Fleet operation.
+#[derive(Deserialize, Serialize)]
+#[serde(deny_unknown_fields)]
+pub(in crate::fleet_ensure) struct CompletedAuthorityRetirementRecord {
+    pub schema_version: u16,
+    pub review_sha256: String,
+    pub files: BTreeMap<String, String>,
+}
+
 /// Current reset authority derived from a separately completed source preparation.
 /// Historical physical facts never become an executable predecessor desired document.
 #[derive(Clone, Debug, serde::Deserialize, Eq, PartialEq, serde::Serialize)]

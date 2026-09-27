@@ -41,12 +41,7 @@ pub async fn apply(
     if operation.review.review_sha256 != review_sha256 {
         return Err(CapacityImportJournalError::PublicationConflict);
     }
-    if record.handoffs.iter().all(|handoff| {
-        handoff
-            .effect
-            .as_ref()
-            .is_some_and(|effect| effect.state == EffectState::Applied)
-    }) {
+    if record.approved && record.reservation.is_some() && journal::all_custody_ready(&record) {
         return complete(store, paths, review_sha256, icp).await;
     }
     publication::verify_inputs(paths, &record, false)?;
@@ -116,11 +111,7 @@ async fn handoff(
     index: usize,
 ) -> Result<(), CapacityImportJournalError> {
     let id = record.handoffs[index].canister_id;
-    if record.handoffs[index]
-        .effect
-        .as_ref()
-        .is_some_and(|effect| effect.state == EffectState::Applied)
-    {
+    if journal::custody_ready(record, id) {
         return Ok(());
     }
     if record.handoffs[index].effect.is_none() {

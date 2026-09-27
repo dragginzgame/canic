@@ -22,13 +22,24 @@ pub enum PoolImportResetProgressRecord {
     AwaitingHandoff,
     ControllersIssued {
         before_total_cycles: u128,
+        before_canister_version: u64,
         sender_canister_version: u64,
     },
     ControllersConfirmed {
         retained_total_cycles: u128,
+        canister_version: u64,
+    },
+    StopIssued {
+        before_total_cycles: u128,
+        before_canister_version: u64,
+    },
+    Stopped {
+        retained_total_cycles: u128,
+        canister_version: u64,
     },
     UninstallIssued {
         before_total_cycles: u128,
+        before_canister_version: u64,
         sender_canister_version: u64,
     },
     Ready(PoolImportSourceReceipt),

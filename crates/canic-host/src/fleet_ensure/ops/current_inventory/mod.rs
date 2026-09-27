@@ -217,8 +217,7 @@ pub(super) fn terminal_inventory(
         &registry_version,
         &component_operation,
     )?;
-    let authorities =
-        query_current_root_authorities(icp, desired, state, &root_candid, &store_candid)?;
+    let authorities = query_current_root_authorities(icp, desired, state, &store_candid)?;
     validate_root_authority(&registry, &authorities)?;
     let release_set = common_release_set(&authorities)?;
     let protocols = ProtocolCatalog::load(
@@ -482,7 +481,6 @@ fn query_entries(
         }
         append_pool_assets(
             icp,
-            &protocols.root.candid_path,
             root,
             store,
             &component_summary.component_ids,
@@ -783,7 +781,6 @@ fn append_root_components(
         |(member, protocol, partition_authority)| {
             validate_component_partition(
                 icp,
-                &protocols.root.candid_path,
                 authority.root.fleet_subnet_root,
                 partition_authority,
                 member,
@@ -1078,7 +1075,6 @@ const fn terminal_field_error(
 
 fn validate_component_partition(
     icp: &IcpCli,
-    candid_path: &Path,
     root: Principal,
     authority: &ComponentPartitionAuthority<'_>,
     member: &canic_core::dto::component_provisioning::RootProvisionedGroupMember,
@@ -1086,9 +1082,8 @@ fn validate_component_partition(
 ) -> Result<(), CurrentProtocolError> {
     let response: RootInventoryStatusResponse = terminal_observation(
         "component_active_partition",
-        query_with_candid(
+        crate::canister_protocol::query_authenticated(
             icp,
-            candid_path,
             root,
             protocol::CANIC_ROOT_STATUS,
             &RootInventoryStatusRequest::ComponentRegistryActivePartition(
@@ -1406,7 +1401,6 @@ fn validate_terminal_descendant_allocation_response(
 )]
 fn append_pool_assets(
     icp: &IcpCli,
-    candid_path: &Path,
     root: &FleetSubnetRootEntry,
     store: Principal,
     component_ids: &BTreeSet<Principal>,
@@ -1426,9 +1420,8 @@ fn append_pool_assets(
     loop {
         let response: RootInventoryStatusResponse = terminal_observation(
             "root_pool",
-            query_with_candid(
+            crate::canister_protocol::query_authenticated(
                 icp,
-                candid_path,
                 root.fleet_subnet_root,
                 protocol::CANIC_ROOT_STATUS,
                 &RootInventoryStatusRequest::Pool(CanisterPoolStatusRequest {

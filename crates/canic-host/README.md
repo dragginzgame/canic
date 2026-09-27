@@ -55,8 +55,13 @@ CLI -> workflow -> policy
 - `ops` owns artifact hashing, current state files and one platform effect.
 - `workflow` persists intent, reconciles replay and publishes terminal state.
 
-Historical install plans, release-pair loaders, role journals, repair receipts,
-recovery bundles, adoption paths and installed-Fleet caches are not read.
+Supplied infrastructure and capacity use explicit reviewed bootstrap/import
+operations before ordinary Ensure. Completed-source preparation accepts only
+current-schema plans, journals and receipts. It archives original evidence and
+publishes separately reviewed reset authority. See the
+[operator guide](../../docs/features/operations/fleet-ensure.md) for these
+procedures and unreadable-record handling; historical contracts are not decoded
+or migrated.
 
 ## Cycle Safety
 

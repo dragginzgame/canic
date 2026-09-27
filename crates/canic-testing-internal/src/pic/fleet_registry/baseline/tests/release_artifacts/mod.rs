@@ -133,6 +133,7 @@ pub(super) fn build_literal_zero_release_artifacts(
                 .expect("commit literal-zero release artifact cache")
         }
     };
+    crate::pic::timing::artifact_cache("literal-zero-release-artifacts", &outcome);
     cache.require_unchanged();
     crate::pic::progress::timed(
         "FLEET",

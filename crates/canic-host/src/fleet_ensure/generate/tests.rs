@@ -971,20 +971,28 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     assert_eq!(generated.observed_controlled_cycles, 319_900_000_000_000);
     assert_eq!(generated.release_build_id, release_build_id);
     assert_eq!(
-        generated.startup_funding.coordinator_balance,
+        generated
+            .startup_funding
+            .as_ref()
+            .unwrap()
+            .coordinator_balance,
         StartupNativeBalance::Observed(270_000_000_000_000)
     );
     assert_eq!(
-        generated.startup_funding.coordinator_spendable_cycles,
+        generated
+            .startup_funding
+            .as_ref()
+            .unwrap()
+            .coordinator_spendable_cycles,
         60_000_000_000_000
     );
     assert!(matches!(
-        generated.startup_funding.coordinator_usage,
+        generated.startup_funding.as_ref().unwrap().coordinator_usage,
         crate::fleet_ensure::view::startup_funding::StartupCoordinatorUsage::Unavailable(
             crate::fleet_ensure::view::startup_funding::StartupUsageUnavailable::SelectedBuildNotInstalled
         )
     ));
-    let startup_root = &generated.startup_funding.roots[0];
+    let startup_root = &generated.startup_funding.as_ref().unwrap().roots[0];
     assert_eq!(startup_root.root, "root-0");
     assert_eq!(
         startup_root.balance,
@@ -2465,66 +2473,16 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     );
     crate::fleet_ensure::ops::write_plan(&recovery_paths, &overwritten_successor)
         .expect("retain rejected successor plan without changing the applied journal");
-    let mut pending_reset_pool = retained_pool.clone();
-    pending_reset_pool.config = recovery_desired
-        .bootstrap
-        .as_ref()
-        .and_then(|bootstrap| bootstrap.roots.first())
-        .expect("current Root pool authority")
-        .limits
-        .canister_pool
-        .clone();
-    for asset in pending_reset_pool
-        .entries
-        .iter_mut()
-        .filter(|asset| asset.origin == CanisterPoolAssetOrigin::Imported)
-    {
-        asset.cycles = Cycles::new(0);
-        asset.status = CanisterPoolAssetStatus::PendingReset;
+    let mut observations = recovery_platform.fresh_process();
+    for live in observations.live.values_mut() {
+        live.canister_version = None;
+        if live.root_owned_lifecycle.is_some() {
+            live.root_owned_lifecycle = Some(RootOwnedCanisterLifecycle::Reconciling);
+            live.cycles = 0;
+        }
     }
-    pending_reset_pool.workload = 0;
-    pending_reset_pool.ready = 0;
-    pending_reset_pool.pending_reset = 2;
-    pending_reset_pool.pooled = 2;
-    let versionless_icp = write_versionless_root_owned_fake_icp(
-        &root,
-        FakeIcpFixture {
-            authority: &retained_authority,
-            coordinator: &coordinator,
-            coordinator_module_hash: artifacts
-                .wasm_sha256_by_canister
-                .get("coordinator")
-                .expect("Coordinator artifact"),
-            fleet_root: &fleet_root,
-            operator: &operator,
-            pool: &pending_reset_pool,
-            controller_cycle_balance: None,
-            root_module_hash: artifacts
-                .wasm_sha256_by_canister
-                .get("root-0")
-                .expect("Root artifact"),
-            root_runtime_status: "running",
-            root_status_error: None,
-            store: &store,
-            store_has_root_controller: true,
-            store_module_hash: artifacts
-                .wasm_sha256_by_canister
-                .get("store-0")
-                .expect("Store artifact"),
-        },
-    );
-    fs::write(root.join("root-status-count"), b"1\n")
-        .expect("select Root pool status after retained authority");
-    let mut versionless_platform = VersionlessPlanningPlatform::new(
-        IcpEnsurePlatform::new(
-            recovery_desired.clone(),
-            versionless_icp
-                .to_str()
-                .expect("version-less fake ICP path"),
-            &root,
-        ),
-        recovery_desired.clone(),
-    );
+    let mut versionless_platform =
+        VersionlessPlanningPlatform::new(observations, recovery_desired.clone());
     let versionless_replan = workflow::plan(
         &root,
         &recovery_desired,
@@ -3291,7 +3249,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         pending_desired.clone(),
         icp.to_str().expect("fake ICP path"),
         &root,
-    );
+    )
+    .with_process_fixture_pool_reader();
     let pending_plan = workflow::plan(
         &root,
         &pending_desired,
@@ -3328,7 +3287,8 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         drifted_desired.clone(),
         icp.to_str().expect("fake ICP path"),
         &root,
-    );
+    )
+    .with_process_fixture_pool_reader();
     let error = workflow::plan(
         &root,
         &drifted_desired,
@@ -3553,11 +3513,11 @@ struct RetainedEnsurePlatform {
 
 struct VersionlessPlanningPlatform {
     desired: DesiredFleet,
-    inner: IcpEnsurePlatform,
+    inner: RetainedEnsurePlatform,
 }
 
 impl VersionlessPlanningPlatform {
-    fn new(inner: IcpEnsurePlatform, desired: DesiredFleet) -> Self {
+    fn new(inner: RetainedEnsurePlatform, desired: DesiredFleet) -> Self {
         Self { desired, inner }
     }
 }
@@ -4813,11 +4773,6 @@ fn write_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
 }
 
 #[cfg(unix)]
-fn write_versionless_root_owned_fake_icp(root: &Path, fixture: FakeIcpFixture<'_>) -> PathBuf {
-    write_fake_icp_with_status_projection(root, fixture, None, true)
-}
-
-#[cfg(unix)]
 #[expect(
     clippy::too_many_lines,
     reason = "one process-backed fixture keeps every accepted fake ICP command visible"
@@ -5120,11 +5075,6 @@ enum FixtureManagedStatusResponse {
 
 #[cfg(not(unix))]
 fn write_fake_icp(_root: &Path, _fixture: FakeIcpFixture<'_>) -> PathBuf {
-    panic!("public generator fixture requires a Unix fake ICP executable")
-}
-
-#[cfg(not(unix))]
-fn write_versionless_root_owned_fake_icp(_root: &Path, _fixture: FakeIcpFixture<'_>) -> PathBuf {
     panic!("public generator fixture requires a Unix fake ICP executable")
 }
 

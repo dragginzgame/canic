@@ -205,6 +205,9 @@ pub fn prepare_handoff(
         return Ok(journal.clone());
     }
     let source = &journal.plan.sources[index];
+    if !crate::fleet_ensure::policy::capacity_import::requires_handoff(&journal.plan, source) {
+        return Err(CapacityImportJournalError::Integrity);
+    }
     admit_source_handoff(source, observed)?;
     validate_request(&journal.plan, observed.binding.canister_id, &request)?;
     let mut updated = journal.clone();
@@ -345,6 +348,9 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
             }
             continue;
         };
+        if !crate::fleet_ensure::policy::capacity_import::requires_handoff(&journal.plan, source) {
+            return Err(CapacityImportJournalError::Integrity);
+        }
         validate_request(
             &journal.plan,
             handoff.canister_id,
@@ -404,6 +410,52 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
         }
     }
     Ok(())
+}
+
+/// A source already held by Root requires no host controller effect.
+/// All other sources require a certified completion retained by this journal owner.
+#[must_use]
+pub fn custody_ready(journal: &CapacityImportJournalRecord, canister: Principal) -> bool {
+    let Some(index) = journal
+        .plan
+        .sources
+        .iter()
+        .position(|source| source.binding.canister_id == canister)
+    else {
+        return false;
+    };
+    let Some(handoff) = journal.handoffs.get(index) else {
+        return false;
+    };
+    if handoff.canister_id != canister {
+        return false;
+    }
+    if crate::fleet_ensure::policy::capacity_import::requires_handoff(
+        &journal.plan,
+        &journal.plan.sources[index],
+    ) {
+        handoff
+            .effect
+            .as_ref()
+            .is_some_and(|effect| effect.state == EffectState::Applied)
+    } else {
+        handoff.effect.is_none()
+            && handoff.request.is_none()
+            && handoff.rejections.is_empty()
+            && handoff.before_reserved_cycles.is_none()
+            && handoff.after_reserved_cycles.is_none()
+    }
+}
+
+/// Whether every selected source has retained host completion or reviewed Root custody.
+#[must_use]
+pub fn all_custody_ready(journal: &CapacityImportJournalRecord) -> bool {
+    journal.handoffs.len() == journal.plan.sources.len()
+        && journal
+            .plan
+            .sources
+            .iter()
+            .all(|source| custody_ready(journal, source.binding.canister_id))
 }
 
 fn source_index(

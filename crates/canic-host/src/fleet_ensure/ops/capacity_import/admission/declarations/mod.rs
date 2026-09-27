@@ -85,6 +85,14 @@ pub(super) fn validate(
             .ok_or_else(invalid)?;
         // Running/empty state and snapshots are live admission facts, not operator assertions.
         let mut expected = source.binding.clone();
+        if !source.binding.stopped
+            && source.binding.controllers.contains(&plan.authority.root)
+            && binding.canister_version <= source.binding.canister_version
+        {
+            // Running execution is disposable. Its declared version remains a lower bound;
+            // the live stopped version, retained by Root, binds all destructive effects.
+            expected.canister_version = binding.canister_version;
+        }
         expected.stopped = true;
         expected.snapshots_size_bytes = 0;
         if expected != binding || source.disposition != declaration.disposition(digest) {

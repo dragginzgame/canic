@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod balance_observation;
 pub mod capacity_import;
+pub mod clean_reinstall;
 pub mod completed_preparation;
 pub mod completed_reset;
 mod continuation;
@@ -368,9 +369,20 @@ pub fn retained_reinstall_apply_plan<E: std::error::Error + 'static>(
     let paths = EnsurePaths::under(root, environment, requested_fleet);
     let _lock = lock_operation(&paths)?;
     // The staged review owns apply; its source remains receipt-only evidence.
-    let plan = match crate::fleet_ensure::ops::reinstall::adoption::review(&paths)? {
-        Some(review) => Some(review),
-        None => retained_plan::read(&paths, environment, requested_fleet)?,
+    let plan = if let Some(review) = crate::fleet_ensure::ops::reinstall::adoption::review(&paths)?
+    {
+        Some(review)
+    } else {
+        if crate::fleet_ensure::ops::operation_selection::completed(
+            &paths,
+            environment,
+            requested_fleet,
+        )?
+        .is_some_and(|completed| completed.plan_sha256 != reviewed_plan_sha256)
+        {
+            return Ok(None);
+        }
+        retained_plan::read(&paths, environment, requested_fleet)?
     };
     let Some(plan) = plan else {
         return Ok(None);
@@ -403,6 +415,15 @@ where
             return Err(EnsureWorkflowError::PlanIntegrity);
         }
         return Ok(Some(review));
+    }
+    if crate::fleet_ensure::ops::operation_selection::completed(
+        &paths,
+        environment,
+        requested_fleet,
+    )?
+    .is_some()
+    {
+        return Ok(None);
     }
     let Some(journal) = retained_plan::journal(&paths, environment, requested_fleet)? else {
         return Ok(None);
@@ -1101,6 +1122,30 @@ where
         }
         desired
     };
+    if let Some(journal) = &retained_journal
+        && let Some(actual) = crate::fleet_ensure::ops::clean_reinstall::terminal::read(
+            &paths,
+            &retained_plan,
+            journal,
+            &state,
+            &funding_plan::<P::Error>(&retained_plan, journal)?.conservation,
+        )?
+    {
+        verify_journal(journal, &retained_plan, requested_fleet, &state)?;
+        if journal.completion != FleetEnsureCompletion::Converged {
+            let mut completed = journal.clone();
+            completed.completion = FleetEnsureCompletion::Converged;
+            completed.stalled_observations = 0;
+            write_journal(&paths, &completed)?;
+        }
+        return Ok(FleetEnsureReport {
+            funding_review: None,
+            actual_conservation: Some(actual),
+            effects_applied: 0,
+            plan: retained_plan,
+            terminal: true,
+        });
+    }
     if let Some(journal) = &retained_journal
         && let Some(actual) = crate::fleet_ensure::ops::infrastructure_bootstrap::terminal::read(
             &paths,
@@ -2248,6 +2293,14 @@ where
     write_state(&paths, &terminal_state)?;
     journal.completion = FleetEnsureCompletion::Converged;
     journal.stalled_observations = 0;
+    crate::fleet_ensure::ops::clean_reinstall::terminal::retain(
+        &paths,
+        &retained_plan,
+        &journal,
+        &terminal_state,
+        &actual_conservation,
+        &funding_plan::<P::Error>(&retained_plan, &journal)?.conservation,
+    )?;
     write_journal(&paths, &journal)?;
     if let Some(balances) = completed_balances {
         crate::fleet_ensure::ops::completed_reset::terminal::retain(

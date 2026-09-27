@@ -32,6 +32,7 @@ pub(super) fn reservation() -> PoolImportReservation {
         final_controllers: vec![principal(1), principal(4)],
         sources: vec![PoolImportSource {
             canister_id: principal(8),
+            controllers: vec![principal(2)],
             module_sha256: Some([7; 32]),
             canister_version: 10,
             stopped: true,
@@ -77,6 +78,70 @@ fn observed(delta: u64) -> PoolImportObservationView {
 fn start() {
     CanisterPoolStore::clear();
     CanisterPoolImportOps::reserve(reservation(), &config(), 1).unwrap();
+}
+
+#[test]
+fn root_owned_running_source_records_stop_and_recovers_without_duplicate_effects() {
+    CanisterPoolStore::clear();
+    let mut request = reservation();
+    request.sources[0].controllers = vec![request.root];
+    request.sources[0].stopped = false;
+    CanisterPoolImportOps::reserve(request.clone(), &config(), 1).unwrap();
+    let mut current = observed(1);
+    current.canister_version = 10;
+    current.controllers = vec![request.root];
+    current.stopped = false;
+    // Running application messages may advance the version before the reviewed stop.
+    current.canister_version = 19;
+    assert!(CanisterPoolImportOps::issue_controllers(identity(), &current, budget(), 2).is_err());
+    CanisterPoolImportOps::issue_stop(identity(), &current, budget(), 2).unwrap();
+    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
+    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let before = CanisterPoolStore::state();
+    assert!(CanisterPoolImportOps::issue_stop(identity(), &current, budget(), 2).is_err());
+    assert!(CanisterPoolImportOps::observe_stopped(identity(), &current).is_err());
+    assert_eq!(CanisterPoolStore::state(), before);
+    current.stopped = true;
+    current.canister_version = 21;
+    CanisterPoolImportOps::observe_stopped(identity(), &current).unwrap();
+    assert!(CanisterPoolImportOps::issue_uninstall(identity(), &current, budget()).is_err());
+    CanisterPoolImportOps::issue_controllers(identity(), &current, budget(), 2).unwrap();
+    current.canister_version = 22;
+    current.controllers = request.final_controllers;
+    CanisterPoolImportOps::observe_controllers(
+        identity(),
+        &current,
+        &history(&current, PoolImportHistoryKind::Controllers),
+    )
+    .unwrap();
+    CanisterPoolImportOps::issue_uninstall(identity(), &current, budget()).unwrap();
+    current.canister_version = 23;
+    current.module_sha256 = None;
+    let receipt = CanisterPoolImportOps::observe_cleared(
+        identity(),
+        &current,
+        &history(&current, PoolImportHistoryKind::Uninstall),
+        3,
+    )
+    .unwrap();
+    let terminal = CanisterPoolStore::state();
+    assert_eq!(
+        CanisterPoolImportOps::observe_cleared(
+            identity(),
+            &current,
+            &history(&current, PoolImportHistoryKind::Uninstall),
+            4
+        )
+        .unwrap(),
+        receipt
+    );
+    assert_eq!(CanisterPoolStore::state(), terminal);
+    assert_eq!(receipt.canister_version, 23);
+    assert_eq!(receipt.before_uninstall_canister_version, 22);
+    assert_eq!(
+        receipt.retained_cycles + receipt.retained_reserved_cycles + receipt.observed_debit_cycles,
+        1_100
+    );
 }
 
 pub(super) fn finish() -> PoolImportSourceReceipt {

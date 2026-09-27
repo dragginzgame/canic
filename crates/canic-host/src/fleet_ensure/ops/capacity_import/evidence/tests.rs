@@ -16,6 +16,7 @@ pub(in crate::fleet_ensure) fn settled(plan: &CapacityImportPlanRecord) -> PoolI
                     root_sender_canister_version: 17,
                     canister_id: source.binding.canister_id,
                     canister_version: source.binding.canister_version + 3,
+                    before_uninstall_canister_version: source.binding.canister_version + 2,
                     retained_cycles: source.observed_cycles - 20,
                     retained_reserved_cycles: source.observed_reserved_cycles - 10,
                     observed_debit_cycles: 30,
@@ -32,6 +33,34 @@ pub(in crate::fleet_ensure) fn settled(plan: &CapacityImportPlanRecord) -> PoolI
             observed_debit_cycles: 30,
         }),
     }
+}
+
+#[test]
+fn running_root_receipt_binds_observed_stopped_version_and_exact_uninstall() {
+    let mut selected = plan();
+    selected.sources[0].binding.controllers = vec![selected.authority.root];
+    selected.sources[0].binding.stopped = false;
+    let selected = crate::fleet_ensure::ops::capacity_import::prepare_review(
+        selected.authority,
+        selected.sources,
+        selected.root_budget,
+    )
+    .unwrap();
+    let mut status = settled(&selected);
+    let PoolImportSourceProgress::Ready(receipt) = &mut status.progress[0] else {
+        unreachable!()
+    };
+    receipt.before_uninstall_canister_version += 20;
+    receipt.canister_version = receipt.before_uninstall_canister_version + 1;
+    validate_root_status(&selected, &status).unwrap();
+    let PoolImportSourceProgress::Ready(receipt) = &mut status.progress[0] else {
+        unreachable!()
+    };
+    receipt.canister_version += 1;
+    assert!(matches!(
+        validate_root_status(&selected, &status),
+        Err(CapacityImportReviewError::RootEvidenceMismatch)
+    ));
 }
 
 #[test]

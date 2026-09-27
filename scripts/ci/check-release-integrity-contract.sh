@@ -431,9 +431,9 @@ rg -F "if: \${{ !cancelled()" <<<"$pocketic_job" >/dev/null ||
 if rg -F 'path: target' <<<"$pocketic_job" | rg -v -F 'path: target/test-artifacts' >/dev/null; then
     fail "PocketIC CI must not cache the complete Cargo target directory"
 fi
-rg -F '"canic-testing-internal ordered PocketIC suite"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
-    fail "the serial PocketIC lane does not use the one-process ordered internal suite"
-rg -F 'pic::governed_suite::governed_serial_pocketic_suite' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+rg -F '"canic-testing-internal governed PocketIC suite"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
+    fail "the PocketIC lane does not use the governed internal suite"
+rg -F 'pic::governed_suite::governed_internal_pocketic_suite' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the serial PocketIC lane does not select the governed internal suite"
 if rg -F 'FLEET_DEPLOYMENT_RESTORE_TEST=' "$WORKSPACE_TEST_RUNNER" >/dev/null; then
     fail "the internal PocketIC lane still splits the process-local Fleet pool"
@@ -554,7 +554,7 @@ rg -F 'libtest-parallel' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary timing output does not distinguish libtest parallelism from suite concurrency"
 pocketic_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic)" ||
     fail "the PocketIC workspace test plan cannot be resolved"
-rg -F -- '-p canic-testing-internal --features governed-pocketic-tests --lib pic::governed_suite::governed_serial_pocketic_suite' \
+rg -F -- '-p canic-testing-internal --features governed-pocketic-tests --lib pic::governed_suite::governed_internal_pocketic_suite' \
     <<<"$pocketic_test_plan" >/dev/null ||
     fail "the governed internal PocketIC lane does not enable its fixture catalogue"
 rg -F -- '-p canic-host --lib governed_pocketic_ -- --test-threads=1 --nocapture --ignored' \

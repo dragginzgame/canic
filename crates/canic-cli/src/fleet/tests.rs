@@ -300,6 +300,8 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("retain in-progress journal");
     let mut options = EnsureOptions {
+        seed: PathBuf::from("deployments/fleet.estate.toml"),
+        source: PathBuf::from("deployments/fleet.toml"),
         observe_funding: None,
         operator_mint: false,
         mint_cmc: "rkp4c-7iaaa-aaaaa-aaaca-cai".into(),
@@ -677,6 +679,7 @@ fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
         state: FleetEnsureProgressState::AwaitingProgress {
             elapsed_seconds: 63,
             provisioning: Some(canic_host::fleet_ensure::dto::FleetProvisioningProgress {
+                components: Vec::new(),
                 pending_root_failure: None,
                 phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
                 root_batch_count: 1,
@@ -710,6 +713,7 @@ fn provisioning_wait_exposes_typed_stage_counts_and_invocation_elapsed() {
             "kind": "awaiting_progress",
             "elapsed_seconds": 63,
             "provisioning": {
+                "components": [],
                 "pending_root_failure": null,
                 "phase": "ActivatingRuntimes",
                 "root_batch_count": 1,
@@ -1092,6 +1096,7 @@ fn timing_outcome_retains_exact_plan_scope_and_never_promotes_prerequisite_succe
             environment: "local",
             desired_sha256: Some("desired"),
             applied_plan_sha256: Some(&report.plan.plan_sha256),
+            applied_review_sha256: None,
             reinstall: false,
             next_review_command: "review",
         },

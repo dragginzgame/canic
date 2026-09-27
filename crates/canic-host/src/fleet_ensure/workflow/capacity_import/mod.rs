@@ -7,7 +7,7 @@ pub mod review;
 
 use crate::{
     fleet_ensure::{
-        model::{EffectState, capacity_import::CapacityImportJournalRecord},
+        model::capacity_import::CapacityImportJournalRecord,
         ops::{
             EnsurePaths,
             capacity_import::{
@@ -49,12 +49,7 @@ pub async fn complete(
     }
     if !journal.approved
         || journal.reservation.is_none()
-        || journal.handoffs.iter().any(|handoff| {
-            handoff
-                .effect
-                .as_ref()
-                .is_none_or(|effect| effect.state != EffectState::Applied)
-        })
+        || !crate::fleet_ensure::ops::capacity_import::journal::all_custody_ready(&journal)
     {
         return Err(CapacityImportJournalError::Unresolved);
     }
@@ -88,7 +83,10 @@ async fn finish_root(
 ) -> Result<PoolImportStatus, CapacityImportJournalError> {
     let mut observed = transport.root_status(&journal.plan).await?;
     for index in 0..journal.plan.sources.len() {
-        while let Some(step) = progress_step(&observed.progress[index]) {
+        while let Some(step) = progress_step(
+            &observed.progress[index],
+            journal.plan.sources[index].binding.stopped,
+        ) {
             *journal = publication::reserve_submission(journal, &format!("{index}:{step}"))?;
             store.save(journal)?;
             observed = transport
@@ -104,11 +102,18 @@ async fn finish_root(
     Ok(observed)
 }
 
-const fn progress_step(progress: &PoolImportSourceProgress) -> Option<&'static str> {
+const fn progress_step(
+    progress: &PoolImportSourceProgress,
+    originally_stopped: bool,
+) -> Option<&'static str> {
     match progress {
-        PoolImportSourceProgress::AwaitingHandoff => Some("controllers"),
+        PoolImportSourceProgress::AwaitingHandoff if !originally_stopped => Some("stop"),
+        PoolImportSourceProgress::AwaitingHandoff | PoolImportSourceProgress::Stopped => {
+            Some("controllers")
+        }
         PoolImportSourceProgress::ControllersIssued => Some("confirm"),
         PoolImportSourceProgress::ControllersConfirmed => Some("uninstall"),
+        PoolImportSourceProgress::StopIssued => Some("confirm_stop"),
         PoolImportSourceProgress::UninstallIssued => Some("cleared"),
         PoolImportSourceProgress::Ready(_) => None,
     }

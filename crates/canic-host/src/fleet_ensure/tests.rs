@@ -4987,6 +4987,7 @@ fn long_running_component_provisioning_is_paced_past_eight_observations_without_
     fixture.platform.protocol_command_only = true;
     fixture.platform.protocol_pending_waits = 10;
     let summary = FleetProvisioningProgress {
+        components: Vec::new(),
         pending_root_failure: None,
         phase: canic_core::dto::component_provisioning::FleetComponentProvisioningPhase::ActivatingRuntimes,
         root_batch_count: 1,

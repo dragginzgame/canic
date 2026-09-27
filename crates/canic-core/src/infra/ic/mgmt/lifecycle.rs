@@ -158,6 +158,17 @@ impl MgmtInfra {
         Ok(())
     }
 
+    /// Quote a stop using the same request as the execution below.
+    pub fn stop_canister_call_cost(canister_pid: Principal) -> Result<u128, IcInfraError> {
+        Ok(
+            Call::unbounded_wait(Principal::management_canister(), "stop_canister")
+                .with_arg(InfraCanisterIdRecord {
+                    canister_id: canister_pid,
+                })?
+                .cost(),
+        )
+    }
+
     /// Stop a canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), IcInfraError> {
         let args = InfraCanisterIdRecord {

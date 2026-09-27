@@ -159,6 +159,143 @@ impl Drop for Fixture {
     }
 }
 
+fn consumed_source(
+    fixture: &Fixture,
+) -> (
+    serde_json::Value,
+    serde_json::Value,
+    CompletedEstatePublicationReviewRecord,
+    CompletedEstatePublicationRecord,
+) {
+    let preparation = serde_json::json!({
+        "cli_release": "0.110.43",
+        "review_sha256": "ab".repeat(32),
+        "source": fixture.review.source,
+        "retired_fields": {"opaque": true},
+    });
+    let prepared = serde_json::json!({
+        "review_sha256": "ab".repeat(32),
+        "prepared": true,
+        "retired_effects": ["complete"],
+    });
+    let bytes = serde_json::to_vec(&serde_json::json!({
+        "reinstall": {"completed_reset": {
+            "preparation": preparation,
+            "prepared": prepared,
+        }},
+        "retired_executable_contract": "not a current FleetEnsurePlan",
+    }))
+    .unwrap();
+    let digest = sha256_hex(&bytes);
+    storage::retain(&fixture.paths, &digest, &bytes).unwrap();
+    let mut review = fixture.review.clone();
+    review.replacement.plan_sha256 = digest;
+    review.review_sha256 = review_digest(&review).unwrap();
+    let review_bytes = serialize(&review, &review_path(&fixture.paths)).unwrap();
+    let review_hash = sha256_hex(&review_bytes);
+    storage::retain(&fixture.paths, &review_hash, &review_bytes).unwrap();
+    let marker = CompletedEstatePublicationRecord {
+        schema_version: 1,
+        review_sha256: review.review_sha256.clone(),
+        review_document_sha256: review_hash,
+        complete: true,
+    };
+    write_current(&marker_path(&fixture.paths), &marker).unwrap();
+    (preparation, prepared, review, marker)
+}
+
+#[test]
+fn completed_publication_retires_preparation_before_current_release_decoding() {
+    let fixture = Fixture::new();
+    let (preparation, prepared, review, marker) = consumed_source(&fixture);
+    let preparation_path = fixture
+        .paths
+        .plan
+        .with_file_name("completed-preparation-review.json");
+    let prepared_path = fixture
+        .paths
+        .plan
+        .with_file_name("completed-preparation-journal.json");
+    write_current(&preparation_path, &preparation).unwrap();
+    write_current(&prepared_path, &prepared).unwrap();
+    let files = [
+        &fixture.paths.plan,
+        &fixture.paths.journal,
+        &fixture.paths.state,
+        &preparation_path,
+        &prepared_path,
+    ];
+    let before = files.map(|path| fs::read(path).unwrap());
+
+    // Completed selection uses immutable publication evidence, never an executable reader.
+    assert_eq!(completed(&fixture.paths).unwrap(), Some(review));
+    assert!(consumed_preparation(&fixture.paths).unwrap());
+    assert!(
+        crate::fleet_ensure::ops::completed_preparation::review(&fixture.paths)
+            .unwrap()
+            .is_none()
+    );
+    crate::fleet_ensure::ops::retained_contract::check(
+        &fixture.root,
+        &fixture.review.environment,
+        &fixture.review.fleet,
+    )
+    .unwrap();
+    drop(lock_operation(&fixture.paths).unwrap());
+    assert_eq!(before, files.map(|path| fs::read(path).unwrap()));
+
+    // An interrupted publication has not consumed the approval, even if preparation finished.
+    let mut pending = marker.clone();
+    pending.complete = false;
+    write_current(&marker_path(&fixture.paths), &pending).unwrap();
+    assert!(completed(&fixture.paths).unwrap().is_none());
+    assert!(!consumed_preparation(&fixture.paths).unwrap());
+    assert!(matches!(
+        crate::fleet_ensure::ops::completed_preparation::review(&fixture.paths),
+        Err(crate::fleet_ensure::ops::completed_preparation::CompletedPreparationError::State(_)
+            | crate::fleet_ensure::ops::completed_preparation::CompletedPreparationError::Conflict)
+    ));
+
+    // A later preparation cannot be retired by an unrelated completed publication.
+    write_current(&marker_path(&fixture.paths), &marker).unwrap();
+    let mut changed = preparation.clone();
+    changed["review_sha256"] = serde_json::Value::String("cd".repeat(32));
+    write_current(&preparation_path, &changed).unwrap();
+    assert!(!consumed_preparation(&fixture.paths).unwrap());
+    assert!(matches!(
+        crate::fleet_ensure::ops::completed_preparation::require_no_intent(&fixture.paths),
+        Err(EnsureStateError::CompletedPreparationInProgress)
+    ));
+
+    write_current(&preparation_path, &preparation).unwrap();
+    let current = serde_json::json!({
+        "completion": "in_progress", "fleet": fixture.review.fleet,
+    });
+    write_current(&fixture.paths.journal, &current).unwrap();
+    retirement::retire(&fixture.paths).unwrap();
+    assert!(preparation_path.exists());
+    assert!(marker_path(&fixture.paths).exists());
+
+    let current = serde_json::json!({
+        "completion": "converged", "fleet": fixture.review.fleet,
+    });
+    write_current(&fixture.paths.journal, &current).unwrap();
+    let journal_bytes = fs::read(&fixture.paths.journal).unwrap();
+    retirement::retire(&fixture.paths).unwrap();
+    assert!(!preparation_path.exists());
+    assert!(!prepared_path.exists());
+    assert!(!marker_path(&fixture.paths).exists());
+    assert!(
+        fixture
+            .paths
+            .plan
+            .with_file_name("completed-authority-history")
+            .join(format!("{}.json", marker.review_sha256))
+            .is_file()
+    );
+    assert_eq!(fs::read(&fixture.paths.journal).unwrap(), journal_bytes);
+}
+
 #[test]
 fn all_three_document_crash_boundaries_recover_before_current_state_decode() {
     let fixture = Fixture::new();

@@ -22,6 +22,12 @@ impl MgmtOps {
             .map_err(|error| OpsError::from(error).into())
     }
 
+    /// Quote the exact stop before its owning workflow records intent.
+    pub fn stop_canister_call_cost(canister_id: Principal) -> Result<u128, InternalError> {
+        MgmtInfra::stop_canister_call_cost(canister_id)
+            .map_err(|error| OpsError::from(error).into())
+    }
+
     /// Quote the exact uninstall before its owning workflow records destructive intent.
     pub fn uninstall_code_call_cost(canister_id: Principal) -> Result<u128, InternalError> {
         MgmtInfra::uninstall_code_call_cost(canister_id)
@@ -98,6 +104,7 @@ impl MgmtOps {
     #[must_use]
     pub fn canister_status_to_dto(status: CanisterStatus) -> CanisterStatusResponse {
         CanisterStatusResponse {
+            version: status.version,
             status: status.status,
             settings: settings_to_dto(status.settings),
             module_hash: status.module_hash,

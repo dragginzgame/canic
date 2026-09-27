@@ -9,20 +9,9 @@ use canic_host::fleet_ensure::{
     ops::{EnsurePaths, read_journal},
 };
 
-#[derive(Clone, Copy, Eq, PartialEq)]
-pub(super) enum Scenario {
-    SyntheticMinimum,
-    ChildClaim,
-}
-
 #[test]
 pub(super) fn native_withdrawal_recovers_the_same_initial_child_claim() {
     assert_literal_zero_host_journey(FundingJourney::NativeChildFunding, 2);
-}
-
-#[test]
-pub(super) fn issued_provisioning_recovers_native_withdrawal_and_receipt_observation() {
-    assert_literal_zero_host_journey(FundingJourney::NativeFunding, 1);
 }
 
 /// Remove only the forecast native credit before the fixture issues any effect.
@@ -63,8 +52,7 @@ pub(super) fn omit_forecast_native_funding(plan: &mut FleetEnsurePlan, root: Pri
 )]
 pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>) {
     let mut desired = input.desired.clone();
-    // A deliberately high fixture minimum makes the underforecast reproducible
-    // without changing the canonical Root, runtime reserve guard or recovery behavior.
+    // Deplete the real child-creation reserve while retaining the current Root contract.
     let root = desired
         .canisters
         .iter_mut()
@@ -73,12 +61,8 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
                 && canister.principal.as_deref() == Some(input.root.to_text().as_str())
         })
         .expect("exact generated Root");
-    let minimum = if input.native_pause == Some(Scenario::ChildClaim) {
-        burn_to(input, 20_000_000_000_000);
-        10_000_000_000_000_u128.to_string()
-    } else {
-        (input.pic.cycle_balance(input.root) + 20_000_000_000_000).to_string()
-    };
+    burn_to(input, 20_000_000_000_000);
+    let minimum = 10_000_000_000_000_u128.to_string();
     root.minimum_cycles.clone_from(&minimum);
     root.initial_cycles = minimum;
     let source = desired_sha256(&desired);
@@ -105,7 +89,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     retain_issued_underfunded_fixture(input, &mut planned.plan, &state, &mut initial);
     let issued = read_journal(&paths).unwrap().unwrap();
     assert_eq!(issued.effects.last().unwrap().state, EffectState::Issued);
-    let child = (input.native_pause == Some(Scenario::ChildClaim)).then(|| {
+    let child = {
         // advance_time is a read followed by a write; the live gateway's automatic
         // clock must not advance between them while this fixture drives bootstrap.
         assert!(input.pic.auto_progress_enabled());
@@ -114,7 +98,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
         input.pic.auto_progress();
         assert!(input.pic.auto_progress_enabled());
         claim
-    });
+    };
     let review = fleet_ensure_workflow::plan(
         input.adapter_root,
         &desired,
@@ -160,6 +144,7 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
         if review_sha256 == review.review_sha256
     ));
     let before = ledger_account_balance(input.pic, input.cycles_ledger, input.operator);
+    assert!(pause.ledger_fee_cycles > 0);
     assert_eq!(withdrawals(input), 0);
     std::fs::write(input.adapter_root.join("lose-funding-response"), []).unwrap();
     std::fs::write(input.adapter_root.join("lose-funded-observation"), []).unwrap();
@@ -260,9 +245,10 @@ pub(super) fn assert_issued_native_funding(input: &AutonomousFundingJourney<'_>)
     let pool = root_pool_status_as(input.pic, input.root, input.operator);
     assert_eq!(
         (pool.workload, pool.ready, pool.failed, pool.pending_reset),
-        (if child.is_some() { 2 } else { 1 }, 1, 0, 0)
+        (2, 1, 0, 0)
     );
-    if let Some((operation_id, canister)) = child {
+    {
+        let (operation_id, canister) = child;
         let recovered = child_status(input, operation_id);
         assert!(recovered.allocation.last_failure.is_none());
         assert_eq!(

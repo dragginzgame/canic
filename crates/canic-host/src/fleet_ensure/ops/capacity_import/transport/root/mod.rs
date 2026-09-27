@@ -1,10 +1,7 @@
 //! Protected Root operations bound to an approved import and completed host handoff.
 
 use crate::fleet_ensure::{
-    model::{
-        EffectState,
-        capacity_import::{CapacityImportJournalRecord, CapacityImportPlanRecord},
-    },
+    model::capacity_import::{CapacityImportJournalRecord, CapacityImportPlanRecord},
     ops::capacity_import::{
         journal::{self, CapacityImportJournalError},
         root_reservation,
@@ -149,16 +146,7 @@ impl CapacityImportTransport {
         canister_id: Principal,
     ) -> Result<PoolImportStatus, CapacityImportJournalError> {
         require_approved(journal)?;
-        let handoff = journal
-            .handoffs
-            .iter()
-            .find(|handoff| handoff.canister_id == canister_id)
-            .ok_or(CapacityImportJournalError::Integrity)?;
-        if handoff
-            .effect
-            .as_ref()
-            .is_none_or(|effect| effect.state != EffectState::Applied)
-        {
+        if !journal::custody_ready(journal, canister_id) {
             return Err(CapacityImportJournalError::Unresolved);
         }
         self.root_command(
@@ -177,12 +165,7 @@ impl CapacityImportTransport {
         journal: &CapacityImportJournalRecord,
     ) -> Result<PoolImportStatus, CapacityImportJournalError> {
         require_approved(journal)?;
-        if journal.handoffs.iter().any(|handoff| {
-            handoff
-                .effect
-                .as_ref()
-                .is_none_or(|effect| effect.state != EffectState::Applied)
-        }) {
+        if !journal::all_custody_ready(journal) {
             return Err(CapacityImportJournalError::Unresolved);
         }
         self.root_command(

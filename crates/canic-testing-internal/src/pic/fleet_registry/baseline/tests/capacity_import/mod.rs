@@ -37,11 +37,17 @@ enum StatusResponse {
 }
 
 #[test]
+pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
+    for root_owned in [false, true] {
+        retained_capacity_journey(root_owned);
+    }
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "one real management journey retains each custody, wipe, accounting and replay boundary"
 )]
-pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
+fn retained_capacity_journey(root_owned: bool) {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
     let (pic, root) = setup(build_pic);
     let pic = &pic;
@@ -54,10 +60,13 @@ pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
     // A real Wasm installation and stable bytes make the destructive boundary observable.
     pic.install_canister(source, b"\0asm\x01\0\0\0".to_vec(), Vec::new(), None);
     pic.set_stable_memory(source, vec![0x6d; 65_536], BlobCompression::NoCompression);
-    pic.stop_canister(source, None).unwrap();
-    pic.set_controllers(source, None, vec![operator, previous_owner])
+    if !root_owned {
+        pic.stop_canister(source, None).unwrap();
+    }
+    let controller = if root_owned { root } else { operator };
+    pic.set_controllers(source, None, vec![controller, previous_owner])
         .unwrap();
-    let observed = pic.canister_status(source, Some(operator)).unwrap();
+    let observed = pic.canister_status(source, Some(controller)).unwrap();
     let root_observed = pic.canister_status(root, Some(operator)).unwrap();
     let final_controllers = context.binding.authority.binding.root_controllers(root);
     let mut transitional_controllers = final_controllers.clone();
@@ -75,9 +84,14 @@ pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
         final_controllers,
         sources: vec![PoolImportSource {
             canister_id: source,
+            controllers: {
+                let mut controllers = observed.settings.controllers;
+                controllers.sort_unstable();
+                controllers
+            },
             module_sha256: Some(observed.module_hash.unwrap().try_into().unwrap()),
             canister_version: observed.version,
-            stopped: true,
+            stopped: !root_owned,
             disposition_sha256: [0x91; 32],
             observed_cycles: observed.cycles.0.try_into().unwrap(),
             observed_reserved_cycles: observed.reserved_cycles.0.try_into().unwrap(),
@@ -125,17 +139,27 @@ pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
     .unwrap();
     assert_eq!(reserved.phase, PoolImportPhase::Reserved);
     assert_eq!(root_pool_status(pic, root).entries, before.entries);
-    pic.set_controllers(
-        source,
-        Some(operator),
-        reservation.transitional_controllers.clone(),
-    )
-    .unwrap();
-    for expected in [
+    if !root_owned {
+        pic.set_controllers(
+            source,
+            Some(operator),
+            reservation.transitional_controllers.clone(),
+        )
+        .unwrap();
+    }
+    let mut steps = Vec::new();
+    if root_owned {
+        steps.extend([
+            PoolImportSourceProgress::StopIssued,
+            PoolImportSourceProgress::Stopped,
+        ]);
+    }
+    steps.extend([
         PoolImportSourceProgress::ControllersIssued,
         PoolImportSourceProgress::ControllersConfirmed,
         PoolImportSourceProgress::UninstallIssued,
-    ] {
+    ]);
+    for expected in steps {
         // The next invocation uses protected retained evidence, as after a lost host reply.
         command(
             pic,
@@ -146,7 +170,7 @@ pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
                 canister_id: source,
             },
         )
-        .unwrap();
+        .unwrap_or_else(|error| panic!("capacity step {expected:?}, root_owned={root_owned}: {error:?}; retained={:?}; source={:?}", status(pic, root, operator, identity), pic.canister_status(source, Some(root))));
         assert_eq!(
             status(pic, root, operator, identity).progress,
             vec![expected]
@@ -176,7 +200,7 @@ pub(super) fn reviewed_capacity_import_retains_exact_ids_and_reset_receipts() {
     assert_eq!(receipt.canister_id, source);
     assert_eq!(
         receipt.canister_version,
-        reservation.sources[0].canister_version + 3
+        receipt.before_uninstall_canister_version + 1
     );
     assert_eq!(
         receipt.retained_cycles + receipt.retained_reserved_cycles + receipt.observed_debit_cycles,

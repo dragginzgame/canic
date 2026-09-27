@@ -100,8 +100,10 @@ app = "example"
 role = "app"
 ```
 
-The role must exist in the selected App configuration. Root packages use
-`role = "root"` and the required control-plane feature.
+The role must exist in the selected App configuration. Declare infrastructure
+roles in configuration; Canic generates their Root, Coordinator and Store
+packages with the required features. Applications supply their own canister
+packages, not infrastructure entrypoints.
 
 The build script remains small:
 
@@ -174,10 +176,18 @@ Rerun the same apply command after interruption. The current journal reconciles
 the live result before retry. After terminal convergence, run plan/apply again
 to prove the immediate successor has zero mutation actions.
 
-Historical install, deployment, adoption, retained-repair and recovery-bundle
-commands are removed. Do not copy their state into `.canic/fleet-ensure` or
-attempt to migrate it. Any old canister that still holds recoverable cycles
-must appear explicitly in the current desired document for reuse or safe drain.
+For explicitly supplied infrastructure IDs, follow
+[supplied infrastructure bootstrap](docs/features/operations/fleet-ensure.md#supplied-infrastructure-bootstrap).
+For additional pool canisters on a ready Root's subnet, follow
+[capacity import](docs/features/operations/fleet-ensure.md#add-supplied-capacity-to-a-current-fleet).
+Both require their own reviewed authority before ordinary Fleet convergence.
+
+Release transitions are reinstall-only. Completed-source review requires valid
+current-schema records and receipts; it does not decode historical contracts or
+fill missing fields. Preserve unreadable evidence and follow the
+[retained-plan guidance](docs/features/operations/fleet-ensure.md#unreadable-retained-plan).
+Every controlled canister with recoverable cycles must be accounted for before
+destructive effects.
 
 ## Cycle-Recovery Limitation
 

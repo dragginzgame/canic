@@ -2,7 +2,9 @@
 //!
 //! Workflow owns observation budgets, approval and persistence before effects.
 
+pub(in crate::fleet_ensure) mod automatic;
 pub(in crate::fleet_ensure) mod convergence;
+pub(in crate::fleet_ensure) mod declarations;
 pub(in crate::fleet_ensure) mod inspection;
 pub(in crate::fleet_ensure) mod publication;
 pub(in crate::fleet_ensure) mod registration;
@@ -23,10 +25,7 @@ use crate::{
         ops::{
             EnsureStateError, canic_init,
             capacity_import::{
-                admission::{
-                    CapacityImportDeclarations,
-                    observer::{inventory, management},
-                },
+                admission::observer::{inventory, management},
                 journal::CapacityImportJournalError,
             },
             resolve_desired_artifacts,
@@ -91,12 +90,13 @@ fn verify_declarations(
     if record.declarations_toml.len() > 256 * 1024 || digest != record.declarations_sha256 {
         return Err(invalid());
     }
-    let declarations: CapacityImportDeclarations =
+    let declarations: declarations::BootstrapDeclarations =
         toml::from_str(&record.declarations_toml).map_err(|_| invalid())?;
     if declarations.schema_version != 1
         || Principal::from_text(&declarations.operator).ok() != Some(record.operator)
         || declarations.network_root_key_sha256 != hex_bytes(record.network_root_key_sha256)
         || declarations.canisters.len() != record.sources.len()
+        || declarations.root_owned.len() != record.held_sources.len()
     {
         return Err(invalid());
     }
@@ -119,6 +119,23 @@ fn verify_declarations(
         expected.stopped = true;
         expected.snapshots_size_bytes = 0;
         if expected != binding || source.disposition != declaration.disposition(digest) {
+            return Err(invalid());
+        }
+    }
+    for declaration in &declarations.root_owned {
+        let binding = declaration.binding()?;
+        if !seen.insert(binding.canister) {
+            return Err(invalid());
+        }
+        let source = record
+            .held_sources
+            .values()
+            .find(|source| source.custody.canister == binding.canister)
+            .ok_or_else(invalid)?;
+        if source.custody != binding
+            || source.disposition != declaration.disposition(digest)
+            || !binding.controllers.contains(&source.root)
+        {
             return Err(invalid());
         }
     }
@@ -197,6 +214,11 @@ pub(in crate::fleet_ensure) fn original_observation(
     record: &InfrastructureBootstrapRecord,
 ) -> FleetObservation {
     let view = InfrastructureBootstrapObservation {
+        held_sources: record
+            .held_sources
+            .iter()
+            .map(|(name, source)| (name.clone(), source.custody.clone()))
+            .collect(),
         canisters: desired
             .canisters
             .iter()
@@ -393,7 +415,14 @@ pub(in crate::fleet_ensure::ops) fn observe(
         .build()
         .map_err(|error| InfrastructureBootstrapError::Observation(error.to_string()))?;
     let mut canisters = BTreeMap::new();
+    let mut held_sources = BTreeMap::new();
     for configured in &desired.canisters {
+        if let Some(source) = record.held_sources.get(&configured.name) {
+            let custody = runtime.block_on(declarations::observe_held(&agent, source))?;
+            held_sources.insert(configured.name.clone(), custody);
+            canisters.insert(configured.name.clone(), None);
+            continue;
+        }
         let id = configured
             .principal
             .as_ref()
@@ -439,6 +468,7 @@ pub(in crate::fleet_ensure::ops) fn observe(
         )
         .map_err(|error| InfrastructureBootstrapError::Observation(error.to_string()))?;
     Ok(InfrastructureBootstrapObservation {
+        held_sources,
         canisters,
         coordinator_registry,
         operator_cycles: balance
@@ -495,8 +525,14 @@ pub(in crate::fleet_ensure) fn verify_initial(
         .parse::<canic_core::cdk::types::Cycles>()
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
         .to_u128();
-    if observed.canisters.len() != desired.canisters.len()
-        || observed.operator_cycles != source.operator_cycles
+    let held = source
+        .held_sources
+        .iter()
+        .map(|(name, source)| (name.clone(), source.custody.clone()))
+        .collect::<BTreeMap<_, _>>();
+    if observed.held_sources != held
+        || observed.canisters.len() != desired.canisters.len()
+        || observed.operator_cycles < source.operator_cycles
         || observed.ledger_fee_cycles != source.ledger_fee_cycles
     {
         return Err(InfrastructureBootstrapError::Integrity);
@@ -507,6 +543,9 @@ pub(in crate::fleet_ensure) fn verify_initial(
             .get(&configured.name)
             .ok_or(InfrastructureBootstrapError::Integrity)?;
         match (source.sources.get(&configured.name), actual) {
+            (None, None)
+                if configured.kind == crate::fleet_ensure::model::DesiredCanisterKind::Pool
+                    && source.held_sources.contains_key(&configured.name) => {}
             (None, None)
                 if configured.kind
                     == crate::fleet_ensure::model::DesiredCanisterKind::Coordinator
@@ -521,7 +560,13 @@ pub(in crate::fleet_ensure) fn verify_initial(
                     .cycles
                     .checked_add(actual.reserved_cycles)
                     .ok_or(InfrastructureBootstrapError::Integrity)?;
-                if original.sample.binding != actual.binding
+                let mut expected_binding = original.sample.binding.clone();
+                if !expected_binding.stopped
+                    && actual.binding.canister_version >= expected_binding.canister_version
+                {
+                    expected_binding.canister_version = actual.binding.canister_version;
+                }
+                if expected_binding != actual.binding
                     || before
                         .checked_sub(after)
                         .is_none_or(|debit| debit > allowance)
@@ -552,6 +597,18 @@ pub(in crate::fleet_ensure) fn terminal_observation(
     state: &FleetEnsureStateRecord,
     observed: &InfrastructureBootstrapObservation,
 ) -> Result<(FleetObservation, u128), InfrastructureBootstrapError> {
+    let source = plan
+        .infrastructure_bootstrap
+        .as_ref()
+        .ok_or(InfrastructureBootstrapError::Integrity)?;
+    let held = source
+        .held_sources
+        .iter()
+        .map(|(name, source)| (name.clone(), source.custody.clone()))
+        .collect::<BTreeMap<_, _>>();
+    if observed.held_sources != held {
+        return Err(InfrastructureBootstrapError::Integrity);
+    }
     let desired = plan
         .reviewed_desired
         .as_ref()

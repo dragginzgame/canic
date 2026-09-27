@@ -13,12 +13,10 @@ use crate::{
         },
         ops::{
             self, EnsurePaths,
-            capacity_import::admission::{
-                CapacityImportDeclarations,
-                observer::{inventory, management},
-            },
+            capacity_import::admission::observer::{inventory, management},
             infrastructure_bootstrap::{
-                InfrastructureBootstrapError, LedgerAccount, authenticated_agent, seal_sources,
+                InfrastructureBootstrapError, LedgerAccount, authenticated_agent, declarations,
+                seal_sources,
             },
         },
     },
@@ -51,7 +49,7 @@ impl BootstrapSurvey {
         if declarations_toml.len() > 256 * 1024 {
             return Err(invalid());
         }
-        let declarations: CapacityImportDeclarations =
+        let declarations: declarations::BootstrapDeclarations =
             toml::from_str(declarations_toml).map_err(|_| invalid())?;
         let operator = Principal::from_text(&desired.operator).map_err(|_| invalid())?;
         let network_root_key_sha256 = decode_hex(&declarations.network_root_key_sha256)
@@ -59,6 +57,8 @@ impl BootstrapSurvey {
             .and_then(|bytes| bytes.try_into().ok())
             .ok_or_else(invalid)?;
         let selected = selected(desired, coordinator)?;
+        let declarations_sha256 = Sha256::digest(declarations_toml.as_bytes()).into();
+        let held_sources = declarations::held_sources(desired, &declarations, declarations_sha256)?;
         let declared = declarations
             .canisters
             .iter()
@@ -73,10 +73,15 @@ impl BootstrapSurvey {
                 }
                 Ok(binding.canister_id)
             })
+            .chain(
+                held_sources
+                    .values()
+                    .map(|source| Ok(source.custody.canister)),
+            )
             .collect::<Result<BTreeSet<_>, _>>()?;
         if declarations.schema_version != 1
             || declarations.operator != desired.operator
-            || declared.len() != declarations.canisters.len()
+            || declared.len() != declarations.canisters.len() + held_sources.len()
             || declared != selected.values().copied().collect()
         {
             return Err(invalid());
@@ -100,34 +105,13 @@ impl BootstrapSurvey {
             declarations_toml: declarations_toml.into(),
             declarations_sha256: Sha256::digest(declarations_toml.as_bytes()).into(),
             sources: BTreeMap::new(),
+            held_sources,
             operator_cycles: 0,
             ledger_fee_cycles: 0,
             source_sha256: [0; 32],
         };
         if let Some(source) = &record.source {
-            let expected = (
-                &original.operator,
-                &original.network_root_key_sha256,
-                original.coordinator,
-                &original.declarations_toml,
-            );
-            let actual = (
-                &source.operator,
-                &source.network_root_key_sha256,
-                source.coordinator,
-                &source.declarations_toml,
-            );
-            let identities = source
-                .sources
-                .iter()
-                .map(|(name, value)| (name.clone(), value.sample.binding.canister_id))
-                .collect::<BTreeMap<_, _>>();
-            if expected != actual
-                || identities != selected
-                || seal_sources(source.clone())? != *source
-            {
-                return Err(invalid());
-            }
+            verify_retained_source(&original, source, &selected)?;
         }
         Ok(Self {
             record,
@@ -147,7 +131,11 @@ impl BootstrapSurvey {
     }
 
     pub(in crate::fleet_ensure) fn canisters(&self) -> Vec<Principal> {
-        self.selected.values().copied().collect()
+        self.selected
+            .iter()
+            .filter(|(name, _)| !self.original.held_sources.contains_key(*name))
+            .map(|(_, id)| *id)
+            .collect()
     }
 
     pub(in crate::fleet_ensure) fn agent(
@@ -175,12 +163,16 @@ impl BootstrapSurvey {
         samples: Vec<CapacityImportSampleRecord>,
     ) -> Result<InfrastructureBootstrapRecord, InfrastructureBootstrapError> {
         let invalid = || InfrastructureBootstrapError::Integrity;
-        let declarations: CapacityImportDeclarations =
+        let declarations: declarations::BootstrapDeclarations =
             toml::from_str(&self.original.declarations_toml).map_err(|_| invalid())?;
-        if samples.len() != self.selected.len() {
+        if samples.len() != self.selected.len() - self.original.held_sources.len() {
             return Err(invalid());
         }
         for (name, id) in &self.selected {
+            if let Some(source) = self.original.held_sources.get(name) {
+                declarations::observe_held(agent, source).await?;
+                continue;
+            }
             let sample = samples
                 .iter()
                 .find(|sample| sample.binding.canister_id == *id)
@@ -325,4 +317,39 @@ fn retain_request(
     };
     write_bytes(&path, &serde_json::to_vec_pretty(&record)?)?;
     Ok(record)
+}
+
+fn verify_retained_source(
+    original: &InfrastructureBootstrapRecord,
+    source: &InfrastructureBootstrapRecord,
+    selected: &BTreeMap<String, Principal>,
+) -> Result<(), InfrastructureBootstrapError> {
+    let invalid = || InfrastructureBootstrapError::Integrity;
+    let expected = (
+        &original.operator,
+        &original.network_root_key_sha256,
+        original.coordinator,
+        &original.declarations_toml,
+    );
+    let actual = (
+        &source.operator,
+        &source.network_root_key_sha256,
+        source.coordinator,
+        &source.declarations_toml,
+    );
+    let identities = source
+        .sources
+        .iter()
+        .map(|(name, value)| (name.clone(), value.sample.binding.canister_id))
+        .chain(
+            source
+                .held_sources
+                .iter()
+                .map(|(name, value)| (name.clone(), value.custody.canister)),
+        )
+        .collect::<BTreeMap<_, _>>();
+    if expected != actual || &identities != selected || seal_sources(source.clone())? != *source {
+        return Err(invalid());
+    }
+    Ok(())
 }

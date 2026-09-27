@@ -163,7 +163,7 @@ fn retain_source(input: &ReinstallJourney<'_>) -> FleetEnsurePlan {
         imported: input.pools,
         repair_failed_reserve: false,
         funding_pause: false,
-        native_pause: None,
+        native_pause: false,
         readiness_floor: 0,
         operator_after_initial_creation: ledger_account_balance(input.pic, ledger, operator)
             .0

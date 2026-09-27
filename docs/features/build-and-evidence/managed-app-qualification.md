@@ -6,11 +6,12 @@ projection, Component Group Directory and Root-issued runtime configuration
 from the same checked-in `canic.toml` that built the App Wasm.
 
 Add one development dependency; product role packages keep their normal
-feature selection unchanged:
+feature selection unchanged. Replace the version placeholder with the exact
+Canic release used by the application and CLI:
 
 ```toml
 [dev-dependencies]
-canic = { version = "=0.110.7", features = ["testing"] }
+canic = { version = "=<same-version-as-application>", features = ["testing"] }
 ```
 
 The minimal fixture is:

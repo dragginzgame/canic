@@ -42,6 +42,8 @@ mod root;
 mod startup;
 #[cfg(test)]
 mod timing;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod workers;
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 type GovernedTestCase = (&'static str, fn());
@@ -223,12 +225,61 @@ mod governed_suite {
     use std::sync::atomic::{AtomicUsize, Ordering};
 
     #[test]
-    #[ignore = "the workspace runner supplies one shared PocketIC server and serial process"]
-    fn governed_serial_pocketic_suite() {
+    #[ignore = "the workspace runner supplies owned PocketIC servers and scratch"]
+    fn governed_internal_pocketic_suite() {
         assert_governed_pocketic_inventory();
         artifacts::preflight_governed_shared_artifacts();
         let cases = ordered_governed_pocketic_cases();
-        run_governed_test_cases(cases);
+        if let Some(path) = std::env::var_os(workers::CASE_FILE_ENV) {
+            let names = std::fs::read_to_string(path).expect("worker case selection");
+            let selected = workers::select(&cases, &names).expect("exact registered worker cases");
+            run_selected_governed_test_cases(selected);
+        } else if std::env::var_os(TARGET_GOVERNED_CASE_ENV).is_some() {
+            run_governed_test_cases(cases);
+        } else {
+            run_selected_governed_test_cases(fleet_registry::governed_recovery_cases());
+            workers::run(worker_groups());
+        }
+    }
+
+    fn worker_groups() -> [Vec<GovernedTestCase>; 2] {
+        let mut regular = fleet_registry::governed_pocketic_cases();
+        regular.extend(fleet_coordinator::governed_pocketic_cases());
+        regular.extend(lifecycle::governed_pocketic_cases());
+        [regular, fleet_registry::governed_fleet_journey_cases()]
+    }
+
+    #[test]
+    fn worker_partition_retains_every_registered_case_and_recovery_barrier() {
+        let cases = ordered_governed_pocketic_cases();
+        let mut partition = fleet_registry::governed_recovery_cases();
+        for group in worker_groups() {
+            assert!(!group.is_empty());
+            partition.extend(group);
+        }
+        assert_unique_governed_case_names(&partition);
+        assert_eq!(
+            partition.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+            cases.iter().map(|(name, _)| *name).collect::<Vec<_>>()
+        );
+    }
+
+    #[test]
+    #[ignore = "targeted qualification of process isolation and recovery in both workers"]
+    fn governed_parallel_funding_proof() {
+        let cases = ordered_governed_pocketic_cases();
+        workers::run([
+            workers::select(
+                &cases,
+                "two Workloads refill two Ready assets with lost funding and creation responses",
+            )
+            .unwrap(),
+            workers::select(
+                &cases,
+                "two Workloads and two Failed assets repair without new creation",
+            )
+            .unwrap(),
+        ]);
     }
 
     fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
@@ -236,8 +287,8 @@ mod governed_suite {
         cases.extend(fleet_registry::governed_pocketic_cases());
         cases.extend(fleet_coordinator::governed_pocketic_cases());
         cases.extend(lifecycle::governed_pocketic_cases());
-        // Exercise recovery first, then retain one process and its caches for
-        // short regressions and the remaining complete provisioning journeys.
+        // Retain the recovery prefix and each worker's internal order; the
+        // registry partition below owns concurrent execution, not case membership.
         cases.extend(fleet_registry::governed_fleet_journey_cases());
         cases
     }

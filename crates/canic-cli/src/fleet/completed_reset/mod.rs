@@ -14,6 +14,22 @@ use canic_host::{
 };
 use std::path::Path;
 
+pub(super) fn retire_if_selected(
+    workspace: &Path,
+    options: &EnsureOptions,
+) -> Result<(), FleetCommandError> {
+    if let Some(environment) = options.environment.as_deref() {
+        reset::retire_completed_authority(
+            workspace,
+            environment,
+            &options.fleet,
+            options.reinstall && options.apply.is_none(),
+        )
+        .map_err(failure)?;
+    }
+    Ok(())
+}
+
 pub(super) fn run_if_selected(
     workspace: &Path,
     options: &EnsureOptions,
@@ -22,6 +38,14 @@ pub(super) fn run_if_selected(
         return Ok(false);
     };
     if options.operator_mint || options.observe_funding.is_some() || options.cancel_mint.is_some() {
+        return Ok(false);
+    }
+    let paths =
+        canic_host::fleet_ensure::EnsurePaths::under(workspace, environment, &options.fleet);
+    if let Some(completed) = canic_host::fleet_ensure::ops::completed_handoff::completed(&paths)
+        .map_err(|error| failure(reset::CompletedResetError::State(error)))?
+        && options.apply.as_deref() != Some(completed.review_sha256.as_str())
+    {
         return Ok(false);
     }
     let retained = reset::review(workspace, environment, &options.fleet).map_err(failure)?;
@@ -42,16 +66,58 @@ pub(super) fn run_if_selected(
     if options.retirement_debit_block.is_some() {
         return Err(FleetCommandError::Usage("completed-source reset requires its exact source operator balance; no external debit is authorized".into()));
     }
+    let session = progress::ProgressSession::new(options.json);
+    session.retain_receipt(
+        workspace,
+        &progress::receipt::Invocation {
+            command: progress::receipt::CommandKind::CompletedReset,
+            fleet: &options.fleet,
+            environment,
+            desired_sha256: None,
+            applied_plan_sha256: None,
+            applied_review_sha256: options.apply.as_deref(),
+            reinstall: true,
+            next_review_command: "",
+        },
+    );
+    let request_sink = session.sink();
     let icp = IcpCli::new(&options.icp, Some(environment.into()))
         .with_identity(options.identity.as_deref())
-        .with_cwd(workspace);
+        .with_cwd(workspace)
+        .with_timing_handler(move |event| request_sink.request(event));
+    let result = execute(workspace, options, environment, applying, &icp, &session);
+    session.finish(result.as_ref().ok().map(|(report, _)| report));
+    drop(session);
+    let (report, review) = result?;
+    if let Some(review) = review {
+        render_review(review, options, environment)?;
+    } else {
+        render_report(&report, options.json)?;
+    }
+    Ok(true)
+}
+
+fn execute(
+    workspace: &Path,
+    options: &EnsureOptions,
+    environment: &str,
+    applying: bool,
+    icp: &IcpCli,
+    session: &progress::ProgressSession,
+) -> Result<
+    (
+        canic_host::fleet_ensure::model::FleetEnsureReport,
+        Option<canic_host::fleet_ensure::view::completed_reset::CompletedResetReviewView>,
+    ),
+    FleetCommandError,
+> {
     if applying {
         let plan = reset::approve(
             workspace,
             environment,
             &options.fleet,
             options.apply.as_deref().expect("selected approval"),
-            &icp,
+            icp,
         )
         .map_err(failure)?;
         let desired = plan
@@ -59,7 +125,15 @@ pub(super) fn run_if_selected(
             .as_ref()
             .ok_or_else(|| failure(reset::CompletedResetError::Conflict))?
             .desired();
-        let session = progress::ProgressSession::new(options.json);
+        session.sink().record(
+            "completed_reset_authority",
+            &serde_json::json!({
+                "review_sha256": options.apply,
+                "desired_sha256": plan.desired_sha256,
+                "plan_sha256": plan.plan_sha256,
+                "operation_id": plan.operation_id,
+            }),
+        );
         let progress = session.sink();
         let observations = session.sink();
         let requests = session.sink();
@@ -76,7 +150,7 @@ pub(super) fn run_if_selected(
             &plan.plan_sha256,
             &mut platform,
         )?;
-        render_report(&report, options.json)?;
+        Ok((report, None))
     } else {
         let path = workspace.join(&options.desired);
         let loaded = load_desired_fleet(&path)?;
@@ -88,12 +162,27 @@ pub(super) fn run_if_selected(
             &loaded.desired,
             &loaded.sha256,
             now_nanoseconds()?,
-            &icp,
+            icp,
         )
         .map_err(failure)?;
-        render_review(review, options, environment)?;
+        session.sink().record(
+            "completed_reset_authority",
+            &serde_json::json!({
+                "review_sha256": review.publication.review_sha256,
+                "desired_sha256": review.plan.desired_sha256,
+                "plan_sha256": review.plan.plan_sha256,
+                "operation_id": review.plan.operation_id,
+            }),
+        );
+        let report = canic_host::fleet_ensure::model::FleetEnsureReport {
+            actual_conservation: None,
+            effects_applied: 0,
+            funding_review: None,
+            plan: review.plan.clone(),
+            terminal: false,
+        };
+        Ok((report, Some(review)))
     }
-    Ok(true)
 }
 
 fn render_review(

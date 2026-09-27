@@ -1,0 +1,788 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-27",
+  "scope": "Read-only deployment and validation latency audit; no new execution benchmark",
+  "feedback": {
+    "local_path": "../toko-miner/docs/upstream/canic.md",
+    "sha256": "74d71c2abf7bc79c2e83631cb65a979f4bd54cb175ac38abdce9db4991c1ada6",
+    "github_issues": [
+      {
+        "number": 29,
+        "updated_at": "2026-09-26T10:00:58Z",
+        "url": "https://github.com/dragginzgame/canic/issues/29"
+      },
+      {
+        "number": 28,
+        "updated_at": "2026-09-25T15:25:08Z",
+        "url": "https://github.com/dragginzgame/canic/issues/28"
+      },
+      {
+        "number": 27,
+        "updated_at": "2026-09-15T09:31:26Z",
+        "url": "https://github.com/dragginzgame/canic/issues/27"
+      },
+      {
+        "number": 25,
+        "updated_at": "2026-09-04T07:10:21Z",
+        "url": "https://github.com/dragginzgame/canic/issues/25"
+      },
+      {
+        "number": 24,
+        "updated_at": "2026-09-03T11:22:17Z",
+        "url": "https://github.com/dragginzgame/canic/issues/24"
+      },
+      {
+        "number": 23,
+        "updated_at": "2026-09-03T07:51:27Z",
+        "url": "https://github.com/dragginzgame/canic/issues/23"
+      }
+    ],
+    "disposition": "No new actionable request beyond the current .45 operator corrections; adoption and matched build performance remain open"
+  },
+  "published_local_test_stage": {
+    "version": "0.110.44",
+    "wall_seconds": 3304,
+    "internal_pocketic_seconds": 2934,
+    "other_seconds": 370,
+    "source": "docs/audits/working/0.110-validation-throughput/report.md#complete-44-release-observation--2026-09-27",
+    "raw_logs_present": false,
+    "limitation": "Previously recorded complete result; original target validation logs were removed by cleanup"
+  },
+  "ci": {
+    "run_id": 36327889446,
+    "job_id": 108645249435,
+    "source_revision": "2d8c9b387a3d034e5c3b4d9d85710c7fdf1725f1",
+    "url": "https://github.com/dragginzgame/canic/actions/runs/36327889446/job/108645249435",
+    "log_sha256": "77a4913b529717988b8f6d575eb9dbd63291a6180355e390245ba575174ddae4",
+    "result": "cancelled",
+    "completed_cases": [
+      {
+        "case": "source-bound activation reset recovers and replays",
+        "seconds": 435.488973
+      },
+      {
+        "case": "Fleet deployment restore",
+        "seconds": 205.894265
+      },
+      {
+        "case": "autonomous Root removal",
+        "seconds": 156.252541
+      },
+      {
+        "case": "supplied infrastructure initializes and recovers through Ensure",
+        "seconds": 88.020498
+      },
+      {
+        "case": "supplied capacity fences bootstrap until publication",
+        "seconds": 19.885558
+      },
+      {
+        "case": "reviewed capacity import retains exact IDs and reset receipts",
+        "seconds": 19.532177
+      },
+      {
+        "case": "host import transport recovers signed handoff and Root progress",
+        "seconds": 30.972095
+      },
+      {
+        "case": "completed preparation seals reconcile lost responses",
+        "seconds": 35.051212
+      },
+      {
+        "case": "completed estate reset recovers and replays",
+        "seconds": 333.762184
+      },
+      {
+        "case": "completed reset stops and clears retained application once",
+        "seconds": 19.22839
+      },
+      {
+        "case": "initial child failure reaches Coordinator and recovers same claim",
+        "seconds": 195.341447
+      },
+      {
+        "case": "low native reserve retains child failure and recovers same claim",
+        "seconds": 44.034028
+      },
+      {
+        "case": "sibling topups retain distinct receipts after both replies are lost",
+        "seconds": 69.292229
+      },
+      {
+        "case": "child grant refreshes Root funding deadline without repeating credit",
+        "seconds": 41.879643
+      },
+      {
+        "case": "live Fleet state cascade preserves partial outcomes and retry",
+        "seconds": 62.525028
+      },
+      {
+        "case": "operator Component public CLI",
+        "seconds": 30.772556
+      },
+      {
+        "case": "operator Component lost-response recovery",
+        "seconds": 2.968166
+      },
+      {
+        "case": "protected current memory allocations",
+        "seconds": 2.698388
+      },
+      {
+        "case": "reinstall fixture release-cache identity",
+        "seconds": 18.594224
+      },
+      {
+        "case": "fixture artifact cache isolates journey edits",
+        "seconds": 6.8e-05
+      },
+      {
+        "case": "synthetic growth catalog agreement",
+        "seconds": 0.003328
+      },
+      {
+        "case": "explicit Root reinstall preserves cycle control",
+        "seconds": 21.674195
+      },
+      {
+        "case": "prepared mainnet Root automatic refill",
+        "seconds": 10.633575
+      },
+      {
+        "case": "autonomous refill margin and exact replay",
+        "seconds": 10.927292
+      },
+      {
+        "case": "topped-up imported pool asset refresh",
+        "seconds": 39.460584
+      },
+      {
+        "case": "fresh provisioning automatic pool readiness",
+        "seconds": 41.817305
+      },
+      {
+        "case": "fixture-bearing Root retirement",
+        "seconds": 29.398421
+      },
+      {
+        "case": "pending fixture automatic funding",
+        "seconds": 72.108336
+      },
+      {
+        "case": "Root restart during Store grant and revocation replies",
+        "seconds": 145.727813
+      },
+      {
+        "case": "Prepared Root initial-Shard bootstrap",
+        "seconds": 61.60434
+      },
+      {
+        "case": "application Store bootstrap and replay",
+        "seconds": 20.34311
+      },
+      {
+        "case": "fresh provisioning terminal runtime activation",
+        "seconds": 36.180814
+      },
+      {
+        "case": "inactive Root preserves and suspends permanent activation failure",
+        "seconds": 30.939452
+      },
+      {
+        "case": "auth-free Root preserves ordinary Fleet activation",
+        "seconds": 25.770898
+      },
+      {
+        "case": "live management gateway preserves fresh creation headroom",
+        "seconds": 0.34542
+      },
+      {
+        "case": "Coordinator attached-cycle grant",
+        "seconds": 23.127196
+      },
+      {
+        "case": "two-Root independent funding limits",
+        "seconds": 33.549045
+      },
+      {
+        "case": "non-renewing automatic grant cap",
+        "seconds": 20.014554
+      },
+      {
+        "case": "explicit funding-policy rotation",
+        "seconds": 22.712296
+      },
+      {
+        "case": "Coordinator reserve-denial ICP fallback",
+        "seconds": 23.763932
+      },
+      {
+        "case": "real ICP rate denial",
+        "seconds": 23.369588
+      },
+      {
+        "case": "insufficient real ICP denial",
+        "seconds": 23.390154
+      },
+      {
+        "case": "uncertain grant fallback suppression",
+        "seconds": 23.353269
+      },
+      {
+        "case": "production Ledger and CMC replay",
+        "seconds": 3.469758
+      },
+      {
+        "case": "prepared Root local Store",
+        "seconds": 10.777601
+      },
+      {
+        "case": "co-located Fleet isolation",
+        "seconds": 16.049048
+      },
+      {
+        "case": "active Component Registry attestations",
+        "seconds": 3.741561
+      },
+      {
+        "case": "Fleet admission add/remove convergence",
+        "seconds": 3.195284
+      },
+      {
+        "case": "Fleet admission unavailable participant recovery",
+        "seconds": 3.993381
+      },
+      {
+        "case": "Fleet admission stale-catalog release",
+        "seconds": 3.910899
+      },
+      {
+        "case": "Fleet admission two-Root convergence",
+        "seconds": 35.389238
+      },
+      {
+        "case": "Coordinator joining-root replay",
+        "seconds": 4.315521
+      },
+      {
+        "case": "Coordinator durable compiled configuration",
+        "seconds": 3.84492
+      },
+      {
+        "case": "composed-framework direct ingress",
+        "seconds": 130.670736
+      },
+      {
+        "case": "managed admission target transition",
+        "seconds": 5.647356
+      },
+      {
+        "case": "published managed-App support",
+        "seconds": 168.165565
+      },
+      {
+        "case": "published managed Component Group support",
+        "seconds": 63.849419
+      },
+      {
+        "case": "generated reinstall recovers and converges",
+        "seconds": 162.05613
+      },
+      {
+        "case": "four initial Shards preserve sealed Root activation",
+        "seconds": 378.186449
+      },
+      {
+        "case": "funded Failed imports recover withdrawal and reset responses",
+        "seconds": 80.966344
+      }
+    ],
+    "recovery_prefix_seconds": 435.488973,
+    "current_regular_partition_observed_seconds": 2573.9399009999997,
+    "unfinished_case": "issued provisioning recovers native withdrawal and receipt observation",
+    "limitation": "Serial .44 cold CI trace mapped to current groups; not a .45 benchmark or proof of final worker imbalance"
+  },
+  "warm_current_fixture_traces": [
+    {
+      "path": ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58026.ATAwJg.log",
+      "sha256": "ab5f9b9d3b61e782312f8b18b3031622a4af3a12c67325753ceabc9176c2dc9c",
+      "spans": [
+        {
+          "name": "source_and_fixture_recipe",
+          "seconds": 0.014155,
+          "parent_id": 2
+        },
+        {
+          "name": "artifact_recipe",
+          "seconds": 7.707458,
+          "parent_id": 5
+        },
+        {
+          "name": "artifact_cache_lookup",
+          "seconds": 2.86597,
+          "parent_id": 5
+        },
+        {
+          "name": "artifact_load",
+          "seconds": 0.009023,
+          "parent_id": 5
+        },
+        {
+          "name": "release_artifact_resolution",
+          "seconds": 10.582597,
+          "parent_id": 4
+        },
+        {
+          "name": "initial_artifacts",
+          "seconds": 12.112767,
+          "parent_id": 2
+        },
+        {
+          "name": "replica_and_transport_setup",
+          "seconds": 0.691142,
+          "parent_id": 2
+        },
+        {
+          "name": "generation_and_initial_review",
+          "seconds": 6.901121,
+          "parent_id": 2
+        },
+        {
+          "name": "initial_recovery_and_convergence",
+          "seconds": 118.832663,
+          "parent_id": 2
+        },
+        {
+          "name": "initial_terminal_replay",
+          "seconds": 27.7543,
+          "parent_id": 2
+        },
+        {
+          "name": "artifact_recipe",
+          "seconds": 6.794642,
+          "parent_id": 14
+        },
+        {
+          "name": "artifact_cache_lookup",
+          "seconds": 2.532407,
+          "parent_id": 14
+        },
+        {
+          "name": "artifact_load",
+          "seconds": 0.00646,
+          "parent_id": 14
+        },
+        {
+          "name": "release_artifact_resolution",
+          "seconds": 9.333692,
+          "parent_id": 13
+        },
+        {
+          "name": "seed_and_preparation_review",
+          "seconds": 5.949215,
+          "parent_id": 18
+        },
+        {
+          "name": "preparation_seal_and_replay",
+          "seconds": 5.857922,
+          "parent_id": 18
+        },
+        {
+          "name": "reset_review",
+          "seconds": 7.146476,
+          "parent_id": 18
+        },
+        {
+          "name": "reset_interruptions_and_recovery",
+          "seconds": 132.827047,
+          "parent_id": 18
+        },
+        {
+          "name": "reset_state_and_conservation",
+          "seconds": 0.150481,
+          "parent_id": 18
+        },
+        {
+          "name": "reset_terminal_replay",
+          "seconds": 25.544219,
+          "parent_id": 18
+        },
+        {
+          "name": "selected_build_wipe",
+          "seconds": 177.475577,
+          "parent_id": 13
+        },
+        {
+          "name": "selected_build_reinstall",
+          "seconds": 186.850274,
+          "parent_id": 2
+        },
+        {
+          "name": "public_memory_allocation_qualification",
+          "seconds": 2.323918,
+          "parent_id": 2
+        },
+        {
+          "name": "cleanup",
+          "seconds": 0.057816,
+          "parent_id": 2
+        },
+        {
+          "name": "production_adapter_journey",
+          "seconds": 355.538509,
+          "parent_id": 1
+        },
+        {
+          "name": "generated mixed topology and Ready reserve retain one reviewed operation",
+          "seconds": 355.660594,
+          "parent_id": null
+        }
+      ],
+      "completed_parentless_request_events": {
+        "identity:None": {
+          "count": 237,
+          "inclusive_seconds": 4.863114000000004
+        },
+        "query:icrc1_fee": {
+          "count": 29,
+          "inclusive_seconds": 1.4846470000000003
+        },
+        "update:create_canister": {
+          "count": 9,
+          "inclusive_seconds": 0.68393
+        },
+        "management_status:canister_status": {
+          "count": 475,
+          "inclusive_seconds": 105.96150699999991
+        },
+        "install:None": {
+          "count": 8,
+          "inclusive_seconds": 27.908686000000003
+        },
+        "query:canic_root_status": {
+          "count": 192,
+          "inclusive_seconds": 10.763711
+        },
+        "canister_inspection:None": {
+          "count": 158,
+          "inclusive_seconds": 80.94217899999997
+        },
+        "set_controllers:None": {
+          "count": 6,
+          "inclusive_seconds": 1.161349
+        },
+        "query:icrc1_balance_of": {
+          "count": 27,
+          "inclusive_seconds": 1.337038
+        },
+        "update:canic_root_command": {
+          "count": 23,
+          "inclusive_seconds": 21.714439000000002
+        },
+        "query:canic_coordinator_registry": {
+          "count": 43,
+          "inclusive_seconds": 2.048727
+        },
+        "query:canic_wasm_store_status": {
+          "count": 27,
+          "inclusive_seconds": 1.3320850000000002
+        },
+        "agent_query:canic_coordinator_operation_status": {
+          "count": 100,
+          "inclusive_seconds": 30.6493
+        },
+        "query:canic_wasm_store_catalog": {
+          "count": 138,
+          "inclusive_seconds": 7.227750000000002
+        },
+        "query:canic_root_operation_status": {
+          "count": 89,
+          "inclusive_seconds": 4.619143
+        },
+        "query:canic_root_fixture_status": {
+          "count": 18,
+          "inclusive_seconds": 0.9760510000000002
+        },
+        "update:canic_wasm_store_publish_chunk": {
+          "count": 18,
+          "inclusive_seconds": 3.8838749999999997
+        },
+        "update:canic_wasm_store_publish_fixture": {
+          "count": 2,
+          "inclusive_seconds": 0.38034100000000004
+        },
+        "update:canic_coordinator_command": {
+          "count": 9,
+          "inclusive_seconds": 2.115256
+        },
+        "query:canic_public_status": {
+          "count": 26,
+          "inclusive_seconds": 1.352567
+        },
+        "query:canic_observability": {
+          "count": 7,
+          "inclusive_seconds": 0.401718
+        },
+        "update:withdraw": {
+          "count": 5,
+          "inclusive_seconds": 0.586673
+        },
+        "canister_history:None": {
+          "count": 8,
+          "inclusive_seconds": 3.864694
+        }
+      }
+    },
+    {
+      "path": ".tmp/pocketic-workers45/reset-final-20260927T155649Z-58024.mjfaFN.log",
+      "sha256": "9170569805f3f666cbdadf1eb49a2a697201b5a30568d7fa2013590cd373882d",
+      "spans": [
+        {
+          "name": "source_and_fixture_recipe",
+          "seconds": 0.001114,
+          "parent_id": 2
+        },
+        {
+          "name": "artifact_recipe",
+          "seconds": 6.044259,
+          "parent_id": 5
+        },
+        {
+          "name": "artifact_cache_lookup",
+          "seconds": 5.06807,
+          "parent_id": 5
+        },
+        {
+          "name": "artifact_load",
+          "seconds": 0.004364,
+          "parent_id": 5
+        },
+        {
+          "name": "release_artifact_resolution",
+          "seconds": 11.116857,
+          "parent_id": 4
+        },
+        {
+          "name": "initial_artifacts",
+          "seconds": 11.972707,
+          "parent_id": 2
+        },
+        {
+          "name": "replica_and_transport_setup",
+          "seconds": 0.59436,
+          "parent_id": 2
+        },
+        {
+          "name": "prepare_infrastructure_creates",
+          "seconds": 0.697407,
+          "parent_id": 10
+        },
+        {
+          "name": "prepare_infrastructure_install",
+          "seconds": 1.907509,
+          "parent_id": 12
+        },
+        {
+          "name": "prepare_infrastructure_install",
+          "seconds": 3.86701,
+          "parent_id": 12
+        },
+        {
+          "name": "prepare_infrastructure_install",
+          "seconds": 1.416254,
+          "parent_id": 12
+        },
+        {
+          "name": "prepare_infrastructure_installs",
+          "seconds": 7.190891,
+          "parent_id": 10
+        },
+        {
+          "name": "prepare_infrastructure_controllers",
+          "seconds": 0.042975,
+          "parent_id": 10
+        },
+        {
+          "name": "generation_and_initial_review",
+          "seconds": 10.144111,
+          "parent_id": 2
+        },
+        {
+          "name": "initial_working_fleet",
+          "seconds": 29.637008,
+          "parent_id": 2
+        },
+        {
+          "name": "artifact_recipe",
+          "seconds": 4.896515,
+          "parent_id": 20
+        },
+        {
+          "name": "artifact_cache_lookup",
+          "seconds": 2.452868,
+          "parent_id": 20
+        },
+        {
+          "name": "artifact_load",
+          "seconds": 0.008258,
+          "parent_id": 20
+        },
+        {
+          "name": "release_artifact_resolution",
+          "seconds": 7.357817,
+          "parent_id": 19
+        },
+        {
+          "name": "replacement_artifacts_and_generation",
+          "seconds": 11.410129,
+          "parent_id": 18
+        },
+        {
+          "name": "root_reinstall_review_and_authority_rejection",
+          "seconds": 4.75991,
+          "parent_id": 18
+        },
+        {
+          "name": "root_reinstall_lost_response_and_recovery",
+          "seconds": 10.478393,
+          "parent_id": 18
+        },
+        {
+          "name": "successor_reviews_and_convergence",
+          "seconds": 55.286131,
+          "parent_id": 18
+        },
+        {
+          "name": "small_estate_same_build_reset",
+          "seconds": 82.980034,
+          "parent_id": 27
+        },
+        {
+          "name": "retained_estate_state_and_replay",
+          "seconds": 100.12638,
+          "parent_id": 18
+        },
+        {
+          "name": "retained_estate_reinstall",
+          "seconds": 182.061471,
+          "parent_id": 2
+        },
+        {
+          "name": "cleanup",
+          "seconds": 0.108799,
+          "parent_id": 2
+        },
+        {
+          "name": "production_adapter_journey",
+          "seconds": 234.519848,
+          "parent_id": 1
+        },
+        {
+          "name": "generated reinstall recovers and converges",
+          "seconds": 234.612748,
+          "parent_id": null
+        }
+      ],
+      "completed_parentless_request_events": {
+        "identity:None": {
+          "count": 189,
+          "inclusive_seconds": 3.8876309999999985
+        },
+        "query:icrc1_fee": {
+          "count": 39,
+          "inclusive_seconds": 2.0527619999999995
+        },
+        "update:create_canister": {
+          "count": 6,
+          "inclusive_seconds": 0.527135
+        },
+        "management_status:canister_status": {
+          "count": 426,
+          "inclusive_seconds": 94.12964300000007
+        },
+        "query:canic_root_status": {
+          "count": 175,
+          "inclusive_seconds": 9.374625
+        },
+        "query:icrc1_balance_of": {
+          "count": 38,
+          "inclusive_seconds": 1.9530850000000004
+        },
+        "query:canic_coordinator_registry": {
+          "count": 57,
+          "inclusive_seconds": 2.7371429999999997
+        },
+        "query:canic_wasm_store_status": {
+          "count": 33,
+          "inclusive_seconds": 1.4853899999999998
+        },
+        "agent_query:canic_coordinator_operation_status": {
+          "count": 131,
+          "inclusive_seconds": 9.24439
+        },
+        "query:canic_wasm_store_catalog": {
+          "count": 48,
+          "inclusive_seconds": 2.5508039999999994
+        },
+        "query:canic_root_operation_status": {
+          "count": 86,
+          "inclusive_seconds": 4.431671
+        },
+        "update:canic_wasm_store_publish_chunk": {
+          "count": 6,
+          "inclusive_seconds": 1.2932289999999997
+        },
+        "update:canic_root_command": {
+          "count": 19,
+          "inclusive_seconds": 12.566826999999998
+        },
+        "update:canic_coordinator_command": {
+          "count": 13,
+          "inclusive_seconds": 6.285691
+        },
+        "canister_inspection:None": {
+          "count": 70,
+          "inclusive_seconds": 35.154478
+        },
+        "stop:None": {
+          "count": 1,
+          "inclusive_seconds": 0.258234
+        },
+        "update:withdraw": {
+          "count": 6,
+          "inclusive_seconds": 0.890305
+        },
+        "install:None": {
+          "count": 6,
+          "inclusive_seconds": 21.776941
+        },
+        "start:None": {
+          "count": 1,
+          "inclusive_seconds": 0.160832
+        },
+        "query:canic_observability": {
+          "count": 6,
+          "inclusive_seconds": 0.29664100000000004
+        },
+        "canister_history:None": {
+          "count": 6,
+          "inclusive_seconds": 3.102618
+        }
+      }
+    }
+  ],
+  "source_sha256": {
+    "crates/canic-testing-internal/src/pic/mod.rs": "f10385b26c569c1190e65ee89c655dcfbf862ca69d4b9efacaaaca928ccd7a0c",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs": "f390d0965b7220c10189e41e4d126c8ee1d6bb0fc16f30d06a80dbaea76de784",
+    "crates/canic-testing-internal/src/pic/fleet_registry/baseline/tests/release_artifacts/mod.rs": "ba887d17f7380f052fca4a89871657ed5525212a32b7ab5116b0c7e5d05be631",
+    "crates/canic-host/src/fleet_ensure/ops/platform.rs": "f11a63a7f68faecc09c3c7e6a34c4f7ce04db27854951b226c3e1d2528d4eff9",
+    ".github/workflows/ci.yml": "8b7b84fbf053d70b823ca42923b03be1ca9397ba8e756b3586c15e6c9c17a7b6",
+    "scripts/ci/run-pocketic-workers.sh": "c9c58d4fbdab44d44184c0740f6f82cc213a4b6730927f7a9859de735c15c1c2"
+  },
+  "limits": [
+    "No test suite or build was run for this audit",
+    "Request times are inclusive and may overlap; do not sum them or nested spans as wall time",
+    "Source and cache conditions differ across CI, local release and scoped fixtures",
+    "No runtime, test membership, worker scheduling, publication or downstream files changed"
+  ]
+}

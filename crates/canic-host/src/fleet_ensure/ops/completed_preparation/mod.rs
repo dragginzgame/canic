@@ -175,6 +175,9 @@ fn digest(review: &CompletedPreparationReviewRecord) -> Result<String, serde_jso
 pub(in crate::fleet_ensure) fn review(
     paths: &EnsurePaths,
 ) -> Result<Option<CompletedPreparationReviewRecord>, CompletedPreparationError> {
+    if ops::completed_handoff::consumed_preparation(paths)? {
+        return Ok(None);
+    }
     let value: Option<CompletedPreparationReviewRecord> = ops::read_current(&review_path(paths))?;
     if let Some(review) = &value {
         verify(review)?;
@@ -513,24 +516,8 @@ pub(in crate::fleet_ensure) fn require_no_intent(
     paths: &EnsurePaths,
 ) -> Result<(), EnsureStateError> {
     if ops::read_document_bytes(&journal_path(paths))?.is_some() {
-        if let Some(publication) = ops::completed_handoff::committed(paths)? {
-            let preparation = review(paths)
-                .map_err(|_| EnsureStateError::CompletedPreparationInProgress)?
-                .ok_or(EnsureStateError::CompletedPreparationInProgress)?;
-            let replacement = ops::completed_handoff::replacement_plan(paths, &publication)?;
-            let exact_preparation = replacement
-                .reinstall
-                .as_ref()
-                .and_then(|intent| intent.completed_reset.as_ref())
-                .is_some_and(|completed| {
-                    completed.preparation == preparation && completed.prepared.prepared
-                });
-            if publication.source == preparation.source
-                && exact_preparation
-                && ops::completed_handoff::pending(paths)?.is_none()
-            {
-                return Ok(());
-            }
+        if ops::completed_handoff::consumed_preparation(paths)? {
+            return Ok(());
         }
         return Err(EnsureStateError::CompletedPreparationInProgress);
     }

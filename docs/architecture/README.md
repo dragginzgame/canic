@@ -23,12 +23,14 @@ Current architecture notes:
 
 Current implementation design and handoff:
 
-- [0.100 Multi-Subnet Fleet Coordinator and Registry Synchronization](../design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
-- [0.100 Implementation Status](../design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/status.md)
+- [Design Roadmap](../design/README.md)
+- [0.110 Fleet Runtime Contraction](../design/0.110-fleet-runtime-contraction/0.110-design.md)
+- [0.110 Implementation Status](../design/0.110-fleet-runtime-contraction/status.md)
 - [Current Repository Status](../status/current.md)
 
 Historical/superseded notes:
 
+- [0.100 Multi-Subnet Fleet Coordinator and Registry Synchronization](../design/archive/0.100-multi-subnet-fleet-coordinator-and-registry-synchronization/0.100-design.md)
 - [Authentication Subnet-State Addendum](authentication-subnet-state-addendum.md)
 
 Operational guidance starts at

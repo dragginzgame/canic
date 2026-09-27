@@ -126,13 +126,22 @@ pub fn check(
     validate_path_labels(environment, fleet)?;
     let paths = EnsurePaths::under(workspace, environment, fleet);
     crate::fleet_ensure::ops::capacity_import::journal::require_no_approved_import(&paths)?;
+    if let Some(completed) =
+        crate::fleet_ensure::ops::operation_selection::completed(&paths, environment, fleet)?
+    {
+        crate::fleet_ensure::ops::operation_selection::retirement::require_terminal_side_effects(
+            &paths,
+            &completed.operation_id,
+        )?;
+        return Ok(());
+    }
     if let Some(review) = crate::fleet_ensure::ops::completed_handoff::pending(&paths)? {
         return Err(RetainedContractError::PublicationRecoveryRequired {
             review_sha256: review.review_sha256,
             plan_sha256: review.plan_sha256,
         });
     }
-    if crate::fleet_ensure::ops::completed_handoff::committed(&paths)?.is_none()
+    if crate::fleet_ensure::ops::completed_handoff::completed(&paths)?.is_none()
         && let Some(review) = crate::fleet_ensure::ops::completed_handoff::review(&paths)?
     {
         return Err(RetainedContractError::CompletedResetReviewRequired {
@@ -142,9 +151,7 @@ pub fn check(
     }
     let preparation = crate::fleet_ensure::ops::completed_preparation::review(&paths)
         .map_err(|error| RetainedContractError::Preparation(Box::new(error)))?;
-    if let Some(review) = preparation
-        && crate::fleet_ensure::ops::completed_handoff::committed(&paths)?.is_none()
-    {
+    if let Some(review) = preparation {
         if let Some(journal) =
             crate::fleet_ensure::ops::completed_preparation::journal(&paths, &review)
                 .map_err(|error| RetainedContractError::Preparation(Box::new(error)))?

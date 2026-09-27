@@ -5,6 +5,7 @@
 //! Boundary: callers must admit live custody/conservation before committing this local handoff.
 
 mod archive;
+pub(in crate::fleet_ensure) mod retirement;
 #[cfg(test)]
 mod tests;
 
@@ -183,6 +184,57 @@ pub fn committed(
         .transpose()
 }
 
+/// Read terminal publication identity without loading its retired executable plan.
+/// This is selection evidence only; pending recovery still verifies the full archive.
+pub fn completed(
+    paths: &EnsurePaths,
+) -> Result<Option<CompletedEstatePublicationReviewRecord>, EnsureStateError> {
+    marker(paths)?
+        .filter(|record| record.complete)
+        .map(|record| publication_identity(paths, &record))
+        .transpose()
+}
+
+/// A preparation embedded in a completed publication has spent its authority.
+/// Compare its exact recorded values, without admitting its release or effect schema.
+pub(in crate::fleet_ensure) fn consumed_preparation(
+    paths: &EnsurePaths,
+) -> Result<bool, EnsureStateError> {
+    let Some(publication) = completed(paths)? else {
+        return Ok(false);
+    };
+    let preparation: Option<serde_json::Value> = read_bounded(
+        &paths
+            .plan
+            .with_file_name("completed-preparation-review.json"),
+        4 * 1024 * 1024,
+    )?;
+    let prepared: Option<serde_json::Value> = read_bounded(
+        &paths
+            .plan
+            .with_file_name("completed-preparation-journal.json"),
+        4 * 1024 * 1024,
+    )?;
+    let (Some(preparation), Some(prepared)) = (preparation, prepared) else {
+        return Ok(false);
+    };
+    let bytes = super::exact_bytes(
+        &super::object_path(paths, &publication.replacement.plan_sha256),
+        &publication.replacement.plan_sha256,
+    )?;
+    let replacement: serde_json::Value = serde_json::from_slice(&bytes).map_err(|_| conflict())?;
+    let Some(reset) = replacement.pointer("/reinstall/completed_reset") else {
+        return Ok(false);
+    };
+    Ok(reset.get("preparation") == Some(&preparation)
+        && reset.get("prepared") == Some(&prepared)
+        && preparation.get("source")
+            == Some(&serde_json::to_value(&publication.source).map_err(|_| conflict())?)
+        && preparation.get("review_sha256").is_some()
+        && preparation.get("review_sha256") == prepared.get("review_sha256")
+        && prepared.get("prepared") == Some(&serde_json::Value::Bool(true)))
+}
+
 /// The archived current plan is immutable even after its published journal advances.
 pub fn replacement_plan(
     paths: &EnsurePaths,
@@ -260,6 +312,15 @@ fn committed_review(
     paths: &EnsurePaths,
     marker: &CompletedEstatePublicationRecord,
 ) -> Result<CompletedEstatePublicationReviewRecord, EnsureStateError> {
+    let review = publication_identity(paths, marker)?;
+    archive::verify(paths, &review)?;
+    Ok(review)
+}
+
+fn publication_identity(
+    paths: &EnsurePaths,
+    marker: &CompletedEstatePublicationRecord,
+) -> Result<CompletedEstatePublicationReviewRecord, EnsureStateError> {
     let bytes = super::exact_bytes(
         &super::object_path(paths, &marker.review_document_sha256),
         &marker.review_document_sha256,
@@ -271,7 +332,6 @@ fn committed_review(
     if review.review_sha256 != marker.review_sha256 {
         return Err(conflict());
     }
-    archive::verify(paths, &review)?;
     Ok(review)
 }
 

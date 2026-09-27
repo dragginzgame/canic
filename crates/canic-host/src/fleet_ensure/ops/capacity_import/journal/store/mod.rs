@@ -329,14 +329,12 @@ pub(in crate::fleet_ensure::ops) fn require_no_approved_import(
     paths: &EnsurePaths,
 ) -> Result<(), EnsureStateError> {
     let path = paths.plan.with_file_name("capacity-import.json");
-    let record = read_at(&path).map_err(|source| EnsureStateError::CapacityImportJournal {
-        path: path.clone(),
-        source: Box::new(source),
-    })?;
-    if record.is_some_and(|record| {
-        record.approved
-            && !crate::fleet_ensure::ops::capacity_import::publication::completed(&record)
-    }) {
+    let pending = crate::fleet_ensure::ops::operation_selection::capacity_import_in_progress(paths)
+        .map_err(|_| EnsureStateError::CapacityImportJournal {
+            path: path.clone(),
+            source: Box::new(CapacityImportJournalError::Integrity),
+        })?;
+    if pending {
         return Err(EnsureStateError::CapacityImportInProgress { path });
     }
     Ok(())

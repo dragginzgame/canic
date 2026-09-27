@@ -137,6 +137,7 @@ pub fn root_reservation(
             .iter()
             .map(|source| canic_core::dto::pool_import::PoolImportSource {
                 canister_id: source.binding.canister_id,
+                controllers: source.binding.controllers.clone(),
                 module_sha256: source.binding.module_sha256,
                 canister_version: source.binding.canister_version,
                 stopped: source.binding.stopped,

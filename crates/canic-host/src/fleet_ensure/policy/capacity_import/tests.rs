@@ -65,6 +65,30 @@ pub fn destination(plan: &CapacityImportPlanRecord) -> CapacityImportDestination
     }
 }
 
+#[test]
+fn current_root_custody_accepts_running_sources_without_an_operator_handoff() {
+    let mut plan = plan();
+    plan.sources[0].binding.controllers = vec![plan.authority.root];
+    plan.sources[0].binding.stopped = false;
+    validate_plan(&plan).unwrap();
+    assert!(!requires_handoff(&plan, &plan.sources[0]));
+    assert_eq!(controller_version_delta(&plan, &plan.sources[0]), 1);
+    let mut observed = sources(&plan);
+    observed[0].binding.canister_version += 10;
+    admit_handoffs(&plan, &destination(&plan), &observed).unwrap();
+    observed[0].binding.controllers = vec![principal(99)];
+    assert!(matches!(
+        admit_handoffs(&plan, &destination(&plan), &observed),
+        Err(CapacityImportPolicyError::SourceChanged { .. })
+    ));
+    plan.sources[0].binding.controllers = vec![principal(99)];
+    plan.sources[0].binding.stopped = true;
+    assert!(matches!(
+        validate_plan(&plan),
+        Err(CapacityImportPolicyError::OperatorNotController { .. })
+    ));
+}
+
 pub fn sources(plan: &CapacityImportPlanRecord) -> Vec<CapacityImportSourceView> {
     plan.sources
         .iter()

@@ -33,8 +33,24 @@ pub fn validate_root_status(
             all_ready = false;
             continue;
         };
+        let minimum_before = source
+            .binding
+            .canister_version
+            .checked_add(
+                crate::fleet_ensure::policy::capacity_import::controller_version_delta(
+                    plan, source,
+                ),
+            )
+            .ok_or(CapacityImportReviewError::RootEvidenceMismatch)?;
+        let before_matches = if source.binding.stopped {
+            receipt.before_uninstall_canister_version == minimum_before
+        } else {
+            receipt.before_uninstall_canister_version > minimum_before
+        };
         if receipt.canister_id != source.binding.canister_id
-            || source.binding.canister_version.checked_add(3) != Some(receipt.canister_version)
+            || !before_matches
+            || receipt.before_uninstall_canister_version.checked_add(1)
+                != Some(receipt.canister_version)
         {
             return Err(CapacityImportReviewError::RootEvidenceMismatch);
         }
