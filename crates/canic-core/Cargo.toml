@@ -55,6 +55,7 @@ sha2 = { workspace = true }
 thiserror = { workspace = true }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ic-secp256k1 = { workspace = true }
 proc-macro2 = { workspace = true }
 quote = { workspace = true }
 serde_path_to_error = { workspace = true }

@@ -50,6 +50,8 @@ mod tests {
     #[cfg(test)]
     mod repeat_reset;
     #[cfg(test)]
+    mod root_public_key;
+    #[cfg(test)]
     mod sibling_funding;
     #[cfg(test)]
     mod state_cascade;
@@ -13782,6 +13784,7 @@ cycles = "80T"
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         for _ in 0..2 {
             let fixture = acquire_active_component_registry();
+            root_public_key::assert_controller_key_discovery(fixture.pic(), fixture.root);
             super::super::role_attestation::assert_registry_bound_role_attestation(
                 fixture.pic(),
                 fixture.root,

@@ -54,8 +54,8 @@ pub mod compiled {
         cdk::{candid::Principal, types::Cycles},
         config::schema::{
             AppConfig, AuthConfig, CanisterAuthConfig, CanisterConfig, CanisterKind,
-            CanisterRoleNameIssue, ChainKeyRootProofConfig, ComponentChildConfig,
-            ComponentChildKind, ComponentDeploymentMemberLimitConfig,
+            CanisterRoleNameIssue, ChainKeyPublicKeyDerivation, ChainKeyRootProofConfig,
+            ComponentChildConfig, ComponentChildKind, ComponentDeploymentMemberLimitConfig,
             ComponentDeploymentSpawnGrantLimitConfig, ComponentGroupComponentConfig,
             ComponentGroupDeploymentConfig, ComponentGroupIncludeConfig,
             ComponentGroupPlacementPolicyConfig, ComponentGroupSpecConfig, ComponentLimitsConfig,

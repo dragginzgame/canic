@@ -19,10 +19,7 @@ use crate::{
     ids::BuildNetwork,
     ops::{
         auth::AuthValidationError,
-        ic::mgmt::{
-            EcdsaKeyId, EcdsaPublicKeyArgs, EcdsaPublicKeyResult, MgmtOps, SignWithEcdsaArgs,
-            SignWithEcdsaResult,
-        },
+        ic::mgmt::{EcdsaKeyId, MgmtOps, SignWithEcdsaArgs, SignWithEcdsaResult},
     },
 };
 #[cfg(any(feature = "auth-chain-key-ecdsa", test))]
@@ -69,11 +66,6 @@ pub(in crate::ops::auth) struct SignChainKeyBatchHeaderInput<'a> {
 ///
 
 pub(in crate::ops::auth) trait ChainKeySigner: Send {
-    fn ecdsa_public_key(
-        &mut self,
-        args: EcdsaPublicKeyArgs,
-    ) -> ChainKeySignerFuture<'_, EcdsaPublicKeyResult>;
-
     fn sign_with_ecdsa(
         &mut self,
         args: SignWithEcdsaArgs,
@@ -92,17 +84,6 @@ pub(in crate::ops::auth) type ChainKeySignerFuture<'a, T> =
 pub(in crate::ops::auth) struct ManagementCanisterChainKeySigner;
 
 impl ChainKeySigner for ManagementCanisterChainKeySigner {
-    fn ecdsa_public_key(
-        &mut self,
-        args: EcdsaPublicKeyArgs,
-    ) -> ChainKeySignerFuture<'_, EcdsaPublicKeyResult> {
-        Box::pin(async move {
-            MgmtOps::ecdsa_public_key(&args)
-                .await
-                .map_err(ChainKeySignerError::Management)
-        })
-    }
-
     fn sign_with_ecdsa(
         &mut self,
         args: SignWithEcdsaArgs,
@@ -127,8 +108,6 @@ pub(in crate::ops::auth) enum ChainKeySignerError {
     HeaderPolicyMismatch { field: &'static str },
     #[error("chain-key signer test key is rejected for this build network")]
     TestKeyRejected,
-    #[error("chain-key signer derived public key does not match configured root key")]
-    PublicKeyMismatch,
     #[error("chain-key signer returned an invalid signature: {0}")]
     SignatureVerification(String),
     #[error("chain-key management signer failed: {0}")]
@@ -197,18 +176,6 @@ where
         name: input.policy.key_id.name.clone(),
     };
     let derivation_path = input.policy.derivation_path.clone();
-    let public_key = signer
-        .ecdsa_public_key(EcdsaPublicKeyArgs {
-            canister_id: Some(input.policy.root_canister_id),
-            derivation_path: derivation_path.clone(),
-            key_id: key_id.clone(),
-        })
-        .await?;
-
-    if public_key.public_key != input.policy.public_key {
-        return Err(ChainKeySignerError::PublicKeyMismatch);
-    }
-
     let message_hash = chain_key_batch_header_hash(input.header);
     let signature = signer
         .sign_with_ecdsa(SignWithEcdsaArgs {
@@ -224,7 +191,7 @@ where
         .map_err(|err| ChainKeySignerError::SignatureVerification(err.to_string()))?;
     verify_chain_key_ecdsa_signature(ChainKeySignatureVerificationInput {
         algorithm: input.policy.algorithm,
-        public_key: &public_key.public_key,
+        public_key: &input.policy.public_key,
         message_hash,
         signature: &signature_bytes,
     })
@@ -234,7 +201,7 @@ where
         algorithm: input.policy.algorithm,
         key_id: input.policy.key_id.clone(),
         derivation_path,
-        public_key: public_key.public_key,
+        public_key: input.policy.public_key.clone(),
         signature: signature_bytes,
     })
 }
@@ -523,45 +490,25 @@ mod tests {
     }
 
     struct MockSigner {
-        public_key: Vec<u8>,
         signature: Vec<u8>,
-        public_key_calls: usize,
         sign_calls: usize,
-        last_public_key_args: Option<EcdsaPublicKeyArgs>,
         last_sign_args: Option<SignWithEcdsaArgs>,
     }
 
     impl MockSigner {
-        fn valid(policy: &ChainKeySigningPolicy, header: &ChainKeyBatchHeaderV1) -> Self {
+        fn valid(header: &ChainKeyBatchHeaderV1) -> Self {
             let signature: K256TestSignature = signing_key()
                 .sign_prehash(&chain_key_batch_header_hash(header))
                 .expect("test prehash signature should sign");
             Self {
-                public_key: policy.public_key.clone(),
                 signature: signature.to_bytes().to_vec(),
-                public_key_calls: 0,
                 sign_calls: 0,
-                last_public_key_args: None,
                 last_sign_args: None,
             }
         }
     }
 
     impl ChainKeySigner for MockSigner {
-        fn ecdsa_public_key(
-            &mut self,
-            args: EcdsaPublicKeyArgs,
-        ) -> ChainKeySignerFuture<'_, EcdsaPublicKeyResult> {
-            self.public_key_calls += 1;
-            self.last_public_key_args = Some(args);
-            Box::pin(async move {
-                Ok(EcdsaPublicKeyResult {
-                    public_key: self.public_key.clone(),
-                    chain_code: vec![9; 32],
-                })
-            })
-        }
-
         fn sign_with_ecdsa(
             &mut self,
             args: SignWithEcdsaArgs,
@@ -581,7 +528,7 @@ mod tests {
         let mut policy = policy();
         policy.build_network = BuildNetwork::Ic;
         let header = header(&policy);
-        let mut signer = MockSigner::valid(&policy, &header);
+        let mut signer = MockSigner::valid(&header);
 
         let err = block_on(sign_chain_key_batch_header(
             SignChainKeyBatchHeaderInput {
@@ -593,15 +540,14 @@ mod tests {
         .expect_err("mainnet test key must reject before signing");
 
         assert!(matches!(err, ChainKeySignerError::TestKeyRejected));
-        assert_eq!(signer.public_key_calls, 0);
         assert_eq!(signer.sign_calls, 0);
     }
 
     #[test]
-    fn chain_key_signer_queries_root_public_key_and_signs_once() {
+    fn chain_key_signer_uses_configured_public_key_and_signs_once() {
         let policy = policy();
         let header = header(&policy);
-        let mut signer = MockSigner::valid(&policy, &header);
+        let mut signer = MockSigner::valid(&header);
 
         let signature = block_on(sign_chain_key_batch_header(
             SignChainKeyBatchHeaderInput {
@@ -612,26 +558,27 @@ mod tests {
         ))
         .expect("valid mock signer should produce a signature");
 
-        assert_eq!(signer.public_key_calls, 1);
         assert_eq!(signer.sign_calls, 1);
         assert_eq!(signature.algorithm, policy.algorithm);
         assert_eq!(signature.key_id, policy.key_id);
         assert_eq!(signature.derivation_path, policy.derivation_path);
         assert_eq!(signature.public_key, policy.public_key);
-        let public_key_args = signer
-            .last_public_key_args
-            .expect("public-key args should be captured");
-        assert_eq!(public_key_args.canister_id, Some(policy.root_canister_id));
         let sign_args = signer.last_sign_args.expect("sign args should be captured");
         assert_eq!(sign_args.message_hash, chain_key_batch_header_hash(&header));
+        assert_eq!(sign_args.key_id.name, policy.key_id.name);
+        assert_eq!(sign_args.derivation_path, policy.derivation_path);
     }
 
     #[test]
-    fn chain_key_signer_rejects_unexpected_public_key_before_signing() {
+    fn chain_key_signer_rejects_signature_from_a_different_key() {
         let policy = policy();
         let header = header(&policy);
-        let mut signer = MockSigner::valid(&policy, &header);
-        signer.public_key[0] ^= 1;
+        let mut signer = MockSigner::valid(&header);
+        let other_key = K256SigningKey::from_bytes((&[42; 32]).into()).unwrap();
+        let wrong_signature: K256TestSignature = other_key
+            .sign_prehash(&chain_key_batch_header_hash(&header))
+            .unwrap();
+        signer.signature = wrong_signature.to_bytes().to_vec();
 
         let err = block_on(sign_chain_key_batch_header(
             SignChainKeyBatchHeaderInput {
@@ -642,16 +589,15 @@ mod tests {
         ))
         .expect_err("public key mismatch must reject");
 
-        assert!(matches!(err, ChainKeySignerError::PublicKeyMismatch));
-        assert_eq!(signer.public_key_calls, 1);
-        assert_eq!(signer.sign_calls, 0);
+        assert!(matches!(err, ChainKeySignerError::SignatureVerification(_)));
+        assert_eq!(signer.sign_calls, 1);
     }
 
     #[test]
     fn chain_key_signer_verifies_returned_signature() {
         let policy = policy();
         let header = header(&policy);
-        let mut signer = MockSigner::valid(&policy, &header);
+        let mut signer = MockSigner::valid(&header);
         signer.signature[0] ^= 1;
 
         let err = block_on(sign_chain_key_batch_header(
@@ -664,7 +610,6 @@ mod tests {
         .expect_err("altered signature must reject");
 
         assert!(matches!(err, ChainKeySignerError::SignatureVerification(_)));
-        assert_eq!(signer.public_key_calls, 1);
         assert_eq!(signer.sign_calls, 1);
     }
 
@@ -672,7 +617,7 @@ mod tests {
     fn chain_key_signer_normalizes_high_s_returned_signature() {
         let policy = policy();
         let header = header(&policy);
-        let mut signer = MockSigner::valid(&policy, &header);
+        let mut signer = MockSigner::valid(&header);
         signer.signature = high_s_signature(&header);
         assert!(
             verify_chain_key_ecdsa_signature_shape(&signer.signature).is_err(),
@@ -690,7 +635,6 @@ mod tests {
 
         verify_chain_key_ecdsa_signature_shape(&signature.signature)
             .expect("stored signature should be low-s");
-        assert_eq!(signer.public_key_calls, 1);
         assert_eq!(signer.sign_calls, 1);
     }
 }

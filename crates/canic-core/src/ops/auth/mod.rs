@@ -16,6 +16,7 @@ mod delegated;
 mod delegation;
 mod error;
 mod issuer_canister_sig;
+mod public_key;
 mod root_canister_sig;
 mod token;
 mod types;

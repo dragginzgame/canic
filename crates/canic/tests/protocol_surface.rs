@@ -1371,6 +1371,7 @@ fn root_delegation_commands_are_variant_owned() {
     let source = read_text(&workspace_root().join("crates/canic/src/macros/endpoints/root.rs"));
     for variant in [
         "GetOrCreateDelegationProof",
+        "GetChainKeyPublicKey",
         "UpsertIssuerPolicy",
         "UpsertIssuerRenewalTemplate",
     ] {

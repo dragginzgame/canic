@@ -15,9 +15,7 @@ use crate::{
     },
     ops::{
         auth::delegated::chain_key_signing::{ChainKeySigner, ChainKeySignerFuture},
-        ic::mgmt::{
-            EcdsaPublicKeyArgs, EcdsaPublicKeyResult, SignWithEcdsaArgs, SignWithEcdsaResult,
-        },
+        ic::mgmt::{SignWithEcdsaArgs, SignWithEcdsaResult},
     },
 };
 use futures::executor::block_on;
@@ -220,9 +218,7 @@ fn sign_header(header: &ChainKeyBatchHeaderV1) -> crate::dto::auth::ChainKeyRoot
 }
 
 struct MockSigner {
-    public_key: Vec<u8>,
     signature: Vec<u8>,
-    public_key_calls: usize,
     sign_calls: usize,
 }
 
@@ -230,28 +226,13 @@ impl MockSigner {
     fn valid_for(header: &ChainKeyBatchHeaderV1) -> Self {
         let signature = sign_header(header);
         Self {
-            public_key: signature.public_key,
             signature: signature.signature,
-            public_key_calls: 0,
             sign_calls: 0,
         }
     }
 }
 
 impl ChainKeySigner for MockSigner {
-    fn ecdsa_public_key(
-        &mut self,
-        _args: EcdsaPublicKeyArgs,
-    ) -> ChainKeySignerFuture<'_, EcdsaPublicKeyResult> {
-        self.public_key_calls += 1;
-        Box::pin(async move {
-            Ok(EcdsaPublicKeyResult {
-                public_key: self.public_key.clone(),
-                chain_code: vec![9; 32],
-            })
-        })
-    }
-
     fn sign_with_ecdsa(
         &mut self,
         _args: SignWithEcdsaArgs,
@@ -266,24 +247,10 @@ impl ChainKeySigner for MockSigner {
 }
 
 struct DynamicMockSigner {
-    public_key_calls: usize,
     sign_calls: usize,
 }
 
 impl ChainKeySigner for DynamicMockSigner {
-    fn ecdsa_public_key(
-        &mut self,
-        _args: EcdsaPublicKeyArgs,
-    ) -> ChainKeySignerFuture<'_, EcdsaPublicKeyResult> {
-        self.public_key_calls += 1;
-        Box::pin(async move {
-            Ok(EcdsaPublicKeyResult {
-                public_key: signing_policy().public_key,
-                chain_code: vec![9; 32],
-            })
-        })
-    }
-
     fn sign_with_ecdsa(
         &mut self,
         args: SignWithEcdsaArgs,
@@ -302,24 +269,10 @@ impl ChainKeySigner for DynamicMockSigner {
 
 struct StaleDuringSignSigner {
     batch_id: [u8; 32],
-    public_key_calls: usize,
     sign_calls: usize,
 }
 
 impl ChainKeySigner for StaleDuringSignSigner {
-    fn ecdsa_public_key(
-        &mut self,
-        _args: EcdsaPublicKeyArgs,
-    ) -> ChainKeySignerFuture<'_, EcdsaPublicKeyResult> {
-        self.public_key_calls += 1;
-        Box::pin(async move {
-            Ok(EcdsaPublicKeyResult {
-                public_key: signing_policy().public_key,
-                chain_code: vec![9; 32],
-            })
-        })
-    }
-
     fn sign_with_ecdsa(
         &mut self,
         args: SignWithEcdsaArgs,
@@ -568,7 +521,6 @@ fn chain_key_batch_signing_signs_prepared_batch_once_and_reuses_signed_state() {
     assert!(signing_result.signed);
     assert!(!signing_result.reused_signed);
     assert!(!signing_result.signing_in_flight);
-    assert_eq!(signer.public_key_calls, 1);
     assert_eq!(signer.sign_calls, 1);
     let stored =
         RootDelegationStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())
@@ -588,7 +540,6 @@ fn chain_key_batch_signing_signs_prepared_batch_once_and_reuses_signed_state() {
     assert_eq!(reused.batch_id, prepared.batch_id);
     assert!(!reused.signed);
     assert!(reused.reused_signed);
-    assert_eq!(second_signer.public_key_calls, 0);
     assert_eq!(second_signer.sign_calls, 0);
 }
 
@@ -620,7 +571,6 @@ fn chain_key_batch_signing_covers_multiple_issuers_with_one_signature() {
 
     assert_eq!(signing_result.batch_id, Some(batch_id));
     assert!(signing_result.signed);
-    assert_eq!(signer.public_key_calls, 1);
     assert_eq!(signer.sign_calls, 1);
 
     let plan = start_chain_key_root_delegation_batch_install(batch_id, 3_000)
@@ -659,7 +609,6 @@ fn chain_key_batch_signing_covers_multiple_issuers_with_one_signature() {
 
     assert_eq!(reused.batch_id, Some(batch_id));
     assert!(reused.reused_signed);
-    assert_eq!(reused_signer.public_key_calls, 0);
     assert_eq!(reused_signer.sign_calls, 0);
 }
 
@@ -674,16 +623,15 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
     let batch = RootDelegationStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())
         .expect("prepared batch should be stored");
     let mut signer = MockSigner::valid_for(&batch.header);
-    signer.public_key[0] ^= 1;
+    signer.signature[0] ^= 1;
 
     block_on(sign_next_chain_key_root_delegation_batch(
         &signing_policy,
         2_000,
         &mut signer,
     ))
-    .expect_err("public-key mismatch should fail signing");
-    assert_eq!(signer.public_key_calls, 1);
-    assert_eq!(signer.sign_calls, 0);
+    .expect_err("invalid signature should fail signing");
+    assert_eq!(signer.sign_calls, 1);
     let stored =
         RootDelegationStateOps::chain_key_root_delegation_batch(prepared.batch_id.unwrap())
             .expect("failed batch should remain stored");
@@ -705,7 +653,6 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
     .expect("retry delay should skip signing");
 
     assert_eq!(blocked.batch_id, None);
-    assert_eq!(blocked_signer.public_key_calls, 0);
     assert_eq!(blocked_signer.sign_calls, 0);
 
     let mut retry_signer = MockSigner::valid_for(&stored.header);
@@ -718,7 +665,6 @@ fn chain_key_batch_signing_failure_marks_same_batch_retryable() {
 
     assert_eq!(retried.batch_id, prepared.batch_id);
     assert!(retried.signed);
-    assert_eq!(retry_signer.public_key_calls, 1);
     assert_eq!(retry_signer.sign_calls, 1);
     let retried_stored = RootDelegationStateOps::chain_key_root_delegation_batch(
         prepared.batch_id.expect("prepared batch id"),
@@ -746,10 +692,7 @@ fn chain_key_batch_duplicate_signing_tick_observes_in_flight_without_management_
         .expect("prepared batch should be stored");
     batch.status = ChainKeyRootDelegationBatchStatus::Signing;
     RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
-    let mut signer = DynamicMockSigner {
-        public_key_calls: 0,
-        sign_calls: 0,
-    };
+    let mut signer = DynamicMockSigner { sign_calls: 0 };
 
     let result = block_on(sign_next_chain_key_root_delegation_batch(
         &signing_policy,
@@ -761,7 +704,6 @@ fn chain_key_batch_duplicate_signing_tick_observes_in_flight_without_management_
     assert_eq!(result.batch_id, Some(batch_id));
     assert!(result.signing_in_flight);
     assert!(!result.signed);
-    assert_eq!(signer.public_key_calls, 0);
     assert_eq!(signer.sign_calls, 0);
     let stored = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
         .expect("in-flight batch should remain stored");
@@ -780,7 +722,6 @@ fn chain_key_batch_discards_signature_returning_after_batch_became_stale() {
     let batch_id = prepared.batch_id.expect("prepare should return a batch id");
     let mut signer = StaleDuringSignSigner {
         batch_id,
-        public_key_calls: 0,
         sign_calls: 0,
     };
 
@@ -796,7 +737,6 @@ fn chain_key_batch_discards_signature_returning_after_batch_became_stale() {
     assert!(!result.signed);
     assert!(!result.reused_signed);
     assert!(!result.signing_in_flight);
-    assert_eq!(signer.public_key_calls, 1);
     assert_eq!(signer.sign_calls, 1);
     let stored = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
         .expect("stale batch should remain until expiry pruning");
@@ -888,7 +828,6 @@ fn chain_key_batch_expired_preinstall_batch_is_pruned_before_signing() {
     .expect("expired batch should be pruned without signing");
 
     assert_eq!(result.batch_id, None);
-    assert_eq!(signer.public_key_calls, 0);
     assert_eq!(signer.sign_calls, 0);
     assert!(
         RootDelegationStateOps::chain_key_root_delegation_batch(batch_id).is_none(),
@@ -1125,10 +1064,7 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
     let issuer = p(54);
     RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
     RootDelegationStateOps::upsert_root_issuer_renewal_template(template(issuer, 60_000_000_000));
-    let mut signer = DynamicMockSigner {
-        public_key_calls: 0,
-        sign_calls: 0,
-    };
+    let mut signer = DynamicMockSigner { sign_calls: 0 };
 
     let proof = block_on(prepare_sign_and_find_test_issuer_proof(
         input(&signing_policy),
@@ -1139,7 +1075,6 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
     .expect("lazy repair should return a proof");
 
     assert_eq!(proof.issuer_pid, issuer);
-    assert_eq!(signer.public_key_calls, 1);
     assert_eq!(signer.sign_calls, 1);
     verify_chain_key_batch_root_proof(
         crate::ops::auth::delegated::chain_key::VerifyChainKeyBatchRootProofInput {
@@ -1152,10 +1087,7 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
     )
     .expect("lazy repair proof should verify");
 
-    let mut cached_signer = DynamicMockSigner {
-        public_key_calls: 0,
-        sign_calls: 0,
-    };
+    let mut cached_signer = DynamicMockSigner { sign_calls: 0 };
     let cached = block_on(prepare_sign_and_find_test_issuer_proof(
         input(&signing_policy),
         issuer,
@@ -1165,7 +1097,6 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
     .expect("cached lazy repair should return a proof");
 
     assert_eq!(cached.cert_hash, proof.cert_hash);
-    assert_eq!(cached_signer.public_key_calls, 0);
     assert_eq!(cached_signer.sign_calls, 0);
 }
 
@@ -1185,10 +1116,7 @@ fn chain_key_lazy_repair_reuses_in_flight_batch_without_extra_signing() {
     RootDelegationStateOps::upsert_chain_key_root_delegation_batch(batch);
 
     for _ in 0..8 {
-        let mut signer = DynamicMockSigner {
-            public_key_calls: 0,
-            sign_calls: 0,
-        };
+        let mut signer = DynamicMockSigner { sign_calls: 0 };
         let proof = block_on(prepare_sign_and_find_test_issuer_proof(
             input(&signing_policy),
             issuer,
@@ -1197,7 +1125,6 @@ fn chain_key_lazy_repair_reuses_in_flight_batch_without_extra_signing() {
         .expect("in-flight lazy repair should be retryable later");
 
         assert_eq!(proof, None);
-        assert_eq!(signer.public_key_calls, 0);
         assert_eq!(signer.sign_calls, 0);
     }
 
@@ -1231,10 +1158,7 @@ fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
 
     let mut early_input = input(&signing_policy);
     early_input.now_ns = retry_after_ns - 1;
-    let mut early_signer = DynamicMockSigner {
-        public_key_calls: 0,
-        sign_calls: 0,
-    };
+    let mut early_signer = DynamicMockSigner { sign_calls: 0 };
     let early = block_on(prepare_sign_and_find_test_issuer_proof(
         early_input,
         issuer,
@@ -1243,15 +1167,11 @@ fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
     .expect("early lazy repair should remain retryable");
 
     assert_eq!(early, None);
-    assert_eq!(early_signer.public_key_calls, 0);
     assert_eq!(early_signer.sign_calls, 0);
 
     let mut retry_input = input(&signing_policy);
     retry_input.now_ns = retry_after_ns;
-    let mut retry_signer = DynamicMockSigner {
-        public_key_calls: 0,
-        sign_calls: 0,
-    };
+    let mut retry_signer = DynamicMockSigner { sign_calls: 0 };
     let retried = block_on(prepare_sign_and_find_test_issuer_proof(
         retry_input,
         issuer,
@@ -1261,7 +1181,6 @@ fn chain_key_lazy_repair_respects_retry_after_before_resigning() {
     .expect("retry-window lazy repair should return a proof");
 
     assert_eq!(retried.issuer_pid, issuer);
-    assert_eq!(retry_signer.public_key_calls, 1);
     assert_eq!(retry_signer.sign_calls, 1);
     let stored = RootDelegationStateOps::chain_key_root_delegation_batch(batch_id)
         .expect("retried batch should remain stored");

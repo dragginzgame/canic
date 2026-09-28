@@ -406,10 +406,9 @@ build_network = "ic"
 max_ttl_secs = 3600
 
 [auth.delegated_tokens.chain_key_root_proof]
+public_key_derivation = "ic"
 key_id = "key_1"
-derivation_path_hash_hex = "..."
 derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
-public_key_hex = "..."
 key_version = 1
 min_accepted_key_version = 1
 min_accepted_proof_epoch = 2
@@ -419,7 +418,15 @@ accept_until_ns = 4102444800000000000
 max_revocation_latency_ns = 60000000000
 ```
 
-`root_canister_id` may fall back to initialized Canic root env. The raw IC root
+Offline derivation requires an explicit `root_canister_id` before the build.
+Host config parsing derives `public_key_hex` and `derivation_path_hash_hex` using
+the selected public master key. Generated role artifacts contain the resolved
+values; verification does not fetch or cascade them. `"ic"` selects production
+`key_1`; `"pocketic"` is restricted to `build_network = "local"`. Any supplied
+key/hash must match. See the [offline configuration runbook](../operations/root-proof-provisioning.md#offline-public-key-configuration).
+
+For explicitly supplied keys without offline derivation, `root_canister_id` may
+fall back to initialized Canic root env. The raw IC root
 key is paired with `build_network` for issuer canister-signature verification:
 `ic` requires the configured known mainnet raw key, while `local` verification
 requires a non-mainnet raw root key from
@@ -430,6 +437,10 @@ requires a non-mainnet raw root key from
 canister id, `key_id`, and `derivation_path_hex`; `derivation_path_hash_hex`
 must match the canonical hash of `derivation_path_hex`. The `ic` build network
 rejects `test_key_1`; local use requires `allow_test_key = true`.
+
+Root signing verifies the returned signature against this configured public key
+locally. It does not query management for a public key before signing. Invalid
+signatures never enter a signed batch; existing retry delays govern failures.
 
 The proof and registry epoch floors are the hard-cut invalidation boundary.
 Before issuing byte-free V1 material, a deployment must set both floors

@@ -54,6 +54,17 @@ pub struct ChainKeyKeyId {
 }
 
 //
+// RootChainKeyPublicKeyRequest
+//
+
+/// Controller request to derive a public key for this Root's ECDSA identity.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootChainKeyPublicKeyRequest {
+    pub key_id: String,
+    pub derivation_path: Vec<Vec<u8>>,
+}
+
+//
 // RootKeyPolicyV1
 //
 

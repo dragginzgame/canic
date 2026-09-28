@@ -20,6 +20,57 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Offline Root public-key derivation — .46 ready for review, 2026-09-28
+
+The maintainer selected offline configuration with no public-key discovery calls
+or runtime cascade. The open .46 batch now resolves explicit `ic`/`pocketic`
+master-key selections during host config parsing, before builds. The Root ID,
+key name and path bind the generated key and path hash; supplied values must
+match. Generated role configurations retain the resolved immutable material.
+The dependency is host-only `ic-secp256k1` 0.3.0. Batch signing now verifies against
+the configured key and removes its redundant management public-key lookup;
+signature creation still uses the required IC management signing call.
+
+All 79 targeted native chain-key tests pass, including five offline-config tests
+and signing/recovery coverage. Scoped warning-denied core/facade/internal-test
+Clippy passes. The real PocketIC attestation case passes with exact equality
+between offline-derived keys and management output (277.47s test, 473s runner
+including compilation/artifact preparation). Logs: `.tmp/offline-key-regression.log`,
+`.tmp/offline-key-clippy.log`, `.tmp/offline-key-pocketic.log`. Scoped formatting
+and `git diff --check` pass. The [review report](../audits/reports/2026-09/2026-09-28/pr32-toko-auth.md)
+records the extended evidence and manual-key signing limitation.
+
+The combined .46 correction and changelog are ready for maintainer review and
+the selected release gate. Package versions remain .45; all changes are
+uncommitted. No full gate, version bump, publication or sibling mutation has run.
+Downstream scripts must select offline configuration and remove their explicit
+key lookup; the [runbook](../operations/root-proof-provisioning.md#offline-public-key-configuration)
+has the exact settings. The prior Toko caller/test blockers below remain separate.
+
+## Toko PR #32 auth correction — prior .46 review, 2026-09-28
+
+Based on Gabriel's PR #32 at `84f696a573375ea57052f5c685277aeb0c8fe35f`.
+Attestation-cache verifiers now require the ECDSA feature used during startup
+configuration validation. Canonical Root gains controller-only public-key
+discovery bound to its own canister ID. The original direct API-to-management
+call is adapted to the required API/workflow/ops layers; wire shape is unchanged.
+
+All 98 focused native checks pass (29 role-contract, 30 replay-policy, 39 protocol).
+The real PocketIC attestation case also passes with controller rejection,
+deterministic public-key replay and derivation-path binding (267.28s test,
+484s complete runner including compilation/artifact preparation). Scoped core,
+facade and internal-test warning-denied Clippy passes (10.95s final run).
+The [review report](../audits/reports/2026-09/2026-09-28/pr32-toko-auth.md)
+retains exact logs, PR provenance and remaining Toko work.
+
+The Canic correction and .46 changelog are ready for maintainer review and the
+selected release gate. This necessary published-line correction stays on .110;
+package versions remain .45. Changes are uncommitted, with no PR merge,
+publication, sibling mutation or live effects. No full workspace gate ran.
+Toko's application-specific role/provisioning callers and 37 reported
+`project_instance` failures still require downstream resolution; this is not
+Toko staging acceptance.
+
 ## Mixed-topology release-test correction — .45 ready for retry, 2026-09-28
 
 The subsequent maintainer gate failed in the mixed-topology reset fixture:

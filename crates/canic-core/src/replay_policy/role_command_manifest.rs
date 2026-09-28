@@ -63,6 +63,7 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         Some(ROOT_CHAIN_KEY_SIGNING_QUOTA_V1),
         None,
     ),
+    query_or_read_only("GetChainKeyPublicKey"),
     snapshot_convergent(
         "HandoffPoolCanister",
         "canister_pool.handoff.v1",

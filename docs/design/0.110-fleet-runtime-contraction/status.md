@@ -1,5 +1,21 @@
 # Canic 0.110 Implementation Status
 
+## Toko auth correction — .46 ready for review, 2026-09-28
+
+PR #32's attestation-cache feature requirement and controller-only Root public-key
+inspection are incorporated locally, with API/workflow/ops layering and real
+PocketIC authorization/derivation coverage. The maintainer then selected offline
+configuration: derive keys before builds, embed them in each role, and remove
+the redundant public-key lookup during signing. The extension's 79 targeted
+native tests, scoped warning-denied Clippy and PocketIC equivalence case pass
+(277.47s test / 473s runner with artifact preparation). The combined correction
+and changelog are ready for review and the selected gate; package versions
+remain .45.
+This necessary published-line follow-up does not begin a new minor. The
+[current handoff](../../status/current.md#offline-root-public-key-derivation--46-ready-for-review-2026-09-28)
+retains proof and downstream blockers. No full gate, publication or live effect ran.
+
+
 ## Mixed-topology reset correction — .45 ready for retry, 2026-09-28
 
 The next full gate exposed another obsolete completed-preparation fixture path.

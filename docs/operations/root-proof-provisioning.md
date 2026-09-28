@@ -23,6 +23,98 @@ bridge-backed canister-signature flow.
 | Active architecture contract | `docs/architecture/authentication.md` |
 | Wire/protocol contract | `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` |
 
+## Offline public-key configuration
+
+Use offline derivation for deployment. The shared App TOML selects the exact Root
+identity and public master-key environment before building any role:
+
+```toml
+[auth.delegated_tokens]
+enabled = true
+build_network = "ic"
+root_canister_id = "5lnwm-ziaaa-aaaae-agtqa-cai"
+
+[auth.delegated_tokens.chain_key_root_proof]
+public_key_derivation = "ic"
+key_id = "key_1"
+derivation_path_hex = ["63616e6963", "64656c65676174696f6e"]
+```
+
+This is an excerpt: retain the existing key-version, epoch, validity and TTL
+policy fields. Omit `public_key_hex` and `derivation_path_hash_hex`; Canic derives
+both during host configuration parsing, before validation and artifact generation.
+If either value is supplied, it must match the derived bytes. The generated role
+configuration contains the resolved key; ordinary verification reads it locally.
+There is no key-discovery call, runtime cascade, or post-install rebuild.
+
+Select `public_key_derivation = "pocketic"` with `build_network = "local"` only
+for a PocketIC environment. Supported PocketIC key names are `key_1`, `test_key_1`
+and `dfx_test_key`; `test_key_1` also requires the existing `allow_test_key = true`.
+The IC selection supports production `key_1`. Unknown keys, mismatched networks,
+missing Root identity and stale supplied key/hash values fail before compilation.
+An explicit `public_key_hex` without `public_key_derivation` remains available for
+environments whose master key is not in the supported offline catalog.
+
+The Root ID must be selected before building. An empty Root with a known ID does
+not need code installed for offline derivation. Preserve the selected network,
+Root ID, key name and path with the exact qualified artifacts across retries.
+Changing those inputs requires fresh artifacts. Public keys do not expire;
+the configured acceptance policy and signed proofs still have validity limits.
+
+Derivation uses DFINITY's `ic-secp256k1` on the host only. Its derivation library
+does not enter canister Wasm. Root batch signing uses the configured public key
+and verifies each returned signature locally; it makes only the required
+`sign_with_ecdsa` management call, with no preceding public-key lookup.
+
+## Explicit Root public-key inspection
+
+The following optional diagnostic makes a management call on every invocation.
+It is not part of offline configuration or the normal deployment path.
+
+A controller of an active canonical Root with the root-delegation capability can
+call the update `canic_root_command` with:
+
+```candid
+(variant { GetChainKeyPublicKey = record {
+  key_id = "key_1";
+  derivation_path = vec { blob "canic"; blob "delegation" };
+}})
+```
+
+The matching response variant contains compressed SEC1 secp256k1 public-key bytes.
+Use the intended key name and derivation path; the request has no canister-ID field.
+Canic binds derivation to the receiving Root's identity. Repeating the same request
+returns the same public key without granting signing access or changing issuer
+policies. Existing Root activation and authority-fence checks still apply.
+
+Roles with `auth.role_attestation_cache = true` require
+`auth-root-canister-sig-verify` and `auth-chain-key-ecdsa` (directly or through their
+resolved feature implications). The latter validates the configured chain-key
+verification material during startup; it does not enable Root signing.
+
+## Application integration boundaries
+
+An application role guard must preserve caller, role, audience, subnet and
+freshness checks. Canonical `canic_root_status` Component Registry queries are
+controller-only, so an ordinary application canister cannot substitute them for
+an application-specific Root lookup. For the supported attestation flow, an
+active Component member prepares a `PrepareRoleAttestation` command and retrieves
+its proof through `canic_root_auth_status::RoleAttestation`. The receiver verifies
+the proof and checks its required role. The `auth::attested_local_subnet()`
+guard requires `SignedRoleAttestation` as the first endpoint argument and binds
+it to the transport caller and receiver's live subnet; the application must still
+check the expected role. Choose TTL and epoch policy for
+the required revocation behavior rather than treating a cached proof as an
+instantaneous registry lookup.
+
+`GetOrCreateDelegationProof` binds the issuer to the **calling canister**. A user
+hub cannot call it on behalf of a user shard. The maintained issuer lazy-repair
+and controller-configured Root renewal paths are described below. The public
+Rust provisioning facade runs inside Root; it is not a canonical wire command
+for arbitrary application managers. An application requiring immediate manager-
+triggered provisioning needs an explicitly reviewed authorization contract.
+Reinstalling canonical Root does not add application-specific methods.
+
 ## Supported Flow
 
 Root-owned renewal is the active delegated-auth liveness path for issuers with
@@ -46,7 +138,8 @@ internal root update:
 ```text
 issuer                 -> root canic_root_command GetOrCreateDelegationProof update
 root                   -> management canister sign_with_ecdsa when no reusable batch exists
-root                   -> issuer canic_command InstallDelegationProof update
+root                   -> return the issuer-bound proof
+issuer                 -> verify and store the returned proof locally
 ```
 
 Lazy repair must reuse a valid existing chain-key batch when possible and must
