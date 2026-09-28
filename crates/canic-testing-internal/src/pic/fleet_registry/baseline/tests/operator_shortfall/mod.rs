@@ -1,6 +1,6 @@
 //! Module: pic::fleet_registry::baseline::tests::operator_shortfall
 //!
-//! Responsibility: qualify fresh reinstall admission against a disposable Ledger account.
+//! Responsibility: reject changed operator balance before current reset issues effects.
 //! Boundary: fixture transfers bracket admission; they do not qualify retained mint recovery.
 
 use super::*;
@@ -18,7 +18,14 @@ pub(super) fn assert_fresh_reinstall_rejection(
     let balance = ledger_account_balance(input.pic, ledger, operator);
     let paths = EnsurePaths::under(input.adapter_root, &desired.environment, &desired.fleet);
     let documents = [&paths.plan, &paths.journal, &paths.state];
-    let before = documents.map(|path| fs::read(path).unwrap());
+    let snapshot = || {
+        documents.map(|path| match fs::read(path) {
+            Ok(bytes) => Some(bytes),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => None,
+            Err(error) => panic!("read execution evidence: {error}"),
+        })
+    };
+    let before = snapshot();
     let withdrawals: u64 = input
         .pic
         .query_candid(ledger, "withdrawal_count", ())
@@ -26,10 +33,15 @@ pub(super) fn assert_fresh_reinstall_rejection(
     assert!(plan.conservation.maximum_operator_debit_cycles > 0);
 
     move_fixture_balance(input.pic, ledger, operator, reserve, balance.clone());
-    let result = fleet_ensure_workflow::apply(
+    let icp = canic_host::icp::IcpCli::new(
+        input.icp_wrapper.to_str().unwrap(),
+        Some(desired.environment.clone()),
+    )
+    .with_cwd(input.adapter_root)
+    .with_local_replica(Some(input.local_replica.clone()));
+    let result = canic_host::fleet_ensure::workflow::clean_reinstall::apply(
         input.adapter_root,
-        desired,
-        &desired_sha256(desired),
+        &desired.environment,
         &desired.fleet,
         &plan.plan_sha256,
         &mut literal_zero_journey_platform(
@@ -39,15 +51,17 @@ pub(super) fn assert_fresh_reinstall_rejection(
             input.local_replica.clone(),
             true,
         ),
+        &icp,
     );
     assert!(
         matches!(result,
-            Err(EnsureWorkflowError::InsufficientOperatorCycles { actual: 0, required })
-                if required == plan.conservation.maximum_operator_debit_cycles
+            Err(EnsureWorkflowError::InfrastructureBootstrap(
+                canic_host::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError::Integrity
+            ))
         ),
-        "reject before replacing the completed preparation journal: {result:?}"
+        "reject before creating execution intent or issuing effects: {result:?}"
     );
-    assert_eq!(documents.map(|path| fs::read(path).unwrap()), before);
+    assert_eq!(snapshot(), before);
     assert_eq!(
         input
             .pic

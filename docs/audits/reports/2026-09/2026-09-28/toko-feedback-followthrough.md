@@ -8,7 +8,7 @@ without changing its checkout, deployment records or live estate.
 
 ## Release failure and current reset proof
 
-The latest release failure is in the completed-estate CLI fixture. It invokes
+The earlier release failure is in the completed-estate CLI fixture. It invokes
 `fleet ensure --reinstall` without a current desired document and expects the
 superseded completed-preparation route. The current route correctly selects a
 fresh reset; the fixture fails before reviewing it. The failure is not an IC
@@ -47,6 +47,40 @@ instances, real HTTP 502 retries and typed permanent-failure rejection. Scoped
 host/CLI/internal-test warning-denied Clippy passes after correcting one eager
 `Option::or` in the fixture. Logs: `.tmp/upstream-feedback45-native.log` and
 `.tmp/upstream-feedback45-clippy-final.log`.
+
+## Subsequent mixed-topology gate correction
+
+The maintainer's next full run failed at the mixed-topology fixture's obsolete
+completed-preparation CLI review, before the replacement reset was applied:
+`target/test-runs/20260928T081507Z-53814.lgXOwc/7.log`.
+The fixture now generates current authority and uses the shared clean-reset
+workflow. Its large, superseded preparation sequence is removed. No production
+admission or cycle-conservation check was relaxed.
+
+The maintained assertions retain real Hub/Shard user-row deletion and authored
+system-row restoration, exact infrastructure/application Wasm hashes, physical
+IDs, five workload canisters, one Ready reserve and memory diagnostics. A full-reset
+Ledger reserve avoids incidental fixture shortfalls. The shared proof also checks
+that operator-balance drift causes rejection before execution records or paid
+effects, then restores the fixture balance and loses a real funding reply. That
+payment and the subsequent lost install reply recover under the same reviewed
+phase; final exact debit, bounded burn and offline replay still pass.
+
+Both affected callers pass:
+
+| Proof | Test | Complete runner | Retained log |
+| --- | ---: | ---: | --- |
+| Mixed topology and retained Ready reserve | 346.87s | 366s | `target/test-runs/20260928T085923Z-19625.6DToIb/1.log` |
+| Consecutive changed-build and same-build resets | 197.08s | 198s | `target/test-runs/20260928T090528Z-47971.wGD7Bm/1.log` |
+
+Scoped warning-denied Clippy passes (3.19s) in `.tmp/mixed-reset45-clippy.log`.
+Removing an unused wire response changed the decoder's variant-size distribution;
+the existing lint expectation now applies to both tested configurations. An
+intermediate run caught the old funding helper's incorrect full-Fleet digest at
+the infrastructure phase; the helper now uses the current reset owner and asserts
+the typed balance-drift rejection. Intermediate failures are not counted as passes.
+No new complete workspace result is claimed. The complete accepted .45 batch
+remains ready for maintainer review and the selected release-gate retry.
 
 ## Current feedback disposition
 

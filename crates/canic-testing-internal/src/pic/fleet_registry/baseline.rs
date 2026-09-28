@@ -64,7 +64,7 @@ mod tests {
         AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
     };
     #[cfg(test)]
-    use canic::dto::canister::{CanisterInspectionRequest, CanisterStatusResponse};
+    use canic::dto::canister::CanisterInspectionRequest;
     #[cfg(test)]
     use canic::dto::component_registry::{
         ComponentLifecycleStatus, ComponentRegistryActivePartitionRequest,
@@ -338,8 +338,6 @@ mod tests {
         BootstrapStore(RootStoreBootstrapRequest),
         PrepareStoreFixture(canic::dto::root_store::RootStoreFixturePrepareRequest),
         #[cfg(test)]
-        InspectCanister(CanisterInspectionRequest),
-        #[cfg(test)]
         #[expect(
             dead_code,
             reason = "the production adapter uses the replicated history Candid sidecar"
@@ -383,12 +381,9 @@ mod tests {
     }
 
     #[derive(CandidType, Deserialize)]
-    #[cfg_attr(
-        not(test),
-        expect(
-            clippy::large_enum_variant,
-            reason = "the non-test decoder omits the larger test-only response variants"
-        )
+    #[expect(
+        clippy::large_enum_variant,
+        reason = "the direct Root wire decoder retains its component registry response inline"
     )]
     enum RootCommandResponseFragment {
         PrepareStoreFixture(
@@ -398,8 +393,6 @@ mod tests {
             >,
         ),
         ImportPoolCanister(PoolImportResponse),
-        #[cfg(test)]
-        InspectCanister(CanisterStatusResponse),
         #[cfg(test)]
         InspectCanisterHistory(canic::dto::canister::CanisterHistoryResponse),
         MaintainPool(PoolMaintenanceResponse),
@@ -8013,16 +8006,19 @@ esac
         pic.create_canister_with_id(None, None, cycles_ledger)
             .expect("create canonical Cycles Ledger stub principal");
         let mut total_requested = requested.iter().map(|(_, cycles)| cycles).sum::<u128>();
-        let operator_balance = if matches!(
+        let includes_reset = matches!(
             funding,
             FundingJourney::Reinstall | FundingJourney::CompletedReset
-        ) {
+        ) || (matches!(funding, FundingJourney::Fresh)
+            && initial_workload_count == 5);
+        let operator_balance = if includes_reset {
             10_000_000_000_000_000_u128
         } else {
             2_000_000_000_000_000_u128
         };
         if funded_import_repair
             || failed_reserve
+            || includes_reset
             || matches!(
                 funding,
                 FundingJourney::NativeChildFunding
@@ -9313,85 +9309,6 @@ esac
     }
 
     #[cfg(test)]
-    fn plan_reinstall_through_cli(
-        input: &ReinstallJourney<'_>,
-    ) -> canic_host::fleet_ensure::FleetEnsureReport {
-        use std::ffi::OsString;
-        use std::os::unix::fs::PermissionsExt as _;
-        let root = input.adapter_root;
-        std::fs::create_dir_all(root.join("apps/test")).unwrap();
-        std::fs::copy(input.config, root.join("apps/test/canic.toml")).unwrap();
-        std::fs::write(root.join("icp.yaml"), "canisters: []\n").unwrap();
-        let desired_path = root.join("reinstall-desired.toml");
-        std::fs::write(
-            &desired_path,
-            toml::to_string_pretty(input.desired).unwrap(),
-        )
-        .unwrap();
-        let wrapper = root.join("reinstall-cli-icp");
-        let network = serde_json::json!({"api_url": input.local_replica.url, "root_key": input.local_replica.root_key}).to_string();
-        std::fs::write(
-            &wrapper,
-            format!(
-                r#"#!/bin/bash
-set -euo pipefail
-case " $* " in
-  *" network status "*) printf '%s\n' '{network}'; exit 0 ;;
-  *" canister "*|*" cycles "*)
-    unset ICP_ENVIRONMENT
-    args=()
-    while (( $# )); do
-      case "$1" in
-        -e|--environment) shift 2 ;;
-        *) args+=("$1"); shift ;;
-      esac
-    done
-    exec '{}' "${{args[@]}}" -n '{}' -k '{}' ;;
-  *) exec '{}' "$@" ;;
-esac
-"#,
-                input.icp_wrapper.display(),
-                input.local_replica.url,
-                input.local_replica.root_key,
-                input.icp_wrapper.display()
-            ),
-        )
-        .unwrap();
-        std::fs::set_permissions(&wrapper, std::fs::Permissions::from_mode(0o700)).unwrap();
-        let previous = std::env::current_dir().unwrap();
-        std::env::set_current_dir(root).unwrap();
-        let result = canic_cli::run([
-            OsString::from("--environment"),
-            OsString::from("local"),
-            OsString::from("--icp"),
-            wrapper.into_os_string(),
-            OsString::from("fleet"),
-            OsString::from("ensure"),
-            OsString::from(&input.desired.fleet),
-            OsString::from("--desired"),
-            desired_path.into_os_string(),
-            OsString::from("--reinstall"),
-        ]);
-        std::env::set_current_dir(previous).unwrap();
-        result.expect("the production CLI plans the deliberate wipe through real ICP observations");
-        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
-            root,
-            &input.desired.environment,
-            &input.desired.fleet,
-        );
-        let plan = canic_host::fleet_ensure::ops::read_plan(&paths)
-            .unwrap()
-            .unwrap();
-        canic_host::fleet_ensure::FleetEnsureReport {
-            actual_conservation: None,
-            funding_review: None,
-            effects_applied: 0,
-            plan,
-            terminal: false,
-        }
-    }
-
-    #[cfg(test)]
     fn selected_reinstall_artifacts(input: &ReinstallJourney<'_>) -> LiteralZeroReleaseArtifacts {
         let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let config = AppConfigSnapshot::load(input.config).unwrap();
@@ -9444,451 +9361,11 @@ esac
     #[cfg(test)]
     #[expect(
         clippy::too_many_lines,
-        reason = "one pre-reset funding proof keeps durable intent, seal removal and lost payment response together"
-    )]
-    fn assert_sealed_reinstall_funding_retry(
-        input: &ReinstallJourney<'_>,
-        reset: &canic_host::fleet_ensure::model::FleetEnsurePlan,
-    ) -> u64 {
-        let root = input.adapter_root;
-        let desired = input.desired;
-        let operator = Principal::from_text(&desired.operator).unwrap();
-        let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-        let credits = planned_actions(reset)
-            .into_iter()
-            .filter(|action| {
-                matches!(
-                    action,
-                    EnsureAction::Fund { .. } | EnsureAction::FundEstate { .. }
-                )
-            })
-            .collect::<Vec<_>>();
-        let [
-            EnsureAction::Fund {
-                principal, amount, ..
-            },
-        ] = credits.as_slice()
-        else {
-            panic!("exactly one reviewed native Root credit is required");
-        };
-        assert_eq!(principal, &input.root.to_text());
-        let credited = *amount;
-        let withdrawals = || {
-            input
-                .pic
-                .query_candid::<u64, _>(ledger, "withdrawal_count", ())
-                .unwrap()
-        };
-        let withdrawals_before = withdrawals();
-        let operator_before = ledger_account_balance(input.pic, ledger, operator);
-        #[expect(
-            clippy::result_large_err,
-            reason = "qualification asserts the public workflow error"
-        )]
-        let apply = || {
-            fleet_ensure_workflow::apply(
-                root,
-                desired,
-                &desired_sha256(desired),
-                &desired.fleet,
-                &reset.plan_sha256,
-                &mut literal_zero_journey_platform(
-                    desired,
-                    input.icp_wrapper,
-                    root,
-                    input.local_replica.clone(),
-                    true,
-                ),
-            )
-        };
-        std::fs::write(root.join("fail-before-funding"), []).unwrap();
-        assert!(matches!(apply(), Err(EnsureWorkflowError::Platform(_))));
-        assert!(root.join("failed-before-funding").is_file());
-        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
-            root,
-            &desired.environment,
-            &desired.fleet,
-        );
-        let retained = canic_host::fleet_ensure::ops::read_journal(&paths)
-            .unwrap()
-            .unwrap();
-        assert_eq!(retained.effects.len(), 1);
-        assert_eq!(
-            retained.effects[0].state,
-            canic_host::fleet_ensure::model::EffectState::Intent
-        );
-        assert_eq!(
-            retained.effects[0].action_sha256,
-            canic_host::fleet_ensure::ops::action_sha256(credits[0])
-        );
-        let request = AuthoritySnapshotRequest {
-            operation_id: canic_core::cdk::utils::hash::decode_hex(&reset.operation_id)
-                .unwrap()
-                .try_into()
-                .unwrap(),
-        };
-        let RootCommandResponseFragment::ResumeAuthoritySnapshot(open) = root_command_as(
-            input.pic,
-            input.root,
-            operator,
-            RootCommandFragment::ResumeAuthoritySnapshot(request),
-        )
-        .unwrap() else {
-            panic!("exact resume response")
-        };
-        assert_eq!(open.phase, AuthorityRestoreFencePhase::Open);
-        assert!(matches!(
-            apply(),
-            Err(EnsureWorkflowError::DriftedBeforeApply)
-        ));
-        assert_eq!(withdrawals(), withdrawals_before);
-        assert_eq!(
-            ledger_account_balance(input.pic, ledger, operator),
-            operator_before
-        );
-        assert!(!root.join("reinstall-mutations.log").exists());
-        let RootCommandResponseFragment::PrepareAuthoritySnapshot(sealed) = root_command_as(
-            input.pic,
-            input.root,
-            operator,
-            RootCommandFragment::PrepareAuthoritySnapshot(request),
-        )
-        .unwrap() else {
-            panic!("exact seal response")
-        };
-        assert_eq!(sealed.phase, AuthorityRestoreFencePhase::Sealed);
-        assert_eq!(sealed.operation_id, Some(request.operation_id));
-        std::fs::write(root.join("lose-funding-response"), []).unwrap();
-        let lost = root.join("lost-funding-response");
-        if lost.exists() {
-            std::fs::remove_file(&lost).unwrap();
-        }
-        let root_before = input.pic.cycle_balance(input.root);
-        assert!(matches!(apply(), Err(EnsureWorkflowError::Platform(_))));
-        assert!(lost.is_file());
-        assert_eq!(withdrawals(), withdrawals_before + 1);
-        assert_eq!(
-            ledger_account_balance(input.pic, ledger, operator),
-            operator_before - Nat::from(reset.conservation.maximum_operator_debit_cycles)
-        );
-        assert!(
-            input.pic.cycle_balance(input.root) + reset.conservation.maximum_execution_burn_cycles
-                >= root_before + credited
-        );
-        let child = selected_fixture_targets_from_pool(
-            input.pic,
-            input.root,
-            &root_pool_status_as(input.pic, input.root, operator),
-        )
-        .into_iter()
-        .find(|(_, role)| role.as_str() == "user_hub")
-        .unwrap()
-        .0;
-        let child_before = input.pic.cycle_balance(child);
-        assert_eq!(
-            application_rejection(
-                root_command_as(
-                    input.pic,
-                    input.root,
-                    child,
-                    RootCommandFragment::RespondCapability(descendant_funding_request(
-                        input.pic, 0xba
-                    ))
-                ),
-                "funded sealed Root rejects child grants"
-            )
-            .code(),
-            canic_core::diagnostics::codes::AUTHORITY_INACTIVE.raw_code()
-        );
-        assert!(input.pic.cycle_balance(child) <= child_before);
-        withdrawals_before + 1
-    }
-
-    #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one recovery proof preserves applied installs across funding review, lost reply and terminal replay"
-    )]
-    fn complete_selected_reinstall(
-        input: &ReinstallJourney<'_>,
-        reset: &canic_host::fleet_ensure::model::FleetEnsurePlan,
-        underfunded: bool,
-    ) -> (
-        canic_host::fleet_ensure::model::FleetEnsureReport,
-        u128,
-        u128,
-    ) {
-        use canic_host::fleet_ensure::model::{EffectState, FleetEnsureSuccessorReviewReason};
-        let root = input.adapter_root;
-        let desired = input.desired;
-        let digest = desired_sha256(desired);
-        let platform = || {
-            literal_zero_journey_platform(
-                desired,
-                input.icp_wrapper,
-                root,
-                input.local_replica.clone(),
-                true,
-            )
-        };
-        #[expect(
-            clippy::result_large_err,
-            reason = "qualification asserts the existing public workflow error variants"
-        )]
-        let apply = |plan: &canic_host::fleet_ensure::model::FleetEnsurePlan| {
-            // Child initialization can outlive one host observation window.
-            // Resume the same reviewed plan; other failures still fail immediately.
-            for attempt in 0..=64 {
-                let result = fleet_ensure_workflow::apply(
-                    root,
-                    desired,
-                    &digest,
-                    &desired.fleet,
-                    &plan.plan_sha256,
-                    &mut platform(),
-                );
-                if attempt == 64
-                    || !matches!(
-                        result,
-                        Err(EnsureWorkflowError::ProvisioningRetryPending { .. })
-                    )
-                {
-                    return result;
-                }
-                std::thread::sleep(Duration::from_secs(1));
-            }
-            unreachable!("the last attempt returns its exact result")
-        };
-        let first = apply(reset);
-        if !underfunded {
-            return (
-                first.expect("complete the funded repeat wipe"),
-                reset.conservation.maximum_operator_debit_cycles,
-                0,
-            );
-        }
-        assert!(
-            matches!(first, Err(EnsureWorkflowError::SuccessorReviewRequired {
-            reason: FleetEnsureSuccessorReviewReason::AdditionalEffect, review: Some(ref details),
-        }) if details.maximum_additional_debit_cycles > 0),
-            "exact additional funding review: {first:?}"
-        );
-        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
-            root,
-            &desired.environment,
-            &desired.fleet,
-        );
-        let retained = canic_host::fleet_ensure::ops::read_journal(&paths)
-            .unwrap()
-            .unwrap();
-        assert_eq!(retained.operation_id, reset.operation_id);
-        assert_eq!(retained.effects.len(), planned_actions(reset).len());
-        assert!(
-            retained
-                .effects
-                .iter()
-                .all(|effect| effect.state == EffectState::Applied)
-        );
-        assert!(retained.successor_phases.is_empty());
-        let original_plan = std::fs::read(&paths.plan).unwrap();
-        let installs = std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap();
-        assert_eq!(installs.lines().count(), 3);
-        let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-        let operator = Principal::from_text(&desired.operator).unwrap();
-        let balance = ledger_account_balance(input.pic, ledger, operator);
-        let withdrawals_before: u64 = input
-            .pic
-            .query_candid(ledger, "withdrawal_count", ())
-            .unwrap();
-        let retry = apply(reset);
-        assert!(
-            matches!(
-                retry,
-                Err(EnsureWorkflowError::SuccessorReviewRequired { .. })
-            ),
-            "paused reset requires a new review without repeating effects: {retry:?}"
-        );
-        let replayed = canic_host::fleet_ensure::ops::read_journal(&paths)
-            .unwrap()
-            .unwrap();
-        assert_eq!(
-            replayed.effects, retained.effects,
-            "all three exact install receipts survive retry"
-        );
-        assert_eq!(std::fs::read(&paths.plan).unwrap(), original_plan);
-        assert_eq!(ledger_account_balance(input.pic, ledger, operator), balance);
-        let mut debit = 0;
-        let mut burn = 0;
-        let mut expected_withdrawals = withdrawals_before;
-        for _ in 0..8 {
-            let reviewed = fleet_ensure_workflow::plan(
-                root,
-                desired,
-                &digest,
-                &desired.fleet,
-                1_800_000_000_000_000_135,
-                &mut platform(),
-            )
-            .expect("review recovery under the same reinstall operation");
-            assert_eq!(reviewed.plan.operation_id, reset.operation_id);
-            let actions = planned_actions(&reviewed.plan);
-            assert!(actions.iter().all(|action| !matches!(
-                action,
-                EnsureAction::Install { .. } | EnsureAction::Create { .. }
-            )));
-            let funds = actions
-                .iter()
-                .filter_map(|action| match action {
-                    EnsureAction::Fund {
-                        principal,
-                        pool_funding,
-                        ..
-                    } => {
-                        let authority = pool_funding.as_ref().expect("reconciliation owns funding");
-                        assert_eq!(authority.root, input.root.to_text());
-                        assert_eq!(
-                            authority.lifecycle,
-                            canic_host::fleet_ensure::model::EstatePoolAssetLifecycle::PendingReset
-                        );
-                        Some(principal)
-                    }
-                    _ => None,
-                })
-                .collect::<BTreeSet<_>>();
-            assert!(
-                funds.len() <= 1,
-                "only the intentionally depleted Hub needs funding"
-            );
-            debit += reviewed.plan.conservation.maximum_operator_debit_cycles;
-            burn += reviewed.plan.conservation.maximum_execution_burn_cycles;
-            expected_withdrawals += u64::try_from(funds.len()).unwrap();
-            if !funds.is_empty() {
-                let lost = root.join("lost-funding-response");
-                if lost.exists() {
-                    std::fs::remove_file(lost).unwrap();
-                }
-                std::fs::write(root.join("lose-funding-response"), []).unwrap();
-            }
-            let mut result = apply(&reviewed.plan);
-            if !funds.is_empty() {
-                assert!(
-                    matches!(result, Err(EnsureWorkflowError::Platform(_))),
-                    "lose the completed withdrawal response: {result:?}"
-                );
-                assert!(root.join("lost-funding-response").exists());
-                result = apply(&reviewed.plan);
-            }
-            assert_eq!(
-                std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap(),
-                installs
-            );
-            let withdrawals: u64 = input
-                .pic
-                .query_candid(ledger, "withdrawal_count", ())
-                .unwrap();
-            assert_eq!(
-                withdrawals, expected_withdrawals,
-                "retry cannot repeat a paid withdrawal"
-            );
-            match result {
-                Ok(complete) => {
-                    assert!(debit > 0);
-                    assert_eq!(
-                        ledger_account_balance(input.pic, ledger, operator),
-                        balance - Nat::from(debit)
-                    );
-                    return (
-                        complete,
-                        reset.conservation.maximum_operator_debit_cycles + debit,
-                        burn,
-                    );
-                }
-                Err(EnsureWorkflowError::SuccessorReviewRequired {
-                    review: Some(details),
-                    ..
-                }) => assert!(!details.actions.is_empty()),
-                Err(error) => panic!("reviewed recovery must converge: {error:?}"),
-            }
-        }
-        panic!("bounded same-operation recovery reviews exhausted");
-    }
-
-    #[cfg(test)]
-    #[expect(
-        clippy::too_many_lines,
-        reason = "one production-adapter journey proves mixed-topology row wiping, interruption recovery and conservation"
+        reason = "one mixed-topology proof binds selected artifacts, authored rows and retained physical identities"
     )]
     fn assert_selected_build_reinstall_journey(input: ReinstallJourney<'_>) {
-        use canic_host::fleet_ensure::model::FleetEnsurePlanScope;
         let root = input.adapter_root;
-        let source_desired = input.desired.clone();
-        let replacement = selected_reinstall_artifacts(&input);
-        let mut selected = select_reinstall_build(input.desired, &replacement);
-        let root_policy = selected
-            .canisters
-            .iter_mut()
-            .find(|canister| canister.kind == DesiredCanisterKind::Root)
-            .unwrap();
-        root_policy.minimum_cycles =
-            (input.pic.cycle_balance(input.root) + 1_000_000_000_000).to_string();
-        root_policy
-            .initial_cycles
-            .clone_from(&root_policy.minimum_cycles);
-        assert_ne!(
-            selected.bootstrap.as_ref().unwrap().release_build_id,
-            input.desired.bootstrap.as_ref().unwrap().release_build_id
-        );
-        let input = ReinstallJourney {
-            desired: &selected,
-            ..input
-        };
-        let selected_hashes =
-            canic_host::fleet_ensure::ops::resolve_desired_artifacts(root, &selected)
-                .expect("selected artifact identities")
-                .wasm_sha256_by_canister;
-        let source_hashes =
-            canic_host::fleet_ensure::ops::resolve_desired_artifacts(root, &source_desired)
-                .expect("source artifact identities")
-                .wasm_sha256_by_canister;
-        for (name, hash) in &selected_hashes {
-            assert_ne!(
-                Some(hash),
-                source_hashes.get(name),
-                "distinct infrastructure build"
-            );
-        }
-        let bootstrap = selected.bootstrap.as_ref().unwrap();
-        let application_hashes =
-            canic_host::release_set::load_persisted_application_artifact_union(
-                root,
-                &bootstrap
-                    .component_deployment_configuration
-                    .component_topology,
-                bootstrap.release_build_id,
-            )
-            .expect("selected application release manifest")
-            .union
-            .entries
-            .into_iter()
-            .map(|artifact| artifact.wasm_gz_sha256_hex)
-            .collect::<BTreeSet<_>>();
-        let desired = input.desired;
-        let digest = desired_sha256(desired);
-        let operator = Principal::from_text(&desired.operator).unwrap();
-        let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
-        let platform = || {
-            literal_zero_journey_platform(
-                desired,
-                input.icp_wrapper,
-                root,
-                input.local_replica.clone(),
-                true,
-            )
-        };
-        let all = [input.coordinator, input.root, input.store]
-            .into_iter()
-            .chain(input.pools.iter().copied())
-            .collect::<Vec<_>>();
+        let operator = Principal::from_text(&input.desired.operator).unwrap();
         let rows = |id| {
             input
                 .pic
@@ -9896,21 +9373,13 @@ esac
                 .ok()
                 .and_then(Result::ok)
         };
-        let before_operator = ledger_account_balance(input.pic, ledger, operator);
-        let before_root = ledger_account_balance(input.pic, ledger, input.root);
-        let wipe_span = Span::start("selected_build_wipe");
-        let mut phase = Span::start("seed_and_preparation_review");
         let applications = input
             .pools
             .iter()
             .copied()
             .filter(|id| rows(*id).is_some())
             .collect::<Vec<_>>();
-        assert_eq!(
-            applications.len(),
-            2,
-            "real application rows in both Hub and Shard"
-        );
+        assert_eq!(applications.len(), 2, "real Hub and Shard application rows");
         for id in applications {
             for (key, value) in [(0_u64, 99_u64), (42, 1001)] {
                 let result: Result<(), Error> = input
@@ -9926,278 +9395,91 @@ esac
                     ReinstallUserRow {
                         id: 42,
                         value: 1001
-                    }
+                    },
                 ]
             );
         }
-
-        let hub = selected_fixture_targets_from_pool(
-            input.pic,
-            input.root,
-            &root_pool_status_as(input.pic, input.root, operator),
-        )
-        .into_iter()
-        .find(|(_, role)| role.as_str() == "user_hub")
-        .unwrap()
-        .0;
-        let burned: Result<u128, Error> = input
-            .pic
-            .update_candid_as(
-                hub,
-                input.root,
-                "test_recovery_balance",
-                (323_400_000_000_u128,),
-            )
-            .expect("spend fixture cycles through its local controller endpoint");
-        assert!(burned.unwrap() > 0);
-        assert!(
-            input.pic.cycle_balance(hub)
-                < bootstrap.roots[0]
-                    .limits
-                    .canister_pool
-                    .canister_cycles
-                    .to_u128()
+        let replacement = selected_reinstall_artifacts(&input);
+        let executable = completed_reset::local_icp(&input);
+        let desired = completed_reset::generate(&input, &executable, replacement.release_build_id);
+        assert_ne!(
+            desired.bootstrap.as_ref().unwrap().release_build_id,
+            input.desired.bootstrap.as_ref().unwrap().release_build_id
         );
-
-        let native_before = all
-            .iter()
-            .map(|id| input.pic.cycle_balance(*id))
-            .sum::<u128>();
-        let mut first = platform();
-        let preparation = plan_reinstall_through_cli(&input);
-        assert_eq!(
-            preparation.plan.scope,
-            FleetEnsurePlanScope::ReinstallPreparation
-        );
-        assert_eq!(preparation.plan.desired_sha256, digest);
-        assert_eq!(
-            preparation
-                .plan
-                .reviewed_desired
-                .as_ref()
+        let selected_hashes =
+            canic_host::fleet_ensure::ops::resolve_desired_artifacts(root, &desired)
                 .unwrap()
-                .desired()
-                .bootstrap
-                .as_ref()
+                .wasm_sha256_by_canister;
+        let source_hashes =
+            canic_host::fleet_ensure::ops::resolve_desired_artifacts(root, input.desired)
                 .unwrap()
-                .release_build_id,
-            desired.bootstrap.as_ref().unwrap().release_build_id
-        );
-        let repeated = fleet_ensure_workflow::plan_reinstall(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            1_800_000_000_000_000_110,
-            &mut first,
-        );
-        assert!(
-            matches!(&repeated, Err(EnsureWorkflowError::ReinstallConflict)),
-            "an unapplied preparation must prevent another reset review: {repeated:?}"
-        );
-        phase = phase.next("preparation_seal_and_replay");
-        let sealed = fleet_ensure_workflow::apply(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            &preparation.plan.plan_sha256,
-            &mut first,
-        )
-        .expect("seal the current authorities");
-        assert!(sealed.terminal);
-        assert!(matches!(
-            canic_host::fleet_ensure::resolve_current_fleet(
-                root,
-                &desired.environment,
-                &desired.fleet
-            ),
-            Err(canic_host::fleet_ensure::CurrentFleetInventoryError::NotConverged { .. })
-        ));
-        let replay = fleet_ensure_workflow::apply(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            &preparation.plan.plan_sha256,
-            &mut first,
-        )
-        .expect("replay seal without mutation");
-        assert_eq!(replay.effects_applied, 0);
-        phase = phase.next("reset_review");
-        let reset = fleet_ensure_workflow::plan(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            1_800_000_000_000_000_120,
-            &mut first,
-        )
-        .expect("review complete sealed reset inventory");
-        assert_eq!(reset.plan.scope, FleetEnsurePlanScope::Full);
-        assert_eq!(reset.plan.operation_id, preparation.plan.operation_id);
-        assert_eq!(
-            reset.plan.reinstall.as_ref().unwrap().assets.len(),
-            input.pools.len()
-        );
-        let installs = planned_actions(&reset.plan)
-            .into_iter()
-            .filter(|action| {
-                matches!(
-                    action,
-                    EnsureAction::Install {
-                        mode: canic_host::fleet_ensure::model::InstallMode::Reinstall,
-                        ..
-                    }
-                )
-            })
-            .count();
-        assert_eq!(installs, 3, "reset exactly Coordinator, Store and Root");
-        phase = phase.next("reset_interruptions_and_recovery");
-
-        operator_shortfall::assert_fresh_reinstall_rejection(&input, &reset.plan);
-        let protected_withdrawals = assert_sealed_reinstall_funding_retry(&input, &reset.plan);
-        std::fs::write(root.join("fail-before-install"), []).unwrap();
-        std::fs::write(root.join("fail-before-root-install"), input.root.to_text()).unwrap();
-        let interrupted = fleet_ensure_workflow::apply(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            &reset.plan.plan_sha256,
-            &mut first,
-        );
-        assert!(
-            matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
-            "interrupt before install: {interrupted:?}"
-        );
-        assert!(!root.join("reinstall-mutations.log").exists());
-        assert_eq!(
-            input
-                .pic
-                .query_candid::<u64, _>(ledger, "withdrawal_count", ())
-                .unwrap(),
-            protected_withdrawals,
-            "lost pre-reset credit response must not withdraw again"
-        );
-        std::fs::write(root.join("lose-install-response"), []).unwrap();
-        let interrupted = fleet_ensure_workflow::apply(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            &reset.plan.plan_sha256,
-            &mut platform(),
-        );
-        assert!(
-            matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
-            "interrupt after install: {interrupted:?}"
-        );
-        assert!(root.join("lost-install-response").is_file());
-        let interrupted = fleet_ensure_workflow::apply(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            &reset.plan.plan_sha256,
-            &mut platform(),
-        );
-        assert!(
-            matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
-            "interrupt before Root reinstall: {interrupted:?}"
-        );
-        assert!(root.join("failed-before-root-install").is_file());
-        assert_eq!(
-            std::fs::read_to_string(root.join("reinstall-mutations.log"))
-                .unwrap()
-                .lines()
-                .count(),
-            2
-        );
-        // Root inspections advance canister_version without deploying code.
-        let inspection = encode_one(RootCommandFragment::InspectCanister(
-            CanisterInspectionRequest {
-                canister_id: input.root,
-            },
-        ))
-        .unwrap();
-        let inspected = input
-            .pic
-            .update_call(
-                input.root,
-                operator,
-                canic::protocol::CANIC_ROOT_COMMAND,
-                inspection,
-            )
-            .unwrap();
-        let inspected = decode_one::<Result<RootCommandResponseFragment, Error>>(&inspected)
-            .unwrap()
-            .unwrap();
-        assert!(matches!(
-            inspected,
-            RootCommandResponseFragment::InspectCanister(_)
-        ));
-        let replacement = fleet_ensure_workflow::plan_reinstall(
-            root,
-            &source_desired,
-            &desired_sha256(&source_desired),
-            &desired.fleet,
-            1_800_000_000_000_000_130,
-            &mut platform(),
-        );
-        assert!(
-            matches!(
-                &replacement,
-                Err(EnsureWorkflowError::RetainedOperationRecoveryRequired {
-                    operation_id, plan_sha256,
-                }) if operation_id == &reset.plan.operation_id
-                    && plan_sha256 == &reset.plan.plan_sha256
-            ),
-            "replacement must identify the interrupted reset: {replacement:?}"
-        );
-        std::fs::remove_file(root.join("lost-install-response")).unwrap();
-        let interrupted = fleet_ensure_workflow::apply(
-            root,
-            &source_desired,
-            &desired_sha256(&source_desired),
-            &desired.fleet,
-            &reset.plan.plan_sha256,
-            &mut platform(),
-        );
-        assert!(
-            matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
-            "lose changed Root response while workspace selects another build: {interrupted:?}"
-        );
-        assert!(root.join("lost-install-response").is_file());
-        assert_eq!(
-            std::fs::read_to_string(root.join("reinstall-mutations.log"))
-                .unwrap()
-                .lines()
-                .count(),
-            3
-        );
-
-        let (complete, funding, additional_burn) =
-            complete_selected_reinstall(&input, &reset.plan, true);
-        assert!(complete.terminal);
-        assert!(complete.actual_conservation.is_some());
-        phase = phase.next("reset_state_and_conservation");
-        for binding in &reset.plan.reinstall.as_ref().unwrap().authorities {
-            let id = Principal::from_text(&binding.principal).unwrap();
-            let status = input.pic.canister_status(id, Some(operator)).unwrap();
-            assert_eq!(
-                status
-                    .module_hash
-                    .map(|hash| canic_core::cdk::utils::hash::hex_bytes(&hash))
-                    .as_ref(),
-                selected_hashes.get(&binding.name)
+                .wasm_sha256_by_canister;
+        for (name, hash) in &selected_hashes {
+            assert_ne!(
+                Some(hash),
+                source_hashes.get(name),
+                "distinct infrastructure build"
             );
+        }
+        let bootstrap = desired.bootstrap.as_ref().unwrap();
+        let application_hashes =
+            canic_host::release_set::load_persisted_application_artifact_union(
+                root,
+                &bootstrap
+                    .component_deployment_configuration
+                    .component_topology,
+                bootstrap.release_build_id,
+            )
+            .unwrap()
+            .union
+            .entries
+            .into_iter()
+            .map(|artifact| artifact.wasm_gz_sha256_hex)
+            .collect::<BTreeSet<_>>();
+        let paths = canic_host::fleet_ensure::ops::EnsurePaths::under(
+            root,
+            &desired.environment,
+            &desired.fleet,
+        );
+        let original_ids = canic_host::fleet_ensure::ops::read_state(&paths, &desired.fleet)
+            .unwrap()
+            .principals;
+        let previous = canic_host::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap()
+            .operation_id;
+        repeat_reset::assert_journey(
+            ReinstallJourney {
+                desired: &desired,
+                ..input
+            },
+            &previous,
+        );
+        let final_ids = canic_host::fleet_ensure::ops::read_state(&paths, &desired.fleet)
+            .unwrap()
+            .principals;
+        assert_eq!(
+            final_ids.values().collect::<BTreeSet<_>>(),
+            original_ids.values().collect::<BTreeSet<_>>()
+        );
+        for canister in &desired.canisters {
+            if let Some(hash) = selected_hashes.get(&canister.name) {
+                let id = Principal::from_text(canister.principal.as_ref().unwrap()).unwrap();
+                let status = input.pic.canister_status(id, Some(operator)).unwrap();
+                assert_eq!(
+                    status
+                        .module_hash
+                        .map(canic_core::cdk::utils::hash::hex_bytes)
+                        .as_ref(),
+                    Some(hash)
+                );
+            }
         }
         for id in input.pools {
             let status = input.pic.canister_status(*id, Some(input.root)).unwrap();
             if let Some(hash) = status.module_hash {
                 assert!(
-                    application_hashes.contains(&canic_core::cdk::utils::hash::hex_bytes(&hash)),
+                    application_hashes.contains(&canic_core::cdk::utils::hash::hex_bytes(hash)),
                     "selected application Wasm installed"
                 );
             }
@@ -10211,85 +9493,13 @@ esac
             final_rows,
             vec![
                 vec![ReinstallUserRow { id: 0, value: 7 }],
-                vec![ReinstallUserRow { id: 0, value: 7 }]
+                vec![ReinstallUserRow { id: 0, value: 7 }],
             ],
             "all user rows disappear and authored system rows return"
         );
         let pool = root_pool_status_as(input.pic, input.root, operator);
         assert_eq!((pool.workload, pool.ready, pool.pending_reset), (5, 1, 0));
         assert!(pool.pending_creation.is_none());
-        let native_after = all
-            .iter()
-            .map(|id| input.pic.cycle_balance(*id))
-            .sum::<u128>();
-        assert!(native_after <= native_before + funding);
-        assert!(
-            native_before + funding - native_after
-                <= preparation.plan.conservation.maximum_execution_burn_cycles
-                    + reset.plan.conservation.maximum_execution_burn_cycles
-                    + additional_burn
-        );
-        assert_eq!(
-            ledger_account_balance(input.pic, ledger, operator),
-            before_operator - Nat::from(funding)
-        );
-        assert_eq!(
-            ledger_account_balance(input.pic, ledger, input.root),
-            before_root
-        );
-        let mutations = std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap();
-        assert_eq!(
-            mutations.lines().count(),
-            3,
-            "lost changed Wasm response never repeats an install"
-        );
-        phase = phase.next("reset_terminal_replay");
-        // A newly reviewed funding plan uses its own selected input. A reset replay
-        // still recovers its retained selection despite a changed workspace build.
-        let replay_desired = if complete.plan.reinstall.is_some() {
-            &source_desired
-        } else {
-            desired
-        };
-        let mut replay_phase = Span::start("same_plan_terminal_apply");
-        let replay = fleet_ensure_workflow::apply(
-            root,
-            replay_desired,
-            &desired_sha256(replay_desired),
-            &desired.fleet,
-            &complete.plan.plan_sha256,
-            &mut platform(),
-        )
-        .expect("effect-free wipe replay");
-        assert_eq!(replay.effects_applied, 0);
-        assert_eq!(
-            std::fs::read_to_string(root.join("reinstall-mutations.log")).unwrap(),
-            mutations
-        );
-        replay_phase = replay_phase.next("fresh_terminal_plan");
-        let ordinary = fleet_ensure_workflow::plan(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            1_800_000_000_000_000_140,
-            &mut platform(),
-        )
-        .expect("ordinary ensure after wipe");
-        assert!(planned_actions(&ordinary.plan).is_empty());
-        replay_phase = replay_phase.next("fresh_terminal_apply");
-        fleet_ensure_workflow::apply(
-            root,
-            desired,
-            &digest,
-            &desired.fleet,
-            &ordinary.plan.plan_sha256,
-            &mut platform(),
-        )
-        .expect("retain ordinary no-op convergence");
-        replay_phase.finish();
-        phase.finish();
-        wipe_span.finish();
     }
 
     #[cfg(test)]

@@ -1,5 +1,19 @@
 # Canic 0.110 Implementation Status
 
+## Mixed-topology reset correction — .45 ready for retry, 2026-09-28
+
+The next full gate exposed another obsolete completed-preparation fixture path.
+Mixed-topology wiping now uses current generated authority and the shared clean
+reset proof, retaining actual Hub/Shard data clearing, selected artifacts, physical
+IDs and exact funding/conservation checks. It passes in 346.87s; consecutive
+changed-build/same-build resets pass in 197.08s. Scoped internal Clippy passes.
+No production behavior changed and no broad gate was rerun. The .45 batch and
+changelog are ready for review and the chosen release-gate retry; versions remain
+.44 and this correction is uncommitted. The
+[current handoff](../../status/current.md#mixed-topology-release-test-correction--45-ready-for-retry-2026-09-28)
+retains exact evidence and remaining upstream acceptance.
+
+
 ## Toko feedback follow-through — .45 ready for review, 2026-09-28
 
 The completed-reset public CLI regression passes with receipt, recovery, exact
