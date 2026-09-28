@@ -765,6 +765,23 @@ role_attestation_cache = true
         &["auth-root-canister-sig-verify"],
     );
 
+    let checks = workspace_config_quality_checks(&root, std::slice::from_ref(&config));
+    let missing = checks
+        .iter()
+        .find(|check| {
+            check.subject == "demo.app" && check.code == "role_contract_required_feature_missing"
+        })
+        .expect("chain-key verifier requirement");
+    assert_eq!(missing.status, MedicStatus::Fail);
+    assert!(missing.detail.contains("auth-chain-key-ecdsa"));
+
+    write_medic_package_with_canic_features(
+        &root,
+        "app",
+        "demo",
+        "app",
+        &["auth-root-canister-sig-verify", "auth-chain-key-ecdsa"],
+    );
     let checks = workspace_config_quality_checks(&root, &[config]);
 
     assert!(checks.iter().any(|check| {
@@ -772,9 +789,11 @@ role_attestation_cache = true
             && check.code == "role_required_canic_feature_present"
             && check.status == MedicStatus::Pass
     }));
-    assert!(!checks.iter().any(|check| {
-        check.subject == "demo.app" && check.code == "role_contract_required_feature_missing"
-    }));
+    assert!(
+        !checks
+            .iter()
+            .any(|check| { check.subject == "demo.app" && check.status == MedicStatus::Fail })
+    );
 
     fs::remove_dir_all(root).expect("remove temp root");
 }

@@ -20,6 +20,21 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Medic release-test correction — .46 ready for retry, 2026-09-28
+
+The maintainer's release gate failed only the CLI Medic required-feature fixture
+(`target/test-runs/20260928T110050Z-19541.ETH5oo/1.log`). Its nominally valid
+attestation-cache role omitted the ECDSA feature now required by the .46 contract.
+The fixture now verifies missing-ECDSA rejection, then declares both verifier
+features and requires successful resolution with no role failure. Runtime policy
+is unchanged.
+
+All seven targeted `medic::tests::workspace_config_quality_checks` tests pass
+(0.66s test time; 2m 04s compilation). Scoped formatting and diff checks pass.
+The accepted .46 correction batch and existing changelog are ready for maintainer
+review and release-gate retry; the failed full gate has not been rerun. This
+test correction remains uncommitted, and package versions remain .45.
+
 ## Offline Root public-key derivation — .46 ready for review, 2026-09-28
 
 The maintainer selected offline configuration with no public-key discovery calls
