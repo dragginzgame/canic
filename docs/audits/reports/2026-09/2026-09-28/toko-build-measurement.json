@@ -1,0 +1,127 @@
+{
+  "schema_version": 1,
+  "snapshot": "unreleased .45 candidate; package versions .44",
+  "workspace": "/home/adam/projects/canic/.tmp/toko-feedback45-20260928",
+  "source_snapshot_sha256": "562853178ca9f26789ba75772ea749a7c2482555d627279f4e4013c8ba08e984",
+  "selected_inputs_sha256": "c6ff50331ca5de79efaa6ea59f7bf4d6615f02fdd562055ec725b9e1f7da1d5e",
+  "cli_sha256": "290ad17c27ff450be9d8ae27b66f9af7d14e4820bc5ad41def455f2d1779b958",
+  "controlled_changes": "Non-semantic Rust comments in game_shard/src/lib.rs and toko-miner-contracts/src/lib.rs; baseline restored between cohorts.",
+  "input_files_verified": 5184,
+  "warm_pairs_byte_identical": true,
+  "cases": [
+    {
+      "case": "cold",
+      "metrics": {
+        "elapsed_seconds": 1027.38,
+        "user_seconds": 2146.47,
+        "system_seconds": 246.27,
+        "max_process_rss_kib": 2857384,
+        "exit_code": 0
+      },
+      "log_sha256": "732bd0cc5e73f81e4ccc96ca082a52524ea329672fdc94e545fe293b958773b3",
+      "release_file_inventory_sha256": "db26ea4214f3ad8435e6fe547e2aad7deee7486f5b7aee1058570cd7b2c7f689",
+      "release_build_ids_in_log": [
+        "84f6cda90c7f493867916cec42d47d78c1c9c1f5701b8d135740605d248660fb"
+      ],
+      "phase_lines": [
+        "Checks: 9.41s | lock wait: 0.01s",
+        "Build phase declaration: 212.87s",
+        "Build phase runtime Cargo/link: 541.29s"
+      ]
+    },
+    {
+      "case": "warm",
+      "metrics": {
+        "elapsed_seconds": 2.16,
+        "user_seconds": 0.93,
+        "system_seconds": 1.2,
+        "max_process_rss_kib": 99716,
+        "exit_code": 0
+      },
+      "log_sha256": "ac538f8e7aabd88c516be87cdebcb04f39b78302a10393fd8f0066cbbfd457a8",
+      "release_file_inventory_sha256": "db26ea4214f3ad8435e6fe547e2aad7deee7486f5b7aee1058570cd7b2c7f689",
+      "release_build_ids_in_log": [
+        "84f6cda90c7f493867916cec42d47d78c1c9c1f5701b8d135740605d248660fb"
+      ],
+      "phase_lines": [
+        "Checks: 2.13s | lock wait: 0.00s"
+      ]
+    },
+    {
+      "case": "application_changed",
+      "metrics": {
+        "elapsed_seconds": 456.48,
+        "user_seconds": 852.62,
+        "system_seconds": 55.97,
+        "max_process_rss_kib": 2856552,
+        "exit_code": 0
+      },
+      "log_sha256": "1eb0d02c0e23eeea78feac72fd4ebadd7e79cc76e21d18167bddcb028e23f4be",
+      "release_file_inventory_sha256": "6979913bd9b5dff6aae3ff1e6f287674baa6b580cd667e955d7b8fc285d4aeb1",
+      "release_build_ids_in_log": [
+        "0362e98eea96281ab222c7d5180928eeb57c75d07496ce3b744ccdd5169aa07c"
+      ],
+      "phase_lines": [
+        "Checks: 2.04s | lock wait: 0.00s",
+        "Build phase declaration: 26.53s",
+        "Build phase runtime Cargo/link: 331.51s"
+      ]
+    },
+    {
+      "case": "application_warm",
+      "metrics": {
+        "elapsed_seconds": 2.22,
+        "user_seconds": 1.02,
+        "system_seconds": 1.16,
+        "max_process_rss_kib": 100740,
+        "exit_code": 0
+      },
+      "log_sha256": "3558602616e676ee5513af382625349c403cccb87047ae42d8450330eb106175",
+      "release_file_inventory_sha256": "6979913bd9b5dff6aae3ff1e6f287674baa6b580cd667e955d7b8fc285d4aeb1",
+      "release_build_ids_in_log": [
+        "0362e98eea96281ab222c7d5180928eeb57c75d07496ce3b744ccdd5169aa07c"
+      ],
+      "phase_lines": [
+        "Checks: 2.18s | lock wait: 0.00s"
+      ]
+    },
+    {
+      "case": "dependency_changed",
+      "metrics": {
+        "elapsed_seconds": 483.64,
+        "user_seconds": 878.43,
+        "system_seconds": 73.82,
+        "max_process_rss_kib": 2856928,
+        "exit_code": 0
+      },
+      "log_sha256": "8876ed02dbce4d294fb9c9b9ebe45d5774048d30dff527c3252ac0f0891cef64",
+      "release_file_inventory_sha256": "5e289adf58a103cfb4d7aa186be975f32c373ae75c4df9b9a87f855695fc3c3e",
+      "release_build_ids_in_log": [
+        "a29b24b4705334e0604de005370ccd0119998f7854a0a6122ee4013ffb57989f"
+      ],
+      "phase_lines": [
+        "Checks: 2.09s | lock wait: 0.00s",
+        "Build phase declaration: 36.62s",
+        "Build phase runtime Cargo/link: 340.76s"
+      ]
+    },
+    {
+      "case": "dependency_warm",
+      "metrics": {
+        "elapsed_seconds": 2.19,
+        "user_seconds": 1.06,
+        "system_seconds": 1.11,
+        "max_process_rss_kib": 100228,
+        "exit_code": 0
+      },
+      "log_sha256": "c579b0cf636ad559e5074ff49916f91f1fe837e74a2c701637506b1d80a160c9",
+      "release_file_inventory_sha256": "5e289adf58a103cfb4d7aa186be975f32c373ae75c4df9b9a87f855695fc3c3e",
+      "release_build_ids_in_log": [
+        "a29b24b4705334e0604de005370ccd0119998f7854a0a6122ee4013ffb57989f"
+      ],
+      "phase_lines": [
+        "Checks: 2.15s | lock wait: 0.00s"
+      ]
+    }
+  ]
+}

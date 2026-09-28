@@ -59,6 +59,26 @@ fn execute(
     environment: &str,
     desired: &canic_host::fleet_ensure::model::DesiredFleet,
 ) -> Result<CleanReinstallReport, FleetCommandError> {
+    let applied_plan = match options.apply.as_deref() {
+        Some(digest) => {
+            canic_host::fleet_ensure::workflow::infrastructure_bootstrap::retained(
+                workspace,
+                environment,
+                &options.fleet,
+                digest,
+            )
+            .is_ok()
+                || canic_host::fleet_ensure::ops::read_plan(
+                    &canic_host::fleet_ensure::ops::EnsurePaths::under(
+                        workspace,
+                        environment,
+                        &options.fleet,
+                    ),
+                )?
+                .is_some_and(|plan| plan.plan_sha256 == digest)
+        }
+        None => false,
+    };
     let session = progress::ProgressSession::new(options.json);
     session.retain_receipt(
         workspace,
@@ -67,8 +87,8 @@ fn execute(
             fleet: &options.fleet,
             environment,
             desired_sha256: None,
-            applied_plan_sha256: None,
-            applied_review_sha256: options.apply.as_deref(),
+            applied_plan_sha256: options.apply.as_deref().filter(|_| applied_plan),
+            applied_review_sha256: options.apply.as_deref().filter(|_| !applied_plan),
             reinstall: true,
             next_review_command: "",
         },
@@ -108,6 +128,9 @@ fn execute(
             )?)
         }
     })();
+    if let Ok(report) = &result {
+        record_authority(&session, report);
+    }
     match &result {
         Ok(CleanReinstallReport::Infrastructure(report) | CleanReinstallReport::Fleet(report)) => {
             session.finish(Some(report));
@@ -117,6 +140,35 @@ fn execute(
     }
     drop(session);
     result
+}
+
+fn record_authority(session: &progress::ProgressSession, phase: &CleanReinstallReport) {
+    let authority = match phase {
+        CleanReinstallReport::Infrastructure(report) | CleanReinstallReport::Fleet(report) => {
+            let fleet = matches!(phase, CleanReinstallReport::Fleet(_));
+            serde_json::json!({
+                "phase": if fleet { "fleet" } else { "infrastructure" },
+                "desired_sha256": report.plan.desired_sha256,
+                "plan_sha256": report.plan.plan_sha256,
+                "operation_id": report.plan.operation_id,
+                "review_sha256": null,
+                "phase_completed": report.terminal,
+                "fleet_completed": fleet && report.terminal,
+            })
+        }
+        CleanReinstallReport::Import(record) => serde_json::json!({
+            "phase": "import",
+            "desired_sha256": null,
+            "plan_sha256": null,
+            "operation_id": null,
+            "review_sha256": record.operation.as_ref().map(|operation| canic_core::cdk::utils::hash::hex_bytes(operation.review.review_sha256)),
+            "phase_completed": canic_host::fleet_ensure::ops::capacity_import::publication::completed(record),
+            "fleet_completed": false,
+        }),
+    };
+    session
+        .sink()
+        .record("clean_reinstall_authority", &authority);
 }
 
 fn render(

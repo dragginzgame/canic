@@ -19,7 +19,9 @@ use crate::fleet_ensure::{
         infrastructure_bootstrap::InfrastructureBootstrapError,
         infrastructure_bootstrap::survey::BootstrapSurvey,
     },
-    view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
+    view::infrastructure_bootstrap::{
+        InfrastructureBootstrapApplyView, InfrastructureBootstrapObservation,
+    },
     workflow::{EnsureWorkflowError, ordered_actions, verify_terminal_conservation_with_total},
 };
 use std::path::Path;
@@ -351,20 +353,38 @@ pub fn apply<P: EnsurePlatform>(
     crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapPublicationRecord,
     EnsureWorkflowError<P::Error>,
 > {
+    apply_reporting(workspace, environment, fleet, digest, platform)
+        .map(|result| result.publication)
+}
+
+/// Preserve the ordinary execution report through local identity publication.
+pub(super) fn apply_reporting<P: EnsurePlatform>(
+    workspace: &Path,
+    environment: &str,
+    fleet: &str,
+    digest: &str,
+    platform: &mut P,
+) -> Result<InfrastructureBootstrapApplyView, EnsureWorkflowError<P::Error>> {
     let plan = retained(workspace, environment, fleet, digest)?;
     let paths = EnsurePaths::under(workspace, environment, fleet);
     if let Some(record) = bootstrap::publication::read(&paths, digest)? {
         if record.completed {
-            return Ok(record);
+            return Ok(InfrastructureBootstrapApplyView {
+                publication: record,
+                execution: None,
+            });
         }
-        return Ok(bootstrap::publication::publish(&paths, &plan)?);
+        return Ok(InfrastructureBootstrapApplyView {
+            publication: bootstrap::publication::publish(&paths, &plan)?,
+            execution: None,
+        });
     }
     let desired = plan
         .reviewed_desired
         .as_ref()
         .ok_or(EnsureWorkflowError::PlanIntegrity)?
         .desired();
-    crate::fleet_ensure::workflow::apply(
+    let execution = crate::fleet_ensure::workflow::apply(
         workspace,
         desired,
         &plan.desired_sha256,
@@ -372,5 +392,8 @@ pub fn apply<P: EnsurePlatform>(
         digest,
         platform,
     )?;
-    Ok(bootstrap::publication::publish(&paths, &plan)?)
+    Ok(InfrastructureBootstrapApplyView {
+        publication: bootstrap::publication::publish(&paths, &plan)?,
+        execution: Some(execution),
+    })
 }

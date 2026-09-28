@@ -1,4 +1,4 @@
-//! Qualify a completed estate through current receipts, current reset and recovery.
+//! Qualify the public clean-reinstall CLI, diagnostic receipts and exact recovery.
 //!
 //! All remote effects use production adapters against disposable PocketIC canisters.
 
@@ -6,9 +6,8 @@ mod capacity_import;
 
 use super::*;
 use canic_core::cdk::utils::hash::sha256_hex;
-use canic_host::fleet_ensure::{
-    ops::{EnsurePaths, read_state, retained_contract},
-    workflow::{completed_preparation, completed_reset},
+use canic_host::fleet_ensure::ops::{
+    EnsurePaths, capacity_import::journal::CapacityImportJournalStore, read_plan, read_state,
 };
 use std::collections::BTreeMap;
 
@@ -90,7 +89,7 @@ pub(super) fn prepare_source(input: &ReinstallJourney<'_>, plan: &FleetEnsurePla
 
 #[expect(
     clippy::too_many_lines,
-    reason = "one connected completed-source journey keeps publication, lost install response and terminal replay together"
+    reason = "one public CLI journey retains review, lost replies, receipts and terminal replay"
 )]
 pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     let span = Span::start("completed_source_reset_journey");
@@ -98,246 +97,203 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     std::fs::create_dir_all(root.join("apps/test")).unwrap();
     std::fs::copy(input.config, root.join("apps/test/canic.toml")).unwrap();
     std::fs::write(root.join("icp.yaml"), "canisters: []\n").unwrap();
-    let old_paths = paths(&input);
-    let originals = read_state(&old_paths, &input.desired.fleet)
-        .unwrap()
-        .principals;
-    let replacement = selected_reinstall_artifacts(&input);
-    retained_contract::inspect_completed_receipts(root, "local", &input.desired.fleet)
-        .expect("audit original paid receipts separately from physical inventory");
-    let source = retained_contract::inspect_completed_source(root, "local", &input.desired.fleet)
-        .expect("audit completed records before any source effect");
-    let source_documents = [&old_paths.plan, &old_paths.journal, &old_paths.state]
+    let paths = paths(&input);
+    let originals = read_state(&paths, &input.desired.fleet).unwrap().principals;
+    let source_documents = [&paths.plan, &paths.journal, &paths.state]
         .into_iter()
         .map(|path| (path.clone(), std::fs::read(path).unwrap()))
         .collect::<BTreeMap<_, _>>();
-    assert_eq!(source.inventory.canisters.len(), originals.len());
-    retained_contract::check(root, "local", &input.desired.fleet).unwrap();
+    let replacement = selected_reinstall_artifacts(&input);
     let executable = local_icp(&input);
     let icp = canic_host::icp::IcpCli::new(executable.to_str().unwrap(), Some("local".into()))
         .with_cwd(root)
         .with_local_replica(Some(input.local_replica.clone()));
-    let planning = cli_receipt(
-        root,
-        &executable,
-        &[
-            "fleet",
-            "ensure",
-            &input.desired.fleet,
-            "--reinstall",
-            "--json",
-        ],
-        "completed_preparation",
-        None,
-        true,
-    );
-    assert!(
-        planning
-            .iter()
-            .any(|event| event["event"] == "icp_request_timing")
-    );
-    let preparation = completed_preparation::review(root, "local", &input.desired.fleet)
-        .unwrap()
-        .unwrap();
-    let prepared_receipt = cli_receipt(
-        root,
-        &executable,
-        &[
-            "fleet",
-            "ensure",
-            &input.desired.fleet,
-            "--apply",
-            &preparation.review_sha256,
-            "--json",
-        ],
-        "completed_preparation",
-        Some(&preparation.review_sha256),
-        true,
-    );
-    assert!(
-        prepared_receipt
-            .iter()
-            .any(|event| event["event"] == "completed_preparation_authority"
-                && event["data"]["prepared"] == true)
-    );
-    let unavailable =
-        canic_host::icp::IcpCli::new("/missing/completed-reset-icp", Some("local".into()))
-            .with_cwd(root);
-    let prepared = completed_preparation::apply(
-        root,
-        "local",
-        &input.desired.fleet,
-        &preparation.review_sha256,
-        &unavailable,
-    )
-    .expect("prepared replay performs no remote calls");
-    assert!(prepared.prepared);
-    for (path, bytes) in &source_documents {
-        assert_eq!(&std::fs::read(path).unwrap(), bytes);
-    }
     let desired = generate(&input, &executable, replacement.release_build_id);
-    let digest = desired_sha256(&desired);
     std::fs::write(
         root.join("desired-reset.toml"),
         toml::to_string_pretty(&desired).unwrap(),
     )
     .unwrap();
-    let reset_review = cli_receipt(
-        root,
-        &executable,
-        &[
-            "fleet",
-            "ensure",
-            &desired.fleet,
-            "--desired",
-            "desired-reset.toml",
-            "--reinstall",
-            "--json",
-        ],
-        "completed_reset",
-        None,
-        true,
-    );
-    assert!(
-        reset_review
-            .iter()
-            .any(|event| event["event"] == "completed_reset_authority")
-    );
-    let review = completed_reset::review(root, "local", &desired.fleet)
-        .unwrap()
-        .unwrap();
-    assert!(!review.committed);
-    let plan = completed_reset::approve(
-        root,
-        "local",
-        &desired.fleet,
-        &review.publication.review_sha256,
-        &icp,
-    )
-    .expect("commit fresh authority without issuing installs");
-    // Drop all source observations here, as if the host stopped after local publication.
-    let resumed = completed_reset::approve(
-        root,
-        "local",
-        &desired.fleet,
-        &review.publication.review_sha256,
-        &unavailable,
-    )
-    .expect("committed publication recovery requires no source calls");
-    assert_eq!(resumed, plan);
-    let failed_receipt = cli_apply_receipt(
-        root,
-        Path::new("/missing/reset-icp"),
-        &desired.fleet,
-        &review.publication.review_sha256,
-        true,
-        false,
-    );
-    assert_eq!(failed_receipt.last().unwrap()["data"]["state"], "failed");
-    let platform = || {
-        literal_zero_journey_platform(
-            &desired,
-            input.icp_wrapper,
+    let review = || {
+        cli_receipt(
             root,
-            input.local_replica.clone(),
+            &executable,
+            &[
+                "fleet",
+                "ensure",
+                &desired.fleet,
+                "--desired",
+                "desired-reset.toml",
+                "--source",
+                "fleet-policy.toml",
+                "--seed",
+                "fleet-seed.toml",
+                "--reinstall",
+                "--json",
+            ],
+            "ensure",
+            None,
             true,
         )
     };
-    std::fs::write(root.join("lose-install-response"), []).unwrap();
-    let first = fleet_ensure_workflow::apply(
-        root,
-        &desired,
-        &digest,
-        &desired.fleet,
-        &plan.plan_sha256,
-        &mut platform(),
-    );
+    let operator = Principal::from_text(&desired.operator).unwrap();
+    let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
+    let before_operator = ledger_account_balance(input.pic, ledger, operator);
+    let planning = review();
     assert!(
-        root.join("lost-install-response").exists(),
-        "exercise a real lost reinstall response: {first:?}"
-    );
-    if let Err(error) = &first {
-        assert!(
-            matches!(error, EnsureWorkflowError::Platform(_)),
-            "{error:?}"
-        );
-    }
-    let resumed_receipt = cli_apply_receipt(
-        root,
-        &executable,
-        &desired.fleet,
-        &review.publication.review_sha256,
-        true,
-        true,
-    );
-    assert!(
-        resumed_receipt
+        planning
             .iter()
             .any(|event| event["event"] == "icp_request_timing")
     );
-    assert_eq!(resumed_receipt.last().unwrap()["data"]["terminal"], true);
-    let result = fleet_ensure_workflow::apply(
+    let infrastructure = read_plan(&paths).unwrap().unwrap();
+    assert_eq!(
+        infrastructure.scope,
+        canic_host::fleet_ensure::model::FleetEnsurePlanScope::InfrastructureBootstrap
+    );
+    // A real install succeeds remotely and loses its reply. The same CLI digest resumes it.
+    std::fs::write(root.join("lose-install-response"), []).unwrap();
+    let failed = cli_apply_receipt(
         root,
-        &desired,
-        &digest,
+        &executable,
+        &desired.fleet,
+        &infrastructure.plan_sha256,
+        true,
+        false,
+    );
+    assert_eq!(failed.last().unwrap()["data"]["state"], "failed");
+    assert!(
+        root.join("lost-install-response").is_file(),
+        "{}",
+        std::fs::read_to_string(root.join("last-cli-output.txt")).unwrap()
+    );
+    let initialized = cli_apply_receipt(
+        root,
+        &executable,
+        &desired.fleet,
+        &infrastructure.plan_sha256,
+        true,
+        true,
+    );
+    assert_eq!(initialized.last().unwrap()["data"]["terminal"], true);
+    assert!(
+        initialized.last().unwrap()["data"]["effects_applied"]
+            .as_u64()
+            .unwrap()
+            > 0
+    );
+    review();
+    let import = CapacityImportJournalStore::open(&paths)
+        .unwrap()
+        .read()
+        .unwrap()
+        .unwrap();
+    let import_digest = canic_core::cdk::utils::hash::hex_bytes(
+        import.operation.as_ref().unwrap().review.review_sha256,
+    );
+    cli_apply_receipt(
+        root,
+        &executable,
+        &desired.fleet,
+        &import_digest,
+        true,
+        true,
+    );
+    for child in input.pools {
+        let status = input.pic.canister_status(*child, Some(input.root)).unwrap();
+        assert!(status.module_hash.is_none());
+        assert_eq!(status.memory_metrics.stable_memory_size, Nat::from(0_u8));
+    }
+    review();
+    let plan = read_plan(&paths).unwrap().unwrap();
+    assert_eq!(
+        plan.scope,
+        canic_host::fleet_ensure::model::FleetEnsurePlanScope::Full
+    );
+    let completed = cli_apply_receipt(
+        root,
+        &executable,
         &desired.fleet,
         &plan.plan_sha256,
-        &mut platform(),
-    )
-    .expect("recover the installed module and converge the retained estate");
-    assert!(result.terminal);
-    assert!(result.actual_conservation.is_some());
+        true,
+        true,
+    );
+    assert_eq!(completed.last().unwrap()["data"]["terminal"], true);
     assert_eq!(
-        read_state(&old_paths, &desired.fleet).unwrap().principals,
+        read_state(&paths, &desired.fleet).unwrap().principals,
         originals
     );
+    let unavailable = canic_host::icp::IcpCli::new("/missing/reset-icp", Some("local".into()));
+    let mut offline = IcpEnsurePlatform::new(desired.clone(), "/missing/reset-icp", root);
+    let canic_host::fleet_ensure::workflow::clean_reinstall::CleanReinstallReport::Fleet(result) =
+        canic_host::fleet_ensure::workflow::clean_reinstall::apply(
+            root,
+            "local",
+            &desired.fleet,
+            &plan.plan_sha256,
+            &mut offline,
+            &unavailable,
+        )
+        .expect("completed reset replays without an IC executable")
+    else {
+        panic!("expected completed Fleet")
+    };
+    let actual = result.actual_conservation.as_ref().unwrap();
+    assert_eq!(
+        ledger_account_balance(input.pic, ledger, operator),
+        before_operator
+            - Nat::from(
+                infrastructure.conservation.maximum_operator_debit_cycles
+                    + actual.operator_debit_cycles
+            )
+    );
+    let history = root
+        .join(".canic/fleet-ensure/history/local")
+        .join(&desired.fleet)
+        .join("objects");
     for bytes in source_documents.values() {
         assert_eq!(
-            std::fs::read(
-                old_paths
-                    .plan
-                    .with_file_name("activation-reset-evidence")
-                    .join(sha256_hex(bytes))
-            )
-            .unwrap(),
+            std::fs::read(history.join(sha256_hex(bytes))).unwrap(),
             *bytes
         );
     }
     let mutations = std::fs::read(root.join("reinstall-mutations.log")).unwrap();
+    // Earlier phase receipts remain local replay after the active plan advances.
+    let replay = cli_apply_receipt(
+        root,
+        Path::new("/missing/reset-icp"),
+        &desired.fleet,
+        &infrastructure.plan_sha256,
+        true,
+        true,
+    );
+    assert_eq!(
+        replay[0]["data"]["applied_plan_sha256"],
+        infrastructure.plan_sha256
+    );
+    assert_eq!(replay.last().unwrap()["data"]["effects_applied"], 0);
+    assert!(
+        !replay
+            .iter()
+            .any(|event| event["event"] == "icp_request_timing")
+    );
     for json in [false, true] {
         let receipt = cli_apply_receipt(
             root,
             Path::new("/missing/reset-icp"),
             &desired.fleet,
-            &review.publication.review_sha256,
+            &plan.plan_sha256,
             json,
             true,
         );
-        assert_eq!(receipt.last().unwrap()["data"]["effects_applied"], 0);
-        assert_eq!(
-            receipt.last().unwrap()["data"]["plan_sha256"],
-            plan.plan_sha256
-        );
-        assert_eq!(receipt.last().unwrap()["data"]["terminal"], true);
+        let outcome = &receipt.last().unwrap()["data"];
+        assert_eq!(outcome["effects_applied"], 0);
+        assert_eq!(outcome["plan_sha256"], plan.plan_sha256);
+        assert_eq!(outcome["terminal"], true);
         assert!(
             !receipt
                 .iter()
                 .any(|event| event["event"] == "icp_request_timing")
         );
-        let mut unavailable =
-            IcpEnsurePlatform::new(desired.clone(), "/missing/completed-reset-icp", root);
-        let replay = fleet_ensure_workflow::apply(
-            root,
-            &desired,
-            &digest,
-            &desired.fleet,
-            &plan.plan_sha256,
-            &mut unavailable,
-        )
-        .expect("terminal replay is entirely local");
-        assert!(replay.terminal);
-        assert_eq!(replay.effects_applied, 0);
-        assert_eq!(replay.actual_conservation, result.actual_conservation);
     }
     assert_eq!(
         std::fs::read(root.join("reinstall-mutations.log")).unwrap(),
@@ -359,14 +315,7 @@ fn cli_apply_receipt(
     if json {
         args.push("--json");
     }
-    cli_receipt(
-        root,
-        executable,
-        &args,
-        "completed_reset",
-        Some(approval),
-        succeeds,
-    )
+    cli_receipt(root, executable, &args, "ensure", Some(approval), succeeds)
 }
 
 fn cli_receipt(
@@ -404,6 +353,15 @@ fn cli_receipt(
         .env(CLI_ARGUMENTS, serde_json::to_string(&invocation).unwrap())
         .output()
         .unwrap();
+    std::fs::write(
+        root.join("last-cli-output.txt"),
+        format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+    .unwrap();
     assert_eq!(
         output.status.success(),
         succeeds,
@@ -429,11 +387,24 @@ fn cli_receipt(
         .collect::<Vec<_>>();
     assert_eq!(events[0]["event"], "invocation_started");
     assert_eq!(events[0]["data"]["command"], command);
+    let invocation = &events[0]["data"];
     assert_eq!(
-        events[0]["data"]["applied_review_sha256"],
-        serde_json::to_value(approval).unwrap()
+        invocation["applied_plan_sha256"]
+            .as_str()
+            .or_else(|| invocation["applied_review_sha256"].as_str()),
+        approval
     );
-    assert!(events[0]["data"]["applied_plan_sha256"].is_null());
+    assert!(
+        invocation["applied_plan_sha256"].is_null()
+            || invocation["applied_review_sha256"].is_null()
+    );
+    if succeeds {
+        assert!(
+            events
+                .iter()
+                .any(|event| event["event"] == "clean_reinstall_authority")
+        );
+    }
     assert_eq!(events.last().unwrap()["event"], "invocation_finished");
     assert_eq!(
         events.last().unwrap()["data"]["timing_evidence_complete"],

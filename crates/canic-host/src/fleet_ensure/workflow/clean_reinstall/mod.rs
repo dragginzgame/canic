@@ -262,12 +262,18 @@ pub fn apply<P: EnsurePlatform>(
         .map(|record| CleanReinstallReport::Import(Box::new(record)));
     }
     if let Ok(plan) = infrastructure_bootstrap::retained(workspace, environment, fleet, digest) {
-        let published =
-            infrastructure_bootstrap::apply(workspace, environment, fleet, digest, platform)?;
-        return Ok(CleanReinstallReport::Infrastructure(Box::new(report(
-            plan,
-            published.completed,
-        ))));
+        let published = infrastructure_bootstrap::apply_reporting(
+            workspace,
+            environment,
+            fleet,
+            digest,
+            platform,
+        )?;
+        return Ok(CleanReinstallReport::Infrastructure(Box::new(
+            published
+                .execution
+                .unwrap_or_else(|| report(plan, published.publication.completed)),
+        )));
     }
     let plan = ops::read_plan(&paths)?.ok_or(EnsureWorkflowError::PlanMissing)?;
     Ok(CleanReinstallReport::Fleet(Box::new(workflow::apply(

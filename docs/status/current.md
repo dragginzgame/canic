@@ -20,6 +20,52 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Toko feedback completion — .45 ready for review, 2026-09-28
+
+The maintainer requests the release-test repair and remaining Toko feedback in
+one batch before pushing. The completed-reset regression still invoked the
+superseded preparation sequence without a current desired document. It now runs
+the public current-generation/clean-reinstall CLI through infrastructure,
+Root-owned clearing and workload convergence. Its fixture receives the same
+full-reset Ledger reserve as the repeated-reset fixture; exact payment checks
+remain. Infrastructure publication now preserves the real execution report,
+and timing receipts identify the reset phase and distinguish plan/import digests.
+
+The exact PocketIC CLI case passes in 196.80s (286s runner including compilation
+and artifact setup), including lost install response, same-digest recovery,
+cleared child modules/stable memory, exact retained IDs and Ledger debit, unchanged
+historical archives, distinct receipts and offline plain/JSON terminal replay.
+Log: `target/test-runs/20260928T080312Z-1917.XqdmIY/1.log`.
+All 32 CLI progress/receipt and six native query-transport tests pass. Scoped
+host/CLI/internal-test warning-denied Clippy passes after a fixture-only eager
+`Option::or` lint correction. No full gate was run.
+
+The Fleet guide no longer requires decoding a completed predecessor plan or
+using its old preparation sequence. The current route satisfies CANIC-184 and
+the completion guidance in CANIC-179; CANIC-183 has public-CLI receipt evidence.
+CANIC-150 named progress and CANIC-160 bounded query retries retain their earlier
+implementation and the focused checks above. Published-version/live Toko
+acceptance remains downstream work. Older CANIC-156/174 RF3 implementation is
+recorded complete in .34; the stale downstream acceptance wording is not a new
+missing implementation. CANIC-161/170 incident attribution remains unverified.
+
+CANIC-176's six current application Release measurements pass in the isolated
+`.tmp/toko-feedback45-20260928/` snapshot: 17m07s cold, 7m36s after an application
+comment change and 8m04s after a path-dependency comment change. Each unchanged
+repeat takes about 2.2s with identical complete artifact hashes. All copied inputs
+are restored and verified. This establishes warm reuse, not a runtime compilation
+speedup; broader compiler/link optimization and live acceptance remain open.
+
+The [feedback report](../audits/reports/2026-09/2026-09-28/toko-feedback-followthrough.md)
+records every current disposition, exact measurement controls and structured
+results. The accepted .45 implementation batch and changelog are ready for
+maintainer review and the selected release gate. Final scoped Clippy passes;
+the final PocketIC proof also covers offline replay of an earlier phase after
+Fleet completion. No full workspace pass is claimed. Package versions stay .44;
+changes remain uncommitted, with no publication, sibling mutation or live IC effect.
+
+
+
 ## Release-gate host selection correction — ready for retry, .45, 2026-09-27
 
 The maintainer's ordinary gate reported 1103 passing host tests and three failures

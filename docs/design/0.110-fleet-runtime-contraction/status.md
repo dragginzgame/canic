@@ -1,5 +1,23 @@
 # Canic 0.110 Implementation Status
 
+## Toko feedback follow-through — .45 ready for review, 2026-09-28
+
+The completed-reset public CLI regression passes with receipt, recovery, exact
+Ledger debit, archive, ID retention and offline replay assertions (196.80s test;
+286s complete targeted runner). Infrastructure execution reports and current
+phase receipts are preserved; stale completed-predecessor decoding instructions
+are removed from the operator guide. All 38 selected progress/query tests and
+scoped Clippy pass. Six frozen-input Release build measurements establish exact
+warm reuse around 2.2s; changed-input runtime compilation remains costly.
+
+The [current handoff](../../status/current.md#toko-feedback-completion--45-ready-for-review-2026-09-28)
+and [feedback report](../../audits/reports/2026-09/2026-09-28/toko-feedback-followthrough.md)
+retain results and outstanding live/performance acceptance. The accepted .45
+implementation batch and changelog are ready for maintainer review and the
+selected release gate. No full gate was rerun; versions remain .44 and changes
+remain uncommitted. No publication or live effects ran.
+
+
 ## Clean reinstall correction — .45 ready for review, 2026-09-27
 
 Completed-Fleet generation and explicit reinstall now use explicit inventory,
