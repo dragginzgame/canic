@@ -413,7 +413,7 @@ fn cli_receipt(
     events
 }
 
-fn local_icp(input: &ReinstallJourney<'_>) -> PathBuf {
+pub(super) fn local_icp(input: &ReinstallJourney<'_>) -> PathBuf {
     use std::os::unix::fs::PermissionsExt as _;
     let path = input.adapter_root.join("completed-reset-icp");
     let network = serde_json::json!({"api_url": input.local_replica.url, "root_key": input.local_replica.root_key});
@@ -448,7 +448,7 @@ esac
     path
 }
 
-fn generate(
+pub(super) fn generate(
     input: &ReinstallJourney<'_>,
     executable: &Path,
     release: canic_core::ids::ReleaseBuildId,

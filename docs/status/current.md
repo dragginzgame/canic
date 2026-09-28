@@ -20,6 +20,40 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Mixed-topology release-test correction — .45 ready for retry, 2026-09-28
+
+The subsequent maintainer gate failed in the mixed-topology reset fixture:
+`target/test-runs/20260928T081507Z-53814.lgXOwc/7.log`, at its obsolete
+completed-preparation CLI review (`InfrastructureBootstrap(Integrity)`). The
+current completed-Fleet route requires generated physical inventory authority and
+separate infrastructure/import/convergence phases. The fixture now generates that
+authority and reuses the current clean-reset recovery proof. Production behavior
+is unchanged. The old fixture-only preparation/funding sequence and its unused
+wire variants are removed.
+
+The mixed topology retains Hub/Shard user-row wipe and authored-row restoration,
+selected Wasm hashes, exact IDs, five workloads/one Ready reserve and memory
+allocation diagnostics. Its reserve now funds the complete reset. The shared
+proof retains exact Ledger/conservation assertions and additionally verifies
+operator-balance drift before effect intent and a lost funding response before
+the existing lost-install/replay checks. Both callers pass:
+
+- Mixed topology: 346.87s test / 366s complete runner;
+  `target/test-runs/20260928T085923Z-19625.6DToIb/1.log`.
+- Consecutive changed-build/same-build resets: 197.08s test / 198s runner;
+  `target/test-runs/20260928T090528Z-47971.wGD7Bm/1.log`.
+- Scoped internal library/test warning-denied Clippy: pass (3.19s),
+  `.tmp/mixed-reset45-clippy.log`. The wire-decoder lint expectation was updated
+  after removing the unused larger test response variant; both configurations pass.
+
+The complete accepted .45 batch and changelog are ready for maintainer review and
+the selected release-gate retry. The failed full run has not been replaced by a
+full passing result. Versions remain .44, the .45 changes here are uncommitted,
+and no Git publication, sibling mutation or live effect ran. Upstream live
+acceptance and further runtime build optimization retain their prior disposition
+in the [feedback report](../audits/reports/2026-09/2026-09-28/toko-feedback-followthrough.md).
+
+
 ## Toko feedback completion — .45 ready for review, 2026-09-28
 
 The maintainer requests the release-test repair and remaining Toko feedback in

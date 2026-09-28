@@ -123,6 +123,36 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
             &icp,
         )
     };
+    if infrastructure
+        .plan
+        .conservation
+        .maximum_operator_debit_cycles
+        > 0
+    {
+        operator_shortfall::assert_fresh_reinstall_rejection(&input, &infrastructure.plan);
+        let withdrawals: u64 = input
+            .pic
+            .query_candid(ledger, "withdrawal_count", ())
+            .unwrap();
+        let funding_lost = root.join("lost-funding-response");
+        if funding_lost.exists() {
+            std::fs::remove_file(&funding_lost).unwrap();
+        }
+        std::fs::write(root.join("lose-funding-response"), []).unwrap();
+        let lost_funding = apply(&infrastructure.plan.plan_sha256);
+        assert!(
+            matches!(lost_funding, Err(EnsureWorkflowError::Platform(_))),
+            "lost funding reply: {lost_funding:?}"
+        );
+        assert!(funding_lost.is_file());
+        assert_eq!(
+            input
+                .pic
+                .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                .unwrap(),
+            withdrawals + 1
+        );
+    }
     let lost = apply(&infrastructure.plan.plan_sha256);
     assert!(
         matches!(lost, Err(EnsureWorkflowError::Platform(_))),
