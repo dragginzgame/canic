@@ -25,6 +25,8 @@ macro_rules! canic_emit_root_command_endpoint {
             BootstrapStore(::canic::dto::root_store::RootStoreBootstrapRequest),
             #[cfg(canic_capability_root_delegation)]
             GetOrCreateDelegationProof,
+            #[cfg(canic_capability_root_delegation)]
+            GetChainKeyPublicKey(::canic::dto::auth::RootChainKeyPublicKeyRequest),
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffRequest),
             ImportPoolCanister(::canic::dto::pool::PoolCanisterRequest),
             ImportPoolCapacity(::canic::dto::pool_import::PoolImportCommand),
@@ -97,6 +99,8 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             #[cfg(canic_capability_root_delegation)]
             GetOrCreateDelegationProof(::canic::dto::auth::RootDelegationProofBatchProof),
+            #[cfg(canic_capability_root_delegation)]
+            GetChainKeyPublicKey(Vec<u8>),
             HandoffPoolCanister(::canic::dto::pool::PoolHandoffResponse),
             ImportPoolCanister(::canic::dto::pool::PoolImportResponse),
             ImportPoolCapacity(::canic::dto::pool_import::PoolImportStatus),
@@ -246,7 +250,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::SynchronizeRegistry(_)
             );
             #[cfg(canic_capability_root_delegation)]
-            let controller_command = controller_command || matches!(&command, RootCommand::UpsertIssuerPolicy(_) | RootCommand::UpsertIssuerRenewalTemplate(_));
+            let controller_command = controller_command || matches!(&command, RootCommand::GetChainKeyPublicKey(_) | RootCommand::UpsertIssuerPolicy(_) | RootCommand::UpsertIssuerRenewalTemplate(_));
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)
                     .await
@@ -428,6 +432,12 @@ macro_rules! canic_emit_root_command_endpoint {
                     $crate::__internal::core::api::auth::AuthApi::get_or_create_chain_key_delegation_proof_root()
                         .await
                         .map(RootCommandResponse::GetOrCreateDelegationProof)
+                }
+                #[cfg(canic_capability_root_delegation)]
+                RootCommand::GetChainKeyPublicKey(request) => {
+                    $crate::__internal::core::api::auth::AuthApi::root_chain_key_public_key(request)
+                        .await
+                        .map(RootCommandResponse::GetChainKeyPublicKey)
                 }
                 RootCommand::HandoffPoolCanister(request) => {
                     let response = $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::admin(

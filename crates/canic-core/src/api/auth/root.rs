@@ -9,17 +9,41 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            RootChainKeyPublicKeyRequest, RootDelegationProofBatchProof, RootIssuerPolicyResponse,
+            RootIssuerPolicyUpsertRequest, RootIssuerRenewalStatusRequest,
+            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+            RootIssuerRenewalTemplateUpsertRequest,
         },
         error::Error,
     },
-    ops::{ic::IcOps, runtime::env::EnvOps},
+    ops::{
+        ic::{
+            IcOps,
+            mgmt::{EcdsaKeyId, EcdsaPublicKeyArgs, MgmtOps},
+        },
+        runtime::env::EnvOps,
+    },
     workflow::runtime::auth::RuntimeAuthWorkflow,
 };
 
 impl AuthApi {
+    /// Derive the public key for this Root without exposing signing authority.
+    pub async fn root_chain_key_public_key(
+        request: RootChainKeyPublicKeyRequest,
+    ) -> Result<Vec<u8>, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        let result = MgmtOps::ecdsa_public_key(&EcdsaPublicKeyArgs {
+            canister_id: Some(IcOps::canister_self()),
+            derivation_path: request.derivation_path,
+            key_id: EcdsaKeyId {
+                name: request.key_id,
+            },
+        })
+        .await
+        .map_err(Error::from)?;
+        Ok(result.public_key)
+    }
+
     /// Upsert root issuer policy from the local root controller path.
     pub fn upsert_root_issuer_policy_root(
         request: RootIssuerPolicyUpsertRequest,

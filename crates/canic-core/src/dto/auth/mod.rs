@@ -31,7 +31,8 @@ pub use proof::{
     DelegatedAuthIssuerPolicySnapshotV1, DelegatedAuthRegistrySnapshotV1, DelegationCert,
     DelegationProof, IcCanisterSignatureProofV1, IcChainKeyBatchSignatureProofV1,
     InstallActiveDelegationProofRequest, InstallActiveDelegationProofResponse, IssuerProof,
-    IssuerProofAlgorithm, IssuerProofBinding, RootKeyPolicyV1, RootProof,
+    IssuerProofAlgorithm, IssuerProofBinding, RootChainKeyPublicKeyRequest, RootKeyPolicyV1,
+    RootProof,
 };
 pub use renewal::{
     RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,

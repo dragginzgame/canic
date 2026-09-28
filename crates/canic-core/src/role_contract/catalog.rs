@@ -210,6 +210,12 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
         "role-attestation caches verify root canister-signature proofs locally",
     ),
     requirement(
+        RoleCapabilityKey::RoleAttestationVerifier,
+        "auth.role_attestation_cache",
+        CanicFeatureKey::AuthChainKeyEcdsa,
+        "role-attestation caches validate the configured chain-key root proof verifier",
+    ),
+    requirement(
         RoleCapabilityKey::FleetCoordinator,
         "built_in.fleet_coordinator",
         CanicFeatureKey::FleetCoordinatorCanister,
