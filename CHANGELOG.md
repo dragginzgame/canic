@@ -16,7 +16,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.45` makes clean reinstall use current authority while preserving selected
   IDs and cycles, retiring completed records as history; it also improves deployment
-  diagnostics, test throughput, dependency checks and operator documentation.
+  diagnostics with accurate phase receipts, test throughput, dependency checks
+  and operator documentation.
 - `0.110.44` reduces retained-estate recovery fixtures to two workloads and one
   reserve while retaining interruption, conservation and replay checks. Reuse
   release-test artifacts across standalone host-test edits. Cut historical receipt

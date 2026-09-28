@@ -8013,7 +8013,10 @@ esac
         pic.create_canister_with_id(None, None, cycles_ledger)
             .expect("create canonical Cycles Ledger stub principal");
         let mut total_requested = requested.iter().map(|(_, cycles)| cycles).sum::<u128>();
-        let operator_balance = if matches!(funding, FundingJourney::Reinstall) {
+        let operator_balance = if matches!(
+            funding,
+            FundingJourney::Reinstall | FundingJourney::CompletedReset
+        ) {
             10_000_000_000_000_000_u128
         } else {
             2_000_000_000_000_000_u128

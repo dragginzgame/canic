@@ -48,27 +48,28 @@ resuming an operation; generated successor-review commands retain it. Without
 the option, the existing default-selection behavior applies. This option does
 not select an identity for unrelated Canic command groups.
 
-Normal `fleet ensure` review/apply, completed-source preparation, completed-estate
-reset review/apply/replay, and `fleet generate` commands print a timing
-receipt path under `.canic/diagnostics/fleet/` before measured work. `--json`
-Ensure output emits a `fleet_ensure_timing_receipt` event with that path. These
-private JSONL diagnostics supplement the retained plan and journal; they never
-prove deployment completion or authorize continuation. Funding-observation and
-operator-mint subcommands retain their existing output owners.
+Normal `fleet ensure` review/apply, clean-reinstall review/apply/replay and
+`fleet generate` commands print a timing receipt path under
+`.canic/diagnostics/fleet/` before measured work. `--json` Ensure output emits a
+`fleet_ensure_timing_receipt` event with that path. These private JSONL diagnostics
+supplement the retained plan and journal; they never prove deployment completion
+or authorize continuation. Funding-observation and operator-mint subcommands
+retain their existing output owners.
 
-Completed-source routes select their local retained owner before opening the
-receipt; local route selection is outside the measured interval. The receipt
-opens before remote preparation, reset planning or publication approval.
-`invocation_started.command` distinguishes `completed_preparation` and
-`completed_reset`. `applied_review_sha256` records the supplied preparation or
-publication digest; it is not an execution plan hash. A
-`completed_preparation_authority` event binds the source operation/plan and
-prepared result. A `completed_reset_authority` event binds the publication digest
-to the current desired, plan and operation hashes. Preparation completion does
-not mean the Fleet deployment is terminal. Failed invocations close as failed;
-abrupt interruption retains incomplete evidence. Same-digest continuation and
-terminal publication-digest replay each create a separate receipt. Keep all of
-them; a terminal execution replay reports zero effects and issues no IC calls.
+Clean reinstall selects its local owner and current input before opening the
+receipt; local selection is outside the measured interval. Remote review and
+apply use the shared receipt owner with `invocation_started.command: ensure`.
+`applied_plan_sha256` identifies an infrastructure or Fleet execution plan;
+`applied_review_sha256` identifies a pool import review. A
+`clean_reinstall_authority` event identifies the phase and its current digest,
+with explicit `phase_completed` and `fleet_completed` fields. Completing
+infrastructure or import does not complete the Fleet. Infrastructure execution
+retains the real effect count and conservation report through local publication.
+
+Failed invocations close as failed; abrupt interruption retains incomplete
+evidence. Same-digest continuation and terminal replay each create a separate
+receipt. Keep all of them. A terminal execution replay reports zero effects and
+issues no IC calls.
 
 Each line has UTC Unix milliseconds and monotonic elapsed microseconds. Existing
 progress DTOs bind operation, plan and phase; stage and request identifiers link
@@ -1576,218 +1577,73 @@ contracts. Historical release notes remain evidence only. Current desired
 state, current `v1` ensure state, and current live observations are the only
 host authorities.
 
-A release boundary discards the predecessor's installation state and current
-Fleet authority. The new host does not resume an old journal with substituted
-desired input or silently fill omitted durable fields. Cycle conservation must
-be established before controlled infrastructure is erased. Any retirement work
-runs under its exact original authority; its receipts account for cycles and
-do not admit old identities, topology, stable bytes or protocols into the new
-Fleet. The replacement Fleet uses a separately reviewed current plan. Exact
-controlled canister identities and their cycle accounts may remain in place;
-identity reuse is not promised. Same-release interruption recovery retains its exact current plan,
-journal, installed artifact and paid-effect receipts.
+A release boundary discards the predecessor's application/framework state and
+completed execution authority. The new host does not resume an old journal with
+substituted desired input or silently fill omitted durable fields. Cycle
+conservation must be established before controlled infrastructure is erased.
+Only unfinished issued effects require reconciliation under their exact
+authority. Completed records are archived as history; they do not admit old
+stable bytes or protocols into the new Fleet. The replacement uses a separately
+reviewed current plan. Selected ID-preserving reset retains those physical
+identities and controlled cycle accounts, subject to reviewed protocol debit.
+Same-operation interruption recovery retains the exact current plan, journal,
+artifact bytes and paid-effect receipts.
 
 ## Unreadable retained plan
 
 An unreadable plan or journal is not permission to replace an unfinished
-operation. Missing required fields, such as plan `recovery_review` or journal
-effect `publication_attempts`, are rejected even when `schema_version` is 1.
-Preserve the complete Fleet directory, referenced
+operation. For active unfinished work, missing required fields such as plan
+`recovery_review` or journal effect `publication_attempts` are rejected even when
+`schema_version` is 1. Preserve the complete Fleet directory, referenced
 content objects, release artifacts, desired inputs, estate seed and paid-effect
 receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
 
-The completed-source retirement inspector decodes the maintained plan and journal
-and verifies the canonical plan hash. Required funding observations cannot be
-omitted; an empty map adds no allowance. Malformed observations, unknown paid-work
-fields, unfinished effects and inconsistent identities reject review. Original
-document hashes bind inventory, conservation, archive and handoff checks.
+Completion selection runs before executable plan decoding. A completed operation
+with consistent completion identities and no unresolved issued effects is history,
+even when its executable payload belongs to an older release. Use
+[clean reinstall of a completed Fleet](#clean-reinstall-of-a-completed-fleet):
+qualify the current build, supply the complete physical inventory and current
+policy, then review current custody. Canic archives the historical files unchanged
+and retires their execution ownership. It does not require old application data,
+old plan fields, historical operator balances or the predecessor CLI.
 
-This boundary also applies to read-only commands such as `canic info env`.
-A working frontend does not prove that the retained operation completed, and
-an unreadable plan does not authorize reconstructing role bindings from stale
-state. Decode errors retain the document path and underlying cause and point
-here, including missing continuation bounds such as `maximum_successor_actions`.
+An unreadable executable payload alone neither proves nor disproves completion.
+If completion metadata is damaged, contradictory or genuinely unfinished, retain
+the evidence and reconcile the outstanding effects under their existing owner.
+Do not fill missing fields or delete journals. A working frontend is not proof
+that a paid operation finished. Read-only commands that need an active role map
+also cannot invent it from an unreadable plan.
 
-For an explicitly disposable **local simulator**, first retain the evidence
-above and confirm that discarding its simulated data and balances is authorized.
-Stop its owning session, then use that owner's exact-session reset procedure.
-For Canic's `LocalFleetSession`, follow
-[persistence, recovery and reset](local-development-fleet.md#persistence-recovery-and-reset):
-reset the recorded session only after its owner exits, start a fresh session,
-use its newly returned environment, and generate/review a new Fleet plan from
-the current local release. Reset preserves historical Ensure records and shared
-artifacts; deleting just `plan.json` is not this procedure. A downstream-owned
-simulator must use its own documented reset owner; the Canic session command
-cannot reset arbitrary local infrastructure. A name containing `local` does not
-prove disposability. This procedure cannot resolve or discard outstanding live
-payments, controlled real cycles or an unresolved real operation.
-
-Ordinary Ensure diagnoses failures in either document and reports
-`RetainedActivationReviewRequired` only when the
-existing local source inspector finds an exact Applied protocol prefix ending
-in Issued provisioning, with an unissued readiness tail. The diagnostic names
-the operation, journal's plan reference and hash of the source document. These
-are evidence identities; the journal reference is not a verified current plan
-digest, and local inspection does not establish live reset authority.
-
-The inspector also verifies the original action hash for an already Applied
-Store bootstrap receipt that lacks fixture metadata. This private receipt
-projection is limited to the completed prefix; it does not construct a current
-bootstrap command, invent empty fixtures or permit an Issued bootstrap row.
-The source documents and all paid-attempt evidence remain byte-for-byte intact.
-
-For that source shape, use the existing explicit `fleet ensure <fleet>
---reinstall` review with the selected corrected release's desired input and
-the exact environment. Omit `--apply`. This deliberately bypasses ordinary
-resume selection, inspects source evidence before requiring current journal
-fields, and requests the bounded CANIC-157 partial-activation review
-described above. It leaves the active source documents in place and may reject
-if source artifacts, controllers, complete physical inventory, Root Ledger
-balances, pending paid effects or debit bounds do not satisfy admission. It
-requires a changed, corrected Root module and admits only one Root.
-
-An admitted review is a new current operation, not a repaired source plan.
-Review its exact digest and conservation evidence before applying it. The
-existing sequence archives source evidence, settles Coordinator/Root work,
-reviews Root reinstall separately, then completes the dependent Full Ensure
-review. Interrupted steps resume their own retained digest; a later build must
-not replace their selected input. Completion requires terminal conservation
-and immediate effect-free replay. No successful local diagnostic or preview
-establishes those completion properties.
-
-A completed current operation has a separate bounded assessment. An explicit
-`--reinstall` review selects supported native funding/install receipts with
-immutable protocol successor phases. Selection requires a valid current plan
-and journal with matching completed operation identities. All plan fields,
-including recovery forecasts and continuation bounds, must decode and hash
-correctly before the review can inspect fresh inventory and conservation.
-
-This assessment requires every action hash and Applied receipt to match, native
-payments to retain their original recorded balance evidence, and exact phase
-identities. Fresh source-bound inventory must contain the same complete physical
-estate and registry. Original operator debit, ledger fees, Root account balances,
-pool membership and controlled-cycle burn must reconcile within the source's
-bounds. Unresolved effects, creation/funding-review histories, pending creation,
-transfers, missing assets and unrelated operator balance changes reject this
-bounded path. Receipt inspection verifies the retained completion evidence; it
-does not independently fetch historical Ledger blocks.
-
-A completed source with no operator payments may explicitly review one external
-Cycles Ledger withdrawal using `--reinstall --retirement-debit-block <BLOCK>`.
-This is limited to a default operator account and a currently operator-controlled
-destination outside the source Fleet. The block must postdate the source review;
-its exact amount plus fee must explain the entire independent balance change.
-No source document or bound changes. Sources with operator payments, unexplained
-movement, refunds or a destination inside the source estate reject this lane.
-
-The host fetches that single block through a replicated query and verifies the
-destination with controller-only management status. The record binds the Ledger,
-operator, destination, network root key, block hash/index, timestamp, amount and
-fee. A burn receipt proves the debit only: it neither proves successful delivery
-nor authorises retrying a withdrawal. The receipt is retained separately from
-source conservation in the new reviewed plan. Apply takes only that plan's digest,
-re-reads the receipt and live balances, and rejects changes before source adoption
-or authority sealing. Response size, decoding work and observation time are bounded;
-archived or unsupported receipt shapes fail closed. Existing source archive,
-interruption and effect-free replay owners remain unchanged.
-
-The separate preparation review exposes those measured values under
-`reinstall.source.terminal_retirement.conservation`, together with exact raw
-source document hashes. Review the full reset scope and selected target artifacts.
-Apply repeats source and live conservation checks before adoption. The existing
-local handoff archives the source plan, journal, state and every successor phase
-before committing replacement intent. Preserve the referenced content objects
-and source artifacts too. Interrupted handoff selects the same replacement pair;
-a completed handoff never rolls back subsequent progress. Subsequent preparation
-and full reset use the existing journaled effect owner and their selected digests.
-
-If a retained document cannot decode and the bounded partial-activation inspection
-cannot establish its supported recovery shape, `RetainedPlanUnreadable` preserves
-the underlying error. Completed-source review never uses decode failure to select
-an alternative contract. Resolve issued effects under their exact original
-authority before changing release contracts.
+For an explicitly disposable **local simulator**, use its owner's exact-session
+reset procedure after the owner exits. For Canic's `LocalFleetSession`, follow
+[persistence, recovery and reset](local-development-fleet.md#persistence-recovery-and-reset).
+Deleting just an Ensure plan is not a simulator reset. A simulator reset cannot
+resolve outstanding live payments or discard controlled real cycles.
 
 ## Deliberate selected-build database wipe
 
-`canic fleet ensure <fleet> --reinstall` requests a new wipe of a fully converged
-Fleet using the selected desired build. Build the current workspace and generate
-its desired input before making a fresh request. The completed source operation
-supplies installed authority and source protocol contracts; the new review binds
-the selected target artifact hashes separately. An identical rebuild is also a
-new deliberate wipe. The request retains its own operation identity; it is not
-a persistent desired-state flag.
+Follow [the current clean-reinstall sequence](#clean-reinstall-of-a-completed-fleet)
+for both changed-build and identical-build resets. Each new completed-estate reset
+gets a distinct operation identity. Infrastructure initialization, Root-owned
+child clearing and workload convergence each require their reviewed digest.
 
-1. Review the `reinstall_preparation` plan and apply its `plan_sha256`. This
-   seals Root and Coordinator allocation and maintenance.
-2. Run ordinary `fleet ensure` again. Review the `full` reset plan, including
-   every physical pool asset captured after sealing, then apply its digest.
-3. If interrupted, apply the retained digest again through ordinary ensure.
-   Retained reviewed input selects the original target even when workspace input
-   changes again. The journal reconciles completed effects and continues that
-   same wipe. A new `--reinstall` request cannot replace it.
+If interrupted, apply that same digest again. The operation retains its qualified
+artifact bytes and current input paths; changing the workspace does not replace
+them. Intent and reconciliation protect payments and installs from repetition.
+An unfinished reset keeps its recovery owner until it finishes.
 
-After sealing, the journal records `prepared`; current-Fleet reads reject it
-until the full reset converges. Preparation completion applies only to the
-`reinstall_preparation` scope. Reinstall recovery checks management deployment
-history through a reviewed Root witness against the issued effect, installed
-hash, operator and observed version. The controller-only call uses replicated
-management history, so ordinary inspection or timer version advances permit
-retry when no newer deployment exists; conflicting history fails closed. Root's
-own intended replacement can use the exact selected Root module and Candid to
-verify its lost response. Other modules or changed controllers are rejected.
-Keep both source and selected build artifacts until the operation completes.
-The current durable reinstall record changes through a pre-1.0 hard cut; this
-extension does not import unfinished plans from another Canic schema.
-
-Preparation reviews each Root and Coordinator against its own conservative
-`update + 8 × observation` burn allowance. Another authority's cycles cannot
-cover a shortfall: preparation has no funding transfer. A rejection reports the
-exact authority, available cycles, required allowance and shortfall. This is a
-maximum execution bound, not predicted spend or a cheaper substitute for reset
-headroom.
-
-Reviewing a preparation plan does not pause grants. Applying and confirming its
-seal fences ordinary child funding and suspends the Root maintenance timers,
-including after a subsequent native-cycle top-up. Explicit live resume opens
-that authority again; restoring a snapshot keeps it fenced. This protection is
-the current-source, exact-authority preparation contract. It is not automatic
-pre-top-up protection for the management-only recovery prerequisite, and does
-not authorize calling a predecessor release's protected protocol.
-
-Before each reviewed native or estate credit to a Root or Coordinator that is
-about to be reinstalled, the host rechecks its source module, controllers,
-Principal, subnet and Running status, then queries the seal for the exact reset
-operation. A changed or removed seal rejects before withdrawal, including on
-an interrupted retry. The review reserves the additional observation allowance.
-Later successor funding after replacement uses the current runtime's ordinary
-funding checks; it never queries the replaced source's seal. This does not pause
-an unverified installed runtime or protect externally issued top-ups.
-
-The disposable five-Workload/one-Ready PocketIC journey exercises this boundary
-with an actual Root native credit: a retained payment intent refuses to proceed
-after explicit seal removal; resealing the same operation permits one withdrawal,
-whose lost reply is reconciled without another payment. Child grants remain
-fenced, and interrupted reset recovery reaches full readiness and effect-free
-replay. This does not qualify Coordinator or estate credits on a live network.
-Management-only reset funding uses the separately described Stopped-state guard,
-without querying the old runtime's seal.
-
-Completion requires full Fleet readiness and conservation of the complete
-physical estate. Application stable data is discarded; authored installation
-fixtures and current framework authority are rebuilt. Physical identities,
-cycle balances and Root-owned Ledger account identities are retained, with
-observed execution charges accounted for by the reviewed bounds. Logical pool
-role assignments may change. No partial reset is reported as full convergence.
-
-After completion, ordinary ensure is a no-op. A new `--reinstall` request creates
-a new intentional wipe. A conflicting new request cannot replace an unfinished
-wipe, and `--reinstall` cannot be combined with `--apply`.
+Full completion retains the selected physical IDs, controlled cycles and terminal
+accounting while discarding application and framework state. Logical workload
+assignments may change within the reviewed Root/subnet inventory. Infrastructure
+or pool clearing completion alone is not Fleet convergence. Ordinary Ensure does
+not request another wipe; a later explicit `--reinstall` does. Do not combine
+`--reinstall` and `--apply`.
 
 ## Retained growth and dependent recovery review
 
-Before a changed-release Root reinstall, Ensure compares retained descendant
+During same-operation dependent recovery, Ensure compares retained descendant
 identities with the selected Root pool imports. Known assets missing from that
 selection cause typed `IncompleteRootEstate` rejection before Stop or Install.
 Refresh the existing operator seed and matching policy imports from terminal
