@@ -14,6 +14,9 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.46` derives configured Root public keys offline, removes repeated key
+  lookups during signing, corrects role-attestation feature requirements, and
+  adds controller-only Root public-key inspection.
 - `0.110.45` makes clean reinstall use current authority while preserving selected
   IDs and cycles, retiring completed records as history; it also improves deployment
   diagnostics with accurate phase receipts, current mixed-topology reset qualification,

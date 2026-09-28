@@ -944,6 +944,16 @@ fn render_delegated_token_config(config: &DelegatedTokenConfig) -> TokenStream {
 }
 
 fn render_chain_key_root_proof_config(config: &ChainKeyRootProofConfig) -> TokenStream {
+    let public_key_derivation = render_option(config.public_key_derivation.as_ref(), |value| {
+        match value {
+            crate::config::schema::ChainKeyPublicKeyDerivation::Ic => quote! {
+                ::canic::__internal::core::bootstrap::compiled::ChainKeyPublicKeyDerivation::Ic
+            },
+            crate::config::schema::ChainKeyPublicKeyDerivation::Pocketic => quote! {
+                ::canic::__internal::core::bootstrap::compiled::ChainKeyPublicKeyDerivation::Pocketic
+            },
+        }
+    });
     let key_id = render_option(config.key_id.as_ref(), |value| render_owned_string(value));
     let derivation_path_hash_hex =
         render_option(config.derivation_path_hash_hex.as_ref(), |value| {
@@ -986,6 +996,7 @@ fn render_chain_key_root_proof_config(config: &ChainKeyRootProofConfig) -> Token
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::ChainKeyRootProofConfig {
+            public_key_derivation: #public_key_derivation,
             key_id: #key_id,
             derivation_path_hash_hex: #derivation_path_hash_hex,
             derivation_path_hex: #derivation_path_hex,

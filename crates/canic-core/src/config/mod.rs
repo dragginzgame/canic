@@ -202,7 +202,7 @@ impl Config {
                 detail: source.to_string(),
             }
         })?;
-        let config: ConfigModel =
+        let mut config: ConfigModel =
             serde_path_to_error::deserialize(deserializer).map_err(|error| {
                 let issue = classify_toml_issue(config_str, error.path(), error.inner());
                 ConfigError::CannotParseToml {
@@ -211,6 +211,8 @@ impl Config {
                 }
             })?;
 
+        crate::ops::config::chain_key::resolve(&mut config.auth.delegated_tokens)
+            .map_err(ConfigSchemaError::from)?;
         config.validate().map_err(ConfigError::from)?;
         config.compile_component_deployment_configuration_digest()?;
         Ok(config)

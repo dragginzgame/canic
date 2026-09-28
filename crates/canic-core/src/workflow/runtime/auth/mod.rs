@@ -6,6 +6,7 @@
 
 mod prepare;
 mod provisioning;
+mod public_key;
 mod renewal;
 mod root_delegation_batch;
 mod root_issuer;

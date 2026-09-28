@@ -244,6 +244,48 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
 }
 
 #[test]
+fn role_attestation_cache_requires_chain_key_validation() {
+    let mut app = ConfigTestBuilder::canister_config(CanisterKind::Service);
+    app.auth.role_attestation_cache = true;
+    let config = ConfigTestBuilder::new()
+        .with_default_canister("app", app)
+        .build();
+    let role = CanisterRole::new("app");
+
+    assert_eq!(
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features: BTreeSet::from([CanicFeatureKey::AuthRootCanisterSigVerify]),
+            default_features_enabled: false,
+        }),
+        RoleContractResolution::Rejected {
+            errors: vec![RoleContractFinding::RequiredFeatureMissing {
+                capability: RoleCapabilityKey::RoleAttestationVerifier,
+                feature: CanicFeatureKey::AuthChainKeyEcdsa,
+            }],
+        }
+    );
+
+    assert!(matches!(
+        resolve_role_contract(RoleContractInput {
+            source: RoleContractSource::Declared {
+                config: &config,
+                role: &role,
+            },
+            declared_features: BTreeSet::from([
+                CanicFeatureKey::AuthRootCanisterSigVerify,
+                CanicFeatureKey::AuthChainKeyEcdsa,
+            ]),
+            default_features_enabled: false,
+        }),
+        RoleContractResolution::Resolved { .. }
+    ));
+}
+
+#[test]
 fn root_chain_key_signing_feature_is_required_only_when_an_issuer_exists() {
     let mut issuer = ConfigTestBuilder::canister_config(CanisterKind::Shard);
     issuer.auth.delegated_token_issuer = true;

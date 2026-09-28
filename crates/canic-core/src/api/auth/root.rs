@@ -9,9 +9,10 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
-            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-            RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+            RootChainKeyPublicKeyRequest, RootDelegationProofBatchProof, RootIssuerPolicyResponse,
+            RootIssuerPolicyUpsertRequest, RootIssuerRenewalStatusRequest,
+            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
+            RootIssuerRenewalTemplateUpsertRequest,
         },
         error::Error,
     },
@@ -20,6 +21,16 @@ use crate::{
 };
 
 impl AuthApi {
+    /// Derive the public key for this Root without exposing signing authority.
+    pub async fn root_chain_key_public_key(
+        request: RootChainKeyPublicKeyRequest,
+    ) -> Result<Vec<u8>, Error> {
+        EnvOps::require_root().map_err(Error::from)?;
+        RuntimeAuthWorkflow::root_chain_key_public_key(request)
+            .await
+            .map_err(Error::from)
+    }
+
     /// Upsert root issuer policy from the local root controller path.
     pub fn upsert_root_issuer_policy_root(
         request: RootIssuerPolicyUpsertRequest,

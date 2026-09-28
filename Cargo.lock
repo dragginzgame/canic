@@ -572,6 +572,7 @@ dependencies = [
  "ic-cdk",
  "ic-certification",
  "ic-memory",
+ "ic-secp256k1",
  "ic-signature-verification",
  "ic-timers",
  "k256",
@@ -2221,7 +2222,7 @@ dependencies = [
  "k256",
  "leb128",
  "p256",
- "pem",
+ "pem 3.0.6",
  "pkcs8",
  "rand 0.10.3",
  "rangemap",
@@ -2333,7 +2334,7 @@ dependencies = [
  "hex-literal",
  "hkdf",
  "ic_principal",
- "pem",
+ "pem 3.0.6",
  "rand 0.8.8",
  "thiserror 2.0.18",
  "zeroize",
@@ -2403,6 +2404,25 @@ checksum = "c80c46e399bcce51c531237e1111ced114dec295cff22b0996099a6168814b03"
 dependencies = [
  "leb128",
  "sha2 0.10.9",
+]
+
+[[package]]
+name = "ic-secp256k1"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3bf34836f1c4e8114b6d13b7699428939742e9ad73615bc0be4799ccc5566869"
+dependencies = [
+ "hex-literal",
+ "hmac 0.12.1",
+ "ic_principal",
+ "k256",
+ "num-bigint",
+ "pem 1.1.1",
+ "rand 0.8.8",
+ "rand_chacha 0.3.1",
+ "sha2 0.10.9",
+ "simple_asn1",
+ "zeroize",
 ]
 
 [[package]]
@@ -3402,6 +3422,15 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
+]
+
+[[package]]
+name = "pem"
+version = "1.1.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a8835c273a76a90455d7344889b0964598e3316e2a79ede8e36f16bdcf2228b8"
+dependencies = [
+ "base64 0.13.1",
 ]
 
 [[package]]
@@ -4461,6 +4490,18 @@ name = "simdutf8"
 version = "0.1.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e3a9fe34e3e7a50316060351f37187a3f546bce95496156754b601a5fa71b76e"
+
+[[package]]
+name = "simple_asn1"
+version = "0.6.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d585997b0ac10be3c5ee635f1bab02d512760d14b7c468801ac8a01d9ae5f1d"
+dependencies = [
+ "num-bigint",
+ "num-traits",
+ "thiserror 2.0.18",
+ "time",
+]
 
 [[package]]
 name = "siphasher"

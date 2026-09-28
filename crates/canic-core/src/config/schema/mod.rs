@@ -7,6 +7,7 @@
 //! All configuration must deserialize into these types and pass validation.
 //! Invariants enforced here are assumed everywhere else in the system.
 
+mod chain_key;
 mod component_group;
 mod component_group_deployment;
 mod component_spec;
@@ -14,6 +15,7 @@ mod fleet_service;
 mod log;
 mod role;
 
+pub use chain_key::{ChainKeyDerivationError, ChainKeyPublicKeyDerivation};
 pub use component_group::*;
 pub use component_group_deployment::*;
 pub use component_spec::*;
@@ -41,6 +43,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum ConfigSchemaError {
+    #[error(transparent)]
+    ChainKeyDerivation(#[from] ChainKeyDerivationError),
+
     #[error("validation error: {context} '{role}' {issue}")]
     InvalidCanisterRoleName {
         context: &'static str,
@@ -518,6 +523,10 @@ pub struct DelegatedTokenConfig {
 #[derive(Clone, Debug, Default, Deserialize, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct ChainKeyRootProofConfig {
+    /// Host-only derivation selection; generated artifacts contain the resolved public key.
+    #[serde(default)]
+    pub public_key_derivation: Option<ChainKeyPublicKeyDerivation>,
+
     #[serde(default)]
     pub key_id: Option<String>,
 

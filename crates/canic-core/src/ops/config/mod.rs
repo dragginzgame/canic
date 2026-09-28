@@ -4,6 +4,9 @@
 //! Does not own: config parsing, environment initialization, or endpoint DTOs.
 //! Boundary: ops layer between runtime context and immutable configuration model.
 
+#[cfg(not(target_arch = "wasm32"))]
+pub mod chain_key;
+
 use crate::{
     InternalError,
     config::{
