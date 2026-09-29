@@ -113,6 +113,17 @@ Wasm is unchanged. These gate fixes and updated `.49` notes are ready for review
 no broad validation, version transaction, commit or publication was run by the
 agent in this follow-up.
 
+The later governed-suite failure was a stale supplied-infrastructure import
+fixture: its two-source request allowed 32 calls, below the maintained minimum
+of 35. It now derives the recommended call count and debit budget from the shared
+policy and destination Root quote. The exact
+`pic::fleet_registry::baseline::tests::infrastructure_bootstrap::supplied_infrastructure_initializes_and_recovers`
+case passes in 77.55 seconds, including recovery and effect-free replay.
+Warning-denied library and test-target Clippy also pass. Logs are
+`/tmp/canic-bootstrap-import-*.log`; the exact test output is
+`target/test-runs/20260929T200342Z-61806.ofa9Iw/1.log`. The `.49` notes include
+this fixture correction; no broad suite or release command was rerun.
+
 ## Unscheduled backup execution gap
 
 Fresh CLI backup execution fails closed because Coordinator-backed Component

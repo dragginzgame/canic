@@ -444,6 +444,16 @@ fn assert_initial_import(
     use canic_host::fleet_ensure::{
         dto::capacity_import::CapacityImportReviewRequest, workflow::capacity_import::review,
     };
+    let maximum_root_paid_calls =
+        canic_core::control_plane_support::policy::pool_import::recommended_calls(
+            input.pools.len(),
+        )
+        .unwrap();
+    let context = super::capacity_import::context(
+        input.pic,
+        input.root,
+        Principal::from_text(&desired.operator).unwrap(),
+    );
     let request = CapacityImportReviewRequest {
         environment: desired.environment.clone(),
         fleet: desired.fleet.clone(),
@@ -453,8 +463,13 @@ fn assert_initial_import(
         policy: "bootstrap-policy.toml".into(),
         seed: "bootstrap-estate.toml".into(),
         maximum_source_debit_cycles: 100_000_000_000,
-        maximum_root_debit_cycles: 4_000_000_000_000,
-        maximum_root_paid_calls: u32::try_from(input.pools.len()).unwrap() * 12 + 8,
+        maximum_root_debit_cycles:
+            canic_core::control_plane_support::policy::pool_import::required_debit(
+                context.maximum_call_debit_cycles,
+                maximum_root_paid_calls,
+            )
+            .unwrap(),
+        maximum_root_paid_calls,
     };
     let planned = review::plan(input.adapter_root, &request, icp).unwrap();
     assert_eq!(planned.operation.as_ref().unwrap().review.publication_kind,
