@@ -27,8 +27,8 @@ material was removed after the review. No downstream file was written.
 
 The digest belongs to the isolated review, not to a newly staged review in
 Toko's live workspace. Do not copy it into another operation's journal or
-candidate marker. The [structured assessment](canic166-staging-review.json)
-records the retained raw review path and its checksum.
+candidate marker. The downstream review snapshot was removed from Canic on
+2026-09-29. This report retains the historical assessment, not live authority.
 
 ## Scope assessment
 

@@ -54,18 +54,18 @@ Translation initialization completes before the clock jumps; startup-load cost
 is outside this acceptance claim.
 
 The [evidence manifest](toko-feedback-evidence/manifest.json) binds retained logs,
-phase measurements, exact test body, unchanged producer, compiled core sources
-and release manifests. Compiled runtime source matches the working tree apart
+phase measurements and compiled Canic core sources. Copied downstream tests,
+producer, release manifests and execution snapshots were removed on 2026-09-29.
+At qualification, compiled runtime source matched the working tree apart
 from comments and native tests. Diagnostic profiling uses a separate release,
 `3b54a188afa0848db846a740f6a21325798dad72fdf50a3bbb5941e931348de7`;
 its instrumented timings are explanatory, not acceptance measurements.
 
 ## Reproduction and checks
 
-Use the existing `metrics-ceiling-fixture.patch` only in a disposable Toko copy.
-Use retained `metrics-index-retention-test.rs.txt` for the exact test, the retained
-producer unchanged, and a local override of `canic-core` to the retained source.
-Build with the candidate CLI and profile above, then select the finalized
+The following command records the historical downstream qualification. Its
+copied application fixture is no longer retained here; current reproduction
+belongs to the downstream repository. The original run selected the finalized
 artifact directory explicitly:
 
 ```sh

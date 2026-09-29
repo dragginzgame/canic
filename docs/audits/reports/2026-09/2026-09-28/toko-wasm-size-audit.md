@@ -66,9 +66,9 @@ by the existence or version of that crate. No sibling files were modified.
   `wasm32-unknown-unknown`, normal dependency edges. Also resolved the instance
   with defaults disabled. Proc-macro subgraphs still appear in these trees:
   dependency presence alone does not establish runtime retention.
-- [Inventory and source hashes](toko-wasm-audit-inventory.json) and
-  [complete dependency-tree evidence](toko-wasm-audit-trees.json.gz) retain the
-  inputs, commands, dependency versions and results. The gzip contains JSON.
+- The downstream inventory, source hashes and dependency-tree snapshots were
+  removed from Canic on 2026-09-29. The findings here describe the recorded
+  checkout above; current application evidence belongs in the downstream repo.
   An initial tree attempt could not materialize IcyDB in the read-only shared
   cache; an isolated temporary Cargo home resolved all trees successfully.
 - No current Toko Wasm artifacts were available. No Toko source/config/lockfile

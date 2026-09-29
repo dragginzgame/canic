@@ -143,3 +143,27 @@ bc1d7c41aee6401f3cfed26a5a12cbe8c4f436b3:docs/audits/reports/2026-09/2026-09-10/
 0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5013
 0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5020
 0518afc0e2719dd71c2eefa50f5cc885ea985e2d:docs/audits/working/0.110-validation-throughput/qualification.json:generic-api-key:5021
+
+# Toko Wasm audit inventory: all 19 reviewed values reproduce the SHA-256 of
+# their named source files at Toko commit 6519b72d2a420564dabaf700fc55f7b8603d9fd3.
+# The snapshot is removed from the current tree; full-history scanning still sees it.
+# Exclude only these exact historical commit/path/rule/line occurrences.
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1089
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1126
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1135
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1136
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1144
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1177
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1185
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1186
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1205
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1239
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1246
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1269
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1298
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1306
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1307
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1314
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1373
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1434
+5b2e0ed70d286284d3ab26aa2d5db18027fa72a2:docs/audits/reports/2026-09/2026-09-28/toko-wasm-audit-inventory.json:generic-api-key:1438
