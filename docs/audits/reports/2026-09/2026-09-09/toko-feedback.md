@@ -25,7 +25,10 @@ The disposable Fleet uses `/tmp/toko-feedback-fleet`, local gateway port 18014,
 and its own XDG identity directories. The maintainer's local network and identity
 store are separate. Metrics uses independent native PocketIC fixtures. Files
 under `toko-feedback-evidence/` have hashes and original paths in
-[manifest.json](toko-feedback-evidence/manifest.json).
+[manifest.json](toko-feedback-evidence/manifest.json). On 2026-09-29 the
+downstream source, application-state, artifact and execution snapshots were
+removed; the manifest now covers the remaining Canic evidence. Results below
+remain historical findings, not a retained downstream fixture or live authority.
 
 ## CANIC-149: same-release local reinstall
 
@@ -133,15 +136,9 @@ changed integration target pass. This candidate also includes the unadopted
 allocation experiment; its peak remains
 21,745,173 instructions. Recovery success does not satisfy the separate budget.
 
-Reproduction fixtures and the exact test body are retained as
-`metrics-ceiling-fixture.patch`, `metrics-allocation-experiment.patch`,
-`metrics-ceiling-test.rs.txt` and `metrics-isolation-test.rs.txt` in the evidence
-directory. Apply only to a disposable copy, build with the exact release profile,
-and set `TOKO_MINER_QUALIFICATION_RELEASE_BUILD_ID` and
-`TOKO_MINER_QUALIFICATION_ARTIFACTS_DIR` when running the named ignored
-`canister_toko_miner_user_hub` test. Fixture setup endpoints must never ship in
-the application. The candidate core patch is a qualification override, not a
-changed downstream pin.
+The copied downstream reproduction patches and test bodies were removed on
+2026-09-29. The measurements above describe the historical qualification only;
+current downstream reproduction belongs to Toko's own source and test owners.
 
 The subsequent [history-index correction](metrics-history-index.md) uses the
 unchanged downstream producer and uninstrumented Canic runtime. It passes
@@ -199,8 +196,8 @@ funding tranche or prove the actual staging recovery.
 
 ## Staging review: no effects applied
 
-The [exact JSON review](toko-feedback-evidence/toko-feedback-staging-recovery-review.json)
-was prepared in the disposable copy using named `toko-miner-mainnet` authority.
+The historical JSON review was prepared in the disposable copy using named
+`toko-miner-mainnet` authority. Its downstream snapshot has been removed.
 A restrictive transport permits status reads and only typed Root
 `InspectCanister` calls for the retained assets; that endpoint delegates solely
 to management `canister_status`. Installs, transfers and stop/start operations
@@ -225,7 +222,8 @@ not a claim that current concurrent gameplay changes are deployed.
 
 ## Review handoff
 
-The [approved six-file downstream patch](toko-miner-followup.patch) is applied.
+The approved six-file downstream patch was applied; its copied patch has since
+been removed from Canic.
 [Base/proposed hashes and application record](toko-miner-followup.json) retain
 its exact reviewed inputs and outputs: all six bases matched immediately before
 application and all six proposed hashes matched immediately afterward. Shell

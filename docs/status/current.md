@@ -20,6 +20,39 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## Downstream snapshot cleanup — .47 review update, 2026-09-29
+
+At the maintainer's request, removed 54 historical Toko/Toko Miner snapshot
+files (798,721 bytes): source inventories and dependency trees, copied Candid,
+application source/test patches, deployment-state and execution captures.
+Canic findings, native/PocketIC regression evidence and Canic-only source and
+measurement inventories remain. Updated the affected reports and pruned the
+mixed evidence manifest to its 18 remaining Canic entries; their files and hashes
+verify, and no Markdown links point to the removed snapshots.
+
+The exact Gitleaks exceptions remain necessary for immutable historical commits;
+the production full-history scan still passes with zero findings. Changed JSON
+parsing and diff checks also pass. Both .47 changelog views describe the cleanup.
+This documentation/evidence-only
+change leaves the accepted batch ready for review and the selected validation
+retry; it does not rerun or replace the runtime qualification below. Changes
+remain uncommitted, with no version change, publication or downstream mutation.
+
+## .47 secret-scan correction — ready for validation retry, 2026-09-29
+
+The maintainer's gate at `5b2e0ed70d286284d3ab26aa2d5db18027fa72a2`
+reported 19 Gitleaks candidates in the Toko Wasm audit inventory. Every value
+reproduces the SHA-256 of its named source file at Toko commit
+`6519b72d2a420564dabaf700fc55f7b8603d9fd3`; none is a credential.
+The existing `.gitleaksignore` now admits only those exact historical
+commit/path/rule/line fingerprints. Built-in rules and file coverage remain.
+
+The production full-history scan passes with Gitleaks 8.30.1 and zero findings.
+Fingerprint syntax/uniqueness and scoped diff checks pass. Both .47 changelog
+views include the correction. The accepted batch remains ready for review and
+the maintainer-selected validation retry; this correction is uncommitted. No
+broad gate, package-version change, publication or downstream mutation ran.
+
 ## CANIC-185 — extended .47 batch ready for review, 2026-09-29
 
 The maintainer accepted the newly reported Toko Miner funding blocker into the

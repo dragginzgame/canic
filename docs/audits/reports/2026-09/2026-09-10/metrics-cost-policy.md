@@ -39,10 +39,11 @@ IC runtime failure. There is no larger replacement limit or configurable bypass.
 ## Downstream boundary
 
 Toko's current source still contains its own absolute assertion. The
-[prepared test-only patch](toko-metrics-cost-reference.patch) replaces that
-assertion with a positive-measurement check and advisory output. Its
+prepared test-only change would replace that assertion with a
+positive-measurement check and advisory output. Its
 [base and proposed hashes](toko-metrics-cost-reference.json) bind the reviewed
-change. It remains unapplied reference material. The maintainer explicitly
+change. The unapplied downstream patch snapshot was removed from Canic on
+2026-09-29. The maintainer explicitly
 restricted this task to Canic on 2026-09-10; downstream source adoption and
 qualification are outside the active task.
 

@@ -25,8 +25,9 @@ The retained-delegation counterfactual differs in exactly two runtime inputs:
 Root capability resolution always selects Root delegation, and the
 `root-control-plane` feature selects its stable state. Restoring the candidate
 versions of those two files produces the capability-owned build. Their before
-and after hashes, retained counterfactual source, and shared input hashes are
-in [the evidence directory](artifacts/feedback-auth/). This comparison measures
+and after Canic hashes and retained counterfactual source are
+in [the evidence directory](artifacts/feedback-auth/). Downstream input and
+artifact snapshots were removed on 2026-09-29. This comparison measures
 the marginal capability change within the working candidate; it is not a
 comparison against an immutable published release.
 
@@ -43,8 +44,8 @@ state symbols. The pruned companion and linked Wasm have none. The checked
 families cover the Root delegation state operations, records, data and TLS
 owner. The pruned Candid omits `GetOrCreateDelegationProof`,
 `UpsertIssuerPolicy`, `UpsertIssuerRenewalTemplate` and the checked issuer
-renewal status surface. The exact before/after Candid and structured metrics
-are retained beside the input hashes.
+renewal status surface. The historical measurements above remain a summary;
+the copied Toko Candid and artifact inventories are no longer retained in Canic.
 
 The named optimized companions do **not** have byte-identical executable
 sections to the canonical Wasms; their metrics explicitly record
