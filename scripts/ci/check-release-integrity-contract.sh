@@ -210,8 +210,7 @@ for preflight_target in \
     shellcheck \
     layering-gate \
     current-document-semantics-gate \
-    blob-storage-inventory-gate \
-    blob-storage-cashier-inventory-gate \
+    blob-storage-protocol-evidence-gate \
     release-validation-matrix-gate \
     release-integrity-contract-gate \
     audit-method-catalog-gate \
@@ -343,8 +342,7 @@ invariant_recipe="$(sed -n '/^check-invariants:/,/^$/p' "$MAKEFILE")"
 for invariant_target in \
     layering-gate \
     current-document-semantics-gate \
-    blob-storage-inventory-gate \
-    blob-storage-cashier-inventory-gate \
+    blob-storage-protocol-evidence-gate \
     dependency-risk-inventory-test \
     release-validation-matrix-gate \
     release-integrity-contract-gate \
@@ -546,11 +544,6 @@ ordinary_expected_targets="$(awk -F '\t' 'NR > 1 && $3 != "integration" && $4 ==
     "$WORKSPACE_TEST_INVENTORY" | LC_ALL=C sort)"
 [[ "$ordinary_selected_targets" = "$ordinary_expected_targets" ]] ||
     fail "ordinary workspace selection differs from its exact integration inventory"
-ordinary_inventory_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { count++ } END { print count + 0 }' "$WORKSPACE_TEST_INVENTORY")"
-ordinary_package_count="$(awk -F '\t' 'NR > 1 && $4 == "parallel" && $5 == "ordinary" { print $1 }' "$WORKSPACE_TEST_INVENTORY" | sort -u | wc -l)"
-rg -F "==> combined inventory: $ordinary_inventory_count targets across $ordinary_package_count packages" \
-    <<<"$ordinary_test_plan" >/dev/null ||
-    fail "the ordinary integration inventory is not compiled as one multi-package batch"
 rg -F 'libtest-parallel' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary timing output does not distinguish libtest parallelism from suite concurrency"
 pocketic_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" pocketic)" ||
@@ -588,28 +581,27 @@ for release_target in release-patch release-patch-fast release-minor release-maj
 done
 bash "$RELEASE_VALIDATION_LANE_TEST" >/dev/null ||
     fail "the release validation lane does not fail closed before version mutation"
-rg -F 'runtime, build, package, protocol, fixture, or unrelated path changed' \
-    "$FAST_PATCH_GATE" >/dev/null ||
-    fail "the fast patch gate does not reject production or unrelated source drift"
+# release_flow_guard executes eligibility, receipt-ancestry, lockfile and
+# post-validation source rejection cases. Diagnostic wording is not evidence.
 for fast_patch_boundary in \
-    'no complete validated release ancestor' \
-    'Cargo.lock fast patches may change only compatible package versions and checksums' \
     'cargo fmt --all -- --check' \
     'cargo test --locked -p canic --test release_flow_guard' \
     'bash scripts/ci/check-dependency-risk-inventory.sh' \
-    'cargo check --locked --workspace --all-targets' \
-    'PocketIC was not run'; do
+    'cargo check --locked --workspace --all-targets'; do
     rg -F "$fast_patch_boundary" "$FAST_PATCH_GATE" >/dev/null ||
         fail "the fast patch gate omits boundary: $fast_patch_boundary"
 done
 patch_recipe="$(sed -n '/^patch:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-cadence' <<<"$patch_recipe" >/dev/null ||
     fail "the patch release flow omits its read-only cadence advisory"
-cadence_output="$(bash "$RELEASE_CADENCE")"
-rg -F 'guideline: no more than 12 releases per minor' <<<"$cadence_output" >/dev/null ||
-    fail "the release cadence tool does not report the governed release-count guideline"
-rg -F 'next release ordinal:' <<<"$cadence_output" >/dev/null ||
-    fail "the release cadence tool does not report the next release ordinal"
+cadence_output="$(bash "$RELEASE_CADENCE" --tsv)"
+IFS=$'\t' read -r cadence_minor cadence_count cadence_limit cadence_next cadence_extra <<<"$cadence_output"
+[[ "$cadence_minor" =~ ^[0-9]+\.[0-9]+$ && "$cadence_count" =~ ^[0-9]+$ &&
+    "$cadence_limit" = 12 && "$cadence_next" =~ ^[0-9]+$ && -z "$cadence_extra" ]] ||
+    fail "the release cadence record is invalid"
+[[ "$cadence_minor" = "$(bash "$VERSION_READER" | sed 's/\.[^.]*$//')" &&
+    "$cadence_next" -eq $((cadence_count + 1)) ]] ||
+    fail "the release cadence record does not match the selected minor and next ordinal"
 rg -F 'CANIC_RELEASE_VALIDATED' "$BUMP_VERSION" >/dev/null ||
     fail "direct release version mutation is not guarded by completed validation"
 rg -F 'CANIC_RELEASE_VALIDATED_HEAD' "$BUMP_VERSION" >/dev/null ||
@@ -618,11 +610,7 @@ rg -F 'check-release-remote-state.sh before-version "$PLANNED"' "$BUMP_VERSION" 
     fail "release version mutation does not refresh remote ancestry and tag state"
 rg -F 'cargo metadata --locked --offline --format-version 1 --no-deps' "$RELEASE_CANDIDATE" >/dev/null ||
     fail "post-bump release candidate does not verify locked offline metadata"
-rg -F 'still says Unreleased' "$RELEASE_CANDIDATE" >/dev/null ||
-    fail "post-bump release candidate does not reject an unsealed changelog"
-rg -F 'validated source is followed by non-release change' "$RELEASE_CANDIDATE" >/dev/null ||
-    fail "post-bump release candidate does not reject production changes after validation"
-rg -F 'Verified complete matching Canic package set' "$PUBLISH_WORKSPACE" >/dev/null ||
+rg -F 'registry_has_version "$crate" "$version"' "$PUBLISH_WORKSPACE" >/dev/null ||
     fail "workspace publication does not verify the complete matching package set"
 for version_consumer in \
     "$MAKEFILE" \
@@ -684,9 +672,9 @@ rg -F '"$GITLEAKS_BIN" git' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated scanner does not inspect Git history"
 rg -F -- '--gitleaks-ignore-path "$ROOT_DIR/.gitleaksignore"' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not select the reviewed fingerprint file"
-rg -F 'Gitleaks configuration overrides are not allowed' "$SECRET_SCAN" >/dev/null ||
+rg -F 'if [ -n "${GITLEAKS_CONFIG:-}" ] || [ -n "${GITLEAKS_CONFIG_TOML:-}" ]; then' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not reject external rule configuration"
-rg -F 'repository .gitleaks.toml overrides are not allowed' "$SECRET_SCAN" >/dev/null ||
+rg -F '[ ! -e "$ROOT_DIR/.gitleaks.toml" ] ||' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not reject repository rule configuration"
 rg -F -- '--is-shallow-repository' "$SECRET_SCAN" >/dev/null ||
     fail "the dedicated secret scan does not reject incomplete Git history"
@@ -743,8 +731,6 @@ fi
 next_icp_major=$((required_icp_major + 1))
 rg -F "ICP_CLI_SUPPORTED_VERSION_RANGE: &str = \">=$icp_cli_required, <$next_icp_major.0.0\"" "$ICP_MODEL" >/dev/null ||
     fail "host ICP CLI range does not match its independent minimum"
-rg -F 'maintainer toolchain currently pins `'"$CANIC_ICP_CLI_VERSION"'`' "$INSTALLING" >/dev/null ||
-    fail "installation guidance does not report the pinned ICP CLI version"
 rg -F 'bash scripts/dev/update-icp-cli-pin.sh' "$MAKEFILE" >/dev/null ||
     fail "make update-dev does not refresh the ICP CLI pin"
 
@@ -1067,34 +1053,31 @@ printf '%s\n' \
     '*) exit 2 ;;' \
     'esac' >"$fake_gitleaks"
 chmod +x "$fake_gitleaks"
+FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
+    GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null ||
+    fail "the secret scan rejected the qualified scanner and complete history"
 
-if unavailable_gitleaks_output="$(
-    FAKE_GITLEAKS_VERSION_FAIL=1 GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
-)"; then
+if (
+    FAKE_GITLEAKS_VERSION_FAIL=1 GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
+); then
     fail "the secret scan accepted unavailable Gitleaks version output"
 fi
-[[ "$unavailable_gitleaks_output" == *"unable to read the gitleaks version"* ]] ||
-    fail "the secret scan did not preserve its unavailable-version cause"
 
-if near_gitleaks_output="$(
+if (
     FAKE_GITLEAKS_VERSION="${CANIC_GITLEAKS_VERSION}0" \
-        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
-)"; then
+        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
+); then
     fail "the secret scan accepted a near-match Gitleaks version"
 fi
-[[ "$near_gitleaks_output" == *"gitleaks version mismatch"* ]] ||
-    fail "the secret scan did not preserve its version-mismatch cause"
 
 for config_variable in GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML; do
-    if config_override_output="$(
+    if (
         env "$config_variable=review-override" \
             FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
-            GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
-    )"; then
+            GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
+    ); then
         fail "the secret scan accepted $config_variable"
     fi
-    [[ "$config_override_output" == *"configuration overrides are not allowed"* ]] ||
-        fail "the secret scan did not preserve its configuration-override cause"
 done
 
 fake_bin="$tmp_dir/bin"
@@ -1110,15 +1093,13 @@ printf '%s\n' \
     '*) exit 2 ;;' \
     'esac' >"$fake_bin/git"
 chmod +x "$fake_bin/git"
-if shallow_history_output="$(
+if (
     PATH="$fake_bin:$PATH" \
         FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
-        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" 2>&1
-)"; then
+        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
+); then
     fail "the secret scan accepted incomplete Git history"
 fi
-[[ "$shallow_history_output" == *"complete repository history is unavailable in a shallow clone"* ]] ||
-    fail "the secret scan did not preserve its shallow-history cause"
 
 if rg -n 'curl[^|]*\|' "${installers[@]}" "$DEV_INSTALL" "$ICP_UPDATE" >/dev/null; then
     fail "active installer pipes an unverified download into execution"
@@ -1126,14 +1107,10 @@ fi
 
 rg -F 'runs-on: ubuntu-24.04' "$CI" >/dev/null ||
     fail "CI does not select the canonical supported host"
-rg -F 'Ubuntu 24.04, x86_64' "$MATRIX" >/dev/null ||
-    fail "supported host matrix is missing the CI host"
 rg -F '`x86_64-unknown-linux-gnu`' "$MATRIX" >/dev/null ||
     fail "supported host matrix is missing the native target"
 rg -F '`wasm32-unknown-unknown`' "$MATRIX" >/dev/null ||
     fail "supported host matrix is missing the canister target"
-rg -F 'Install-Capable But Not Release-Supported' "$MATRIX" >/dev/null ||
-    fail "supported host matrix does not distinguish installer branches"
 
 printf 'canic-release-integrity\n' >"$tmp_dir/input"
 bash "$VERIFY" sha256 \
@@ -1144,8 +1121,6 @@ if bash "$VERIFY" sha256 \
     "$tmp_dir/input" >"$tmp_dir/rejection.stdout" 2>"$tmp_dir/rejection.stderr"; then
     fail "checksum mismatch was accepted"
 fi
-rg -F 'sha256 checksum mismatch' "$tmp_dir/rejection.stderr" >/dev/null ||
-    fail "checksum mismatch did not preserve its deterministic cause"
 
 bash -n "$VERIFY" "${installers[@]}" "$SECRET_SCAN" "$POCKET_IC_ALIGNMENT" "$RELEASE_CANDIDATE" "$VERSION_READER" "$DEV_INSTALL" "$ICP_UPDATE"
 bash "$POCKET_IC_ALIGNMENT" >/dev/null

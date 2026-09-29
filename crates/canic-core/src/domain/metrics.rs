@@ -241,7 +241,6 @@ pub enum WasmStoreMetricOperation {
     ManifestPromote,
     Prepare,
     ReleasePublish,
-    SourceResolve,
 }
 
 impl WasmStoreMetricOperation {
@@ -254,7 +253,6 @@ impl WasmStoreMetricOperation {
             Self::ManifestPromote => "manifest_promote",
             Self::Prepare => "prepare",
             Self::ReleasePublish => "release_publish",
-            Self::SourceResolve => "source_resolve",
         }
     }
 }
@@ -269,8 +267,6 @@ impl WasmStoreMetricOperation {
 #[remain::sorted]
 pub enum WasmStoreMetricSource {
     ManagedFleet,
-    Resolver,
-    Store,
     TargetStore,
 }
 
@@ -280,8 +276,6 @@ impl WasmStoreMetricSource {
     pub const fn metric_label(self) -> &'static str {
         match self {
             Self::ManagedFleet => "managed_fleet",
-            Self::Resolver => "resolver",
-            Self::Store => "store",
             Self::TargetStore => "target_store",
         }
     }
@@ -334,7 +328,6 @@ pub enum WasmStoreMetricReason {
     MissingManifest,
     Ok,
     StoreCall,
-    UnsupportedInline,
 }
 
 impl WasmStoreMetricReason {
@@ -352,62 +345,8 @@ impl WasmStoreMetricReason {
             Self::MissingManifest => "missing_manifest",
             Self::Ok => "ok",
             Self::StoreCall => "store_call",
-            Self::UnsupportedInline => "unsupported_inline",
         }
     }
-}
-
-///
-/// ManagementCallMetricOperation
-///
-/// Management canister operation dimension used by runtime metrics recording.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum ManagementCallMetricOperation {
-    CanisterInfo,
-    CanisterStatus,
-    ClearChunkStore,
-    DeleteCanister,
-    DepositCycles,
-    EcdsaPublicKey,
-    GetCycles,
-    InstallChunkedCode,
-    SignWithEcdsa,
-    StartCanister,
-    StopCanister,
-    StoredChunks,
-    UninstallCode,
-    UpdateSettings,
-    UploadChunk,
-}
-
-///
-/// ManagementCallMetricOutcome
-///
-/// Management canister outcome dimension used by runtime metrics recording.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum ManagementCallMetricOutcome {
-    Completed,
-    Failed,
-    Started,
-}
-
-///
-/// ManagementCallMetricReason
-///
-/// Bounded management canister reason dimension used by runtime metrics recording.
-///
-
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum ManagementCallMetricReason {
-    Infra,
-    Ok,
 }
 
 ///

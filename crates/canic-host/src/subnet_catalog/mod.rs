@@ -5,7 +5,6 @@
 //! Boundary: callers receive only the validated catalog produced by `ic-query`.
 
 pub mod acquisition;
-mod evidence;
 pub mod ops;
 #[cfg(test)]
 mod tests;
@@ -19,14 +18,6 @@ use ic_query::subnet_catalog::{
 use std::path::{Path, PathBuf};
 
 pub use acquisition::MainnetCatalogClient;
-
-pub use evidence::{
-    SubnetCatalogFailureCacheDispositionV1, SubnetCatalogFailureEffectsV1, SubnetCatalogFieldV1,
-    SubnetCatalogLoadFailureEvidenceV1, SubnetCatalogLoadStageV1, SubnetCatalogRefreshTriggerV1,
-    SubnetCatalogRegistryRecordEvidenceV1, SubnetCatalogRegistryRecordKindV1,
-    SubnetCatalogRegistryValueEncodingV1, SubnetCatalogRetryabilityV1, SubnetCatalogSourceKindV1,
-    SubnetCatalogSubjectV1, SubnetCatalogUnknownRetryReasonV1,
-};
 
 const IC_QUERY_CACHE_DIRECTORY: &str = "ic-query";
 

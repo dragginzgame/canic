@@ -12,7 +12,6 @@ use crate::{
     },
 };
 use candid::Principal;
-use std::collections::BTreeSet;
 
 impl ComponentTopology {
     /// Validate one root binding and return its exact canonical topology projection.
@@ -59,39 +58,6 @@ impl ComponentTopology {
         }
 
         Ok(projection)
-    }
-
-    /// Validate every root in one Fleet plan, including uniqueness and admission sums.
-    pub fn validate_fleet_subnet_root_bindings(
-        &self,
-        bindings: &[FleetSubnetRootBinding],
-    ) -> Result<(), ComponentTopologyError> {
-        let mut root_principals = BTreeSet::new();
-        let mut placement_subnets = BTreeSet::new();
-        let authority = bindings.first().map(|binding| &binding.authority);
-
-        for binding in bindings {
-            if authority.is_some_and(|authority| authority != &binding.authority) {
-                return Err(ComponentTopologyError::RootAuthorityMismatch);
-            }
-            if !root_principals.insert(binding.fleet_subnet_root) {
-                return Err(ComponentTopologyError::DuplicateFleetSubnetRootPrincipal {
-                    fleet_subnet_root: binding.fleet_subnet_root,
-                });
-            }
-            if !placement_subnets.insert(binding.placement_subnet) {
-                return Err(ComponentTopologyError::DuplicateFleetSubnetRootSubnet {
-                    placement_subnet: binding.placement_subnet,
-                });
-            }
-            self.validate_root_binding(binding)?;
-        }
-
-        let admissions = bindings
-            .iter()
-            .map(|binding| binding.component_admissions.as_slice())
-            .collect::<Vec<_>>();
-        self.validate_fleet_admissions(&admissions)
     }
 
     /// Validate one concrete Component binding against its root admission and Spec.

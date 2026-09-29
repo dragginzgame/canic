@@ -80,6 +80,7 @@ pub(in crate::fleet_ensure::ops::capacity_import) fn fixture()
         status: FleetSubnetRootStatus::Active,
     };
     let context = PoolImportContext {
+        maximum_call_debit_cycles: 1,
         bootstrap: None,
         root_authority_sha256: CanisterPoolApi::import_authority_hash(&binding).unwrap(),
         binding,

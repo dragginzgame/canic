@@ -5,23 +5,26 @@ use candid::Principal;
 use canic_core::ids::FleetCoordinatorRootFundingPolicy;
 use canic_core::{
     cdk::types::Cycles,
-    dto::{
-        fleet_funding::{
-            FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
-            FleetRootFundingRequest,
-        },
-        fleet_registry::FleetRegistryVersion,
-    },
+    dto::{fleet_funding::FleetRootFundingRequest, fleet_registry::FleetRegistryVersion},
     ids::{
-        AppId, CanonicalNetworkId, CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding,
-        FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
+        AppId, CanonicalNetworkId, CyclesFundingBudget, FleetBinding, FleetCoordinatorBinding,
+        FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
         FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, SubnetId,
-    },
-    shared_support::fleet_admission_policy::{
-        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
     shared_support::fleet_funding_policy::{
         fleet_root_funding_operation_id, fleet_subnet_root_funding_policy_hash,
+    },
+};
+
+#[cfg(feature = "root-control-plane")]
+use canic_core::dto::fleet_funding::{
+    FleetRootFundingAcceptanceReceipt, FleetRootFundingAcceptanceRequest,
+};
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
+use canic_core::{
+    ids::FleetAdmissionPolicy,
+    shared_support::fleet_admission_policy::{
+        bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
     },
 };
 
@@ -57,6 +60,7 @@ pub fn fleet_subnet_root_funding_authority() -> FleetSubnetRootFundingAuthority 
     }
 }
 
+#[cfg(any(feature = "root-control-plane", feature = "fleet-coordinator-canister"))]
 pub fn fleet_admission_policy(fleet: FleetBinding) -> FleetAdmissionPolicy {
     let template =
         compile_fleet_admission_policy_template(vec![Principal::from_slice(&[1; 29])], Vec::new())
@@ -108,6 +112,7 @@ pub fn root_funding_request_fixture(operation_sequence: u64) -> FleetRootFunding
     }
 }
 
+#[cfg(feature = "root-control-plane")]
 pub fn root_funding_acceptance_receipt_fixture(
     request: &FleetRootFundingRequest,
     accepted_at_ns: u64,

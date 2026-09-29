@@ -294,8 +294,9 @@ pub const fn evidence_summary_exit_class(
 
 pub const EVIDENCE_ENVELOPE_SCHEMA_ID: &str = "canic.evidence_envelope.v1";
 pub const POLICY_GATE_REPORT_SCHEMA_ID: &str = "canic.policy_gate_report.v1";
-pub const PROJECT_EVIDENCE_MANIFEST_SCHEMA_ID: &str = "canic.project_evidence_manifest.v1";
-pub const PROJECT_EVIDENCE_GATE_REPORT_SCHEMA_ID: &str = "canic.project_evidence_gate_report.v1";
+pub const WORKSPACE_EVIDENCE_MANIFEST_SCHEMA_ID: &str = "canic.workspace_evidence_manifest.v1";
+pub const WORKSPACE_EVIDENCE_GATE_REPORT_SCHEMA_ID: &str =
+    "canic.workspace_evidence_gate_report.v1";
 
 #[must_use]
 pub fn evidence_envelope_schema() -> PayloadSchemaRefV1 {
@@ -308,13 +309,13 @@ pub fn policy_gate_report_schema() -> PayloadSchemaRefV1 {
 }
 
 #[must_use]
-pub fn project_evidence_manifest_schema() -> PayloadSchemaRefV1 {
-    PayloadSchemaRefV1::stable(PROJECT_EVIDENCE_MANIFEST_SCHEMA_ID, "1")
+pub fn workspace_evidence_manifest_schema() -> PayloadSchemaRefV1 {
+    PayloadSchemaRefV1::stable(WORKSPACE_EVIDENCE_MANIFEST_SCHEMA_ID, "1")
 }
 
 #[must_use]
-pub fn project_evidence_gate_report_schema() -> PayloadSchemaRefV1 {
-    PayloadSchemaRefV1::stable(PROJECT_EVIDENCE_GATE_REPORT_SCHEMA_ID, "1")
+pub fn workspace_evidence_gate_report_schema() -> PayloadSchemaRefV1 {
+    PayloadSchemaRefV1::stable(WORKSPACE_EVIDENCE_GATE_REPORT_SCHEMA_ID, "1")
 }
 
 pub fn json_payload_sha256<T>(payload: &T) -> Result<String, serde_json::Error>

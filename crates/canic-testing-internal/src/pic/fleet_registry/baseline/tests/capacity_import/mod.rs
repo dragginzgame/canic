@@ -111,7 +111,7 @@ fn retained_capacity_journey(root_owned: bool) {
             .root_funding
             .request_threshold
             .to_u128(),
-        maximum_root_debit_cycles: 2_000_000_000_000,
+        maximum_root_debit_cycles: context.maximum_call_debit_cycles.checked_mul(24).unwrap(),
         maximum_paid_calls: 24,
     };
     let identity = PoolImportIdentity {
@@ -128,6 +128,19 @@ fn retained_capacity_journey(root_owned: bool) {
         .err(),
         Some(InternalError::forbidden().into())
     );
+    let mut underfunded = reservation.clone();
+    underfunded.maximum_root_debit_cycles -= 1;
+    assert_eq!(
+        command(
+            pic,
+            root,
+            operator,
+            PoolImportCommand::Reserve(Box::new(underfunded))
+        )
+        .err(),
+        Some(InternalError::resource_exhausted().into())
+    );
+    assert_eq!(self::context(pic, root, operator).active_import, None);
     let before = root_pool_status(pic, root);
     assert!(before.tracked - before.store < before.config.maximum_size);
     let reserved = command(

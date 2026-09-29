@@ -134,9 +134,6 @@ pub enum ReleaseBuildPlanError {
 
     #[error("could not allocate a unique release-build identity after {RANDOM_ATTEMPTS} attempts")]
     IdentityAllocationExhausted,
-
-    #[error("Fleet ensure cannot mutate a canister without a finalized release-build plan")]
-    MissingFinalizedAuthority,
 }
 
 /// Create and durably publish one new random release-build plan.

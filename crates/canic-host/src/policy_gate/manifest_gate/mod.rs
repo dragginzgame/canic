@@ -1,23 +1,23 @@
 use super::{
     CiPolicyV1, PolicyEvaluationStatusV1, PolicyFindingV1, PolicyGateError,
-    ProjectEvidenceGateEntryReportV1, ProjectEvidenceGateReportV1, ProjectEvidenceManifestEntryV1,
-    ProjectEvidenceManifestGateRequest, evaluation::evaluate_policy, parse_ci_policy_v1,
-    parse_project_evidence_manifest_v1,
+    WorkspaceEvidenceGateEntryReportV1, WorkspaceEvidenceGateReportV1,
+    WorkspaceEvidenceManifestEntryV1, WorkspaceEvidenceManifestGateRequest,
+    evaluation::evaluate_policy, parse_ci_policy_v1, parse_workspace_evidence_manifest_v1,
 };
 use crate::evidence_envelope::{
     EvidenceEnvelopeV1, ExitClassV1, InputFingerprintV1, combine_exit_classes,
-    evidence_envelope_schema, file_input_fingerprint, project_evidence_manifest_schema,
+    evidence_envelope_schema, file_input_fingerprint, workspace_evidence_manifest_schema,
 };
 use std::{
     fs,
     path::{Path, PathBuf},
 };
 
-pub fn evaluate_project_evidence_manifest_gate(
-    request: ProjectEvidenceManifestGateRequest<'_>,
-) -> Result<ProjectEvidenceGateReportV1, PolicyGateError> {
+pub fn evaluate_workspace_evidence_manifest_gate(
+    request: WorkspaceEvidenceManifestGateRequest<'_>,
+) -> Result<WorkspaceEvidenceGateReportV1, PolicyGateError> {
     let policy = parse_ci_policy_v1(request.policy_source)?;
-    let manifest = parse_project_evidence_manifest_v1(request.manifest_source)?;
+    let manifest = parse_workspace_evidence_manifest_v1(request.manifest_source)?;
     let policy_file_fingerprint = file_input_fingerprint(
         "ci_policy",
         request.policy_path,
@@ -26,20 +26,20 @@ pub fn evaluate_project_evidence_manifest_gate(
         None,
     )?;
     let manifest_file_fingerprint = file_input_fingerprint(
-        "project_evidence_manifest",
+        "workspace_evidence_manifest",
         request.manifest_path,
         request.fingerprint_root,
-        Some(project_evidence_manifest_schema()),
+        Some(workspace_evidence_manifest_schema()),
         None,
     )?;
-    let project_root = manifest_project_root(request.manifest_path, &manifest.project.root);
+    let workspace_root = manifest_workspace_root(request.manifest_path, &manifest.workspace.root);
     let mut evidence = Vec::new();
 
     for entry in &manifest.evidence {
         evidence.push(evaluate_manifest_entry(
             &policy,
             &policy_file_fingerprint,
-            &project_root,
+            &workspace_root,
             entry,
         )?);
     }
@@ -49,10 +49,10 @@ pub fn evaluate_project_evidence_manifest_gate(
         .any(|entry| entry.status == PolicyEvaluationStatusV1::Failed);
     let gate_exit_class = combine_exit_classes(evidence.iter().map(|entry| entry.gate_exit_class));
 
-    Ok(ProjectEvidenceGateReportV1 {
+    Ok(WorkspaceEvidenceGateReportV1 {
         schema_version: 1,
         manifest_schema_version: manifest.schema_version,
-        project_name: manifest.project.name,
+        workspace_name: manifest.workspace.name,
         policy_file_fingerprint,
         manifest_file_fingerprint,
         policy_status: if has_failures {
@@ -68,10 +68,10 @@ pub fn evaluate_project_evidence_manifest_gate(
 fn evaluate_manifest_entry(
     policy: &CiPolicyV1,
     policy_file_fingerprint: &InputFingerprintV1,
-    project_root: &Path,
-    entry: &ProjectEvidenceManifestEntryV1,
-) -> Result<ProjectEvidenceGateEntryReportV1, PolicyGateError> {
-    let evidence_path = resolve_manifest_entry_path(project_root, &entry.path);
+    workspace_root: &Path,
+    entry: &WorkspaceEvidenceManifestEntryV1,
+) -> Result<WorkspaceEvidenceGateEntryReportV1, PolicyGateError> {
+    let evidence_path = resolve_manifest_entry_path(workspace_root, &entry.path);
     if !evidence_path.is_file() {
         return Ok(missing_manifest_entry_report(entry));
     }
@@ -81,7 +81,7 @@ fn evaluate_manifest_entry(
     let evaluated_envelope_fingerprint = file_input_fingerprint(
         "evidence_envelope",
         &evidence_path,
-        project_root,
+        workspace_root,
         Some(evidence_envelope_schema()),
         None,
     )?;
@@ -127,7 +127,7 @@ fn evaluate_manifest_entry(
         policy_report.policy_status = PolicyEvaluationStatusV1::Failed;
     }
 
-    Ok(ProjectEvidenceGateEntryReportV1 {
+    Ok(WorkspaceEvidenceGateEntryReportV1 {
         kind: entry.kind.clone(),
         path: entry.path.clone(),
         required: entry.required,
@@ -146,8 +146,8 @@ fn evaluate_manifest_entry(
 }
 
 fn missing_manifest_entry_report(
-    entry: &ProjectEvidenceManifestEntryV1,
-) -> ProjectEvidenceGateEntryReportV1 {
+    entry: &WorkspaceEvidenceManifestEntryV1,
+) -> WorkspaceEvidenceGateEntryReportV1 {
     let (status, gate_exit_class, findings) = if entry.required {
         (
             PolicyEvaluationStatusV1::Failed,
@@ -177,7 +177,7 @@ fn missing_manifest_entry_report(
         )
     };
 
-    ProjectEvidenceGateEntryReportV1 {
+    WorkspaceEvidenceGateEntryReportV1 {
         kind: entry.kind.clone(),
         path: entry.path.clone(),
         required: entry.required,
@@ -191,7 +191,7 @@ fn missing_manifest_entry_report(
     }
 }
 
-fn manifest_project_root(manifest_path: &Path, root: &str) -> PathBuf {
+fn manifest_workspace_root(manifest_path: &Path, root: &str) -> PathBuf {
     let root_path = PathBuf::from(root);
     if root_path.is_absolute() {
         return root_path;
@@ -202,11 +202,11 @@ fn manifest_project_root(manifest_path: &Path, root: &str) -> PathBuf {
         .join(root_path)
 }
 
-fn resolve_manifest_entry_path(project_root: &Path, path: &str) -> PathBuf {
+fn resolve_manifest_entry_path(workspace_root: &Path, path: &str) -> PathBuf {
     let path = PathBuf::from(path);
     if path.is_absolute() {
         path
     } else {
-        project_root.join(path)
+        workspace_root.join(path)
     }
 }

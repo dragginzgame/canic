@@ -7,7 +7,6 @@
 use crate::{
     InternalError,
     domain::public_metrics::PublicMetricKind,
-    ids::SystemMetricKind,
     model::public_metrics::PublicMetricSample,
     ops::runtime::metrics::{
         intent::IntentMetrics, placement_index::PlacementIndexMetrics,
@@ -54,7 +53,7 @@ fn process_rows() -> Result<Vec<PublicMetricSample>, InternalError> {
         &mut counts,
         "inter_canister_call",
         "started",
-        SystemMetrics::count(SystemMetricKind::CanisterCall),
+        SystemMetrics::count(),
     );
     let rows = counts
         .into_iter()
@@ -169,12 +168,12 @@ mod tests {
             PlacementIndexMetricReason::Ok,
         );
         WasmStoreMetrics::record(
-            WasmStoreMetricOperation::SourceResolve,
-            WasmStoreMetricSource::Store,
+            WasmStoreMetricOperation::ReleasePublish,
+            WasmStoreMetricSource::TargetStore,
             WasmStoreMetricOutcome::Completed,
             WasmStoreMetricReason::Ok,
         );
-        SystemMetrics::increment(SystemMetricKind::CanisterCall);
+        SystemMetrics::increment();
         let rows = process_rows().unwrap();
         for name in [
             "process.platform_call.started",

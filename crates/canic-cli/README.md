@@ -44,6 +44,11 @@ to validate artifacts and create or adopt the plan and journal, `restore run`
 to preview or execute journaled operations, and `restore status` to inspect
 progress. Backup references use the same row ordering as `backup list`.
 
+Fresh `backup create` execution is unavailable until Component Registry topology
+preflight is implemented. Dry-run planning does not create a backup or qualify
+live authority. This gap is unscheduled; see the
+[backup availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
+
 ## Install
 
 From a checkout:

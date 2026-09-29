@@ -95,6 +95,26 @@ pub enum CapacityImportJournalError {
     ReaderMismatch,
     #[error("Root rejected the capacity import request: {0}")]
     RootRejected(canic_core::dto::error::Error),
+    #[error(
+        "capacity import budget cannot cover the complete operation: {paid_calls} calls, at least {minimum_calls} required; debit ceiling {maximum_debit_cycles}, required {required_debit_cycles}"
+    )]
+    InsufficientRootBudget {
+        paid_calls: u32,
+        minimum_calls: u32,
+        maximum_debit_cycles: u128,
+        required_debit_cycles: u128,
+    },
+    #[error(
+        "Root capacity import hit a capacity limit in phase {phase:?}: {reserved_debit_cycles}/{maximum_debit_cycles} cycles reserved, {observed_debit_cycles} observed debit, {paid_calls}/{maximum_paid_calls} calls; preserve issued operation authority"
+    )]
+    RootCapacityLimit {
+        phase: canic_core::dto::pool_import::PoolImportPhase,
+        reserved_debit_cycles: u128,
+        maximum_debit_cycles: u128,
+        observed_debit_cycles: u128,
+        paid_calls: u32,
+        maximum_paid_calls: u32,
+    },
     #[error("Root capacity import response has an invalid current-contract encoding")]
     RootResponseInvalid,
     #[error("capacity import requires exact approval and a protected Root reservation")]

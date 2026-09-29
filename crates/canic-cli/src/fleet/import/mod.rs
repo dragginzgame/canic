@@ -87,7 +87,7 @@ pub(super) fn command() -> Command {
                 .help(help),
         );
     }
-    command.after_help("Examples:\n  canic --environment staging fleet import staging --canister <id> --declarations deployments/import.toml --maximum-source-debit 1T --maximum-root-debit 2T --maximum-root-paid-calls 36\n  canic --environment staging fleet import staging --apply <review-sha256>\n\nReview retains bounded status observations. Apply hands sources to Root, clears code/state, publishes both inventory inputs and releases capacity. No replacement IDs or funding transfers are created. This requires initialized current infrastructure.")
+    command.after_help("Examples:\n  canic --environment staging fleet import staging --canister <id> --declarations deployments/import.toml --maximum-source-debit 1T --maximum-root-debit 2T --maximum-root-paid-calls 36\n  canic --environment staging fleet import staging --apply <review-sha256>\n\nReview retains bounded status observations. Apply hands sources to Root, clears code/state, publishes both policy/seed input paths and releases capacity. Use mutable operator copies for frozen release inputs. No replacement IDs or funding transfers are created. This requires initialized current infrastructure.")
 }
 
 pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {

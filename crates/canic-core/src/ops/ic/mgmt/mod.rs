@@ -13,7 +13,6 @@ mod types;
 use crate::{
     InternalError,
     domain::metrics::{
-        ManagementCallMetricOperation, ManagementCallMetricOutcome, ManagementCallMetricReason,
         PlatformCallMetricMode, PlatformCallMetricOutcome, PlatformCallMetricReason,
         PlatformCallMetricSurface,
     },
@@ -21,16 +20,8 @@ use crate::{
         CanisterSettings as CanisterSettingsDto, CanisterStatusResponse,
         EnvironmentVariable as EnvironmentVariableDto, MemoryMetrics, QueryStats,
     },
-    ids::SystemMetricKind,
     infra::ic::{IcInfraError, mgmt::MgmtInfra},
-    ops::{
-        OpsError,
-        prelude::*,
-        runtime::metrics::{
-            management_call::ManagementCallMetrics, platform_call::PlatformCallMetrics,
-            system::SystemMetrics,
-        },
-    },
+    ops::{OpsError, prelude::*, runtime::metrics::platform_call::PlatformCallMetrics},
 };
 use std::future::Future;
 
@@ -60,44 +51,33 @@ pub struct MgmtOps;
 
 // Execute one management-canister call and record low-cardinality outcomes.
 async fn management_call<T>(
-    operation: ManagementCallMetricOperation,
     fut: impl Future<Output = Result<T, IcInfraError>>,
 ) -> Result<T, InternalError> {
-    management_call_infra(operation, fut)
+    management_call_infra(fut)
         .await
         .map_err(|err| OpsError::from(err).into())
 }
 
 async fn management_call_infra<T>(
-    operation: ManagementCallMetricOperation,
     fut: impl Future<Output = Result<T, IcInfraError>>,
 ) -> Result<T, IcInfraError> {
     record_management_call(
-        operation,
         PlatformCallMetricOutcome::Started,
         PlatformCallMetricReason::Ok,
-        ManagementCallMetricOutcome::Started,
-        ManagementCallMetricReason::Ok,
     );
 
     match fut.await {
         Ok(value) => {
             record_management_call(
-                operation,
                 PlatformCallMetricOutcome::Completed,
                 PlatformCallMetricReason::Ok,
-                ManagementCallMetricOutcome::Completed,
-                ManagementCallMetricReason::Ok,
             );
             Ok(value)
         }
         Err(err) => {
             record_management_call(
-                operation,
                 PlatformCallMetricOutcome::Failed,
                 PlatformCallMetricReason::Infra,
-                ManagementCallMetricOutcome::Failed,
-                ManagementCallMetricReason::Infra,
             );
             Err(err)
         }
@@ -106,11 +86,8 @@ async fn management_call_infra<T>(
 
 // Record management-call metrics with no target or method labels.
 fn record_management_call(
-    operation: ManagementCallMetricOperation,
     platform_outcome: PlatformCallMetricOutcome,
     platform_reason: PlatformCallMetricReason,
-    management_outcome: ManagementCallMetricOutcome,
-    management_reason: ManagementCallMetricReason,
 ) {
     PlatformCallMetrics::record(
         PlatformCallMetricSurface::Management,
@@ -118,5 +95,4 @@ fn record_management_call(
         platform_outcome,
         platform_reason,
     );
-    ManagementCallMetrics::record(operation, management_outcome, management_reason);
 }

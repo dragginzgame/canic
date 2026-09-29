@@ -75,7 +75,6 @@ pub(crate) fn read_optional_regular_bytes_bounded(
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum FileCommitMode {
     Replace,
-    CreateNew,
     CreateNewWithParents,
     CreatePrivateWithParents,
 }
@@ -86,14 +85,6 @@ enum FileCommitMode {
 /// is published. Serialization must complete before calling this helper.
 pub fn write_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
     commit_bytes(path, bytes, FileCommitMode::Replace)
-}
-
-/// Durably create one file without replacing an existing destination.
-///
-/// The parent directory must already exist. Serialization must complete before
-/// calling this helper.
-pub fn create_new_bytes(path: &Path, bytes: &[u8]) -> io::Result<()> {
-    commit_bytes(path, bytes, FileCommitMode::CreateNew)
 }
 
 /// Durably create one file and its missing parent hierarchy without replacing
@@ -423,14 +414,7 @@ mod supported {
         mut before: impl FnMut(FileCommitStep, &Path) -> io::Result<()>,
     ) -> io::Result<()> {
         let (parent, file_name) = split_target(path)?;
-        if matches!(
-            mode,
-            FileCommitMode::Replace
-                | FileCommitMode::CreateNewWithParents
-                | FileCommitMode::CreatePrivateWithParents
-        ) {
-            create_parent_hierarchy(parent, &mut before)?;
-        }
+        create_parent_hierarchy(parent, &mut before)?;
         let parent_fd = open_directory(parent)?;
         let permissions = if mode == FileCommitMode::CreatePrivateWithParents {
             0o600
@@ -460,9 +444,7 @@ mod supported {
             FileCommitMode::Replace => {
                 unix_fs::renameat(&parent_fd, &temp_name, &parent_fd, file_name)
             }
-            FileCommitMode::CreateNew
-            | FileCommitMode::CreateNewWithParents
-            | FileCommitMode::CreatePrivateWithParents => {
+            FileCommitMode::CreateNewWithParents | FileCommitMode::CreatePrivateWithParents => {
                 publish_create_new(&parent_fd, &temp_name, file_name)
             }
         };

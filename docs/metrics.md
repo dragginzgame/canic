@@ -164,7 +164,7 @@ rows use completed work-instruction samples as `count` and their saturating
 instruction total as `value_u64`. These samples bracket the complete accepted
 shared-runtime callback path, including registry acceptance, consumer work,
 completion accounting, and successor binding; they are not isolated
-application-function benchmarks. Runtime timer status schema 3 separately
+application-function benchmarks. Runtime timer status schema 1 separately
 projects scheduler and work instruction aggregates plus each role's bounded
 latest Wasm/stable-memory page extents and maximum observed page growth. Memory
 page extents are epoch-local high-water observations, not exact live bytes or

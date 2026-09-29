@@ -4,6 +4,7 @@ use crate::fleet_ensure::model::capacity_import::{
     CapacityImportAuthority, CapacityImportSourceBinding,
 };
 use candid::Principal;
+use canic_core::ids::SubnetId;
 use std::collections::BTreeSet;
 
 /// Complete destination inventory and current admission fences.
@@ -58,4 +59,11 @@ pub struct CapacityImportInventoryView {
     pub plan_sha256: [u8; 32],
     pub policy: CapacityImportDocumentView,
     pub seed: CapacityImportDocumentView,
+}
+
+/// Verified registry placement available before observing a destination's live capacity.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct CapacityImportRootView {
+    pub root: Principal,
+    pub subnet: SubnetId,
 }

@@ -160,3 +160,28 @@ fn canonical_controllers(controllers: &[Principal]) -> bool {
             *principal != Principal::anonymous() && *principal != Principal::management_canister()
         })
 }
+
+/// Reject an incomplete reservation envelope before any controller or stop effect.
+pub(super) fn validate_budget(
+    request: &crate::fleet_ensure::dto::capacity_import::CapacityImportReviewRequest,
+    maximum_call_cycles: u128,
+) -> Result<(), crate::fleet_ensure::ops::capacity_import::journal::CapacityImportJournalError> {
+    use crate::fleet_ensure::ops::capacity_import::journal::CapacityImportJournalError;
+    use canic_core::control_plane_support::policy::pool_import;
+    let minimum_calls = pool_import::minimum_calls(request.canisters.len())
+        .ok_or(CapacityImportJournalError::RequestInvalid)?;
+    let required_debit_cycles =
+        pool_import::required_debit(maximum_call_cycles, request.maximum_root_paid_calls)
+            .ok_or(CapacityImportJournalError::RequestInvalid)?;
+    if request.maximum_root_paid_calls < minimum_calls
+        || request.maximum_root_debit_cycles < required_debit_cycles
+    {
+        return Err(CapacityImportJournalError::InsufficientRootBudget {
+            paid_calls: request.maximum_root_paid_calls,
+            minimum_calls,
+            maximum_debit_cycles: request.maximum_root_debit_cycles,
+            required_debit_cycles,
+        });
+    }
+    Ok(())
+}

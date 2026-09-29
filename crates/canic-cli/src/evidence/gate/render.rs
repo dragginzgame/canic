@@ -8,7 +8,7 @@ use canic_host::{
     evidence_envelope::{EvidenceTargetV1, ExitClassV1},
     policy_gate::{
         PolicyEvaluationStatusV1, PolicyFindingSeverityV1, PolicyGateReportV1,
-        ProjectEvidenceGateReportV1,
+        WorkspaceEvidenceGateReportV1,
     },
 };
 
@@ -57,10 +57,10 @@ fn render_single_gate_report(report: &PolicyGateReportV1) -> String {
     lines.join("\n")
 }
 
-fn render_manifest_gate_report(report: &ProjectEvidenceGateReportV1) -> String {
+fn render_manifest_gate_report(report: &WorkspaceEvidenceGateReportV1) -> String {
     let mut lines = vec![
-        "Project evidence policy gate:".to_string(),
-        format!("  project: {}", report.project_name),
+        "Workspace evidence policy gate:".to_string(),
+        format!("  workspace: {}", report.workspace_name),
         format!(
             "  policy_status: {}",
             policy_status_label(report.policy_status)

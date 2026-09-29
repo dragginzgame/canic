@@ -31,10 +31,6 @@ use crate::{
                 LifecycleMetricOutcome, LifecycleMetricPhase, LifecycleMetricRole,
                 LifecycleMetricStage,
             },
-            management_call::{
-                ManagementCallMetricOperation, ManagementCallMetricOutcome,
-                ManagementCallMetricReason,
-            },
             placement_index::{
                 PlacementIndexMetricOperation, PlacementIndexMetricOutcome,
                 PlacementIndexMetricReason,
@@ -302,20 +298,20 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
     reset_for_tests();
 
     WasmStoreMetrics::record(
-        WasmStoreMetricOperation::SourceResolve,
-        WasmStoreMetricSource::Store,
+        WasmStoreMetricOperation::ReleasePublish,
+        WasmStoreMetricSource::TargetStore,
         WasmStoreMetricOutcome::Completed,
         WasmStoreMetricReason::Ok,
     );
     WasmStoreMetrics::record(
         WasmStoreMetricOperation::ChunkUpload,
-        WasmStoreMetricSource::Store,
+        WasmStoreMetricSource::TargetStore,
         WasmStoreMetricOutcome::Skipped,
         WasmStoreMetricReason::CacheHit,
     );
     WasmStoreMetrics::record(
         WasmStoreMetricOperation::ChunkUpload,
-        WasmStoreMetricSource::Store,
+        WasmStoreMetricSource::TargetStore,
         WasmStoreMetricOutcome::Skipped,
         WasmStoreMetricReason::CacheHit,
     );
@@ -324,7 +320,13 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
 
     assert_metric_count(
         &entries,
-        &["wasm_store", "source_resolve", "store", "completed", "ok"],
+        &[
+            "wasm_store",
+            "release_publish",
+            "target_store",
+            "completed",
+            "ok",
+        ],
         1,
     );
     assert_metric_count(
@@ -332,7 +334,7 @@ fn wasm_store_metrics_are_exposed_with_stable_labels() {
         &[
             "wasm_store",
             "chunk_upload",
-            "store",
+            "target_store",
             "skipped",
             "cache_hit",
         ],
@@ -832,11 +834,6 @@ fn seed_all_metric_families_for_reset_test() {
         LifecycleMetricStage::Bootstrap,
         LifecycleMetricOutcome::Started,
     );
-    ManagementCallMetrics::record(
-        ManagementCallMetricOperation::InstallChunkedCode,
-        ManagementCallMetricOutcome::Started,
-        ManagementCallMetricReason::Ok,
-    );
     ReplayMetrics::record(
         ReplayMetricOperation::Check,
         ReplayMetricOutcome::Completed,
@@ -859,8 +856,8 @@ fn seed_all_metric_families_for_reset_test() {
         ShardingMetricReason::Ok,
     );
     WasmStoreMetrics::record(
-        WasmStoreMetricOperation::SourceResolve,
-        WasmStoreMetricSource::Resolver,
+        WasmStoreMetricOperation::ReleasePublish,
+        WasmStoreMetricSource::ManagedFleet,
         WasmStoreMetricOutcome::Completed,
         WasmStoreMetricReason::Ok,
     );

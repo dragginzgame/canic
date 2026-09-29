@@ -55,7 +55,12 @@ pub(super) fn qualify(input: &ReinstallJourney<'_>, desired: &DesiredFleet, icp:
         policy: "fleet-policy.toml".into(),
         seed: "fleet-seed.toml".into(),
         maximum_source_debit_cycles: 1_000_000_000_000,
-        maximum_root_debit_cycles: 2_000_000_000_000,
+        maximum_root_debit_cycles: super::super::capacity_import::context(
+            pic, input.root, operator,
+        )
+        .maximum_call_debit_cycles
+        .checked_mul(64)
+        .unwrap(),
         maximum_root_paid_calls: 64,
     };
     let planned = review::plan(input.adapter_root, &request, icp)

@@ -559,7 +559,7 @@ fn apply_journal_command_preview_reports_full_ready_row() {
     journal
         .mark_operation_completed_at(0, None)
         .expect("mark operation completed");
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert!(preview.ready);
@@ -583,7 +583,7 @@ fn apply_journal_command_preview_reports_blocked_state() {
     let plan = RestorePlanner::plan(&manifest, None).expect("plan should build");
     let dry_run = RestoreApplyDryRun::from_plan(&plan).expect("build restore dry-run");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     assert!(!preview.ready);
     assert!(!preview.operation_available);
@@ -620,7 +620,7 @@ fn apply_journal_command_preview_reports_upload_command() {
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
         .expect("dry-run should validate artifacts");
     let journal = RestoreApplyJournal::from_dry_run(&dry_run).expect("build apply journal");
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
     let expected_artifact_path = root.join("artifacts/root").to_string_lossy().to_string();
 
     fs::remove_dir_all(root).expect("remove temp root");
@@ -780,7 +780,7 @@ fn apply_journal_command_preview_reports_load_command() {
     journal
         .mark_operation_completed_at(3, None)
         .expect("mark child stop completed");
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     fs::remove_dir_all(root).expect("remove temp root");
     let command = preview.command.expect("command preview");
@@ -860,7 +860,7 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
     journal
         .mark_operation_completed_at(3, None)
         .expect("mark child stop completed");
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     fs::remove_dir_all(root).expect("remove temp root");
     assert!(preview.operation_available);
@@ -878,7 +878,7 @@ fn apply_journal_load_command_requires_uploaded_snapshot_receipt() {
 #[test]
 fn apply_journal_command_preview_reports_status_verification_command() {
     let journal = command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     assert!(preview.command_available);
     let command = preview.command.expect("command preview");
@@ -901,7 +901,7 @@ fn apply_journal_command_preview_rejects_unsupported_verification_command() {
     let mut journal =
         command_preview_journal(RestoreApplyOperationKind::VerifyMember, Some("status"));
     journal.operations[0].verification_kind = Some("query".to_string());
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     assert!(!preview.command_available);
     assert!(preview.command.is_none());
@@ -912,7 +912,7 @@ fn apply_journal_command_preview_rejects_unsupported_verification_command() {
 fn apply_journal_command_preview_reports_deployment_verification_command() {
     let journal =
         command_preview_journal(RestoreApplyOperationKind::VerifyDeployment, Some("status"));
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     assert!(preview.command_available);
     let command = preview.command.expect("command preview");
@@ -1077,7 +1077,7 @@ fn apply_journal_mark_next_operation_pending_claims_first_operation() {
         .mark_upload_snapshot_pending_at(0, Some("2026-05-04T12:00:00Z".to_string()), Vec::new())
         .expect("mark operation pending");
     let report = journal.report();
-    let preview = journal.next_command_preview();
+    let preview = journal.next_command_preview_with_config(&RestoreApplyCommandConfig::default());
 
     assert_eq!(journal.pending_operations, 1);
     assert_eq!(journal.ready_operations, 0);

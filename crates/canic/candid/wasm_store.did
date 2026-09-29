@@ -543,7 +543,7 @@ type TemplateChunkSetPrepareInput = record {
 //
 // TemplateChunkingMode
 //
-type TemplateChunkingMode = variant { Chunked; Inline };
+type TemplateChunkingMode = variant { Chunked };
 // Exact template release key used by Store command inspection.
 type TemplateLookupRequest = record { template_id : text; version : text };
 type TemplateManifestInput = record {
@@ -573,7 +573,7 @@ type TemplateManifestResponse = record {
 //
 // TemplateManifestState
 //
-type TemplateManifestState = variant { Blocked; Staged; Approved };
+type TemplateManifestState = variant { Approved };
 type TemplateStagingStatusResponse = record {
   expected_chunk_hashes : vec blob;
   expected_chunk_count : nat32;

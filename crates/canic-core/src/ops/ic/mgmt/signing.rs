@@ -12,11 +12,7 @@ impl MgmtOps {
         args: &EcdsaPublicKeyArgs,
     ) -> Result<EcdsaPublicKeyResult, InternalError> {
         let infra_args = ecdsa_public_key_args_to_infra(args);
-        let result = management_call(
-            ManagementCallMetricOperation::EcdsaPublicKey,
-            MgmtInfra::ecdsa_public_key(&infra_args),
-        )
-        .await?;
+        let result = management_call(MgmtInfra::ecdsa_public_key(&infra_args)).await?;
 
         Ok(ecdsa_public_key_from_infra(result))
     }
@@ -26,11 +22,7 @@ impl MgmtOps {
         args: &SignWithEcdsaArgs,
     ) -> Result<SignWithEcdsaResult, InternalError> {
         let infra_args = sign_with_ecdsa_args_to_infra(args);
-        let result = management_call(
-            ManagementCallMetricOperation::SignWithEcdsa,
-            MgmtInfra::sign_with_ecdsa(&infra_args),
-        )
-        .await?;
+        let result = management_call(MgmtInfra::sign_with_ecdsa(&infra_args)).await?;
 
         Ok(sign_with_ecdsa_from_infra(result))
     }

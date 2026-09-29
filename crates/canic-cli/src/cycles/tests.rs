@@ -4,18 +4,13 @@ use crate::cycles::{
         CycleTopupEventSample, CycleTopupStatus, CycleTrackerPage, CycleTrackerSample,
         CyclesCanisterStatus, CyclesCoverageStatus, CyclesReport,
     },
-    parse::{
-        CycleHistoryStatusResponse, CycleTopupsStatusResponse, parse_cycle_tracker_page,
-        parse_topup_event_page,
-    },
+    parse::{cycle_tracker_page, topup_event_page},
     transport::summarize_cycle_tracker,
 };
-use candid::{CandidType, Encode};
 use canic_core::{
-    cdk::{types::Cycles, utils::hash::hex_bytes},
+    cdk::types::Cycles,
     dto::{
         cycles::{CycleTopupEvent, CycleTopupEventStatus, CycleTrackerEntry},
-        error::Error as CanicError,
         page::Page,
     },
 };
@@ -125,22 +120,19 @@ fn parses_cycles_verbose_option() {
 
 #[test]
 fn parses_typed_cycle_tracker_page() {
-    let output = response_json(&Ok::<_, CanicError>(
-        CycleHistoryStatusResponse::CycleHistory(Page {
-            entries: vec![
-                CycleTrackerEntry {
-                    timestamp_secs: 10,
-                    cycles: Cycles::new(1_000),
-                },
-                CycleTrackerEntry {
-                    timestamp_secs: 20,
-                    cycles: Cycles::new(750),
-                },
-            ],
-            total: 2,
-        }),
-    ));
-    let page = parse_cycle_tracker_page(&output).expect("parse page");
+    let page = cycle_tracker_page(Page {
+        entries: vec![
+            CycleTrackerEntry {
+                timestamp_secs: 10,
+                cycles: Cycles::new(1_000),
+            },
+            CycleTrackerEntry {
+                timestamp_secs: 20,
+                cycles: Cycles::new(750),
+            },
+        ],
+        total: 2,
+    });
 
     assert_eq!(page.total, 2);
     assert_eq!(page.entries[0].timestamp_secs, 10);
@@ -149,42 +141,34 @@ fn parses_typed_cycle_tracker_page() {
 
 #[test]
 fn parses_typed_topup_event_page() {
-    let output = response_json(&Ok::<_, CanicError>(
-        CycleTopupsStatusResponse::CycleTopups(Page {
-            entries: vec![
-                CycleTopupEvent {
-                    timestamp_secs: 10,
-                    sequence: 0,
-                    requested_cycles: Cycles::new(4_000_000_000_000),
-                    transferred_cycles: Some(Cycles::new(4_000_000_000_000)),
-                    status: CycleTopupEventStatus::RequestOk,
-                    error: None,
-                    parent_failure: None,
-                },
-                CycleTopupEvent {
-                    timestamp_secs: 20,
-                    sequence: 1,
-                    requested_cycles: Cycles::new(4_000_000_000_000),
-                    transferred_cycles: None,
-                    status: CycleTopupEventStatus::RequestErr,
-                    error: Some("no cycles".to_string()),
-                    parent_failure: None,
-                },
-            ],
-            total: 2,
-        }),
-    ));
-    let page = parse_topup_event_page(&output).expect("parse topup page");
+    let page = topup_event_page(Page {
+        entries: vec![
+            CycleTopupEvent {
+                timestamp_secs: 10,
+                sequence: 0,
+                requested_cycles: Cycles::new(4_000_000_000_000),
+                transferred_cycles: Some(Cycles::new(4_000_000_000_000)),
+                status: CycleTopupEventStatus::RequestOk,
+                error: None,
+                parent_failure: None,
+            },
+            CycleTopupEvent {
+                timestamp_secs: 20,
+                sequence: 1,
+                requested_cycles: Cycles::new(4_000_000_000_000),
+                transferred_cycles: None,
+                status: CycleTopupEventStatus::RequestErr,
+                error: Some("no cycles".to_string()),
+                parent_failure: None,
+            },
+        ],
+        total: 2,
+    });
 
     assert_eq!(page.total, 2);
     assert_eq!(page.entries[0].status, CycleTopupStatus::RequestOk);
     assert_eq!(page.entries[0].transferred_cycles, Some(4_000_000_000_000));
     assert_eq!(page.entries[1].status, CycleTopupStatus::RequestErr);
-}
-
-fn response_json<T: CandidType>(response: &T) -> String {
-    let bytes = Encode!(response).expect("encode response");
-    serde_json::json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }
 
 // Ensure summaries report partial windows when no sample exists before the cutoff.

@@ -214,7 +214,7 @@ mod tests {
             [
                 "wasm_store",
                 "chunk_upload",
-                "store",
+                "target_store",
                 "skipped",
                 "cache_hit",
             ],
@@ -252,14 +252,14 @@ mod tests {
             CanisterOpsMetricReason::Ok,
         );
         WasmStoreMetrics::record(
-            WasmStoreMetricOperation::SourceResolve,
-            WasmStoreMetricSource::Store,
+            WasmStoreMetricOperation::ReleasePublish,
+            WasmStoreMetricSource::TargetStore,
             WasmStoreMetricOutcome::Completed,
             WasmStoreMetricReason::Ok,
         );
         WasmStoreMetrics::record(
             WasmStoreMetricOperation::ChunkUpload,
-            WasmStoreMetricSource::Store,
+            WasmStoreMetricSource::TargetStore,
             WasmStoreMetricOutcome::Skipped,
             WasmStoreMetricReason::CacheHit,
         );

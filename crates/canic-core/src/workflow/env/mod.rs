@@ -147,7 +147,6 @@ fn map_binding_error(error: ComponentTopologyError) -> InternalError {
         | ComponentTopologyError::ChildParentConflictsWithAuthority
         | ComponentTopologyError::ChildPrincipalConflictsWithOwner
         | ComponentTopologyError::ComponentPrincipalConflictsWithAuthority
-        | ComponentTopologyError::RootAuthorityMismatch
         | ComponentTopologyError::RootPrincipalConflictsWithCoordinator => {
             codes::AUTHORITY_CONFLICT
         }

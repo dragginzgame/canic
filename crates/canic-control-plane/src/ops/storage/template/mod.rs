@@ -1,9 +1,9 @@
-#[cfg(any(test, feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
 mod chunked;
 #[cfg(feature = "wasm-store-canister")]
 mod gc;
 
-#[cfg(any(test, feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
 pub use chunked::TemplateChunkedOps;
 #[cfg(feature = "wasm-store-canister")]
 pub use gc::WasmStoreGcOps;
@@ -13,7 +13,7 @@ use crate::dto::template::WasmStoreCatalogEntryResponse;
 use crate::schema::WasmStoreConfig;
 use crate::{
     dto::template::{TemplateManifestInput, TemplateManifestResponse},
-    ids::{TemplateChunkKey, TemplateId, TemplateManifestState, TemplateReleaseKey},
+    ids::{TemplateChunkKey, TemplateId, TemplateReleaseKey},
     storage::stable::template::{TemplateManifestRecord, TemplateManifestStateStore},
 };
 #[cfg(feature = "root-control-plane")]
@@ -22,9 +22,7 @@ use crate::{
         WasmStoreGcStatusResponse, WasmStoreOverviewStoreResponse,
         WasmStorePublicationSlotResponse, WasmStoreTemplateStatusResponse,
     },
-    ids::{
-        CanisterRole, TemplateChunkingMode, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus,
-    },
+    ids::{CanisterRole, TemplateVersion, WasmStoreBinding, WasmStoreGcStatus},
     storage::stable::template::TemplateManifestEntryRecord,
 };
 #[cfg(feature = "root-control-plane")]
@@ -59,12 +57,6 @@ pub enum TemplateManifestOpsError {
 
     #[error("chunk set '{0}' must contain at least one chunk")]
     TemplateChunkSetEmpty(TemplateReleaseKey),
-
-    #[error("chunk set '{0}' payload hash mismatch")]
-    PayloadHashMismatch(TemplateReleaseKey),
-
-    #[error("chunk set '{0}' payload size mismatch")]
-    PayloadSizeMismatch(TemplateReleaseKey),
 
     #[error("chunk set '{0}' exceeds chunk index bounds")]
     ChunkIndexOverflow(TemplateReleaseKey),
@@ -109,10 +101,7 @@ impl TemplateManifestOpsError {
             Self::TemplateChunkSetMissing(_) => codes::WASM_STORE_CHUNK_MISSING,
             Self::TemplateChunkMissing(_) => codes::WASM_STORE_CHUNK_MISSING,
             Self::TemplateChunkSetEmpty(_) => codes::COLLECTION_INVALID,
-            Self::PayloadHashMismatch(_) | Self::TemplateChunkHashMismatch(_) => {
-                codes::DIGEST_CONFLICT
-            }
-            Self::PayloadSizeMismatch(_) => codes::CAPACITY_CONFLICT,
+            Self::TemplateChunkHashMismatch(_) => codes::DIGEST_CONFLICT,
             Self::ChunkIndexOverflow(_) => codes::POSITION_CAPACITY,
             Self::TemplateChunkIndexOutOfRange(_, _) => codes::POSITION_CAPACITY,
             Self::WasmStoreCapacityExceeded { .. } | Self::WasmStoreVersionLimitExceeded { .. } => {
@@ -173,7 +162,7 @@ pub struct WasmStoreGcExecutionStats {
 
 impl TemplateManifestOps {
     /// Return one exact approved manifest without exposing an unbounded catalog.
-    #[cfg(any(test, feature = "wasm-store-canister"))]
+    #[cfg(feature = "wasm-store-canister")]
     #[must_use]
     pub fn approved_manifest_response(
         template_id: &TemplateId,
@@ -183,10 +172,7 @@ impl TemplateManifestOps {
         TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .find(|entry| {
-                entry.release == release
-                    && entry.record.manifest_state == TemplateManifestState::Approved
-            })
+            .find(|entry| entry.release == release)
             .map(|entry| record_to_response(entry.release, entry.record))
     }
 
@@ -196,10 +182,7 @@ impl TemplateManifestOps {
         let mut manifests = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter_map(|entry| {
-                (entry.record.manifest_state == TemplateManifestState::Approved)
-                    .then(|| record_to_response(entry.release, entry.record))
-            })
+            .map(|entry| record_to_response(entry.release, entry.record))
             .collect::<Vec<_>>();
 
         manifests.sort_by(|left, right| left.role.cmp(&right.role));
@@ -249,10 +232,7 @@ impl TemplateManifestOps {
         let manifests = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter(|entry| {
-                entry.record.manifest_state == TemplateManifestState::Approved
-                    && &entry.record.store_binding == store_binding
-            })
+            .filter(|entry| &entry.record.store_binding == store_binding)
             .collect::<Vec<_>>();
 
         let approved_payload_bytes = manifests
@@ -320,10 +300,7 @@ impl TemplateManifestOps {
         let approved = TemplateManifestStateStore::export()
             .entries
             .into_iter()
-            .filter(|entry| {
-                entry.record.role == *role
-                    && entry.record.manifest_state == TemplateManifestState::Approved
-            })
+            .filter(|entry| entry.record.role == *role)
             .collect::<Vec<_>>();
 
         match approved.as_slice() {
@@ -332,25 +309,6 @@ impl TemplateManifestOps {
                 entry.release.clone(),
                 entry.record.clone(),
             )),
-            _ => Err(TemplateManifestOpsError::ApprovedManifestConflict(role.clone()).into()),
-        }
-    }
-
-    // Return whether exactly one approved manifest exists for this role.
-    #[cfg(test)]
-    pub fn has_approved_for_role(role: &CanisterRole) -> Result<bool, InternalError> {
-        let approved_count = TemplateManifestStateStore::export()
-            .entries
-            .into_iter()
-            .filter(|entry| {
-                entry.record.role == *role
-                    && entry.record.manifest_state == TemplateManifestState::Approved
-            })
-            .count();
-
-        match approved_count {
-            0 => Ok(false),
-            1 => Ok(true),
             _ => Err(TemplateManifestOpsError::ApprovedManifestConflict(role.clone()).into()),
         }
     }
@@ -367,9 +325,6 @@ impl TemplateManifestOps {
             if entry.release == release {
                 continue;
             }
-            if entry.record.manifest_state != TemplateManifestState::Approved {
-                continue;
-            }
 
             TemplateManifestStateStore::remove(&entry.release);
         }
@@ -384,13 +339,7 @@ impl TemplateManifestOps {
         let mut removed = 0;
 
         for entry in TemplateManifestStateStore::export().entries {
-            if entry.record.manifest_state != TemplateManifestState::Approved {
-                continue;
-            }
             if entry.record.role == CanisterRole::WASM_STORE {
-                continue;
-            }
-            if entry.record.chunking_mode != TemplateChunkingMode::Chunked {
                 continue;
             }
             if roles.contains(&entry.record.role) {
@@ -463,15 +412,16 @@ fn projected_template_versions_for_manifests(
 #[cfg(test)]
 mod tests {
     use super::*;
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(feature = "wasm-store-canister")]
     use crate::dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput};
+    use crate::ids::{TemplateChunkingMode, TemplateManifestState};
     #[cfg(feature = "wasm-store-canister")]
     use crate::ids::{WasmStoreGcMode, WasmStoreGcStatus};
     use crate::{
-        ids::{CanisterRole, TemplateChunkingMode, TemplateVersion, WasmStoreBinding},
+        ids::{CanisterRole, TemplateVersion, WasmStoreBinding},
         storage::stable::template::{TemplateChunkSetStateStore, TemplateChunkStore},
     };
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(feature = "wasm-store-canister")]
     use canic_core::cdk::utils::hash::wasm_hash;
 
     fn approved_input(template_id: &'static str, role: &'static str) -> TemplateManifestInput {
@@ -482,7 +432,7 @@ mod tests {
             payload_hash: vec![1; 32],
             payload_size_bytes: 512,
             store_binding: WasmStoreBinding::new("primary"),
-            chunking_mode: TemplateChunkingMode::Inline,
+            chunking_mode: TemplateChunkingMode::Chunked,
             manifest_state: TemplateManifestState::Approved,
             approved_at: Some(10),
             created_at: 9,
@@ -521,14 +471,6 @@ mod tests {
             (
                 TemplateManifestOpsError::TemplateChunkSetEmpty(release.clone()),
                 codes::COLLECTION_INVALID,
-            ),
-            (
-                TemplateManifestOpsError::PayloadHashMismatch(release.clone()),
-                codes::DIGEST_CONFLICT,
-            ),
-            (
-                TemplateManifestOpsError::PayloadSizeMismatch(release.clone()),
-                codes::CAPACITY_CONFLICT,
             ),
             (
                 TemplateManifestOpsError::ChunkIndexOverflow(release.clone()),
@@ -597,16 +539,6 @@ mod tests {
     }
 
     #[cfg(feature = "root-control-plane")]
-    fn approved_chunked_input(
-        template_id: &'static str,
-        role: &'static str,
-    ) -> TemplateManifestInput {
-        let mut input = approved_input(template_id, role);
-        input.chunking_mode = TemplateChunkingMode::Chunked;
-        input
-    }
-
-    #[cfg(feature = "root-control-plane")]
     #[test]
     fn replace_approved_removes_the_superseded_manifest() {
         reset_store();
@@ -631,23 +563,11 @@ mod tests {
 
     #[cfg(feature = "root-control-plane")]
     #[test]
-    fn has_approved_for_role_reports_presence() {
-        reset_store();
-
-        assert!(!TemplateManifestOps::has_approved_for_role(&CanisterRole::new("app")).unwrap());
-
-        TemplateManifestOps::replace_approved_from_input(approved_input("one", "app"));
-
-        assert!(TemplateManifestOps::has_approved_for_role(&CanisterRole::new("app")).unwrap());
-    }
-
-    #[cfg(feature = "root-control-plane")]
-    #[test]
     fn prune_approved_roles_not_in_removes_stale_managed_roles() {
         reset_store();
 
-        TemplateManifestOps::replace_approved_from_input(approved_chunked_input("one", "app"));
-        TemplateManifestOps::replace_approved_from_input(approved_chunked_input("two", "scale"));
+        TemplateManifestOps::replace_approved_from_input(approved_input("one", "app"));
+        TemplateManifestOps::replace_approved_from_input(approved_input("two", "scale"));
 
         let kept = BTreeSet::from([CanisterRole::new("app")]);
         let removed = TemplateManifestOps::prune_approved_roles_not_in(&kept);
@@ -663,13 +583,13 @@ mod tests {
         assert_eq!(TemplateManifestStateStore::export().entries.len(), 1);
     }
 
-    #[cfg(feature = "root-control-plane")]
+    #[cfg(feature = "wasm-store-canister")]
     #[test]
     fn prepare_then_publish_chunk_rejects_hash_mismatch() {
         reset_store();
 
         let payload = vec![1_u8, 2, 3];
-        TemplateChunkedOps::prepare_chunk_set_from_input(
+        TemplateChunkedOps::prepare_chunk_set_in_store_from_input(
             TemplateChunkSetPrepareInput {
                 manifest: None,
                 template_id: TemplateId::new("embedded:app"),
@@ -679,16 +599,21 @@ mod tests {
                 chunk_hashes: vec![wasm_hash(&payload)],
             },
             77,
+            store_limits(10_000),
         )
         .unwrap();
 
-        let err = TemplateChunkedOps::publish_chunk_from_input(TemplateChunkInput {
-            preparation: None,
-            template_id: TemplateId::new("embedded:app"),
-            version: TemplateVersion::new("0.18.0"),
-            chunk_index: 0,
-            bytes: vec![9, 9, 9],
-        })
+        let err = TemplateChunkedOps::publish_chunk_in_store_from_input(
+            TemplateChunkInput {
+                preparation: None,
+                template_id: TemplateId::new("embedded:app"),
+                version: TemplateVersion::new("0.18.0"),
+                chunk_index: 0,
+                bytes: vec![9, 9, 9],
+            },
+            78,
+            store_limits(10_000),
+        )
         .expect_err("mismatched chunk hash must fail");
 
         assert_eq!(

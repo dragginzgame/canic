@@ -1,4 +1,4 @@
-use super::{CiPolicyV1, PolicyGateError, ProjectEvidenceManifestV1};
+use super::{CiPolicyV1, PolicyGateError, WorkspaceEvidenceManifestV1};
 use std::{
     collections::BTreeSet,
     path::{Component, Path},
@@ -43,17 +43,17 @@ pub(super) fn validate_ci_policy_v1(policy: &CiPolicyV1) -> Result<(), PolicyGat
     Ok(())
 }
 
-pub(super) fn validate_project_evidence_manifest_v1(
-    manifest: &ProjectEvidenceManifestV1,
+pub(super) fn validate_workspace_evidence_manifest_v1(
+    manifest: &WorkspaceEvidenceManifestV1,
 ) -> Result<(), PolicyGateError> {
     if manifest.schema_version != 1 {
         return Err(PolicyGateError::InvalidPolicy(format!(
-            "unsupported project evidence manifest schema_version {}; expected 1",
+            "unsupported workspace evidence manifest schema_version {}; expected 1",
             manifest.schema_version
         )));
     }
-    ensure_nonempty("project.name", &manifest.project.name)?;
-    ensure_nonempty("project.root", &manifest.project.root)?;
+    ensure_nonempty("workspace.name", &manifest.workspace.name)?;
+    ensure_nonempty("workspace.root", &manifest.workspace.root)?;
     if manifest.evidence.is_empty() {
         return Err(PolicyGateError::InvalidPolicy(
             "evidence must not be empty".to_string(),

@@ -346,9 +346,12 @@ fn retries_keep_original_cycle_baseline_and_reject_unreviewed_credits() {
 #[test]
 fn ambiguous_or_unavailable_root_never_selects_a_replacement() {
     let plan = plan();
-    let first = destination(&plan);
-    let mut second = first.clone();
-    second.authority.root = principal(20);
+    let first = CapacityImportRootView {
+        root: plan.authority.root,
+        subnet: plan.authority.subnet,
+    };
+    let mut second = first;
+    second.root = principal(20);
     let roots = [first, second];
     assert_eq!(
         select_destination(&roots, plan.authority.subnet, None),
@@ -359,7 +362,6 @@ fn ambiguous_or_unavailable_root_never_selects_a_replacement() {
     assert_eq!(
         select_destination(&roots, plan.authority.subnet, Some(principal(5)))
             .unwrap()
-            .authority
             .root,
         principal(5)
     );

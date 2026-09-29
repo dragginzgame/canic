@@ -3,7 +3,6 @@
 //! Responsibility: SHA-256 helpers for wasm/module identity and hex rendering.
 //! Does not own: artifact storage, wasm validation, or manifest policy.
 //! Boundary: provides pure hashing and hex conversion utilities.
-
 use sha2::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
@@ -25,12 +24,6 @@ pub fn sha256_hex(bytes: &[u8]) -> String {
 #[must_use]
 pub fn wasm_hash(bytes: &[u8]) -> Vec<u8> {
     sha256_bytes(bytes)
-}
-
-/// Compute lowercase hexadecimal wasm module hash.
-#[must_use]
-pub fn wasm_hash_hex(bytes: &[u8]) -> String {
-    sha256_hex(bytes)
 }
 
 /// Render one byte slice as lowercase hexadecimal.
@@ -106,8 +99,8 @@ mod tests {
                                 27ae41e4649b934ca495991b7852b855";
 
     #[test]
-    fn wasm_hash_hex_matches_sha256_vector() {
-        assert_eq!(wasm_hash_hex(&[]), EMPTY_SHA256);
+    fn sha256_hex_matches_standard_vector() {
+        assert_eq!(sha256_hex(&[]), EMPTY_SHA256);
     }
 
     #[test]

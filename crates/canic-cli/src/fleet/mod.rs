@@ -444,7 +444,7 @@ fn ensure_command() -> Command {
                     "Review a clean current-build reinstall, retaining supplied IDs and cycles",
                 ),
         )
-        .arg(value_arg("seed").long("seed").value_name("PATH").requires("reinstall").help("Explicit retained canister inventory; defaults to deployments/<fleet>.estate.toml"))
+        .arg(value_arg("seed").long("seed").value_name("PATH").requires("reinstall").help("Retained canister inventory; apply may publish resolved IDs here (defaults to deployments/<fleet>.estate.toml)"))
         .arg(value_arg("source").long("source").value_name("PATH").requires("reinstall").help("Current Fleet policy for reset/import publication; defaults to deployments/<fleet>.toml"))
         .arg(Arg::new("retirement-debit-block").long("retirement-debit-block").value_name("BLOCK")
             .value_parser(clap::value_parser!(u64)).requires("reinstall")

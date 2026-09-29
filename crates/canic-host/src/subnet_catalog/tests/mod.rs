@@ -4,7 +4,9 @@ mod source;
 use super::*;
 use crate::test_support::temp_dir;
 use ic_query::subnet_catalog::{
-    CacheDisposition, CatalogReadPolicy, SubnetCatalogHostError, SubnetCatalogSource,
+    CacheDisposition, CatalogReadPolicy, SubnetCatalogFailureCacheDisposition,
+    SubnetCatalogHostError, SubnetCatalogLoadStage, SubnetCatalogRefreshTrigger,
+    SubnetCatalogRetryability, SubnetCatalogSource, SubnetCatalogSubject,
     load_subnet_catalog_detailed_with_source,
 };
 use source::{Reply, Source};
@@ -88,17 +90,11 @@ fn agreement_failure_preserves_cache_and_retry_recovers_without_weaker_fallback(
         let retained = load_cached_mainnet_subnet_catalog(&root, request.now_unix_secs).unwrap();
         assert_eq!(retained.snapshot_authority(), initial.snapshot_authority());
         assert_eq!(fs::read(&initial.path).unwrap(), bytes);
-        let evidence = SubnetCatalogLoadFailureEvidenceV1::from_preflight_failure(&failure);
+        assert_eq!(failure.request.source, Some(mainnet_source_selection()));
+        assert_eq!(failure.stage, SubnetCatalogLoadStage::RefreshFailed);
         assert_eq!(
-            evidence.source_kind,
-            Some(SubnetCatalogSourceKindV1::MultiEndpointAgreement)
-        );
-        assert_eq!(evidence.stage, SubnetCatalogLoadStageV1::RefreshFailed);
-        assert_eq!(
-            evidence.cache_disposition,
-            SubnetCatalogFailureCacheDispositionV1::RefreshFailed {
-                trigger: SubnetCatalogRefreshTriggerV1::Stale
-            }
+            failure.cache_disposition,
+            SubnetCatalogFailureCacheDisposition::RefreshFailed(SubnetCatalogRefreshTrigger::Stale)
         );
         let recovered =
             load_subnet_catalog_detailed_with_source(&request, &Source::new(Reply::Matching, 11))
@@ -195,35 +191,33 @@ fn cache_failure_reaches_canic_as_complete_typed_pre_effect_evidence() {
 
     let failure =
         load_cached_mainnet_subnet_catalog(&root, 123).expect_err("missing cache must fail closed");
-    let evidence = SubnetCatalogLoadFailureEvidenceV1::from_preflight_failure(&failure);
-
     fs::remove_dir_all(root).expect("remove temporary ICP root");
-    assert_eq!(evidence.network, MAINNET_NETWORK);
-    assert_eq!(evidence.source_kind, None);
-    assert!(evidence.source_endpoints.is_empty());
-    assert_eq!(evidence.stage, SubnetCatalogLoadStageV1::CacheAbsence);
-    assert_eq!(evidence.registry_version, None);
-    assert_eq!(evidence.returned_registry_value_version, None);
-    assert_eq!(evidence.source_endpoint, None);
-    assert_eq!(evidence.assurance, None);
-    assert!(evidence.registry_records.is_empty());
+    assert_eq!(failure.request.network, MAINNET_NETWORK);
+    assert_eq!(failure.request.source, None);
+    assert_eq!(failure.stage, SubnetCatalogLoadStage::CacheAbsence);
+    assert_eq!(failure.registry_version, None);
+    assert_eq!(failure.returned_registry_value_version, None);
+    assert_eq!(failure.source_endpoint, None);
+    assert_eq!(failure.assurance, None);
+    assert!(failure.registry_records.is_empty());
     assert_eq!(
-        evidence.cache_disposition,
-        SubnetCatalogFailureCacheDispositionV1::CacheMissing
+        failure.cache_disposition,
+        SubnetCatalogFailureCacheDisposition::CacheMissing
     );
     assert!(matches!(
-        evidence.subject,
-        Some(SubnetCatalogSubjectV1::CachePath { .. })
+        failure.subject,
+        Some(SubnetCatalogSubject::CachePath(_))
     ));
-    assert_eq!(evidence.code, "missing_catalog");
-    assert_eq!(evidence.category, "missing");
+    assert!(matches!(
+        failure.source,
+        SubnetCatalogHostError::MissingCatalog { .. }
+    ));
+    assert_eq!(failure.code, failure.source.code());
+    assert_eq!(failure.category, failure.source.category());
     assert_eq!(
-        evidence.retryability,
-        SubnetCatalogRetryabilityV1::NotRetryable
+        failure.retryability,
+        SubnetCatalogRetryability::NotRetryable
     );
-    assert!(!evidence.effects.build_started);
-    assert!(!evidence.effects.workspace_mutation_started);
-    assert!(!evidence.effects.ic_mutation_started);
 }
 
 fn load_mainnet_with_source(

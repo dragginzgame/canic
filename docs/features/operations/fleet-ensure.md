@@ -1284,6 +1284,22 @@ sample remains the original balance baseline on retry. Source balances must reta
 the Ready floor plus their debit allowance; Root must retain its threshold plus
 its separate allowance.
 
+Before handoff, Host and Root require at least `17 × source_count + 1` paid calls
+and a debit ceiling covering every allowed call at Root's largest current import
+quote. The quote is effect-free; it is a conservative allowance, not an expected
+payment. Clean reinstall derives `32 × source_count + 16` calls and the matching
+cycle allowance automatically. Explicit import reviews report the required bound
+when their supplied limits are insufficient. Successful callbacks settle unused
+call allowance; failed or unresolved callbacks retain theirs and retries never
+reset consumed call counts. A capacity-limit error reports the protected phase,
+reserved and observed debits, and paid-call bounds; extra Root funding does not
+increase an existing reviewed allowance.
+
+The policy and seed paths are publication outputs. Use mutable operator copies
+when release inputs must stay frozen. A semantic no-op preserves exact seed bytes,
+including comments and formatting; resolved physical-ID changes publish the
+reviewed replacement bytes through the same recoverable paired write.
+
 Apply approves the saved operation digest. It does not accept new canister IDs,
 declarations, paths or debit limits. Repeat that exact apply command after an
 interruption: signed ingress, spent attempts, Root reset receipts and paired local

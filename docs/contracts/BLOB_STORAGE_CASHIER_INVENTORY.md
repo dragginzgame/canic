@@ -8,19 +8,14 @@ Last updated: 2026-06-20
 
 ## Purpose
 
-This inventory is the source-of-truth gate for Canic's 0.70 blob-storage
-Cashier integration.
+This historical inventory retains the source search, accepted immutable Toko
+references, and protocol observations for its original release line. Dated
+search conclusions below describe the evidence available at that time.
 
-No `blob-storage-billing` feature, Cashier DTO, Cashier client wrapper, billing
-stable record, gateway-principal sync workflow, funding workflow, billing
-endpoint macro, billing Candid snapshot, or billing behavior test may merge
-unless this inventory remains complete and cites exact protocol sources.
-
-This inventory does not replace the 0.69 gateway protocol inventory. The 0.70
-billing line required both inventories to be complete before implementation:
-
-- `docs/contracts/BLOB_STORAGE_INVENTORY.md`
-- `docs/contracts/BLOB_STORAGE_CASHIER_INVENTORY.md`
+The current [structured evidence record](blob-storage-protocol-evidence.json)
+owns machine-checked method identifiers, source provenance and refresh behavior.
+The [feature guide](../features/blob-storage/README.md) describes the maintained
+surface. Inventory prose is explanatory and is not release authority.
 
 ## Current Finding
 
@@ -531,40 +526,9 @@ Accepted MVP scope:
   methods. Those methods are deferred unless they are required to preserve the
   three accepted Toko-backed 0.70 flows.
 
-## Implementation Gate
+## Current verification
 
-The following actions were blocked while this document was incomplete and are
-now unblocked for the Toko-backed 0.70 MVP:
-
-- Adding the `blob-storage-billing` feature.
-- Adding Cashier DTOs or Candid snapshots.
-- Adding Cashier call wrappers.
-- Adding billing config stable records.
-- Adding gateway-principal sync storage or workflow.
-- Adding funding policy or funding workflow.
-- Emitting `_immutableObjectStorageUpdateGatewayPrincipals`.
-- Emitting `_immutableObjectStorageFundFromProjectCycles`.
-- Emitting `get_blob_storage_status`.
-- Adding billing macro tests, Cashier wrapper tests, or PocketIC billing
-  behavior tests that assert protocol behavior.
-
-This gate is enforced in CI and local Make test/release-bump paths by
-`scripts/ci/check-blob-storage-cashier-inventory-gate.sh`. While the status was
-incomplete, the guard rejected blob-storage billing feature metadata,
-source/module paths, Cashier method literals, billing status endpoint literals,
-and public Cashier/billing API/model names outside this protocol inventory and
-design documentation. Now that this inventory is marked `Complete`, the same
-guard verifies that all required method sections are present and individually
-complete, have no unresolved fields, and that the optional Cashier methods
-section is also complete.
-
-Implementation state:
-
-- The 0.70 backend MVP consumes this inventory through checked-in Candid
-  snapshots, typed Cashier DTOs/wrappers, explicit billing config, mock Cashier
-  tests, gateway-principal sync, project-cycle funding, and read-only backend
-  status.
-- Production Cashier stays disabled in tests and must be injected by explicit
-  configuration.
-- Update this inventory and the 0.70 design if actual Cashier source or
-  deployed Candid later contradicts the Toko-backed MVP contract.
+`scripts/ci/check-blob-storage-protocol-evidence.sh` validates the structured
+record and the presence of these source notes. Current protocol, policy and
+workflow tests validate implementation behavior. There is no pre-implementation
+branch or requirement for specific wording in this historical inventory.

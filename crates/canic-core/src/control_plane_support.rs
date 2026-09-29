@@ -39,6 +39,7 @@ pub mod model {
 }
 
 pub mod policy {
+    pub use crate::domain::policy::pure::pool_import;
     pub mod cycles_funding {
         pub use crate::domain::policy::pure::cycles_funding::{
             FundingDecision, FundingPolicyViolation, cooldown_retry_after_secs, evaluate,

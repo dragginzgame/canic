@@ -16,7 +16,6 @@ pub mod icp_refill;
 pub mod intent;
 pub mod inter_canister_call;
 pub mod lifecycle;
-pub mod management_call;
 pub mod placement_index;
 pub mod platform_call;
 pub mod recording;
@@ -49,7 +48,7 @@ use {
 use sharding::ShardingMetrics;
 
 #[cfg(test)]
-use {management_call::ManagementCallMetrics, system::SystemMetrics};
+use system::SystemMetrics;
 
 /// Project one public metrics tier into the unified row shape.
 #[must_use]
@@ -200,7 +199,6 @@ pub fn reset_for_tests() {
     InterCanisterCallMetrics::reset();
     IntentMetrics::reset();
     LifecycleMetrics::reset();
-    ManagementCallMetrics::reset();
     ReplayMetrics::reset();
     RootCapabilityMetrics::reset();
     ScalingMetrics::reset();

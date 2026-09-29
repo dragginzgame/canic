@@ -39,22 +39,3 @@ impl AccessMetricKind {
         }
     }
 }
-
-///
-/// SystemMetricKind
-///
-/// Enumerates platform operation families recorded by system metrics.
-/// Owned by ids and consumed by runtime metrics adapters.
-///
-
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
-#[remain::sorted]
-pub enum SystemMetricKind {
-    CanisterCall,
-    CanisterStatus,
-    DeleteCanister,
-    DepositCycles,
-    InstallCode,
-    UninstallCode,
-    UpdateSettings,
-}

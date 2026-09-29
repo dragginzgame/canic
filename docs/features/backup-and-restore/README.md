@@ -1,10 +1,30 @@
 # Backup And Restore
 
-Canic's backup and restore capability is host-side operational recovery for
-canister snapshots. The CLI selects topology, freezes the source view, records
-manifests and checksums, and journals both download and restore execution.
+Canic's backup and restore primitives provide host-side operational recovery for
+canister snapshots, with manifests, checksums and durable execution journals.
 
-## What It Provides
+## Current Availability
+
+Fresh `canic backup create <fleet>` execution is unavailable: its executor rejects
+before snapshot effects because Coordinator-backed Component Registry topology
+preflight is not implemented. `--dry-run` can prepare local planning files for a
+supported inventory, but does not prove live topology, controller authority or
+quiescence and does not create a backup. Current selection requires exactly one
+Fleet Subnet Root.
+
+This gap dates from the 0.100.80 removal of the public Subnet Registry query.
+It has no accepted implementation slice in the current 0.110 batch or scheduled
+0.111 blob extraction. The proposed
+[OC-5 inventory and backup work](../../design/ideas/openchat-scale-application-support/design.md)
+is an unscheduled idea, not a delivery commitment. Completion needs an accepted
+Host/CLI/Backup slice covering authoritative membership, controller/read authority,
+quiescence, topology changes, interruption and same-release recovery.
+
+Verification and restore of existing valid same-release backups retain their
+own artifact, identity and journal checks. Preserve the backup runner and its
+recovery machinery while the missing live preflight remains fail-closed.
+
+## Maintained Primitives
 
 - topology-aware full-Fleet and subtree backup selection
 - snapshot download journals with durable artifact paths and hashes
@@ -14,10 +34,9 @@ manifests and checksums, and journals both download and restore execution.
 - resumable, bounded restore execution with operator-attention states
 - local pruning kept separate from live snapshot deletion
 
-A compact operator path is:
+For an existing backup, the operator path is:
 
 ```bash
-canic backup create <fleet>
 canic backup verify <backup>
 canic restore prepare <backup> --require-verified --require-restore-ready
 ```

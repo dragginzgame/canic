@@ -19,23 +19,13 @@ impl MgmtOps {
         canister_pid: Principal,
         cycles: u128,
     ) -> Result<(), InternalError> {
-        management_call(
-            ManagementCallMetricOperation::DepositCycles,
-            MgmtInfra::deposit_cycles(canister_pid, cycles),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::DepositCycles);
+        management_call(MgmtInfra::deposit_cycles(canister_pid, cycles)).await?;
 
         Ok(())
     }
     /// Gets a canister's cycle balance (expensive: calls mgmt canister).
     pub async fn get_cycles(canister_pid: Principal) -> Result<Cycles, InternalError> {
-        let cycles = management_call(
-            ManagementCallMetricOperation::GetCycles,
-            MgmtInfra::get_cycles(canister_pid),
-        )
-        .await?;
+        let cycles = management_call(MgmtInfra::get_cycles(canister_pid)).await?;
 
         Ok(cycles)
     }

@@ -16,6 +16,24 @@ pub(in crate::fleet_ensure::generate) fn qualify(request: &FleetGenerateRequest<
             .iter()
             .all(|entry| entry.principal.is_some())
     );
+    let original = format!(
+        "# frozen source comment\n{}\n",
+        std::fs::read_to_string(request.seed).unwrap()
+    );
+    assert_eq!(
+        seed_projection(&supplied, &original, None).unwrap(),
+        original
+    );
+    let coordinator = supplied
+        .canisters
+        .iter()
+        .find(|entry| entry.kind == DesiredCanisterKind::Coordinator)
+        .unwrap();
+    let id = candid::Principal::from_text(coordinator.principal.as_ref().unwrap()).unwrap();
+    assert_eq!(
+        seed_projection(&supplied, &original, Some(id)).unwrap(),
+        original
+    );
     assert!(!request.root.join("root-status-count").exists());
     assert!(!supplied.bootstrap.as_ref().unwrap().fresh_estate);
     assert!(matches!(
@@ -43,6 +61,11 @@ pub(in crate::fleet_ensure::generate) fn qualify(request: &FleetGenerateRequest<
             .all(|entry| entry.principal.is_none()
                 == (entry.kind == DesiredCanisterKind::Coordinator))
     );
+    let creating = std::fs::read_to_string(&path).unwrap();
+    let projected = seed_projection(&created, &creating, Some(id)).unwrap();
+    assert_ne!(projected, creating);
+    let physical: EstateSeed = toml::from_str(&projected).unwrap();
+    assert_eq!(physical.coordinator, id.to_text());
     let source: FleetSource = load_toml(request.source, "source").unwrap();
     assert!(validate_identity_seed(&source, &seed).is_err());
     assert!(matches!(

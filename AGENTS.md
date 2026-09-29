@@ -109,10 +109,15 @@ with this file, the code is wrong.
   Exact upstream version names, immutable historical records and versioned
   audit-method/evidence revisions are not product compatibility generations
   and may retain their truthful versions.
-- Every pre-1.0 release transition is reinstall-only, without an active
-  exception. Active designs must not specify cross-release upgrades, state
+- Ordinary pre-1.0 release transitions are reinstall-only. Active designs must
+  not specify cross-release upgrades, state
   migration or import, authority handoff, existing-installation adoption,
   mixed-version operation, rollback or compatibility recovery.
+- The maintainer authorized in-repository implementation and qualification of
+  the exact [CANIC-188 incident repair](docs/design/0.110-fleet-runtime-contraction/issued-import-recovery.md).
+  This exception retains the frozen .48 layout for one unfinished import and
+  restores its original Root artifact afterward. It grants no general upgrade
+  lane, live execution, or mutation authority over the Toko Miner repository.
 - Application data, stable memory, canister identities, topology, historical
   release authority, old plans, old journal formats and predecessor
   compatibility may be discarded at a release boundary. The sole

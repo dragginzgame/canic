@@ -124,41 +124,6 @@ fn durable_write_creates_parents_and_replaces_complete_contents() {
 }
 
 #[test]
-fn durable_create_new_never_replaces_an_existing_file() {
-    let root = temp_root("create-new");
-    fs::create_dir_all(&root).expect("create temp root");
-    let path = root.join("report.json");
-
-    create_new_bytes(&path, b"first complete contents").expect("create output");
-    let error = create_new_bytes(&path, b"replacement").expect_err("existing output must reject");
-
-    assert_eq!(error.kind(), io::ErrorKind::AlreadyExists);
-    assert_eq!(
-        fs::read(&path).expect("read target"),
-        b"first complete contents"
-    );
-    assert_no_temporary_files(&root);
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[test]
-fn durable_create_new_does_not_create_missing_parents() {
-    let root = temp_root("create-new-parent");
-    fs::create_dir_all(&root).expect("create temp root");
-    let missing_parent = root.join("missing");
-    let path = missing_parent.join("report.json");
-
-    let error = create_new_bytes(&path, b"contents").expect_err("missing parent must reject");
-
-    assert_eq!(error.kind(), io::ErrorKind::NotFound);
-    assert!(!missing_parent.exists());
-    assert_no_temporary_files(&root);
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-#[test]
 fn durable_create_new_with_parents_never_replaces_an_existing_file() {
     let root = temp_root("create-new-with-parents");
     fs::create_dir_all(&root).expect("create temp root");
@@ -338,7 +303,7 @@ fn create_new_publication_race_cannot_replace_the_winner() {
     let error = commit_with_hook(
         &path,
         b"our complete contents",
-        FileCommitMode::CreateNew,
+        FileCommitMode::CreateNewWithParents,
         |step, _| {
             if step == FileCommitStep::Publication {
                 fs::write(&path, b"raced complete contents")?;

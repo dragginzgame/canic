@@ -234,3 +234,8 @@ The command reports the current minor line, its published release count, the
 12-release guideline and the ordinal of the next release. `make patch` runs the
 same advisory before validation and version mutation. The advisory never
 changes files, tags or release authority.
+
+Automation may invoke `scripts/dev/report-release-cadence.sh --tsv [VERSION]`.
+It emits one tab-separated row: minor line, published release count, advisory
+limit and next release ordinal. Plain output remains descriptive; exceeding the
+limit remains advisory in either format.

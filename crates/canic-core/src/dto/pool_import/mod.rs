@@ -105,6 +105,8 @@ pub struct PoolImportStatus {
 /// Protected current placement, authority and next import number used during host review.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct PoolImportContext {
+    /// Effect-free upper quote for any supported import call on this Root.
+    pub maximum_call_debit_cycles: u128,
     pub bootstrap: Option<PoolImportBootstrap>,
     pub binding: crate::ids::FleetSubnetRootBinding,
     pub root_authority_sha256: [u8; 32],

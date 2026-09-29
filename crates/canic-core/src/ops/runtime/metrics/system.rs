@@ -1,50 +1,28 @@
-//! Module: ops::runtime::metrics::system
-//!
-//! Responsibility: record and snapshot low-cardinality runtime metrics for the system family.
-//! Does not own: workflow decisions, persisted records, or endpoint DTOs.
-//! Boundary: ops-layer metrics consumed by workflow metrics projection.
+//! Aggregate inter-canister call count consumed by process metrics.
 
-use crate::ids::SystemMetricKind;
-use std::{cell::RefCell, collections::HashMap};
+use std::cell::Cell;
 
 thread_local! {
-    static SYSTEM_METRICS: RefCell<HashMap<SystemMetricKind, u64>> = RefCell::new(HashMap::new());
+    static CANISTER_CALLS: Cell<u64> = const { Cell::new(0) };
 }
 
-///
-/// SystemMetrics
-///
-/// Operations-layer recorder for coarse system action counters.
-///
-
+/// Runtime owner of the aggregate inter-canister call counter.
 pub struct SystemMetrics;
 
 impl SystemMetrics {
-    /// Read one fixed aggregate without visiting target or method identities.
-    pub(crate) fn count(kind: SystemMetricKind) -> u64 {
-        SYSTEM_METRICS.with_borrow(|counts| counts.get(&kind).copied().unwrap_or_default())
+    /// Read the aggregate without visiting target or method identities.
+    pub(crate) fn count() -> u64 {
+        CANISTER_CALLS.get()
     }
 
-    /// Increment a counter and return the new value.
-    pub fn increment(kind: SystemMetricKind) {
-        SYSTEM_METRICS.with_borrow_mut(|counts| {
-            let entry = counts.entry(kind).or_insert(0);
-            *entry = entry.saturating_add(1);
-        });
-    }
-
-    #[must_use]
-    #[cfg(test)]
-    pub fn snapshot() -> Vec<(SystemMetricKind, u64)> {
-        SYSTEM_METRICS
-            .with_borrow(std::clone::Clone::clone)
-            .into_iter()
-            .collect()
+    /// Record one inter-canister call with saturating accounting.
+    pub fn increment() {
+        CANISTER_CALLS.set(CANISTER_CALLS.get().saturating_add(1));
     }
 
     #[cfg(test)]
     pub fn reset() {
-        SYSTEM_METRICS.with_borrow_mut(HashMap::clear);
+        CANISTER_CALLS.set(0);
     }
 }
 
@@ -56,79 +34,22 @@ impl SystemMetrics {
 mod tests {
     use super::*;
 
-    fn snapshot_map() -> HashMap<SystemMetricKind, u64> {
-        SystemMetrics::snapshot().into_iter().collect()
+    #[test]
+    fn calls_accumulate_and_reset() {
+        SystemMetrics::reset();
+        assert_eq!(SystemMetrics::count(), 0);
+        SystemMetrics::increment();
+        SystemMetrics::increment();
+        assert_eq!(SystemMetrics::count(), 2);
+        SystemMetrics::reset();
+        assert_eq!(SystemMetrics::count(), 0);
     }
 
     #[test]
-    fn system_metrics_start_empty() {
+    fn calls_saturate() {
+        CANISTER_CALLS.set(u64::MAX);
+        SystemMetrics::increment();
+        assert_eq!(SystemMetrics::count(), u64::MAX);
         SystemMetrics::reset();
-
-        let snapshot = SystemMetrics::snapshot();
-        assert!(snapshot.is_empty());
-    }
-
-    #[test]
-    fn increment_increases_counter() {
-        SystemMetrics::reset();
-
-        SystemMetrics::increment(SystemMetricKind::CanisterCall);
-
-        let map = snapshot_map();
-        assert_eq!(map.get(&SystemMetricKind::CanisterCall), Some(&1));
-    }
-
-    #[test]
-    fn increment_accumulates() {
-        SystemMetrics::reset();
-
-        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
-        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
-        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
-
-        let map = snapshot_map();
-        assert_eq!(map.get(&SystemMetricKind::CanisterStatus), Some(&3));
-    }
-
-    #[test]
-    fn metrics_are_isolated_per_kind() {
-        SystemMetrics::reset();
-
-        SystemMetrics::increment(SystemMetricKind::InstallCode);
-        SystemMetrics::increment(SystemMetricKind::DeleteCanister);
-        SystemMetrics::increment(SystemMetricKind::DeleteCanister);
-
-        let map = snapshot_map();
-
-        assert_eq!(map.get(&SystemMetricKind::InstallCode), Some(&1));
-        assert_eq!(map.get(&SystemMetricKind::DeleteCanister), Some(&2));
-    }
-
-    #[test]
-    fn reset_clears_all_metrics() {
-        SystemMetrics::reset();
-
-        SystemMetrics::increment(SystemMetricKind::InstallCode);
-        SystemMetrics::increment(SystemMetricKind::UpdateSettings);
-
-        SystemMetrics::reset();
-
-        let snapshot = SystemMetrics::snapshot();
-        assert!(snapshot.is_empty());
-    }
-
-    #[test]
-    fn increment_saturates_at_u64_max() {
-        SystemMetrics::reset();
-
-        // Force near-overflow state
-        SYSTEM_METRICS.with_borrow_mut(|counts| {
-            counts.insert(SystemMetricKind::CanisterCall, u64::MAX);
-        });
-
-        SystemMetrics::increment(SystemMetricKind::CanisterCall);
-
-        let map = snapshot_map();
-        assert_eq!(map.get(&SystemMetricKind::CanisterCall), Some(&u64::MAX));
     }
 }

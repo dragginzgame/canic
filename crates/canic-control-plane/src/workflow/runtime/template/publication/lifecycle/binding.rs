@@ -128,3 +128,57 @@ impl WasmStorePublicationWorkflow {
         Self::require_active_publication_store(&store.binding)
     }
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::ops::storage::state::root_wasm_store::{
+        PublicationStoreStateTestInput, WasmStoreStateTestInput,
+    };
+    use canic_core::{cdk::types::Principal, diagnostics::codes};
+
+    #[test]
+    fn initial_publication_rejects_gc_fenced_store_without_binding_it() {
+        for mode in [
+            WasmStoreGcMode::Prepared,
+            WasmStoreGcMode::InProgress,
+            WasmStoreGcMode::Clearing,
+            WasmStoreGcMode::Complete,
+        ] {
+            let binding = WasmStoreBinding::new("primary");
+            RootWasmStoreStateOps::import_test_state(
+                PublicationStoreStateTestInput {
+                    active_binding: None,
+                    detached_binding: None,
+                    retired_binding: None,
+                    generation: 0,
+                    changed_at: 0,
+                    retired_at: 0,
+                },
+                vec![WasmStoreStateTestInput {
+                    binding: binding.clone(),
+                    pid: Principal::from_slice(&[1; 29]),
+                    created_at: 1,
+                    gc_mode: mode,
+                    gc_changed_at: 1,
+                    prepared_at: None,
+                    started_at: None,
+                    completed_at: None,
+                    runs_completed: 0,
+                }],
+            );
+            let error =
+                WasmStorePublicationWorkflow::pin_initial_publication_store(binding).unwrap_err();
+            assert_eq!(error.code(), codes::STORAGE_INACTIVE);
+            assert!(
+                RootWasmStoreStateOps::publication_store_state()
+                    .active_binding
+                    .is_none()
+            );
+        }
+    }
+}

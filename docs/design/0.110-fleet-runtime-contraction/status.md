@@ -2,11 +2,11 @@
 
 ## Maintained scope
 
-The .47 package set is published. CANIC-185 target-local bootstrap funding,
+The .48 package set is published. CANIC-185 target-local bootstrap funding,
 role-owned activation persistence, optional observability, passive blob
 contracts, artifact reuse/admission and IcyDB composition corrections are
 implemented. The [current handoff](../../status/current.md) owns the active
-cleanup batch; [release notes](../../changelog/0.110.md) describe shipped behavior.
+cleanup and CANIC-187/188 correction batch; [release notes](../../changelog/0.110.md) describe shipped behavior.
 
 The normative [design](0.110-design.md) and independent
 [size follow-through amendment](2026-09-28-toko-size-follow-through.md) define
@@ -24,7 +24,9 @@ observability and blob-contract work; it did not restart the full B3/B4 matrix.
 | FI1 | Bootstrap and capacity-import implementation/qualification shipped in .43; subsequent reinstall/recovery corrections shipped through .47. |
 | B5 | The .42 checkpoint is qualified; final closeout must cover FI1 and subsequent corrections and receive human acceptance. |
 | Cleanup | Complete and ready for maintainer review: unused runtime/Host paths, obsolete helpers/tests and status-owned release flows removed, duplicate evidence consolidated, focused checks passed. |
-| Reinstall review corrections | Complete in the open .48 batch: typed unavailable funding diagnostics and exact-digest unpaid-review cancellation, with native recovery and public-CLI PocketIC qualification. Publication and Toko live acceptance remain pending. |
+| Reinstall review corrections | Shipped in .48: typed unavailable funding diagnostics and exact-digest unpaid-review cancellation. Toko confirms live cancellation and infrastructure completion. |
+
+| CANIC-187/188 | Implemented and locally qualified in the open .49 batch: whole-operation import budgets, successful-call settlement, seed-byte preservation and an exact issued-import repair. Live repair and downstream convergence remain outstanding; see the [repair decision](issued-import-recovery.md). |
 
 ## Evidence and remaining acceptance
 

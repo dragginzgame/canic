@@ -19,19 +19,14 @@ impl MgmtOps {
         args: T,
     ) -> Result<(), InternalError> {
         let chunk_count = chunk_hashes_list.len();
-        management_call(
-            ManagementCallMetricOperation::InstallChunkedCode,
-            MgmtInfra::install_chunked_code(
-                target_canister,
-                store_canister,
-                chunk_hashes_list,
-                wasm_module_hash,
-                args,
-            ),
-        )
+        management_call(MgmtInfra::install_chunked_code(
+            target_canister,
+            store_canister,
+            chunk_hashes_list,
+            wasm_module_hash,
+            args,
+        ))
         .await?;
-
-        SystemMetrics::increment(SystemMetricKind::InstallCode);
 
         log!(
             Topic::CanisterLifecycle,
@@ -48,11 +43,7 @@ impl MgmtOps {
         chunk: Vec<u8>,
     ) -> Result<Vec<u8>, InternalError> {
         let chunk_len = chunk.len();
-        let hash = management_call(
-            ManagementCallMetricOperation::UploadChunk,
-            MgmtInfra::upload_chunk(canister_pid, chunk),
-        )
-        .await?;
+        let hash = management_call(MgmtInfra::upload_chunk(canister_pid, chunk)).await?;
 
         #[expect(clippy::cast_precision_loss)]
         let bytes_kb = chunk_len as f64 / 1_000.0;
@@ -67,20 +58,12 @@ impl MgmtOps {
 
     /// List the chunk hashes currently stored in one canister's chunk store.
     pub async fn stored_chunks(canister_pid: Principal) -> Result<Vec<Vec<u8>>, InternalError> {
-        management_call(
-            ManagementCallMetricOperation::StoredChunks,
-            MgmtInfra::stored_chunks(canister_pid),
-        )
-        .await
+        management_call(MgmtInfra::stored_chunks(canister_pid)).await
     }
 
     /// Clear the chunk store of one canister.
     pub async fn clear_chunk_store(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(
-            ManagementCallMetricOperation::ClearChunkStore,
-            MgmtInfra::clear_chunk_store(canister_pid),
-        )
-        .await?;
+        management_call(MgmtInfra::clear_chunk_store(canister_pid)).await?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -93,13 +76,7 @@ impl MgmtOps {
 
     /// Uninstalls code from a canister and records metrics.
     pub async fn uninstall_code(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(
-            ManagementCallMetricOperation::UninstallCode,
-            MgmtInfra::uninstall_code(canister_pid),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::UninstallCode);
+        management_call(MgmtInfra::uninstall_code(canister_pid)).await?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -112,20 +89,12 @@ impl MgmtOps {
 
     /// Start one verified installation through the observed management boundary.
     pub async fn start_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(
-            ManagementCallMetricOperation::StartCanister,
-            MgmtInfra::start_canister(canister_pid),
-        )
-        .await
+        management_call(MgmtInfra::start_canister(canister_pid)).await
     }
 
     /// Stops a canister via the management canister.
     pub async fn stop_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(
-            ManagementCallMetricOperation::StopCanister,
-            MgmtInfra::stop_canister(canister_pid),
-        )
-        .await?;
+        management_call(MgmtInfra::stop_canister(canister_pid)).await?;
 
         log!(
             Topic::CanisterLifecycle,
@@ -138,13 +107,7 @@ impl MgmtOps {
 
     /// Deletes a canister (code + controllers) via the management canister.
     pub async fn delete_canister(canister_pid: Principal) -> Result<(), InternalError> {
-        management_call(
-            ManagementCallMetricOperation::DeleteCanister,
-            MgmtInfra::delete_canister(canister_pid),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::DeleteCanister);
+        management_call(MgmtInfra::delete_canister(canister_pid)).await?;
 
         Ok(())
     }

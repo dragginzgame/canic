@@ -11,9 +11,9 @@ use crate::output;
 use canic_host::{
     evidence_envelope::{EvidenceEnvelopeV1, ExitClassV1},
     policy_gate::{
-        PolicyGateReportV1, PolicyGateRequest, ProjectEvidenceGateReportV1,
-        ProjectEvidenceManifestGateRequest, evaluate_policy_gate,
-        evaluate_project_evidence_manifest_gate,
+        PolicyGateReportV1, PolicyGateRequest, WorkspaceEvidenceGateReportV1,
+        WorkspaceEvidenceManifestGateRequest, evaluate_policy_gate,
+        evaluate_workspace_evidence_manifest_gate,
     },
 };
 use std::fs;
@@ -32,7 +32,7 @@ use render::render_gate_report;
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub(super) enum EvidenceGateReport {
     Envelope(Box<PolicyGateReportV1>),
-    Manifest(Box<ProjectEvidenceGateReportV1>),
+    Manifest(Box<WorkspaceEvidenceGateReportV1>),
 }
 
 impl EvidenceGateReport {
@@ -66,7 +66,7 @@ pub(super) fn evaluate_gate_files(
         }
         EvidenceGateInput::Manifest(manifest_path) => {
             let manifest_source = fs::read_to_string(manifest_path)?;
-            evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+            evaluate_workspace_evidence_manifest_gate(WorkspaceEvidenceManifestGateRequest {
                 policy_source: &policy_source,
                 policy_path: &options.policy,
                 manifest_source: &manifest_source,

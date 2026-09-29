@@ -203,12 +203,6 @@ impl RestoreApplyJournal {
             .min_by_key(|operation| operation.sequence)
     }
 
-    /// Render the next transitionable operation as a no-execute command preview.
-    #[must_use]
-    pub fn next_command_preview(&self) -> RestoreApplyCommandPreview {
-        RestoreApplyCommandPreview::from_journal(self)
-    }
-
     /// Render the next transitionable operation with a configured command preview.
     #[must_use]
     pub(in crate::restore) fn next_command_preview_with_config(
