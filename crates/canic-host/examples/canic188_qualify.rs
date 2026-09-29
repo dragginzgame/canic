@@ -11,10 +11,10 @@ use canic_host::fleet_ensure::{
     model::{DesiredCanisterKind, DesiredFleet},
     ops::{CanicInitRequest, compile_arguments},
 };
-use ic_testkit::pocket_ic::{PocketIc, PocketIcBuilder};
+use ic_testkit::pic::{PocketIc, PocketIcBuilder, PocketIcBuilderExt, PocketIcStartupConfig};
 use serde::Deserialize;
 use sha2_host::{Digest, Sha256};
-use std::{error::Error as StdError, fs, path::Path};
+use std::{error::Error as StdError, fs, path::Path, time::Duration};
 
 #[derive(CandidType)]
 enum StatusRequest {
@@ -71,10 +71,9 @@ fn main() -> Result<(), Box<dyn StdError>> {
     if server.scheme() != "http" || server.host_str() != Some("127.0.0.1") {
         return Err("qualification requires the owned loopback PocketIC server".into());
     }
-    let pic = PocketIcBuilder::new()
-        .with_server_url(server)
-        .with_application_subnet()
-        .build();
+    let pic = PocketIcBuilder::new().with_application_subnet().try_build(
+        PocketIcStartupConfig::connect(server.as_str(), Duration::from_secs(30)),
+    )?;
     pic.create_canister_with_id(None, None, root)
         .map_err(std::io::Error::other)?;
     pic.add_cycles(root, 300_700_000_000_000);
