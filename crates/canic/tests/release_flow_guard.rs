@@ -735,24 +735,18 @@ fn release_candidate_accepts_only_sealed_release_mutation_after_validation() {
 }
 
 #[test]
-fn release_candidate_accepts_explicit_fast_validation_receipt() {
-    let (root, source) = create_candidate_repo("candidate-fast-receipt");
-    write_file(
-        &root,
-        "docs/status/current.md",
-        &format!(
-            "<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 gate=fast -->\n"
-        ),
-    );
+fn release_candidate_accepts_sealed_packages_without_a_status_document() {
+    let (root, _) = create_candidate_repo("candidate-sealed-packages");
+    fs::remove_file(root.join("docs/status/current.md"))
+        .expect("descriptive handoff should be removable");
 
     let output = run_candidate_guard(&root);
 
     assert!(
         output.status.success(),
-        "guard should accept the explicit fast receipt\n{}",
+        "sealed package surfaces should be sufficient for candidate checks\n{}",
         output_text(&output)
     );
-    assert!(output_text(&output).contains("fast gate"));
     let _ = fs::remove_dir_all(root);
 }
 

@@ -20,7 +20,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   caching, shared Cargo output, build admission and deployment diagnostics, and updates IcyDB
   composition to 0.261.16; removes downstream snapshots and admits verified
   historical audit hashes in secret scanning; removes orphaned code, compacts
-  historical evidence and fixes lifecycle-owner guard selection.
+  historical evidence, fixes lifecycle-owner guard selection and removes status
+  markers from publication admission.
 - `0.110.46` derives configured Root public keys offline, removes repeated key
   lookups during signing, corrects role-attestation feature requirements, and
   adds controller-only Root public-key inspection.

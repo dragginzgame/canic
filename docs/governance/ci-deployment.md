@@ -491,7 +491,7 @@ source. Current and committed version queries must use the shared pinned
 parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals an `Unreleased` detailed changelog entry with the
 release date or preserves its existing valid ISO date, then writes that source
-commit into one machine-checked current-status release marker. Source
+commit into a generated current-status release record. Source
 development and draft preflight require no manually maintained status marker;
 the bump removes stale marker lines and writes the sole candidate marker
 itself. Lineage prose is descriptive and is not a versioning or publication
@@ -510,10 +510,13 @@ gate still rejects volatile
 "latest published" and manual release-truth prose elsewhere. After staging,
 `make release-commit` runs the fast
 post-bump `make release-candidate` guard before committing or tagging. That
-guard verifies the sealed changelog and source marker, rejects every
-non-release change after the validated source, and checks locked offline Cargo
+guard verifies the sealed changelog, rejects non-release changes in the
+release transaction, and checks locked offline Cargo
 metadata, uniform workspace package versions and the installed-CLI default
-without repeating the already completed full source validation.
+without repeating the already completed full source validation. Current status
+text and markers are informational and never gate candidate admission or
+package publication. The release lane owns validation; the publication guard
+does not infer validation from an editable handoff.
 
 ### Fast non-runtime patch lane
 
