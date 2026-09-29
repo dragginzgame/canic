@@ -245,8 +245,12 @@ mod governed_suite {
     fn worker_groups() -> [Vec<GovernedTestCase>; 2] {
         let mut regular = fleet_registry::governed_pocketic_cases();
         regular.extend(fleet_coordinator::governed_pocketic_cases());
-        regular.extend(lifecycle::governed_pocketic_cases());
-        [regular, fleet_registry::governed_fleet_journey_cases()]
+        regular.extend(lifecycle::governed_runtime_cases());
+        // The retained timing baseline leaves this worker about 350s shorter.
+        // Move the two independent support estates (~200s) without adding workers.
+        let mut journeys = lifecycle::governed_support_cases();
+        journeys.extend(fleet_registry::governed_fleet_journey_cases());
+        [regular, journeys]
     }
 
     #[test]
@@ -255,12 +259,28 @@ mod governed_suite {
         let mut partition = fleet_registry::governed_recovery_cases();
         for group in worker_groups() {
             assert!(!group.is_empty());
+            let positions = group
+                .iter()
+                .map(|(name, _)| {
+                    cases
+                        .iter()
+                        .position(|(registered, _)| registered == name)
+                        .unwrap()
+                })
+                .collect::<Vec<_>>();
+            assert!(positions.windows(2).all(|pair| pair[0] < pair[1]));
             partition.extend(group);
         }
         assert_unique_governed_case_names(&partition);
         assert_eq!(
-            partition.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
-            cases.iter().map(|(name, _)| *name).collect::<Vec<_>>()
+            partition
+                .iter()
+                .map(|(name, _)| *name)
+                .collect::<std::collections::BTreeSet<_>>(),
+            cases
+                .iter()
+                .map(|(name, _)| *name)
+                .collect::<std::collections::BTreeSet<_>>()
         );
     }
 

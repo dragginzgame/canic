@@ -1705,6 +1705,11 @@ where
                     let maintenance_continuation =
                         observed.retry == EffectRetry::ContinuePoolMaintenance;
                     if matches!(record.state, EffectState::Intent) || maintenance_continuation {
+                        crate::fleet_ensure::policy::infrastructure_bootstrap::validate_effect_headroom(
+                            &retained_plan,
+                            action,
+                            source_cycles,
+                        )?;
                         if let Some(maximum_attempts) = action.fixture_publication_attempt_limit() {
                             if !reserve_fixture_publication_attempt(record, maximum_attempts) {
                                 return Err(EnsureWorkflowError::FixturePublicationBound {

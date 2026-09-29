@@ -127,7 +127,9 @@ pub fn held_fixture_store_wasm() -> Vec<u8> {
         let manifest = config
             .parent()
             .unwrap()
-            .join(".canic/generated/canic-fleet-wasm-store/Cargo.toml");
+            .join(".canic/generated")
+            .join(config.file_name().unwrap())
+            .join("canic-fleet-wasm-store/Cargo.toml");
         let target = workspace.join("target/pic-wasm");
         let mut command = std::process::Command::new("cargo");
         command
@@ -821,7 +823,7 @@ fn workspace_root() -> PathBuf {
 // -----------------------------------------------------------------------------
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
-pub(super) use tests::governed_pocketic_cases;
+pub(super) use tests::{governed_pocketic_cases, governed_runtime_cases, governed_support_cases};
 
 #[cfg(test)]
 mod fast_tests {
@@ -1790,6 +1792,12 @@ mod tests {
     }
 
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
+        let mut cases = governed_runtime_cases();
+        cases.extend(governed_support_cases());
+        cases
+    }
+
+    pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
         vec![
             (
                 "composed-framework direct ingress",
@@ -1799,6 +1807,13 @@ mod tests {
                 "managed admission target transition",
                 managed_admission_target_transition_replays_and_recovers_forward,
             ),
+        ]
+    }
+
+    // These independently created estates can run on the journey worker without
+    // repeating runtime ingress/transition qualification or sharing replica state.
+    pub fn governed_support_cases() -> Vec<crate::pic::GovernedTestCase> {
+        vec![
             (
                 "published managed-App support",
                 published_managed_app_support_drives_composed_lifecycle,

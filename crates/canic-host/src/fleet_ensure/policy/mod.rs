@@ -1771,20 +1771,7 @@ fn append_target_funding(
     if funding_fenced || live.cycles >= cycle_policy.minimum_cycles {
         return Ok(());
     }
-    let target_updates =
-        u128::try_from(actions.len()).map_err(|_| EnsurePolicyError::ArithmeticOverflow {
-            field: "target update count",
-        })?;
-    let update_margin = bounds.update_burn.checked_mul(target_updates).ok_or(
-        EnsurePolicyError::ArithmeticOverflow {
-            field: "target update margin",
-        },
-    )?;
-    let target_margin = bounds.observation_burn.checked_add(update_margin).ok_or(
-        EnsurePolicyError::ArithmeticOverflow {
-            field: "target funding margin",
-        },
-    )?;
+    let target_margin = target_funding_margin(actions.len(), bounds)?;
     let funding_deficit_cycles = cycle_policy.minimum_cycles - live.cycles;
     let amount = funding_deficit_cycles.checked_add(target_margin).ok_or(
         EnsurePolicyError::ArithmeticOverflow {
@@ -1823,6 +1810,19 @@ fn append_target_funding(
     );
     accumulator.add_funding(amount)?;
     accumulator.add_fee(bounds.ledger_fee)
+}
+
+fn target_funding_margin(actions: usize, bounds: CycleBounds) -> Result<u128, EnsurePolicyError> {
+    let update_margin = bounds.update_burn.checked_mul(actions as u128).ok_or(
+        EnsurePolicyError::ArithmeticOverflow {
+            field: "target update margin",
+        },
+    )?;
+    checked_add(
+        bounds.observation_burn,
+        update_margin,
+        "target funding margin",
+    )
 }
 
 fn reviewed_reinstall_canisters(

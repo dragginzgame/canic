@@ -1,6 +1,7 @@
 //! Focused retained child failure, capacity and progress regressions.
 
 use super::*;
+use crate::storage::stable::component_registry::RootComponentChildAllocationFailureRecord;
 use canic_core::{
     control_plane_support::error::{ProvisioningFailureStage, ProvisioningRetryCategory},
     diagnostics::codes,
@@ -182,7 +183,8 @@ fn reserve() -> (ActiveComponentTreeFixture, RootComponentChildAllocationView) {
 fn retained_child_failure_does_not_change_work_or_capacity() {
     let (fixture, allocation) = reserve();
     let before = RootComponentRegistryStore::export();
-    let error = InternalError::resource_exhausted();
+    let detail = "x".repeat(InternalError::MAX_PLATFORM_REJECTION_BYTES);
+    let error = InternalError::public(codes::PLATFORM_UNAVAILABLE).with_platform_rejection(&detail);
     let first = ComponentRegistryOps::record_child_failure(
         fixture.component,
         allocation.operation_id,
@@ -216,10 +218,34 @@ fn retained_child_failure_does_not_change_work_or_capacity() {
     let view = ComponentRegistryOps::child_allocation(fixture.component, allocation.operation_id)
         .unwrap()
         .unwrap();
-    assert_eq!(view.last_failure, Some(repeated));
+    assert_eq!(view.last_failure, Some(repeated.clone()));
+    assert_eq!(
+        repeated.platform_rejection.as_deref(),
+        Some(detail.as_str())
+    );
     let response = ComponentRegistryOps::child_failure_response(repeated);
     assert_eq!(response.diagnostic_code, error.public_error().raw_code());
     assert_eq!(response.consecutive_failures, 2);
+    assert_eq!(
+        response.platform_rejection.as_deref(),
+        Some(detail.as_str())
+    );
+    let encoded = candid::encode_one(&response).unwrap();
+    let decoded: canic_core::dto::component_registry::RootComponentChildAllocationFailure =
+        candid::decode_one(&encoded).unwrap();
+    assert_eq!(decoded, response);
+    let record = retained.child_allocations[0].last_failure.clone().unwrap();
+    let mut json = serde_json::to_value(&record).unwrap();
+    json.as_object_mut().unwrap().remove("platform_rejection");
+    assert!(serde_json::from_value::<RootComponentChildAllocationFailureRecord>(json).is_err());
+    let mut invalid = record;
+    invalid.platform_rejection = Some("x".repeat(InternalError::MAX_PLATFORM_REJECTION_BYTES + 1));
+    assert_eq!(
+        crate::ops::component_registry::child_failure::validate(Some(&invalid))
+            .unwrap_err()
+            .code(),
+        codes::STATE_INVALID
+    );
 }
 
 #[test]

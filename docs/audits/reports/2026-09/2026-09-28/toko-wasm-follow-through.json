@@ -1,0 +1,120 @@
+{
+  "schema_version": 1,
+  "date": "2026-09-28",
+  "kind": "development_observability_pair",
+  "base_commit": "06d73694d4c15a5d2c80469030c8944281334fbe",
+  "package_version": "0.110.46",
+  "open_batch": "0.110.47",
+  "source_inventory": {
+    "path": "toko-wasm-follow-through-source.sha256.gz",
+    "sha256": "13e63d4c59dc93addfe8215ae62009e483c7855ff2ed5e8915a0a4b8d5e857b4",
+    "files": 1506
+  },
+  "tools": {
+    "rustc": "1.98.1 (48a229cea 2026-09-01)",
+    "ic_wasm": "0.11.1",
+    "binaryen": "132",
+    "wasm_objdump": "1.0.34",
+    "executable_sha256": {
+      "rustc": "859254978c0a0402c32f949f6de0d99aee73be8d15f45aac00ae1448aac51e74",
+      "ic_wasm": "0cacb47f878536fd8d25a6afca66b6d52cf158370f73622caf63e7e6d6b920cf",
+      "wasm_opt": "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725"
+    }
+  },
+  "build": {
+    "role": "minimal",
+    "fixture": "canisters/audit/minimal",
+    "target": "wasm32-unknown-unknown",
+    "profile": "release",
+    "environment": "local",
+    "release_binding": "unbound template",
+    "command": [
+      "target/debug/examples/build_artifact",
+      "minimal",
+      "release",
+      ".",
+      ".",
+      ".tmp/toko-wasm-size/selected.toml",
+      "--environment",
+      "local"
+    ],
+    "optimization": "canonical Host release pipeline: Cargo opt-level z/LTO, ic-wasm shrink, Binaryen",
+    "configuration_path": ".tmp/toko-wasm-size/selected.toml",
+    "default_config": "[app]\nname = \"standalone\"\ninit_mode = \"enabled\"\n\n[roles.root]\nkind = \"root\"\n\n[roles.minimal]\nkind = \"canister\"\npackage = \"../../canisters/audit/minimal\"\n\n[auth.delegated_tokens]\nenabled = false\n\n[component_specs.default]\ncomponent_role = \"minimal\"\nmaximum_instances = 1\n",
+    "lean_append": "\n[roles.minimal.observability]\ndiagnostics = false\nhistory = false\nlogs = false\nmetrics = false\n"
+  },
+  "full": {
+    "config_sha256": "9b41be438a5660982a82daf56fb76277780296b07fd7204aeabe70242ab6d155",
+    "wasm_bytes": 2885159,
+    "code_bytes": 2623363,
+    "gzip_bytes": 1034911,
+    "data_bytes": 214942,
+    "defined_functions": 4785,
+    "imports": 38,
+    "exports": 11,
+    "tables": 1,
+    "wasm_sha256": "a09eee7449d6645fc4f0df583e92003a445ae5d11ec99e0552cc0e8651df8f3c",
+    "gzip_sha256": "f577d78137badb652e8a452a3205a5b5918466c0f0c91f397251e1a467503503",
+    "candid_sha256": "a4840843fc00e2f9e27a7cc6c0d382faec421ecfbe7ca80fd06568d5aad90ab3"
+  },
+  "lean": {
+    "config_sha256": "7f25797ad65fcdaa4660d008d32323c5c7e23e532e5ddd48018dc093c46c7615",
+    "wasm_bytes": 2635446,
+    "code_bytes": 2405383,
+    "gzip_bytes": 942632,
+    "data_bytes": 196022,
+    "defined_functions": 4340,
+    "imports": 38,
+    "exports": 11,
+    "tables": 1,
+    "wasm_sha256": "dcfed5e874f7788cfd06c20ffbe89a5e9b2fbec7586c04122de0df94fae2b91d",
+    "gzip_sha256": "fd8d309e1d23f307fb51db6a0d5bbe9291f23848dd556bf53eb70c95d15b2e5f",
+    "candid_sha256": "1e9105fd079adaf046571ebd1d437c27f750b3923e0fde812ecc7378d378f55a"
+  },
+  "saved": {
+    "wasm_bytes": 249713,
+    "code_bytes": 217980,
+    "gzip_bytes": 92279,
+    "data_bytes": 18920,
+    "defined_functions": 445
+  },
+  "repetitions": {
+    "per_configuration": 2,
+    "order": [
+      "full",
+      "lean",
+      "full",
+      "lean"
+    ],
+    "wasm_identical": true,
+    "gzip_identical": true,
+    "candid_identical": true,
+    "reused_compiler_cache": true
+  },
+  "artifacts": ".tmp/toko-wasm-size/final-{full,lean,full-repeat,lean-repeat}/",
+  "limits": [
+    "Both configurations use the new activation codecs; no codec-only delta is measured.",
+    "This is not a Toko measurement or a complete canonical-role attribution matrix.",
+    "No IC instruction or cycle saving is measured.",
+    "The size fixtures are unbound templates, not deployment-qualified release artifacts."
+  ],
+  "lean_surface_builds": {
+    "profile": "fast",
+    "root": {
+      "config": ".tmp/toko-wasm-size/lean-surfaces.toml",
+      "config_sha256": "8b4149b1650e7d2d835c53c442a05407b2f5faf3dcfc7afdd3bc10067d19c696",
+      "wasm_sha256": "5192dcd5a6c86dbaef78321f29210bcff23b091817078b88902209f9987bc15b",
+      "candid_sha256": "d07f8a3addc86fa97b5c26eb5140d12115e73e643b7d725b511d06f48fc88718"
+    },
+    "standalone_local": {
+      "config": ".tmp/toko-wasm-size/lean-local.toml",
+      "config_sha256": "ad7de0108c5b72298ed3601316c5dff40855a3926ef13b2553fc8bbe1f92e221",
+      "wasm_sha256": "95b1814f097204d6037a6b0bda79562d84fe3f214b2fdf9a52d88c487eee7ef0",
+      "candid_sha256": "31f2b6cc68e1ce7d2fc5ccb5c67442a1817fe138c7662c19c9c2a07150105ae7"
+    }
+  },
+  "canonical_candid": {
+    "wasm_store": "86387fac464b9ea0c707305da7a4db829d18c282f81131ca61e2b7b8d62207ad",
+    "fleet_coordinator": "cf03bfe44012a019ee5ee345e5e671260d07304da7a93eef95f643fb7c545505"
+  }
+}

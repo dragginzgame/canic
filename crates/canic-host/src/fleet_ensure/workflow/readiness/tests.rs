@@ -19,6 +19,7 @@ fn request(root: &Path) -> FleetReadinessRequest<'_> {
         cycles_ledger: Principal::management_canister(),
         estimated_required_cycles: None,
         desired: None,
+        generation_inputs: None,
         conversion: None,
     }
 }
@@ -37,6 +38,34 @@ fn unknown_funding_is_not_claimed_sufficient_and_estimates_never_grant_authority
         vec![ReadinessBlocker::EstimatedFundingShortfall]
     );
     assert!(!root.exists());
+}
+
+#[test]
+fn reset_funding_shortfall_is_explicit_without_duplicate_blockers() {
+    use crate::fleet_ensure::view::readiness::InfrastructureFundingReadiness;
+    let root = temp_dir("readiness-reset-shortfall");
+    let request = request(&root);
+    for (funding, blocked) in [(None, false), (Some(10), false), (Some(11), true)] {
+        let mut report = report(&request, "network".into(), 10, None);
+        for _ in 0..2 {
+            record_reset_forecast(
+                &mut report,
+                Some(InfrastructureFundingReadiness {
+                    targets: Vec::new(),
+                    maximum_funding_cycles: funding,
+                    maximum_ledger_transfers: 1,
+                }),
+            );
+        }
+        assert_eq!(
+            report
+                .blockers
+                .contains(&ReadinessBlocker::EstimatedFundingShortfall),
+            blocked
+        );
+        assert_eq!(report.blockers.len(), usize::from(blocked));
+        assert!(report.estimated_required_cycles.is_none());
+    }
 }
 
 #[test]

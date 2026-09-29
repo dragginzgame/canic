@@ -27,7 +27,8 @@ use std::fmt;
 pub struct InternalError {
     code: RegisteredDiagnosticCode,
     projection: PublicProjection,
-    provisioning_failure: Option<crate::view::provisioning_failure::ProvisioningFailureView>,
+    platform_rejection: Option<String>,
+    provisioning_failure: Option<Box<crate::view::provisioning_failure::ProvisioningFailureView>>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -37,11 +38,15 @@ enum PublicProjection {
 }
 
 impl InternalError {
+    /// Maximum UTF-8 bytes retained for a platform rejection.
+    pub const MAX_PLATFORM_REJECTION_BYTES: usize = 1024;
+
     const fn new(code: RegisteredDiagnosticCode, public_code: RegisteredDiagnosticCode) -> Self {
         Self {
             code,
             projection: PublicProjection::Registered(public_code),
             provisioning_failure: None,
+            platform_rejection: None,
         }
     }
 
@@ -59,6 +64,7 @@ impl InternalError {
             code,
             projection: PublicProjection::Registered(public_code),
             provisioning_failure: None,
+            platform_rejection: None,
         }
     }
 
@@ -70,12 +76,30 @@ impl InternalError {
             code: codes::PLATFORM_FAILED,
             projection: PublicProjection::Forwarded(err),
             provisioning_failure: None,
+            platform_rejection: None,
         }
+    }
+
+    /// Retain bounded platform rejection text for protected operator diagnostics only.
+    #[must_use]
+    pub fn with_platform_rejection(mut self, message: &str) -> Self {
+        let mut end = message.len().min(Self::MAX_PLATFORM_REJECTION_BYTES);
+        while !message.is_char_boundary(end) {
+            end -= 1;
+        }
+        self.platform_rejection = Some(message[..end].to_owned());
+        self
+    }
+
+    /// Platform evidence never changes public codes or retry decisions.
+    #[must_use]
+    pub fn platform_rejection(&self) -> Option<&str> {
+        self.platform_rejection.as_deref()
     }
 
     /// Attach only the first originating owner; outer workflows preserve its exact context.
     #[must_use]
-    pub const fn with_provisioning_failure(
+    pub fn with_provisioning_failure(
         mut self,
         stage: crate::domain::provisioning_failure::ProvisioningFailureStage,
         target: candid::Principal,
@@ -83,8 +107,8 @@ impl InternalError {
         retry_category: crate::domain::provisioning_failure::ProvisioningRetryCategory,
     ) -> Self {
         if self.provisioning_failure.is_none() {
-            self.provisioning_failure =
-                Some(crate::view::provisioning_failure::ProvisioningFailureView {
+            self.provisioning_failure = Some(Box::new(
+                crate::view::provisioning_failure::ProvisioningFailureView {
                     recorded_at_ns: None,
                     retry_at_ns: None,
                     stage,
@@ -92,7 +116,8 @@ impl InternalError {
                     operation_id,
                     diagnostic_code: self.public_error().raw_code(),
                     retry_category,
-                });
+                },
+            ));
         }
         self
     }
@@ -103,16 +128,17 @@ impl InternalError {
         mut self,
         origin: crate::view::provisioning_failure::ProvisioningFailureView,
     ) -> Self {
-        self.provisioning_failure.get_or_insert(origin);
+        self.provisioning_failure
+            .get_or_insert_with(|| Box::new(origin));
         self
     }
 
     /// Return protected context independently of the bounded public error envelope.
     #[must_use]
-    pub const fn provisioning_failure(
+    pub fn provisioning_failure(
         &self,
     ) -> Option<crate::view::provisioning_failure::ProvisioningFailureView> {
-        self.provisioning_failure
+        self.provisioning_failure.as_deref().copied()
     }
 
     #[must_use]

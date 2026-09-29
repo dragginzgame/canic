@@ -18,6 +18,15 @@ use std::time::Duration;
 
 const MAX_NONROOT_BOOTSTRAP_ATTEMPTS: u32 = 64;
 
+pub fn post_upgrade_wasm_store_before_bootstrap(
+    embedded_release_build_id: Option<&str>,
+    authority: RoleRuntimeAuthority,
+) -> bool {
+    post_upgrade_nonroot_before_bootstrap(CanisterRole::WASM_STORE, authority, move |_role| {
+        workflow::runtime::post_upgrade_wasm_store_after_memory_init(embedded_release_build_id)
+    })
+}
+
 pub fn post_upgrade_nonroot_canister_before_bootstrap(
     role: CanisterRole,
     embedded_release_build_id: Option<&str>,

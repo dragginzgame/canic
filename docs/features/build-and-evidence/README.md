@@ -18,12 +18,19 @@ preserve the underlying report and its input fingerprints without claiming
 that a deployment mutation happened.
 
 The host generates thin Cargo packages for Root, Coordinator and Store under
-`.canic/generated/` beside the selected configuration. All three bind the exact
+`.canic/generated/<config-file>/` beside the selected configuration. Sibling
+configurations have independent manifests and lockfiles. All three bind the exact
 Canic dependency and use unpublished build packages. Root selects configured
 capabilities, Store compiles its configuration, and Coordinator remains
 independent of App configuration. Cargo graphs are validated before artifact
 finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
 Candid follows its configured capabilities.
+
+Every final artifact, including a Local build, must fit Canic's supported
+10 MiB code-section and 50,000 defined-function ceilings before the Wasm,
+Candid and gzip outputs are published. Rejection preserves any previous output
+set and reports the offending artifact and measured limit. These are build
+admission checks, not a substitute for replica validation of the whole module.
 
 ## Boundary
 

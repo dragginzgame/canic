@@ -14,6 +14,11 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.47` corrects inflated reinstall funding and adds early infrastructure
+  forecasts; separates role-owned persistence, makes observability optional and
+  decouples blob contracts from embedded storage; improves artifact reuse, CI
+  caching, shared Cargo output, build admission and deployment diagnostics, and updates IcyDB
+  composition to 0.261.16.
 - `0.110.46` derives configured Root public keys offline, removes repeated key
   lookups during signing, corrects role-attestation feature requirements, and
   adds controller-only Root public-key inspection.

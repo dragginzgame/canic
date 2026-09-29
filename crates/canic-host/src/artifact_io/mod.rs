@@ -24,7 +24,7 @@ use std::{
 use canic_core::ids::BuildNetwork;
 use flate2::{Compression, GzBuilder};
 
-pub use wasm::enforce_wasm_code_section_limit;
+pub use wasm::enforce_wasm_install_limits;
 pub use wasm::wasm_artifact_metrics;
 
 const ARTIFACT_STAGE_ATTEMPTS: usize = 64;
@@ -52,6 +52,7 @@ const CANISTER_METHOD_EXPORT_PREFIXES: [&str; 3] = [
 
 /// Inputs and final paths for one qualification-before-publication Wasm artifact set.
 pub struct WasmArtifactFinalization<'a> {
+    pub release_build_id: Option<canic_core::ids::ReleaseBuildId>,
     pub profile: CanisterBuildProfile,
     pub build_network: BuildNetwork,
     pub embed_candid: bool,
@@ -99,7 +100,7 @@ pub fn finalize_wasm_artifact(
         )?);
         let binaryen_elapsed = phase.elapsed();
         let phase = Instant::now();
-        enforce_wasm_code_section_limit(finalization.build_network, &staged.wasm_path)?;
+        enforce_wasm_install_limits(finalization.build_network, &staged.wasm_path)?;
         write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
         if finalization.validate_sidecar_only {
             validate_sidecar_only_candid_artifact(&staged.wasm_path, &staged.did_path)?;
@@ -125,6 +126,11 @@ fn stage_and_publish_artifact_set<T>(
     write_wasm_artifact(finalization.source_wasm_path, &staged.wasm_path)?;
     write_bytes(&staged.did_path, finalization.candid)?;
 
+    if let Some(identity) = finalization.release_build_id {
+        let mut bytes = fs::read(&staged.wasm_path)?;
+        crate::canister_build::release_binding::bind_release_build_id(&mut bytes, identity)?;
+        write_bytes(&staged.wasm_path, &bytes)?;
+    }
     let result = qualify(&staged)?;
     let wasm = fs::read(&staged.wasm_path)?;
     let candid = fs::read(&staged.did_path)?;

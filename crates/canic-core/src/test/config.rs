@@ -6,7 +6,7 @@ use crate::{
         CanisterAuthConfig, CanisterConfig, CanisterKind, ComponentChildConfig, ComponentChildKind,
         ComponentLimitsConfig, ComponentSpawnGrantConfig, ComponentSpecConfig,
         CyclesFundingPolicyConfig, DiagnosticsCanisterConfig, MetricsCanisterConfig,
-        RoleDeclaration, RoleDeclarationKind, StandardsCanisterConfig,
+        RoleDeclaration, RoleDeclarationKind, RoleObservabilityConfig, StandardsCanisterConfig,
     },
     config::{Config, ConfigModel, RoleRuntimeAuthority, RoleRuntimeConfig},
     ids::{CanisterRole, ComponentSpecId},
@@ -76,6 +76,7 @@ impl ConfigTestBuilder {
                 kind: declaration_kind,
                 package: (!role.is_root()).then(|| role.as_ref().to_string()),
                 fleet_admission: false,
+                observability: RoleObservabilityConfig::default(),
             },
         );
 

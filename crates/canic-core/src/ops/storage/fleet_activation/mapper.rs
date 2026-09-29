@@ -16,20 +16,21 @@ use crate::{
     },
     storage::stable::fleet_activation::{
         ComponentRuntimeRecord, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
-        FleetActivationRecord, FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
+        FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
         FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
         FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
         MAX_RETAINED_PREPARED_CREDENTIAL_GENERATIONS,
     },
+    view::fleet_activation::FleetActivationView,
 };
 use std::collections::BTreeSet;
 
 pub(super) fn record_to_status(
-    record: FleetActivationRecord,
+    record: FleetActivationView,
     is_root: bool,
 ) -> Result<FleetActivationStatusResponse, FleetActivationOpsError> {
     super::fixture::validate(&record)?;
-    let FleetActivationRecord {
+    let FleetActivationView {
         state,
         root_authority,
         wasm_store_authority,

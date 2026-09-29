@@ -39,96 +39,84 @@ fn failed_cargo_input_capture_leaves_no_stage_or_published_changes() {
 }
 
 #[test]
-fn ic_code_limit_failure_preserves_the_published_artifact_set() {
-    let root = unique_temp_dir("canic-artifact-set-ic-limit");
-    fs::create_dir_all(&root).expect("create temp dir");
-    let source_wasm_path = root.join("source.wasm");
-    let wasm_path = root.join("app.wasm");
-    let did_path = root.join("app.did");
-    let wasm_gz_path = root.join("app.wasm.gz");
-    let oversized =
-        wasm_with_code_section_size(super::wasm::CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1);
-    fs::write(&source_wasm_path, oversized).expect("write oversized source Wasm");
-    fs::write(&wasm_path, b"previous wasm").expect("write previous Wasm");
-    fs::write(&did_path, b"previous candid").expect("write previous Candid");
-    fs::write(&wasm_gz_path, b"previous gzip").expect("write previous gzip");
-
-    let finalization = WasmArtifactFinalization {
-        profile: CanisterBuildProfile::Fast,
-        build_network: BuildNetwork::Ic,
-        embed_candid: false,
-        validate_sidecar_only: false,
-        source_wasm_path: &source_wasm_path,
-        candid: b"service : {}",
-        wasm_path: &wasm_path,
-        did_path: &did_path,
-        wasm_gz_path: &wasm_gz_path,
-    };
-    let error = stage_and_publish_artifact_set(&finalization, |staged| {
-        enforce_wasm_code_section_limit(BuildNetwork::Ic, &staged.wasm_path)?;
-        write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
-        Ok(())
-    })
-    .expect_err("IC-bound oversized Wasm must reject");
-
-    assert!(error.to_string().contains("IC mainnet Wasm artifact"));
-    assert_eq!(
-        fs::read(&wasm_path).expect("read previous Wasm"),
-        b"previous wasm"
-    );
-    assert_eq!(
-        fs::read(&did_path).expect("read previous Candid"),
-        b"previous candid"
-    );
-    assert_eq!(
-        fs::read(&wasm_gz_path).expect("read previous gzip"),
-        b"previous gzip"
-    );
-    assert_no_artifact_stage(&root);
-    fs::remove_dir_all(root).expect("remove temp root");
+fn install_limit_failure_preserves_the_published_artifact_set() {
+    for network in [BuildNetwork::Ic, BuildNetwork::Local] {
+        for oversized in [
+            wasm_with_code_section_size(super::wasm::SUPPORTED_CODE_SECTION_LIMIT_BYTES + 1),
+            wasm_with_defined_functions(super::wasm::SUPPORTED_DEFINED_FUNCTION_LIMIT + 1),
+        ] {
+            let root = unique_temp_dir("canic-artifact-set-limit");
+            fs::create_dir_all(&root).unwrap();
+            let source_wasm_path = root.join("source.wasm");
+            let wasm_path = root.join("app.wasm");
+            let did_path = root.join("app.did");
+            let wasm_gz_path = root.join("app.wasm.gz");
+            fs::write(&source_wasm_path, oversized).unwrap();
+            fs::write(&wasm_path, b"previous wasm").unwrap();
+            fs::write(&did_path, b"previous candid").unwrap();
+            fs::write(&wasm_gz_path, b"previous gzip").unwrap();
+            let finalization = WasmArtifactFinalization {
+                release_build_id: None,
+                profile: CanisterBuildProfile::Fast,
+                build_network: network,
+                embed_candid: false,
+                validate_sidecar_only: false,
+                source_wasm_path: &source_wasm_path,
+                candid: b"service : {}",
+                wasm_path: &wasm_path,
+                did_path: &did_path,
+                wasm_gz_path: &wasm_gz_path,
+            };
+            let result = stage_and_publish_artifact_set(&finalization, |staged| {
+                enforce_wasm_install_limits(network, &staged.wasm_path)?;
+                write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
+                Ok(())
+            });
+            assert!(result.is_err());
+            assert_eq!(fs::read(&wasm_path).unwrap(), b"previous wasm");
+            assert_eq!(fs::read(&did_path).unwrap(), b"previous candid");
+            assert_eq!(fs::read(&wasm_gz_path).unwrap(), b"previous gzip");
+            assert_no_artifact_stage(&root);
+            fs::remove_dir_all(root).unwrap();
+        }
+    }
 }
 
 #[test]
-fn local_build_publishes_wasm_above_the_current_ic_mainnet_limit() {
-    let root = unique_temp_dir("canic-artifact-set-local-limit");
-    fs::create_dir_all(&root).expect("create temp dir");
-    let source_wasm_path = root.join("source.wasm");
-    let wasm_path = root.join("app.wasm");
-    let did_path = root.join("app.did");
-    let wasm_gz_path = root.join("app.wasm.gz");
-    let oversized =
-        wasm_with_code_section_size(super::wasm::CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1);
-    fs::write(&source_wasm_path, &oversized).expect("write oversized source Wasm");
+fn install_limits_accept_exact_supported_boundaries() {
+    let root = unique_temp_dir("canic-artifact-exact-limits");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("app.wasm");
+    for wasm in [
+        wasm_with_code_section_size(super::wasm::SUPPORTED_CODE_SECTION_LIMIT_BYTES),
+        wasm_with_defined_functions(super::wasm::SUPPORTED_DEFINED_FUNCTION_LIMIT),
+    ] {
+        fs::write(&path, wasm).unwrap();
+        for network in [BuildNetwork::Ic, BuildNetwork::Local] {
+            enforce_wasm_install_limits(network, &path).unwrap();
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
 
-    let finalization = WasmArtifactFinalization {
-        profile: CanisterBuildProfile::Fast,
-        build_network: BuildNetwork::Local,
-        embed_candid: false,
-        validate_sidecar_only: false,
-        source_wasm_path: &source_wasm_path,
-        candid: b"service : {}",
-        wasm_path: &wasm_path,
-        did_path: &did_path,
-        wasm_gz_path: &wasm_gz_path,
-    };
-    stage_and_publish_artifact_set(&finalization, |staged| {
-        enforce_wasm_code_section_limit(BuildNetwork::Local, &staged.wasm_path)?;
-        write_gzip_artifact(&staged.wasm_path, &staged.wasm_gz_path)?;
-        Ok(())
-    })
-    .expect("local oversized Wasm must publish");
-
-    assert_eq!(
-        fs::read(&wasm_path).expect("read published Wasm"),
-        oversized
-    );
-    assert_eq!(
-        fs::read(&did_path).expect("read published Candid"),
-        b"service : {}"
-    );
-    assert!(fs::metadata(&wasm_gz_path).expect("gzip metadata").len() > 0);
-    assert_no_artifact_stage(&root);
-    fs::remove_dir_all(root).expect("remove temp root");
+fn wasm_with_defined_functions(count: u32) -> Vec<u8> {
+    let mut wasm = b"\0asm\x01\0\0\0".to_vec();
+    push_section(&mut wasm, 1, &[1, 0x60, 0, 0]);
+    let mut functions = Vec::new();
+    push_u32_leb128(&mut functions, count);
+    functions.resize(functions.len() + count as usize, 0);
+    wasm.push(3);
+    push_u32_leb128(&mut wasm, u32::try_from(functions.len()).unwrap());
+    wasm.extend(functions);
+    let mut code = Vec::new();
+    push_u32_leb128(&mut code, count);
+    for _ in 0..count {
+        code.extend([2, 0, 0x0b]);
+    }
+    wasm.push(10);
+    push_u32_leb128(&mut wasm, u32::try_from(code.len()).unwrap());
+    wasm.extend(code);
+    wasm
 }
 
 // Replace the source artifact only after a successful shrink command.
@@ -539,12 +527,27 @@ fn push_section(wasm: &mut Vec<u8>, id: u8, payload: &[u8]) {
 
 fn wasm_with_code_section_size(size: usize) -> Vec<u8> {
     let mut wasm = b"\0asm\x01\0\0\0".to_vec();
+    push_section(&mut wasm, 1, &[1, 0x60, 0, 0]);
+    push_section(&mut wasm, 3, &[1, 0]);
+    let mut body_size = size - 2;
+    let mut encoded_size = Vec::new();
+    loop {
+        encoded_size.clear();
+        push_u32_leb128(&mut encoded_size, u32::try_from(body_size).unwrap());
+        let adjusted = size - 1 - encoded_size.len();
+        if adjusted == body_size {
+            break;
+        }
+        body_size = adjusted;
+    }
+    let mut code = vec![1];
+    code.extend(encoded_size);
+    code.push(0); // No locals.
+    code.resize(size - 1, 1); // nop instructions.
+    code.push(0x0b);
     wasm.push(10);
-    push_u32_leb128(
-        &mut wasm,
-        u32::try_from(size).expect("test section size fits u32"),
-    );
-    wasm.resize(wasm.len() + size, 0);
+    push_u32_leb128(&mut wasm, u32::try_from(size).unwrap());
+    wasm.extend(code);
     wasm
 }
 

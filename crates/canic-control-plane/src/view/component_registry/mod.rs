@@ -589,12 +589,13 @@ pub struct RootComponentChildAllocationView {
 }
 
 /// Read-only latest child allocation diagnostic and its bounded retry deadline.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentChildAllocationFailureView {
     pub diagnostic_code: u16,
     pub failed_at_ns: u64,
     pub consecutive_failures: u32,
     pub retry_at_ns: u64,
+    pub platform_rejection: Option<String>,
 }
 
 ///

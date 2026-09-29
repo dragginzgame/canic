@@ -202,6 +202,18 @@ macro_rules! __canic_build_internal {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::Icrc21 => {
                     println!("cargo:rustc-cfg=canic_capability_icrc21");
                 }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::ObservabilityDiagnostics => {
+                    println!("cargo:rustc-cfg=canic_capability_observability_diagnostics");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::ObservabilityHistory => {
+                    println!("cargo:rustc-cfg=canic_capability_observability_history");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::ObservabilityLogs => {
+                    println!("cargo:rustc-cfg=canic_capability_observability_logs");
+                }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::ObservabilityMetrics => {
+                    println!("cargo:rustc-cfg=canic_capability_observability_metrics");
+                }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::RoleAttestationSigner => {
                     println!("cargo:rustc-cfg=canic_capability_role_attestation_signer");
                 }

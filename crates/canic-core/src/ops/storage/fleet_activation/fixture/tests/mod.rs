@@ -9,7 +9,7 @@ use crate::{
 };
 use sha2::{Digest, Sha256};
 
-fn fixture_record(child: bool) -> FleetActivationRecord {
+fn fixture_record(child: bool) -> FleetActivationView {
     let ManagedCanisterBinding::Component(component) =
         crate::test::support::managed_component_binding()
     else {
@@ -54,7 +54,7 @@ fn fixture_record(child: bool) -> FleetActivationRecord {
         },
         descriptor,
     };
-    FleetActivationRecord {
+    FleetActivationView {
         state: FleetActivationStateRecord::Prepared {
             identity,
             evidence: FleetActivationEvidenceRecord {
@@ -94,8 +94,10 @@ fn fixture_assignment_roundtrips_for_parent_and_child_without_a_progress_cursor(
             .unwrap()
             .grant_revision = 3;
         validate(&record).unwrap();
-        let bytes = crate::cdk::serialize::serialize(&record).unwrap();
-        let restored: FleetActivationRecord = crate::cdk::serialize::deserialize(&bytes).unwrap();
+        crate::ops::storage::fleet_activation::codec::select_ordinary();
+        let bytes = crate::ops::storage::fleet_activation::codec::encode(&record).unwrap();
+        let restored =
+            crate::ops::storage::fleet_activation::codec::decode_ordinary(&bytes.bytes).unwrap();
         assert_eq!(restored, record);
         validate(&restored).unwrap();
         let status =

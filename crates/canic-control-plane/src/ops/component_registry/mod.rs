@@ -6130,7 +6130,7 @@ fn child_record_to_directory_view(
 fn validate_child_allocation_record(
     record: &RootComponentChildAllocationRecord,
 ) -> Result<(), InternalError> {
-    child_failure::validate(record.last_failure)?;
+    child_failure::validate(record.last_failure.as_ref())?;
     if record.operation_id == [0; 32]
         || record.component != record.reserved_against_registry.component
         || record.reserved_against_registry.revision == 0

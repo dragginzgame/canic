@@ -409,40 +409,103 @@ pub struct ComponentRuntimeActivationRecord {
 }
 
 ///
-/// FleetActivationRecord
+/// OrdinaryActivationRecord
+///
+/// Ordinary managed activation without Root manifests or Store authority.
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct FleetActivationRecord {
+#[serde(deny_unknown_fields)]
+pub struct OrdinaryActivationRecord {
     pub state: FleetActivationStateRecord,
-    pub root_authority: Option<FleetSubnetRootAuthorityRecord>,
-    pub wasm_store_authority: Option<FleetSubnetWasmStoreAuthorityRecord>,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
     pub prepared_state_snapshot_hash: Option<[u8; 32]>,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
     pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
-    pub cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
-    pub credential_manifests: Vec<FleetCredentialManifestRecord>,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
     pub component_runtime: Option<ComponentRuntimeRecord>,
 }
 
+///
+/// RootActivationRecord
+///
+/// Root-owned activation authority and retained manifests.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct RootActivationRecord {
+    pub state: FleetActivationStateRecord,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub prepared_state_snapshot_hash: Option<[u8; 32]>,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
+    pub root_authority: FleetSubnetRootAuthorityRecord,
+    pub wasm_store_authority: FleetSubnetWasmStoreAuthorityRecord,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub cascade_manifest: Option<Vec<FleetCascadeManifestEntryRecord>>,
+    pub credential_manifests: Vec<FleetCredentialManifestRecord>,
+}
+
+///
+/// WasmStoreActivationRecord
+///
+/// Store-owned activation, independent of Component deployment schemas.
+///
+
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct WasmStoreActivationRecord {
+    pub state: FleetActivationStateRecord,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub prepared_state_snapshot_hash: Option<[u8; 32]>,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub prepared_topology_snapshot_hash: Option<[u8; 32]>,
+    pub wasm_store_authority: FleetSubnetWasmStoreAuthorityRecord,
+}
+
+///
+/// FleetActivationRecord
+///
+/// Bounded opaque encoding of the lifecycle-selected concrete activation record.
+///
+
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetActivationRecord {
+    pub bytes: Vec<u8>,
+}
 impl FleetActivationRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "FleetActivationRecord";
 }
-
-impl_storable_bounded!(
-    FleetActivationRecord,
-    MAX_FLEET_ACTIVATION_RECORD_BYTES,
-    false
-);
+impl crate::cdk::structures::storable::Storable for FleetActivationRecord {
+    const BOUND: crate::cdk::structures::storable::Bound =
+        crate::cdk::structures::storable::Bound::Bounded {
+            max_size: MAX_FLEET_ACTIVATION_RECORD_BYTES,
+            is_fixed_size: false,
+        };
+    fn to_bytes(&self) -> std::borrow::Cow<'_, [u8]> {
+        std::borrow::Cow::Borrowed(&self.bytes)
+    }
+    fn into_bytes(self) -> Vec<u8> {
+        self.bytes
+    }
+    fn from_bytes(bytes: std::borrow::Cow<'_, [u8]>) -> Self {
+        Self {
+            bytes: bytes.into_owned(),
+        }
+    }
+}
 
 ///
 /// FleetActivationData
+///
+/// Canonical encoded activation snapshot.
 ///
 
 #[derive(Clone, Debug, Default, Eq, PartialEq)]
 pub struct FleetActivationData {
     pub record: Option<FleetActivationRecord>,
 }
-
 impl FleetActivationData {
     pub const STATE_CONTRACT_NAME: &'static str = "FleetActivationData";
 }
@@ -450,26 +513,23 @@ impl FleetActivationData {
 ///
 /// FleetActivation
 ///
+/// Single durable owner; role conversion and transient projections belong to ops.
+///
 
 pub struct FleetActivation;
-
 impl FleetActivation {
-    #[must_use]
     pub(crate) fn get() -> Option<FleetActivationRecord> {
         FLEET_ACTIVATION.with_borrow(|store| store.get().clone())
     }
-
     pub(crate) fn initialize(record: FleetActivationRecord) -> bool {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
             if store.get().is_some() {
                 return false;
             }
-            let previous = store.set(Some(record));
-            debug_assert!(previous.is_none());
+            store.set(Some(record));
             true
         })
     }
-
     pub(crate) fn replace(record: FleetActivationRecord) -> bool {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
             if store.get().is_none() {
@@ -479,85 +539,10 @@ impl FleetActivation {
             true
         })
     }
-
-    #[cfg(test)]
-    #[must_use]
-    pub(crate) fn export() -> FleetActivationData {
-        FleetActivationData {
-            record: Self::get(),
-        }
-    }
-
     #[cfg(test)]
     pub(crate) fn import(data: FleetActivationData) {
         FLEET_ACTIVATION.with_borrow_mut(|store| {
-            store.set(None);
-            if let Some(record) = data.record {
-                store.set(Some(record));
-            }
+            store.set(data.record);
         });
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::{
-        cdk::structures::storable::Storable,
-        ids::{AppId, CanonicalNetworkId, FleetId, FleetKey, ReleaseBuildId, ReleaseBuildNonce},
-    };
-
-    fn record() -> FleetActivationRecord {
-        FleetActivationRecord {
-            state: FleetActivationStateRecord::Prepared {
-                identity: FleetActivationIdentityRecord {
-                    fleet: FleetBinding {
-                        fleet: FleetKey {
-                            canonical_network_id: CanonicalNetworkId::ic_mainnet(),
-                            fleet_id: FleetId::from_generated_bytes([1; 32]),
-                        },
-                        app: AppId::from("toko"),
-                    },
-                    operation_id: [2; 32],
-                    release_build_id: ReleaseBuildId::from_nonce(
-                        ReleaseBuildNonce::from_random_bytes([3; 32]),
-                    ),
-                },
-                evidence: FleetActivationEvidenceRecord {
-                    cascade: None,
-                    credential: None,
-                },
-                application_init_args: Some(vec![4, 5, 6]),
-            },
-            root_authority: None,
-            wasm_store_authority: None,
-            prepared_state_snapshot_hash: None,
-            prepared_topology_snapshot_hash: None,
-            cascade_manifest: None,
-            credential_manifests: Vec::new(),
-            component_runtime: None,
-        }
-    }
-
-    #[test]
-    fn prepared_record_roundtrips_through_stable_encoding() {
-        let record = record();
-        let bytes = record.to_bytes();
-        let decoded = FleetActivationRecord::from_bytes(bytes);
-
-        assert_eq!(decoded, record);
-    }
-
-    #[test]
-    fn store_initializes_once_without_an_unbound_record() {
-        FleetActivation::import(FleetActivationData::default());
-        let record = record();
-
-        assert_eq!(FleetActivation::get(), None);
-        assert!(FleetActivation::initialize(record.clone()));
-        assert_eq!(FleetActivation::get(), Some(record.clone()));
-        assert!(!FleetActivation::initialize(record));
-
-        FleetActivation::import(FleetActivationData::default());
     }
 }

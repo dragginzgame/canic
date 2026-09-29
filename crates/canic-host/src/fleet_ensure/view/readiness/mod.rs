@@ -16,6 +16,7 @@ pub struct FleetReadiness {
     pub operator: String,
     pub cycles_ledger: String,
     pub network_identity: String,
+    pub generation_inputs_checked: bool,
     #[serde(with = "crate::fleet_ensure::model::u128_text")]
     pub available_cycles: u128,
     #[serde(with = "crate::fleet_ensure::model::option_u128_text")]
@@ -71,7 +72,39 @@ pub struct PrebuildFundingReadiness {
     #[serde(with = "crate::fleet_ensure::model::option_u128_text")]
     pub per_step_execution_allowance_cycles: Option<u128>,
     pub conversion: Option<ReadinessConversionQuote>,
+    pub clean_reinstall_infrastructure: Option<InfrastructureFundingReadiness>,
     pub unresolved: Vec<ReadinessUnresolved>,
+}
+
+///
+/// InfrastructureFundingReadiness
+///
+/// Advisory reset funding view; imports and workload convergence retain separate review.
+///
+
+#[derive(Debug, Serialize)]
+pub struct InfrastructureFundingReadiness {
+    pub targets: Vec<InfrastructureTargetFundingReadiness>,
+    #[serde(with = "crate::fleet_ensure::model::option_u128_text")]
+    pub maximum_funding_cycles: Option<u128>,
+    pub maximum_ledger_transfers: usize,
+}
+
+///
+/// InfrastructureTargetFundingReadiness
+///
+/// Readiness view of one owner's native balance and funding forecast, excluding Ledger fees.
+///
+
+#[derive(Debug, Serialize)]
+pub struct InfrastructureTargetFundingReadiness {
+    pub name: String,
+    pub principal: String,
+    #[serde(with = "crate::fleet_ensure::model::option_u128_text")]
+    pub available_native_cycles: Option<u128>,
+    #[serde(with = "crate::fleet_ensure::model::option_u128_text")]
+    pub maximum_funding_cycles: Option<u128>,
+    pub unavailable: Option<RootReadinessUnavailable>,
 }
 
 ///

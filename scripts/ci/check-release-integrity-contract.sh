@@ -55,6 +55,7 @@ installers=(
     "$ROOT/scripts/ci/install-icp-cli.sh"
     "$ROOT/scripts/ci/install-ic-wasm.sh"
     "$ROOT/scripts/ci/install-binaryen.sh"
+    "$ROOT/scripts/ci/install-sccache-ci.sh"
 )
 
 fail() {

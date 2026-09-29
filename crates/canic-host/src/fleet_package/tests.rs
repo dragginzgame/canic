@@ -66,3 +66,61 @@ fn package(name: &str, id: &str, version: &str) -> CargoMetadataPackage {
         targets: Vec::new(),
     }
 }
+#[test]
+fn sibling_configurations_preserve_each_others_generated_packages() {
+    let root = temp_dir("generated-package-config-isolation");
+    let canic_manifest = root.join("crates/canic/Cargo.toml");
+    fs::create_dir_all(canic_manifest.parent().unwrap()).unwrap();
+    fs::write(
+        &canic_manifest,
+        "[package]\nname = 'canic'\nversion = '0.1.0'\n",
+    )
+    .unwrap();
+    fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    let dependencies = GeneratedWrapperDependencies {
+        canic_version: "0.1.0".into(),
+        candid_version: "0.10.0".into(),
+        ic_cdk_version: "0.20.0".into(),
+    };
+    for package in [
+        "canic-fleet-root",
+        "canic-fleet-coordinator",
+        "canic-fleet-wasm-store",
+    ] {
+        let first = manifest_path(&root.join("configs/first.toml"), package);
+        let second = manifest_path(&root.join("configs/second.toml"), package);
+        let write = |manifest: &Path, features: &[&str]| {
+            materialize(
+                manifest,
+                &root,
+                &canic_manifest,
+                &dependencies,
+                &FleetPackageSpec {
+                    package,
+                    crate_name: "fixture",
+                    app: "test",
+                    role: "root",
+                    features,
+                    entrypoint: "// fixture entrypoint\n",
+                    build_script: Some("fn main() {}\n"),
+                },
+            )
+            .unwrap();
+        };
+        let read = |manifest: &Path| {
+            ["Cargo.toml", "Cargo.lock", "src/lib.rs", "build.rs"]
+                .map(|name| fs::read(manifest.parent().unwrap().join(name)).unwrap())
+        };
+        write(&first, &["control-plane", "auth-chain-key-root-sign"]);
+        let retained = read(&first);
+        // Reproduce a second worker preparing a different Root feature contract
+        // while the first worker has already frozen its Cargo inputs.
+        write(&second, &["control-plane"]);
+        assert_eq!(read(&first), retained);
+        assert_ne!(first, second);
+        assert_ne!(read(&first)[0], read(&second)[0]);
+        write(&first, &["control-plane", "auth-chain-key-root-sign"]);
+        assert_eq!(read(&first), retained);
+    }
+    fs::remove_dir_all(root).unwrap();
+}

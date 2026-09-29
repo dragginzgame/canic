@@ -19,6 +19,7 @@ pub struct CompiledCanisterArtifact {
     output: CanisterArtifactBuildOutput,
     candid: Vec<u8>,
     profile: CanisterBuildProfile,
+    release_build_id: Option<canic_core::ids::ReleaseBuildId>,
     build_network: BuildNetwork,
     profile_marker: Option<PathBuf>,
 }
@@ -36,6 +37,7 @@ impl CompiledCanisterArtifact {
             output,
             candid,
             profile: context.profile,
+            release_build_id: context.release_build_id,
             build_network: context.build_network,
             profile_marker,
         })
@@ -49,6 +51,7 @@ impl CompiledCanisterArtifact {
         self.output.transforms = finalize_wasm_artifact(
             &WasmArtifactFinalization {
                 profile: self.profile,
+                release_build_id: self.release_build_id,
                 build_network: self.build_network,
                 embed_candid: should_embed_candid_metadata(self.build_network),
                 validate_sidecar_only: false,

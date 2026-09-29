@@ -1,4 +1,5 @@
 use std::collections::HashSet;
+
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -6,7 +7,6 @@ use std::path::{Path, PathBuf};
 use candid::types::internal::TypeContainer;
 use candid::{Principal, decode_one, encode_one};
 use candid_parser::utils::CandidSource;
-#[cfg(feature = "blob-storage-billing")]
 use canic::dto::blob_storage::{
     BlobProjectCyclesTopUpReport, BlobStorageBillingConfig, BlobStorageBillingWarning,
     BlobStorageCashierAccountBalanceGetError, BlobStorageCashierAccountBalanceGetOk,
@@ -1080,7 +1080,6 @@ fn blob_storage_gateway_dtos_roundtrip_through_candid() {
     );
 }
 
-#[cfg(feature = "blob-storage-billing")]
 fn cashier_balance(total: i64) -> BlobStorageCashierAccountCycleBalances {
     BlobStorageCashierAccountCycleBalances {
         total: candid::Int::from(total),
@@ -1091,7 +1090,6 @@ fn cashier_balance(total: i64) -> BlobStorageCashierAccountCycleBalances {
     }
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_cashier_dtos_roundtrip_through_candid() {
     let account = Principal::from_slice(&[1, 2, 3]);
@@ -1121,7 +1119,6 @@ fn blob_storage_cashier_dtos_roundtrip_through_candid() {
     ));
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_cashier_dto_candid_shapes_are_pinned() {
     let balance_env = candid_type_env::<BlobStorageCashierAccountCycleBalances>();
@@ -1140,7 +1137,6 @@ fn blob_storage_cashier_dto_candid_shapes_are_pinned() {
     );
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_funding_report_dto_roundtrips_through_candid() {
     assert_candid_roundtrip(BlobProjectCyclesTopUpReport {
@@ -1176,7 +1172,6 @@ fn blob_storage_funding_report_dto_roundtrips_through_candid() {
     );
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_billing_config_dto_roundtrips_through_candid() {
     assert_candid_roundtrip(BlobStorageBillingConfig {
@@ -1188,7 +1183,6 @@ fn blob_storage_billing_config_dto_roundtrips_through_candid() {
     });
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_billing_config_dto_candid_shape_is_pinned() {
     let config_env = candid_type_env::<BlobStorageBillingConfig>();
@@ -1203,7 +1197,6 @@ fn blob_storage_billing_config_dto_candid_shape_is_pinned() {
     );
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_status_dtos_roundtrip_through_candid() {
     let cashier = Principal::from_slice(&[4, 5, 6]);
@@ -1234,7 +1227,6 @@ fn blob_storage_status_dtos_roundtrip_through_candid() {
     assert_candid_roundtrip(BlobStorageBillingWarning::CashierBalanceMalformed);
 }
 
-#[cfg(feature = "blob-storage-billing")]
 #[test]
 fn blob_storage_status_dto_candid_shapes_are_pinned() {
     let status_env = candid_type_env::<BlobStorageStatusResponse>();
@@ -1930,5 +1922,46 @@ mod capacity_import_surface {
         assert!(matches!(restored,
             RootCommand::ImportPoolCapacity(PoolImportCommand::Settle(found)) if found == identity
         ));
+    }
+}
+
+mod lean_observability_relay {
+    use super::*;
+    canic::__canic_emit_relay_observability_response!();
+
+    #[test]
+    fn lean_reply_decodes_at_root_and_disabled_reads_fail_without_collecting() {
+        use canic::dto::observability::{
+            CanisterObservabilityRequest, CanisterObservabilityResponse,
+        };
+        let encoded = encode_one(RelayedObservabilityResponse::CycleBalance(
+            canic::dto::role::CycleBalanceStatusResponse { cycles: 123 },
+        ))
+        .unwrap();
+        let decoded: CanisterObservabilityResponse = decode_one(&encoded).unwrap();
+        assert!(
+            matches!(decoded, CanisterObservabilityResponse::CycleBalance(value) if value.cycles == 123)
+        );
+        for request in [
+            CanisterObservabilityRequest::MemoryAllocations,
+            CanisterObservabilityRequest::CycleHistory(canic::dto::page::PageRequest {
+                offset: 0,
+                limit: 10,
+            }),
+        ] {
+            let result = canic::__canic_sensitive_observability_response!(
+                request,
+                RelayedObservabilityResponse
+            );
+            assert!(
+                matches!(result, Err(error) if error == canic::Error::from_registered(canic::diagnostics::codes::REQUEST_INVALID))
+            );
+        }
+        let candid = candid_type_env::<RelayedObservabilityResponse>();
+        assert!(candid.contains("CycleBalance"));
+        assert!(candid.contains("ChildFunding"));
+        assert!(!candid.contains("MemoryAllocations"));
+        assert!(!candid.contains("CycleHistory"));
+        assert!(!candid.contains("Metrics"));
     }
 }

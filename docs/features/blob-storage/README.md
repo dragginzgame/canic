@@ -16,6 +16,16 @@ billing feature adds Cashier-backed status, funding, and readiness flows.
 Downstream canisters select the feature explicitly and choose the endpoint
 guard appropriate to their application authority.
 
+Remote clients can import all passive request, response and billing value types
+from `canic::dto::blob_storage` with `default-features = false` and no blob
+features. Only canisters hosting local blob state or workflows should enable
+`blob-storage` or `blob-storage-billing`. Importing these DTOs does not select
+blob memory allocations, funding workflows or endpoint macros.
+
+This boundary prepares client-only consumers while `ic-blob-storage` is being
+qualified. Canic continues to own its existing embedded implementation and wire
+contract; this change does not replace it or introduce another service protocol.
+
 ## Boundary
 
 Blob storage is for application product data. It is not the canister-snapshot

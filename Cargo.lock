@@ -2672,9 +2672,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.261.12"
+version = "0.261.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7738702a2daf12520dbd4ced9eee9ba57b61c534c06bb93d99c1a478e92b2725"
+checksum = "44e71cb81a00c962a4c4e4fa83233859c4dca8f84386ed19d8f14b73cbf84d39"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2690,9 +2690,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.261.12"
+version = "0.261.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f327d19a531a20260b5d90a7a6cc41785a68febece131176ac209ff4acbebb4a"
+checksum = "981803dab8055b0e95a21d2233847f71703db078bfc5c9355f25077d20db5074"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2715,18 +2715,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.261.12"
+version = "0.261.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "287c196cf76699978ae547ba7a43e1595ef9d413e3c10246d5442af48f9e9c7f"
+checksum = "d20ed6310c221f23bb5105f655b623c19c710d9dc6ee24e0e74e49b2f767a784"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.261.12"
+version = "0.261.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6477431cf69b09beb308d7846a1b94e6dd8c215e92c460555ae09dc2afa96d8c"
+checksum = "d93c1a6849a4acc7e7f69eca6041284abc0e9862a4e2c941bf7c477605dc53df"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2746,9 +2746,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.261.12"
+version = "0.261.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "087f0885479aad3c8d5d812d9c3594b6b1259a4e3955f19388f06010ddd63137"
+checksum = "a2120ee900eca27365349510922c6d44db48df6a9cf2116a5d3d2caed893cf77"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2763,9 +2763,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.261.12"
+version = "0.261.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5aef650a819e39aff055680daeb5f7c4e976c0b9188d107222a0f26ce2225fd9"
+checksum = "4fa27de9c82cdfc888c16e460e75017509ac473ca59f414033d10011bf0bc966"
 dependencies = [
  "candid",
  "derive_more",
@@ -4881,9 +4881,9 @@ dependencies = [
 
 [[package]]
 name = "tokio-rustls"
-version = "0.26.5"
+version = "0.26.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0c85f2c3ef0b1cd58b36682f4b17aaa995f0e5db534d85692b4903abce21f67"
+checksum = "c9cc2678c2cdd569ef8215e2afd7954ada2ae20b4fdd2c5fe6139a3b02d105db"
 dependencies = [
  "rustls",
  "tokio",
@@ -5599,9 +5599,9 @@ checksum = "04a2ecdf2cc4d33a6a93d71bcfbc00bb1f635cdb8029a2cc0709204a045ec7a3"
 
 [[package]]
 name = "xxhash-rust"
-version = "0.8.18"
+version = "0.8.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "aee1b19627c7c60102ab80d3a9cbe18de90bfe03bfa6c3715447681f0e8c8af6"
+checksum = "550a2b930b62486a393c52d5c3b84bff264b28aa437ed64694d31e93b1757af7"
 
 [[package]]
 name = "yoke"

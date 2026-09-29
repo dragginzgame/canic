@@ -4,13 +4,13 @@
 //! Does not own: Wasm optimization, installation, or replica validation.
 //! Boundary: parses top-level sections around artifact transforms and before publication.
 
+use crate::canister_build::WasmArtifactMetrics;
 use std::{collections::BTreeMap, fmt, fs, path::Path};
 
 use canic_core::ids::BuildNetwork;
 
-use crate::canister_build::WasmArtifactMetrics;
-
-pub(super) const CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+pub(super) const SUPPORTED_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
+pub(super) const SUPPORTED_DEFINED_FUNCTION_LIMIT: u32 = 50_000;
 const IC_WASM_CODE_SECTION_WARNING_BYTES: usize = 9 * 1024 * 1024 + 256 * 1024;
 const WASM_HEADER: &[u8; 8] = b"\0asm\x01\0\0\0";
 const WASM_CUSTOM_SECTION_ID: u8 = 0;
@@ -47,6 +47,11 @@ enum WasmCodeSectionError {
     DuplicateExportSection,
 
     DuplicateFunctionSection,
+
+    FunctionLimitExceeded {
+        actual: u32,
+        limit: u32,
+    },
 
     InvalidHeader,
 
@@ -87,6 +92,10 @@ impl fmt::Display for WasmCodeSectionError {
             Self::DuplicateFunctionSection => {
                 write!(formatter, "duplicate Wasm function section")
             }
+            Self::FunctionLimitExceeded { actual, limit } => write!(
+                formatter,
+                "Wasm defines {actual} functions, exceeding the supported limit of {limit}"
+            ),
             Self::InvalidHeader => write!(formatter, "invalid Wasm module header"),
             Self::InvalidName { offset } => {
                 write!(formatter, "invalid UTF-8 Wasm name at byte {offset}")
@@ -100,7 +109,7 @@ impl fmt::Display for WasmCodeSectionError {
             }
             Self::LimitExceeded { actual, limit } => write!(
                 formatter,
-                "Wasm code section is {actual} bytes, exceeding the IC limit of {limit} bytes by {} bytes",
+                "Wasm code section is {actual} bytes, exceeding the supported limit of {limit} bytes by {} bytes",
                 actual - limit
             ),
             Self::TruncatedSection {
@@ -117,46 +126,36 @@ impl fmt::Display for WasmCodeSectionError {
 
 impl std::error::Error for WasmCodeSectionError {}
 
-/// Enforce the current IC mainnet code limit only for an IC-bound artifact.
-pub fn enforce_wasm_code_section_limit(
+/// Enforce supported code-size and defined-function limits for every build network.
+pub fn enforce_wasm_install_limits(
     build_network: BuildNetwork,
     wasm_path: &Path,
 ) -> Result<usize, Box<dyn std::error::Error>> {
     let wasm = fs::read(wasm_path)?;
-    let code_section_bytes = wasm_code_section_size(&wasm).map_err(|source| {
-        format!(
-            "failed to inspect Wasm code section for {}: {source}",
-            wasm_path.display()
-        )
-    })?;
-    match build_network {
-        BuildNetwork::Ic => {
-            validate_wasm_code_section_size(code_section_bytes).map_err(|source| {
-                format!(
-                    "IC mainnet Wasm artifact {} cannot be installed: {source}",
-                    wasm_path.display()
-                )
-            })?;
-            report_current_ic_mainnet_limit_distance(wasm_path, code_section_bytes);
-        }
-        BuildNetwork::Local if code_section_bytes > CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES => {
-            eprintln!(
-                "{} {}  code={}  limit={}  local build only",
-                wasm_progress_prefix("WARN"),
-                compact_wasm_artifact_name(wasm_path),
-                format_byte_count(code_section_bytes),
-                format_byte_count(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES),
-            );
-        }
-        BuildNetwork::Local => {
-            report_current_ic_mainnet_limit_distance(wasm_path, code_section_bytes);
-        }
-    }
-
-    Ok(code_section_bytes)
+    let structure = inspect_wasm(&wasm)?;
+    validate_wasm_code_section_size(structure.code_section_bytes)
+        .and_then(|()| validate_defined_functions(structure.defined_functions))
+        .map_err(|source| {
+            format!(
+                "{build_network:?} Wasm artifact {} cannot be installed: {source}",
+                wasm_path.display()
+            )
+        })?;
+    report_install_limit_distance(wasm_path, structure.code_section_bytes);
+    Ok(structure.code_section_bytes)
 }
 
-fn report_current_ic_mainnet_limit_distance(wasm_path: &Path, code_section_bytes: usize) {
+const fn validate_defined_functions(count: u32) -> Result<(), WasmCodeSectionError> {
+    if count > SUPPORTED_DEFINED_FUNCTION_LIMIT {
+        return Err(WasmCodeSectionError::FunctionLimitExceeded {
+            actual: count,
+            limit: SUPPORTED_DEFINED_FUNCTION_LIMIT,
+        });
+    }
+    Ok(())
+}
+
+fn report_install_limit_distance(wasm_path: &Path, code_section_bytes: usize) {
     let status = if code_section_bytes >= IC_WASM_CODE_SECTION_WARNING_BYTES {
         "WARN"
     } else {
@@ -167,7 +166,7 @@ fn report_current_ic_mainnet_limit_distance(wasm_path: &Path, code_section_bytes
         wasm_progress_prefix(status),
         compact_wasm_artifact_name(wasm_path),
         format_byte_count(code_section_bytes),
-        format_byte_count(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES - code_section_bytes),
+        format_byte_count(SUPPORTED_CODE_SECTION_LIMIT_BYTES - code_section_bytes),
     );
 }
 
@@ -227,6 +226,7 @@ pub(super) fn wasm_contract_snapshot(
     Ok(inspect_wasm(wasm)?.contract)
 }
 
+#[cfg(test)]
 fn wasm_code_section_size(wasm: &[u8]) -> Result<usize, WasmCodeSectionError> {
     Ok(inspect_wasm(wasm)?.code_section_bytes)
 }
@@ -435,14 +435,18 @@ fn read_u32(bytes: &[u8], cursor: &mut usize) -> Option<u32> {
 }
 
 const fn validate_wasm_code_section_size(size: usize) -> Result<(), WasmCodeSectionError> {
-    if size > CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES {
+    if size > SUPPORTED_CODE_SECTION_LIMIT_BYTES {
         return Err(WasmCodeSectionError::LimitExceeded {
             actual: size,
-            limit: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
+            limit: SUPPORTED_CODE_SECTION_LIMIT_BYTES,
         });
     }
     Ok(())
 }
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
 
 #[cfg(test)]
 mod tests {
@@ -492,7 +496,7 @@ mod tests {
     #[test]
     fn accepts_the_exact_ic_code_section_limit() {
         assert_eq!(
-            validate_wasm_code_section_size(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES),
+            validate_wasm_code_section_size(SUPPORTED_CODE_SECTION_LIMIT_BYTES),
             Ok(())
         );
     }
@@ -500,10 +504,25 @@ mod tests {
     #[test]
     fn rejects_one_byte_over_the_ic_code_section_limit() {
         assert_eq!(
-            validate_wasm_code_section_size(CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1),
+            validate_wasm_code_section_size(SUPPORTED_CODE_SECTION_LIMIT_BYTES + 1),
             Err(WasmCodeSectionError::LimitExceeded {
-                actual: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES + 1,
-                limit: CURRENT_IC_MAINNET_CODE_SECTION_LIMIT_BYTES,
+                actual: SUPPORTED_CODE_SECTION_LIMIT_BYTES + 1,
+                limit: SUPPORTED_CODE_SECTION_LIMIT_BYTES,
+            })
+        );
+    }
+
+    #[test]
+    fn enforces_the_defined_function_boundary() {
+        assert_eq!(
+            validate_defined_functions(SUPPORTED_DEFINED_FUNCTION_LIMIT),
+            Ok(())
+        );
+        assert_eq!(
+            validate_defined_functions(SUPPORTED_DEFINED_FUNCTION_LIMIT + 1),
+            Err(WasmCodeSectionError::FunctionLimitExceeded {
+                actual: SUPPORTED_DEFINED_FUNCTION_LIMIT + 1,
+                limit: SUPPORTED_DEFINED_FUNCTION_LIMIT,
             })
         );
     }

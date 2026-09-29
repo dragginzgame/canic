@@ -1,5 +1,44 @@
 # Public Status and Protected Observability
 
+## Compile-time selection
+
+Declared roles can omit optional Canic observation providers in `canic.toml`:
+
+```toml
+[roles.project_hub.observability]
+diagnostics = false
+history = false
+logs = false
+metrics = false
+```
+
+All four options default to `true`. Selection is per role, applies to managed
+and standalone-local endpoints, and participates in the compiled capability
+and protocol-profile identity. Rebuild and regenerate consumer Candid bindings.
+Canonical Store and Coordinator retain their fixed infrastructure surfaces.
+
+| Option | Optional generated reads |
+| --- | --- |
+| `diagnostics` | Detailed `Runtime` and `MemoryAllocations` projections |
+| `history` | Public chart history, cycle history and supported top-up history |
+| `logs` | Paged log reads |
+| `metrics` | Public metric snapshots and protected metric pages |
+
+Health, readiness, discovery, binding, current cycle balance and child funding
+accounting remain available. The authenticated Root relay remains usable for
+those financial observations. Its request vocabulary is shared; a disabled
+optional observation returns `REQUEST_INVALID`. Workload relay replies contain
+only the selected response variants, so omitted providers and serializers are
+not retained by the relay. Root still carries the shared remote response contract
+needed to observe independently configured children.
+
+When both metrics and history are disabled, generated lifecycle code does not
+select automatic public sampling. Public family publication settings still
+apply when sampling is selected. Explicit application calls to sampling or
+query APIs retain the code they use. These settings do not remove internal
+accounting, metric recording, stable logs, bounded log retention or recovery
+state. Existing custom application endpoints are unaffected.
+
 Canic separates reads by caller authority. Publication never changes who may
 read protected diagnostics, and Fleet admission or application-player admission
 does not grant observability access.

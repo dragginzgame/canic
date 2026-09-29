@@ -20,6 +20,8 @@ SCCACHE_STATS_ACTIVE=0
 SCCACHE_START_REQUESTS=0
 SCCACHE_START_HITS=0
 SCCACHE_START_MISSES=0
+SCCACHE_START_UNCACHEABLE=0
+SCCACHE_START_ERRORS=0
 PRECOMPILE_ONLY=0
 TEST_LOG_DIR=""
 TEST_LOG_SEQUENCE=0
@@ -64,10 +66,22 @@ read_sccache_counts() {
         $1 == "Compile" && $2 == "requests" && NF == 3 { requests = $3 }
         $1 == "Cache" && $2 == "hits" && NF == 3 { hits = $3 }
         $1 == "Cache" && $2 == "misses" && NF == 3 { misses = $3 }
+        $1 == "Non-cacheable" && $2 == "calls" && NF == 3 { uncacheable = $3 }
+        $1 == "Cache" && $2 == "errors" && NF == 3 { errors = $3 }
+        $1 == "Cache" && $2 == "read" && $3 == "errors" { read_errors = $4 }
+        $1 == "Cache" && $2 == "write" && $3 == "errors" { write_errors = $4 }
+        $1 == "Cache" && $2 == "timeouts" && NF == 3 { timeouts = $3 }
         END {
-            print requests + 0
-            print hits + 0
-            print misses + 0
+            # Unknown or truncated output must not masquerade as a healthy cache.
+            if (requests !~ /^[0-9]+$/ || hits !~ /^[0-9]+$/ ||
+                misses !~ /^[0-9]+$/ || uncacheable !~ /^[0-9]+$/ ||
+                errors !~ /^[0-9]+$/ || read_errors !~ /^[0-9]+$/ ||
+                write_errors !~ /^[0-9]+$/ || timeouts !~ /^[0-9]+$/) exit 1
+            print requests
+            print hits
+            print misses
+            print uncacheable
+            print errors + read_errors + write_errors + timeouts
         }
     ' <<<"$stats"
 }
@@ -84,7 +98,7 @@ start_compiler_cache_observation() {
 
     local counts=()
     mapfile -t counts < <(read_sccache_counts "$wrapper")
-    if [[ "${#counts[@]}" -ne 3 ]]; then
+    if [[ "${#counts[@]}" -ne 5 ]]; then
         echo "==> compiler cache observation: unavailable" >&2
         return
     fi
@@ -92,6 +106,8 @@ start_compiler_cache_observation() {
     SCCACHE_START_REQUESTS="${counts[0]}"
     SCCACHE_START_HITS="${counts[1]}"
     SCCACHE_START_MISSES="${counts[2]}"
+    SCCACHE_START_UNCACHEABLE="${counts[3]}"
+    SCCACHE_START_ERRORS="${counts[4]}"
     echo "==> compiler cache start: requests=$SCCACHE_START_REQUESTS hits=$SCCACHE_START_HITS misses=$SCCACHE_START_MISSES"
 }
 
@@ -101,14 +117,16 @@ report_compiler_cache_observation() {
     fi
     local counts=()
     mapfile -t counts < <(read_sccache_counts "$RUSTC_WRAPPER")
-    if [[ "${#counts[@]}" -ne 3 ]] ||
+    if [[ "${#counts[@]}" -ne 5 ]] ||
         ((counts[0] < SCCACHE_START_REQUESTS)) ||
         ((counts[1] < SCCACHE_START_HITS)) ||
-        ((counts[2] < SCCACHE_START_MISSES)); then
-        echo "==> compiler cache delta: unavailable (sccache server reset during the run)" >&2
+        ((counts[2] < SCCACHE_START_MISSES)) ||
+        ((counts[3] < SCCACHE_START_UNCACHEABLE)) ||
+        ((counts[4] < SCCACHE_START_ERRORS)); then
+        echo "==> compiler cache delta: unavailable (statistics missing or counters reset during the run)" >&2
         return
     fi
-    echo "==> compiler cache delta: requests=$((counts[0] - SCCACHE_START_REQUESTS)) hits=$((counts[1] - SCCACHE_START_HITS)) misses=$((counts[2] - SCCACHE_START_MISSES))"
+    echo "==> compiler cache delta: requests=$((counts[0] - SCCACHE_START_REQUESTS)) hits=$((counts[1] - SCCACHE_START_HITS)) misses=$((counts[2] - SCCACHE_START_MISSES)) uncacheable=$((counts[3] - SCCACHE_START_UNCACHEABLE)) cache_errors=$((counts[4] - SCCACHE_START_ERRORS))"
 }
 
 report_owned_pocketic_server_output() {
@@ -459,7 +477,8 @@ run_serial_pocketic_test() {
 
 is_governed_canic_host_pocketic_test() {
     [[ "$TARGETED_POCKETIC_TEST" = \
-        'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ||
+        'canister_build::release_binding::tests::governed_pocketic_release_binding_retains_runtime_identity' ||
+        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::operator_mint_tests::governed_pocketic_operator_mint_recovers_receipts' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::real_mint_funding::governed_pocketic_mint_credit_resumes_original_native_withdrawal' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::ops::reinstall::terminal::inventory::custody::tests::governed_pocketic_completed_estate_certified_custody' ||

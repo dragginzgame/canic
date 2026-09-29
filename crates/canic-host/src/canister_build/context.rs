@@ -104,9 +104,8 @@ impl WorkspaceBuildContext {
                 canic_core::role_contract::CANONICAL_BUILD_CONFIG_PATH_ENV,
                 &self.config_path,
             );
-        if let Some(release_build_id) = self.release_build_id {
-            command.env(RELEASE_BUILD_ID_ENV, release_build_id.to_string());
-        }
+        // Release identity is bound into a private Wasm copy during finalization.
+        // Keeping it out of Cargo inputs preserves unchanged role compilation.
     }
 }
 

@@ -4,11 +4,14 @@
 //! Does not own: lifecycle orchestration, embedded build lookup, endpoint policy, or timers.
 //! Boundary: initialization writes `Prepared` once; status rejects invalid role/state projections.
 
+mod codec;
 mod fixture;
 mod mapper;
 
+use self::codec::FleetActivation;
+
 #[cfg(test)]
-use crate::storage::stable::fleet_activation::FleetActivationData;
+use self::codec::FleetActivationData;
 use crate::{
     config::ComponentTopology,
     dto::fleet_subnet_root::{
@@ -54,19 +57,18 @@ use crate::{
         ComponentGroupDirectoryMemberRecord, ComponentGroupDirectoryProvenanceRecord,
         ComponentGroupDirectoryRecord, ComponentRuntimeActivationRecord,
         ComponentRuntimeDirectoryAuthorityRecord, ComponentRuntimeDirectoryRecord,
-        ComponentRuntimeRecord, FleetActivation, FleetActivationEvidenceRecord,
-        FleetActivationIdentityRecord, FleetActivationRecord, FleetActivationStateRecord,
-        FleetCascadeActivationEvidenceRecord, FleetCascadeManifestEntryRecord,
-        FleetCredentialGenerationRefRecord, FleetCredentialManifestEntryRecord,
-        FleetCredentialManifestRecord, FleetDirectoryProvenanceRecord,
-        FleetDirectoryServiceComponentRecord, FleetDirectoryServiceRecord,
-        FleetDirectorySnapshotRecord, FleetRegistryVersionRecord, FleetServiceModeRecord,
-        FleetSubnetRootAuthorityRecord, FleetSubnetRootDirectoryEntryRecord,
-        FleetSubnetRootStatusRecord, FleetSubnetWasmStoreAuthorityRecord,
-        MAX_FLEET_ACTIVATION_RECORD_BYTES, ProtectedComponentDeploymentRecord,
+        ComponentRuntimeRecord, FleetActivationEvidenceRecord, FleetActivationIdentityRecord,
+        FleetActivationStateRecord, FleetCascadeActivationEvidenceRecord,
+        FleetCascadeManifestEntryRecord, FleetCredentialGenerationRefRecord,
+        FleetCredentialManifestEntryRecord, FleetCredentialManifestRecord,
+        FleetDirectoryProvenanceRecord, FleetDirectoryServiceComponentRecord,
+        FleetDirectoryServiceRecord, FleetDirectorySnapshotRecord, FleetRegistryVersionRecord,
+        FleetServiceModeRecord, FleetSubnetRootAuthorityRecord,
+        FleetSubnetRootDirectoryEntryRecord, FleetSubnetRootStatusRecord,
+        FleetSubnetWasmStoreAuthorityRecord, ProtectedComponentDeploymentRecord,
     },
     view::fleet_activation::{
-        ComponentRuntimeActivationTransition, FleetActivationTransition,
+        ComponentRuntimeActivationTransition, FleetActivationTransition, FleetActivationView,
         FleetActivationWasmStoreAuthorityView,
     },
 };
@@ -124,7 +126,7 @@ pub enum FleetActivationOpsError {
 pub struct FleetActivationOps;
 
 /// Fully validated activation-evidence replacement ready for an infallible commit.
-pub struct PreparedFleetActivationSnapshot(Option<FleetActivationRecord>);
+pub struct PreparedFleetActivationSnapshot(Option<FleetActivationView>);
 
 /// Exact managed-runtime identity validated before protected activation persistence.
 pub struct PreparedComponentRuntime {
@@ -134,6 +136,17 @@ pub struct PreparedComponentRuntime {
 }
 
 impl FleetActivationOps {
+    pub(crate) fn select_ordinary_storage() {
+        codec::select_ordinary();
+    }
+    pub(crate) fn select_root_storage() {
+        codec::select_root();
+    }
+
+    pub(crate) fn select_wasm_store_storage() {
+        codec::select_wasm_store();
+    }
+
     pub(crate) fn initialize_root_prepared(
         input: FleetSubnetRootInitArgs,
         embedded_release_build_id: ReleaseBuildId,
@@ -141,6 +154,7 @@ impl FleetActivationOps {
         component_topology: &ComponentTopology,
         root_canister: candid::Principal,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        Self::select_root_storage();
         let prepared = prepare_root_install(
             RootInstallIdentity {
                 binding: input.authority.binding,
@@ -163,6 +177,7 @@ impl FleetActivationOps {
         embedded_release_build_id: ReleaseBuildId,
         wasm_store_canister: candid::Principal,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        Self::select_wasm_store_storage();
         let prepared = prepare_wasm_store_install(
             WasmStoreInstallIdentity {
                 authority: input.authority,
@@ -182,6 +197,7 @@ impl FleetActivationOps {
         component_runtime: Option<PreparedComponentRuntime>,
         application_init_args: Option<Vec<u8>>,
     ) -> Result<FleetActivationIdentity, FleetActivationOpsError> {
+        Self::select_ordinary_storage();
         let prepared = prepare_nonroot_install(
             NonrootInstallIdentity {
                 fleet,
@@ -195,7 +211,7 @@ impl FleetActivationOps {
 
     #[cfg(test)]
     #[must_use]
-    pub(crate) fn snapshot() -> FleetActivationData {
+    fn snapshot() -> FleetActivationData {
         FleetActivation::export()
     }
 
@@ -804,7 +820,7 @@ fn initialize_prepared(
     let wasm_store_authority = prepared
         .wasm_store_authority
         .map(wasm_store_authority_id_to_record);
-    let record = FleetActivationRecord {
+    let record = FleetActivationView {
         state: FleetActivationStateRecord::Prepared {
             identity: FleetActivationIdentityRecord {
                 fleet: prepared.identity.fleet.clone(),
@@ -895,17 +911,9 @@ fn wasm_store_authority_record_to_id(
     }
 }
 
-fn validate_record_bound(record: &FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
+fn validate_record_bound(record: &FleetActivationView) -> Result<(), FleetActivationOpsError> {
     fixture::validate(record)?;
-    let bytes = crate::cdk::serialize::serialize(record)
-        .map_err(|error| FleetActivationOpsError::Encode(error.to_string()))?;
-    let maximum = MAX_FLEET_ACTIVATION_RECORD_BYTES as usize;
-    if bytes.len() > maximum {
-        return Err(FleetActivationOpsError::RecordTooLarge {
-            maximum,
-            observed: bytes.len(),
-        });
-    }
+    codec::encode(record)?;
     Ok(())
 }
 
@@ -972,7 +980,7 @@ fn prepare_applied_snapshot(
     Ok(PreparedFleetActivationSnapshot(Some(record)))
 }
 
-fn replace_record(record: FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
+fn replace_record(record: FleetActivationView) -> Result<(), FleetActivationOpsError> {
     validate_record_bound(&record)?;
     if !FleetActivation::replace(record) {
         return Err(FleetActivationOpsError::NotInitialized);
@@ -981,7 +989,7 @@ fn replace_record(record: FleetActivationRecord) -> Result<(), FleetActivationOp
 }
 
 fn component_runtime_status(
-    record: FleetActivationRecord,
+    record: FleetActivationView,
 ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
     fixture::validate(&record)?;
     let (operation_id, runtime_active, state_activated_at_ns) = match &record.state {
@@ -1071,7 +1079,7 @@ fn component_runtime_status(
 }
 
 fn component_runtime_preparation_status(
-    record: FleetActivationRecord,
+    record: FleetActivationView,
 ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
     let mut status = component_runtime_activation_status(record)?;
     status.phase = ComponentRuntimePhase::DirectoryPrepared;
@@ -1080,7 +1088,7 @@ fn component_runtime_preparation_status(
 }
 
 fn replay_component_runtime_activation(
-    record: FleetActivationRecord,
+    record: FleetActivationView,
     request: ComponentRuntimeActivationRequest,
 ) -> Result<ComponentRuntimeActivationTransition, FleetActivationOpsError> {
     let activation = record
@@ -1101,7 +1109,7 @@ fn replay_component_runtime_activation(
 }
 
 fn component_runtime_activation_status(
-    record: FleetActivationRecord,
+    record: FleetActivationView,
 ) -> Result<ComponentRuntimeStatusResponse, FleetActivationOpsError> {
     let activation_directory = record
         .component_runtime
@@ -1734,6 +1742,9 @@ mod tests {
         let release_build_id = release_build(14);
         let identity = initialize_root(input(release_build_id), release_build_id)
             .expect("initialize Prepared");
+        let retained = FleetActivationOps::snapshot();
+        codec::forget_projection();
+        assert_eq!(FleetActivationOps::snapshot(), retained);
         let stored = FleetActivationOps::snapshot()
             .record
             .expect("protected activation record");
@@ -1777,6 +1788,10 @@ mod tests {
             store,
         )
         .expect("initialize sibling Store");
+
+        let retained = FleetActivationOps::snapshot();
+        codec::forget_projection();
+        assert_eq!(FleetActivationOps::snapshot(), retained);
 
         assert_eq!(identity.operation_id, root_input.install_id);
         assert_eq!(

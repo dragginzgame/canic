@@ -452,7 +452,7 @@ impl AccessFailure {
         }
     }
 
-    const fn unselected(pred: &BuiltinPredicate) -> Self {
+    fn unselected(pred: &BuiltinPredicate) -> Self {
         Self {
             terminal: true,
             ..Self::from_builtin(pred, AccessError::ExpressionRuleRequired)

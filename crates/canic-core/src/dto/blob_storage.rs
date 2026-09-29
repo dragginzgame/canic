@@ -1,11 +1,9 @@
 use crate::dto::prelude::*;
 
-#[cfg(feature = "blob-storage-billing")]
 pub use crate::domain::blob_storage::{
     BlobStorageBillingWarning, BlobStorageFundingStatus, BlobStorageGatewayPrincipalSyncAction,
     BlobStoragePaymentModelStatus, BlobStorageReadinessBlocker,
 };
-#[cfg(feature = "blob-storage-billing")]
 use candid::Int;
 
 ///
@@ -50,7 +48,6 @@ impl BlobStorageLocalCounters {
 /// Passive DTO for the Cashier account balance debt-target variant.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageCashierDebtTarget {
     Prepaid,
@@ -63,7 +60,6 @@ pub enum BlobStorageCashierDebtTarget {
 /// Passive DTO for Cashier cycle-balance records.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageCashierAccountCycleBalances {
     pub total: Int,
@@ -79,7 +75,6 @@ pub struct BlobStorageCashierAccountCycleBalances {
 /// Passive DTO for `account_balance_get_v1` requests.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageCashierAccountBalanceGetRequest {
     pub account: Principal,
@@ -91,7 +86,6 @@ pub struct BlobStorageCashierAccountBalanceGetRequest {
 /// Passive DTO for successful `account_balance_get_v1` responses.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageCashierAccountBalanceGetOk {
     pub account_cycle_balances: BlobStorageCashierAccountCycleBalances,
@@ -104,7 +98,6 @@ pub struct BlobStorageCashierAccountBalanceGetOk {
 /// Passive DTO for Cashier `account_balance_get_v1` error variants.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageCashierAccountBalanceGetError {
     AccountNotFound,
@@ -117,7 +110,6 @@ pub enum BlobStorageCashierAccountBalanceGetError {
 /// Passive DTO for Cashier `account_balance_get_v1` results.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageCashierAccountBalanceGetResult {
     Ok(BlobStorageCashierAccountBalanceGetOk),
@@ -130,7 +122,6 @@ pub enum BlobStorageCashierAccountBalanceGetResult {
 /// Passive DTO for `account_top_up_v1` request records.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageCashierAccountTopUpRequest {
     pub target_balance: Option<Nat>,
@@ -143,7 +134,6 @@ pub struct BlobStorageCashierAccountTopUpRequest {
 /// Passive DTO for successful `account_top_up_v1` responses.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageCashierAccountTopUpOk {
     pub balance: BlobStorageCashierAccountCycleBalances,
@@ -156,7 +146,6 @@ pub struct BlobStorageCashierAccountTopUpOk {
 /// Passive DTO for Cashier `account_top_up_v1` error variants.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageCashierAccountTopUpError {
     NotAuthorized(Principal),
@@ -171,7 +160,6 @@ pub enum BlobStorageCashierAccountTopUpError {
 /// Passive DTO for Cashier `account_top_up_v1` results.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageCashierAccountTopUpResult {
     Ok(BlobStorageCashierAccountTopUpOk),
@@ -184,7 +172,6 @@ pub enum BlobStorageCashierAccountTopUpResult {
 /// Passive DTO for internal blob-storage billing configuration.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageBillingConfig {
     pub cashier_canister_id: Principal,
@@ -200,7 +187,6 @@ pub struct BlobStorageBillingConfig {
 /// Passive DTO returned by `_immutableObjectStorageFundFromProjectCycles`.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobProjectCyclesTopUpReport {
     pub requested_cycles: Nat,
@@ -218,7 +204,6 @@ pub struct BlobProjectCyclesTopUpReport {
 /// Passive DTO for backend blob-storage billing status requests.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageStatusRequest {
     pub sync_gateway_principals: bool,
@@ -230,7 +215,6 @@ pub struct BlobStorageStatusRequest {
 /// Passive DTO returned by `get_blob_storage_status`.
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct BlobStorageStatusResponse {
     pub payment_model: BlobStoragePaymentModelStatus,
@@ -250,7 +234,7 @@ pub struct BlobStorageStatusResponse {
     pub warnings: Vec<BlobStorageBillingWarning>,
 }
 
-#[cfg(all(test, feature = "blob-storage-billing"))]
+#[cfg(test)]
 mod tests {
     use super::*;
     use candid::{CandidType, Decode, Encode};

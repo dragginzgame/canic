@@ -1,5 +1,8 @@
 //! Parse and render the effect-free checks available before a Fleet release build.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     cli::{
         clap::{
@@ -16,7 +19,7 @@ use crate::{
 use candid::Principal;
 use canic_core::cdk::types::Cycles;
 use canic_host::fleet_ensure::workflow::readiness::{
-    FleetReadinessRequest, ReadinessConversionRequest, inspect,
+    FleetReadinessRequest, ReadinessConversionRequest, ReadinessGenerationInputs, inspect,
 };
 use canic_host::icp_config::resolve_current_canic_icp_root;
 use clap::{ArgAction, Command};
@@ -32,6 +35,8 @@ pub(super) fn command() -> Command {
         .arg(value_arg("cycles-ledger").long("cycles-ledger").default_value(DEFAULT_CYCLES_LEDGER).help("Exact Cycles Ledger to query"))
         .arg(value_arg("estimated-cycles").long("estimated-cycles").help("Optional operator debit estimate, such as 90T; never spending approval"))
         .arg(value_arg("desired").long("desired").help("Desired Fleet input for pre-build Root native headroom; no artifacts are loaded"))
+        .arg(value_arg("source").long("source").requires("seed").conflicts_with("desired").help("Current Fleet policy to check before generation; requires --seed"))
+        .arg(value_arg("seed").long("seed").requires("source").conflicts_with("desired").help("Explicit estate seed to check before generation; requires --source"))
         .arg(value_arg("quote-conversion").long("quote-conversion").action(ArgAction::SetTrue).num_args(0).help("Observe advisory ICP conversion rate and fees"))
         .arg(value_arg("icp-ledger").long("icp-ledger").default_value("ryjl3-tyaaa-aaaaa-aaaba-cai").help("ICP Ledger for the advisory conversion quote"))
         .arg(value_arg("cmc").long("cmc").default_value("rkp4c-7iaaa-aaaaa-aaaca-cai").help("CMC for the advisory conversion quote"))
@@ -85,6 +90,8 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
             })
         })
         .transpose()?;
+    let source = string_option(&matches, "source").map(|path| root.join(path));
+    let seed = string_option(&matches, "seed").map(|path| root.join(path));
     let report = inspect(&FleetReadinessRequest {
         workspace: &root,
         environment: &environment,
@@ -95,6 +102,10 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
         cycles_ledger: parse_principal("cycles-ledger")?,
         estimated_required_cycles,
         desired: desired.as_ref(),
+        generation_inputs: source
+            .as_deref()
+            .zip(seed.as_deref())
+            .map(|(source, seed)| ReadinessGenerationInputs { source, seed }),
         conversion,
     })
     .map_err(|error| FleetCommandError::Readiness(Box::new(error)))?;
@@ -116,6 +127,10 @@ pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
 }
 
 fn print_report(report: &canic_host::fleet_ensure::view::readiness::FleetReadiness) {
+    println!(
+        "generation_inputs_checked: {}",
+        report.generation_inputs_checked
+    );
     println!(
         "fleet: {}\nenvironment: {}\noperator: {}\nnetwork: {}\navailable_cycles: {}\nfunding_requirement: {}\nblockers: {:?}",
         report.fleet,
@@ -139,6 +154,28 @@ fn print_report(report: &canic_host::fleet_ensure::view::readiness::FleetReadine
         "observation_window_unix_ms: {}..{}",
         report.observed_at_unix_ms, report.completed_at_unix_ms
     );
+    if let Some(forecast) = &report.funding.clean_reinstall_infrastructure {
+        println!(
+            "clean_reinstall_infrastructure_funding: {}; ledger_transfers_at_most={} (fees, imports and workload convergence excluded)",
+            forecast
+                .maximum_funding_cycles
+                .map_or_else(|| "unknown".into(), format_cycles),
+            forecast.maximum_ledger_transfers
+        );
+        for target in &forecast.targets {
+            println!(
+                "infrastructure {}: native={} funding_at_most={} unavailable={:?}",
+                target.name,
+                target
+                    .available_native_cycles
+                    .map_or_else(|| "unknown".into(), format_cycles),
+                target
+                    .maximum_funding_cycles
+                    .map_or_else(|| "unknown".into(), format_cycles),
+                target.unavailable
+            );
+        }
+    }
     for root in &report.funding.roots {
         println!(
             "root {}: native={} floor_excluding_execution={} shortfall={} unavailable={:?}",

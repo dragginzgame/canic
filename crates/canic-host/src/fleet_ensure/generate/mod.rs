@@ -7,6 +7,7 @@
 pub mod capacity_import;
 mod completed_source;
 pub mod infrastructure_bootstrap;
+pub mod preflight;
 mod startup_funding;
 #[cfg(test)]
 mod tests;
@@ -204,6 +205,9 @@ pub enum FleetGenerateError {
 
     #[error("existing Fleet identity seed conflicts with requested fresh-estate authority: {0}")]
     FreshSeedConflict(String),
+
+    #[error("completed Fleet generation requires an explicit physical inventory: supply current policy and a non-fresh seed naming the Coordinator, every Root/Store and every child as pool imports; run fleet readiness with --source and --seed before building. For ordinary same-build startup, reuse the retained current desired document with fleet ensure without --reinstall")]
+    CompletedFleetRequiresExplicitInventory,
 
     #[error("Fleet identity seed and policy topology differ: {0}")]
     SeedTopology(String),
@@ -778,35 +782,21 @@ fn generate(
         crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection,
     >,
 ) -> Result<GenerationOutput, FleetGenerateError> {
-    let clean_reinstall = initialization.is_none()
-        && crate::fleet_ensure::ops::operation_selection::completed_fleet(
-            &crate::fleet_ensure::ops::EnsurePaths::under(
-                request.root,
-                request.environment,
-                request.fleet,
-            ),
-            request.environment,
-            request.fleet,
-        )
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    if clean_reinstall {
-        crate::fleet_ensure::ops::retained_contract::check(
-            request.root,
-            request.environment,
-            request.fleet,
-        )
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    }
-    let initialization = initialization.or_else(|| clean_reinstall.then_some(crate::fleet_ensure::model::infrastructure_bootstrap::BootstrapCoordinatorSelection::Initialize));
-    let mut source: FleetSource = load_toml(request.source, "source")?;
-    let seed: EstateSeed = load_toml(request.seed, "seed")?;
-    require_schema(source.schema_version, "source")?;
-    require_schema(seed.schema_version, "seed")?;
-    if let Some(selection) = initialization {
-        infrastructure_bootstrap::validate_seed(&source, &seed, selection)?;
-    } else {
-        validate_identity_seed(&source, &seed)?;
-    }
+    let preflight::GenerationInputs {
+        mut source,
+        seed,
+        initialization,
+        clean_reinstall,
+    } = preflight::load(
+        &preflight::FleetGenerationInputsRequest {
+            root: request.root,
+            environment: request.environment,
+            fleet: request.fleet,
+            source: request.source,
+            seed: request.seed,
+        },
+        initialization,
+    )?;
     require_cycles_creation(&source.coordinator.creation_funding, "Coordinator")?;
     if source.coordinator.subnet.kind != "explicit" {
         return Err(FleetGenerateError::Authority(

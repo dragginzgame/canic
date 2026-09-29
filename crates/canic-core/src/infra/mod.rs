@@ -12,6 +12,12 @@ impl From<ic::IcInfraError> for InternalError {
     fn from(err: ic::IcInfraError) -> Self {
         use crate::diagnostics::codes;
 
+        if let ic::IcInfraError::CallFailed(ic_cdk::call::CallFailed::CallRejected(rejection)) =
+            &err
+        {
+            return Self::public(codes::PLATFORM_UNAVAILABLE)
+                .with_platform_rejection(&rejection.to_string());
+        }
         let code = match err {
             ic::IcInfraError::CandidDecode(_) => codes::CODEC_INVALID,
             ic::IcInfraError::Candid(_) => codes::CODEC_FAILED,
@@ -52,6 +58,30 @@ mod tests {
             decoded.code(),
             codes::PLATFORM_INSUFFICIENT_LIQUID_CYCLES.raw_code()
         );
+    }
+
+    #[test]
+    fn platform_rejection_retains_bounded_utf8_without_changing_public_error() {
+        let message = "Wasm module defined 50001 functions";
+        let rejection = ic_cdk::call::CallRejected::with_rejection(5, message.to_owned());
+        let expected = rejection.to_string();
+        let error = InternalError::from(OpsError::from(ic::IcInfraError::from(
+            CallFailed::CallRejected(rejection),
+        )));
+        assert_eq!(error.public_code(), Some(codes::PLATFORM_UNAVAILABLE));
+        assert_eq!(error.platform_rejection(), Some(expected.as_str()));
+        let public = Error::from(error);
+        assert_eq!(
+            public,
+            Error::from(InternalError::public(codes::PLATFORM_UNAVAILABLE))
+        );
+
+        let message = "€".repeat(InternalError::MAX_PLATFORM_REJECTION_BYTES);
+        let bounded = InternalError::unavailable().with_platform_rejection(&message);
+        let retained = bounded.platform_rejection().unwrap();
+        assert!(retained.len() <= InternalError::MAX_PLATFORM_REJECTION_BYTES);
+        assert!(retained.len() > InternalError::MAX_PLATFORM_REJECTION_BYTES - 3);
+        assert!(message.starts_with(retained));
     }
 
     #[test]

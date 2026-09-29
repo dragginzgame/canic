@@ -1137,12 +1137,14 @@ pub struct RootComponentChildAllocationResponse {
 }
 
 /// Latest bounded failure of a retained child allocation; not lifecycle progress.
-#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildAllocationFailure {
     pub diagnostic_code: u16,
     pub failed_at_ns: u64,
     pub consecutive_failures: u32,
     pub retry_at_ns: u64,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub platform_rejection: Option<String>,
 }
 
 ///

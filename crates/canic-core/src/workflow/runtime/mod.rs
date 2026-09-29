@@ -42,6 +42,7 @@ pub use nonroot::{
     post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init,
     post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_after_memory_init,
     post_upgrade_nonroot_canister_with_fleet_admission_after_memory_init,
+    post_upgrade_wasm_store_after_memory_init,
 };
 pub use root::{init_root_canister, post_upgrade_root_canister_after_memory_init};
 
@@ -58,7 +59,7 @@ impl RuntimeWorkflow {
         workflow::fixture_provisioning::timer::FixtureImportTimer::start()?;
         workflow::runtime::log::LogRetentionWorkflow::start()?;
         workflow::runtime::intent::IntentCleanupWorkflow::start()?;
-        workflow::metrics::publication::timer::PublicSamplingTimer::start()?;
+        workflow::metrics::publication::PublicMetricsWorkflow::start_selected_sampling()?;
         Ok(())
     }
 
@@ -84,7 +85,7 @@ impl RuntimeWorkflow {
 
         start_root_service(
             "public_metrics",
-            workflow::metrics::publication::timer::PublicSamplingTimer::start(),
+            workflow::metrics::publication::PublicMetricsWorkflow::start_selected_sampling(),
         )?;
 
         // root-only services

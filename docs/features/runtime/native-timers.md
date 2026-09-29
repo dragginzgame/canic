@@ -33,7 +33,7 @@ therefore two inventories. Do not combine a direct `ic-cdk-timers` consumer
 with this design without separately inventorying and qualifying that second
 provider path.
 
-The published IcyDB 0.261.2 composition fixtures share Canic's `ic-timers 0.8.0`
+The published IcyDB 0.261.13 composition fixtures share Canic's `ic-timers 0.8.0`
 package. Both the workspace and standalone audit lockfiles resolve one timer
 inventory. Qualify composed lifecycle and timer custody with
 `make test-pocketic-case CASE=icydb_lifecycle_composition`.

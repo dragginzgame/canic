@@ -128,6 +128,23 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
+      - name: Restore compiler cache
+        id: compiler-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/canic-sccache
+          key: compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env') }}-${{ github.sha }}
+          restore-keys: |
+            compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env') }}-
+      - name: Install compiler cache
+        shell: bash
+        run: |
+          bash scripts/ci/install-sccache-ci.sh
+          {
+            echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
+            echo "SCCACHE_CACHE_SIZE=2G"
+            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-sccache.sh"
+          } >> "$GITHUB_ENV"
       - name: Install formatting tools
         shell: bash
         run: |
@@ -149,6 +166,12 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "checks failure"
+      - name: Save compiler cache
+        if: ${{ !cancelled() && steps.compiler-cache.outputs.cache-primary-key != '' && steps.compiler-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/canic-sccache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
   tests-ordinary:
     needs: [checks]
@@ -165,6 +188,23 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
+      - name: Restore compiler cache
+        id: compiler-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/canic-sccache
+          key: compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env') }}-${{ github.sha }}
+          restore-keys: |
+            compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env') }}-
+      - name: Install compiler cache
+        shell: bash
+        run: |
+          bash scripts/ci/install-sccache-ci.sh
+          {
+            echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
+            echo "SCCACHE_CACHE_SIZE=2G"
+            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-sccache.sh"
+          } >> "$GITHUB_ENV"
       - name: Install ordinary test helper tools
         shell: bash
         run: |
@@ -193,6 +233,12 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "ordinary-test failure"
+      - name: Save compiler cache
+        if: ${{ !cancelled() && steps.compiler-cache.outputs.cache-primary-key != '' && steps.compiler-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/canic-sccache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
   tests-pocketic:
     needs: [checks]
@@ -208,6 +254,23 @@ jobs:
       - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
         with:
           cache-targets: false
+      - name: Restore compiler cache
+        id: compiler-cache
+        uses: actions/cache/restore@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/canic-sccache
+          key: compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env') }}-${{ github.sha }}
+          restore-keys: |
+            compiler-${{ runner.os }}-${{ runner.arch }}-${{ github.job }}-${{ env.CANIC_INTERNAL_TOOLCHAIN }}-${{ hashFiles('tool-versions.env') }}-
+      - name: Install compiler cache
+        shell: bash
+        run: |
+          bash scripts/ci/install-sccache-ci.sh
+          {
+            echo "SCCACHE_DIR=$RUNNER_TEMP/canic-sccache"
+            echo "SCCACHE_CACHE_SIZE=2G"
+            echo "RUSTC_WRAPPER=$GITHUB_WORKSPACE/scripts/ci/run-sccache.sh"
+          } >> "$GITHUB_ENV"
       - name: Install PocketIC test helper tools
         shell: bash
         run: |
@@ -269,6 +332,12 @@ jobs:
         if: ${{ failure() }}
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "PocketIC-test failure"
+      - name: Save compiler cache
+        if: ${{ !cancelled() && steps.compiler-cache.outputs.cache-primary-key != '' && steps.compiler-cache.outputs.cache-hit != 'true' }}
+        uses: actions/cache/save@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/canic-sccache
+          key: ${{ steps.compiler-cache.outputs.cache-primary-key }}
 
   release-build:
     needs: [checks]

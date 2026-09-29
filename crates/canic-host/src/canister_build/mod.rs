@@ -10,6 +10,7 @@ mod metrics;
 mod model;
 mod output_roots;
 mod process;
+pub mod release_binding;
 mod reuse;
 
 pub use crate::{artifact_io::validate_wasm_candid_endpoints, build_profile::CanisterBuildProfile};
