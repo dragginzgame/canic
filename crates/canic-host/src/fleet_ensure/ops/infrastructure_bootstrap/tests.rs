@@ -13,7 +13,6 @@ use canic_core::{cdk::types::Cycles, ids::SubnetId};
 
 pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired: &DesiredFleet) {
     let mut desired = desired.clone();
-    desired.maximum_observation_burn_cycles = "1000000000".into();
     let mut source = source_record(&desired);
     reseal(&mut desired, &mut source);
     let plan = prepare(root, &desired, &source, "supplied-infrastructure", 43).unwrap();
@@ -70,6 +69,8 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
     assert_eq!(restored, plan);
     verify_plan(root, &restored).unwrap();
 
+    qualify_default_funding(root, &desired, &source);
+
     qualify_survey_identity(root, &desired, &source);
     qualify_declarations(&source);
     qualify_initial_observation(&plan, &source);
@@ -103,6 +104,155 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
             EnsurePolicyError::InfrastructureBootstrap(_)
         ))
     ));
+}
+
+fn qualify_default_funding(
+    root: &Path,
+    desired: &DesiredFleet,
+    source: &InfrastructureBootstrapRecord,
+) {
+    use crate::fleet_ensure::policy::infrastructure_bootstrap::{
+        InfrastructureBootstrapError as FundingError, validate_effect_headroom,
+    };
+    let mut desired = desired.clone();
+    let mut source = source.clone();
+    assert_eq!(
+        desired
+            .maximum_observation_burn_cycles
+            .parse::<Cycles>()
+            .unwrap()
+            .to_u128(),
+        1_000_000_000_000
+    );
+    for (name, balance, floor) in [
+        ("coordinator", 270_858_752_107_955, "270T"),
+        ("root-0", 401_015_495_335_881, "10T"),
+        ("store-0", 6_065_627_936_253, "0B"),
+    ] {
+        source.sources.get_mut(name).unwrap().sample.cycles = balance;
+        desired
+            .canisters
+            .iter_mut()
+            .find(|entry| entry.name == name)
+            .unwrap()
+            .minimum_cycles = floor.into();
+    }
+    reseal(&mut desired, &mut source);
+    let plan = prepare(root, &desired, &source, "bounded-native-funding", 43).unwrap();
+    verify_plan(root, &plan).unwrap();
+    assert!(plan.conservation.maximum_operator_debit_cycles < 100_000_000_000_000);
+    let forecast = desired
+        .canisters
+        .iter()
+        .filter(|target| target.kind != DesiredCanisterKind::Pool)
+        .map(|target| {
+            crate::fleet_ensure::policy::infrastructure_bootstrap::forecast_target_funding(
+                target.minimum_cycles.parse::<Cycles>().unwrap().to_u128(),
+                source.sources[&target.name].sample.cycles,
+                desired
+                    .maximum_observation_burn_cycles
+                    .parse::<Cycles>()
+                    .unwrap()
+                    .to_u128(),
+                desired
+                    .maximum_update_burn_cycles
+                    .parse::<Cycles>()
+                    .unwrap()
+                    .to_u128(),
+            )
+            .unwrap()
+        })
+        .sum::<u128>();
+    assert!(forecast >= plan.conservation.maximum_new_funding_cycles);
+    assert!(
+        plan.conservation.maximum_execution_burn_cycles
+            <= plan.conservation.observed_controlled_cycles
+                + plan.conservation.maximum_new_funding_cycles
+    );
+    let owner = plan
+        .canisters
+        .iter()
+        .find(|entry| entry.name == "store-0")
+        .unwrap();
+    let action = owner
+        .actions
+        .iter()
+        .find(|action| matches!(action, EnsureAction::Install { .. }))
+        .unwrap();
+    assert!(
+        matches!(validate_effect_headroom(&plan, action, Some(0)), Err(EnsurePolicyError::InfrastructureBootstrap(FundingError::Headroom { name, .. })) if name == "store-0")
+    );
+    validate_effect_headroom(&plan, action, Some(33_000_000_000_000)).unwrap();
+    assert!(matches!(
+        validate_effect_headroom(&plan, action, None),
+        Err(EnsurePolicyError::InfrastructureBootstrap(
+            FundingError::Authority
+        ))
+    ));
+    qualify_large_held_inventory(
+        root,
+        &desired,
+        &source,
+        plan.conservation.maximum_new_funding_cycles,
+    );
+}
+
+fn qualify_large_held_inventory(
+    root: &Path,
+    desired: &DesiredFleet,
+    source: &InfrastructureBootstrapRecord,
+    funding: u128,
+) {
+    use crate::fleet_ensure::model::infrastructure_bootstrap::{
+        InfrastructureBootstrapCustodyRecord, InfrastructureBootstrapHeldSourceRecord,
+    };
+    let mut desired = desired.clone();
+    let mut source = source.clone();
+    let template = desired
+        .canisters
+        .iter()
+        .find(|target| target.kind == DesiredCanisterKind::Pool)
+        .unwrap()
+        .clone();
+    desired
+        .canisters
+        .retain(|target| target.kind != DesiredCanisterKind::Pool);
+    source
+        .sources
+        .retain(|name, _| desired.canisters.iter().any(|target| target.name == *name));
+    let parent = source.sources[template.parent.as_ref().unwrap()]
+        .sample
+        .binding
+        .canister_id;
+    let root_input = &mut desired.bootstrap.as_mut().unwrap().roots[0];
+    root_input.canister_pool_imports.clear();
+    root_input.limits.canister_pool.maximum_size = 24;
+    let held = root_input.capacity_import_bootstrap.as_mut().unwrap();
+    held.sources.clear();
+    for index in 0..24_u8 {
+        let id = Principal::from_slice(&[80, index]);
+        let name = format!("held-{index}");
+        let mut child = template.clone();
+        child.name = name.clone();
+        child.principal = Some(id.to_text());
+        root_input.canister_pool_imports.push(name.clone());
+        held.sources.push(id);
+        source.held_sources.insert(name, InfrastructureBootstrapHeldSourceRecord {
+            root: parent,
+            custody: InfrastructureBootstrapCustodyRecord {
+                canister: id, subnet: SubnetId::from_principal(Principal::from_text(&child.subnet).unwrap()),
+                controllers: vec![parent], module_sha256: Some([38; 32]),
+            },
+            disposition: crate::fleet_ensure::model::capacity_import::CapacityImportDisposition::AbsenceEvidence { evidence_sha256: [0; 32] },
+        });
+        desired.canisters.push(child);
+    }
+    reseal(&mut desired, &mut source);
+    let plan = prepare(root, &desired, &source, "retained-multi-role-estate", 43).unwrap();
+    verify_plan(root, &plan).unwrap();
+    assert_eq!(desired.canisters.len(), 27);
+    assert_eq!(source.held_sources.len(), 24);
+    assert_eq!(plan.conservation.maximum_new_funding_cycles, funding);
 }
 
 fn source_record(desired: &DesiredFleet) -> InfrastructureBootstrapRecord {

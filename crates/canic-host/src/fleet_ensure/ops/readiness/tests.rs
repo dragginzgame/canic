@@ -2,6 +2,62 @@ use super::*;
 use crate::fleet_ensure::{ops, tests::protocol_tranche_fixture};
 use std::fs;
 
+#[test]
+fn reset_forecast_reports_all_owners_and_keeps_missing_balances_unknown() {
+    use crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapFundingTarget;
+    let operator = Principal::from_slice(&[99]).to_text();
+    let targets = || {
+        [
+            ("coordinator", 270_000_000_000_000),
+            ("root", 10_000_000_000_000),
+            ("store", 0),
+        ]
+        .into_iter()
+        .enumerate()
+        .map(
+            |(index, (name, minimum_cycles))| InfrastructureBootstrapFundingTarget {
+                name: name.into(),
+                principal: Principal::from_slice(&[u8::try_from(index).unwrap() + 1]).to_text(),
+                controllers: vec![operator.clone()],
+                minimum_cycles,
+                observation_burn_cycles: 1_000_000_000_000,
+                update_burn_cycles: 1_000_000_000_000,
+            },
+        )
+        .collect()
+    };
+    let mut balances = [
+        270_858_752_107_955_u128,
+        401_015_495_335_881,
+        6_065_627_936_253,
+    ]
+    .into_iter();
+    let forecast = infrastructure_with(targets(), |principal| {
+        let mut report = status(principal, &operator);
+        report.cycles = Some(balances.next().unwrap().to_string());
+        Ok(report)
+    })
+    .unwrap()
+    .unwrap();
+    assert!(balances.next().is_none());
+    assert!(forecast.maximum_funding_cycles.unwrap() < 100_000_000_000_000);
+    assert_eq!(forecast.maximum_ledger_transfers, 2);
+    assert_eq!(forecast.targets[1].maximum_funding_cycles, Some(0));
+    let unknown = infrastructure_with(targets(), |_| {
+        Err(RootReadinessUnavailable::ObservationFailed)
+    })
+    .unwrap()
+    .unwrap();
+    assert_eq!(unknown.maximum_funding_cycles, None);
+    assert!(
+        unknown
+            .targets
+            .iter()
+            .all(|target| target.maximum_funding_cycles.is_none()
+                && target.unavailable == Some(RootReadinessUnavailable::ObservationFailed))
+    );
+}
+
 fn status(principal: &str, operator: &str) -> IcpCanisterStatusReport {
     serde_json::from_value(serde_json::json!({
         "id": principal, "settings": { "controllers": [operator] }, "cycles": "700",

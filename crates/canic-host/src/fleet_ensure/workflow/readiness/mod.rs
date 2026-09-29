@@ -38,7 +38,14 @@ pub struct FleetReadinessRequest<'a> {
     pub cycles_ledger: Principal,
     pub estimated_required_cycles: Option<u128>,
     pub desired: Option<&'a crate::fleet_ensure::dto::LoadedDesiredFleet>,
+    pub generation_inputs: Option<ReadinessGenerationInputs<'a>>,
     pub conversion: Option<ReadinessConversionRequest>,
+}
+
+/// Intended generator files checked before builds, without granting import authority.
+pub struct ReadinessGenerationInputs<'a> {
+    pub source: &'a Path,
+    pub seed: &'a Path,
 }
 
 ///
@@ -56,6 +63,8 @@ pub struct ReadinessConversionRequest {
 /// Failure to establish even the read-only pre-build facts.
 #[derive(Debug, Error)]
 pub enum FleetReadinessError {
+    #[error(transparent)]
+    GenerationInputs(#[from] Box<crate::fleet_ensure::generate::FleetGenerateError>),
     #[error(transparent)]
     RetainedContract(#[from] crate::fleet_ensure::ops::retained_contract::RetainedContractError),
     #[error(transparent)]
@@ -90,6 +99,20 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
         request.environment,
         request.fleet,
     )?;
+    if let Some(inputs) = &request.generation_inputs {
+        crate::fleet_ensure::generate::preflight::validate_generation_inputs(
+            &crate::fleet_ensure::generate::preflight::FleetGenerationInputsRequest {
+                root: request.workspace,
+                environment: request.environment,
+                fleet: request.fleet,
+                source: inputs.source,
+                seed: inputs.seed,
+            },
+            request.operator,
+            request.cycles_ledger,
+        )
+        .map_err(Box::new)?;
+    }
     let started = now_ms()?;
     let paths = EnsurePaths::under(request.workspace, request.environment, request.fleet);
     let retained_operation = retained(&paths, request)?;
@@ -128,6 +151,10 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
         retained_operation,
     );
     report.observed_at_unix_ms = started;
+    if let Some(inputs) = &request.generation_inputs {
+        let forecast = reset_forecast(request, inputs, &icp)?;
+        record_reset_forecast(&mut report, forecast);
+    }
     if let Some(selected) = request.desired {
         report.funding =
             crate::fleet_ensure::ops::readiness::roots(request.workspace, &selected.desired, &icp)?;
@@ -157,6 +184,51 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
     }
     report.completed_at_unix_ms = now_ms()?;
     Ok(report)
+}
+
+fn record_reset_forecast(
+    report: &mut FleetReadiness,
+    forecast: Option<crate::fleet_ensure::view::readiness::InfrastructureFundingReadiness>,
+) {
+    let shortfall = forecast
+        .as_ref()
+        .and_then(|value| value.maximum_funding_cycles)
+        .is_some_and(|funding| funding > report.available_cycles);
+    if shortfall
+        && !report
+            .blockers
+            .contains(&ReadinessBlocker::EstimatedFundingShortfall)
+    {
+        report
+            .blockers
+            .push(ReadinessBlocker::EstimatedFundingShortfall);
+    }
+    report.funding.clean_reinstall_infrastructure = forecast;
+}
+
+fn reset_forecast(
+    request: &FleetReadinessRequest<'_>,
+    inputs: &ReadinessGenerationInputs<'_>,
+    icp: &IcpCli,
+) -> Result<
+    Option<crate::fleet_ensure::view::readiness::InfrastructureFundingReadiness>,
+    FleetReadinessError,
+> {
+    let targets = crate::fleet_ensure::generate::preflight::bootstrap_funding_targets(
+        &crate::fleet_ensure::generate::preflight::FleetGenerationInputsRequest {
+            root: request.workspace,
+            environment: request.environment,
+            fleet: request.fleet,
+            source: inputs.source,
+            seed: inputs.seed,
+        },
+        request.operator,
+        request.cycles_ledger,
+    )
+    .map_err(Box::new)?;
+    Ok(crate::fleet_ensure::ops::readiness::infrastructure(
+        targets, icp,
+    )?)
 }
 
 fn retained(
@@ -218,6 +290,7 @@ fn report(
         operator: request.operator.to_text(),
         cycles_ledger: request.cycles_ledger.to_text(),
         network_identity,
+        generation_inputs_checked: request.generation_inputs.is_some(),
         available_cycles,
         estimated_required_cycles: request.estimated_required_cycles,
         estimated_shortfall_cycles,

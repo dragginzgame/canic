@@ -254,6 +254,7 @@ pub fn post_upgrade_nonroot_canister_after_memory_init(
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
+    FleetActivationOps::select_ordinary_storage();
     let active = restore_managed_nonroot(canister_role, embedded_release_build_id, false)?;
     if active {
         RuntimeWorkflow::start_all()?;
@@ -266,6 +267,7 @@ pub fn post_upgrade_nonroot_canister_with_automatic_topup_after_memory_init(
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
+    FleetActivationOps::select_ordinary_storage();
     let active = restore_managed_nonroot(canister_role, embedded_release_build_id, false)?;
     if active {
         RuntimeWorkflow::start_all_with_automatic_topup()?;
@@ -278,6 +280,7 @@ pub fn post_upgrade_nonroot_canister_with_fleet_admission_after_memory_init(
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
+    FleetActivationOps::select_ordinary_storage();
     let active = restore_managed_nonroot(canister_role, embedded_release_build_id, true)?;
     FleetAdmissionProjectionWorkflow::restore()?;
     if active {
@@ -291,10 +294,24 @@ pub fn post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_af
     canister_role: CanisterRole,
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
+    FleetActivationOps::select_ordinary_storage();
     let active = restore_managed_nonroot(canister_role, embedded_release_build_id, true)?;
     FleetAdmissionProjectionWorkflow::restore()?;
     if active {
         RuntimeWorkflow::start_all_with_automatic_topup()?;
+    }
+    Ok(active)
+}
+
+/// Restore the Store's concrete codec before reading protected activation state.
+pub fn post_upgrade_wasm_store_after_memory_init(
+    embedded_release_build_id: Option<&str>,
+) -> Result<bool, InternalError> {
+    FleetActivationOps::select_wasm_store_storage();
+    let active =
+        restore_managed_nonroot(CanisterRole::WASM_STORE, embedded_release_build_id, false)?;
+    if active {
+        RuntimeWorkflow::start_all()?;
     }
     Ok(active)
 }

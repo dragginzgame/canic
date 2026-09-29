@@ -174,3 +174,39 @@ for mode in ordinary fast targeted-pocketic; do
     if rg -q '\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]' "$scratch/output.log"; then exit 1; fi
 done
 echo 'workspace test runner barriers, selectors, failure ordering, quiet output, retained diagnostics and cleanup passed'
+
+# Cache accounting distinguishes misses/uncacheable outputs from infrastructure
+# errors, rejects partial stats and never reports a negative delta after reset.
+cat > "$fixture/bin/sccache" <<'SH'
+#!/usr/bin/env bash
+set -euo pipefail
+[[ "$1" == --show-stats ]]
+[[ "$RUNNER_CACHE_SCENARIO" != unavailable ]] || exit 2
+if [[ "$RUNNER_CACHE_SCENARIO" == malformed ]]; then
+    echo 'Compile requests 10'
+    exit 0
+fi
+count=0
+[[ ! -e "$CANIC_TEST_SCRATCH/cache-count" ]] || read -r count < "$CANIC_TEST_SCRATCH/cache-count"
+echo "$((count + 1))" > "$CANIC_TEST_SCRATCH/cache-count"
+if [[ "$RUNNER_CACHE_SCENARIO" == reset && "$count" -gt 0 ]]; then count=-1; fi
+printf 'Compile requests %s\nCache hits %s\nCache misses %s\n' "$((20 + count * 10))" "$((5 + count * 2))" "$((5 + count * 3))"
+printf 'Non-cacheable calls %s\nCache errors %s\n' "$((10 + count * 5))" "$((2 + count))"
+printf 'Cache read errors 0\nCache write errors 0\nCache timeouts 0\n'
+SH
+chmod +x "$fixture/bin/sccache"
+for scenario in healthy reset malformed unavailable; do
+    scratch="$fixture/cache-$scenario"
+    mkdir -p "$scratch"
+    CI=0 RUSTC_WRAPPER="$fixture/bin/sccache" CANIC_TEST_PLAN_ONLY=0 \
+        CANIC_TEST_SCRATCH="$scratch" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
+        RUNNER_CACHE_SCENARIO="$scenario" \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" ordinary > "$scratch/output.log" 2>&1
+    case "$scenario" in
+        healthy) rg -q 'compiler cache delta: requests=10 hits=2 misses=3 uncacheable=5 cache_errors=1' "$scratch/output.log" ;;
+        reset) rg -q 'compiler cache delta: unavailable' "$scratch/output.log" ;;
+        *) rg -q 'compiler cache observation: unavailable' "$scratch/output.log" ;;
+    esac
+done
+echo 'compiler cache observation tests passed'

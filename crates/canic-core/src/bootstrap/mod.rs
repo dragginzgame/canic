@@ -4,6 +4,8 @@
 //! Does not own: config schema validation rules, runtime lifecycle ordering, or artifact builds.
 //! Boundary: lifecycle and build tooling call bootstrap after config generation.
 
+#[doc(hidden)]
+pub mod release_binding;
 #[cfg(any(not(target_arch = "wasm32"), test))]
 mod render;
 
@@ -67,10 +69,10 @@ pub mod compiled {
             MAX_COMPONENT_CHILD_ROLES, MAX_COMPONENT_PROVISIONING_GRANTS,
             MAX_COMPONENT_SPAWN_GRANTS, MAX_FLEET_COMPONENT_INSTANCES, MetricsCanisterConfig,
             MetricsProfile, NAME_MAX_BYTES, RoleAttestationConfig, RoleDeclaration,
-            RoleDeclarationKind, ScalePool, ScalePoolPolicy, ScalingConfig, ServicesConfig,
-            ShardPool, ShardPoolPolicy, ShardingConfig, Standards, StandardsCanisterConfig,
-            TopupPolicy, implicit_root_canister_config, implicit_wasm_store_canister_config,
-            validate_app_name, validate_canister_role_name,
+            RoleDeclarationKind, RoleObservabilityConfig, ScalePool, ScalePoolPolicy,
+            ScalingConfig, ServicesConfig, ShardPool, ShardPoolPolicy, ShardingConfig, Standards,
+            StandardsCanisterConfig, TopupPolicy, implicit_root_canister_config,
+            implicit_wasm_store_canister_config, validate_app_name, validate_canister_role_name,
         },
         ids::{
             AppId, BuildNetwork, CanisterRole, ComponentDeploymentConfigurationDigest,

@@ -10,6 +10,7 @@ cp "$ROOT/scripts/ci/run-sccache.sh" "$fixture/scripts/ci/"
 export CANIC_SCCACHE_BIN="$fixture/cache"
 export COMPILER_RECORD="$fixture/compiler-args"
 export CACHE_RECORD="$fixture/cache-args"
+export CANIC_SCCACHE_VERBOSE=0
 compiler="$fixture/bin with spaces/rustc"
 wrapper="$fixture/scripts/ci/run-sccache.sh"
 
@@ -52,11 +53,27 @@ cmp "$fixture/expected" "$COMPILER_RECORD"
 [[ "$(cat "$fixture/stdout")" == 'compiler stdout' ]]
 [[ ! -s "$fixture/stderr" ]]
 
-# The reported cache connection error falls back to the original compiler argv.
-CACHE_MODE=unavailable run_compiler
+# Repeated cache connection errors silently fall back to the original compiler argv.
+for _attempt in 1 2 3; do
+    CACHE_MODE=unavailable run_compiler
+    cmp "$fixture/expected" "$COMPILER_RECORD"
+    [[ "$(cat "$fixture/stdout")" == 'compiler stdout' ]]
+    [[ ! -s "$fixture/stderr" ]]
+done
+
+# Explicit cache diagnostics remain available without changing fallback behavior.
+CANIC_SCCACHE_VERBOSE=1 CACHE_MODE=unavailable run_compiler
 cmp "$fixture/expected" "$COMPILER_RECORD"
 [[ "$(cat "$fixture/stdout")" == 'compiler stdout' ]]
 grep -q '^sccache: warning: cache unavailable' "$fixture/stderr"
+grep -q '^sccache: warning: Operation not permitted' "$fixture/stderr"
+
+# The default is quiet even when no verbosity setting is inherited.
+unset CANIC_SCCACHE_VERBOSE
+CACHE_MODE=unavailable run_compiler
+cmp "$fixture/expected" "$COMPILER_RECORD"
+[[ "$(cat "$fixture/stdout")" == 'compiler stdout' ]]
+[[ ! -s "$fixture/stderr" ]]
 
 # Compiler failures, including exit 2, stay failures and are never retried.
 for compiler_status in 1 2; do
@@ -72,15 +89,17 @@ status=0
 CACHE_MODE=unavailable COMPILER_STATUS=42 run_compiler || status=$?
 [[ "$status" -eq 42 ]]
 cmp "$fixture/expected" "$COMPILER_RECORD"
-grep -q '^error: genuine compiler failure$' "$fixture/stderr"
+[[ "$(cat "$fixture/stderr")" == 'error: genuine compiler failure' ]]
 
 # Unclassified failures and cache management commands must not invoke a compiler.
 status=0
 CACHE_MODE=failed run_compiler || status=$?
 [[ "$status" -eq 7 && ! -s "$COMPILER_RECORD" ]]
+[[ "$(cat "$fixture/stderr")" == 'cache failed without an infrastructure diagnostic' ]]
 status=0
 CACHE_MODE=unavailable "$wrapper" --show-stats > "$fixture/stdout" 2> "$fixture/stderr" || status=$?
 [[ "$status" -eq 2 && ! -s "$COMPILER_RECORD" ]]
+[[ "$(cat "$fixture/stderr")" == 'sccache: error: Operation not permitted (os error 1)' ]]
 printf '%s\0' --show-stats > "$fixture/expected-cache"
 cmp "$fixture/expected-cache" "$CACHE_RECORD"
 

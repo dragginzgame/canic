@@ -457,10 +457,29 @@ pub(super) fn generate(
     let config = retain_generated_journey_source(root, input.config);
     let seed = root.join("fleet-seed.toml");
     let policy = root.join("fleet-policy.toml");
+    let preflight = canic_host::fleet_ensure::FleetGenerationInputsRequest {
+        root,
+        environment: "local",
+        fleet: &input.desired.fleet,
+        source: &policy,
+        seed: &seed,
+    };
+    let operator = Principal::from_text(&input.desired.operator).unwrap();
+    let ledger = Principal::from_text(&input.desired.cycles_ledger).unwrap();
     let mut seed_value: toml::Value =
         toml::from_str(&std::fs::read_to_string(&seed).unwrap()).unwrap();
     let mut policy_value: toml::Value =
         toml::from_str(&std::fs::read_to_string(&policy).unwrap()).unwrap();
+    if seed_value
+        .get("fresh_estate")
+        .and_then(toml::Value::as_bool)
+        == Some(true)
+    {
+        assert!(matches!(
+            canic_host::fleet_ensure::validate_generation_inputs(&preflight, operator, ledger),
+            Err(canic_host::fleet_ensure::FleetGenerateError::CompletedFleetRequiresExplicitInventory)
+        ));
+    }
     seed_value["fresh_estate"] = false.into();
     seed_value["coordinator"] = input.coordinator.to_text().into();
     seed_value["roots"][0]["root"] = input.root.to_text().into();
@@ -478,6 +497,8 @@ pub(super) fn generate(
     policy_value["fleet_subnet_roots"][0]["canister_pool"]["maximum_size"] = (maximum + 1).into();
     std::fs::write(&seed, toml::to_string(&seed_value).unwrap()).unwrap();
     std::fs::write(&policy, toml::to_string(&policy_value).unwrap()).unwrap();
+    canic_host::fleet_ensure::validate_generation_inputs(&preflight, operator, ledger)
+        .expect("explicit current inventory passes before artifact-bound generation");
     canic_host::fleet_ensure::generate_desired_fleet(
         &canic_host::fleet_ensure::FleetGenerateRequest {
             catalog_progress: None,

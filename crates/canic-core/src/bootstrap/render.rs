@@ -449,12 +449,19 @@ fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
         render_owned_string(package)
     });
     let fleet_admission = declaration.fleet_admission;
+    let diagnostics = declaration.observability.diagnostics;
+    let history = declaration.observability.history;
+    let logs = declaration.observability.logs;
+    let metrics = declaration.observability.metrics;
 
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RoleDeclaration {
             kind: #kind,
             package: #package,
             fleet_admission: #fleet_admission,
+            observability: ::canic::__internal::core::bootstrap::compiled::RoleObservabilityConfig {
+                diagnostics: #diagnostics, history: #history, logs: #logs, metrics: #metrics,
+            },
         }
     }
 }

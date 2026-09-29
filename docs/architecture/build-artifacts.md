@@ -82,6 +82,24 @@ from the App's ordinary Cargo graph. Build scripts must declare external inputs
 to Cargo. Input collection is conservative across the complete Cargo catalog,
 rather than a minimal per-role dependency cache.
 
+Canonical Cargo builds do not receive the changing release-build identity.
+Managed entrypoints retain one fixed-width identity slot in active Wasm data.
+For each selected release, Host copies the compiled template and fills that slot
+before shrink, Binaryen, hashes and manifest publication. Binding rejects absent,
+duplicate, overlapping or already-bound slots and leaves the template unchanged. Runtime
+lifecycle checks read the bound identity from the installed module and compare it
+with the typed init/activation authority as before. No controller, network or
+application input can set the module's identity after installation.
+
+This separates a new release nonce from source compilation: unchanged roles can
+retain Cargo freshness while their final bytes and hashes bind the selected
+release. Source, configuration, features, protocol profiles and tool changes still
+invalidate their corresponding compilation inputs. Retried deployments use the
+same qualified final bytes. Unbound Cargo outputs are intermediate build data,
+not installable release artifacts. Direct fixture compilation can initialize the
+same slot from its fixed test identity; production finalization accepts only an
+unbound template and never relabels a completed artifact.
+
 The [Toko Miner Release measurement report](../audits/reports/2026-09/2026-09-24/toko-performance-followup.md)
 records application-scale cold, warm, changed-source and relocated-checkout
 behaviour, including exact artifact verification and shared-host limitations.
@@ -228,10 +246,12 @@ summary reports lock acquisition separately; input/output verification time
 excludes it. These are phase observations, not
 evidence that lock waiting caused an earlier slow build.
 
-Every runtime embeds the complete release identity. Changed inputs therefore
-still rebuild those runtimes for the new identity; this surface does not compose
-a new release from artifacts embedding different identities. Reuse never grants
-authority to resume or change a Fleet operation.
+Every finalized runtime embeds the complete release identity. A changed identity
+binds fresh private copies of Cargo templates; it does not itself invalidate
+role compilation. Changed source, configuration, features and compiler inputs
+still rebuild their affected Cargo targets. Finalization and qualification run
+for the new release, and the manifest never mixes artifacts bound to different
+identities. Reuse never grants authority to resume or change a Fleet operation.
 
 For isolated release checkouts, keep real, independent `.canic` directories and
 Cargo target/build directories. Do not symlink `.canic`, share mutable operation

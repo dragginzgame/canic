@@ -412,7 +412,7 @@ assert_fleet_probe_outputs() {
     local role="$3"
     local feature="$4"
     local package="$5"
-    local manifest="$downstream_root/.canic/generated/$package/Cargo.toml"
+    local manifest="$downstream_root/.canic/generated/canic.toml/$package/Cargo.toml"
     local artifacts="$downstream_root/.icp/local/canisters/$role"
     for extension in wasm wasm.gz did; do
         test -s "$artifacts/$role.$extension"

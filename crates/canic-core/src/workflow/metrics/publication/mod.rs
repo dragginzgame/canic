@@ -14,7 +14,10 @@ use crate::{
     },
     ops::{
         ic::IcOps,
-        runtime::public_metrics::{ApplicationMetricsSampler, PublicMetricsOps},
+        runtime::public_metrics::{
+            ApplicationMetricsSampler, PublicMetricsOps, PublicSamplingStartup, sampling_startup,
+            select_sampling_startup,
+        },
     },
 };
 
@@ -22,6 +25,20 @@ use crate::{
 pub struct PublicMetricsWorkflow;
 
 impl PublicMetricsWorkflow {
+    /// Select the optional sampling owner before runtime startup or restoration.
+    pub fn enable_sampling() {
+        select_sampling_startup(PublicSamplingStartup {
+            start: timer::PublicSamplingTimer::start,
+        });
+    }
+
+    pub(crate) fn start_selected_sampling() -> Result<(), InternalError> {
+        if let Some(startup) = sampling_startup() {
+            (startup.start)()?;
+        }
+        Ok(())
+    }
+
     #[must_use]
     pub fn health() -> PublicHealth {
         PublicMetricsOps::health()

@@ -32,12 +32,34 @@ use crate::{
 };
 use std::{cell::Cell, collections::BTreeSet};
 
-thread_local! {
-    static APPLICATION_SAMPLER: Cell<Option<ApplicationMetricsSampler>> = const { Cell::new(None) };
-}
-
 #[cfg(feature = "sharding")]
 use crate::ops::storage::placement::sharding::ShardingRegistryOps;
+
+thread_local! {
+    static APPLICATION_SAMPLER: Cell<Option<ApplicationMetricsSampler>> = const { Cell::new(None) };
+    static SAMPLING_STARTUP: Cell<Option<PublicSamplingStartup>> = const { Cell::new(None) };
+}
+
+///
+/// PublicSamplingStartup
+///
+/// Startup callback selected by generated lifecycle code; absent in lean roles.
+///
+
+#[derive(Clone, Copy)]
+pub struct PublicSamplingStartup {
+    pub start: fn() -> Result<(), InternalError>,
+}
+
+/// Retain the selected sampling owner before runtime startup.
+pub fn select_sampling_startup(startup: PublicSamplingStartup) {
+    SAMPLING_STARTUP.set(Some(startup));
+}
+
+/// Read the selected sampling owner without constructing the sampler.
+pub fn sampling_startup() -> Option<PublicSamplingStartup> {
+    SAMPLING_STARTUP.get()
+}
 
 /// One synchronous aggregate provider composed by application lifecycle code.
 /// The provider owns bounded source collection; Canic owns the timer and history.

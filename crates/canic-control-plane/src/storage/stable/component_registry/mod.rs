@@ -1808,12 +1808,21 @@ pub struct RootComponentChildAllocationRecord {
 }
 
 /// Bounded diagnostic metadata, independent of the allocation's effect progress.
-#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RootComponentChildAllocationFailureRecord {
     pub diagnostic_code: u16,
     pub failed_at_ns: u64,
     pub consecutive_failures: u32,
     pub retry_at_ns: u64,
+    #[serde(deserialize_with = "required_platform_rejection")]
+    pub platform_rejection: Option<String>,
+}
+
+fn required_platform_rejection<'de, D>(deserializer: D) -> Result<Option<String>, D::Error>
+where
+    D: serde::Deserializer<'de>,
+{
+    Option::<String>::deserialize(deserializer)
 }
 
 #[cfg(feature = "root-control-plane")]
@@ -5754,6 +5763,7 @@ impl RootComponentRegistryStore {
         let mut maximum = record.clone();
         maximum.last_failure = Some(RootComponentChildAllocationFailureRecord {
             diagnostic_code: u16::MAX,
+            platform_rejection: Some("x".repeat(canic_core::control_plane_support::error::InternalError::MAX_PLATFORM_REJECTION_BYTES)),
             failed_at_ns: u64::MAX,
             consecutive_failures: u32::MAX,
             retry_at_ns: u64::MAX,

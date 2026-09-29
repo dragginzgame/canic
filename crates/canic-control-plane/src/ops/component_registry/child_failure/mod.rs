@@ -82,6 +82,7 @@ impl ComponentRegistryOps {
         validate_child_allocation_record(&before)?;
         if before
             .last_failure
+            .as_ref()
             .is_some_and(|failure| now_ns < failure.failed_at_ns)
         {
             return Err(InternalError::conflict());
@@ -89,17 +90,19 @@ impl ComponentRegistryOps {
         let diagnostic_code = error.public_error().raw_code();
         let consecutive_failures = before
             .last_failure
+            .as_ref()
             .filter(|failure| failure.diagnostic_code == diagnostic_code)
             .map_or(1, |failure| failure.consecutive_failures.saturating_add(1));
         let failure = RootComponentChildAllocationFailureRecord {
             diagnostic_code,
+            platform_rejection: error.platform_rejection().map(str::to_owned),
             failed_at_ns: now_ns,
             consecutive_failures,
             retry_at_ns: retry_at(now_ns, consecutive_failures)?,
         };
-        validate(Some(failure))?;
+        validate(Some(&failure))?;
         let mut after = before.clone();
-        after.last_failure = Some(failure);
+        after.last_failure = Some(failure.clone());
         replace(&before, after)?;
         Ok(view(failure))
     }
@@ -122,11 +125,12 @@ impl ComponentRegistryOps {
         Ok(())
     }
 
-    pub(crate) const fn child_failure_response(
+    pub(crate) fn child_failure_response(
         failure: RootComponentChildAllocationFailureView,
     ) -> RootComponentChildAllocationFailure {
         RootComponentChildAllocationFailure {
             diagnostic_code: failure.diagnostic_code,
+            platform_rejection: failure.platform_rejection,
             failed_at_ns: failure.failed_at_ns,
             consecutive_failures: failure.consecutive_failures,
             retry_at_ns: failure.retry_at_ns,
@@ -160,11 +164,15 @@ fn retry_at(now_ns: u64, failures: u32) -> Result<u64, InternalError> {
 }
 
 pub(super) fn validate(
-    failure: Option<RootComponentChildAllocationFailureRecord>,
+    failure: Option<&RootComponentChildAllocationFailureRecord>,
 ) -> Result<(), InternalError> {
     if let Some(failure) = failure
         && (failure.diagnostic_code == 0
             || failure.consecutive_failures == 0
+            || failure
+                .platform_rejection
+                .as_ref()
+                .is_some_and(|text| text.len() > InternalError::MAX_PLATFORM_REJECTION_BYTES)
             || failure.retry_at_ns != retry_at(failure.failed_at_ns, failure.consecutive_failures)?)
     {
         return Err(InternalError::invariant());
@@ -172,11 +180,12 @@ pub(super) fn validate(
     Ok(())
 }
 
-pub(super) const fn view(
+pub(super) fn view(
     failure: RootComponentChildAllocationFailureRecord,
 ) -> RootComponentChildAllocationFailureView {
     RootComponentChildAllocationFailureView {
         diagnostic_code: failure.diagnostic_code,
+        platform_rejection: failure.platform_rejection,
         failed_at_ns: failure.failed_at_ns,
         consecutive_failures: failure.consecutive_failures,
         retry_at_ns: failure.retry_at_ns,

@@ -20,6 +20,328 @@ open-draft statements describe that earlier development state.
 
 <!-- canic-status-summary:end -->
 
+## CANIC-185 — extended .47 batch ready for review, 2026-09-29
+
+The maintainer accepted the newly reported Toko Miner funding blocker into the
+open .47 batch. Target-local installation/observation funding replaces repeated
+whole-continuation deposits; generated 1T allowances and durable retry counts
+remain. Native writes require fresh owner headroom. Pre-build readiness now
+reports infrastructure funding with explicit unknowns and later-phase limits.
+The [correction report](../audits/reports/2026-09/2026-09-29/toko-bootstrap-funding.md)
+records the contract and qualification scope. With Toko's recorded balances, the
+infrastructure forecast is 81.075619955792T before Ledger fees; this is not a
+fresh live quote or a complete later-phase funding estimate.
+
+All targeted qualification passes: 29 host tests (two ignored), three CLI tests,
+warning-denied Clippy for Host/CLI/internal testing libraries and tests, scoped
+formatting and diff checks. Both production-default PocketIC cases pass:
+completed-reset recovery/replay (369.26s body, 532s runner) and supplied
+infrastructure initialization/recovery (161.24s body, 162s runner). No broad
+workspace gate ran.
+
+Together with the completed size and IcyDB work below, the accepted .47 batch is
+ready for maintainer review and push preparation; both changelog views are ready
+for the selected version/release flow. Toko Miner remains read-only; versions
+remain .46 and all changes uncommitted. No publication or live deployment ran.
+Downstream adoption still needs a matching CLI/runtime release and fresh review.
+The human-owned minor-closeout gate remains unchanged.
+
+## IcyDB 0.261.16 — .47 ready for review, 2026-09-28
+
+Build-output cleanup: removed the standalone fixture's 1.2 GiB nested `target/`
+at the maintainer's request and reverted the proposed Git-ignore expansion.
+Repository Cargo configuration now defaults direct builds to root `target/`.
+Locked offline metadata checks confirm that destination for the main workspace,
+the fixture selected from the root, and Cargo invoked inside the fixture.
+Existing explicit target overrides remain authoritative. No compile or broad
+gate was needed for this configuration-only correction.
+
+The maintainer-requested update is complete. The crates.io index confirmed
+0.261.16 as the newest published non-yanked release at selection. Main workspace
+and standalone composed-audit manifests/lockfiles resolve all six IcyDB crates
+to .16. Both graphs retain one `ic-memory 0.14.3` and one `ic-timers 0.8.0`.
+No Canic API adaptation was necessary. Historical size measurements and the
+previous .13 qualification remain historical evidence only.
+
+All twelve `icydb_lifecycle_composition` PocketIC cases pass (206.27s test body;
+369s runner with compilation), including data/checkpoint commits, provisioning
+and held-response recovery, memory admission and lifecycle/timer custody.
+The standalone composed-audit fixture passes its locked all-feature native
+compile (38.12s). The exact timer-provider graph/manifest-consumer guard passes
+(0.31s test body). Scoped diff checks pass. Logs:
+`/tmp/canic-icydb-026116-{update,lifecycle,audit-check,timer-guard}.log`.
+
+Together with the completed size batch below, the accepted .47 batch and both
+changelog views are ready for maintainer review and the selected release flow.
+Package versions remain .46 and all edits remain uncommitted. No broad gate,
+version bump, Git publication, live deployment or sibling mutation ran.
+
+## Toko size implementation — extended .47 batch ready for review, 2026-09-28
+
+The maintainer explicitly selected role persistence, optional observability and
+initial blob preparation. The [accepted scope amendment](../design/0.110-fleet-runtime-contraction/2026-09-28-toko-size-follow-through.md)
+reopens those narrow cuts after the prior deferral. All three are implemented:
+ordinary/Root/Store activation codecs share one durable owner, observation
+providers are selected per role with defaults enabled, and passive blob billing
+contracts no longer select embedded storage. The activation schema follows the
+reinstall-only release boundary; same-release recovery remains supported.
+
+Final targeted evidence:
+
+- 212 native checks pass across activation, role/configuration contracts,
+  bounded storage, no-default-feature Candid/endpoint surfaces and Host metadata.
+- All 12 lifecycle composition PocketIC cases pass (201.66s body); the exact
+  Root held Store grant/revocation reply recovery case also passes (391.32s body,
+  including nested builds). Ordinary, Root and Store restart owners are covered.
+- Warning-denied Clippy passes for `canic-core`, `canic` and `canic-host`, with
+  all features and libraries/tests selected. Scoped Rust formatting passes.
+- Canonical Store/Coordinator Candid refresh and ordinary builds pass. Lean
+  managed, Root and standalone-local endpoint builds pass; generated declarations
+  retain required health/financial reads while omitting optional local reads.
+- Two optimized repetitions per minimal-fixture configuration produce identical
+  Wasm/gzip/Candid bytes. Disabling all four observation groups saves 217,980 code
+  bytes (8.31%), 249,713 total Wasm bytes, 92,279 gzip bytes and 445 functions.
+
+The [audit follow-through](../audits/reports/2026-09/2026-09-28/toko-wasm-size-audit.md#selected-implementation-follow-through)
+retains commands, logs, artifact hashes and the final source inventory. The size
+pair isolates observability; it measures neither Toko nor a codec-only delta.
+Toko still needs current-Canic adoption, selected opt-outs and regenerated bindings.
+
+The complete extended .47 batch, including the preceding work below, is ready
+for maintainer review and push preparation. Both changelog views are current
+and ready for the selected release flow; packages remain .46 and changes remain
+uncommitted. No broad gate, version bump, commit, publication, sibling mutation,
+live deployment or minor transition ran.
+
+## Release identity binding — preceding .47 batch ready for review, 2026-09-28
+
+The accepted build-speed correction is complete. Canonical Host Cargo commands
+omit the per-release identity. Generated lifecycle entrypoints read one reserved
+Wasm data slot; Host binds a private copy before shrink/Binaryen, qualification,
+hashing and publication. Cargo outputs remain reusable templates. Missing,
+duplicate, overlapping and already-bound slots reject before mutation. Runtime
+identity checks, exact artifacts across retries and effect recovery remain; no
+new IC calls or install-time identity override are introduced.
+
+Final evidence:
+
+- 13 focused Host native checks pass, including disjoint/touching/overlapping data,
+  immutable templates, typed rejection, distinct final identities and equal Cargo
+  environments with separate artifact destinations.
+- The optimized Fast/Release PocketIC probe passes: actual Cargo freshness across
+  identities, source-edit invalidation, installed identity, mismatched/unbound
+  rejection and valid reinstall. Test body: 1.65s; runner with compilation: 169s.
+- The exact generated-artifact activation-reset recovery proof passes (347.10s
+  body; 513s runner with compilation). Coordinator, Root, Store and workload
+  artifacts build and install through production paths; interruption and terminal
+  replay retain their assertions. The initial artifact build took 4m16s, and the
+  second selected identity completed in 23.87s, with declaration-cache hits.
+  This is one fixture observation, not an application-scale before/after benchmark.
+- Warning-denied Clippy passes for `canic-core`, `canic` and `canic-host`, selecting
+  libraries/tests and all features (24.38s final run). The overlap predicate and
+  the previously reported oversized test function are corrected.
+- Scoped formatting, ShellCheck, runner selector/diagnostic mocks and diff checks pass.
+
+Logs: `/tmp/canic-047-binding-{native,pocketic,clippy,recovery}.log`.
+The [performance report](../audits/reports/2026-09/2026-09-28/deployment-test-performance.md)
+records limits: source/configuration/dependency changes still rebuild affected
+roles; new identities still require finalization and qualification. Full-suite
+runtime and application-scale deployment gains remain unmeasured.
+
+The complete accepted .47 batch, including the preceding artifact-admission,
+rejection-diagnostic, IcyDB, generation-preflight and CI/test-speed corrections,
+is ready for maintainer review and the selected release flow. Both changelog
+views are current. Packages remain .46; all edits are uncommitted. No broad gate,
+version bump, commit, publication, sibling mutation or live deployment ran.
+
+## Toko Wasm source/feature audit — complete, 2026-09-28
+
+The requested [Toko size audit](../audits/reports/2026-09/2026-09-28/toko-wasm-size-audit.md)
+covers all 17 declared roles, shared Rust/generator sources, build recipes and
+relevant frontend consumers. Locked offline Wasm dependency trees resolve for
+every role; the source/hash inventory and compressed tree evidence accompany
+the report. Toko at `6519b72` pins Canic `.110.6` and IcyDB `.255.3`.
+No current Toko Wasm was available, so no new byte-saving result is claimed.
+
+Priorities are a blob client/DTO boundary for the Hub, optional observability
+selection, narrower role-owned activation codecs and the planned standalone
+blob service. The instance's local blob switches do not change its dependency
+features; SQL and control-plane code are absent from its normal feature graph.
+Toko already split its generator and actively consumes metrics/logs. The report
+distinguishes these facts from historical ablations and product-removal choices.
+Toko remains clean/read-only. Only audit documentation/evidence changed; no
+runtime edit, compile, broad gate, release or deployment ran. Existing `.47`
+readiness and human minor-closeout requirements remain unchanged.
+
+## Local artifact admission and child rejection diagnostics — .47 review, 2026-09-28
+
+Toko's reported E66 at InstallIntent exposed two Canic gaps. Finalization now
+rejects both Local and IC artifacts above the supported 10 MiB code-section or
+50,000 defined-function ceiling before publishing Wasm/Candid/gzip outputs.
+Failure retains prior outputs and removes the private stage. The code ceiling
+retains Canic's existing conservative build contract: upstream
+[resource limits](https://docs.internetcomputer.org/references/resource-limits/)
+currently list 12 MiB while
+[execution-error guidance](https://docs.internetcomputer.org/references/execution-errors/)
+still lists 10 MiB. This is not a fresh measurement of a selected replica.
+
+Raw IC rejection text now survives InternalError conversion and appears as
+nullable `last_failure.platform_rejection` in authorized child-allocation status.
+It is bounded to 1,024 UTF-8 bytes, persists across same-release restart, and
+clears when the existing failure clears after progress. Public codes, first-owner
+provisioning context and retry decisions are unchanged. Admission reserves the
+maximum diagnostic bytes before effects, preserving registry capacity accounting.
+Internal provisioning context is boxed to keep error and wrapper sizes bounded.
+
+All 34 focused all-feature native tests pass across Core, Control Plane and Host:
+artifact boundaries/publication, rejection conversion, retained failure/restart,
+capacity, Candid roundtrip, required field presence and oversized-record rejection.
+Logs: `/tmp/canic-install-diagnostics-tests.log`. Scoped warning-denied Clippy
+initially reported an oversized release-binding PocketIC test; the completed
+release-binding qualification above resolves that failure and records the passing
+lint result. Original log: `/tmp/canic-install-diagnostics-clippy.log`. Its runtime
+slot reader also received the bytewise volatile-read correction exposed by that
+check.
+
+This correction and both .47 changelog surfaces are ready for review. The completed
+release-binding evidence and combined batch readiness are recorded above. Packages
+remain .46; changes are uncommitted. No broad gate, version transaction, sibling
+mutation or live deployment ran. The existing Toko fleet still needs the
+maintainer's fresh reinstall and project-creation acceptance test; the original
+IC rejection text has not been recovered from its old E66 record.
+
+
+## Test/build performance follow-through — .47 ready for review, 2026-09-28
+
+The accepted quick-audit follow-through adds bounded compiler caching to the CI
+Rust-check, ordinary and PocketIC jobs. Each has a checksum-pinned installer and
+2 GiB cache, including save after test failure. Runner statistics now distinguish
+uncacheable calls and cache errors from misses. Current local statistics show
+zero cache errors; low hit rate alone was not evidence of a broken server.
+
+Two independent lifecycle support cases move to the shorter of the existing
+PocketIC workers. The retained worker durations were 2393.37s and 2046.06s;
+moving approximately 201s projects about 146s off that run's critical path.
+This is an estimate, not a measured new full-suite duration. Case membership,
+per-worker catalogue order, source-bound recovery barrier and isolation remain.
+
+Artifact-builder and compiler-cache unit tests now live in standalone test
+modules. Their assertion-only edits can reuse fixture Wasm; production modules
+remain exact inputs and all concurrent source edits still abort a cache build.
+The production implementations retain the same behavior. Module moves cause a
+one-time artifact-cache invalidation before that reuse benefit applies.
+
+The [performance report](../audits/reports/2026-09/2026-09-28/deployment-test-performance.md)
+records implemented changes, evidence and remaining work. Full separation of
+production Host/operator code from artifact producers remains architectural
+work. The completed release-binding correction above now separates changing release
+identities from Cargo compilation.
+Existing small recovery estates retain their paid-effect and failure coverage.
+No new end-to-end deployment or full-suite speedup is claimed.
+
+All 27 distinct focused native tests pass (19 build/cache checks, five producer
+cache checks and three worker/inventory checks). Warning-denied Host/internal-test
+Clippy passes. Workflow validation, the real pinned installer, runner mocks,
+worker cleanup, release-integrity guard, scoped formatting and diff checks pass.
+Logs: `/tmp/canic-047-{build-cache-tests,worker-partition,performance-clippy,runner-tests,worker-launcher,ci-integrity}.log`.
+An initial sandboxed nested compiler probe could not access sccache; the same
+checks passed with normal socket access, without changing their assertions.
+
+The bounded CI/cache/scheduling batch and the earlier IcyDB, generated-package
+isolation and CANIC-184 fixes are ready for maintainer review and the selected
+release flow. Both .47 changelog views are current; packages remain .46 and all
+changes are uncommitted. Broader deployment-build optimization remains open as
+recorded above. No broad gate, version bump, commit, publication or live effect ran.
+
+## CANIC-184 generation preflight — .47 ready for review, 2026-09-28
+
+Toko's 2026-09-28 local reinstall follow-up is implemented in the existing .47
+batch. `fleet readiness --source <policy> --seed <estate>` shares the generator's
+current input/schema/topology validation before building or remote observations.
+The two paths are paired and exclude `--desired`; successful reports identify
+`generation_inputs_checked`. Readiness binds the input operator/Ledger to its
+selected authority. Completed Fleets with a symbolic fresh seed get typed
+`CompletedFleetRequiresExplicitInventory` and actionable guidance. Nothing
+promotes terminal metadata into import authority or modifies retained evidence.
+
+The Fleet guide now explains explicit selection of all physical IDs, including
+allocated descendants, into current seed/policy input. Ordinary same-build
+startup reuses the retained desired document through Ensure without regeneration
+or reinstall. New generation after completion prepares the existing reviewed
+clean-reinstall phases. Toko's launcher/staging integration and live acceptance
+remain downstream work; no sibling files or deployed canisters were changed.
+
+Nine focused Host/CLI tests pass, including the before-network rejection,
+explicit inventory, authority mismatch, duplicate ID, unchanged-record and
+paired-option checks. Warning-denied Host/CLI/internal-test Clippy passes with
+governed test features. The exact mixed-topology PocketIC journey passes (926s
+runner step, 928s total), covering fresh installation, effect-free same-build
+replay, rejected symbolic reset input, accepted explicit inventory, selected-build
+reset, lost-response recovery, cycle accounting, cleared rows and retained IDs.
+This also exercises the corrected generated-package layout below. Logs:
+`/tmp/canic-047-preflight-{native,clippy,pocketic}.log`.
+
+The combined CI/cache-output, IcyDB and CANIC-184 follow-up batch is complete and
+ready for maintainer review and the selected release flow. Both .47 changelog
+views are updated; package versions remain .46 and changes remain uncommitted.
+No full workspace gate, version bump, commit, publication or live deployment ran.
+
+## IcyDB dependency update — .47 ready for review, 2026-09-28
+
+The registry's latest non-yanked published IcyDB release at inspection is
+0.261.13; the sibling checkout's .14 entry is not yet published. Workspace
+consumers move from .12 to .13 and the maintained standalone audit fixture moves
+from .2 to .13. Both lockfiles align all six IcyDB crates and retain one
+`ic-memory 0.14.3` and one `ic-timers 0.8.0`. The standalone lock also refreshes
+local Canic package identities from .34 to .46 and resolves their current
+host-only public-key derivation dependencies. No API adaptation was necessary.
+Historical audit measurements remain unchanged and are not requalified.
+
+All twelve `icydb_lifecycle_composition` PocketIC tests pass (215.86s test time;
+376s runner time including compilation), including provisioning interruption,
+memory admission and lifecycle/timer custody. The standalone audit fixture's
+locked all-feature native compile and exact timer-provider graph guard pass.
+Logs: `/tmp/canic-icydb-026113-{lifecycle,audit-check,timer-guard}.log`.
+
+This completes the requested dependency update alongside the CI/cache-output
+corrections below. The combined .47 batch and changelog surfaces are ready for
+maintainer review and release flow. Package versions remain .46 and changes are
+uncommitted. No full workspace gate, publication, deployment or sibling mutation
+ran.
+
+## Parallel generated-package correction — .47 ready for review, 2026-09-28
+
+The reported 4727s CI run is `.45` run `36405581553`, PocketIC job
+`108875298406`. Mixed-topology artifact publication rejected changed
+`canonical-root-cargo` inputs. The other worker began the automatic-funding
+fixture while the mixed-topology build was active; their sibling TOML files
+shared one generated Root manifest despite different feature contracts.
+
+Generated Root, Coordinator and Store packages now live under
+`.canic/generated/<config-file>/<package>/`. Package checks, the held-Store
+fixture, provenance tests and active build documentation use that layout.
+Exact artifact input-change rejection remains intact. The new filesystem
+regression reproduced the overwrite before the fix in 0.32s and now passes;
+it runs in ordinary host tests before the PocketIC barrier.
+
+All 14 focused host package/configuration/provenance tests pass (7.99s), as
+does warning-denied host/internal-test Clippy with governed-test features.
+The previously prepared quiet-sccache correction is also applied: fallback
+is silent unless `CANIC_SCCACHE_VERBOSE=1`, while compiler errors and cache
+management failures remain visible. Its shell regression, affected ShellCheck,
+scoped formatting and diff checks pass. Logs are under `/tmp/canic-config-isolation-`
+(`before.log`, `after.log`, `clippy.log`); original CI log:
+`/tmp/canic-ci-45-job.log`. A preliminary single-case PocketIC run was stopped
+during compilation once the deterministic filesystem reproduction was identified;
+no passing PocketIC result is claimed for this batch and no full gate ran.
+
+The accepted CI/cache-output correction batch and both .47 changelog views are
+ready for maintainer review and the selected release flow. Package versions
+remain .46; changes are uncommitted. This necessary parallel-build correction
+stays on the published .110 line despite its cadence threshold; it does not
+start .111 extraction or add a release per test. No commit, publication,
+sibling mutation or live deployment ran.
+
 ## Medic release-test correction — .46 ready for retry, 2026-09-28
 
 The maintainer's release gate failed only the CLI Medic required-feature fixture

@@ -62,6 +62,9 @@ pub fn manifest_path(config_path: &Path, package: &str) -> PathBuf {
         .parent()
         .unwrap_or_else(|| Path::new("."))
         .join(".canic/generated")
+        // Sibling configurations can require different Root features. Their
+        // generated manifests must not overwrite another build's frozen inputs.
+        .join(config_path.file_name().unwrap_or_default())
         .join(package)
         .join("Cargo.toml")
 }

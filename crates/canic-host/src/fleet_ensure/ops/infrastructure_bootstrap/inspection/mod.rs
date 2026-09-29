@@ -7,7 +7,10 @@ use crate::{
     fleet_ensure::{
         model::{
             EnsureAction, FleetEnsurePlan,
-            infrastructure_bootstrap::InfrastructureBootstrapInspectionRecord,
+            infrastructure_bootstrap::{
+                BOOTSTRAP_EFFECT_INSPECTION_ROUNDS, BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
+                InfrastructureBootstrapInspectionRecord,
+            },
         },
         ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
     },
@@ -89,7 +92,7 @@ fn reserve_inner(
             record.registration_attempts,
         ]
         .iter()
-        .any(|n| *n > 2)
+        .any(|n| *n > BOOTSTRAP_PHASE_INSPECTION_ROUNDS)
     {
         return Err(InfrastructureBootstrapError::Integrity);
     }
@@ -107,7 +110,10 @@ fn reserve_inner(
         .cloned()
         .collect::<std::collections::BTreeSet<_>>()
         != expected
-        || record.effect_observations.values().any(|count| *count > 8)
+        || record
+            .effect_observations
+            .values()
+            .any(|count| *count > BOOTSTRAP_EFFECT_INSPECTION_ROUNDS)
     {
         return Err(InfrastructureBootstrapError::Integrity);
     }
@@ -122,9 +128,9 @@ fn reserve_inner(
             .ok_or(InfrastructureBootstrapError::Integrity)?,
     };
     let maximum = if matches!(phase, InspectionPhase::Effect) {
-        8
+        BOOTSTRAP_EFFECT_INSPECTION_ROUNDS
     } else {
-        2
+        BOOTSTRAP_PHASE_INSPECTION_ROUNDS
     };
     if *counter >= maximum {
         return Err(InfrastructureBootstrapError::InspectionBudget);

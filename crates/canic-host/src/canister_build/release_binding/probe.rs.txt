@@ -1,0 +1,33 @@
+mod release_binding;
+
+#[used]
+static ID: release_binding::EmbeddedReleaseBuildId = release_binding::EmbeddedReleaseBuildId::new(option_env!("CANIC_RELEASE_BUILD_ID"));
+
+#[link(wasm_import_module = "ic0")]
+unsafe extern "C" {
+    fn msg_arg_data_size() -> i32;
+    fn msg_arg_data_copy(destination: i32, offset: i32, size: i32);
+    fn msg_reply_data_append(source: i32, size: i32);
+    fn msg_reply();
+}
+
+#[unsafe(export_name = "canister_init")]
+pub extern "C" fn init() {
+    let mut expected = [0_u8; 64];
+    unsafe {
+        assert_eq!(msg_arg_data_size(), 64);
+        msg_arg_data_copy(expected.as_mut_ptr() as i32, 0, 64);
+    }
+    assert_eq!(ID.read().expect("bound release").as_bytes(), expected);
+}
+
+#[unsafe(export_name = "canister_query binding")]
+pub extern "C" fn binding() {
+    let id = ID.read().expect("bound release");
+    let mut reply = b"DIDL\0\x01\x71\x40".to_vec();
+    reply.extend(id.as_bytes());
+    unsafe {
+        msg_reply_data_append(reply.as_ptr() as i32, reply.len() as i32);
+        msg_reply();
+    }
+}

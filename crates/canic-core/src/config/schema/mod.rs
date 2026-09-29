@@ -398,6 +398,7 @@ impl ConfigModel {
                 kind: RoleDeclarationKind::Root,
                 package: None,
                 fleet_admission: false,
+                observability: RoleObservabilityConfig::default(),
             },
         );
         cfg.roles.insert(
@@ -406,6 +407,7 @@ impl ConfigModel {
                 kind: RoleDeclarationKind::Canister,
                 package: Some("app".to_string()),
                 fleet_admission: false,
+                observability: RoleObservabilityConfig::default(),
             },
         );
         cfg.component_specs

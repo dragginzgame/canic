@@ -101,6 +101,41 @@ pub struct RoleDeclaration {
     /// Enroll every managed instance of this role in Fleet admission convergence.
     #[serde(default)]
     pub fleet_admission: bool,
+
+    /// Optional observation surfaces compiled into this role's endpoints.
+    #[serde(default)]
+    pub observability: RoleObservabilityConfig,
+}
+
+///
+/// RoleObservabilityConfig
+///
+/// Build-time selection of optional observation providers. Operational health,
+/// readiness, binding and cycle balance remain available for every managed role.
+///
+
+#[derive(Clone, Copy, Debug, Deserialize, Serialize)]
+#[serde(default, deny_unknown_fields)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent build-time provider switches, not mutually exclusive runtime states"
+)]
+pub struct RoleObservabilityConfig {
+    pub diagnostics: bool,
+    pub history: bool,
+    pub logs: bool,
+    pub metrics: bool,
+}
+
+impl Default for RoleObservabilityConfig {
+    fn default() -> Self {
+        Self {
+            diagnostics: true,
+            history: true,
+            logs: true,
+            metrics: true,
+        }
+    }
 }
 
 ///

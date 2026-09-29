@@ -19,6 +19,7 @@ Supporting implementation evidence does not belong here.
 - `immutable-test-checkout-lease/`
 - `inspect-message-admission/`
 - `operator-funding-conversion-authority/`
+- [OpenChat-class application support](openchat-scale-application-support/design.md) — maintainer-requested product objective; proposed qualification and implementation packages remain unnumbered and unscheduled.
 - `release-binding-finalization/`
 - `role-specific-stable-initialization/`
 

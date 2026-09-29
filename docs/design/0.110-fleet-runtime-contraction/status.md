@@ -1,5 +1,32 @@
 # Canic 0.110 Implementation Status
 
+## CANIC-185 — .47 funding correction, 2026-09-29
+
+The maintainer accepted the infrastructure reset funding blocker as a necessary
+published-line correction in the existing open .47 batch. Host policy owns
+target-local funding and native write admission; the existing readiness command
+owns the early advisory forecast. The
+[funding report](../../audits/reports/2026-09/2026-09-29/toko-bootstrap-funding.md)
+records the reserve/retry contract, production-default and retained-estate tests,
+and downstream release boundary. Targeted host/CLI checks, both production-default
+PocketIC recovery cases and scoped warning-denied Clippy pass. The extended .47
+batch is ready for review and push preparation; the
+[current handoff](../../status/current.md) owns whole-batch readiness. This does
+not reopen unrelated contraction work or cross the human minor-closeout gate.
+
+## Toko size follow-through — bounded .47 scope amendment, 2026-09-28
+
+The maintainer explicitly reopened role-owned activation persistence, optional
+observability and passive blob contracts. The independent
+[scope amendment](2026-09-28-toko-size-follow-through.md) owns this limited
+reopening of the deferred B3/B4 work and its qualification boundary. It does not
+resume the full historical contraction matrix or begin another minor.
+The [current handoff](../../status/current.md) records implementation readiness.
+The bounded follow-through is complete: targeted native/lint, three persistence
+owners' PocketIC recovery and repeated optimized observability measurements
+pass. The complete extended .47 batch is ready for review and push preparation;
+no broad gate, release or next minor was selected.
+
 ## Toko auth correction — .46 ready for review, 2026-09-28
 
 PR #32's attestation-cache feature requirement and controller-only Root public-key

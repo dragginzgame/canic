@@ -21,6 +21,12 @@ pub use crate::ops::runtime::public_metrics::ApplicationMetricsSampler;
 pub struct PublicStatusApi;
 
 impl PublicStatusApi {
+    /// Called by compile-selected lifecycle adapters before runtime startup.
+    #[doc(hidden)]
+    pub fn enable_sampling() {
+        PublicMetricsWorkflow::enable_sampling();
+    }
+
     #[must_use]
     pub fn health() -> PublicHealth {
         PublicMetricsWorkflow::health()

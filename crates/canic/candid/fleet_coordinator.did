@@ -568,9 +568,10 @@ type FleetComponentSynchronizationRootProgress = record {
 //
 type FleetCoordinatorBinding = record {
   fleet : FleetBinding;
+  // Canonical direct controllers that may recover any canister in this Fleet.
+  recovery_controllers : vec principal;
   coordinator_subnet : principal;
   coordinator : principal;
-  recovery_controllers : vec principal;
 };
 //
 // FleetCoordinatorInitArgs
@@ -1256,6 +1257,7 @@ type Page = record { total : nat64; entries : vec principal };
 type PageRequest = record { offset : nat64; limit : nat64 };
 // Protected origin carried through outer provisioning stages without public error expansion.
 type ProvisioningFailureOrigin = record {
+  // Observed owner's retry deadline in Unix nanoseconds, absent when unknown.
   retry_at_ns : opt nat64;
   retry_category : ProvisioningRetryCategory;
   operation_id : blob;
@@ -1305,11 +1307,15 @@ type Result_3 = variant { Ok : ObservabilityResponse; Err : Error };
 type Result_4 = variant { Ok : PublicStatusResponse; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
+  ObservabilityMetrics;
   Sharding;
+  ObservabilityLogs;
   Scaling;
   Root;
   FleetCoordinator;
+  ObservabilityHistory;
   Index;
+  ObservabilityDiagnostics;
   Icrc21;
   ChildProvisioning;
   DelegatedTokenIssuer;
@@ -1366,3 +1372,5 @@ service : (FleetCoordinatorInitArgs) -> {
   canic_observability : (ObservabilityRequest) -> (Result_3) query;
   canic_public_status : (PublicStatusRequest) -> (Result_4) query;
 }
+// canic:payload-contract a46e736368656d615f76657273696f6e01782064656661756c745f7570646174655f696e67726573735f6d61785f6279746573194000707570646174655f6f766572726964657381a2666d6574686f64781963616e69635f636f6f7264696e61746f725f636f6d6d616e64696d61785f62797465731a00800000781976617269616e745f646570656e64656e745f6d6574686f647381781963616e69635f636f6f7264696e61746f725f636f6d6d616e64
+

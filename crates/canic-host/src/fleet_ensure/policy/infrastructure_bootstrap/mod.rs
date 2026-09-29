@@ -2,11 +2,18 @@
 //!
 //! No creation is inferred from a missing supplied canister. Pool handoff is a later phase.
 
+#[cfg(test)]
+mod tests;
+
 use crate::fleet_ensure::{
     model::{
         DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, DesiredPresence,
         EnsureAction, FleetEnsurePlan, FleetEnsurePlanScope, FleetObservation,
-        infrastructure_bootstrap::{BootstrapCoordinatorSelection, InfrastructureBootstrapRecord},
+        infrastructure_bootstrap::{
+            BOOTSTRAP_EFFECT_INSPECTION_ROUNDS, BOOTSTRAP_EFFECT_OBSERVATIONS_PER_ROUND,
+            BOOTSTRAP_PHASE_INSPECTION_ROUNDS, BootstrapCoordinatorSelection,
+            InfrastructureBootstrapRecord,
+        },
     },
     policy::{
         CanisterCyclePolicy, CanisterRuntimeStatus, CycleConservation, EnsurePolicyError,
@@ -94,11 +101,9 @@ pub(in crate::fleet_ensure) fn compile(
             &mut accumulator,
         )?;
         let reserve = local_reserve(canister.actions.len(), minimum_cycles, bounds)?;
-        let required = checked_add(
-            reserve.required,
-            protocol_reserve,
-            "bootstrap setup headroom",
-        )?;
+        // Continuation is a shared debit ceiling, not a deposit on every owner.
+        // Further writes must pass fresh target-local headroom admission.
+        let required = funding_floor(canister.actions.len(), minimum_cycles, bounds)?;
         accumulator.add_burn(reserve.observation_burn)?;
         if let Some(live) = live {
             append_target_funding(
@@ -215,6 +220,125 @@ struct BootstrapReserve {
     observation_burn: u128,
 }
 
+/// Fund installation and one observation window; unused retry ceilings are not payments.
+fn funding_floor(
+    actions: usize,
+    minimum: u128,
+    bounds: crate::fleet_ensure::policy::CycleBounds,
+) -> Result<u128, EnsurePolicyError> {
+    let updates = bounds.update_burn.checked_mul(actions as u128 + 1).ok_or(
+        EnsurePolicyError::ArithmeticOverflow {
+            field: "bootstrap funded updates",
+        },
+    )?;
+    let observations = observation_window(bounds)?;
+    checked_add(
+        minimum,
+        checked_add(updates, observations, "bootstrap funded work")?,
+        "bootstrap funding floor",
+    )
+}
+
+fn observation_window(
+    bounds: crate::fleet_ensure::policy::CycleBounds,
+) -> Result<u128, EnsurePolicyError> {
+    // Fund all permitted retries of the next effect, plus both rounds of
+    // review, apply, registration and terminal inspection. Do not multiply
+    // this complete window by every hypothetical future protocol action.
+    let count = u128::from(BOOTSTRAP_EFFECT_INSPECTION_ROUNDS)
+        * u128::from(BOOTSTRAP_EFFECT_OBSERVATIONS_PER_ROUND)
+        + 4 * u128::from(BOOTSTRAP_PHASE_INSPECTION_ROUNDS);
+    bounds
+        .observation_burn
+        .checked_mul(count)
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "bootstrap funded observations",
+        })
+}
+
+/// Upper funding forecast for retained infrastructure before replacement bytes exist.
+/// Five effects cover stop, uninstall, install, controller reconciliation and start.
+pub(in crate::fleet_ensure) fn forecast_target_funding(
+    minimum: u128,
+    available: u128,
+    observation_burn: u128,
+    update_burn: u128,
+) -> Result<u128, EnsurePolicyError> {
+    let bounds = crate::fleet_ensure::policy::CycleBounds {
+        ledger_fee: 0,
+        management_creation_fee: 0,
+        material_threshold: 0,
+        observation_burn,
+        update_burn,
+    };
+    let required = funding_floor(5, minimum, bounds)?;
+    if available >= required {
+        return Ok(0);
+    }
+    checked_add(
+        required - available,
+        super::target_funding_margin(5, bounds)?,
+        "bootstrap funding forecast",
+    )
+}
+
+/// Admit a write only against its own current native balance, preserving its configured floor.
+pub(in crate::fleet_ensure) fn validate_effect_headroom(
+    plan: &FleetEnsurePlan,
+    action: &EnsureAction,
+    available: Option<u128>,
+) -> Result<(), EnsurePolicyError> {
+    if plan.infrastructure_bootstrap.is_none()
+        || matches!(
+            action,
+            EnsureAction::Create { .. } | EnsureAction::Fund { .. }
+        )
+    {
+        return Ok(());
+    }
+    let desired = plan
+        .reviewed_desired
+        .as_ref()
+        .ok_or(InfrastructureBootstrapError::Authority)?
+        .desired();
+    let configured = desired
+        .canisters
+        .iter()
+        .find(|configured| match action {
+            EnsureAction::FleetProtocol {
+                principal, action, ..
+            } => {
+                configured.kind == action.target_kind()
+                    && (configured.principal.as_deref() == Some(principal.as_str())
+                        || (configured.kind == DesiredCanisterKind::Coordinator
+                            && configured.principal.is_none()))
+            }
+            _ => configured.name == action.name(),
+        })
+        .ok_or(InfrastructureBootstrapError::Authority)?;
+    let bounds = cycle_bounds(desired)?;
+    let minimum = canister_cycle_policy(configured)?.minimum_cycles;
+    let required = checked_add(
+        minimum,
+        checked_add(
+            observation_window(bounds)?,
+            bounds.update_burn,
+            "bootstrap next effect window",
+        )?,
+        "bootstrap effect headroom",
+    )?;
+    let available = available.ok_or(InfrastructureBootstrapError::Authority)?;
+    if available < required {
+        return Err(InfrastructureBootstrapError::Headroom {
+            name: configured.name.clone(),
+            required,
+            available,
+        }
+        .into());
+    }
+    Ok(())
+}
+
 fn local_reserve(
     actions: usize,
     minimum: u128,
@@ -290,11 +414,22 @@ fn finish(
         accumulator.new_funding,
         "bootstrap available cycles",
     )?;
-    let retained = available.checked_sub(accumulator.execution_burn).ok_or(
-        EnsurePolicyError::ArithmeticOverflow {
-            field: "bootstrap terminal cycles",
-        },
-    )?;
+    let floors = desired
+        .canisters
+        .iter()
+        .filter(|target| target.kind != DesiredCanisterKind::Pool)
+        .try_fold(reserved, |total, target| {
+            checked_add(
+                total,
+                canister_cycle_policy(target)?.minimum_cycles,
+                "bootstrap retained floors",
+            )
+        })?;
+    let spendable = available
+        .checked_sub(floors)
+        .ok_or(InfrastructureBootstrapError::Authority)?;
+    let execution_burn = accumulator.execution_burn.min(spendable);
+    let retained = available - execution_burn;
     let mut plan = FleetEnsurePlan {
         infrastructure_bootstrap: Some(Box::new(record.clone())),
         continuation: artifacts.continuation.clone(),
@@ -302,7 +437,7 @@ fn finish(
         conservation: CycleConservation {
             estate_funding_domains: Vec::new(),
             expected_post_operation_cycles: retained,
-            maximum_execution_burn_cycles: accumulator.execution_burn,
+            maximum_execution_burn_cycles: execution_burn,
             maximum_new_funding_cycles: accumulator.new_funding,
             maximum_operator_debit_cycles: checked_add(
                 accumulator.new_funding,

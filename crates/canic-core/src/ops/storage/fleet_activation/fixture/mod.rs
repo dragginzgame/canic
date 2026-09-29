@@ -14,14 +14,15 @@ use crate::{
     },
     ops::{fixture_content, storage::fleet_activation::FleetActivationOpsError},
     storage::stable::fleet_activation::{
-        FleetActivationRecord, FleetActivationStateRecord,
+        FleetActivationStateRecord,
         fixture::{FixtureAssignmentRecord, FixtureChunkRecord},
     },
+    view::fleet_activation::FleetActivationView,
 };
 use candid::Principal;
 
 /// Reject substituted descriptors and assignments from another installation or release.
-pub fn validate(record: &FleetActivationRecord) -> Result<(), FleetActivationOpsError> {
+pub fn validate(record: &FleetActivationView) -> Result<(), FleetActivationOpsError> {
     let Some(runtime) = &record.component_runtime else {
         return Ok(());
     };

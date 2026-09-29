@@ -46,8 +46,12 @@ trap 'rm -f -- "$diagnostics"' EXIT
 status=0
 "$SCCACHE_BIN" "$@" 2>"$diagnostics" || status=$?
 if [[ "$status" -eq 2 ]] && grep -q '^sccache: error:' "$diagnostics"; then
-    echo "sccache: warning: cache unavailable; running compiler directly" >&2
-    sed 's/^sccache: error:/sccache: warning:/' "$diagnostics" >&2
+    # A working compiler fallback needs no per-crate warning. Opt in when
+    # diagnosing cache availability; compiler diagnostics remain untouched.
+    if [[ "${CANIC_SCCACHE_VERBOSE:-0}" == 1 ]]; then
+        echo "sccache: warning: cache unavailable; running compiler directly" >&2
+        sed 's/^sccache: error:/sccache: warning:/' "$diagnostics" >&2
+    fi
     rm -f -- "$diagnostics"
     trap - EXIT
     exec "$@"

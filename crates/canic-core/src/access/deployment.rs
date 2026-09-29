@@ -15,9 +15,7 @@ pub fn require_service_authority(service: &str) -> Result<(), AccessError> {
     )
 }
 
-const fn service_authority_access_result(
-    result: Result<bool, InternalError>,
-) -> Result<(), AccessError> {
+fn service_authority_access_result(result: Result<bool, InternalError>) -> Result<(), AccessError> {
     match result {
         Ok(true) => Ok(()),
         Ok(false) => Err(AccessError::ServiceAuthorityRequired),

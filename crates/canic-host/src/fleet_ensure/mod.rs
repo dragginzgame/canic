@@ -27,6 +27,7 @@ pub use generate::{
     fresh_pool_creation_funding, generate_desired_fleet,
     infrastructure_bootstrap::generate_infrastructure_bootstrap,
     initialize_fresh_estate_seed,
+    preflight::{FleetGenerationInputsRequest, validate_generation_inputs},
 };
 pub use inventory::{
     CurrentFleetDiscovery, CurrentFleetInventory, CurrentFleetInventoryError, CurrentFleetRegistry,

@@ -29,7 +29,6 @@ pub(super) fn supplied_infrastructure_initializes_and_recovers() {
 pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     let operator = Principal::from_text(&input.desired.operator).unwrap();
     let mut desired = input.desired.clone();
-    desired.maximum_observation_burn_cycles = "1000000000".into();
     let mut names = BTreeMap::from([
         ("coordinator".to_string(), input.coordinator),
         ("root".to_string(), input.root),

@@ -88,13 +88,17 @@ tests fingerprint that sysroot and compile small declaration fixtures; artifact
 preflight tests resolve the actual Fast-profile toolchain. These prerequisites
 do not start PocketIC or require the full deployment-tool installation.
 
-Make-based work shares the repository `target/`. When `sccache` is available
+Direct Cargo and Make-based work within this checkout share the repository
+`target/`. Repository Cargo configuration also directs standalone audit fixtures
+there by default. When `sccache` is available
 and no explicit `RUSTC_WRAPPER` is set, Make selects it through the repository
 wrapper and disables Rust incremental compilation so compiler results remain
 cacheable. The wrapper gives the persistent cache server a stable
 `.tmp/sccache-runtime/` socket and temporary directory; it never inherits an
 invocation-owned `test-runtime.*` directory that cleanup removes. Cache infrastructure
-errors fall back to the original compiler command with a warning. Genuine compiler
+errors fall back quietly to the original compiler command. Set
+`CANIC_SCCACHE_VERBOSE=1` to print cache fallback diagnostics while investigating
+cache availability; ordinary builds avoid repeating them for every crate. Genuine compiler
 failures retain their diagnostics and exit codes without another compile attempt;
 cache-management commands retain their own failure status. Without a
 wrapper, Make leaves Cargo's profile defaults intact: local dev/test work may
@@ -230,9 +234,16 @@ host graph because they have not built the ordinary workspace graph.
 Timing output calls this
 `libtest-parallel` to distinguish parallelism inside one Cargo invocation from
 concurrent suite execution. When Make selects `sccache`, the runner reports
-request/hit/miss deltas, retains the server through the complete two-hour test
-envelope and uses a 40 GiB local cache; a reset is reported rather than
-silently presenting zero requests as cache evidence.
+request/hit/miss, uncacheable-call and cache-error deltas, retains the server
+through the complete two-hour test envelope and uses a 40 GiB local cache.
+Missing or malformed statistics and a server reset are reported as unavailable.
+The Rust checks, ordinary tests and PocketIC CI jobs install checksum-pinned
+sccache and restore a separate 2 GiB disk cache per job. Cache saves also run
+after test failures; cancellation skips them. Keys bind the platform, toolchain
+and tool pins, with per-source snapshots and same-job fallback. sccache validates
+individual compiler inputs after restore; the archive is never validation evidence.
+Cargo target caching stays disabled in CI to bound disk use. Final PocketIC
+artifacts retain their independent exact-input validation and cache.
 Cargo continues across independently selected ordinary test binaries and records
 their failures before returning one nonzero result. Serial PocketIC commands
 stop after a failed binary, and a failed suite skips all remaining serial suites
@@ -244,9 +255,14 @@ PocketIC-only mode remains independently runnable. The governed internal harness
 runs source-bound activation-reset recovery before starting two isolated workers.
 One worker retains Fleet deployment restore, autonomous Root removal and the
 remaining short regressions in catalogue order, keeping their process-local
-baseline. The other retains the complete Fleet journeys in catalogue order.
+baseline. The other runs the independent published managed-App and Component
+Group lifecycle cases before the complete Fleet journeys. This balances the
+retained timing baseline without adding processes or sharing mutable estates.
 Partition membership derives from the registered cases; native tests require
-exact coverage, unique identities, nonempty groups and the recovery prefix.
+exact coverage, unique identities, nonempty groups, per-worker catalogue order
+and the recovery prefix. Build and compiler-cache unit tests live in separate
+modules so assertion-only edits do not invalidate the fixture artifact producer;
+production inputs and concurrent-change checks remain complete.
 
 Workers execute the parent's already compiled binary, with independent servers,
 ports, native ICP shims and invocation-owned scratch. Only validated immutable

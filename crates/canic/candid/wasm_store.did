@@ -185,9 +185,10 @@ type FleetCascadeManifestEntry = record {
 //
 type FleetCoordinatorBinding = record {
   fleet : FleetBinding;
+  // Canonical direct controllers that may recover any canister in this Fleet.
+  recovery_controllers : vec principal;
   coordinator_subnet : principal;
   coordinator : principal;
-  recovery_controllers : vec principal;
 };
 //
 // FleetCredentialGenerationRef
@@ -363,13 +364,11 @@ type PublicMetricFamily = variant {
 // Interpretation of a sampled value. Counter windows must change on every reset.
 type PublicMetricKind = variant {
   Gauge;
+  TimerCounter : record {
+    registration : TimerMetricRegistration;
+    saturated : bool;
+  };
   Counter : record { window_id : nat64; saturated : bool };
-  TimerCounter : record { registration : TimerMetricRegistration; saturated : bool };
-};
-type TimerMetricRegistration = record {
-  canister_version : nat64;
-  started_at_ns : nat64;
-  sequence : nat64;
 };
 // Select a published aggregate family and one bounded page.
 type PublicMetricsRequest = record {
@@ -413,11 +412,15 @@ type Result_8 = variant { Ok : Result_7; Err : Error };
 type Result_9 = variant { Ok; Err : Error };
 // Closed compiled capability identity exposed by the immutable role overview.
 type RoleCapability = variant {
+  ObservabilityMetrics;
   Sharding;
+  ObservabilityLogs;
   Scaling;
   Root;
   FleetCoordinator;
+  ObservabilityHistory;
   Index;
+  ObservabilityDiagnostics;
   Icrc21;
   ChildProvisioning;
   DelegatedTokenIssuer;
@@ -440,21 +443,24 @@ type RoleOverviewResponse = record {
   protocol_profile_digest : blob;
 };
 type RootRequestMetadata = record { request_id : blob; ttl_ns : nat64 };
+// Aggregate observations retain full counts when the bounded detail list fills.
 type StateCascadeReport = record {
-  successful_targets : nat64;
-  reconciliation_failures : nat64;
-  unconfirmed_targets : nat64;
   omitted_targets : nat64;
+  successful_targets : nat64;
   targets : vec StateCascadeTargetOutcome;
+  unconfirmed_targets : nat64;
+  reconciliation_failures : nat64;
 };
+// Exact canister associated with one bounded state-cascade observation.
 type StateCascadeTargetOutcome = record {
-  canister_id : principal;
   result : StateCascadeTargetResult;
+  canister_id : principal;
 };
+// One observed result; an unconfirmed call may have applied before its reply was lost.
 type StateCascadeTargetResult = variant {
   Applied;
-  AppliedWithReconciliationFailure : Error;
   Unconfirmed : Error;
+  AppliedWithReconciliationFailure : Error;
 };
 type StateSnapshotInput = record { fleet_state : opt FleetStateInput };
 type StoreCatalogReadRequest = variant {
@@ -510,11 +516,12 @@ type StoreStatusResponse = variant {
   Authority : FleetSubnetWasmStoreAuthority;
 };
 type TemplateChunkInput = record {
-  preparation : opt TemplateChunkSetPrepareInput;
   chunk_index : nat32;
   template_id : text;
   version : text;
   bytes : blob;
+  // Exact metadata admitted with chunk zero; absent for subsequent chunks.
+  preparation : opt TemplateChunkSetPrepareInput;
 };
 // Exact template chunk key used by the Store's bounded read lane.
 type TemplateChunkRequest = record {
@@ -525,11 +532,12 @@ type TemplateChunkRequest = record {
 type TemplateChunkResponse = record { bytes : blob };
 type TemplateChunkSetInfoResponse = record { chunk_hashes : vec blob };
 type TemplateChunkSetPrepareInput = record {
-  manifest : opt TemplateManifestInput;
   payload_size_bytes : nat64;
   chunk_hashes : vec blob;
   template_id : text;
   version : text;
+  // Optional approved manifest admitted atomically with this exact chunk set.
+  manifest : opt TemplateManifestInput;
   payload_hash : blob;
 };
 //
@@ -578,6 +586,12 @@ type TemplateStagingStatusResponse = record {
   chunk_set_present : bool;
   manifest : opt TemplateManifestResponse;
   payload_hash : opt blob;
+};
+// Source-owned counter lifetime, scoped to one canister's observed runtime history.
+type TimerMetricRegistration = record {
+  started_at_ns : nat64;
+  canister_version : nat64;
+  sequence : nat64;
 };
 type TopologyChildren = record {
   children : vec TopologyDirectChild;
@@ -683,3 +697,5 @@ service : (FleetSubnetWasmStoreInitArgs) -> {
   canic_wasm_store_status : (StoreStatusRequest) -> (Result_11) query;
   icrc10_supported_standards : () -> (vec record { text; text }) query;
 }
+// canic:payload-contract a46e736368656d615f76657273696f6e01782064656661756c745f7570646174655f696e67726573735f6d61785f6279746573194000707570646174655f6f766572726964657383a2666d6574686f64781863616e69635f7761736d5f73746f72655f636f6d6d616e64696d61785f6279746573194000a2666d6574686f64781e63616e69635f7761736d5f73746f72655f7075626c6973685f6368756e6b696d61785f62797465731a00110000a2666d6574686f64782063616e69635f7761736d5f73746f72655f7075626c6973685f66697874757265696d61785f62797465731a00110000781976617269616e745f646570656e64656e745f6d6574686f647381781863616e69635f7761736d5f73746f72655f636f6d6d616e64
+

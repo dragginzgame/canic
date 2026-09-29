@@ -102,6 +102,17 @@ impl LifecycleApi {
     }
 
     #[must_use]
+    pub fn post_upgrade_wasm_store_before_bootstrap(
+        embedded_release_build_id: Option<&str>,
+        authority: RoleRuntimeAuthority,
+    ) -> bool {
+        lifecycle::upgrade::nonroot::post_upgrade_wasm_store_before_bootstrap(
+            embedded_release_build_id,
+            authority,
+        )
+    }
+
+    #[must_use]
     pub fn post_upgrade_nonroot_canister_before_bootstrap(
         role: CanisterRole,
         embedded_release_build_id: Option<&str>,

@@ -77,6 +77,58 @@ fn catalog_matches_canic_cargo_features() {
 }
 
 #[test]
+fn optional_observability_changes_capabilities_without_changing_state_ownership() {
+    let mut config = ConfigTestBuilder::new()
+        .with_default_canister(
+            "app",
+            ConfigTestBuilder::canister_config(CanisterKind::Service),
+        )
+        .build();
+    let role = CanisterRole::new("app");
+    let resolve = |config: &crate::config::schema::ConfigModel| match resolve_role_contract(
+        RoleContractInput {
+            source: RoleContractSource::Declared {
+                config,
+                role: &role,
+            },
+            declared_features: BTreeSet::new(),
+            default_features_enabled: false,
+        },
+    ) {
+        RoleContractResolution::Resolved { contract } => contract,
+        other @ RoleContractResolution::Rejected { .. } => {
+            panic!("unexpected resolution: {other:?}")
+        }
+    };
+    let full = resolve(&config);
+    let selection: crate::config::schema::RoleObservabilityConfig =
+        toml::from_str("diagnostics = false\nhistory = false\nlogs = false\nmetrics = false\n")
+            .unwrap();
+    config.roles.get_mut(&role).unwrap().observability = selection;
+    let lean = resolve(&config);
+    assert_eq!(full.allocations, lean.allocations);
+    assert_eq!(
+        full.capabilities
+            .difference(&lean.capabilities)
+            .copied()
+            .collect::<BTreeSet<_>>(),
+        BTreeSet::from([
+            RoleCapabilityKey::ObservabilityDiagnostics,
+            RoleCapabilityKey::ObservabilityHistory,
+            RoleCapabilityKey::ObservabilityLogs,
+            RoleCapabilityKey::ObservabilityMetrics,
+        ])
+    );
+    assert!(lean.capabilities.contains(&RoleCapabilityKey::Runtime));
+    assert!(
+        toml::from_str::<crate::config::schema::RoleObservabilityConfig>("metric = false").is_err()
+    );
+    let partial: crate::config::schema::RoleObservabilityConfig =
+        toml::from_str("logs = false").unwrap();
+    assert!(partial.metrics && partial.history && partial.diagnostics && !partial.logs);
+}
+
+#[test]
 fn catalog_is_valid_and_classifies_every_public_feature() {
     catalog::validate_catalog().expect("canonical role-contract catalog should be valid");
 
@@ -236,6 +288,10 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
         BTreeSet::from([
             RoleCapabilityKey::DelegatedTokenVerifier,
             RoleCapabilityKey::FleetAdmissionProjection,
+            RoleCapabilityKey::ObservabilityDiagnostics,
+            RoleCapabilityKey::ObservabilityHistory,
+            RoleCapabilityKey::ObservabilityLogs,
+            RoleCapabilityKey::ObservabilityMetrics,
             RoleCapabilityKey::RoleAttestationVerifier,
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::Sharding,
@@ -672,6 +728,8 @@ fn automatic_topup_is_derived_only_from_the_exact_configured_role() {
         built_in_role_capabilities(BuiltInRoleKind::WasmStore),
         BTreeSet::from([
             RoleCapabilityKey::ChildProvisioning,
+            RoleCapabilityKey::ObservabilityHistory,
+            RoleCapabilityKey::ObservabilityMetrics,
             RoleCapabilityKey::Runtime,
             RoleCapabilityKey::WasmStore,
         ])

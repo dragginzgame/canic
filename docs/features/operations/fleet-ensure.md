@@ -213,16 +213,57 @@ checks passed, not that deployment is affordable or approved.
 
 ## Clean reinstall of a completed Fleet
 
-Run readiness before building. Do not supply a historical desired document to
-this pre-build check; it inspects completion metadata without decoding the old
-executable contracts. An unresolved paid operation must resume its recorded
-operation before another reset can begin.
+Run readiness before building, supplying the current policy and intended estate
+seed together. This uses the generator's input checks without loading artifacts
+or decoding a completed predecessor's executable contracts. A symbolic fresh seed
+is valid for initial creation, but a completed Fleet requires explicit physical
+inventory for new generation. An unresolved paid operation must resume its
+recorded operation before another reset can begin.
 
 ```sh
 canic --environment staging fleet readiness toko-miner-staging-001 \
   --identity toko-miner-mainnet \
-  --operator '<CURRENT_OPERATOR_PRINCIPAL>'
+  --operator '<CURRENT_OPERATOR_PRINCIPAL>' \
+  --source deployments/toko-miner-staging-001.toml \
+  --seed deployments/toko-miner-staging-001.estate.toml
 ```
+
+Prepare those inputs explicitly: select the completed estate's physical
+Coordinator, Root and Store IDs, plus every Root-owned child, including allocated
+workloads and descendants. Terminal identity metadata is an inventory source,
+not import approval. Keep its records unchanged; write the selected IDs into a
+current seed with `fresh_estate = false` and put each Root's children in its
+`roots[].pool_imports`. Match those imports in the current policy's
+`fleet_subnet_roots[].canister_pool.imports`, with sufficient pool capacity.
+Reject incomplete or conflicting inventory instead of substituting new IDs.
+The subsequent review establishes live custody, membership, cycles and exact
+wipe/funding effects; only its approved digest authorizes execution.
+
+Successful readiness reports `generation_inputs_checked: true` when both paths
+were supplied. Without them, readiness checks retained work, signer/network and
+funding only. Input checks do not qualify artifacts or guarantee live admission;
+generation and review check their inputs again. `--source` and `--seed` cannot be
+combined with `--desired` on readiness. Preserve the selected source, seed and
+qualified build throughout interrupted reinstall phases.
+
+For completed Fleets, that readiness command also reports
+`funding.clean_reinstall_infrastructure`: current native balances and an upper
+funding forecast for each selected Coordinator, Root and Store. It uses the
+current generated allowances and a bounded installation window, before loading
+replacement artifacts. The sum excludes Ledger fees; `maximum_ledger_transfers`
+identifies the possible fee count. A missing balance or controller mismatch keeps
+the sum unknown. Import, pool and workload funding remain explicitly unresolved
+until their own reviews; this infrastructure forecast is not a whole-Fleet quote.
+
+Infrastructure review funds each owner's installation and observation window.
+It does not deposit the whole continuation ceiling on every canister. The shared
+execution ceiling is bounded by controlled native surplus above configured
+floors, excluding reserved cycles. Each further native write checks the actual
+target's current headroom. A typed headroom or continuation-budget failure stops
+further writes; retain the original operation and receipts. Inspection attempts,
+lost-response reconciliation and terminal conservation remain bounded. The
+generated observation/update allowances are unchanged; do not lower them or edit
+generated authority to bypass a funding failure.
 
 Build Toko against the same current Canic release as the CLI, using the normal
 `canic build` command. Keep the selected build's artifacts. Generate fresh current
@@ -418,6 +459,14 @@ backoff. A proved Store activation
 binding conflict suspends retries for review; exact acceptance replay does not
 clear it. Failure timestamps and attempt counts do not count as work progress
 or bypass host stall detection. Issued effects remain in their existing records.
+
+Authorized child-allocation status also includes nullable
+`last_failure.platform_rejection`: up to 1,024 UTF-8 bytes of the originating
+IC rejection, including its rejection code. This evidence survives same-release
+restart and is cleared with the failure after work advances. The public error
+remains its bounded diagnostic code (for example E66); rejection text does not
+select retry or recovery behavior. Allocation admission reserves space for the
+maximum diagnostic before any failure occurs.
 
 > Development status: canister/code/controller/cycle convergence and the typed
 > Store, Registry, Root-mirror, local Component Registry and Component action
@@ -625,11 +674,15 @@ response recovery, retained assets, conservation and effect-free replay. Exact
 evidence and the separate live-adoption boundary are in the
 [activation feedback report](../../audits/reports/2026-09/2026-09-08/activation-feedback.md).
 
-After a completed fresh installation, the original symbolic fresh seed may be
-used again. Ensure resolves its Root name through the existing Fleet state
-before management prerequisites. A configured Principal that conflicts with
-that retained identity rejects; observed identity, Subnet, controller and module
-checks still apply. A changed release still requires reviewed reinstall.
+For ordinary startup of a completed Fleet on the same build, reuse its retained
+current desired document with `fleet ensure <fleet> --desired <path>`, without
+`--reinstall` or a new `fleet generate`. Ensure resolves symbolic names in that
+already reviewed desired document through the existing Fleet state. Conflicting
+Principals reject; observed identity, Subnet, controller and module checks still
+apply. This does not permit reusing the original symbolic fresh seed for new
+generation after completion. New generation selects clean reinstall and needs
+explicit physical inventory as described above. A changed release always requires
+reviewed reinstall.
 
 A completed prerequisite is not a ready Fleet. Run Ensure planning again and
 review its full plan for the remaining infrastructure and current protocol

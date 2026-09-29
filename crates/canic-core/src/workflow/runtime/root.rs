@@ -104,6 +104,7 @@ pub fn init_root_canister(
 pub fn post_upgrade_root_canister_after_memory_init(
     embedded_release_build_id: Option<&str>,
 ) -> Result<bool, InternalError> {
+    FleetActivationOps::select_root_storage();
     let embedded_release_build_id =
         ReleaseBuildOps::embedded_release_build_id(embedded_release_build_id)?;
     FleetActivationOps::require_release_build(embedded_release_build_id)

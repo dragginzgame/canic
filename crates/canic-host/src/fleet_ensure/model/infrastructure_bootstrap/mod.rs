@@ -10,6 +10,28 @@ use canic_core::ids::SubnetId;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 
+/// Durable attempts per whole-estate inspection boundary.
+pub(in crate::fleet_ensure) const BOOTSTRAP_PHASE_INSPECTION_ROUNDS: u32 = 2;
+/// Durable attempts per preparation/reconciliation boundary.
+pub(in crate::fleet_ensure) const BOOTSTRAP_EFFECT_INSPECTION_ROUNDS: u32 = 8;
+/// Preparation, target balance and destination balance within one effect round.
+pub(in crate::fleet_ensure) const BOOTSTRAP_EFFECT_OBSERVATIONS_PER_ROUND: u32 = 3;
+
+///
+/// InfrastructureBootstrapFundingTarget
+///
+/// Model projection of a physical owner and native floor for the readiness forecast.
+///
+
+pub(in crate::fleet_ensure) struct InfrastructureBootstrapFundingTarget {
+    pub name: String,
+    pub principal: String,
+    pub controllers: Vec<String>,
+    pub minimum_cycles: u128,
+    pub observation_burn_cycles: u128,
+    pub update_burn_cycles: u128,
+}
+
 /// Explicit Coordinator prerequisite, independent of Root-local capacity import.
 #[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case")]

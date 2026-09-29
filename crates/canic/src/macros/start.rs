@@ -1,3 +1,18 @@
+// Keep the per-release identity in one data slot, independent of code generation.
+#[doc(hidden)]
+#[macro_export]
+macro_rules! __canic_release_build_binding {
+    () => {
+        #[doc(hidden)]
+        #[used]
+        static __CANIC_RELEASE_BUILD_ID:
+            $crate::__internal::core::bootstrap::release_binding::EmbeddedReleaseBuildId =
+            $crate::__internal::core::bootstrap::release_binding::EmbeddedReleaseBuildId::new(
+                option_env!("CANIC_RELEASE_BUILD_ID"),
+            );
+    };
+}
+
 // -----------------------------------------------------------------------------
 // Start macros
 // -----------------------------------------------------------------------------
@@ -77,6 +92,8 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 
         #[$crate::__internal::cdk::init]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_fleet_admission_projection)]
@@ -84,7 +101,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 $canister_role,
                 payload,
                 args,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
             #[cfg(not(canic_capability_fleet_admission_projection))]
@@ -92,7 +109,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
                 $canister_role,
                 payload,
                 args,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
 
@@ -101,30 +118,32 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(all(canic_capability_automatic_topup, canic_capability_fleet_admission_projection))]
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap(
                 $canister_role,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
             #[cfg(all(canic_capability_automatic_topup, not(canic_capability_fleet_admission_projection)))]
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_automatic_topup_before_bootstrap(
                 $canister_role,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
             #[cfg(all(not(canic_capability_automatic_topup), canic_capability_fleet_admission_projection))]
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_with_fleet_admission_before_bootstrap(
                 $canister_role,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
             #[cfg(all(not(canic_capability_automatic_topup), not(canic_capability_fleet_admission_projection)))]
             let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
                 $canister_role,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
 
@@ -197,20 +216,23 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
 
         #[$crate::__internal::cdk::init]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs) {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let authority = __canic_compiled_role_runtime_authority();
             $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::init_wasm_store_before_bootstrap(
                 args,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
         }
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let authority = __canic_compiled_role_runtime_authority();
-            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_nonroot_canister_before_bootstrap(
-                $crate::api::canister::CanisterRole::WASM_STORE,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+            let active = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::post_upgrade_wasm_store_before_bootstrap(
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 authority,
             );
 
@@ -283,6 +305,8 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[$crate::__internal::cdk::init]
         fn init(args: Option<Vec<u8>>) {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let authority = __canic_compiled_role_runtime_authority();
             let role = $canister_role;
             let component_spec = authority
@@ -324,6 +348,8 @@ macro_rules! __canic_start_local_lifecycle_core {
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let authority = __canic_compiled_role_runtime_authority();
 
             #[cfg(canic_capability_automatic_topup)]
@@ -366,12 +392,7 @@ macro_rules! __canic_start_local_lifecycle_core {
 macro_rules! start_fleet_root {
     () => {
         $crate::__canic_require_finish!();
-        #[doc(hidden)]
-        #[used]
-        static __CANIC_RELEASE_BUILD_ID: &str = match option_env!("CANIC_RELEASE_BUILD_ID") {
-            Some(value) => value,
-            None => "",
-        };
+        $crate::__canic_release_build_binding!();
         #[doc(hidden)]
         fn __canic_compiled_config() -> (
             $crate::__internal::core::bootstrap::compiled::RoleRuntimeAuthority,
@@ -388,11 +409,13 @@ macro_rules! start_fleet_root {
 
         #[$crate::__internal::cdk::init]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs) {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
 
             $crate::__internal::control_plane::api::lifecycle::LifecycleApi::init_root_canister_before_bootstrap(
                 args,
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 runtime_authority,
                 config,
                 config_source,
@@ -403,10 +426,12 @@ macro_rules! start_fleet_root {
 
         #[$crate::__internal::cdk::post_upgrade]
         fn post_upgrade() {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
             let (runtime_authority, config, config_source, config_path) = __canic_compiled_config();
 
             let active = $crate::__internal::control_plane::api::lifecycle::LifecycleApi::post_upgrade_root_canister_before_bootstrap(
-                option_env!("CANIC_RELEASE_BUILD_ID"),
+                __CANIC_RELEASE_BUILD_ID.read().as_deref(),
                 runtime_authority,
                 config,
                 config_source,
@@ -590,13 +615,7 @@ macro_rules! start {
     ) => {
         $crate::__canic_require_finish!();
 
-        #[doc(hidden)]
-        #[used]
-        static __CANIC_RELEASE_BUILD_ID: &str =
-            match option_env!("CANIC_RELEASE_BUILD_ID") {
-                Some(value) => value,
-                None => "",
-            };
+        $crate::__canic_release_build_binding!();
 
         #[cfg(canic_is_root)]
         compile_error!("Fleet Subnet Root is built by Canic's canonical infrastructure builder");
@@ -678,13 +697,7 @@ macro_rules! start_local {
 macro_rules! start_wasm_store {
     ($(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
-        #[doc(hidden)]
-        #[used]
-        static __CANIC_RELEASE_BUILD_ID: &str =
-            match option_env!("CANIC_RELEASE_BUILD_ID") {
-                Some(value) => value,
-                None => "",
-            };
+        $crate::__canic_release_build_binding!();
         #[expect(clippy::unused_async)]
         async fn canic_setup() {}
 
@@ -711,15 +724,17 @@ macro_rules! start_wasm_store {
 macro_rules! start_fleet_coordinator {
     () => {
         $crate::__canic_require_finish!();
-        #[doc(hidden)]
-        #[used]
-        static __CANIC_RELEASE_BUILD_ID: &str = match option_env!("CANIC_RELEASE_BUILD_ID") {
-            Some(value) => value,
-            None => "",
-        };
+        $crate::__canic_release_build_binding!();
 
         #[$crate::__internal::cdk::init]
         fn init(args: ::canic::dto::fleet_coordinator::FleetCoordinatorInitArgs) {
+            #[cfg(any(
+                canic_capability_observability_metrics,
+                canic_capability_observability_history
+            ))]
+            $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
+            // Preserve the same binding slot in this infrastructure artifact.
+            let _ = __CANIC_RELEASE_BUILD_ID.read();
             $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::init(
                 args,
             );

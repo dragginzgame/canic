@@ -5,7 +5,7 @@
 //! Boundary: callers provide typed direct features after host/build evidence validation.
 
 use crate::{
-    config::schema::{ConfigModel, RoleDeclarationKind},
+    config::schema::{ConfigModel, RoleDeclarationKind, RoleObservabilityConfig},
     ids::CanisterRole,
     role_contract::{
         allocation::allocation_definition,
@@ -120,6 +120,8 @@ pub fn built_in_role_capabilities(kind: BuiltInRoleKind) -> BTreeSet<RoleCapabil
             capabilities.insert(RoleCapabilityKey::FleetCoordinator);
         }
         BuiltInRoleKind::WasmStore => {
+            capabilities.insert(RoleCapabilityKey::ObservabilityHistory);
+            capabilities.insert(RoleCapabilityKey::ObservabilityMetrics);
             capabilities.insert(RoleCapabilityKey::ChildProvisioning);
             capabilities.insert(RoleCapabilityKey::Runtime);
             capabilities.insert(RoleCapabilityKey::WasmStore);
@@ -137,6 +139,7 @@ pub fn derive_role_capabilities(
     };
 
     let mut capabilities = BTreeSet::from([RoleCapabilityKey::Runtime]);
+    capabilities.extend(observability_capabilities(declaration.observability));
     if declaration.kind == RoleDeclarationKind::Root {
         capabilities.insert(RoleCapabilityKey::Root);
         capabilities.insert(RoleCapabilityKey::RootControlPlane);
@@ -223,6 +226,22 @@ pub fn resolve_effective_features(
     }
 
     declared_features
+}
+
+fn observability_capabilities(
+    config: RoleObservabilityConfig,
+) -> impl Iterator<Item = RoleCapabilityKey> {
+    [
+        (
+            config.diagnostics,
+            RoleCapabilityKey::ObservabilityDiagnostics,
+        ),
+        (config.history, RoleCapabilityKey::ObservabilityHistory),
+        (config.logs, RoleCapabilityKey::ObservabilityLogs),
+        (config.metrics, RoleCapabilityKey::ObservabilityMetrics),
+    ]
+    .into_iter()
+    .filter_map(|(enabled, capability)| enabled.then_some(capability))
 }
 
 fn requirements_for_capabilities(

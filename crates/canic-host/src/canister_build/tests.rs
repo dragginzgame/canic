@@ -178,12 +178,39 @@ fn build_context_applies_exact_child_build_network() {
         environment
             .get(std::ffi::OsStr::new(canic_core::ids::RELEASE_BUILD_ID_ENV,))
             .copied(),
-        context
-            .release_build_id
-            .map(|value| value.to_string())
-            .as_deref()
-            .map(std::ffi::OsStr::new)
+        None
     );
+}
+
+#[test]
+fn changing_release_identity_preserves_cargo_environment_and_changes_artifact_destination() {
+    let context = WorkspaceBuildContext {
+        role: "app".into(),
+        profile: super::CanisterBuildProfile::Fast,
+        environment: "local".into(),
+        build_network: BuildNetwork::Local,
+        workspace_root: "/workspace".into(),
+        icp_root: "/workspace".into(),
+        config_path: "/workspace/canic.toml".into(),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    let first = context.with_release_build_id(canic_core::ids::ReleaseBuildId::from_nonce(
+        canic_core::ids::ReleaseBuildNonce::from_random_bytes([1; 32]),
+    ));
+    let second = context.with_release_build_id(canic_core::ids::ReleaseBuildId::from_nonce(
+        canic_core::ids::ReleaseBuildNonce::from_random_bytes([2; 32]),
+    ));
+    let mut first_command = std::process::Command::new("cargo");
+    let mut second_command = std::process::Command::new("cargo");
+    first.apply_to_command(&mut first_command);
+    second.apply_to_command(&mut second_command);
+    assert_eq!(
+        first_command.get_envs().collect::<Vec<_>>(),
+        second_command.get_envs().collect::<Vec<_>>()
+    );
+    assert_ne!(first.artifact_root(), second.artifact_root());
 }
 
 #[test]

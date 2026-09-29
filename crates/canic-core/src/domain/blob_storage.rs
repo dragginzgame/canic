@@ -7,16 +7,13 @@
 //! Boundary: DTO modules re-export these values to preserve public API paths
 //! while status builders import the domain owner directly.
 
-#[cfg(feature = "blob-storage-billing")]
 use candid::{CandidType, Nat};
-#[cfg(feature = "blob-storage-billing")]
 use serde::{Deserialize, Serialize};
 
 ///
 /// BlobStoragePaymentModelStatus
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStoragePaymentModelStatus {
     NotConfigured,
@@ -27,7 +24,6 @@ pub enum BlobStoragePaymentModelStatus {
 /// BlobStorageGatewayPrincipalSyncAction
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageGatewayPrincipalSyncAction {
     NotRequested,
@@ -39,7 +35,6 @@ pub enum BlobStorageGatewayPrincipalSyncAction {
 /// BlobStorageFundingStatus
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageFundingStatus {
     NotConfigured,
@@ -59,7 +54,6 @@ pub enum BlobStorageFundingStatus {
 /// BlobStorageReadinessBlocker
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageReadinessBlocker {
     NotConfigured,
@@ -74,7 +68,6 @@ pub enum BlobStorageReadinessBlocker {
 /// BlobStorageBillingWarning
 ///
 
-#[cfg(feature = "blob-storage-billing")]
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum BlobStorageBillingWarning {
     GatewayPrincipalSetEmpty,

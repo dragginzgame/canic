@@ -153,7 +153,11 @@ fn real_host_policy_tests_are_outside_the_fixture_producer() {
     assert!(excluded.contains(&host.join("src/fleet_ensure/policy/tests.rs")));
     assert!(excluded.contains(&host.join("src/icp/query/tests.rs")));
     assert!(!excluded.contains(&host.join("src/icp/query/mod.rs")));
-    assert!(!excluded.contains(&host.join("src/canister_build/artifact.rs")));
+    for module in ["artifact", "cache"] {
+        let directory = host.join("src/canister_build").join(module);
+        assert!(excluded.contains(&directory.join("tests.rs")));
+        assert!(!excluded.contains(&directory.join("mod.rs")));
+    }
 }
 
 #[test]

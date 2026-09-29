@@ -12,10 +12,12 @@ use crate::{
         model::{
             DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredPresence,
             FleetEnsureStateRecord, MAX_FLEET_ENSURE_CANISTERS,
+            infrastructure_bootstrap::InfrastructureBootstrapFundingTarget,
         },
         ops::{EnsurePaths, EnsureStateError, read_state, startup_funding},
         policy::EnsurePolicyError,
         view::readiness::{
+            InfrastructureFundingReadiness, InfrastructureTargetFundingReadiness,
             PrebuildFundingReadiness, ReadinessUnresolved, RootFundingReadiness,
             RootReadinessUnavailable,
         },
@@ -34,6 +36,7 @@ pub(in crate::fleet_ensure) fn unknown() -> PrebuildFundingReadiness {
         roots: Vec::new(),
         per_step_execution_allowance_cycles: None,
         conversion: None,
+        clean_reinstall_infrastructure: None,
         unresolved: vec![
             ReadinessUnresolved::DesiredNotSelected,
             ReadinessUnresolved::ArtifactExecutionReserve,
@@ -44,6 +47,73 @@ pub(in crate::fleet_ensure) fn unknown() -> PrebuildFundingReadiness {
             ReadinessUnresolved::FreshPlanAdmission,
         ],
     }
+}
+
+/// Observe each reset owner once; unavailable authority or balances remain unknown.
+pub(in crate::fleet_ensure) fn infrastructure(
+    targets: Vec<InfrastructureBootstrapFundingTarget>,
+    icp: &IcpCli,
+) -> Result<Option<InfrastructureFundingReadiness>, EnsureStateError> {
+    infrastructure_with(targets, |principal| {
+        icp.canister_status_report(principal)
+            .map_err(|_| RootReadinessUnavailable::ObservationFailed)
+    })
+}
+
+fn infrastructure_with(
+    targets: Vec<InfrastructureBootstrapFundingTarget>,
+    mut observe: impl FnMut(&str) -> Result<IcpCanisterStatusReport, RootReadinessUnavailable>,
+) -> Result<Option<InfrastructureFundingReadiness>, EnsureStateError> {
+    if targets.is_empty() {
+        return Ok(None);
+    }
+    let mut result = InfrastructureFundingReadiness {
+        targets: Vec::new(),
+        maximum_funding_cycles: Some(0),
+        maximum_ledger_transfers: 0,
+    };
+    for target in targets {
+        let controllers = target
+            .controllers
+            .iter()
+            .map(Principal::from_text)
+            .collect::<Result<BTreeSet<_>, _>>()
+            .map_err(|_| EnsureStateError::StartupConfigurationMismatch)?;
+        let observed = observe(&target.principal)
+            .and_then(|status| native_balance(&target.principal, &controllers, &status));
+        let funding = observed
+            .as_ref()
+            .ok()
+            .map(|available| {
+                crate::fleet_ensure::policy::infrastructure_bootstrap::forecast_target_funding(
+                    target.minimum_cycles,
+                    *available,
+                    target.observation_burn_cycles,
+                    target.update_burn_cycles,
+                )
+                .map_err(|error| EnsureStateError::StartupFunding(Box::new(error)))
+            })
+            .transpose()?;
+        result.maximum_funding_cycles = match (result.maximum_funding_cycles, funding) {
+            (Some(total), Some(amount)) => Some(
+                total
+                    .checked_add(amount)
+                    .ok_or(EnsureStateError::StartupConfigurationMismatch)?,
+            ),
+            _ => None,
+        };
+        if funding.is_none_or(|amount| amount > 0) {
+            result.maximum_ledger_transfers += 1;
+        }
+        result.targets.push(InfrastructureTargetFundingReadiness {
+            name: target.name,
+            principal: target.principal,
+            available_native_cycles: observed.as_ref().ok().copied(),
+            maximum_funding_cycles: funding,
+            unavailable: observed.err(),
+        });
+    }
+    Ok(Some(result))
 }
 
 /// Compile configuration demand and observe only explicitly selected Root identities.
