@@ -26,7 +26,7 @@ Date: 2026-08-17
   activated Fleet must use one admitted release set with matching callers.
 
 The detailed source inventory remains in the working
-[0.102 diagnostic audit](../../audits/working/0.102-diagnostic-inventory/index.md).
+[0.102 diagnostic audit](../../../audits/release-lines/supporting/0.102-diagnostic-inventory/README.md).
 It is temporary conversion evidence, not a recurring producer-registration
 workflow.
 
@@ -137,7 +137,7 @@ For the simplified contract, targeted checks must cover only:
 - current encoding/lifecycle behavior for stable records actually changed; and
 - representative release-Wasm absence plus closeout measurement.
 
-The targeted [closeout Wasm evidence](../../audits/working/0.102-diagnostic-inventory/inventory.md#published-v01022-verification)
+The targeted [closeout Wasm evidence](../../../audits/release-lines/supporting/0.102-diagnostic-inventory/inventory.md#published-v01022-verification)
 builds a representative Component, Fleet Subnet Root, Fleet Coordinator and
 Wasm Store through the canonical release builder. All four data sections are
 smaller than the retained baseline and bounded scans find no host catalogue or

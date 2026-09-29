@@ -1814,7 +1814,8 @@
   },
   "records": {
     "file": "b5-qualification-records.tar.gz",
-    "sha256": "36baeb7b68c11e9bd69bcfb9cf6859b0e5dde087dfa7d48fbca22e203105be72"
+    "sha256": "a7d198de0424a385b60bb65b294fd201198165cae8b7d6fd29453ed9ef33aaeb",
+    "storage": "tar.gz with exact duplicate files represented as archive-local hard links; every member retains its original bytes"
   },
   "limitations": [
     "Qualification is bound to the dirty candidate, not a published validation receipt. Version, commit, tag, push and deployment were not performed.",

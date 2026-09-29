@@ -74,16 +74,10 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
     [ -d "$design_dir" ] || continue
 
     max_files=2
-    if [ "$(basename "$design_dir")" = \
-        "0.102-compact-diagnostic-codes" ]; then
+    # The active line retains two accepted, independent scope authorities.
+    if [ "$design_dir" = "$ROOT/docs/design/0.110-fleet-runtime-contraction" ]; then
         max_files=4
-        require_files "$GUARD_LABEL" \
-            "$design_dir/0.102-design.md" \
-            "$design_dir/status.md" \
-            "$design_dir/allocation-proposal.md" \
-            "$design_dir/code-allocation-ledger.md"
     fi
-
     if [[ "$design_dir" == "$ROOT/docs/design/0."* ]]; then
         design_line="$(basename "$design_dir")"
         design_line="${design_line%%-*}"
@@ -104,8 +98,8 @@ for design_dir in "$ROOT"/docs/design/0.* "$ROOT"/docs/design/archive/0.*; do
     while IFS= read -r design_file; do
         case "$(basename "$design_file")" in
             *design.md | status.md | *-status.md) ;;
-            allocation-proposal.md | code-allocation-ledger.md)
-                [ "$max_files" -eq 4 ] || {
+            2026-09-28-toko-size-follow-through.md | metrics-history-locality.md)
+                [ "$design_dir" = "$ROOT/docs/design/0.110-fleet-runtime-contraction" ] || {
                     warn_layout "unexpected design-directory authority: $(guard_path "$design_file")"
                 }
                 ;;

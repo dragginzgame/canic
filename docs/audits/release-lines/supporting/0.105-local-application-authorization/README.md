@@ -1,5 +1,11 @@
 # 0.105 B1 Local Application Authorization Evidence
 
+Historical evidence retained after the 2026-09-29 cleanup. This line is
+complete; these records do not describe current APIs or release readiness.
+Generated source/consumer inventories and obsolete reproduction scripts
+were pruned. Their exact historical bytes remain in Git at `1e8ad0cfa61d8d37bf417db2e0edabb5445efe8f`
+under `docs/audits/working/0.105-local-application-authorization/`.
+
 Date: 2026-08-19
 
 ## Captured Predecessor
@@ -21,7 +27,7 @@ Date: 2026-08-19
   `v0.104.2`; B3 begins from that published state.
 
 The complete producer and consumer map is in
-[consumer-inventory.tsv](consumer-inventory.tsv). The exact predecessor costs
+[consumer-inventory.tsv](README.md). The exact predecessor costs
 are in [resource-baseline.md](resource-baseline.md). The accepted state hard
 cut is recorded in [b3-session-state.md](b3-session-state.md), and the enabled
 and disabled role artifacts plus endpoint journey are recorded in

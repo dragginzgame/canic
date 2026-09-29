@@ -44,18 +44,18 @@ declarations do not truncate their owning production modules. Neither count is
 a Wasm-size claim.
 
 The exact public-boundary ownership and code-dependent control-flow inventory
-is recorded in [public-boundary.md](public-boundary.md). It is narrower than
+is recorded in [public-boundary.md](README.md). It is narrower than
 the complete internal producer ledger but complete for the maintained current
 wire boundary.
 
 The complete structural classification of all 39 conversions and 35
 production context-appending calls is recorded in
-[conversion-context.md](conversion-context.md). It identifies where typed
+[conversion-context.md](README.md). It identifies where typed
 variants are currently flattened, but does not yet allocate the semantic leaves
 inside those types.
 
 The recursive follow-through of the 12 terminal flattening owners is recorded
-in [transitive-error-inventory.md](transitive-error-inventory.md). Its union of
+in [transitive-error-inventory.md](README.md). Its union of
 54 Canic-owned typed owners and 514 declared variants is the reproducible first
 perimeter, not a proposed code count. Expanding the authentication string stop
 adds ten owners and 96 non-test structural variants; the conservative
@@ -64,64 +64,64 @@ causes. It identifies the string buckets, stringified typed forwarding and
 dependency adapters that must be corrected before allocation can be exhaustive.
 
 The first semantic family is recorded in
-[configuration-leaves.md](configuration-leaves.md). It proves the TOML/schema
+[configuration-leaves.md](README.md). It proves the TOML/schema
 validation path is native-only, bounds the runtime configuration perimeter at
 86 producer-reachable exact candidates after its path-specific reachability
 cut, and proposes three safe projections. Semantic grouping and observability
 approval remain open; no number is allocated.
 
 The second semantic family starts in
-[auth-policy-leaves.md](auth-policy-leaves.md). Its base typed surface maps 48
+[auth-policy-leaves.md](README.md). Its base typed surface maps 48
 exact authentication/policy candidates and four safe projections and excludes
 one unproduced sharding reason.
 
-[auth-string-frontier.md](auth-string-frontier.md) expands and reconciles that
+[auth-string-frontier.md](README.md) expands and reconciles that
 untyped stop. It records ten additional typed owners, 43 direct prose
 construction sites, the maintained delegated-session public helper, 103 new
 exact candidates and two new safe projections after reuse/sediment removal. It
 also proves that the durable chain-key signing state currently marks terminal
 protected-policy failures retryable.
 
-[ic-infrastructure-leaves.md](ic-infrastructure-leaves.md) maps 24 provisional
+[ic-infrastructure-leaves.md](README.md) maps 24 provisional
 exact leaves across the owned IC adapters and the pinned call, rejection,
 signing-cost and Candid dependency surfaces. It adds four safe projections and
 keeps destination-invalid absence as typed evidence before projection.
 
-[bounded-runtime-leaves.md](bounded-runtime-leaves.md) maps 60 current exact
+[bounded-runtime-leaves.md](README.md) maps 60 current exact
 topology, runtime-log, refill, Placement Index and complete current blob
 candidates plus four safe projections. One projection is shared with
 configuration. Because all 27 blob producers still exist in 0.102, their
 leaves are allocated now and retire without reuse only if a later promoted
 extraction removes them.
 
-[runtime-ops-leaves.md](runtime-ops-leaves.md) maps configuration lookup,
+[runtime-ops-leaves.md](README.md) maps configuration lookup,
 protected deployment validation, runtime environment and request/RPC wrapper
 ownership. It contributes 18 new exact candidates and two safe projections,
 while deliberately reusing existing environment, access and compiled-
 configuration meanings.
 
-[fleet-activation-leaves.md](fleet-activation-leaves.md) maps all fresh root,
+[fleet-activation-leaves.md](README.md) maps all fresh root,
 Store and non-root activation admission plus the protected activation record.
 It contributes 30 exact candidates and one safe projection; more than thirty
 record-validation prose sites reduce to one durable-state invariant because
 their owner, fail-closed action and retry policy are identical.
 
-[storage-registry-leaves.md](storage-registry-leaves.md) maps the ICP-refill,
+[storage-registry-leaves.md](README.md) maps the ICP-refill,
 Placement Index and feature-gated Sharding record owners to 18 exact candidates
 and two safe projections. `StorageOpsError` remains transparent.
 
-[fleet-control-plane-leaves.md](fleet-control-plane-leaves.md) maps the Fleet
+[fleet-control-plane-leaves.md](README.md) maps the Fleet
 Registry, Component provisioning plan, Fleet-service binding and shared receipt
 hashing owners. It contributes 124 exact candidates and one safe projection,
 preserving four aggregate typed causes instead of numbering their formatted
 wrappers.
 
-[intent-store-leaves.md](intent-store-leaves.md) maps all 51 live durable intent
+[intent-store-leaves.md](README.md) maps all 51 live durable intent
 variants plus one safe state projection. Request/state-machine conditions remain
 actionable while primary/index/metadata contradictions fail closed behind the
 masked public state code.
 
-[memory-adapter-leaves.md](memory-adapter-leaves.md) pins the current adapter to
+[memory-adapter-leaves.md](README.md) pins the current adapter to
 `ic-memory 0.12.3` and its lockfile checksum. It groups 131 known reachable
 structural leaves into 54 Canic-owned semantics and adds 20 boundary-specific
 unknown leaves for the reachable non-exhaustive enums: 74 exact candidates and
@@ -132,7 +132,7 @@ no broad projection.
 This table is the frozen initial family and first-21-pass staging subtotal. It
 is retained to show how B1 expanded from the original typed-family audit; the
 current whole-program qualified total is maintained in
-[ledger-reconciliation.md](ledger-reconciliation.md), not by extending this
+[ledger-reconciliation.md](README.md), not by extending this
 wide table for every later site slice.
 
 | Family | Provisional exact candidates | Safe projections | Remaining qualification |
@@ -172,7 +172,7 @@ wide table for every later site slice.
 | Component Registry preparation/allocation/create-install workflow | 28 new, 15 reused | 0 new | 55 direct constructor sites classified; eight transparent typed-cause/adapter sites |
 | **Corrected initial counted subtotal** | **1,139** | **31 distinct** | 1,170 identities; not a numeric allocation |
 
-[ledger-reconciliation.md](ledger-reconciliation.md) reconciles the qualified family
+[ledger-reconciliation.md](README.md) reconciles the qualified family
 arithmetic and every cross-family reuse. The broad source-document token census
 contains 712 unique uppercase tokens; four are explicitly documented notation
 or forbidden/unreachable examples, leaving exactly 708 collision-free proposed
@@ -191,14 +191,14 @@ reconciliation therefore contains 2,864 exact meanings plus 31 additional
 projections: 2,895 qualified symbolic identities. This correction
 changes evidence only; it allocates no number and changes no runtime behavior.
 
-[projection-ledger.md](projection-ledger.md) aggregates those 31 additional
+[projection-ledger.md](README.md) aggregates those 31 additional
 identities plus five exact leaves reused as projection targets. It names the
 required observation class for every masked family and records three remaining
 approval gaps: numeric conversion of the guarded recent-failure ring and
 call-site-specific IC effect-journal wiring. Cashier uses the guarded numeric
 runtime observation until a promoted extraction retires it.
 
-[ic-observability-owners.md](ic-observability-owners.md) resolves the IC gap to
+[ic-observability-owners.md](README.md) resolves the IC gap to
 17 current call families and their operation-specific recovery/status
 authorities, including the missing narrow Store-publication attempt owner. It
 requires durable operation records for mutating effects and the guarded runtime
@@ -210,7 +210,7 @@ decrease if the final action/retry review proves two differently named meanings
 identical, and every masked exact leaf still requires an approved numeric
 observability owner in the complete allocation table.
 
-[direct-constructor-frontier.md](direct-constructor-frontier.md) proves why 685
+[direct-constructor-frontier.md](README.md) proves why 685
 was not a whole-program total: 2,208 baseline production `InternalError::*`
 references require site-level disposition across 101 files. The two Component
 Registry modules alone contain 1,154 references. Every mechanical site now
@@ -218,12 +218,12 @@ reuses a qualified meaning, adds a justified meaning or has an explicit
 transparent/sediment disposition.
 
 The site ledgers indexed by
-[ledger-reconciliation.md](ledger-reconciliation.md) close all 2,208 mechanical
+[ledger-reconciliation.md](README.md) close all 2,208 mechanical
 references. Expanding the Coordinator receipt adapter and three final small
 helpers produces an effective 2,514-site frontier, also fully classified with
 zero open dispositions.
 
-[The code-allocation ledger](../../../design/archive/0.102-compact-diagnostic-codes/code-allocation-ledger.md)
+[The code-allocation ledger](code-allocation-ledger.md)
 freezes the permanent
 repository-only current/retired allocation contract and the contract for a
 generated language-neutral current registry. Because no numeric allocation has
@@ -317,7 +317,7 @@ The current native consumers are:
 decode or match the current enum. They are propagation owners, not catalogue
 authorities.
 
-[public-boundary.md](public-boundary.md) now binds this surface to exact
+[public-boundary.md](README.md) now binds this surface to exact
 current-candidate functions and source coordinates. Its structured manifest
 contains twelve machine-decision consumers and six transparent decode/render
 consumers. That closes maintained production-consumer ownership; it does not
@@ -331,7 +331,7 @@ interpolated into those messages. Operation IDs, generations, limits, retry
 times, principals, Canister identities and conflicting authority values can be
 remediation-significant even when their surrounding prose is disposable.
 
-[dynamic-public-context.md](dynamic-public-context.md) defines the required
+[dynamic-public-context.md](README.md) defines the required
 row shape and four classifications: caller-derivable, sensitive/operator-only,
 authoritatively typed, and caller-required but unowned. Its current-source
 census is not yet complete. Its first sixty-three bounded slices classify 656
@@ -540,7 +540,7 @@ comparisons.
 ### Retained V3 Baseline
 
 The fresh full
-[CANIC-WASM-001/v3 report](../../reports/2026-08/2026-08-12/wasm-footprint-v3.md)
+[CANIC-WASM-001/v3 report](../../../reports/2026-08/2026-08-12/wasm-footprint-v3.md)
 passes with risk `5/10`. It builds and measures release plus debug artifacts for
 all six configured Components and the three infrastructure roles at immutable
 tag `v0.101.53`. The release values for the four representative roles exactly

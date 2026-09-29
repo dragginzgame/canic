@@ -39,7 +39,7 @@ native tests, scoped warning-denied Clippy and PocketIC equivalence case pass
 and changelog are ready for review and the selected gate; package versions
 remain .45.
 This necessary published-line follow-up does not begin a new minor. The
-[current handoff](../../status/current.md#offline-root-public-key-derivation--46-ready-for-review-2026-09-28)
+[current handoff](../../status/archive/2026-09-29-precompact.md#offline-root-public-key-derivation--46-ready-for-review-2026-09-28)
 retains proof and downstream blockers. No full gate, publication or live effect ran.
 
 
@@ -53,7 +53,7 @@ changed-build/same-build resets pass in 197.08s. Scoped internal Clippy passes.
 No production behavior changed and no broad gate was rerun. The .45 batch and
 changelog are ready for review and the chosen release-gate retry; versions remain
 .44 and this correction is uncommitted. The
-[current handoff](../../status/current.md#mixed-topology-release-test-correction--45-ready-for-retry-2026-09-28)
+[current handoff](../../status/archive/2026-09-29-precompact.md#mixed-topology-release-test-correction--45-ready-for-retry-2026-09-28)
 retains exact evidence and remaining upstream acceptance.
 
 
@@ -67,7 +67,7 @@ are removed from the operator guide. All 38 selected progress/query tests and
 scoped Clippy pass. Six frozen-input Release build measurements establish exact
 warm reuse around 2.2s; changed-input runtime compilation remains costly.
 
-The [current handoff](../../status/current.md#toko-feedback-completion--45-ready-for-review-2026-09-28)
+The [current handoff](../../status/archive/2026-09-29-precompact.md#toko-feedback-completion--45-ready-for-review-2026-09-28)
 and [feedback report](../../audits/reports/2026-09/2026-09-28/toko-feedback-followthrough.md)
 retain results and outstanding live/performance acceptance. The accepted .45
 implementation batch and changelog are ready for maintainer review and the
@@ -730,7 +730,7 @@ review command, explains unavailable environment comparison, and documents
 application payload limits and early-readiness limits. Host request literals
 and internal fixtures follow the new optional signing-identity field.
 
-The [current handoff](../../status/current.md#toko-feedback-before-35--2026-09-21)
+The [current handoff](../../status/archive/2026-09-29-precompact.md#toko-feedback-before-35--2026-09-21)
 records focused host/CLI/fixture validation and the per-finding disposition.
 These bounded corrections are qualified. The expanded checkpoint above now
 qualifies timing receipts and matched local deployment/cache measurements;
@@ -1045,7 +1045,7 @@ bounded Root/Store reads, stable generated build inputs, direct audit-Root
 builds and duplicate PocketIC removal; local funding deficits and complete
 allocation-binding diagnostics. Existing native, transport, focused PocketIC
 and scoped Clippy evidence is retained in the
-[release handoff](../../status/current.md#selected-25-release-handoff--2026-09-18).
+[release handoff](../../status/archive/2026-09-29-precompact.md#selected-25-release-handoff--2026-09-18).
 No full-suite or whole-release speed result is claimed. Package versions remain
 .24; no version/publication/live effect ran.
 
@@ -1507,7 +1507,7 @@ activation, preserving the exact child failure through Coordinator and host.
 Five focused unit cases, scoped warning-denied Clippy and the exact failed IC
 case pass. The selected correction and .20 changelog are ready for the release
 retry; the agent did not repeat the full gate or perform publication. See the
-[current handoff](../../status/current.md#release-test-correction-child-failure-through-membership-retries--2026-09-16)
+[current handoff](../../status/archive/2026-09-29-precompact.md#release-test-correction-child-failure-through-membership-retries--2026-09-16)
 for exact evidence and limits.
 
 ## Management-only funding protection complete locally — 2026-09-16
@@ -1982,7 +1982,7 @@ grant-timer correction, source-bound activation preparation/reset, role-correct
 state fanout, inspection diagnostics/preflight, child usage/allowance diagnostics,
 unchanged-release reuse and the completed ICP/IcyDB/ic-query integrations.
 Direct positive, rejection and interruption/replay evidence is recorded in the
-[current handoff](../../status/current.md#latest-focused-validation) and linked
+[current handoff](../../status/archive/2026-09-29-precompact.md#latest-focused-validation) and linked
 reports. The root and detailed changelogs describe the complete selected scope.
 Packages remain .16; the .17 draft is untagged. The complete release gate has
 not been run by this readiness pass. No version or Git publication occurred.
@@ -1992,14 +1992,14 @@ included in fixture conservation and mock Ledger backing; a fully funded
 continuation may reach its ceiling; and both selected-build wipe paths resume
 typed pending initialization against the same reviewed plan with bounded retries.
 All three failed cases pass individually, and owning-package Clippy passes.
-The [current handoff](../../status/current.md#release-test-corrections--2026-09-15)
+The [current handoff](../../status/archive/2026-09-29-precompact.md#release-test-corrections--2026-09-15)
 records logs and the concurrent dependency-update boundary. Runtime semantics
 and the selected release scope are unchanged; the complete gate remains due.
 
 Both maintained IcyDB fixtures now select published 0.257.15, with six aligned
 packages in each lockfile, SQL disabled and ic-memory 0.13.3 retained. Seven
 focused PocketIC cases and fixture/integration/composed declaration-mode Clippy
-pass without Rust API edits. The [dependency handoff](../../status/current.md#icydb-025715-update--2026-09-15)
+pass without Rust API edits. The [dependency handoff](../../status/archive/2026-09-29-precompact.md#icydb-025715-update--2026-09-15)
 records the qualification; historical Wasm measurements are unchanged.
 
 The line already exceeds the advisory twelve-release guideline. This boundary

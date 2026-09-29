@@ -1,12 +1,10 @@
 //! Module: durable_io
 //!
-//! Responsibility: own atomic durable regular-file publication and narrow canonical-document
-//! mechanics for `canic-host`.
+//! Responsibility: own atomic durable regular-file publication for `canic-host`.
 //! Does not own: domain schemas or transitions, path selection, ephemeral protocol files, open
 //! command-result descriptors, backup persistence, or multi-file transactions.
 //! Boundary: reads reject links/special files; writes own sibling staging, publication, cleanup,
-//! and filesystem syncs behind replace and create-new modes; document helpers add only bounded
-//! encoding, reads and exact replacement reconciliation.
+//! and filesystem syncs behind replace and create-new modes.
 
 #[cfg(test)]
 mod tests;

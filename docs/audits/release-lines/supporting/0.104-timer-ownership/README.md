@@ -1,5 +1,11 @@
 # 0.104 B1 Timer And Async-Job Ownership Baseline
 
+Historical evidence retained after the 2026-09-29 cleanup. This line is
+complete; these records do not describe current APIs or release readiness.
+Generated source/consumer inventories and obsolete reproduction scripts
+were pruned. Their exact historical bytes remain in Git at `1e8ad0cfa61d8d37bf417db2e0edabb5445efe8f`
+under `docs/audits/working/0.104-timer-ownership/`.
+
 Date: 2026-08-18
 
 ## Result
@@ -25,12 +31,12 @@ The hard-cut decisions are:
 
 The mechanically reviewable inputs are:
 
-- [consumer inventory](consumer-inventory.tsv), covering the 45 production
+- [consumer inventory](README.md), covering the 45 production
   Rust files discovered from parsed timer/recovery types, imports, paths and
   macro tokens across applications, canisters and crates;
-- [native claim inventory](native-claims.tsv), classifying every provider
+- [native claim inventory](README.md), classifying every provider
   registration family and its target custody;
-- [durable state inventory](durable-state.tsv), classifying every field in the
+- [durable state inventory](README.md), classifying every field in the
   current memory-ID-60 record; and
 - [propagation contract](propagation.md), fixing the guide, fixtures,
   lifecycle grammar, IcyDB boundary and B2-B8 work map.
@@ -220,7 +226,7 @@ workspace, release matrix and broad PocketIC suites were not run.
 ## B6 Native Adoption And Lifecycle Participant
 
 B6 was accepted by maintainer continuation on 2026-08-18. The maintained
-[native-timer guide](../../../features/runtime/native-timers.md) now shows the
+[native-timer guide](../../../../features/runtime/native-timers.md) now shows the
 exact `ic-timers = "=0.6.1"` dependency, direct once and after-completion
 registrations, cancellation/unregister/detachment behavior, volatile custody
 versus durable demand, native reconstruction and the shared inventory. The
@@ -375,7 +381,7 @@ workspace, release matrix and broad PocketIC suites were not run.
 B8 was accepted by maintainer continuation on 2026-08-19 and structurally
 strengthened by the closeout correction. The former lexical call-site count is
 replaced by a parsed Rust ownership contract. Its
-45-file [shared inventory](consumer-inventory.tsv) covers `apps/`, shipped
+45-file [shared inventory](README.md) covers `apps/`, shipped
 crates and every executable canister fixture, while excluding ordinary test
 modules and the dedicated internal test-harness crate. Each discovered file
 must be classified as fixed Canic consumption, private lifecycle consumption,

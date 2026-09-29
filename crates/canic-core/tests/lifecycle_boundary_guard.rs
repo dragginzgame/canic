@@ -308,6 +308,13 @@ fn assert_selected_lifecycle_owner(
     for statement in
         tokens.split(|token| matches!(token, TokenTree::Punct(punct) if punct.as_char() == ';'))
     {
+        let owners = invocation_names(statement.iter().cloned().collect())
+            .into_iter()
+            .filter(|name| name.ends_with("_before_bootstrap"))
+            .collect::<Vec<_>>();
+        if owners.is_empty() {
+            continue;
+        }
         let enabled = statement
             .windows(2)
             .filter_map(|pair| {
@@ -331,11 +338,7 @@ fn assert_selected_lifecycle_owner(
             })
             .all(|enabled| enabled);
         if enabled {
-            selected.extend(
-                invocation_names(statement.iter().cloned().collect())
-                    .into_iter()
-                    .filter(|name| name.ends_with("_before_bootstrap")),
-            );
+            selected.extend(owners);
         }
     }
     assert_eq!(
@@ -473,6 +476,33 @@ fn invocation_names(tokens: proc_macro2::TokenStream) -> Vec<String> {
         }
     }
     calls
+}
+
+#[test]
+fn lifecycle_owner_selection_ignores_unrelated_configuration() {
+    let source = r"
+        fn init() {
+            #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
+            configure_metrics();
+            #[cfg(canic_capability_automatic_topup)]
+            init_with_topup_before_bootstrap();
+            #[cfg(not(canic_capability_automatic_topup))]
+            init_before_bootstrap();
+        }
+    ";
+    for topup in [false, true] {
+        assert_selected_lifecycle_owner(
+            source,
+            "init",
+            topup,
+            false,
+            if topup {
+                "init_with_topup_before_bootstrap"
+            } else {
+                "init_before_bootstrap"
+            },
+        );
+    }
 }
 
 #[test]

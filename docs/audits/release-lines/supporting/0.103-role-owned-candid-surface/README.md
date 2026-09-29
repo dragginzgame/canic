@@ -1,5 +1,11 @@
 # 0.103 Role-Owned Candid Surface Baseline
 
+Historical evidence retained after the 2026-09-29 cleanup. This line is
+complete; these records do not describe current APIs or release readiness.
+Generated source/consumer inventories and obsolete reproduction scripts
+were pruned. Their exact historical bytes remain in Git at `1e8ad0cfa61d8d37bf417db2e0edabb5445efe8f`
+under `docs/audits/working/0.103-role-owned-candid-surface/`.
+
 This directory freezes the first B1 input: the exact generated Candid surface
 at released tag `v0.102.2` (`8cf4723cecd7579cbe3304b980c63b1bc3969d68`). It
 does not authorize or describe a runtime/protocol mutation.
