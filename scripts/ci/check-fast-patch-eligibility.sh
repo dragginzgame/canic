@@ -65,44 +65,29 @@ base_commit="$(git rev-list -n 1 "$base_tag")" ||
 git merge-base --is-ancestor "$base_commit" HEAD ||
     fail "HEAD does not descend from published baseline $base_tag"
 
-tag_status="$(git show "$base_tag:docs/status/current.md")" ||
-    fail "$base_tag does not retain its validation receipt"
-mapfile -t validation_receipts < <(
-    rg '^<!-- canic-release-validation: version=[0-9]+\.[0-9]+\.[0-9]+ source=[0-9a-f]{40} date=[0-9]{4}-[0-9]{2}-[0-9]{2}( gate=(complete|fast))? -->$' \
-        <<<"$tag_status"
-)
-[ "${#validation_receipts[@]}" -eq 1 ] ||
-    fail "$base_tag must retain exactly one structured validation receipt"
-receipt_version="$(sed -E 's/^.*version=([^ ]+).*$/\1/' <<<"${validation_receipts[0]}")"
-[ "$receipt_version" = "$workspace_version" ] ||
-    fail "$base_tag validation receipt names $receipt_version instead of $workspace_version"
-receipt_source="$(sed -E 's/^.*source=([0-9a-f]{40}).*$/\1/' <<<"${validation_receipts[0]}")"
+receipt="$(bash "$ROOT/scripts/ci/read-release-validation.sh" "$base_tag" "$workspace_version")" ||
+    fail "$base_tag has no valid structured validation receipt; use the complete release gate"
+IFS=$'\t' read -r receipt_source receipt_gate <<<"$receipt"
 git cat-file -e "$receipt_source^{commit}" 2>/dev/null ||
     fail "$base_tag validation receipt source is unavailable"
 git merge-base --is-ancestor "$receipt_source" "$base_commit" ||
     fail "$base_tag validation receipt source does not precede its release"
 validation_basis_tag="$base_tag"
-if [[ "${validation_receipts[0]}" == *" gate=fast -->" ]]; then
+if [[ "$receipt_gate" == fast ]]; then
     validation_basis_tag=""
     while IFS= read -r candidate_tag; do
         [ "$candidate_tag" != "$base_tag" ] || continue
         candidate_version="${candidate_tag#v}"
         [[ "$candidate_version" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]] || continue
         [ "$(git cat-file -t "refs/tags/$candidate_tag" 2>/dev/null || true)" = "tag" ] || continue
-        candidate_pattern="${candidate_version//./\\.}"
-        candidate_status="$(git show "$candidate_tag:docs/status/current.md" 2>/dev/null || true)"
-        mapfile -t complete_receipts < <(
-            rg "^<!-- canic-release-validation: version=$candidate_pattern source=[0-9a-f]{40} date=[0-9]{4}-[0-9]{2}-[0-9]{2} -->$|^<!-- canic-release-validation: version=$candidate_pattern source=[0-9a-f]{40} date=[0-9]{4}-[0-9]{2}-[0-9]{2} gate=complete -->$" \
-                <<<"$candidate_status"
-        )
-        if [ "${#complete_receipts[@]}" -eq 1 ]; then
-            candidate_source="$(sed -E 's/^.*source=([0-9a-f]{40}).*$/\1/' <<<"${complete_receipts[0]}")"
-            candidate_commit="$(git rev-list -n 1 "$candidate_tag")"
-            git cat-file -e "$candidate_source^{commit}" 2>/dev/null || continue
-            git merge-base --is-ancestor "$candidate_source" "$candidate_commit" || continue
-            validation_basis_tag="$candidate_tag"
-            break
-        fi
+        candidate_receipt="$(bash "$ROOT/scripts/ci/read-release-validation.sh" "$candidate_tag" "$candidate_version" 2>/dev/null)" || continue
+        IFS=$'\t' read -r candidate_source candidate_gate <<<"$candidate_receipt"
+        [[ "$candidate_gate" == complete ]] || continue
+        candidate_commit="$(git rev-list -n 1 "$candidate_tag")"
+        git cat-file -e "$candidate_source^{commit}" 2>/dev/null || continue
+        git merge-base --is-ancestor "$candidate_source" "$candidate_commit" || continue
+        validation_basis_tag="$candidate_tag"
+        break
     done < <(git tag --merged "$base_commit" --sort=-version:refname 'v*')
     [ -n "$validation_basis_tag" ] ||
         fail "$base_tag has a fast receipt but no complete validated release ancestor"
@@ -130,7 +115,7 @@ for changed_path in "${changed_paths[@]}"; do
             scripts/ci/check-fast-patch-eligibility.sh | \
             scripts/ci/check-release-candidate.sh | \
             scripts/ci/check-release-integrity-contract.sh | \
-            scripts/ci/confirm-version-bump.sh | \
+            scripts/ci/read-release-validation.sh | \
             crates/canic/tests/release_flow_guard.rs)
             release_tooling_changed=1
             ;;

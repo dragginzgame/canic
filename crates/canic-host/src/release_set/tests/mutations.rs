@@ -1,5 +1,4 @@
 use super::*;
-use crate::release_set::AppConfigError;
 use canic_core::ids::CanisterRole;
 use toml::Value as TomlValue;
 
@@ -160,28 +159,6 @@ maximum_instances = 1
             .contains("[component_specs.\"default\".spawn_grants.\"hub\".\"worker\"]")
     );
     assert!(updated.source.contains("maximum_instances_per_parent = 1"));
-}
-
-#[test]
-fn attach_app_role_rejects_removed_service_kind() {
-    let config = r#"
-[app]
-name = "demo"
-
-[roles.root]
-kind = "root"
-
-[roles.worker]
-kind = "canister"
-package = "worker"
-
-
-"#;
-    assert!(matches!(
-        attach_app_role_source(config, "demo", "worker", "default", "service")
-            .expect_err("removed service kind must reject"),
-        AppConfigError::InvalidKind { .. }
-    ));
 }
 
 #[test]

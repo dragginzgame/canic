@@ -374,7 +374,6 @@ pub enum ManagementCallMetricOperation {
     EcdsaPublicKey,
     GetCycles,
     InstallChunkedCode,
-    InstallCode,
     SignWithEcdsa,
     StartCanister,
     StopCanister,

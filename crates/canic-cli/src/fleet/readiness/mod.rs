@@ -18,10 +18,15 @@ use crate::{
 };
 use candid::Principal;
 use canic_core::cdk::types::Cycles;
-use canic_host::fleet_ensure::workflow::readiness::{
-    FleetReadinessRequest, ReadinessConversionRequest, ReadinessGenerationInputs, inspect,
+use canic_host::{
+    fleet_ensure::{
+        view::readiness::InfrastructureFundingUnavailable,
+        workflow::readiness::{
+            FleetReadinessRequest, ReadinessConversionRequest, ReadinessGenerationInputs, inspect,
+        },
+    },
+    icp_config::resolve_current_canic_icp_root,
 };
-use canic_host::icp_config::resolve_current_canic_icp_root;
 use clap::{ArgAction, Command};
 use std::ffi::OsString;
 
@@ -176,6 +181,12 @@ fn print_report(report: &canic_host::fleet_ensure::view::readiness::FleetReadine
             );
         }
     }
+    if let Some(reason) = &report.funding.clean_reinstall_infrastructure_unavailable {
+        println!(
+            "clean_reinstall_infrastructure_funding: unknown; {}",
+            infrastructure_unavailable_message(reason)
+        );
+    }
     for root in &report.funding.roots {
         println!(
             "root {}: native={} floor_excluding_execution={} shortfall={} unavailable={:?}",
@@ -220,4 +231,21 @@ fn print_report(report: &canic_host::fleet_ensure::view::readiness::FleetReadine
     println!(
         "Read-only snapshot. Resume retained work through Fleet ensure; preserve its plan, journal and selected build. Exact funding and authority are checked again before effects."
     );
+}
+
+fn infrastructure_unavailable_message(reason: &InfrastructureFundingUnavailable) -> String {
+    match reason {
+        InfrastructureFundingUnavailable::FleetNotCompleted => {
+            "no completed Fleet selected for a pre-build reset forecast".into()
+        }
+        InfrastructureFundingUnavailable::GenerationInputsNotSupplied => {
+            "supply paired --source and --seed inputs for a pre-build reset forecast".into()
+        }
+        InfrastructureFundingUnavailable::RetainedInfrastructureReview {
+            operation_id,
+            plan_sha256,
+        } => format!(
+            "retained unpaid infrastructure review {plan_sha256} (operation {operation_id}); preserve retained authority; --cancel-reinstall {plan_sha256} on this Fleet releases an unissued review before current-build generation and a fresh funding review"
+        ),
+    }
 }

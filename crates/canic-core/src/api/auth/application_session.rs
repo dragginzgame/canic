@@ -441,6 +441,7 @@ fn map_state_error(error: ApplicationSessionStateError) -> Error {
         | ApplicationSessionStateError::ReplayAlreadyExists => {
             Error::from_registered(codes::STATE_CONFLICT)
         }
+        #[cfg(any(test, feature = "auth-local-application-authorization"))]
         ApplicationSessionStateError::AuthorityGenerationExhausted => {
             Error::from_registered(codes::VERSION_CAPACITY)
         }

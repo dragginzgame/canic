@@ -232,18 +232,7 @@ topup = {}
 }
 
 #[test]
-fn removed_recursive_and_tree_fields_do_not_parse() {
-    for field in [
-        "kind = \"service\"",
-        "owner_component = \"other\"",
-        "initial_trees = 1",
-        "maximum_trees = 1",
-    ] {
-        let source = format!("component_role = \"hub\"\nmaximum_instances = 1\n{field}\n");
-        toml::from_str::<ComponentSpecConfig>(&source)
-            .expect_err("removed Component Spec field must reject");
-    }
-
+fn component_child_declarations_reject_nested_children() {
     toml::from_str::<ComponentSpecConfig>(
         r#"
 component_role = "hub"

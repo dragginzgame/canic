@@ -14,6 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.48` separates release receipts from status documents, removes obsolete
+  public APIs (a pre-1.0 hard cut), runtime paths and tests, consolidates historical evidence and
+  active planning, explains unavailable infrastructure funding and permits exact-digest
+  cancellation of unpaid reinstall reviews.
 - `0.110.47` corrects inflated reinstall funding and adds early infrastructure
   forecasts; separates role-owned persistence, makes observability optional and
   decouples blob contracts from embedded storage; improves artifact reuse, CI

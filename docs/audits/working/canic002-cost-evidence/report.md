@@ -55,10 +55,11 @@ time, freshness, completeness, type and saturation. Reset followed by regrowth
 is rejected. Aggregate callback events remain gauges; completed samples do not
 account for interrupted callbacks or establish callback rates. No parallel
 tracking owner is introduced, and public history does not derive timer rates.
-IcyDB 0.259.6 still resolves ic-timers 0.7.1 in external composition fixtures;
-their shared-inventory qualification awaits a matching published IcyDB dependency.
-The maintainer explicitly accepts this temporary test-only mismatch and leaves
-the IcyDB pin unchanged; it is not a blocker for Canic's dependency update.
+The earlier IcyDB 0.259.6 / ic-timers 0.7.1 dependency mismatch is resolved:
+Canic now pins IcyDB 0.261.16 and ic-timers 0.8.0, with shared lifecycle/timer
+qualification recorded in the .47 release evidence. This resolves the dependency
+blocker only; complete transfer coverage and downstream balance verification
+remain open below.
 
 Funding grant counters do not cover every balance-changing transfer. Safe
 consumption attribution additionally needs interval-aligned balances, complete

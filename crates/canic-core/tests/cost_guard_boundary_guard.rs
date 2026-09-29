@@ -151,12 +151,32 @@ fn cycles_ledger_paid_adapters_require_cost_guard_permit() {
 fn management_deployment_adapters_require_cost_guard_permit() {
     let lifecycle_ops = source_root().join("ops/ic/mgmt/lifecycle.rs");
     let lifecycle = fs::read_to_string(&lifecycle_ops).expect("read management lifecycle ops");
-    let lifecycle_permit_args = lifecycle.matches("_permit: &CostGuardPermit").count();
-
-    assert_eq!(
-        lifecycle_permit_args, 2,
-        "both install_code management adapters must have permit-required wrappers"
+    let syntax = syn::parse_file(&lifecycle).expect("parse management lifecycle ops");
+    let install = syntax
+        .items
+        .iter()
+        .find_map(|item| {
+            let Item::Impl(implementation) = item else {
+                return None;
+            };
+            implementation.items.iter().find_map(|item| match item {
+                ImplItem::Fn(method) if method.sig.ident == "install_chunked_code_with_permit" => {
+                    Some(method)
+                }
+                _ => None,
+            })
+        })
+        .expect("chunked install adapter");
+    let Some(FnArg::Typed(argument)) = install.sig.inputs.first() else {
+        panic!("chunked install must require a cost-guard permit");
+    };
+    let Type::Reference(reference) = argument.ty.as_ref() else {
+        panic!("chunked install must borrow its cost-guard permit");
+    };
+    assert!(
+        matches!(reference.elem.as_ref(), Type::Path(ty) if ty.path.is_ident("CostGuardPermit"))
     );
+    assert!(reference.mutability.is_none());
     assert!(
         !lifecycle.contains("create_canister"),
         "Canister runtimes must not retain an autonomous raw create_canister adapter"

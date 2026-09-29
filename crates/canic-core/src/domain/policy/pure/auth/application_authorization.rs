@@ -7,26 +7,32 @@
 use crate::{
     domain::value::Principal,
     model::auth::application_authorization::{
-        ApplicationScopeRef, CanonicalApplicationScopes, LocalApplicationAuthorityBinding,
-        LocalApplicationAuthoritySnapshot, LocalApplicationSession,
-        MAX_ACTIVE_APPLICATION_SESSIONS, MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT,
-        MAX_APPLICATION_PROOF_LIFETIME_NS, MAX_APPLICATION_REPLAY_RECORDS,
-        MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT, MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
-        VerifiedApplicationAuthority,
+        ApplicationScopeRef, CanonicalApplicationScopes, LocalApplicationAuthoritySnapshot,
+        LocalApplicationSession, MAX_ACTIVE_APPLICATION_SESSIONS,
+        MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT, MAX_APPLICATION_PROOF_LIFETIME_NS,
+        MAX_APPLICATION_REPLAY_RECORDS, MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT,
+        MAX_LOCAL_APPLICATION_SESSION_TTL_NS, VerifiedApplicationAuthority,
     },
 };
+
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::model::auth::application_authorization::LocalApplicationAuthorityBinding;
 
 /// Stable-binding action required by one locally activated protected-policy change.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum ApplicationAuthorityBindingTransition {
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     AdvanceGeneration,
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     Initialize,
     Unchanged,
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     UpdateWithoutGeneration,
 }
 
 /// Decide whether one protected local policy transition invalidates retained sessions.
 #[must_use]
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub fn decide_application_authority_binding_transition(
     previous: Option<&LocalApplicationAuthorityBinding>,
     current: &LocalApplicationAuthorityBinding,
@@ -280,14 +286,6 @@ pub enum ApplicationSessionTtlError {
     RequestedZero,
 }
 
-/// Existing replay disposition resolved before expensive proof verification.
-#[derive(Clone, Copy, Debug, Eq, PartialEq)]
-pub enum ApplicationReplayDisposition {
-    Absent,
-    Conflict,
-    ExactActiveReceipt,
-}
-
 /// Target-local post-cleanup occupancy used by pure admission policy.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ApplicationSessionCapacity {
@@ -297,10 +295,9 @@ pub struct ApplicationSessionCapacity {
     pub replay_for_subject: usize,
 }
 
-/// Pure replay, replacement and capacity decision input.
+/// Pure replacement and capacity decision input after replay resolution.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct ApplicationSessionAdmissionInput {
-    pub replay: ApplicationReplayDisposition,
     pub replacing_existing_session: bool,
     pub capacity: ApplicationSessionCapacity,
 }
@@ -310,7 +307,6 @@ pub struct ApplicationSessionAdmissionInput {
 pub enum ApplicationSessionAdmissionDecision {
     CommitNew,
     CommitReplacement,
-    ReturnExactReceipt,
 }
 
 /// Typed admission failure that leaves existing state unchanged.
@@ -330,20 +326,10 @@ pub enum ApplicationCapacityLimit {
     ReplaySubject,
 }
 
-/// Decide exact retry, conflict, replacement and target-local capacity.
+/// Decide replacement and target-local capacity after the workflow resolves replay.
 pub const fn decide_application_session_admission(
     input: ApplicationSessionAdmissionInput,
 ) -> Result<ApplicationSessionAdmissionDecision, ApplicationSessionAdmissionError> {
-    match input.replay {
-        ApplicationReplayDisposition::ExactActiveReceipt => {
-            return Ok(ApplicationSessionAdmissionDecision::ReturnExactReceipt);
-        }
-        ApplicationReplayDisposition::Conflict => {
-            return Err(ApplicationSessionAdmissionError::ReplayConflict);
-        }
-        ApplicationReplayDisposition::Absent => {}
-    }
-
     if input.capacity.replay_for_subject >= MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT {
         return Err(ApplicationSessionAdmissionError::Capacity(
             ApplicationCapacityLimit::ReplaySubject,
@@ -691,7 +677,7 @@ mod tests {
     }
 
     #[test]
-    fn replay_and_capacity_policy_never_evicts_live_authority() {
+    fn capacity_policy_never_evicts_live_authority() {
         let full = ApplicationSessionCapacity {
             active_global: MAX_ACTIVE_APPLICATION_SESSIONS,
             active_for_subject: MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT,
@@ -700,23 +686,6 @@ mod tests {
         };
         assert_eq!(
             decide_application_session_admission(ApplicationSessionAdmissionInput {
-                replay: ApplicationReplayDisposition::ExactActiveReceipt,
-                replacing_existing_session: false,
-                capacity: full,
-            }),
-            Ok(ApplicationSessionAdmissionDecision::ReturnExactReceipt)
-        );
-        assert_eq!(
-            decide_application_session_admission(ApplicationSessionAdmissionInput {
-                replay: ApplicationReplayDisposition::Conflict,
-                replacing_existing_session: false,
-                capacity: full,
-            }),
-            Err(ApplicationSessionAdmissionError::ReplayConflict)
-        );
-        assert_eq!(
-            decide_application_session_admission(ApplicationSessionAdmissionInput {
-                replay: ApplicationReplayDisposition::Absent,
                 replacing_existing_session: true,
                 capacity: full,
             }),
@@ -732,7 +701,6 @@ mod tests {
         };
         assert_eq!(
             decide_application_session_admission(ApplicationSessionAdmissionInput {
-                replay: ApplicationReplayDisposition::Absent,
                 replacing_existing_session: true,
                 capacity: available_replay,
             }),

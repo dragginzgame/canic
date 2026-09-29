@@ -8,13 +8,10 @@ mod persistence;
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    component_topology::PlannedFleetSubnetRootTopology,
-    release_set::{
-        GZIP_MAGIC, WASM_MAGIC,
-        fixture::{FixtureArtifactError, FixtureArtifactManifest},
-        valid_package_name, validate_release_artifact_relative_path,
-    },
+use crate::release_set::{
+    GZIP_MAGIC, WASM_MAGIC,
+    fixture::{FixtureArtifactError, FixtureArtifactManifest},
+    valid_package_name, validate_release_artifact_relative_path,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -377,23 +374,6 @@ impl FleetSubnetRootReleaseSetManifest {
         )
     }
 
-    /// Project one pre-creation root plan without fabricating a root principal.
-    pub fn project_planned(
-        topology: &ComponentTopology,
-        root: &PlannedFleetSubnetRootTopology,
-        union: &ApplicationArtifactUnion,
-        fixtures: &FixtureArtifactManifest,
-    ) -> Result<Self, ApplicationReleaseSetError> {
-        Self::project_for_root(
-            topology,
-            &root.component_admissions,
-            root.component_topology_digest,
-            root.limits.maximum_wasm_store_bytes,
-            union,
-            fixtures,
-        )
-    }
-
     fn project_for_root(
         topology: &ComponentTopology,
         component_admissions: &[canic_core::ids::ComponentSpecAdmission],
@@ -461,24 +441,6 @@ impl FleetSubnetRootReleaseSetManifest {
             &binding.component_admissions,
             binding.component_topology_digest,
             binding.limits.maximum_wasm_store_bytes,
-            union,
-            fixtures,
-        )
-    }
-
-    /// Validate this manifest against one exact pre-creation root plan.
-    pub fn validate_against_planned(
-        &self,
-        topology: &ComponentTopology,
-        root: &PlannedFleetSubnetRootTopology,
-        union: &ApplicationArtifactUnion,
-        fixtures: &FixtureArtifactManifest,
-    ) -> Result<(), ApplicationReleaseSetError> {
-        self.validate_for_root(
-            topology,
-            &root.component_admissions,
-            root.component_topology_digest,
-            root.limits.maximum_wasm_store_bytes,
             union,
             fixtures,
         )
@@ -583,31 +545,6 @@ impl FleetSubnetRootReleaseSetManifest {
     ) -> Result<ReleaseSetDigest, ApplicationReleaseSetError> {
         Ok(ReleaseSetDigest::from_bytes(
             Sha256::digest(self.canonical_bytes(topology, binding, union, fixtures)?).into(),
-        ))
-    }
-
-    /// Encode one pre-creation root plan's fully validated manifest.
-    pub fn canonical_bytes_planned(
-        &self,
-        topology: &ComponentTopology,
-        root: &PlannedFleetSubnetRootTopology,
-        union: &ApplicationArtifactUnion,
-        fixtures: &FixtureArtifactManifest,
-    ) -> Result<Vec<u8>, ApplicationReleaseSetError> {
-        self.validate_against_planned(topology, root, union, fixtures)?;
-        serde_json::to_vec(self).map_err(ApplicationReleaseSetError::Serialization)
-    }
-
-    /// Hash one pre-creation root plan's exact canonical manifest bytes.
-    pub fn digest_planned(
-        &self,
-        topology: &ComponentTopology,
-        root: &PlannedFleetSubnetRootTopology,
-        union: &ApplicationArtifactUnion,
-        fixtures: &FixtureArtifactManifest,
-    ) -> Result<ReleaseSetDigest, ApplicationReleaseSetError> {
-        Ok(ReleaseSetDigest::from_bytes(
-            Sha256::digest(self.canonical_bytes_planned(topology, root, union, fixtures)?).into(),
         ))
     }
 }

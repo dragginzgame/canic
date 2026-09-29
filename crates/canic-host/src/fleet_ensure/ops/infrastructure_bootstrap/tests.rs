@@ -69,6 +69,12 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
     assert_eq!(restored, plan);
     verify_plan(root, &restored).unwrap();
 
+    crate::fleet_ensure::workflow::readiness::tests::qualify_unpaid_infrastructure_review(
+        &plan,
+        &root.join("deployments/retained-multi-component.toml"),
+        &root.join("deployments/retained-multi-component.estate.toml"),
+    );
+
     qualify_default_funding(root, &desired, &source);
 
     qualify_survey_identity(root, &desired, &source);

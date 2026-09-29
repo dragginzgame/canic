@@ -90,25 +90,26 @@ mod tests {
         ManagementCallMetrics::reset();
 
         ManagementCallMetrics::record(
-            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOperation::InstallChunkedCode,
             ManagementCallMetricOutcome::Started,
             ManagementCallMetricReason::Ok,
         );
         ManagementCallMetrics::record(
-            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOperation::InstallChunkedCode,
             ManagementCallMetricOutcome::Failed,
             ManagementCallMetricReason::Infra,
         );
         ManagementCallMetrics::record(
-            ManagementCallMetricOperation::InstallCode,
+            ManagementCallMetricOperation::InstallChunkedCode,
             ManagementCallMetricOutcome::Failed,
             ManagementCallMetricReason::Infra,
         );
 
         let map = snapshot_map();
+        assert_eq!(map.len(), 2);
         assert_eq!(
             map.get(&ManagementCallMetricKey {
-                operation: ManagementCallMetricOperation::InstallCode,
+                operation: ManagementCallMetricOperation::InstallChunkedCode,
                 outcome: ManagementCallMetricOutcome::Started,
                 reason: ManagementCallMetricReason::Ok,
             }),
@@ -116,7 +117,7 @@ mod tests {
         );
         assert_eq!(
             map.get(&ManagementCallMetricKey {
-                operation: ManagementCallMetricOperation::InstallCode,
+                operation: ManagementCallMetricOperation::InstallChunkedCode,
                 outcome: ManagementCallMetricOutcome::Failed,
                 reason: ManagementCallMetricReason::Infra,
             }),

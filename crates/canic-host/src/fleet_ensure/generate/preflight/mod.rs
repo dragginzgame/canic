@@ -130,13 +130,14 @@ pub(super) fn load(
     initialization: Option<BootstrapCoordinatorSelection>,
 ) -> Result<GenerationInputs, FleetGenerateError> {
     crate::fleet_ensure::policy::validate_path_labels(request.environment, request.fleet)?;
-    let clean_reinstall = initialization.is_none()
-        && operation_selection::completed_fleet(
-            &EnsurePaths::under(request.root, request.environment, request.fleet),
-            request.environment,
-            request.fleet,
-        )
-        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let paths = EnsurePaths::under(request.root, request.environment, request.fleet);
+    let cancelled =
+        crate::fleet_ensure::ops::clean_reinstall::cancellation::ready_for_review(&paths)
+            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let completed =
+        operation_selection::completed_fleet(&paths, request.environment, request.fleet)
+            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let clean_reinstall = initialization.is_none() && (completed || cancelled);
     if clean_reinstall {
         retained_contract::check(request.root, request.environment, request.fleet)
             .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;

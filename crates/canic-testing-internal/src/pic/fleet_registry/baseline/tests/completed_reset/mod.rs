@@ -108,10 +108,15 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     let icp = canic_host::icp::IcpCli::new(executable.to_str().unwrap(), Some("local".into()))
         .with_cwd(root)
         .with_local_replica(Some(input.local_replica.clone()));
+    let initial = generate(
+        &input,
+        &executable,
+        input.desired.bootstrap.as_ref().unwrap().release_build_id,
+    );
     let desired = generate(&input, &executable, replacement.release_build_id);
     std::fs::write(
         root.join("desired-reset.toml"),
-        toml::to_string_pretty(&desired).unwrap(),
+        toml::to_string_pretty(&initial).unwrap(),
     )
     .unwrap();
     let review = || {
@@ -145,7 +150,84 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
             .iter()
             .any(|event| event["event"] == "icp_request_timing")
     );
+    let unpaid = read_plan(&paths).unwrap().unwrap();
+    assert_eq!(
+        unpaid
+            .reviewed_desired
+            .as_ref()
+            .unwrap()
+            .desired()
+            .bootstrap
+            .as_ref()
+            .unwrap()
+            .release_build_id,
+        initial.bootstrap.as_ref().unwrap().release_build_id
+    );
+    assert_ne!(
+        initial.bootstrap.as_ref().unwrap().release_build_id,
+        replacement.release_build_id
+    );
+    let original_review = std::fs::read(&paths.plan).unwrap();
+    let cancelled = cli_output(
+        root,
+        Path::new("/missing/cancellation-icp"),
+        &[
+            "fleet",
+            "ensure",
+            &desired.fleet,
+            "--cancel-reinstall",
+            &unpaid.plan_sha256,
+            "--json",
+        ],
+        true,
+    );
+    assert!(String::from_utf8_lossy(&cancelled.stdout).contains("clean_reinstall_cancelled"));
+    assert!(!paths.plan.exists() && !paths.journal.exists());
+    let archived = root
+        .join(".canic/fleet-ensure/history/local")
+        .join(&desired.fleet)
+        .join("objects")
+        .join(sha256_hex(&original_review));
+    assert_eq!(std::fs::read(archived).unwrap(), original_review);
+    assert_eq!(
+        ledger_account_balance(input.pic, ledger, operator),
+        before_operator
+    );
+    let regenerated = generate(&input, &executable, replacement.release_build_id);
+    std::fs::write(
+        root.join("desired-reset.toml"),
+        toml::to_string_pretty(&regenerated).unwrap(),
+    )
+    .unwrap();
+    review();
     let infrastructure = read_plan(&paths).unwrap().unwrap();
+    assert_ne!(infrastructure.plan_sha256, unpaid.plan_sha256);
+    assert_eq!(
+        infrastructure
+            .reviewed_desired
+            .as_ref()
+            .unwrap()
+            .desired()
+            .bootstrap
+            .as_ref()
+            .unwrap()
+            .release_build_id,
+        replacement.release_build_id
+    );
+    let current_review = std::fs::read(&paths.plan).unwrap();
+    cli_output(
+        root,
+        Path::new("/missing/cancellation-icp"),
+        &[
+            "fleet",
+            "ensure",
+            &desired.fleet,
+            "--cancel-reinstall",
+            &unpaid.plan_sha256,
+        ],
+        false,
+    );
+    assert_eq!(std::fs::read(&paths.plan).unwrap(), current_review);
     assert_eq!(
         infrastructure.scope,
         canic_host::fleet_ensure::model::FleetEnsurePlanScope::InfrastructureBootstrap
@@ -166,6 +248,17 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         "{}",
         std::fs::read_to_string(root.join("last-cli-output.txt")).unwrap()
     );
+    let issued = std::fs::read(&paths.journal).unwrap();
+    assert!(matches!(
+        canic_host::fleet_ensure::workflow::clean_reinstall::cancel_review(
+            root,
+            "local",
+            &desired.fleet,
+            &infrastructure.plan_sha256
+        ),
+        Err(canic_host::fleet_ensure::ops::EnsureStateError::ResetReviewEffectEvidence { .. })
+    ));
+    assert_eq!(std::fs::read(&paths.journal).unwrap(), issued);
     let initialized = cli_apply_receipt(
         root,
         &executable,
@@ -332,43 +425,7 @@ fn cli_receipt(
         .unwrap()
         .map(|entry| entry.unwrap().path())
         .collect::<std::collections::BTreeSet<_>>();
-    // Run the real CLI in a fresh process. Successful reports stay captured;
-    // failed assertions expose the child diagnostics, as ordinary libtest does.
-    let mut invocation = vec![
-        "--environment",
-        "local",
-        "--icp",
-        executable.to_str().unwrap(),
-    ];
-    invocation.extend_from_slice(args);
-    let output = std::process::Command::new(std::env::current_exe().unwrap())
-        .args([
-            CLI_TEST,
-            "--exact",
-            "--include-ignored",
-            "--nocapture",
-            "--test-threads=1",
-        ])
-        .current_dir(root)
-        .env(CLI_ARGUMENTS, serde_json::to_string(&invocation).unwrap())
-        .output()
-        .unwrap();
-    std::fs::write(
-        root.join("last-cli-output.txt"),
-        format!(
-            "{}\n{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        ),
-    )
-    .unwrap();
-    assert_eq!(
-        output.status.success(),
-        succeeds,
-        "stdout:\n{}\nstderr:\n{}",
-        String::from_utf8_lossy(&output.stdout),
-        String::from_utf8_lossy(&output.stderr)
-    );
+    let output = cli_output(root, executable, args, succeeds);
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("fleet_ensure_timing_receipt") || stderr.contains("Fleet timing receipt:"),
@@ -411,6 +468,52 @@ fn cli_receipt(
         true
     );
     events
+}
+
+fn cli_output(
+    root: &Path,
+    executable: &Path,
+    args: &[&str],
+    succeeds: bool,
+) -> std::process::Output {
+    // Run the real CLI in a fresh process. Successful reports stay captured;
+    // failed assertions expose the child diagnostics, as ordinary libtest does.
+    let mut invocation = vec![
+        "--environment",
+        "local",
+        "--icp",
+        executable.to_str().unwrap(),
+    ];
+    invocation.extend_from_slice(args);
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            CLI_TEST,
+            "--exact",
+            "--include-ignored",
+            "--nocapture",
+            "--test-threads=1",
+        ])
+        .current_dir(root)
+        .env(CLI_ARGUMENTS, serde_json::to_string(&invocation).unwrap())
+        .output()
+        .unwrap();
+    std::fs::write(
+        root.join("last-cli-output.txt"),
+        format!(
+            "{}\n{}",
+            String::from_utf8_lossy(&output.stdout),
+            String::from_utf8_lossy(&output.stderr)
+        ),
+    )
+    .unwrap();
+    assert_eq!(
+        output.status.success(),
+        succeeds,
+        "stdout:\n{}\nstderr:\n{}",
+        String::from_utf8_lossy(&output.stdout),
+        String::from_utf8_lossy(&output.stderr)
+    );
+    output
 }
 
 pub(super) fn local_icp(input: &ReinstallJourney<'_>) -> PathBuf {

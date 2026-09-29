@@ -4,14 +4,6 @@
 //! Does not own: proof verification, IC caller acquisition, endpoint DTOs, or authorization policy.
 //! Boundary: workflow supplies invariant-bearing model values; stable storage commits one current record set.
 
-#![cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "staged state operations have compiler-version-dependent liveness until the sequenced workflow surface consumes them"
-    )
-)]
-
 use super::LocalApplicationAuthorizationStateOps;
 use crate::{
     cdk::types::Principal,
@@ -20,16 +12,19 @@ use crate::{
         LocalApplicationReplay, LocalApplicationSession, MAX_ACTIVE_APPLICATION_SESSIONS,
         MAX_ACTIVE_APPLICATION_SESSIONS_PER_SUBJECT, MAX_APPLICATION_REPLAY_RECORDS,
         MAX_APPLICATION_REPLAY_RECORDS_PER_SUBJECT, MAX_APPLICATION_SESSION_AUDIT_PAGE_ENTRIES,
-        MAX_APPLICATION_SESSION_CLEANUP_REMOVALS, MAX_APPLICATION_SESSION_INDEX_BYTES,
-        MAX_APPLICATION_SESSION_RECORD_BYTES, MAX_APPLICATION_SESSION_STABLE_BYTES,
-        MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
+        MAX_APPLICATION_SESSION_INDEX_BYTES, MAX_APPLICATION_SESSION_RECORD_BYTES,
+        MAX_APPLICATION_SESSION_STABLE_BYTES, MAX_LOCAL_APPLICATION_SESSION_TTL_NS,
     },
-    ops::runtime::metrics::auth::record_application_session_generation_invalidation,
     storage::stable::auth::{
         LocalApplicationAuthorityBindingRecord, LocalApplicationAuthorizationState,
         LocalApplicationAuthorizationStateData, LocalApplicationReplayRecord,
         LocalApplicationSessionRecord,
     },
+};
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
+use crate::{
+    model::auth::application_authorization::MAX_APPLICATION_SESSION_CLEANUP_REMOVALS,
+    ops::runtime::metrics::auth::record_application_session_generation_invalidation,
 };
 use std::{
     cell::RefCell,
@@ -67,12 +62,14 @@ pub enum ApplicationSessionCommitResult {
 }
 
 /// Bounded cleanup result split by canonical record owner.
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
 pub struct ApplicationSessionCleanupResult {
     pub sessions_removed: usize,
     pub replays_removed: usize,
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 impl ApplicationSessionCleanupResult {
     #[must_use]
     pub const fn total_removed(self) -> usize {
@@ -156,6 +153,7 @@ pub enum ApplicationSessionStateError {
     AuthorityGenerationMismatch,
 
     #[error("application authority generation is exhausted")]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     AuthorityGenerationExhausted,
 
     #[error("application replay already exists")]
@@ -170,6 +168,7 @@ pub enum ApplicationSessionStateError {
 
 impl LocalApplicationAuthorizationStateOps {
     /// Validate canonical records and synchronously reconstruct every derived index.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn restore_application_session_state()
     -> Result<ApplicationSessionRestoreStats, ApplicationSessionStateError> {
         let state = LocalApplicationAuthorizationState::application_authorization_state();
@@ -185,6 +184,7 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Return the current locally persisted application authority binding.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn application_authority_binding()
     -> Result<Option<LocalApplicationAuthorityBinding>, ApplicationSessionStateError> {
         LocalApplicationAuthorizationState::application_authorization_state()
@@ -195,6 +195,7 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Persist one binding without changing the current authority generation.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn set_application_authority_binding(
         current: LocalApplicationAuthorityBinding,
     ) -> Result<(), ApplicationSessionStateError> {
@@ -204,6 +205,7 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Persist one binding and atomically advance its authority generation.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn advance_application_authority_binding_generation(
         current: LocalApplicationAuthorityBinding,
     ) -> Result<(), ApplicationSessionStateError> {
@@ -409,6 +411,7 @@ impl LocalApplicationAuthorizationStateOps {
     }
 
     /// Remove at most 128 strictly expired session and replay records.
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn cleanup_application_sessions(
         now_ns: u64,
     ) -> Result<ApplicationSessionCleanupResult, ApplicationSessionStateError> {
@@ -442,6 +445,7 @@ impl LocalApplicationAuthorizationStateOps {
 
     /// Return the earliest retained session or replay expiry for native cleanup custody.
     #[must_use]
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     pub fn application_session_cleanup_due_at_ns() -> Option<u64> {
         let state = LocalApplicationAuthorizationState::application_authorization_state();
         state
@@ -755,6 +759,7 @@ fn authority_binding_from_record(
     }
 }
 
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 fn authority_binding_to_record(
     binding: &LocalApplicationAuthorityBinding,
 ) -> LocalApplicationAuthorityBindingRecord {

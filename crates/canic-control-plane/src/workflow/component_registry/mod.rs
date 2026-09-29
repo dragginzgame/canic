@@ -129,19 +129,17 @@ use canic_core::{
             ComponentRuntimeDirectorySynchronizationRequest, ComponentRuntimePhase,
             ComponentRuntimeStatusResponse, FleetServiceComponentRequester, PeerComponentRequester,
             RootComponentAllocationPhase, RootComponentAllocationRequest,
-            RootComponentAllocationResponse, RootComponentAllocationStatusRequest,
-            RootComponentChildAllocationRequest, RootComponentChildAllocationResponse,
-            RootComponentChildAllocationStatusRequest, RootComponentChildCommitRequest,
+            RootComponentAllocationResponse, RootComponentChildAllocationRequest,
+            RootComponentChildAllocationResponse, RootComponentChildCommitRequest,
             RootComponentChildCommitResponse, RootComponentChildCreationRequest,
             RootComponentChildDirectoryPreparationRequest,
             RootComponentChildDirectoryPreparationResponse, RootComponentChildInstallEvidence,
             RootComponentChildInstallRequest, RootComponentChildMembershipActivationRequest,
             RootComponentChildMembershipActivationResponse,
             RootComponentChildRuntimeActivationRequest,
-            RootComponentChildRuntimeActivationResponse, RootComponentCommitRequest,
-            RootComponentCommitResponse, RootComponentCreationEvidence,
-            RootComponentCreationRequest, RootComponentDeletedReceipt, RootComponentDeletionIntent,
-            RootComponentDeletionPhase, RootComponentDeletionRequest,
+            RootComponentChildRuntimeActivationResponse, RootComponentCommitResponse,
+            RootComponentCreationEvidence, RootComponentDeletedReceipt,
+            RootComponentDeletionIntent, RootComponentDeletionPhase, RootComponentDeletionRequest,
             RootComponentDeletionResponse, RootComponentDeletionStatusRequest,
             RootComponentDirectoryPreparationRequest, RootComponentDirectoryPreparationResponse,
             RootComponentDrainingAdvancePhase, RootComponentDrainingAdvanceRequest,
@@ -150,15 +148,14 @@ use canic_core::{
             RootComponentDrainingStatusRequest, RootComponentFinalInventory,
             RootComponentFinalInventoryRequest, RootComponentFinalInventoryResponse,
             RootComponentInitialInventoryStatus, RootComponentInstallEvidence,
-            RootComponentInstallRequest, RootComponentMembershipActivationRequest,
-            RootComponentMembershipActivationResponse, RootComponentMembershipRemovedReceipt,
-            RootComponentQuiescencePhase, RootComponentQuiescenceRequest,
-            RootComponentQuiescenceResponse, RootComponentQuiescenceStatusRequest,
-            RootComponentQuiescenceStopIntent, RootComponentQuiescentReceipt,
-            RootComponentRegistryPreparationRequest, RootComponentRegistryStatusResponse,
-            RootComponentRuntimeActivationRequest, RootComponentRuntimeActivationResponse,
-            RootComponentSubtreeRemovalAdvanceRequest, RootComponentSubtreeRemovalCompletedReceipt,
-            RootComponentSubtreeRemovalDeleteIntent,
+            RootComponentMembershipActivationRequest, RootComponentMembershipActivationResponse,
+            RootComponentMembershipRemovedReceipt, RootComponentQuiescencePhase,
+            RootComponentQuiescenceRequest, RootComponentQuiescenceResponse,
+            RootComponentQuiescenceStatusRequest, RootComponentQuiescenceStopIntent,
+            RootComponentQuiescentReceipt, RootComponentRegistryPreparationRequest,
+            RootComponentRegistryStatusResponse, RootComponentRuntimeActivationRequest,
+            RootComponentRuntimeActivationResponse, RootComponentSubtreeRemovalAdvanceRequest,
+            RootComponentSubtreeRemovalCompletedReceipt, RootComponentSubtreeRemovalDeleteIntent,
             RootComponentSubtreeRemovalDeletePreparationRequest,
             RootComponentSubtreeRemovalDeleteRequest, RootComponentSubtreeRemovalDeletedReceipt,
             RootComponentSubtreeRemovalDirectoryConvergenceEvidence,
@@ -653,16 +650,6 @@ pub async fn prepare(
     response(root, &prepared)
 }
 
-/// Independently verify the durable Component Registry meta record without mutation.
-pub async fn status(
-    request: RootComponentRegistryPreparationRequest,
-) -> Result<RootComponentRegistryStatusResponse, InternalError> {
-    let (authority, root) = root_authority()?;
-    root_store::status(request.store_bootstrap.clone()).await?;
-    let prepared = ComponentRegistryOps::current().ok_or_else(InternalError::unavailable)?;
-    prepared_status(&authority, root, &request, &prepared)
-}
-
 /// Verify the exact local Component Registry authority without a remote Store lookup.
 ///
 /// The Store bootstrap has its own Root-owned terminal proof. This query only proves that the
@@ -1023,25 +1010,6 @@ pub(super) fn top_level_allocation_decision(
     .map_err(InternalError::from)
 }
 
-/// Read one durable top-level Component allocation reservation without mutation.
-pub fn allocation_status(
-    request: RootComponentAllocationStatusRequest,
-) -> Result<RootComponentAllocationResponse, InternalError> {
-    let (authority, _root) = root_authority()?;
-    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(InternalError::unavailable)?;
-    let topology = ConfigOps::component_topology()?;
-    validate_allocation_record(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        &allocation,
-        request.operation_id,
-    )?;
-    allocation_response(allocation)
-}
-
 /// Resolve one top-level Component allocation for the role-owned operation status lane.
 pub fn allocation_operation_status(
     operation_id: [u8; 32],
@@ -1079,14 +1047,6 @@ pub fn allocation_operation_status(
         allocation: allocation_response(allocation)?,
         complete,
     }))
-}
-
-/// Read one peer allocation for its exact active requester caller.
-pub fn peer_allocation_status(
-    request: RootComponentAllocationStatusRequest,
-) -> Result<RootComponentAllocationResponse, InternalError> {
-    require_active_peer_allocation_caller(request.operation_id)?;
-    allocation_status(request)
 }
 
 /// Durably reserve one direct child for the exact registered parent caller.
@@ -1200,31 +1160,6 @@ pub fn authorize_child_allocation_caller(
         InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
     })?;
     Ok(())
-}
-
-/// Read one durable direct-child reservation for its exact registered parent caller.
-pub fn child_allocation_status(
-    request: RootComponentChildAllocationStatusRequest,
-) -> Result<RootComponentChildAllocationResponse, InternalError> {
-    let (authority, _root) = root_authority()?;
-    let _prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let caller = IcOps::msg_caller();
-    let parent =
-        ComponentRegistryOps::registered_parent(request.component, caller)?.ok_or_else(|| {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED)
-        })?;
-    let allocation =
-        ComponentRegistryOps::child_allocation(request.component, request.operation_id)?
-            .ok_or_else(InternalError::unavailable)?;
-    validate_child_allocation(
-        &authority.binding,
-        authority.initial_release_set,
-        &ConfigOps::component_topology()?,
-        &parent.0,
-        &allocation,
-        None,
-    )?;
-    Ok(child_allocation_response(allocation))
 }
 
 /// Resolve the exact terminal child binding retained for one parent-owned operation.
@@ -2262,26 +2197,12 @@ pub async fn finalize_subtree_leaf(
     Ok(subtree_removal_response(removal))
 }
 
-/// Read one durable child-subtree removal operation without mutation.
-pub fn subtree_removal_status(
-    request: RootComponentSubtreeRemovalStatusRequest,
-) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
-    existing_subtree_removal(request)?.ok_or_else(InternalError::unavailable)
-}
-
 /// Resolve one subtree removal through its domain-owned operation identity.
 pub fn subtree_removal_operation_status(
     operation_id: [u8; 32],
 ) -> Result<Option<RootComponentSubtreeRemovalResponse>, InternalError> {
     ComponentRegistryOps::subtree_removal_by_operation(operation_id)
         .map(|removal| removal.map(subtree_removal_response))
-}
-
-/// Advance one reserved direct child through a root-owned creation effect.
-pub async fn create_child_allocation(
-    request: RootComponentChildCreationRequest,
-) -> Result<RootComponentChildAllocationResponse, InternalError> {
-    create_child_allocation_for_parent(request, IcOps::msg_caller()).await
 }
 
 async fn create_child_allocation_for_parent(
@@ -2317,35 +2238,6 @@ async fn create_child_allocation_for_parent(
         let _maintenance = crate::workflow::canister_pool::maintain_ready_capacity_once(1).await?;
     }
     advance_child_creation(request.component, request.operation_id, allocation, plan)
-}
-
-/// Advance one reserved top-level Component through a durable creation effect.
-pub async fn create_allocation(
-    request: RootComponentCreationRequest,
-) -> Result<RootComponentAllocationResponse, InternalError> {
-    let (authority, root) = root_authority()?;
-    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let preparation_request = RootComponentRegistryPreparationRequest {
-        store_bootstrap: prepared.store_bootstrap.clone(),
-        expected_fleet_registry: prepared.prepared_against_registry.clone(),
-    };
-    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_current_mirror_authority(&authority, root, &preparation_request)?;
-
-    let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(InternalError::unavailable)?;
-    validate_allocation_caller(&allocation)?;
-    validate_allocation_record(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        &allocation,
-        request.operation_id,
-    )?;
-    let plan = creation_plan(root, &store, &allocation)?;
-
-    allocation_response(advance_creation(request.operation_id, allocation, plan)?)
 }
 
 /// Reuse the ordinary top-level Component pool-claim journal for one accepted group member.
@@ -2410,62 +2302,6 @@ pub(super) async fn advance_group_member_registry_commit(
     Ok((committed, partition))
 }
 
-/// Advance peer Component creation for its exact active requester caller.
-pub async fn create_peer_allocation(
-    request: RootComponentCreationRequest,
-) -> Result<RootComponentAllocationResponse, InternalError> {
-    require_active_peer_allocation_caller(request.operation_id)?;
-    create_allocation(request).await
-}
-
-/// Advance one created top-level Component through exact installation and verification.
-pub async fn install_allocation(
-    request: RootComponentInstallRequest,
-) -> Result<RootComponentAllocationResponse, InternalError> {
-    let (authority, root) = root_authority()?;
-    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let preparation_request = RootComponentRegistryPreparationRequest {
-        store_bootstrap: prepared.store_bootstrap.clone(),
-        expected_fleet_registry: prepared.prepared_against_registry.clone(),
-    };
-    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    validate_current_mirror_authority(&authority, root, &preparation_request)?;
-
-    let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(InternalError::unavailable)?;
-    validate_allocation_caller(&allocation)?;
-    validate_allocation_record(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        &allocation,
-        request.operation_id,
-    )?;
-    let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
-
-    Box::pin(advance_install(request.operation_id, allocation, plan)).await
-}
-
-/// Advance peer Component installation for its exact active requester caller.
-pub async fn install_peer_allocation(
-    request: RootComponentInstallRequest,
-) -> Result<RootComponentAllocationResponse, InternalError> {
-    require_active_peer_allocation_caller(request.operation_id)?;
-    Box::pin(install_allocation(request)).await
-}
-
-/// Install and independently verify one exactly created direct child through its root.
-pub async fn install_child_allocation(
-    request: RootComponentChildInstallRequest,
-) -> Result<RootComponentChildAllocationResponse, InternalError> {
-    Box::pin(install_child_allocation_for_parent(
-        request,
-        IcOps::msg_caller(),
-    ))
-    .await
-}
-
 async fn install_child_allocation_for_parent(
     request: RootComponentChildInstallRequest,
     parent_canister_id: candid::Principal,
@@ -2501,17 +2337,6 @@ async fn install_child_allocation_for_parent(
         request.operation_id,
         allocation,
         plan,
-    ))
-    .await
-}
-
-/// Atomically commit one verified direct child and derive the next Component Directory authority.
-pub async fn commit_child_allocation(
-    request: RootComponentChildCommitRequest,
-) -> Result<RootComponentChildCommitResponse, InternalError> {
-    Box::pin(commit_child_allocation_for_parent(
-        request,
-        IcOps::msg_caller(),
     ))
     .await
 }
@@ -2566,17 +2391,6 @@ async fn commit_child_allocation_for_parent(
         &partition,
     )?;
     child_commit_response(committed, partition)
-}
-
-/// Prepare one committed child and converge its owning Component plus distinct direct parent.
-pub async fn prepare_child_directories(
-    request: RootComponentChildDirectoryPreparationRequest,
-) -> Result<RootComponentChildDirectoryPreparationResponse, InternalError> {
-    Box::pin(prepare_child_directories_for_parent(
-        request,
-        IcOps::msg_caller(),
-    ))
-    .await
 }
 
 async fn prepare_child_directories_for_parent(
@@ -2686,17 +2500,6 @@ fn child_directory_failure(stage: &'static str, error: InternalError) -> Interna
     error
 }
 
-/// Activate and independently verify one exact Directory-prepared direct-child runtime.
-pub async fn activate_child_runtime(
-    request: RootComponentChildRuntimeActivationRequest,
-) -> Result<RootComponentChildRuntimeActivationResponse, InternalError> {
-    Box::pin(activate_child_runtime_for_parent(
-        request,
-        IcOps::msg_caller(),
-    ))
-    .await
-}
-
 async fn activate_child_runtime_for_parent(
     request: RootComponentChildRuntimeActivationRequest,
     parent_canister_id: candid::Principal,
@@ -2738,17 +2541,6 @@ async fn activate_child_runtime_for_parent(
         committed: child_commit_response(allocation, plan.committed_partition)?,
         child,
     })
-}
-
-/// Activate Registry membership and converge one runtime-active direct child.
-pub async fn activate_child_membership(
-    request: RootComponentChildMembershipActivationRequest,
-) -> Result<RootComponentChildMembershipActivationResponse, InternalError> {
-    Box::pin(activate_child_membership_for_parent(
-        request,
-        IcOps::msg_caller(),
-    ))
-    .await
 }
 
 async fn activate_child_membership_for_parent(
@@ -2894,59 +2686,6 @@ async fn converge_active_child_parent_directories(
         converge_active_member_directory(parent_binding, authority, authority_hash).await?;
     }
     Ok(())
-}
-
-/// Atomically commit one verified top-level Component and its first Directory authority.
-pub async fn commit_allocation(
-    request: RootComponentCommitRequest,
-) -> Result<RootComponentCommitResponse, InternalError> {
-    let (authority, root) = root_authority()?;
-    let prepared = prepared_registry(&authority.binding, authority.initial_release_set)?;
-    let preparation_request = RootComponentRegistryPreparationRequest {
-        store_bootstrap: prepared.store_bootstrap.clone(),
-        expected_fleet_registry: prepared.prepared_against_registry.clone(),
-    };
-    let store = root_store::status(preparation_request.store_bootstrap.clone()).await?;
-    let fleet_directory =
-        validate_current_mirror_authority(&authority, root, &preparation_request)?;
-
-    let topology = ConfigOps::component_topology()?;
-    let allocation = ComponentRegistryOps::allocation(request.operation_id)
-        .ok_or_else(InternalError::unavailable)?;
-    validate_allocation_caller(&allocation)?;
-    validate_allocation_record(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        &allocation,
-        request.operation_id,
-    )?;
-    let plan = component_install_plan(&authority.binding, &store, &allocation).await?;
-    let installation = committed_or_verified_installation(&allocation)?;
-    validate_install_effect(installation, &plan.durable)?;
-    verify_committed_or_verified_install(&allocation, &plan).await?;
-
-    let (committed, partition) = ComponentRegistryOps::commit_verified(
-        request.operation_id,
-        IcOps::now_nanos(),
-        plan.durable.maximum_registry_bytes,
-        fleet_directory,
-    )?;
-    validate_partition(
-        &authority.binding,
-        authority.initial_release_set,
-        &topology,
-        &partition,
-    )?;
-    commit_response(committed, partition)
-}
-
-/// Commit one verified peer Component for its exact active requester caller.
-pub async fn commit_peer_allocation(
-    request: RootComponentCommitRequest,
-) -> Result<RootComponentCommitResponse, InternalError> {
-    require_active_peer_allocation_caller(request.operation_id)?;
-    commit_allocation(request).await
 }
 
 /// Distribute and independently verify exact Directories for one committed Component.

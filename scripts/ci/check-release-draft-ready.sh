@@ -30,14 +30,9 @@ case "$BUMP_TYPE" in
 esac
 
 detailed_changelog="docs/changelog/${planned%.*}.md"
-status_document="docs/status/current.md"
 
 [[ -f "$detailed_changelog" ]] || {
     echo "❌ Missing detailed changelog for planned release $planned: $detailed_changelog" >&2
-    exit 1
-}
-[[ -f "$status_document" ]] || {
-    echo "❌ Missing current status document: $status_document" >&2
     exit 1
 }
 

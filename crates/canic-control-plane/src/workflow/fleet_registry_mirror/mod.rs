@@ -121,34 +121,6 @@ pub async fn accept_synchronization(
     })
 }
 
-/// Revalidate durable local evidence without changing it.
-pub async fn status(
-    request: FleetSubnetRootRegistrySyncRequest,
-) -> Result<FleetSubnetRootRegistrySyncResponse, InternalError> {
-    let (authority, root) = validated_root_authority()?;
-    root_store::status(request.store_bootstrap.clone()).await?;
-    let candidate = FleetRegistryMirrorOps::current()
-        .candidate
-        .ok_or_else(InternalError::unavailable)?;
-    if candidate.operation_id != request.operation_id
-        || candidate.store_bootstrap != request.store_bootstrap
-    {
-        return Err(InternalError::conflict());
-    }
-    validate_snapshot(
-        &authority,
-        &candidate.snapshot,
-        FleetSubnetRootStatus::Joining,
-    )?;
-    if candidate.snapshot.version != request.expected_registry {
-        return Err(InternalError::conflict());
-    }
-    let acknowledgement = candidate
-        .acknowledgement
-        .ok_or_else(InternalError::unavailable)?;
-    response(root, &candidate.snapshot, acknowledgement)
-}
-
 /// Resolve the initial Registry synchronization through its retained operation receipt.
 pub fn synchronization_operation_status(
     operation_id: [u8; 32],
@@ -295,20 +267,6 @@ pub async fn activate(
     FleetRegistryMirrorOps::commit_active(request.previous_registry, snapshot, directory);
     let active = validated_active(&authority, root)?;
     Ok(active_response(root, &active))
-}
-
-/// Independently revalidate the durable active mirror and Directory without mutation.
-pub async fn active_status(
-    request: FleetSubnetRootRegistryMirrorActivationRequest,
-) -> Result<FleetSubnetRootRegistryMirrorActivationResponse, InternalError> {
-    let (authority, root) = validated_root_authority()?;
-    root_store::status(request.store_bootstrap.clone()).await?;
-    validate_transition_request(&authority, &request)?;
-    let active = validated_active(&authority, root)?;
-    match classify_active_transition(&active, &request)? {
-        ActiveMirrorTransition::Current => Ok(active_response(root, &active)),
-        ActiveMirrorTransition::Advance => Err(InternalError::unavailable()),
-    }
 }
 
 /// Advance one Prepared root to the exact Coordinator-published service Registry.

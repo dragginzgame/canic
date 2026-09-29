@@ -3,7 +3,7 @@
 //! No compilation, plan generation, journal mutation or paid effect occurs here.
 
 #[cfg(test)]
-mod tests;
+pub(in crate::fleet_ensure) mod tests;
 
 use crate::{
     fleet_ensure::{
@@ -153,7 +153,7 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
     report.observed_at_unix_ms = started;
     if let Some(inputs) = &request.generation_inputs {
         let forecast = reset_forecast(request, inputs, &icp)?;
-        record_reset_forecast(&mut report, forecast);
+        record_reset_forecast(&paths, &mut report, forecast)?;
     }
     if let Some(selected) = request.desired {
         report.funding =
@@ -187,9 +187,21 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
 }
 
 fn record_reset_forecast(
+    paths: &EnsurePaths,
     report: &mut FleetReadiness,
     forecast: Option<crate::fleet_ensure::view::readiness::InfrastructureFundingReadiness>,
-) {
+) -> Result<(), EnsureStateError> {
+    let unavailable = if forecast.is_none() {
+        Some(
+            crate::fleet_ensure::ops::operation_selection::infrastructure_funding_unavailable(
+                paths,
+                &report.environment,
+                &report.fleet,
+            )?,
+        )
+    } else {
+        None
+    };
     let shortfall = forecast
         .as_ref()
         .and_then(|value| value.maximum_funding_cycles)
@@ -204,6 +216,8 @@ fn record_reset_forecast(
             .push(ReadinessBlocker::EstimatedFundingShortfall);
     }
     report.funding.clean_reinstall_infrastructure = forecast;
+    report.funding.clean_reinstall_infrastructure_unavailable = unavailable;
+    Ok(())
 }
 
 fn reset_forecast(

@@ -39,13 +39,11 @@ with this file, the code is wrong.
   wording, line wrapping, illustrative values, heading inventories, or the
   absence of ordinary narrative. When a fact needs machine enforcement, give
   it a machine-readable field instead of parsing prose.
-- Development and release preflight must not require contributors to add,
-  remove or rotate status markers by hand. The governed version-bump transaction
-  owns the generated release record after validation succeeds. Current status
-  prose and markers must never gate release-candidate admission or package
-  publication; the release validation lane owns validation.
-- Every successful one-shot `make release-*` flow must cross the post-release
-  Cargo cleanup boundary defined by the authoritative CI/deployment policy.
+- Status documents are descriptive handoffs, never release authority. The
+  governed version-bump transaction owns `release-validation.json`; release
+  automation must neither require status markers nor mutate or stage the handoff.
+- Release artifacts are retained for package publication. Explicit cleanup follows
+  the authoritative CI/deployment policy after intended package work is complete.
 
 ## Delivery Cadence
 - Follow `docs/governance/delivery-cadence.md`; it is the authoritative policy

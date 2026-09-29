@@ -463,40 +463,6 @@ fn lifecycle_metrics_are_exposed_with_stable_labels() {
 }
 
 #[test]
-fn management_call_metrics_remain_internal_platform_counters() {
-    reset_for_tests();
-
-    ManagementCallMetrics::record(
-        ManagementCallMetricOperation::InstallCode,
-        ManagementCallMetricOutcome::Started,
-        ManagementCallMetricReason::Ok,
-    );
-    ManagementCallMetrics::record(
-        ManagementCallMetricOperation::InstallCode,
-        ManagementCallMetricOutcome::Failed,
-        ManagementCallMetricReason::Infra,
-    );
-    ManagementCallMetrics::record(
-        ManagementCallMetricOperation::InstallCode,
-        ManagementCallMetricOutcome::Failed,
-        ManagementCallMetricReason::Infra,
-    );
-
-    let snapshot = ManagementCallMetrics::snapshot();
-    assert_eq!(snapshot.len(), 2);
-    assert!(snapshot.iter().any(|(key, count)| key.operation
-        == ManagementCallMetricOperation::InstallCode
-        && key.outcome == ManagementCallMetricOutcome::Started
-        && key.reason == ManagementCallMetricReason::Ok
-        && *count == 1));
-    assert!(snapshot.iter().any(|(key, count)| key.operation
-        == ManagementCallMetricOperation::InstallCode
-        && key.outcome == ManagementCallMetricOutcome::Failed
-        && key.reason == ManagementCallMetricReason::Infra
-        && *count == 2));
-}
-
-#[test]
 fn cycles_topup_metrics_are_exposed() {
     reset_for_tests();
 
@@ -867,7 +833,7 @@ fn seed_all_metric_families_for_reset_test() {
         LifecycleMetricOutcome::Started,
     );
     ManagementCallMetrics::record(
-        ManagementCallMetricOperation::InstallCode,
+        ManagementCallMetricOperation::InstallChunkedCode,
         ManagementCallMetricOutcome::Started,
         ManagementCallMetricReason::Ok,
     );
@@ -901,37 +867,6 @@ fn seed_all_metric_families_for_reset_test() {
     perf::record_checkpoint("metrics::tests", "checkpoint", 7);
 }
 
-#[test]
-fn metrics_docs_cover_all_metric_families() {
-    let workspace_root = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
-    let docs_path = workspace_root.join("docs/metrics.md");
-    let git_marker = workspace_root.join(".git");
-
-    if !docs_path.exists() && !git_marker.exists() {
-        return;
-    }
-
-    let docs = std::fs::read_to_string(&docs_path).unwrap_or_else(|error| {
-        let docs_display = docs_path.display();
-        panic!("failed to read {docs_display}: {error}");
-    });
-
-    for kind in all_metric_kinds() {
-        let name = kind.metric_family_name_for_tests();
-        let table_row = format!("| `{name}` |");
-        let detail_header = format!("### `{name}`");
-
-        assert!(
-            docs.contains(&table_row),
-            "docs/metrics.md table should include MetricsKind::{name}"
-        );
-        assert!(
-            docs.contains(&detail_header),
-            "docs/metrics.md details should include MetricsKind::{name}"
-        );
-    }
-}
-
 fn all_metric_kinds() -> &'static [MetricsKind] {
     &[
         MetricsKind::Core,
@@ -941,23 +876,6 @@ fn all_metric_kinds() -> &'static [MetricsKind] {
         MetricsKind::Security,
         MetricsKind::Storage,
     ]
-}
-
-trait MetricsKindTestName {
-    fn metric_family_name_for_tests(self) -> &'static str;
-}
-
-impl MetricsKindTestName for MetricsKind {
-    fn metric_family_name_for_tests(self) -> &'static str {
-        match self {
-            Self::Core => "Core",
-            Self::Placement => "Placement",
-            Self::Platform => "Platform",
-            Self::Runtime => "Runtime",
-            Self::Security => "Security",
-            Self::Storage => "Storage",
-        }
-    }
 }
 
 fn assert_metric_count(entries: &[MetricEntry], labels: &[&str], expected: u64) {

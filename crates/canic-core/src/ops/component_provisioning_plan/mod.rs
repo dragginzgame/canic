@@ -270,18 +270,6 @@ impl ComponentProvisioningPlanOps {
             .map_err(InternalError::from)
     }
 
-    /// Validate one scale-out plan against its durable placement and installed-root authority.
-    pub fn validate_scale_out_compiled(
-        configuration: &ComponentDeploymentConfiguration,
-        registry: &FleetRegistry,
-        plan: &FleetComponentProvisioningPlan,
-        authority: ComponentProvisioningScaleOutAuthority<'_>,
-    ) -> Result<(), InternalError> {
-        validate_scale_out_compiled_configuration(configuration, registry, plan, authority)
-            .map_err(OpsError::from)
-            .map_err(InternalError::from)
-    }
-
     /// Return the bounded canonical bytes covered by the plan hash.
     pub fn canonical_bytes(
         config: &ConfigModel,

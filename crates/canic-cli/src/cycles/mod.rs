@@ -17,6 +17,7 @@ use crate::{
         transport::cycles_report,
         wallet::{cycles_command, cycles_usage},
     },
+    support::fleet_recipient::FleetRecipientError,
     version_text,
 };
 use canic_backup::discovery::DiscoveryError;
@@ -102,6 +103,21 @@ pub enum CyclesCommandError {
 
     #[error(transparent)]
     Discovery(#[from] DiscoveryError),
+}
+
+impl From<FleetRecipientError> for CyclesCommandError {
+    fn from(error: FleetRecipientError) -> Self {
+        match error {
+            FleetRecipientError::AmbiguousRole { fleet, role } => {
+                Self::AmbiguousRole { fleet, role }
+            }
+            FleetRecipientError::CurrentFleet(error) => Self::CurrentFleet(error),
+            FleetRecipientError::InvalidRecipient => Self::InvalidRecipient,
+            FleetRecipientError::UnknownTarget { fleet, target } => {
+                Self::UnknownTarget { fleet, target }
+            }
+        }
+    }
 }
 
 pub fn run<I>(args: I) -> Result<(), CyclesCommandError>

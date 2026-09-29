@@ -8,14 +8,14 @@ use crate::{
     cli::clap::{flag_arg, parse_matches, render_usage, required_string, string_option, value_arg},
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
-    support::icp_target::IcpTargetOptions,
+    support::fleet_recipient::FleetRecipientError,
+    support::{fleet_recipient, icp_target::IcpTargetOptions},
     version_text,
 };
 use canic_host::{
-    fleet_ensure::{CurrentFleetInventoryError, resolve_current_fleet},
+    fleet_ensure::CurrentFleetInventoryError,
     icp::{IcpCommandError, command_display, run_output_with_stderr},
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
-    registry::RegistryEntry,
 };
 use clap::Command as ClapCommand;
 use std::{ffi::OsString, path::Path};
@@ -68,6 +68,21 @@ pub enum TokenCommandError {
 
     #[error(transparent)]
     Io(#[from] std::io::Error),
+}
+
+impl From<FleetRecipientError> for TokenCommandError {
+    fn from(error: FleetRecipientError) -> Self {
+        match error {
+            FleetRecipientError::AmbiguousRole { fleet, role } => {
+                Self::AmbiguousRole { fleet, role }
+            }
+            FleetRecipientError::CurrentFleet(error) => Self::CurrentFleet(error),
+            FleetRecipientError::InvalidRecipient => Self::InvalidRecipient,
+            FleetRecipientError::UnknownTarget { fleet, target } => {
+                Self::UnknownTarget { fleet, target }
+            }
+        }
+    }
 }
 
 /// Split token command request with optional token symbol prefix.
@@ -236,8 +251,17 @@ fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
 
 fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError> {
     let root = resolve_current_canic_icp_root().map_err(TokenCommandError::IcpRoot)?;
-    let receiver = transfer_receiver(&options.target, &root, &options.receiver)?;
-    let mut command = options.target.icp_cli(&root).command();
+    let mut command = transfer_command_for_receiver(options, &root)?;
+    run_or_print_command(&mut command, options.dry_run)
+}
+
+fn transfer_command_for_receiver(
+    options: &TokenTransferOptions,
+    root: &Path,
+) -> Result<std::process::Command, TokenCommandError> {
+    let receiver = fleet_recipient::resolve(&options.target, root, &options.receiver)
+        .map_err(TokenCommandError::from)?;
+    let mut command = options.target.icp_cli(root).command();
     command.args(["token", &options.token, "transfer"]);
     command.arg(&options.amount);
     command.arg(receiver);
@@ -254,72 +278,7 @@ fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError>
     append_flag(&mut command, "--json", options.json);
     append_flag(&mut command, "--quiet", options.quiet);
     options.target.append_target_args(&mut command);
-    run_or_print_command(&mut command, options.dry_run)
-}
-
-fn transfer_receiver(
-    target: &IcpTargetOptions,
-    root: &Path,
-    receiver: &str,
-) -> Result<String, TokenCommandError> {
-    let Some((fleet, canister_or_role)) = split_fleet_target(receiver)? else {
-        return Ok(receiver.to_string());
-    };
-    let current = resolve_current_fleet(root, &target.environment, fleet)?;
-    let root_canister_id = current.topology.unique_fleet_subnet_root(fleet)?;
-    resolve_canister_or_role(
-        fleet,
-        canister_or_role,
-        root_canister_id,
-        &current.registry.entries,
-    )
-}
-
-fn split_fleet_target(receiver: &str) -> Result<Option<(&str, &str)>, TokenCommandError> {
-    let Some((fleet, canister_or_role)) = receiver.split_once('/') else {
-        return Ok(None);
-    };
-    if fleet.is_empty() || canister_or_role.is_empty() || canister_or_role.contains('/') {
-        return Err(TokenCommandError::InvalidRecipient);
-    }
-    Ok(Some((fleet, canister_or_role)))
-}
-
-fn resolve_canister_or_role(
-    fleet: &str,
-    target: &str,
-    root_canister_id: &str,
-    registry: &[RegistryEntry],
-) -> Result<String, TokenCommandError> {
-    if target == "root" || target == root_canister_id {
-        return Ok(root_canister_id.to_string());
-    }
-    if registry.iter().any(|entry| entry.pid == target) {
-        return Ok(target.to_string());
-    }
-    resolve_role_principal(fleet, target, registry)
-}
-
-fn resolve_role_principal(
-    fleet: &str,
-    role: &str,
-    registry: &[RegistryEntry],
-) -> Result<String, TokenCommandError> {
-    let matches = registry
-        .iter()
-        .filter(|entry| entry.role.as_deref() == Some(role))
-        .collect::<Vec<_>>();
-    match matches.as_slice() {
-        [entry] => Ok(entry.pid.clone()),
-        [] => Err(TokenCommandError::UnknownTarget {
-            fleet: fleet.to_string(),
-            target: role.to_string(),
-        }),
-        _ => Err(TokenCommandError::AmbiguousRole {
-            fleet: fleet.to_string(),
-            role: role.to_string(),
-        }),
-    }
+    Ok(command)
 }
 
 fn run_or_print_command(
@@ -451,49 +410,44 @@ mod tests {
     }
 
     #[test]
-    fn parses_compact_fleet_target_receiver() {
-        assert_eq!(
-            split_fleet_target("demo/app").expect("split target"),
-            Some(("demo", "app"))
+    fn transfer_dispatch_preserves_receiver_and_environment() {
+        let mut options = transfer_options("aaaaa-aa");
+        options.target.environment = "fixture".to_string();
+        options.target.icp = "custom-icp".to_string();
+        let command =
+            transfer_command_for_receiver(&options, Path::new("/missing-canic-workspace"))
+                .expect("build transfer command");
+        assert_eq!(command.get_program(), "custom-icp");
+        let args = command.get_args().collect::<Vec<_>>();
+        let transfer_args = ["token", "icp", "transfer", "1", "aaaaa-aa"];
+        assert!(
+            args.windows(transfer_args.len())
+                .any(|window| window == transfer_args)
         );
-        assert_eq!(
-            split_fleet_target("aaaaa-aa").expect("split raw receiver"),
-            None
-        );
-        std::assert_matches!(
-            split_fleet_target("demo/app/extra"),
-            Err(TokenCommandError::InvalidRecipient)
-        );
+        assert!(args.windows(2).any(|window| window == ["-e", "fixture"]));
     }
 
     #[test]
-    fn resolves_compact_fleet_target_receiver() {
-        let registry = vec![registry_entry("child-principal", "app")];
-
-        assert_eq!(
-            resolve_canister_or_role("demo", "root", "root-principal", &registry)
-                .expect("resolve root"),
-            "root-principal"
+    fn transfer_rejects_malformed_or_unresolved_fleet_targets() {
+        let root = Path::new("/missing-canic-workspace");
+        std::assert_matches!(
+            transfer_command_for_receiver(&transfer_options("demo/app/extra"), root),
+            Err(TokenCommandError::InvalidRecipient)
         );
-        assert_eq!(
-            resolve_canister_or_role("demo", "child-principal", "root-principal", &registry)
-                .expect("resolve child principal"),
-            "child-principal"
-        );
-        assert_eq!(
-            resolve_canister_or_role("demo", "app", "root-principal", &registry)
-                .expect("resolve role"),
-            "child-principal"
+        let mut options = transfer_options("demo/app");
+        options.target.environment = "fixture".to_string();
+        std::assert_matches!(
+            transfer_command_for_receiver(&options, root),
+            Err(TokenCommandError::CurrentFleet(CurrentFleetInventoryError::NotConverged { environment, fleet }))
+                if environment == "fixture" && fleet == "demo"
         );
     }
 
-    fn registry_entry(pid: &str, role: &str) -> RegistryEntry {
-        RegistryEntry {
-            pid: pid.to_string(),
-            role: Some(role.to_string()),
-            parent_pid: None,
-            module_hash: None,
-            protocol_binding: None,
-        }
+    fn transfer_options(receiver: &str) -> TokenTransferOptions {
+        TokenTransferOptions::parse(
+            "icp".to_string(),
+            vec![OsString::from("1"), OsString::from(receiver)],
+        )
+        .expect("parse transfer options")
     }
 }

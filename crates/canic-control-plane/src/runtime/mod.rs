@@ -1,4 +1,3 @@
-//! Control-plane runtime adapters shared by install and publication workflows.
+//! Control-plane runtime adapter for Root funding.
 
-pub mod install;
 pub mod root_funding;

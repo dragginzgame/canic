@@ -17,9 +17,9 @@ use crate::{
         ops::{EnsurePaths, EnsureStateError, read_state, startup_funding},
         policy::EnsurePolicyError,
         view::readiness::{
-            InfrastructureFundingReadiness, InfrastructureTargetFundingReadiness,
-            PrebuildFundingReadiness, ReadinessUnresolved, RootFundingReadiness,
-            RootReadinessUnavailable,
+            InfrastructureFundingReadiness, InfrastructureFundingUnavailable,
+            InfrastructureTargetFundingReadiness, PrebuildFundingReadiness, ReadinessUnresolved,
+            RootFundingReadiness, RootReadinessUnavailable,
         },
     },
     icp::{IcpCanisterStatusReport, IcpCli},
@@ -37,6 +37,9 @@ pub(in crate::fleet_ensure) fn unknown() -> PrebuildFundingReadiness {
         per_step_execution_allowance_cycles: None,
         conversion: None,
         clean_reinstall_infrastructure: None,
+        clean_reinstall_infrastructure_unavailable: Some(
+            InfrastructureFundingUnavailable::GenerationInputsNotSupplied,
+        ),
         unresolved: vec![
             ReadinessUnresolved::DesiredNotSelected,
             ReadinessUnresolved::ArtifactExecutionReserve,

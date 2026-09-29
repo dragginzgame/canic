@@ -42,31 +42,6 @@ impl MgmtOps {
         Ok(())
     }
 
-    /// Install embedded code after a cost guard has reserved deployment quota and cycles.
-    pub async fn install_code_with_permit<T: ArgumentEncoder>(
-        _permit: &CostGuardPermit,
-        target_canister: Principal,
-        wasm_module: Vec<u8>,
-        args: T,
-    ) -> Result<(), InternalError> {
-        let payload_size_bytes = wasm_module.len();
-        management_call(
-            ManagementCallMetricOperation::InstallCode,
-            MgmtInfra::install_code(target_canister, wasm_module, args),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::InstallCode);
-
-        log!(
-            Topic::CanisterLifecycle,
-            Ok,
-            "install_code: {target_canister} embedded_bytes={payload_size_bytes}"
-        );
-
-        Ok(())
-    }
-
     /// Upload one wasm chunk into a canister's chunk store.
     pub async fn upload_chunk(
         canister_pid: Principal,

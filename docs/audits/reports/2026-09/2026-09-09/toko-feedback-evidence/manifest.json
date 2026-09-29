@@ -57,7 +57,11 @@
   "metrics-index-core-workflow-metrics-publication-timer-mod.rs.txt": {
     "sha256": "702fdadbf52fd800ac58d9d05700938fa6f1902be25de063365d3b1b044cfc36",
     "source": "/tmp/canic-metrics-profile/crates/canic-core/src/workflow/metrics/publication/timer/mod.rs",
-    "runtime_matches_worktree_ignoring_comments": true
+    "runtime_matches_worktree_ignoring_comments": true,
+    "retention": "git-blob",
+    "git_commit": "5daf5614fc6e0492b78a83d6f1376287d190c48a",
+    "git_path": "crates/canic-core/src/workflow/metrics/publication/timer/mod.rs",
+    "git_blob": "4fb8938007ed3a907e68426181fb576bbe65093c"
   },
   "canic-metrics-index-unit.log": {
     "sha256": "f1716525c3c69379946241e34baf18ec301503f9a0f1a637275bc7fd15b824b4",

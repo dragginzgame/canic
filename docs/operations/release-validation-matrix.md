@@ -193,7 +193,8 @@ make package
 
 An eligible non-runtime patch substitutes `make patch-fast` for `make
 validate`; package publication still uses the normal candidate and matching
-package-set checks. The fast receipt must remain explicit in the status marker.
+package-set checks. The generated `release-validation.json` records the fast
+gate; status documents do not own validation evidence.
 
 It also records the exact source commit/tree, lockfile/toolchain/features,
 artifact checksums and provenance, package/install probes, supported

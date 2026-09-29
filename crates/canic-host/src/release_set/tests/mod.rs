@@ -1,6 +1,5 @@
 use super::config::{
-    attach_app_role_source, configured_bootstrap_roles_from_config,
-    configured_pool_expectations_from_config, configured_role_auto_create_from_config,
+    attach_app_role_source, configured_role_auto_create_from_config,
     configured_role_details_from_config, configured_role_kinds_from_config,
     configured_role_lifecycle_from_config, configured_role_metrics_profiles_from_config,
     configured_role_topups_from_config, declare_app_role_source, rename_app_role_source,

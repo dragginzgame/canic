@@ -245,16 +245,6 @@ impl ConfigModel {
             .map(|declaration| declaration.fleet_admission)
     }
 
-    /// Return whether one Component Spec contains any Fleet admission role.
-    #[must_use]
-    pub fn component_spec_uses_fleet_admission(
-        &self,
-        component_spec: &ComponentSpecId,
-    ) -> Option<bool> {
-        self.component_spec_fleet_admission_roles(component_spec)
-            .map(|roles| !roles.is_empty())
-    }
-
     /// Return the canonical enrolled roles contained by one Component Spec.
     #[must_use]
     pub fn component_spec_fleet_admission_roles(

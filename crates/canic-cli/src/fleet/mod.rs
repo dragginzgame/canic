@@ -247,6 +247,7 @@ struct EnsureOptions {
     mint_cmc: String,
     mint_icp_ledger: String,
     cancel_mint: Option<String>,
+    cancel_reinstall: Option<String>,
     reinstall: bool,
     retirement_debit_block: Option<u64>,
     apply: Option<String>,
@@ -289,6 +290,7 @@ impl EnsureOptions {
             mint_cmc: required_string(ensure, "mint-cmc"),
             mint_icp_ledger: required_string(ensure, "mint-icp-ledger"),
             cancel_mint: string_option(ensure, "cancel-mint"),
+            cancel_reinstall: string_option(ensure, "cancel-reinstall"),
             apply: string_option(ensure, "apply"),
             desired,
             environment: string_option(ensure, "environment"),
@@ -455,6 +457,9 @@ fn ensure_command() -> Command {
             .help("ICP Ledger Principal for the conversion review"))
         .arg(value_arg("cancel-mint").long("cancel-mint").value_parser(parse_digest).requires("operator-mint").conflicts_with("apply")
             .help("Cancel an unapproved conversion review by its exact digest"))
+        .arg(value_arg("cancel-reinstall").long("cancel-reinstall").value_name("PLAN_SHA256").value_parser(parse_digest)
+            .conflicts_with_all(["apply", "reinstall", "operator-mint", "observe-funding", "desired", "source", "seed", "retirement-debit-block"])
+            .help("Archive and cancel an unpaid clean-reinstall review by exact digest; no live effects"))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
         .arg(identity_arg())

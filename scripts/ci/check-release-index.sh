@@ -24,7 +24,7 @@ is_release_file() {
   case "$1" in
     Cargo.toml | \
       Cargo.lock | \
-      docs/status/current.md | \
+      release-validation.json | \
       scripts/dev/install_dev.sh | \
       scripts/ci/sync-release-surface-version.sh)
       return 0

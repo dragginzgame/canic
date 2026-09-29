@@ -21,16 +21,12 @@ pub use error::{
     AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,
     AppConfigTomlOperation,
 };
-pub use model::{
-    AttachedAppRole, ConfiguredPoolExpectation, ConfiguredRoleLifecycle, DeclaredAppRole,
-    RenamedAppRole,
-};
+pub use model::{AttachedAppRole, ConfiguredRoleLifecycle, DeclaredAppRole, RenamedAppRole};
 pub(super) use mutation::{
     attach_app_role_source, declare_app_role_source, rename_app_role_source,
 };
 pub(super) use projection::{
-    app_identity_from_source, configured_bootstrap_roles_from_config,
-    configured_deployable_roles_from_config, configured_pool_expectations_from_config,
+    app_identity_from_source, configured_deployable_roles_from_config,
     configured_role_auto_create_from_config, configured_role_details_from_config,
     configured_role_kinds_from_config, configured_role_lifecycle_from_config,
     configured_role_metrics_profiles_from_config, configured_role_topups_from_config,
@@ -97,16 +93,6 @@ impl AppConfigSnapshot {
     #[must_use]
     pub fn deployable_roles(&self) -> Vec<String> {
         configured_deployable_roles_from_config(&self.config)
-    }
-
-    #[must_use]
-    pub fn bootstrap_roles(&self) -> Vec<String> {
-        configured_bootstrap_roles_from_config(&self.config)
-    }
-
-    #[must_use]
-    pub fn pool_expectations(&self) -> Vec<ConfiguredPoolExpectation> {
-        configured_pool_expectations_from_config(&self.config)
     }
 
     #[must_use]

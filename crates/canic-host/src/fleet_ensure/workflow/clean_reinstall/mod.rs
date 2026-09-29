@@ -31,6 +31,26 @@ use std::path::Path;
 
 pub use crate::fleet_ensure::view::clean_reinstall::CleanReinstallReport;
 
+/// Cancel only the exact unpaid review; no canister, Ledger or artifact effect occurs.
+pub fn cancel_review(
+    workspace: &Path,
+    environment: &str,
+    fleet: &str,
+    digest: &str,
+) -> Result<
+    crate::fleet_ensure::model::clean_reinstall::CleanReinstallCancellationRecord,
+    EnsureStateError,
+> {
+    crate::fleet_ensure::policy::validate_path_labels(environment, fleet)
+        .map_err(|_| EnsureStateError::ResetReviewConflict)?;
+    storage::cancellation::cancel(
+        &EnsurePaths::under(workspace, environment, fleet),
+        environment,
+        fleet,
+        digest,
+    )
+}
+
 /// Select the normal completed-Fleet reset before attempting to decode predecessor desired state.
 pub fn selected(
     workspace: &Path,
@@ -42,6 +62,10 @@ pub fn selected(
     crate::fleet_ensure::policy::validate_path_labels(environment, fleet)
         .map_err(|_| EnsureStateError::InvalidTerminalSource)?;
     let paths = EnsurePaths::under(workspace, environment, fleet);
+    storage::cancellation::require_no_pending(&paths)?;
+    if reinstall && storage::cancellation::ready_for_review(&paths)? {
+        return Ok(true);
+    }
     if ops::operation_selection::retirement::pending(&paths)?.is_some() {
         return Ok(reinstall);
     }

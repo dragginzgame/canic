@@ -6,6 +6,57 @@ use crate::{
 use serde_json::json;
 use std::fs;
 
+#[test]
+fn infrastructure_forecast_distinguishes_unpaid_review_and_checks_its_identity() {
+    let paths = retained();
+    fs::remove_file(&paths.journal).unwrap();
+    let mut plan = read(&paths.plan).unwrap().unwrap();
+    plan["scope"] = json!("infrastructure_bootstrap");
+    write_current(&paths.plan, &plan).unwrap();
+    let before = fs::read(&paths.plan).unwrap();
+    assert_eq!(
+        infrastructure_funding_unavailable(&paths, "local", "fleet").unwrap(),
+        InfrastructureFundingUnavailable::RetainedInfrastructureReview {
+            operation_id: "a1".repeat(32),
+            plan_sha256: "b2".repeat(32),
+        }
+    );
+    for (field, value) in [
+        ("fleet", "other"),
+        ("environment", "staging"),
+        ("operation_id", "invalid"),
+        ("plan_sha256", "invalid"),
+    ] {
+        let mut invalid = plan.clone();
+        invalid[field] = json!(value);
+        write_current(&paths.plan, &invalid).unwrap();
+        assert!(matches!(
+            infrastructure_funding_unavailable(&paths, "local", "fleet"),
+            Err(EnsureStateError::InvalidTerminalSource)
+        ));
+    }
+    fs::write(&paths.plan, &before).unwrap();
+    write_current(&paths.journal, &json!({"completion": "in_progress"})).unwrap();
+    assert_eq!(
+        infrastructure_funding_unavailable(&paths, "local", "fleet").unwrap(),
+        InfrastructureFundingUnavailable::FleetNotCompleted
+    );
+    assert_eq!(fs::read(&paths.plan).unwrap(), before);
+    assert!(!paths.lock.exists());
+    fs::remove_dir_all(paths.workspace).unwrap();
+}
+
+#[test]
+fn absent_operation_has_explicit_forecast_reason_without_creating_state() {
+    let root = temp_dir("readiness-no-operation");
+    let paths = EnsurePaths::under(&root, "local", "fleet");
+    assert_eq!(
+        infrastructure_funding_unavailable(&paths, "local", "fleet").unwrap(),
+        InfrastructureFundingUnavailable::FleetNotCompleted
+    );
+    assert!(!root.exists());
+}
+
 pub(super) fn retained() -> EnsurePaths {
     let root = temp_dir("completed-operation-selection");
     let paths = EnsurePaths::under(&root, "local", "fleet");

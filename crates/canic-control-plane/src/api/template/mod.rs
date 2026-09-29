@@ -112,15 +112,6 @@ impl WasmStoreBootstrapApi {
             .await
             .map_err(Error::from)
     }
-
-    /// Verify this root's exact live initial Store evidence without mutation.
-    pub async fn root_store_status(
-        request: RootStoreBootstrapRequest,
-    ) -> Result<RootStoreBootstrapResponse, Error> {
-        crate::workflow::bootstrap::root_store::status(request)
-            .await
-            .map_err(Error::from)
-    }
 }
 
 ///

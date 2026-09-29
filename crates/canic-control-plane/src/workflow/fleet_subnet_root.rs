@@ -57,18 +57,14 @@ use canic_core::{
             FLEET_SUBNET_ROOT_DELETION_CALL_REFUND_HEADROOM_CYCLES,
             FLEET_SUBNET_ROOT_DELETION_EXECUTION_RESERVE_CYCLES, FleetSubnetRootAuthority,
             FleetSubnetRootCanisterSummary, FleetSubnetRootDeletionPreparationRequest,
-            FleetSubnetRootDeletionPreparationResponse,
-            FleetSubnetRootDeletionPreparationStatusRequest, FleetSubnetRootDrainingRequest,
-            FleetSubnetRootDrainingResponse, FleetSubnetRootDrainingStatusRequest,
-            FleetSubnetRootFinalInventoryRequest, FleetSubnetRootFinalInventoryResponse,
-            FleetSubnetRootFinalInventoryStatusRequest, FleetSubnetRootRemovalRequest,
-            FleetSubnetRootRemovalStatusRequest, FleetSubnetRootStoreBindingFinalizationRequest,
-            FleetSubnetRootStoreBindingFinalizationResponse,
-            FleetSubnetRootStoreBindingFinalizationStatusRequest,
-            FleetSubnetRootStoreDeletionRequest, FleetSubnetRootStoreDeletionResponse,
-            FleetSubnetRootStoreDeletionStatusRequest, FleetSubnetRootStoreReclamationRequest,
-            FleetSubnetRootStoreReclamationResponse, FleetSubnetRootStoreReclamationStatusRequest,
-            FleetSubnetWasmStoreAdoptionRequest, FleetSubnetWasmStoreAdoptionResponse,
+            FleetSubnetRootDeletionPreparationResponse, FleetSubnetRootDrainingRequest,
+            FleetSubnetRootDrainingResponse, FleetSubnetRootFinalInventoryRequest,
+            FleetSubnetRootFinalInventoryResponse, FleetSubnetRootRemovalRequest,
+            FleetSubnetRootStoreBindingFinalizationRequest,
+            FleetSubnetRootStoreBindingFinalizationResponse, FleetSubnetRootStoreDeletionRequest,
+            FleetSubnetRootStoreDeletionResponse, FleetSubnetRootStoreReclamationRequest,
+            FleetSubnetRootStoreReclamationResponse, FleetSubnetWasmStoreAdoptionRequest,
+            FleetSubnetWasmStoreAdoptionResponse,
         },
         pool::{PoolAdminCommand, PoolAdminResponse},
         role::{OperationReceipt, RootRemovalRequest},
@@ -140,15 +136,6 @@ pub async fn adopt_wasm_store(
         authority,
         IcOps::now_nanos(),
     )
-}
-
-/// Read the terminal sibling Store adoption receipt without a management call.
-pub fn wasm_store_adoption_status(
-    request: FleetSubnetWasmStoreAdoptionRequest,
-) -> Result<FleetSubnetWasmStoreAdoptionResponse, InternalError> {
-    let authority = protected_sibling_wasm_store_authority(&request)?;
-    RootWasmStoreStateOps::sibling_wasm_store_adoption_receipt(request.operation_id, authority)?
-        .ok_or_else(InternalError::unavailable)
 }
 
 /// Resolve the terminal sibling Store adoption through its durable operation identity.
@@ -361,14 +348,6 @@ fn validate_root_draining_reservation(
     Ok(())
 }
 
-/// Read one exact durable root-local draining fence without mutation.
-pub fn draining_status(
-    request: FleetSubnetRootDrainingStatusRequest,
-) -> Result<FleetSubnetRootDrainingResponse, InternalError> {
-    let _state = validated_root_state()?;
-    ComponentRegistryOps::root_draining(request.operation_id).map(draining_response)
-}
-
 /// Freeze one exact terminal Component history and retained write-fenced Store inventory.
 pub async fn finalize_inventory(
     request: FleetSubnetRootFinalInventoryRequest,
@@ -423,15 +402,6 @@ pub async fn finalize_inventory(
     .map(final_inventory_response)
 }
 
-/// Read one exact durable terminal root-local inventory without mutation.
-pub fn final_inventory_status(
-    request: FleetSubnetRootFinalInventoryStatusRequest,
-) -> Result<FleetSubnetRootFinalInventoryResponse, InternalError> {
-    let state = validated_root_state()?;
-    ensure_root_is_published_draining(&state)?;
-    ComponentRegistryOps::root_final_inventory(request.operation_id).map(final_inventory_response)
-}
-
 /// Revalidate the retained Store and publish this root as logically `Removed`.
 pub async fn publish_removal(
     request: FleetSubnetRootRemovalRequest,
@@ -480,18 +450,6 @@ pub async fn publish_removal(
         publication,
         ComponentRegistryOps::root_final_inventory(request.operation_id)?,
     )
-}
-
-/// Read the locally retained exact Coordinator removal receipt without inter-Canister calls.
-pub fn removal_status(
-    request: FleetSubnetRootRemovalStatusRequest,
-) -> Result<FleetSubnetRootRemovalPublicationResponse, InternalError> {
-    let _state = validated_root_state()?;
-    let publication =
-        ComponentRegistryOps::root_removal_publication_if_present(request.operation_id)?
-            .ok_or_else(InternalError::unavailable)?;
-    let inventory = ComponentRegistryOps::root_final_inventory(request.operation_id)?;
-    removal_publication_response(publication, inventory)
 }
 
 /// Resolve root-removal progress from the first durable draining fence onward.
@@ -786,16 +744,6 @@ pub async fn reclaim_store(
     .map(store_reclamation_response)
 }
 
-/// Read one durable Store-reclamation receipt without inter-Canister calls.
-pub fn store_reclamation_status(
-    request: FleetSubnetRootStoreReclamationStatusRequest,
-) -> Result<FleetSubnetRootStoreReclamationResponse, InternalError> {
-    let _state = validated_root_state()?;
-    ComponentRegistryOps::root_store_reclamation_if_present(request.operation_id)?
-        .ok_or_else(InternalError::unavailable)
-        .map(store_reclamation_response)
-}
-
 /// Finalize the reclaimed Store's publication binding before physical deletion is prepared.
 pub async fn finalize_store_binding(
     request: FleetSubnetRootStoreBindingFinalizationRequest,
@@ -850,16 +798,6 @@ pub async fn finalize_store_binding(
         IcOps::now_nanos(),
     )
     .map(store_binding_finalization_response)
-}
-
-/// Read one durable Store-binding finalization receipt without inter-Canister calls.
-pub fn store_binding_finalization_status(
-    request: FleetSubnetRootStoreBindingFinalizationStatusRequest,
-) -> Result<FleetSubnetRootStoreBindingFinalizationResponse, InternalError> {
-    let _state = validated_root_state()?;
-    ComponentRegistryOps::root_store_binding_finalization_if_present(request.operation_id)?
-        .ok_or_else(InternalError::unavailable)
-        .map(store_binding_finalization_response)
 }
 
 /// Physically delete the reclaimed Store after exact binding finalization is durable.
@@ -935,16 +873,6 @@ pub async fn delete_store(
     )?;
     CanisterPoolOps::complete_store_deletion(deletion.wasm_store, request.operation_id)?;
     Ok(store_deletion_response(deletion))
-}
-
-/// Read one durable Store-deletion receipt without a management or Store call.
-pub fn store_deletion_status(
-    request: FleetSubnetRootStoreDeletionStatusRequest,
-) -> Result<FleetSubnetRootStoreDeletionResponse, InternalError> {
-    let _state = validated_root_state()?;
-    ComponentRegistryOps::root_store_deletion_if_present(request.operation_id)?
-        .ok_or_else(InternalError::unavailable)
-        .map(store_deletion_response)
 }
 
 /// Return excess root cycles to the Coordinator and publish external-deletion readiness.
@@ -1048,16 +976,6 @@ pub async fn prepare_deletion(
         IcOps::now_nanos(),
     )
     .map(deletion_preparation_response)
-}
-
-/// Read the root-local readiness receipt without a Coordinator or management call.
-pub fn deletion_preparation_status(
-    request: FleetSubnetRootDeletionPreparationStatusRequest,
-) -> Result<FleetSubnetRootDeletionPreparationResponse, InternalError> {
-    let _state = validated_root_state()?;
-    ComponentRegistryOps::root_deletion_preparation_if_present(request.operation_id)?
-        .ok_or_else(InternalError::unavailable)
-        .map(deletion_preparation_response)
 }
 
 /// Return one compact, fail-closed inventory for this active Fleet Subnet Root.

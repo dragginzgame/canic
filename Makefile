@@ -218,7 +218,7 @@ release-stage:
 	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
 		minor_line="$${version%.*}"; \
 		git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
-			scripts/ci/sync-release-surface-version.sh docs/status/current.md \
+			scripts/ci/sync-release-surface-version.sh release-validation.json \
 			"docs/changelog/$$minor_line.md" \
 			$$(git ls-files -m -- '*/Cargo.toml' || true)
 

@@ -24,10 +24,9 @@ pub use candid::{BuiltCandid, BuiltCandidError, load_built_candid};
 pub use config::{
     AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
     AppConfigNameField, AppConfigNameIssue, AppConfigOperation, AppConfigPackageIssue,
-    AppConfigSnapshot, AppConfigTomlOperation, AttachedAppRole, ConfiguredPoolExpectation,
-    ConfiguredRoleLifecycle, DeclaredAppRole, RenamedAppRole, attach_app_role, declare_app_role,
-    plan_attach_app_role, plan_declare_app_role, plan_rename_app_role, read_app_config_identity,
-    rename_app_role,
+    AppConfigSnapshot, AppConfigTomlOperation, AttachedAppRole, ConfiguredRoleLifecycle,
+    DeclaredAppRole, RenamedAppRole, attach_app_role, declare_app_role, plan_attach_app_role,
+    plan_declare_app_role, plan_rename_app_role, read_app_config_identity, rename_app_role,
 };
 pub use current::{
     CurrentReleaseSetManifest, CurrentReleaseSetManifestError, PersistedCurrentReleaseSetManifest,

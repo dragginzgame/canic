@@ -4089,7 +4089,7 @@ release-count guideline, rather than stranding published users.
 Packages remain .23 and both changelogs extend the open .24 entry. The saved RF2
 snapshot remains intact. No version bump, commit, push, deployment, live funding
 or sibling mutation occurred. See the [operator instructions](../../features/operations/fleet-ensure.md#operator-icp-conversion)
-and [design status](../../design/0.110-fleet-runtime-contraction/status.md#canic-172-operator-admission-and-retained-recovery--2026-09-18).
+and [design status](2026-09-29-fleet-runtime-contraction.md#canic-172-operator-admission-and-retained-recovery--2026-09-18).
 
 ## .24 fixture compiler cache retention — 2026-09-18
 
@@ -5877,7 +5877,7 @@ versions remain 0.110.16. These completed outcomes are included in the selected
 
 The maintainer explicitly separated these additions from .17 on 2026-09-15.
 They remain accepted and sequenced ahead of B1, without allocating another
-patch number. See the [release scope and batch owners](../../design/0.110-fleet-runtime-contraction/status.md#selected-release-scope--2026-09-15).
+patch number. See the [release scope and batch owners](2026-09-29-fleet-runtime-contraction.md#selected-release-scope--2026-09-15).
 
 1. Account for exact operator ICP mint credits/fees/receipts without rewriting the
    operation's original balances. ICP CLI 1.5.0 mint output alone lacks transaction
@@ -6085,7 +6085,7 @@ version bump, commit, push or live Toko recovery was performed.
 The maintainer promoted CANIC-010, 008, 002 and 017 into 0.110. All four
 in-repository batches are implemented, qualified and ready for the governed
 release flow in the existing open **0.110.16** draft. Package versions remain
-0.110.15. The [batch tracker](../../design/0.110-fleet-runtime-contraction/status.md#promoted-operator-batches--2026-09-13)
+0.110.15. The [batch tracker](2026-09-29-fleet-runtime-contraction.md#promoted-operator-batches--2026-09-13)
 records scope, exact evidence and limits. Earlier .16 corrections are preserved.
 No broad validation, version transaction, commit, publication or live Toko effect
 was performed. Sibling repositories remain read-only; this is not a minor

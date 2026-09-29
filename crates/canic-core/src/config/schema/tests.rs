@@ -1091,22 +1091,3 @@ fn role_attestation_empty_min_epoch_role_key_is_invalid() {
     cfg.validate()
         .expect_err("expected empty min epoch role key to fail");
 }
-
-#[test]
-fn removed_app_whitelist_config_is_rejected() {
-    let error = crate::bootstrap::parse_config_model(
-        r#"
-[app]
-name = "demo"
-
-[app.whitelist]
-principals = ["aaaaa-aa"]
-
-[roles.root]
-kind = "root"
-"#,
-    )
-    .expect_err("removed App whitelist authority must reject");
-
-    assert!(error.to_string().contains("whitelist"));
-}
