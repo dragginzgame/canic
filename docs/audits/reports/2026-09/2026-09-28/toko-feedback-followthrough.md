@@ -129,10 +129,10 @@ Toko adoption and deployment are separate effects from this in-repository work.
 ## Current application Release measurement — CANIC-176
 
 The [structured results](toko-build-measurement.json) retain exact binary/input
-and log-inventory hashes. The [executed shell harness](toko-build-measurement.sh)
-was run from `.tmp/toko-feedback45-20260928/`, beside its private `app/`,
+and log-inventory hashes. The historical shell harness was run from
+`.tmp/toko-feedback45-20260928/`, beside its private `app/`,
 `framework/`, `tools/` and `target/` directories. It requires that prepared
-snapshot; it is evidence of this run, not a standalone application setup tool.
+snapshot; its obsolete executable copy was removed from Canic on 2026-09-29.
 Raw logs, input manifests, lockfiles and release file hashes remain under that
 local directory's `results/`.
 

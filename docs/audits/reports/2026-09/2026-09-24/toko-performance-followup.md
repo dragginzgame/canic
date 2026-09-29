@@ -38,12 +38,14 @@ increase is introduced.
 
 All ten local Release invocations pass. The [structured evidence](toko-performance-followup.json)
 retains input/tool identities, resource vectors, selected release records, cache
-diagnostics and log hashes. The [executed harness](toko-performance-matrix.sh)
-is retained byte-for-byte. Its immutable inputs, full build logs, artifact-hash
+diagnostics and log hashes. The historical downstream harness was removed from
+Canic on 2026-09-29; its recorded invocation is not current tooling.
+Its immutable inputs, full build logs, artifact-hash
 inventories and process snapshots live in
 `.tmp/toko-performance-20260924/matrix-qualified/`. To repeat it, prepare a new
 scratch directory with the verified `source.tar`, extracted `original/`, frozen
-`tools/canic` and empty `results/`, then run the harness there. The original
+`tools/canic` and empty `results/`, then recover the matching historical harness
+from Git or the downstream measurement owner. The original
 results are immutable evidence, not a directory to overwrite on repetition.
 
 The first attempt used committed Toko source

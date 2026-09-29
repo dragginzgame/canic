@@ -60,8 +60,8 @@ The retained 0.101.53 evidence recorded this predecessor shape:
   foreign-guard contract.
 
 That evidence is historical input only. The current
-[B1 inventory and decision record](../../audits/working/0.105-local-application-authorization/README.md)
-and [resource baseline](../../audits/working/0.105-local-application-authorization/resource-baseline.md)
+[B1 inventory and decision record](../../../audits/release-lines/supporting/0.105-local-application-authorization/README.md)
+and [resource baseline](../../../audits/release-lines/supporting/0.105-local-application-authorization/resource-baseline.md)
 replace it for 0.105 promotion review.
 
 The read-only IcyDB 0.226 design and Explorer feedback are requirements evidence
