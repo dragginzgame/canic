@@ -41,9 +41,9 @@ with this file, the code is wrong.
   it a machine-readable field instead of parsing prose.
 - Development and release preflight must not require contributors to add,
   remove or rotate status markers by hand. The governed version-bump transaction
-  owns the exact validated-release marker after validation succeeds; a missing,
-  stale or repeated development marker must not block or invalidate an
-  otherwise valid source candidate.
+  owns the generated release record after validation succeeds. Current status
+  prose and markers must never gate release-candidate admission or package
+  publication; the release validation lane owns validation.
 - Every successful one-shot `make release-*` flow must cross the post-release
   Cargo cleanup boundary defined by the authoritative CI/deployment policy.
 
