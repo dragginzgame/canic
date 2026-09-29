@@ -8,12 +8,12 @@
 mod tests;
 
 use crate::{
+    ops::component_provisioning::map_commit_error,
     storage::stable::component_provisioning::{
         RootComponentDirectorySynchronizationIntentRecord,
         RootComponentDirectorySynchronizationRecord,
         RootComponentDirectorySynchronizationStateRecord,
-        RootComponentDirectorySynchronizationTargetRecord, RootComponentProvisioningCommitError,
-        RootComponentProvisioningStore,
+        RootComponentDirectorySynchronizationTargetRecord, RootComponentProvisioningStore,
     },
     view::component_directory_synchronization::{
         RootComponentDirectorySynchronizationDisposition,
@@ -543,25 +543,5 @@ fn intent_record_to_view(
         directory_synchronized_at_ns: intent.directory_synchronized_at_ns,
         directory_authority_hash: intent.directory_authority_hash,
         started_at_ns: intent.started_at_ns,
-    }
-}
-
-const fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
-    match error {
-        RootComponentProvisioningCommitError::ActiveOperationConflict => {
-            InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)
-        }
-        RootComponentProvisioningCommitError::ConflictingOperation => {
-            InternalError::public(canic_core::diagnostics::codes::REQUEST_CONFLICT)
-        }
-        RootComponentProvisioningCommitError::OperationChanged => {
-            InternalError::public(canic_core::diagnostics::codes::AUTHORITY_CONFLICT)
-        }
-        RootComponentProvisioningCommitError::PlacementConflict => {
-            InternalError::public(canic_core::diagnostics::codes::POSITION_CONFLICT)
-        }
-        RootComponentProvisioningCommitError::PlacementCountOverflow => {
-            InternalError::public(canic_core::diagnostics::codes::CAPACITY_LIMIT)
-        }
     }
 }

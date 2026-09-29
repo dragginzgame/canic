@@ -7,6 +7,10 @@ use super::{WasmStoreGcExecutionStats, WasmStoreLimits, input_to_record};
 use crate::dto::template::TemplateManifestInput;
 #[cfg(any(test, feature = "wasm-store-canister"))]
 use crate::dto::template::TemplateStagingStatusResponse;
+#[cfg(feature = "wasm-store-canister")]
+use crate::ids::TemplateManifestState;
+#[cfg(any(test, feature = "wasm-store-canister"))]
+use crate::storage::stable::template::TemplateManifestStateStore;
 #[cfg(any(test, feature = "wasm-store-canister"))]
 use crate::{
     dto::template::{TemplateChunkInput, TemplateChunkSetPrepareInput},
@@ -27,19 +31,17 @@ use crate::{
     ids::WasmStoreGcStatus,
     storage::stable::template::{TemplateChunkSetEntryRecord, TemplateManifestEntryRecord},
 };
-#[cfg(any(test, feature = "wasm-store-canister"))]
-use crate::{ids::TemplateManifestState, storage::stable::template::TemplateManifestStateStore};
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::cdk::structures::storable::Storable;
 use canic_core::cdk::utils::hash::wasm_hash;
 use canic_core::control_plane_support::error::InternalError;
-#[cfg(any(test, feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
 use canic_core::control_plane_support::format::byte_size;
 #[cfg(feature = "wasm-store-canister")]
 use canic_core::control_plane_support::ops::ic::mgmt::MgmtOps;
 #[cfg(feature = "wasm-store-canister")]
 use ic_cdk::api::canister_self;
-#[cfg(any(test, feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
 use std::collections::BTreeMap;
 #[cfg(feature = "wasm-store-canister")]
 use std::collections::BTreeSet;
@@ -697,7 +699,9 @@ fn chunk_entry_store_bytes(chunk_key: &TemplateChunkKey, record: &TemplateChunkR
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::ids::{CanisterRole, TemplateChunkingMode, TemplateId, WasmStoreBinding};
+    use crate::ids::TemplateId;
+    #[cfg(feature = "wasm-store-canister")]
+    use crate::ids::{CanisterRole, TemplateChunkingMode, WasmStoreBinding};
 
     fn reset_store() {
         TemplateManifestStateStore::clear_for_test();

@@ -246,7 +246,7 @@ fn failed_bump_restores_receipt_presence_and_contents() {
     assert_governed_receipt(Some("original receipt\n"), "complete", true);
 }
 
-fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_after_receipt: bool) {
+fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf {
     let root = unique_temp_repo("bump-receipt");
     fs::create_dir_all(&root).expect("temp repo should be created");
     run_git(&root, &["init"]);
@@ -261,7 +261,6 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
     );
-    let handoff = "Current source remains descriptive.\n";
     write_file(&root, "docs/status/current.md", handoff);
     if let Some(receipt) = previous_receipt {
         write_file(&root, "release-validation.json", receipt);
@@ -314,6 +313,12 @@ esac
 "#,
     );
     commit_all(&root, "validated source");
+    root
+}
+
+fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_after_receipt: bool) {
+    let handoff = "Current source remains descriptive.\n";
+    let root = create_receipt_repo(previous_receipt, handoff);
     let validated_head = git_output(&root, &["rev-parse", "HEAD"]);
     if fail_after_receipt {
         run_git(&root, &["tag", "v0.92.8"]);

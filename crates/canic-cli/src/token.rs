@@ -9,12 +9,13 @@ use crate::{
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     support::fleet_recipient::FleetRecipientError,
+    support::icp_command::{append_flag, append_optional_arg, run_or_print},
     support::{fleet_recipient, icp_target::IcpTargetOptions},
     version_text,
 };
 use canic_host::{
     fleet_ensure::CurrentFleetInventoryError,
-    icp::{IcpCommandError, command_display, run_output_with_stderr},
+    icp::IcpCommandError,
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
 use clap::Command as ClapCommand;
@@ -246,13 +247,13 @@ fn run_balance(options: &TokenBalanceOptions) -> Result<(), TokenCommandError> {
     append_flag(&mut command, "--json", options.json);
     append_flag(&mut command, "--quiet", options.quiet);
     options.target.append_target_args(&mut command);
-    run_or_print_command(&mut command, false)
+    run_or_print(&mut command, false).map_err(TokenCommandError::from)
 }
 
 fn run_transfer(options: &TokenTransferOptions) -> Result<(), TokenCommandError> {
     let root = resolve_current_canic_icp_root().map_err(TokenCommandError::IcpRoot)?;
     let mut command = transfer_command_for_receiver(options, &root)?;
-    run_or_print_command(&mut command, options.dry_run)
+    run_or_print(&mut command, options.dry_run).map_err(TokenCommandError::from)
 }
 
 fn transfer_command_for_receiver(
@@ -279,33 +280,6 @@ fn transfer_command_for_receiver(
     append_flag(&mut command, "--quiet", options.quiet);
     options.target.append_target_args(&mut command);
     Ok(command)
-}
-
-fn run_or_print_command(
-    command: &mut std::process::Command,
-    dry_run: bool,
-) -> Result<(), TokenCommandError> {
-    if dry_run {
-        println!("{}", command_display(command));
-        return Ok(());
-    }
-    let output = run_output_with_stderr(command).map_err(TokenCommandError::from)?;
-    if !output.is_empty() {
-        println!("{output}");
-    }
-    Ok(())
-}
-
-fn append_optional_arg(command: &mut std::process::Command, flag: &str, value: Option<&str>) {
-    if let Some(value) = value {
-        command.args([flag, value]);
-    }
-}
-
-fn append_flag(command: &mut std::process::Command, flag: &str, enabled: bool) {
-    if enabled {
-        command.arg(flag);
-    }
 }
 
 fn balance_command() -> ClapCommand {

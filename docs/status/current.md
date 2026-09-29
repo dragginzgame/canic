@@ -83,10 +83,33 @@ for all host/CLI/internal-test targets and features pass. The complete planned .
 batch is ready for maintainer review and push; its changelog draft is ready for
 the governed release transaction, with package versions still .47.
 
-This cleanup has not run a broad gate, changed package versions, committed,
-tagged, pushed or published. The maintainer owns commits and selects the release
-command after reviewing the completed batch. The next release needs the complete
-lane to establish the structured receipt for future fast releases.
+The maintainer-directed .48 validation stopped at Clippy's function-length check
+in `release_flow_guard`. Fixture creation is now separate from receipt assertions;
+all 18 release-flow tests and warning-denied, all-feature Clippy for that test
+target pass. Formatting and whitespace checks pass. This correction did not rerun
+the broad gate or change release behavior; the existing changelog remains current.
+Package versions remain .47. The maintainer owns commits and selects the release
+command; the next release needs the complete lane to establish the structured
+receipt for future fast releases.
+
+The fourth cleanup pass implements all six duplicate-flow recommendations:
+shared Host tool installation, raw/gzip qualification and bounded completed-estate
+queries; shared CLI execution; ops-owned error and metric classification; and one
+storage-owned registry coverage predicate. Tool-specific trust, method limits,
+domain authority, pagination and recovery sequencing remain intact. Both registry
+validation boundaries remain enforced. Isolated Root qualification also corrected
+Coordinator-only fixture and Store-only import gates without lint suppressions.
+
+Validation passes: 342 selected default-feature tests across CLI, Control Plane,
+Core and Host; 185 all-feature Core tests; 57 isolated Root tests; nine Store-enabled
+template tests; and 20 lifecycle/cost/policy/DTO boundary tests. The three ignored
+Host contract inspections require explicitly supplied completed-source workspaces;
+no live estate was inspected. Warning-denied Clippy covers all targets/features of
+all four affected packages, with Control Plane rerun after its feature-gate fix.
+Layering, document semantics, scoped formatting and whitespace checks pass. No
+broad gate ran. The accepted cleanup batch is complete and ready for maintainer
+review and push; the .48 changelog draft is ready for the governed release flow.
+Package versions remain .47, and changes are uncommitted.
 
 The final 0.110 closeout must include FI1 and subsequent corrections and receive
 explicit human acceptance before 0.111 implementation. Downstream adoption,

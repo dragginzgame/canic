@@ -47,7 +47,7 @@ pub(super) fn reserve_icp_refill_cost_guard_if_needed(
     *cost_permit = Some(permit);
     let permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
     record_cost_guard_settlement(token, permit.replay_settlement(), IcOps::now_nanos())
-        .map_err(super::replay::map_icp_refill_replay_store_error)?;
+        .map_err(InternalError::from)?;
     log_icp_refill_cost_guard_reserved(operation);
     Ok(())
 }

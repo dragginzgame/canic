@@ -593,7 +593,7 @@ pub(super) fn mark_request_cycles_external_effect(
         cost_permit,
         replay_ops::guard::secs_to_ns(IcOps::now_secs()),
     )
-    .map_err(replay::map_replay_store_error)
+    .map_err(InternalError::from)
     {
         return Err(CostGuardWorkflow::recover_after_failure(
             cost_permit,

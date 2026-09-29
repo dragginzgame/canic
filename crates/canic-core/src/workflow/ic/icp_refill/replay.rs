@@ -17,8 +17,8 @@ use crate::{
         replay::{
             self as replay_ops, ICP_REFILL_REPLAY_RESPONSE_SCHEMA_VERSION,
             receipt::{
-                ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-                ReplayReceiptToken, abort_uncommitted_receipt, commit_staged_receipt_response,
+                ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptToken,
+                abort_uncommitted_receipt, commit_staged_receipt_response,
                 mark_external_effect_in_flight, mark_recovery_required,
                 replay_cost_guard_settlement, reserve_or_replay_receipt, stage_receipt_response,
             },
@@ -75,7 +75,7 @@ pub(super) fn reserve_icp_refill_replay(
     input: ReplayReceiptReserveInput,
 ) -> Result<IcpRefillReplayReservation, InternalError> {
     let operation_id = input.operation_id.into_bytes();
-    match reserve_or_replay_receipt(input).map_err(map_icp_refill_replay_store_error)? {
+    match reserve_or_replay_receipt(input).map_err(InternalError::from)? {
         ReplayReceiptDecision::Fresh(token)
         | ReplayReceiptDecision::RecoveryRequired {
             token,
@@ -146,7 +146,7 @@ pub(super) fn finish_icp_refill_replay(
     if IcpRefillStoreOps::is_resumable(operation) {
         recover_icp_refill_cost_guard(cost_permit)?;
         log_icp_refill_resumable_abort(operation);
-        abort_uncommitted_receipt(token).map_err(map_icp_refill_replay_store_error)?;
+        abort_uncommitted_receipt(token).map_err(InternalError::from)?;
         return Ok(());
     }
 
@@ -170,7 +170,7 @@ pub(super) fn finish_icp_refill_replay(
         return Err(preserve_icp_refill_response_failure(
             token,
             cost_permit,
-            map_icp_refill_replay_store_error(err),
+            InternalError::from(err),
         ));
     }
 
@@ -180,20 +180,20 @@ pub(super) fn finish_icp_refill_replay(
             RecoveryReason::CostSettlementFailed,
             IcOps::now_nanos(),
         )
-        .map_err(map_icp_refill_replay_store_error)
+        .map_err(InternalError::from)
         {
             return Err(err);
         }
         return Err(err);
     }
     if let Err(err) = commit_staged_receipt_response(token, IcOps::now_nanos()) {
-        let err = map_icp_refill_replay_store_error(err);
+        let err = InternalError::from(err);
         let _ = mark_recovery_required(
             token,
             RecoveryReason::ResponseCommitFailed,
             IcOps::now_nanos(),
         )
-        .map_err(map_icp_refill_replay_store_error);
+        .map_err(InternalError::from);
         return Err(err);
     }
     log_icp_refill_commit(operation);
@@ -209,8 +209,7 @@ fn preserve_icp_refill_response_failure(
         Ok(()) => RecoveryReason::ResponseCommitFailed,
         Err(_settlement_err) => RecoveryReason::CostSettlementFailed,
     };
-    let _ = mark_recovery_required(token, reason, IcOps::now_nanos())
-        .map_err(map_icp_refill_replay_store_error);
+    let _ = mark_recovery_required(token, reason, IcOps::now_nanos()).map_err(InternalError::from);
     err
 }
 
@@ -220,21 +219,20 @@ fn recover_icp_refill_response(
 ) -> Result<IcpRefillResponse, InternalError> {
     let cost_settled = reason == RecoveryReason::CostSettlementFailed;
     if cost_settled {
-        let settlement =
-            replay_cost_guard_settlement(token).map_err(map_icp_refill_replay_store_error)?;
+        let settlement = replay_cost_guard_settlement(token).map_err(InternalError::from)?;
         CostGuardWorkflow::complete_replay_settlement(&settlement, IcOps::now_secs())?;
     }
     let receipt = match commit_staged_receipt_response(token, IcOps::now_nanos()) {
         Ok(receipt) => receipt,
         Err(err) => {
-            let err = map_icp_refill_replay_store_error(err);
+            let err = InternalError::from(err);
             if cost_settled {
                 let _ = mark_recovery_required(
                     token,
                     RecoveryReason::ResponseCommitFailed,
                     IcOps::now_nanos(),
                 )
-                .map_err(map_icp_refill_replay_store_error);
+                .map_err(InternalError::from);
             }
             return Err(err);
         }
@@ -253,7 +251,7 @@ pub(super) fn mark_icp_refill_transfer_effect(
         },
         IcOps::now_nanos(),
     )
-    .map_err(map_icp_refill_replay_store_error)?;
+    .map_err(InternalError::from)?;
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
@@ -280,7 +278,7 @@ pub(super) fn mark_icp_refill_notify_effect(
         },
         IcOps::now_nanos(),
     )
-    .map_err(map_icp_refill_replay_store_error)?;
+    .map_err(InternalError::from)?;
     crate::log!(
         crate::log::Topic::Cycles,
         Info,
@@ -452,24 +450,6 @@ fn decode_icp_refill_replay_response(
             InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
         }
     })
-}
-
-pub(super) fn map_icp_refill_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    match err {
-        ReplayReceiptStoreError::ReceiptMissing
-        | ReplayReceiptStoreError::StagedResponseMissing => {
-            InternalError::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
-        }
-        ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
-            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
-        }
-        ReplayReceiptStoreError::ReceiptTokenMismatch => {
-            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
-        }
-        ReplayReceiptStoreError::CostGuardSettlementMissing => {
-            InternalError::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
-        }
-    }
 }
 
 fn hash_optional_subaccount(hasher: &mut ReplayPayloadHasher, subaccount: Option<[u8; 32]>) {

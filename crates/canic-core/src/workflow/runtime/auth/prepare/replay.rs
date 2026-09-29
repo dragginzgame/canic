@@ -18,8 +18,8 @@ use crate::{
     ops::replay::{
         self as replay_ops,
         receipt::{
-            ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptStoreError,
-            ReplayReceiptToken, commit_staged_receipt_response,
+            ReplayReceiptDecision, ReplayReceiptReserveInput, ReplayReceiptToken,
+            commit_staged_receipt_response,
         },
     },
 };
@@ -195,28 +195,6 @@ pub(super) fn map_token_prepare_replay_decision(
     }
 }
 
-pub(super) fn map_token_prepare_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    map_auth_prepare_replay_store_error(err)
-}
-
-fn map_auth_prepare_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    match err {
-        ReplayReceiptStoreError::ReceiptMissing
-        | ReplayReceiptStoreError::StagedResponseMissing => {
-            InternalError::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
-        }
-        ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
-            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
-        }
-        ReplayReceiptStoreError::ReceiptTokenMismatch => {
-            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
-        }
-        ReplayReceiptStoreError::CostGuardSettlementMissing => {
-            InternalError::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
-        }
-    }
-}
-
 pub(super) fn encode_token_prepare_response(
     response: &DelegatedTokenPrepareResponse,
 ) -> Result<Vec<u8>, InternalError> {
@@ -241,7 +219,7 @@ fn recover_token_prepare_response(
     token: &ReplayReceiptToken,
 ) -> Result<DelegatedTokenPrepareResponse, InternalError> {
     let receipt = commit_staged_receipt_response(token, crate::ops::ic::IcOps::now_nanos())
-        .map_err(map_token_prepare_replay_store_error)?;
+        .map_err(InternalError::from)?;
     decode_token_prepare_response(&receipt)
 }
 
@@ -283,12 +261,6 @@ pub(super) fn map_role_attestation_replay_decision(
     }
 }
 
-pub(super) fn map_role_attestation_replay_store_error(
-    err: ReplayReceiptStoreError,
-) -> InternalError {
-    map_auth_prepare_replay_store_error(err)
-}
-
 pub(super) fn encode_role_attestation_prepare_response(
     response: &RoleAttestationPrepareResponse,
 ) -> Result<Vec<u8>, InternalError> {
@@ -313,7 +285,7 @@ fn recover_role_attestation_prepare_response(
     token: &ReplayReceiptToken,
 ) -> Result<RoleAttestationPrepareResponse, InternalError> {
     let receipt = commit_staged_receipt_response(token, crate::ops::ic::IcOps::now_nanos())
-        .map_err(map_role_attestation_replay_store_error)?;
+        .map_err(InternalError::from)?;
     decode_role_attestation_prepare_response(&receipt)
 }
 

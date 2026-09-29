@@ -999,7 +999,7 @@ fn canonical_controllers(controllers: &[Principal]) -> bool {
 }
 
 #[cfg(feature = "root-control-plane")]
-fn registry_covers_preparation(
+pub fn registry_covers_preparation(
     prepared: &FleetRegistryVersion,
     current: &FleetRegistryVersion,
 ) -> bool {

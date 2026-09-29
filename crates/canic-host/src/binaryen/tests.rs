@@ -162,8 +162,10 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let digest = sha256_file(&candidate).expect("hash fake optimizer candidate");
     let destination = root.join("bin/wasm-opt");
 
-    publish_executable(&candidate, &destination, &digest)
-        .expect("publish and admit closed staged executable");
+    tool_install::publish_executable(WASM_OPT_TOOL, &candidate, &destination, |path| {
+        admit_binaryen_executable(path, &digest).map(|_| ())
+    })
+    .expect("publish and admit closed staged executable");
     let admitted =
         admit_binaryen_executable(&destination, &digest).expect("admit published executable");
 

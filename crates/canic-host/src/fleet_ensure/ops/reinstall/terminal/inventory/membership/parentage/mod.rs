@@ -11,7 +11,7 @@ use crate::{
         CompletedSourceInspectionView,
         model::DesiredCanisterKind,
         ops::reinstall::terminal::inventory::membership::{
-            QUERY_TIMEOUT, RESPONSE_BYTES, contract, require_fresh,
+            QUERY_TIMEOUT, RESPONSE_BYTES, bounded_query, contract, require_fresh,
         },
     },
     protocol_binding::ResolvedProtocolBinding,
@@ -211,35 +211,32 @@ async fn query(
     parent: Principal,
     offset: u64,
 ) -> Result<Page<CanisterInfo>, CompletedParentageError> {
-    let argument = candid::encode_one(Request::Children(PageRequest {
-        offset,
-        limit: PAGE_SIZE,
-    }))
-    .map_err(|source| CompletedParentageError::Decode { parent, source })?;
-    let bytes = tokio::time::timeout(
-        QUERY_TIMEOUT,
-        agent
-            .query(&parent, protocol::CANIC_PUBLIC_STATUS)
-            .with_arg(argument)
-            .call(),
+    let Response::Children(page) = bounded_query::query(
+        agent,
+        parent,
+        protocol::CANIC_PUBLIC_STATUS,
+        Request::Children(PageRequest {
+            offset,
+            limit: PAGE_SIZE,
+        }),
+        bounded_query::QueryLimits {
+            timeout: QUERY_TIMEOUT,
+            response_bytes: RESPONSE_BYTES,
+        },
     )
     .await
-    .map_err(|_| CompletedParentageError::Expired)?
-    .map_err(|source| CompletedParentageError::Query {
-        parent,
-        source: Box::new(source),
+    .map_err(|error| match error {
+        bounded_query::QueryError::Decode(source) => {
+            CompletedParentageError::Decode { parent, source }
+        }
+        bounded_query::QueryError::Expired => CompletedParentageError::Expired,
+        bounded_query::QueryError::Query(source) => {
+            CompletedParentageError::Query { parent, source }
+        }
+        bounded_query::QueryError::Rejected(reason) => {
+            CompletedParentageError::Rejected { parent, reason }
+        }
     })?;
-    let mut config = candid::de::DecoderConfig::new();
-    config.set_decoding_quota(RESPONSE_BYTES * 64);
-    config.set_skipping_quota(RESPONSE_BYTES);
-    let response: Result<Response, canic_core::dto::error::Error> =
-        candid::utils::decode_one_with_config(&bytes, &config)
-            .map_err(|source| CompletedParentageError::Decode { parent, source })?;
-    let Response::Children(page) =
-        response.map_err(|reason| CompletedParentageError::Rejected {
-            parent,
-            reason: Box::new(reason),
-        })?;
     Ok(page)
 }
 

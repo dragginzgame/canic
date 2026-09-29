@@ -9,7 +9,9 @@ mod tests;
 use crate::{
     fleet_ensure::{
         CompletedCoordinatorMembershipView,
-        ops::reinstall::terminal::inventory::membership::contract,
+        ops::reinstall::terminal::inventory::membership::{
+            RESPONSE_BYTES, bounded_query, contract,
+        },
     },
     protocol_binding::ResolvedProtocolBinding,
 };
@@ -118,26 +120,23 @@ pub(super) async fn observe(
     agent: &Agent,
     expected: &CompletedCoordinatorMembershipView,
 ) -> Result<CompletedCoordinatorMembershipView, CompletedCoordinatorError> {
-    let argument =
-        candid::encode_one(Request::Registry).map_err(CompletedCoordinatorError::Decode)?;
-    let bytes = tokio::time::timeout(
-        Duration::from_secs(10),
-        agent
-            .query(&expected.coordinator, protocol::CANIC_COORDINATOR_REGISTRY)
-            .with_arg(argument)
-            .call(),
+    let Response::Registry(registry) = bounded_query::query(
+        agent,
+        expected.coordinator,
+        protocol::CANIC_COORDINATOR_REGISTRY,
+        Request::Registry,
+        bounded_query::QueryLimits {
+            timeout: Duration::from_secs(10),
+            response_bytes: RESPONSE_BYTES,
+        },
     )
     .await
-    .map_err(|_| CompletedCoordinatorError::Deadline)?
-    .map_err(|error| CompletedCoordinatorError::Query(Box::new(error)))?;
-    let mut config = candid::de::DecoderConfig::new();
-    config.set_decoding_quota(8 * 1024 * 1024 * 64);
-    config.set_skipping_quota(8 * 1024 * 1024);
-    let response: Result<Response, canic_core::dto::error::Error> =
-        candid::utils::decode_one_with_config(&bytes, &config)
-            .map_err(CompletedCoordinatorError::Decode)?;
-    let Response::Registry(registry) =
-        response.map_err(|error| CompletedCoordinatorError::Rejected(Box::new(error)))?;
+    .map_err(|error| match error {
+        bounded_query::QueryError::Decode(source) => CompletedCoordinatorError::Decode(source),
+        bounded_query::QueryError::Expired => CompletedCoordinatorError::Deadline,
+        bounded_query::QueryError::Query(source) => CompletedCoordinatorError::Query(source),
+        bounded_query::QueryError::Rejected(reason) => CompletedCoordinatorError::Rejected(reason),
+    })?;
     project(registry, expected)
 }
 

@@ -3,6 +3,7 @@
 //! No management update, reset, payment or source execution journal is used. Pool
 //! queries are sampled membership evidence; cached cycles never become live balances.
 
+mod bounded_query;
 mod contract;
 mod coordinator;
 mod parentage;
@@ -200,33 +201,31 @@ async fn query(
     root: Principal,
     cursor: Option<Principal>,
 ) -> Result<CanisterPoolResponse, CompletedMembershipError> {
-    let argument = candid::encode_one(Request::Pool(CanisterPoolStatusRequest {
-        start_after: cursor,
-        limit: PAGE_SIZE,
-    }))
-    .map_err(|source| CompletedMembershipError::Decode { root, source })?;
-    let bytes = tokio::time::timeout(
-        QUERY_TIMEOUT,
-        agent
-            .query(&root, protocol::CANIC_ROOT_STATUS)
-            .with_arg(argument)
-            .call(),
+    let Response::Pool(page) = bounded_query::query(
+        agent,
+        root,
+        protocol::CANIC_ROOT_STATUS,
+        Request::Pool(CanisterPoolStatusRequest {
+            start_after: cursor,
+            limit: PAGE_SIZE,
+        }),
+        bounded_query::QueryLimits {
+            timeout: QUERY_TIMEOUT,
+            response_bytes: RESPONSE_BYTES,
+        },
     )
     .await
-    .map_err(|_| CompletedMembershipError::Expired)?
-    .map_err(|source| CompletedMembershipError::Query {
-        root,
-        source: Box::new(source),
-    })?;
-    let mut config = candid::de::DecoderConfig::new();
-    config.set_decoding_quota(RESPONSE_BYTES * 64);
-    config.set_skipping_quota(RESPONSE_BYTES);
-    let response: Result<Response, canic_core::dto::error::Error> =
-        candid::utils::decode_one_with_config(&bytes, &config)
-            .map_err(|source| CompletedMembershipError::Decode { root, source })?;
-    let Response::Pool(page) = response.map_err(|source| CompletedMembershipError::Rejected {
-        root,
-        reason: Box::new(source),
+    .map_err(|error| match error {
+        bounded_query::QueryError::Decode(source) => {
+            CompletedMembershipError::Decode { root, source }
+        }
+        bounded_query::QueryError::Expired => CompletedMembershipError::Expired,
+        bounded_query::QueryError::Query(source) => {
+            CompletedMembershipError::Query { root, source }
+        }
+        bounded_query::QueryError::Rejected(reason) => {
+            CompletedMembershipError::Rejected { root, reason }
+        }
     })?;
     Ok(page)
 }

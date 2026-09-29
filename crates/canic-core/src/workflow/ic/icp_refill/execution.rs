@@ -30,9 +30,9 @@ use crate::{
         },
         policy_denied, prepare_context,
         replay::{
-            finish_icp_refill_replay, map_icp_refill_replay_store_error,
-            mark_icp_refill_notify_effect, mark_icp_refill_transfer_effect,
-            preserve_icp_refill_post_effect_result, preserve_icp_refill_recovery_required,
+            finish_icp_refill_replay, mark_icp_refill_notify_effect,
+            mark_icp_refill_transfer_effect, preserve_icp_refill_post_effect_result,
+            preserve_icp_refill_recovery_required,
         },
     },
     workflow::replay::abort_reserved_receipt_after_failure,
@@ -154,7 +154,7 @@ async fn execute_refill_operation(
             .await?
         }
     };
-    validate_receipt_token(token).map_err(map_icp_refill_replay_store_error)?;
+    validate_receipt_token(token).map_err(InternalError::from)?;
     let cmc_subaccount = IcpRefillOps::cmc_topup_subaccount(root_canister)?;
     let operation = create_or_get_operation(IcpRefillOperationCreateInput {
         operation_id,

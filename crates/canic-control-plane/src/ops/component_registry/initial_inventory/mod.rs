@@ -28,17 +28,7 @@ impl ComponentRegistryOps {
         prepared: &FleetRegistryVersion,
         current: &FleetRegistryVersion,
     ) -> bool {
-        let authority_is_exact = prepared.authority == current.authority;
-        let revision_is_covered = match prepared.revision.cmp(&current.revision) {
-            std::cmp::Ordering::Less => true,
-            std::cmp::Ordering::Equal => prepared.content_hash == current.content_hash,
-            std::cmp::Ordering::Greater => false,
-        };
-        let hashes_are_present =
-            prepared.content_hash != [0; 32] && current.content_hash != [0; 32];
-        [authority_is_exact, revision_is_covered, hashes_are_present]
-            .into_iter()
-            .all(|valid| valid)
+        crate::storage::stable::component_registry::registry_covers_preparation(prepared, current)
     }
 
     pub(crate) fn seal_initial_inventory(

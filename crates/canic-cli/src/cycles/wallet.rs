@@ -6,14 +6,16 @@ use crate::{
     cli::globals::{internal_environment_arg, internal_icp_arg},
     cli::help::print_help_or_version,
     cycles::{CyclesCommandError, convert, funding},
-    support::{fleet_recipient, icp_target::IcpTargetOptions},
+    support::{
+        fleet_recipient,
+        icp_command::{append_flag, append_optional_arg, run_or_print},
+        icp_target::IcpTargetOptions,
+    },
     version_text,
 };
 use canic_core::cdk::types::Principal;
 use canic_host::{
-    fleet_ensure::resolve_current_fleet,
-    format::cycles_tc,
-    icp::{command_display, run_output_with_stderr},
+    fleet_ensure::resolve_current_fleet, format::cycles_tc,
     icp_config::resolve_current_canic_icp_root,
 };
 use clap::Command as ClapCommand;
@@ -311,43 +313,47 @@ fn run_balance(options: &BalanceOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let mut command = options.target.icp_cli(&root).command();
     command.args(["cycles", WalletCommandKind::Balance.label()]);
-    append_optional_long_arg(&mut command, SUBACCOUNT_ARG, options.subaccount.as_deref());
-    append_optional_long_arg(
+    append_optional_arg(
         &mut command,
-        OF_PRINCIPAL_ARG,
+        &format!("--{SUBACCOUNT_ARG}"),
+        options.subaccount.as_deref(),
+    );
+    append_optional_arg(
+        &mut command,
+        &format!("--{OF_PRINCIPAL_ARG}"),
         options.of_principal.as_deref(),
     );
-    append_long_flag(&mut command, JSON_ARG, options.json);
-    append_long_flag(&mut command, QUIET_ARG, options.quiet);
+    append_flag(&mut command, &format!("--{JSON_ARG}"), options.json);
+    append_flag(&mut command, &format!("--{QUIET_ARG}"), options.quiet);
     options.target.append_target_args(&mut command);
-    run_or_print_command(&mut command, false)
+    run_or_print(&mut command, false).map_err(CyclesCommandError::from)
 }
 
 fn run_mint(options: &MintOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let mut command = options.target.icp_cli(&root).command();
     command.args(["cycles", WalletCommandKind::Mint.label()]);
-    append_optional_long_arg(&mut command, "icp", options.icp_amount.as_deref());
-    append_optional_long_arg(&mut command, "cycles", options.cycles_amount.as_deref());
-    append_optional_long_arg(
+    append_optional_arg(&mut command, "--icp", options.icp_amount.as_deref());
+    append_optional_arg(&mut command, "--cycles", options.cycles_amount.as_deref());
+    append_optional_arg(
         &mut command,
-        FROM_SUBACCOUNT_ARG,
+        &format!("--{FROM_SUBACCOUNT_ARG}"),
         options.from_subaccount.as_deref(),
     );
-    append_optional_long_arg(
+    append_optional_arg(
         &mut command,
-        TO_SUBACCOUNT_ARG,
+        &format!("--{TO_SUBACCOUNT_ARG}"),
         options.to_subaccount.as_deref(),
     );
-    append_long_flag(&mut command, JSON_ARG, options.json);
+    append_flag(&mut command, &format!("--{JSON_ARG}"), options.json);
     options.target.append_target_args(&mut command);
-    run_or_print_command(&mut command, false)
+    run_or_print(&mut command, false).map_err(CyclesCommandError::from)
 }
 
 fn run_transfer(options: &TransferOptions) -> Result<(), CyclesCommandError> {
     let root = resolve_current_canic_icp_root().map_err(CyclesCommandError::IcpRoot)?;
     let mut command = transfer_command_for_receiver(options, &root)?;
-    run_or_print_command(&mut command, options.dry_run)
+    run_or_print(&mut command, options.dry_run).map_err(CyclesCommandError::from)
 }
 
 fn transfer_command_for_receiver(
@@ -360,18 +366,18 @@ fn transfer_command_for_receiver(
     command.args(["cycles", WalletCommandKind::Transfer.label()]);
     command.arg(&options.amount);
     command.arg(receiver);
-    append_optional_long_arg(
+    append_optional_arg(
         &mut command,
-        TO_SUBACCOUNT_ARG,
+        &format!("--{TO_SUBACCOUNT_ARG}"),
         options.to_subaccount.as_deref(),
     );
-    append_optional_long_arg(
+    append_optional_arg(
         &mut command,
-        FROM_SUBACCOUNT_ARG,
+        &format!("--{FROM_SUBACCOUNT_ARG}"),
         options.from_subaccount.as_deref(),
     );
-    append_long_flag(&mut command, JSON_ARG, options.json);
-    append_long_flag(&mut command, QUIET_ARG, options.quiet);
+    append_flag(&mut command, &format!("--{JSON_ARG}"), options.json);
+    append_flag(&mut command, &format!("--{QUIET_ARG}"), options.quiet);
     options.target.append_target_args(&mut command);
     Ok(command)
 }
@@ -437,33 +443,6 @@ fn run_topup(options: &TopupOptions) -> Result<(), CyclesCommandError> {
         );
     }
     Ok(())
-}
-
-fn run_or_print_command(
-    command: &mut std::process::Command,
-    dry_run: bool,
-) -> Result<(), CyclesCommandError> {
-    if dry_run {
-        println!("{}", command_display(command));
-        return Ok(());
-    }
-    let output = run_output_with_stderr(command).map_err(CyclesCommandError::from)?;
-    if !output.is_empty() {
-        println!("{output}");
-    }
-    Ok(())
-}
-
-fn append_optional_long_arg(command: &mut std::process::Command, name: &str, value: Option<&str>) {
-    if let Some(value) = value {
-        command.arg(format!("--{name}")).arg(value);
-    }
-}
-
-fn append_long_flag(command: &mut std::process::Command, name: &str, enabled: bool) {
-    if enabled {
-        command.arg(format!("--{name}"));
-    }
 }
 
 fn parse_cycle_amount(value: &str) -> Result<u128, String> {
