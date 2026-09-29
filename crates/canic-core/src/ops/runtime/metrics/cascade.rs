@@ -4,7 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::{InternalError, diagnostics::codes};
+use crate::{InternalError, ops::runtime::metrics::error::MetricErrorKind};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -134,22 +134,11 @@ impl CascadeMetricReason {
     /// Classify one internal error into a bounded metric reason.
     #[must_use]
     pub(crate) fn from_error(err: &InternalError) -> Self {
-        let code = err.code();
-        let public_code = err.public_error().code();
-        if code == codes::PLATFORM_FAILED {
-            Self::ManagementCall
-        } else if code == codes::STATE_CONFLICT
-            || public_code == codes::AUTHORITY_UNAUTHORIZED.raw_code()
-            || public_code == codes::REQUEST_INVALID.raw_code()
-        {
-            Self::PolicyDenied
-        } else if code == codes::STATE_INVALID
-            || code == codes::STATE_FAILED
-            || code == codes::LIFECYCLE_FAILED
-        {
-            Self::InvalidState
-        } else {
-            Self::Unknown
+        match MetricErrorKind::classify(err) {
+            MetricErrorKind::ManagementCall => Self::ManagementCall,
+            MetricErrorKind::PolicyDenied => Self::PolicyDenied,
+            MetricErrorKind::InvalidState => Self::InvalidState,
+            MetricErrorKind::Unknown => Self::Unknown,
         }
     }
 }

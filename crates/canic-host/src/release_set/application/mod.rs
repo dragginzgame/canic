@@ -9,25 +9,21 @@ mod persistence;
 mod tests;
 
 use crate::release_set::{
-    GZIP_MAGIC, WASM_MAGIC,
+    artifact::{RepresentationError, qualify_representation},
     fixture::{FixtureArtifactError, FixtureArtifactManifest},
     valid_package_name, validate_release_artifact_relative_path,
 };
-use std::{
-    collections::{BTreeMap, BTreeSet},
-    io::Read,
-};
+use std::collections::{BTreeMap, BTreeSet};
 
 use canic_core::{
     bootstrap::compiled::{ComponentTopology, ComponentTopologyError},
-    cdk::utils::hash::{decode_hex, sha256_hex},
+    cdk::utils::hash::decode_hex,
     ids::{
         CanisterRole, ComponentSpecId, ComponentTopologyDigest, FleetSubnetRootBinding,
         ReleaseBuildId, ReleaseSetDigest,
     },
     role_contract::ProtocolProfileDigest,
 };
-use flate2::read::GzDecoder;
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
@@ -765,66 +761,46 @@ fn compile_entry(
             actual: output.release_build_id,
         });
     }
-    if output.wasm.is_empty() {
-        return Err(ApplicationReleaseSetError::EmptyArtifact {
-            role: output.role.clone(),
-            kind: "raw Wasm",
-        });
-    }
-    if !output.wasm.starts_with(&WASM_MAGIC) {
-        return Err(ApplicationReleaseSetError::InvalidWasm {
-            role: output.role.clone(),
-        });
-    }
-    if output.wasm_gz.is_empty() {
-        return Err(ApplicationReleaseSetError::EmptyArtifact {
-            role: output.role.clone(),
-            kind: "gzip Wasm",
-        });
-    }
-    if !output.wasm_gz.starts_with(&GZIP_MAGIC) {
-        return Err(ApplicationReleaseSetError::InvalidGzip {
-            role: output.role.clone(),
-            source: std::io::Error::new(std::io::ErrorKind::InvalidData, "missing gzip header"),
-        });
-    }
-
-    let wasm_size_bytes = u64::try_from(output.wasm.len()).map_err(|_| {
-        ApplicationReleaseSetError::ArtifactSizeOverflow {
-            role: output.role.clone(),
-            kind: "raw Wasm",
-        }
-    })?;
-    let wasm_gz_size_bytes = u64::try_from(output.wasm_gz.len()).map_err(|_| {
-        ApplicationReleaseSetError::ArtifactSizeOverflow {
-            role: output.role.clone(),
-            kind: "gzip Wasm",
-        }
-    })?;
-    let mut decoded = Vec::new();
-    GzDecoder::new(output.wasm_gz.as_slice())
-        .take(wasm_size_bytes.saturating_add(1))
-        .read_to_end(&mut decoded)
-        .map_err(|source| ApplicationReleaseSetError::InvalidGzip {
-            role: output.role.clone(),
-            source,
+    let qualified =
+        qualify_representation(&output.wasm, &output.wasm_gz).map_err(|error| match error {
+            RepresentationError::EmptyArtifact { kind } => {
+                ApplicationReleaseSetError::EmptyArtifact {
+                    role: output.role.clone(),
+                    kind,
+                }
+            }
+            RepresentationError::InvalidWasm => ApplicationReleaseSetError::InvalidWasm {
+                role: output.role.clone(),
+            },
+            RepresentationError::InvalidGzip { source } => {
+                ApplicationReleaseSetError::InvalidGzip {
+                    role: output.role.clone(),
+                    source,
+                }
+            }
+            RepresentationError::ArtifactSizeOverflow { kind } => {
+                ApplicationReleaseSetError::ArtifactSizeOverflow {
+                    role: output.role.clone(),
+                    kind,
+                }
+            }
+            RepresentationError::RepresentationMismatch => {
+                ApplicationReleaseSetError::RepresentationMismatch {
+                    role: output.role.clone(),
+                }
+            }
         })?;
-    if decoded != output.wasm {
-        return Err(ApplicationReleaseSetError::RepresentationMismatch {
-            role: output.role.clone(),
-        });
-    }
 
     let entry = ApplicationArtifactEntry {
         role: output.role.clone(),
         package: output.package.clone(),
         release_build_id: output.release_build_id,
         wasm_relative_path: output.wasm_relative_path.clone(),
-        wasm_size_bytes,
-        wasm_sha256_hex: sha256_hex(&output.wasm),
+        wasm_size_bytes: qualified.wasm_size_bytes,
+        wasm_sha256_hex: qualified.wasm_sha256_hex,
         wasm_gz_relative_path: output.wasm_gz_relative_path.clone(),
-        wasm_gz_size_bytes,
-        wasm_gz_sha256_hex: sha256_hex(&output.wasm_gz),
+        wasm_gz_size_bytes: qualified.wasm_gz_size_bytes,
+        wasm_gz_sha256_hex: qualified.wasm_gz_sha256_hex,
         candid_sha256: output.candid_sha256,
         protocol_profile_digest: output.protocol_profile_digest,
     };

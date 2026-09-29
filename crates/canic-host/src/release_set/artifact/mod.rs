@@ -4,6 +4,10 @@
 //! Does not own: manifest persistence or build orchestration.
 //! Boundary: keeps every artifact read within the canonical ICP project root.
 
+mod representation;
+
+pub(in crate::release_set) use representation::{RepresentationError, qualify_representation};
+
 use crate::durable_io::{RegularFileReadError, read_optional_regular_bytes};
 use std::{
     fs, io,

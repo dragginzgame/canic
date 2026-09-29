@@ -5,6 +5,7 @@
 //! Boundary: exercises topology completeness, build qualification, and admission-scoped output.
 
 use super::*;
+use crate::release_set::WASM_MAGIC;
 use crate::{
     component_topology::{
         FleetSubnetRootTopologyInput, RootComponentAdmissionInput, plan_fleet_topology,

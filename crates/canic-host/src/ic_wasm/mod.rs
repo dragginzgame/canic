@@ -8,18 +8,17 @@
 #[cfg(test)]
 mod tests;
 
-use crate::output_with_executable_busy_retry;
+use crate::{
+    output_with_executable_busy_retry,
+    tool_install::{self, ArchiveFormat, InstallError, InstallSpec, sha256_file},
+};
 use std::{
     env,
     ffi::OsStr,
-    fs::{self, File, OpenOptions},
-    io::{self, Read},
+    fs, io,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-use canic_core::cdk::utils::hash::hex_bytes;
-use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 #[cfg(unix)]
@@ -34,11 +33,6 @@ pub const IC_WASM_VERSION_IDENTITY: &str = "ic-wasm 0.11.1";
 // Bind the executable it selects rather than a script whose payload can change independently.
 const NPM_LAUNCHER_SHA256: &str =
     "ff4f9bd1d3734f7aa69078ecd4c5716dbfaf67d094c69d5082b00bac5b8bf936";
-
-const DOWNLOAD_TOOL: &str = "curl";
-const EXTRACT_TOOL: &str = "tar";
-const TEMP_ATTEMPTS: usize = 64;
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 ///
 /// IcWasmAuthority
@@ -233,6 +227,47 @@ pub enum IcWasmToolError {
     },
 }
 
+impl From<InstallError> for IcWasmToolError {
+    fn from(error: InstallError) -> Self {
+        match error {
+            InstallError::ArchiveDownload { status, stderr } => {
+                Self::ArchiveDownload { status, stderr }
+            }
+            InstallError::ArchiveExtraction { status, stderr } => {
+                Self::ArchiveExtraction { status, stderr }
+            }
+            InstallError::ArchiveHashMismatch {
+                path,
+                actual,
+                expected,
+            } => Self::ArchiveHashMismatch {
+                path,
+                actual,
+                expected,
+            },
+            InstallError::ExecutableHashMismatch {
+                path,
+                actual,
+                expected,
+            } => Self::ExecutableHashMismatch {
+                path,
+                actual,
+                expected,
+            },
+            InstallError::Io {
+                operation,
+                path,
+                source,
+            } => Self::Io {
+                operation,
+                path,
+                source,
+            },
+            InstallError::TempDirectoryExhausted { root } => Self::TempDirectoryExhausted { root },
+        }
+    }
+}
+
 /// Return the archive authority for the current install-capable host platform.
 pub fn current_ic_wasm_authority() -> Result<IcWasmAuthority, IcWasmToolError> {
     ic_wasm_authority_for(env::consts::OS, env::consts::ARCH)
@@ -261,18 +296,15 @@ pub fn resolve_required_ic_wasm() -> Result<IcWasmExecutable, IcWasmToolError> {
 pub fn install_required_ic_wasm() -> Result<IcWasmExecutable, IcWasmToolError> {
     let authority = current_ic_wasm_authority()?;
     let install_path = default_ic_wasm_install_path()?;
-    let temp = TempDirectory::create()?;
-    let archive_path = temp.path().join(authority.archive_name());
-    download_archive(authority, &archive_path)?;
-    verify_archive(authority, &archive_path)?;
-    extract_archive(authority, &archive_path, temp.path())?;
-    let candidate = temp
-        .path()
-        .join(authority.package_name())
-        .join(IC_WASM_TOOL);
-    admit_ic_wasm_executable(&candidate)?;
-    publish_executable(&candidate, &install_path)?;
-    admit_ic_wasm_executable(&install_path)
+    let spec = InstallSpec {
+        tool: IC_WASM_TOOL,
+        archive_name: &authority.archive_name(),
+        archive_url: &authority.archive_url(),
+        archive_sha256: authority.archive_sha256(),
+        member: &format!("{}/{}", authority.package_name(), IC_WASM_TOOL),
+        format: ArchiveFormat::Xz,
+    };
+    tool_install::install(&spec, &install_path, admit_ic_wasm_executable)
 }
 
 /// Return the fixed installation path used by setup and fallback resolution.
@@ -426,181 +458,6 @@ fn admit_ic_wasm_executable(path: &Path) -> Result<IcWasmExecutable, IcWasmToolE
     })
 }
 
-fn download_archive(
-    authority: IcWasmAuthority,
-    archive_path: &Path,
-) -> Result<(), IcWasmToolError> {
-    let mut command = crate::build_environment::command(DOWNLOAD_TOOL);
-    command
-        .args([
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=https",
-            "--tlsv1.2",
-            "-fsSL",
-            "-o",
-        ])
-        .arg(archive_path)
-        .arg(authority.archive_url());
-    let output =
-        output_with_executable_busy_retry(&mut command).map_err(|source| IcWasmToolError::Io {
-            operation: "run curl for ic-wasm archive",
-            path: archive_path.to_path_buf(),
-            source,
-        })?;
-    if !output.status.success() {
-        return Err(IcWasmToolError::ArchiveDownload {
-            status: output.status.to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
-    }
-    Ok(())
-}
-
-fn verify_archive(authority: IcWasmAuthority, archive_path: &Path) -> Result<(), IcWasmToolError> {
-    let actual = sha256_file(archive_path)?;
-    if actual != authority.archive_sha256() {
-        return Err(IcWasmToolError::ArchiveHashMismatch {
-            path: archive_path.to_path_buf(),
-            actual,
-            expected: authority.archive_sha256(),
-        });
-    }
-    Ok(())
-}
-
-fn extract_archive(
-    authority: IcWasmAuthority,
-    archive_path: &Path,
-    destination: &Path,
-) -> Result<(), IcWasmToolError> {
-    let member = format!("{}/{IC_WASM_TOOL}", authority.package_name());
-    let mut command = crate::build_environment::command(EXTRACT_TOOL);
-    command
-        .arg("-xJf")
-        .arg(archive_path)
-        .arg("-C")
-        .arg(destination)
-        .arg(member);
-    let output =
-        output_with_executable_busy_retry(&mut command).map_err(|source| IcWasmToolError::Io {
-            operation: "run tar for ic-wasm archive",
-            path: archive_path.to_path_buf(),
-            source,
-        })?;
-    if !output.status.success() {
-        return Err(IcWasmToolError::ArchiveExtraction {
-            status: output.status.to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
-    }
-    Ok(())
-}
-
-fn publish_executable(candidate: &Path, destination: &Path) -> Result<(), IcWasmToolError> {
-    let parent = destination.parent().ok_or_else(|| IcWasmToolError::Io {
-        operation: "select ic-wasm installation directory",
-        path: destination.to_path_buf(),
-        source: io::Error::new(io::ErrorKind::InvalidInput, "destination has no parent"),
-    })?;
-    fs::create_dir_all(parent).map_err(|source| IcWasmToolError::Io {
-        operation: "create ic-wasm installation directory",
-        path: parent.to_path_buf(),
-        source,
-    })?;
-    let expected_sha256 = sha256_file(candidate)?;
-    let stage = parent.join(format!(
-        ".ic-wasm.canic-install-{}-{}",
-        std::process::id(),
-        TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-    ));
-    let result = (|| {
-        let mut source = File::open(candidate).map_err(|source| IcWasmToolError::Io {
-            operation: "open admitted ic-wasm executable",
-            path: candidate.to_path_buf(),
-            source,
-        })?;
-        let mut output = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&stage)
-            .map_err(|source| IcWasmToolError::Io {
-                operation: "create staged ic-wasm executable",
-                path: stage.clone(),
-                source,
-            })?;
-        io::copy(&mut source, &mut output).map_err(|source| IcWasmToolError::Io {
-            operation: "write staged ic-wasm executable",
-            path: stage.clone(),
-            source,
-        })?;
-        #[cfg(unix)]
-        fs::set_permissions(&stage, fs::Permissions::from_mode(0o755)).map_err(|source| {
-            IcWasmToolError::Io {
-                operation: "set staged ic-wasm executable permissions",
-                path: stage.clone(),
-                source,
-            }
-        })?;
-        output.sync_all().map_err(|source| IcWasmToolError::Io {
-            operation: "sync staged ic-wasm executable",
-            path: stage.clone(),
-            source,
-        })?;
-        drop(output);
-        let actual = sha256_file(&stage)?;
-        if actual != expected_sha256 {
-            return Err(IcWasmToolError::ExecutableHashMismatch {
-                path: stage.clone(),
-                actual,
-                expected: expected_sha256.clone(),
-            });
-        }
-        admit_ic_wasm_executable(&stage)?;
-        fs::rename(&stage, destination).map_err(|source| IcWasmToolError::Io {
-            operation: "publish ic-wasm executable",
-            path: destination.to_path_buf(),
-            source,
-        })?;
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|source| IcWasmToolError::Io {
-                operation: "sync ic-wasm installation directory",
-                path: parent.to_path_buf(),
-                source,
-            })
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&stage);
-    }
-    result
-}
-
-fn sha256_file(path: &Path) -> Result<String, IcWasmToolError> {
-    let mut file = File::open(path).map_err(|source| IcWasmToolError::Io {
-        operation: "open file for SHA-256",
-        path: path.to_path_buf(),
-        source,
-    })?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 16 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|source| IcWasmToolError::Io {
-                operation: "read file for SHA-256",
-                path: path.to_path_buf(),
-                source,
-            })?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex_bytes(hasher.finalize()))
-}
-
 fn home_is_root() -> bool {
     env::var_os("HOME").is_some_and(|home| Path::new(&home) == Path::new("/"))
 }
@@ -609,43 +466,4 @@ fn home_is_root() -> bool {
 pub(crate) fn resolve_test_ic_wasm(command: &str) -> Result<IcWasmExecutable, IcWasmToolError> {
     let path = canonical_executable(Path::new(command))?;
     admit_ic_wasm_executable(&path)
-}
-
-struct TempDirectory {
-    path: PathBuf,
-}
-
-impl TempDirectory {
-    fn create() -> Result<Self, IcWasmToolError> {
-        let root = env::temp_dir();
-        for _ in 0..TEMP_ATTEMPTS {
-            let path = root.join(format!(
-                "canic-ic-wasm-install-{}-{}",
-                std::process::id(),
-                TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-            ));
-            match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
-                Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(source) => {
-                    return Err(IcWasmToolError::Io {
-                        operation: "create temporary ic-wasm installation directory",
-                        path,
-                        source,
-                    });
-                }
-            }
-        }
-        Err(IcWasmToolError::TempDirectoryExhausted { root })
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDirectory {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
 }

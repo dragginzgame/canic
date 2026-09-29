@@ -1,6 +1,8 @@
 //! Shared explicit protected-authority fixtures for control-plane unit tests.
 
 use candid::Principal;
+#[cfg(feature = "fleet-coordinator-canister")]
+use canic_core::ids::FleetCoordinatorRootFundingPolicy;
 use canic_core::{
     cdk::types::Cycles,
     dto::{
@@ -12,9 +14,8 @@ use canic_core::{
     },
     ids::{
         AppId, CanonicalNetworkId, CyclesFundingBudget, FleetAdmissionPolicy, FleetBinding,
-        FleetCoordinatorBinding, FleetCoordinatorRootFundingPolicy, FleetFundingProfile, FleetId,
-        FleetKey, FleetRegistryAuthority, FleetSubnetRootFundingAuthority,
-        FleetSubnetRootFundingPolicy, SubnetId,
+        FleetCoordinatorBinding, FleetFundingProfile, FleetId, FleetKey, FleetRegistryAuthority,
+        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy, SubnetId,
     },
     shared_support::fleet_admission_policy::{
         bind_initial_fleet_admission_policy, compile_fleet_admission_policy_template,
@@ -24,6 +25,7 @@ use canic_core::{
     },
 };
 
+#[cfg(feature = "fleet-coordinator-canister")]
 pub fn coordinator_root_funding_policy() -> FleetCoordinatorRootFundingPolicy {
     FleetCoordinatorRootFundingPolicy {
         funding_profile: FleetFundingProfile::SingleSubnet,

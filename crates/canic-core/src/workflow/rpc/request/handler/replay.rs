@@ -22,7 +22,6 @@ use crate::{
             ReplayReserveError,
             guard::secs_to_ns,
             guard::{ReplayDecision, ReplayGuardError, ReplayPending, RootReplayGuardInput},
-            receipt::ReplayReceiptStoreError,
         },
         runtime::metrics::replay::{
             ReplayMetricOperation, ReplayMetricOutcome, ReplayMetricReason, ReplayMetrics,
@@ -221,22 +220,22 @@ fn recover_staged_response(
 ) -> Result<Response, InternalError> {
     let cost_settled = reason == RecoveryReason::CostSettlementFailed;
     if cost_settled {
-        let settlement = replay_ops::root_replay_cost_guard_settlement(pending)
-            .map_err(map_replay_store_error)?;
+        let settlement =
+            replay_ops::root_replay_cost_guard_settlement(pending).map_err(InternalError::from)?;
         CostGuardWorkflow::complete_replay_settlement(&settlement, ctx.now)?;
     }
     let receipt = match replay_ops::commit_staged_root_replay_response(pending, secs_to_ns(ctx.now))
     {
         Ok(receipt) => receipt,
         Err(err) => {
-            let err = map_replay_store_error(err);
+            let err = InternalError::from(err);
             if cost_settled {
                 let _ = replay_ops::mark_root_replay_recovery_required(
                     pending,
                     RecoveryReason::ResponseCommitFailed,
                     secs_to_ns(ctx.now),
                 )
-                .map_err(map_replay_store_error);
+                .map_err(InternalError::from);
             }
             return Err(err);
         }
@@ -337,25 +336,7 @@ fn map_replay_commit_error(err: ReplayCommitError) -> InternalError {
 fn map_replay_finalize_error(err: ReplayFinalizeError) -> InternalError {
     match err {
         ReplayFinalizeError::Encode(err) => map_replay_commit_error(err),
-        ReplayFinalizeError::Store(err) => map_replay_store_error(err),
-    }
-}
-
-pub(super) fn map_replay_store_error(err: ReplayReceiptStoreError) -> InternalError {
-    match err {
-        ReplayReceiptStoreError::ReceiptMissing
-        | ReplayReceiptStoreError::StagedResponseMissing => {
-            InternalError::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
-        }
-        ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
-            InternalError::public(crate::diagnostics::codes::CODEC_FAILED)
-        }
-        ReplayReceiptStoreError::ReceiptTokenMismatch => {
-            InternalError::public(crate::diagnostics::codes::SECURITY_CONFLICT)
-        }
-        ReplayReceiptStoreError::CostGuardSettlementMissing => {
-            InternalError::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
-        }
+        ReplayFinalizeError::Store(err) => InternalError::from(err),
     }
 }
 
@@ -405,7 +386,7 @@ pub(super) fn commit_replay(pending: &ReplayPending) -> Result<(), InternalError
             );
             Ok(())
         }
-        Err(err) => Err(map_replay_store_error(err)),
+        Err(err) => Err(InternalError::from(err)),
     }
 }
 
@@ -413,7 +394,7 @@ pub(super) fn commit_replay(pending: &ReplayPending) -> Result<(), InternalError
 ///
 /// Remove reserved replay state when capability execution fails.
 pub(super) fn abort_replay(pending: ReplayPending) -> Result<(), InternalError> {
-    replay_ops::abort_root_replay(pending).map_err(map_replay_store_error)?;
+    replay_ops::abort_root_replay(pending).map_err(InternalError::from)?;
     ReplayMetrics::record(
         ReplayMetricOperation::Abort,
         ReplayMetricOutcome::Completed,
@@ -439,7 +420,7 @@ pub(super) fn mark_external_effect_in_flight(
     effect: ExternalEffectDescriptor,
 ) -> Result<(), InternalError> {
     replay_ops::mark_root_replay_external_effect(pending, effect, secs_to_ns(IcOps::now_secs()))
-        .map_err(map_replay_store_error)
+        .map_err(InternalError::from)
 }
 
 /// Stage the response that an accounting-only retry will commit.
@@ -459,7 +440,7 @@ pub(super) fn mark_recovery_required(
     reason: RecoveryReason,
 ) -> Result<(), InternalError> {
     replay_ops::mark_root_replay_recovery_required(pending, reason, secs_to_ns(IcOps::now_secs()))
-        .map_err(map_replay_store_error)
+        .map_err(InternalError::from)
 }
 
 /// payload_hasher

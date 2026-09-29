@@ -62,6 +62,7 @@ pub mod table;
 pub mod terminal;
 #[cfg(test)]
 mod test_support;
+mod tool_install;
 mod workspace_discovery;
 
 pub(crate) fn cargo_command() -> Command {

@@ -1,6 +1,10 @@
+use crate::release_set::WASM_MAGIC;
 use std::io::Write;
 
-use canic_core::ids::{ReleaseBuildId, ReleaseBuildNonce};
+use canic_core::{
+    cdk::utils::hash::sha256_hex,
+    ids::{ReleaseBuildId, ReleaseBuildNonce},
+};
 use flate2::{Compression, GzBuilder};
 
 use super::*;

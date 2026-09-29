@@ -30,10 +30,10 @@ use crate::{
             DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             receipt::{
-                ReplayReceiptDecision, ReplayReceiptRetentionError, ReplayReceiptStoreError,
-                ReplayReceiptToken, commit_staged_receipt_response, mark_recovery_required,
-                reserve_or_replay_receipt, reserve_or_replay_receipt_with_retention,
-                stage_receipt_response, validate_receipt_token,
+                ReplayReceiptDecision, ReplayReceiptRetentionError, ReplayReceiptToken,
+                commit_staged_receipt_response, mark_recovery_required, reserve_or_replay_receipt,
+                reserve_or_replay_receipt_with_retention, stage_receipt_response,
+                validate_receipt_token,
             },
         },
         runtime::env::EnvOps,
@@ -45,8 +45,7 @@ use admission::{validate_role_attestation_request, validate_token_prepare_public
 use candid::CandidType;
 use replay::{
     encode_role_attestation_prepare_response, encode_token_prepare_response,
-    map_role_attestation_replay_decision, map_role_attestation_replay_store_error,
-    map_token_prepare_replay_decision, map_token_prepare_replay_store_error, replay_reserve_input,
+    map_role_attestation_replay_decision, map_token_prepare_replay_decision, replay_reserve_input,
     role_attestation_replay_command_kind, role_attestation_replay_metadata,
     role_attestation_replay_payload_hash, token_prepare_replay_command_kind,
     token_prepare_replay_payload_hash, token_replay_metadata,
@@ -100,7 +99,7 @@ impl RuntimeAuthWorkflow {
                 return Err(InternalError::resource_exhausted());
             }
             Err(ReplayReceiptRetentionError::Store(err)) => {
-                return Err(map_token_prepare_replay_store_error(err));
+                return Err(InternalError::from(err));
             }
         };
         crate::perf!("delegated_token_reserve_replay");
@@ -139,12 +138,7 @@ impl RuntimeAuthWorkflow {
         let response_bytes = match encode_token_prepare_response(&response) {
             Ok(response_bytes) => response_bytes,
             Err(err) => {
-                return Err(preserve_auth_response_failure(
-                    &token,
-                    err,
-                    map_token_prepare_replay_store_error,
-                    "delegated token prepare",
-                ));
+                return Err(preserve_auth_response_failure(&token, err));
             }
         };
         crate::perf!("delegated_token_encode_response");
@@ -153,8 +147,6 @@ impl RuntimeAuthWorkflow {
             &token,
             DELEGATED_TOKEN_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             response_bytes,
-            map_token_prepare_replay_store_error,
-            "delegated token prepare",
         )?;
         crate::perf!("delegated_token_commit_replay");
         Ok(response)
@@ -182,9 +174,7 @@ impl RuntimeAuthWorkflow {
             metadata.ttl_ns,
         )?;
 
-        let token = match reserve_or_replay_receipt(replay_input)
-            .map_err(map_role_attestation_replay_store_error)?
-        {
+        let token = match reserve_or_replay_receipt(replay_input).map_err(InternalError::from)? {
             ReplayReceiptDecision::Fresh(token) => token,
             decision => return map_role_attestation_replay_decision(decision),
         };
@@ -218,12 +208,7 @@ impl RuntimeAuthWorkflow {
         let response_bytes = match encode_role_attestation_prepare_response(&response) {
             Ok(response_bytes) => response_bytes,
             Err(err) => {
-                return Err(preserve_auth_response_failure(
-                    &token,
-                    err,
-                    map_role_attestation_replay_store_error,
-                    "role attestation prepare",
-                ));
+                return Err(preserve_auth_response_failure(&token, err));
             }
         };
 
@@ -231,8 +216,6 @@ impl RuntimeAuthWorkflow {
             &token,
             ROLE_ATTESTATION_PREPARE_REPLAY_RESPONSE_SCHEMA_VERSION,
             response_bytes,
-            map_role_attestation_replay_store_error,
-            "role attestation prepare",
         )?;
         Ok(response)
     }
@@ -250,8 +233,6 @@ fn commit_auth_prepare_response(
     token: &ReplayReceiptToken,
     response_schema_version: u32,
     response_bytes: Vec<u8>,
-    map_store_error: fn(ReplayReceiptStoreError) -> InternalError,
-    label: &'static str,
 ) -> Result<(), InternalError> {
     if let Err(err) = stage_receipt_response(
         token,
@@ -261,34 +242,25 @@ fn commit_auth_prepare_response(
     ) {
         return Err(preserve_auth_response_failure(
             token,
-            map_store_error(err),
-            map_store_error,
-            label,
+            InternalError::from(err),
         ));
     }
     if let Err(err) = commit_staged_receipt_response(token, IcOps::now_nanos()) {
         return Err(preserve_auth_response_failure(
             token,
-            map_store_error(err),
-            map_store_error,
-            label,
+            InternalError::from(err),
         ));
     }
     Ok(())
 }
 
-fn preserve_auth_response_failure(
-    token: &ReplayReceiptToken,
-    err: InternalError,
-    map_store_error: fn(ReplayReceiptStoreError) -> InternalError,
-    _label: &'static str,
-) -> InternalError {
+fn preserve_auth_response_failure(token: &ReplayReceiptToken, err: InternalError) -> InternalError {
     let _ = mark_recovery_required(
         token,
         RecoveryReason::ResponseCommitFailed,
         IcOps::now_nanos(),
     )
-    .map_err(map_store_error);
+    .map_err(InternalError::from);
     err
 }
 
@@ -304,7 +276,7 @@ async fn prepare_delegated_token_with_lazy_repair(
         prepared_by,
         AuthOps::prepare_delegated_token_issuer_proof,
         repair_active_delegation_proof_from_root,
-        || validate_receipt_token(token).map_err(map_token_prepare_replay_store_error),
+        || validate_receipt_token(token).map_err(InternalError::from),
     )
     .await
 }

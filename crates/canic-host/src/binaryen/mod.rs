@@ -8,18 +8,17 @@
 #[cfg(test)]
 mod tests;
 
-use crate::output_with_executable_busy_retry;
+use crate::{
+    output_with_executable_busy_retry,
+    tool_install::{self, ArchiveFormat, InstallError, InstallSpec, sha256_file},
+};
 use std::{
     env,
     ffi::OsStr,
-    fs::{self, File, OpenOptions},
-    io::{self, Read},
+    fs, io,
     path::{Path, PathBuf},
-    sync::atomic::{AtomicU64, Ordering},
 };
 
-use canic_core::cdk::utils::hash::hex_bytes;
-use sha2_host::{Digest, Sha256};
 use thiserror::Error as ThisError;
 
 #[cfg(unix)]
@@ -29,11 +28,6 @@ pub const BINARYEN_REPAIR_COMMAND: &str = "canic toolchain install";
 pub const BINARYEN_VERSION: &str = "132";
 pub const BINARYEN_VERSION_IDENTITY: &str = "wasm-opt version 132 (version_132)";
 pub const WASM_OPT_TOOL: &str = "wasm-opt";
-
-const DOWNLOAD_TOOL: &str = "curl";
-const EXTRACT_TOOL: &str = "tar";
-const TEMP_ATTEMPTS: usize = 64;
-static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 ///
 /// BinaryenAuthority
@@ -236,6 +230,47 @@ pub enum BinaryenToolError {
     },
 }
 
+impl From<InstallError> for BinaryenToolError {
+    fn from(error: InstallError) -> Self {
+        match error {
+            InstallError::ArchiveDownload { status, stderr } => {
+                Self::ArchiveDownload { status, stderr }
+            }
+            InstallError::ArchiveExtraction { status, stderr } => {
+                Self::ArchiveExtraction { status, stderr }
+            }
+            InstallError::ArchiveHashMismatch {
+                path,
+                actual,
+                expected,
+            } => Self::ArchiveHashMismatch {
+                path,
+                actual,
+                expected,
+            },
+            InstallError::ExecutableHashMismatch {
+                path,
+                actual,
+                expected,
+            } => Self::ExecutableHashMismatch {
+                path,
+                actual,
+                expected,
+            },
+            InstallError::Io {
+                operation,
+                path,
+                source,
+            } => Self::Io {
+                operation,
+                path,
+                source,
+            },
+            InstallError::TempDirectoryExhausted { root } => Self::TempDirectoryExhausted { root },
+        }
+    }
+}
+
 /// Return the checksum authority for the current supported host platform.
 pub fn current_binaryen_authority() -> Result<BinaryenAuthority, BinaryenToolError> {
     binaryen_authority_for(env::consts::OS, env::consts::ARCH)
@@ -265,17 +300,17 @@ pub fn resolve_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolErr
 pub fn install_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolError> {
     let authority = current_binaryen_authority()?;
     let install_path = default_binaryen_install_path()?;
-    let temp = TempDirectory::create()?;
-    let archive_path = temp.path().join(authority.archive_name());
-    download_archive(authority, &archive_path)?;
-    verify_archive(authority, &archive_path)?;
-    extract_archive(&archive_path, temp.path())?;
-    let candidate = temp
-        .path()
-        .join(format!("binaryen-version_{BINARYEN_VERSION}/bin/wasm-opt"));
-    admit_binaryen_executable(&candidate, authority.executable_sha256())?;
-    publish_executable(&candidate, &install_path, authority.executable_sha256())?;
-    admit_binaryen_executable(&install_path, authority.executable_sha256())
+    let spec = InstallSpec {
+        tool: WASM_OPT_TOOL,
+        archive_name: &authority.archive_name(),
+        archive_url: &authority.archive_url(),
+        archive_sha256: authority.archive_sha256(),
+        member: &format!("binaryen-version_{BINARYEN_VERSION}/bin/wasm-opt"),
+        format: ArchiveFormat::Gzip,
+    };
+    tool_install::install(&spec, &install_path, |path| {
+        admit_binaryen_executable(path, authority.executable_sha256())
+    })
 }
 
 /// Return the fixed downstream installation path named by repair diagnostics.
@@ -394,177 +429,6 @@ fn admit_binaryen_executable(
     })
 }
 
-fn download_archive(
-    authority: BinaryenAuthority,
-    archive_path: &Path,
-) -> Result<(), BinaryenToolError> {
-    let mut command = crate::build_environment::command(DOWNLOAD_TOOL);
-    command
-        .args([
-            "--proto",
-            "=https",
-            "--proto-redir",
-            "=https",
-            "--tlsv1.2",
-            "-fsSL",
-            "-o",
-        ])
-        .arg(archive_path)
-        .arg(authority.archive_url());
-    let output = output_with_executable_busy_retry(&mut command).map_err(|source| {
-        BinaryenToolError::Io {
-            operation: "run curl for Binaryen archive",
-            path: archive_path.to_path_buf(),
-            source,
-        }
-    })?;
-    if !output.status.success() {
-        return Err(BinaryenToolError::ArchiveDownload {
-            status: output.status.to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
-    }
-    Ok(())
-}
-
-fn verify_archive(
-    authority: BinaryenAuthority,
-    archive_path: &Path,
-) -> Result<(), BinaryenToolError> {
-    let actual = sha256_file(archive_path)?;
-    if actual != authority.archive_sha256() {
-        return Err(BinaryenToolError::ArchiveHashMismatch {
-            path: archive_path.to_path_buf(),
-            actual,
-            expected: authority.archive_sha256(),
-        });
-    }
-    Ok(())
-}
-
-fn extract_archive(archive_path: &Path, destination: &Path) -> Result<(), BinaryenToolError> {
-    let member = format!("binaryen-version_{BINARYEN_VERSION}/bin/wasm-opt");
-    let mut command = crate::build_environment::command(EXTRACT_TOOL);
-    command
-        .arg("-xzf")
-        .arg(archive_path)
-        .arg("-C")
-        .arg(destination)
-        .arg(member);
-    let output = output_with_executable_busy_retry(&mut command).map_err(|source| {
-        BinaryenToolError::Io {
-            operation: "run tar for Binaryen archive",
-            path: archive_path.to_path_buf(),
-            source,
-        }
-    })?;
-    if !output.status.success() {
-        return Err(BinaryenToolError::ArchiveExtraction {
-            status: output.status.to_string(),
-            stderr: String::from_utf8_lossy(&output.stderr).trim().to_string(),
-        });
-    }
-    Ok(())
-}
-
-fn publish_executable(
-    candidate: &Path,
-    destination: &Path,
-    expected_sha256: &str,
-) -> Result<(), BinaryenToolError> {
-    let parent = destination.parent().ok_or_else(|| BinaryenToolError::Io {
-        operation: "select Binaryen installation directory",
-        path: destination.to_path_buf(),
-        source: io::Error::new(io::ErrorKind::InvalidInput, "destination has no parent"),
-    })?;
-    fs::create_dir_all(parent).map_err(|source| BinaryenToolError::Io {
-        operation: "create Binaryen installation directory",
-        path: parent.to_path_buf(),
-        source,
-    })?;
-    let stage = parent.join(format!(
-        ".wasm-opt.canic-install-{}-{}",
-        std::process::id(),
-        TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-    ));
-    let result = (|| {
-        let mut source = File::open(candidate).map_err(|source| BinaryenToolError::Io {
-            operation: "open admitted Binaryen executable",
-            path: candidate.to_path_buf(),
-            source,
-        })?;
-        let mut output = OpenOptions::new()
-            .create_new(true)
-            .write(true)
-            .open(&stage)
-            .map_err(|source| BinaryenToolError::Io {
-                operation: "create staged Binaryen executable",
-                path: stage.clone(),
-                source,
-            })?;
-        io::copy(&mut source, &mut output).map_err(|source| BinaryenToolError::Io {
-            operation: "write staged Binaryen executable",
-            path: stage.clone(),
-            source,
-        })?;
-        #[cfg(unix)]
-        fs::set_permissions(&stage, fs::Permissions::from_mode(0o755)).map_err(|source| {
-            BinaryenToolError::Io {
-                operation: "set staged Binaryen executable permissions",
-                path: stage.clone(),
-                source,
-            }
-        })?;
-        output.sync_all().map_err(|source| BinaryenToolError::Io {
-            operation: "sync staged Binaryen executable",
-            path: stage.clone(),
-            source,
-        })?;
-        drop(output);
-        admit_binaryen_executable(&stage, expected_sha256)?;
-        fs::rename(&stage, destination).map_err(|source| BinaryenToolError::Io {
-            operation: "publish Binaryen executable",
-            path: destination.to_path_buf(),
-            source,
-        })?;
-        File::open(parent)
-            .and_then(|directory| directory.sync_all())
-            .map_err(|source| BinaryenToolError::Io {
-                operation: "sync Binaryen installation directory",
-                path: parent.to_path_buf(),
-                source,
-            })
-    })();
-    if result.is_err() {
-        let _ = fs::remove_file(&stage);
-    }
-    result
-}
-
-fn sha256_file(path: &Path) -> Result<String, BinaryenToolError> {
-    let mut file = File::open(path).map_err(|source| BinaryenToolError::Io {
-        operation: "open file for SHA-256",
-        path: path.to_path_buf(),
-        source,
-    })?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 16 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|source| BinaryenToolError::Io {
-                operation: "read file for SHA-256",
-                path: path.to_path_buf(),
-                source,
-            })?;
-        if read == 0 {
-            break;
-        }
-        hasher.update(&buffer[..read]);
-    }
-    Ok(hex_bytes(hasher.finalize()))
-}
-
 fn home_is_root() -> bool {
     env::var_os("HOME").is_some_and(|home| Path::new(&home) == Path::new("/"))
 }
@@ -576,43 +440,4 @@ pub(crate) fn resolve_test_binaryen(
     let path = resolve_executable(OsStr::new(command))?;
     let expected = sha256_file(&path)?;
     admit_binaryen_executable(&path, &expected)
-}
-
-struct TempDirectory {
-    path: PathBuf,
-}
-
-impl TempDirectory {
-    fn create() -> Result<Self, BinaryenToolError> {
-        let root = env::temp_dir();
-        for _ in 0..TEMP_ATTEMPTS {
-            let path = root.join(format!(
-                "canic-binaryen-install-{}-{}",
-                std::process::id(),
-                TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
-            ));
-            match fs::create_dir(&path) {
-                Ok(()) => return Ok(Self { path }),
-                Err(source) if source.kind() == io::ErrorKind::AlreadyExists => {}
-                Err(source) => {
-                    return Err(BinaryenToolError::Io {
-                        operation: "create temporary Binaryen installation directory",
-                        path,
-                        source,
-                    });
-                }
-            }
-        }
-        Err(BinaryenToolError::TempDirectoryExhausted { root })
-    }
-
-    fn path(&self) -> &Path {
-        &self.path
-    }
-}
-
-impl Drop for TempDirectory {
-    fn drop(&mut self) {
-        let _ = fs::remove_dir_all(&self.path);
-    }
 }

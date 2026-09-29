@@ -3423,7 +3423,7 @@ fn acceptance_receipt_hash(
     )
 }
 
-const fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
+pub(super) const fn map_commit_error(error: RootComponentProvisioningCommitError) -> InternalError {
     match error {
         RootComponentProvisioningCommitError::ActiveOperationConflict => {
             InternalError::public(canic_core::diagnostics::codes::REQUEST_UNEXPECTED_STATE)

@@ -7,6 +7,7 @@
 #[cfg(test)]
 use crate::model::replay::ROOT_PROVISION_REPLAY_COMMAND_KIND;
 use crate::{
+    InternalError,
     model::replay::{
         CommandKind, ExternalEffectDescriptor, OperationId, PLACEMENT_CHILD_REPLAY_COMMAND_KIND,
         REPLAY_PAYLOAD_HASH_SCHEMA_VERSION, REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason,
@@ -186,6 +187,26 @@ pub enum ReplayReceiptStoreError {
 
     #[error("replay receipt is missing cost guard settlement identity")]
     CostGuardSettlementMissing,
+}
+
+impl From<ReplayReceiptStoreError> for InternalError {
+    fn from(err: ReplayReceiptStoreError) -> Self {
+        match err {
+            ReplayReceiptStoreError::ReceiptMissing
+            | ReplayReceiptStoreError::StagedResponseMissing => {
+                Self::public(crate::diagnostics::codes::EVIDENCE_UNAVAILABLE)
+            }
+            ReplayReceiptStoreError::ReceiptDecodeFailed(_) => {
+                Self::public(crate::diagnostics::codes::CODEC_FAILED)
+            }
+            ReplayReceiptStoreError::ReceiptTokenMismatch => {
+                Self::public(crate::diagnostics::codes::SECURITY_CONFLICT)
+            }
+            ReplayReceiptStoreError::CostGuardSettlementMissing => {
+                Self::public(crate::diagnostics::codes::LIFECYCLE_UNAVAILABLE)
+            }
+        }
+    }
 }
 
 pub fn reserve_or_replay_receipt(

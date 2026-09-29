@@ -86,7 +86,7 @@ pub(super) fn execute_placement_receipt_acknowledgement(
 ) -> Result<Response, InternalError> {
     let operation_id = OperationId::from_bytes(req.operation_id);
     match acknowledge_root_placement_receipt(operation_id, ctx.caller)
-        .map_err(replay::map_replay_store_error)?
+        .map_err(InternalError::from)?
     {
         PlacementReceiptAcknowledgementDecision::Acknowledged
         | PlacementReceiptAcknowledgementDecision::AlreadyAbsent => {}

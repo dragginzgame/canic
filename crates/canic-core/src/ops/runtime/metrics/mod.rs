@@ -11,6 +11,7 @@ pub mod cascade;
 pub mod cycles_funding;
 pub mod cycles_topup;
 pub mod delegated_auth;
+mod error;
 pub mod icp_refill;
 pub mod intent;
 pub mod inter_canister_call;
