@@ -15,7 +15,7 @@ use super::{
     types::{
         InfraCanisterIdRecord, InfraCanisterIdRecordExtended, InfraCanisterInstallMode,
         InfraChunkHash, InfraClearChunkStoreArgs, InfraInstallChunkedCodeArgs,
-        InfraInstallCodeArgs, InfraUploadChunkArgs,
+        InfraUploadChunkArgs,
     },
 };
 
@@ -90,29 +90,6 @@ impl MgmtInfra {
         };
 
         Call::unbounded_wait(Principal::management_canister(), "install_chunked_code")
-            .with_arg(install_args)?
-            .execute()
-            .await?;
-
-        Ok(())
-    }
-
-    /// Install a canister from an embedded wasm payload.
-    pub async fn install_code<T: ArgumentEncoder>(
-        canister_id: Principal,
-        wasm_module: Vec<u8>,
-        args: T,
-    ) -> Result<(), IcInfraError> {
-        let arg = encode_args(args).map_err(IcInfraError::from)?;
-        let install_args = InfraInstallCodeArgs {
-            mode: InfraCanisterInstallMode::Install,
-            canister_id,
-            wasm_module,
-            arg,
-            sender_canister_version: Some(api::canister_version()),
-        };
-
-        Call::unbounded_wait(Principal::management_canister(), "install_code")
             .with_arg(install_args)?
             .execute()
             .await?;

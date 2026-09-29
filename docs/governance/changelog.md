@@ -59,7 +59,7 @@ shape changes, and operational nuance.
 - Root patch summaries and detailed change narratives describe behavior, not
   release readiness. Do not duplicate draft/published or pending-validation
   claims there. The detailed patch heading owns the draft/date field updated by
-  the version transaction; the generated status receipt owns validated-source
+  the version transaction; the generated structured release receipt owns validated-source
   evidence. Remote tags and package registries separately establish publication.
   Development readiness belongs in the current handoff. This ownership rule is
   editorial guidance, not authority for a phrase-based release guard.
@@ -378,14 +378,14 @@ For each release:
 3. Confirm the root bullet and detailed minor-line section agree.
 4. The maintainer commits the completed implementation and changelog batch.
 5. The maintainer runs the governed version target, which performs the explicit
-   open-draft and source-status preflight before the explicit `make validate`
+   open-draft and clean-source preflight before the explicit `make validate`
    workflow, then updates package and release version files. A missing or
    malformed draft therefore fails before compilation or PocketIC begins.
    Immediately before that mutation, it refreshes the current `origin` branch
    and rejects non-fast-forward ancestry or an occupied target release tag.
    The same transaction replaces the exact target patch's `Unreleased` suffix
-   with the release date and binds current status to the validated source
-   commit. The bump transaction repeats the cheap draft preflight before
+   with the release date and writes the structured validation receipt for that
+   exact source commit, without editing the current handoff. The bump transaction repeats the cheap draft preflight before
    version mutation so direct or changed invocation paths retain the same
    boundary. A successful complete gate retains an exact-source local receipt;
    rerunning the release command after a later release-only failure reuses that

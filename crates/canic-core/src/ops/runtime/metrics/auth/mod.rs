@@ -11,12 +11,13 @@ use std::{cell::RefCell, collections::HashMap};
 
 pub use attestation::{record_attestation_epoch_rejected, record_attestation_verify_failed};
 #[cfg(any(test, feature = "auth-local-application-authorization"))]
-pub use sessions::record_application_session_cleanup;
+pub use sessions::{
+    record_application_session_cleanup, record_application_session_generation_invalidation,
+};
 pub use sessions::{
     record_application_session_clear, record_application_session_created,
     record_application_session_establishment_started,
-    record_application_session_expired_observation,
-    record_application_session_generation_invalidation, record_application_session_idempotent,
+    record_application_session_expired_observation, record_application_session_idempotent,
     record_application_session_rejected, record_application_session_replaced,
 };
 
@@ -61,6 +62,7 @@ pub enum AuthMetricOperation {
     Clear,
     Establish,
     ExpiryObservation,
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     GenerationInvalidation,
     Verify,
 }
@@ -75,6 +77,7 @@ impl AuthMetricOperation {
             Self::Clear => "clear",
             Self::Establish => "establish",
             Self::ExpiryObservation => "expiry_observation",
+            #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::GenerationInvalidation => "generation_invalidation",
             Self::Verify => "verify",
         }
@@ -124,6 +127,7 @@ pub enum AuthMetricReason {
     Created,
     EpochRejected,
     Expired,
+    #[cfg(any(test, feature = "auth-local-application-authorization"))]
     GenerationAdvanced,
     InvalidRequest,
     ProofInvalid,
@@ -146,6 +150,7 @@ impl AuthMetricReason {
             Self::Created => "created",
             Self::EpochRejected => "epoch_rejected",
             Self::Expired => "expired",
+            #[cfg(any(test, feature = "auth-local-application-authorization"))]
             Self::GenerationAdvanced => "generation_advanced",
             Self::InvalidRequest => "invalid_request",
             Self::ProofInvalid => "proof_invalid",

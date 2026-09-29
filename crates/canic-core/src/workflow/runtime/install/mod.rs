@@ -14,24 +14,6 @@ use crate::{
 pub struct ModuleInstallWorkflow;
 
 impl ModuleInstallWorkflow {
-    /// Install one Canister whose Candid init boundary accepts exactly one payload.
-    pub async fn install_single_payload_with_permit<P: CandidType>(
-        permit: &CostGuardPermit,
-        target_canister: Principal,
-        source: &ApprovedModuleSource,
-        payload: P,
-    ) -> Result<(), InternalError> {
-        MgmtOps::install_chunked_code_with_permit(
-            permit,
-            target_canister,
-            *source.source_canister(),
-            source.chunk_hashes().to_vec(),
-            source.module_hash().to_vec(),
-            (payload,),
-        )
-        .await
-    }
-
     /// Install one canister from an already resolved module source after a deployment permit.
     pub async fn install_with_payload_with_permit<P: CandidType>(
         permit: &CostGuardPermit,

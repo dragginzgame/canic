@@ -1,12 +1,135 @@
 use super::*;
 use crate::{
     fleet_ensure::{
-        ops::{write_journal, write_plan},
-        view::{operator_mint::OperatorMintRateQuote, readiness::ReadinessUnresolved},
+        generate::preflight,
+        ops::{clean_reinstall, write_journal, write_plan},
+        view::{
+            operator_mint::OperatorMintRateQuote,
+            readiness::{InfrastructureFundingUnavailable, ReadinessUnresolved},
+        },
     },
     test_support::temp_dir,
 };
 use std::fs;
+
+/// Exercise paired readiness against an actual compiled, persisted unpaid bootstrap review.
+pub(in crate::fleet_ensure) fn qualify_unpaid_infrastructure_review(
+    plan: &crate::fleet_ensure::model::FleetEnsurePlan,
+    source: &Path,
+    seed: &Path,
+) {
+    let root = temp_dir("readiness-unpaid-bootstrap");
+    fs::create_dir_all(&root).unwrap();
+    let policy = root.join("policy.toml");
+    let inventory = root.join("seed.toml");
+    fs::copy(source, &policy).unwrap();
+    fs::copy(seed, &inventory).unwrap();
+    let paths = EnsurePaths::under(&root, &plan.environment, &plan.fleet);
+    let desired = plan.reviewed_desired.as_ref().unwrap().desired();
+    clean_reinstall::bind(&paths, desired, &policy, &inventory).unwrap();
+    write_plan(&paths, plan).unwrap();
+    assert!(!paths.journal.exists());
+    let before = directory_bytes(&root);
+    let request = FleetReadinessRequest {
+        environment: &plan.environment,
+        fleet: &plan.fleet,
+        operator: Principal::from_text(&desired.operator).unwrap(),
+        cycles_ledger: Principal::from_text(&desired.cycles_ledger).unwrap(),
+        generation_inputs: Some(ReadinessGenerationInputs {
+            source: &policy,
+            seed: &inventory,
+        }),
+        ..request(&root)
+    };
+    crate::fleet_ensure::ops::retained_contract::check(&root, request.environment, request.fleet)
+        .unwrap();
+    preflight::validate_generation_inputs(
+        &preflight::FleetGenerationInputsRequest {
+            root: &root,
+            environment: request.environment,
+            fleet: request.fleet,
+            source: &policy,
+            seed: &inventory,
+        },
+        request.operator,
+        request.cycles_ledger,
+    )
+    .unwrap();
+    let forecast = reset_forecast(
+        &request,
+        request.generation_inputs.as_ref().unwrap(),
+        &IcpCli::new("must-not-run", None),
+    )
+    .unwrap();
+    assert!(forecast.is_none());
+    let mut report = report(
+        &request,
+        "network".into(),
+        0,
+        retained(&paths, &request).unwrap(),
+    );
+    record_reset_forecast(&paths, &mut report, forecast).unwrap();
+    assert!(report.generation_inputs_checked);
+    // An unavailable quote must not prevent building inputs needed for a new review.
+    assert!(report.blockers.is_empty());
+    assert_eq!(
+        report.funding.clean_reinstall_infrastructure_unavailable,
+        Some(
+            InfrastructureFundingUnavailable::RetainedInfrastructureReview {
+                operation_id: plan.operation_id.clone(),
+                plan_sha256: plan.plan_sha256.clone(),
+            }
+        )
+    );
+    assert!(report.estimated_required_cycles.is_none());
+    assert!(report.estimated_shortfall_cycles.is_none());
+    assert!(report.funding.conversion.is_none());
+    assert_eq!(directory_bytes(&root), before);
+    crate::fleet_ensure::workflow::clean_reinstall::cancel_review(
+        &root,
+        request.environment,
+        request.fleet,
+        &plan.plan_sha256,
+    )
+    .unwrap();
+    assert!(
+        crate::fleet_ensure::workflow::clean_reinstall::retained_desired(
+            &root,
+            request.environment,
+            request.fleet,
+            true
+        )
+        .unwrap()
+        .is_none()
+    );
+    let targets = preflight::bootstrap_funding_targets(
+        &preflight::FleetGenerationInputsRequest {
+            root: &root,
+            environment: request.environment,
+            fleet: request.fleet,
+            source: &policy,
+            seed: &inventory,
+        },
+        request.operator,
+        request.cycles_ledger,
+    )
+    .unwrap();
+    assert!(!targets.is_empty());
+    fs::remove_dir_all(root).unwrap();
+}
+
+fn directory_bytes(root: &Path) -> std::collections::BTreeMap<std::path::PathBuf, Vec<u8>> {
+    let mut bytes = std::collections::BTreeMap::new();
+    for entry in fs::read_dir(root).unwrap() {
+        let path = entry.unwrap().path();
+        if path.is_dir() {
+            bytes.extend(directory_bytes(&path));
+        } else {
+            bytes.insert(path.clone(), fs::read(path).unwrap());
+        }
+    }
+    bytes
+}
 
 fn request(root: &Path) -> FleetReadinessRequest<'_> {
     FleetReadinessRequest {
@@ -30,6 +153,10 @@ fn unknown_funding_is_not_claimed_sufficient_and_estimates_never_grant_authority
     let mut request = request(&root);
     let unknown = report(&request, "network".into(), 10, None);
     assert!(unknown.estimated_shortfall_cycles.is_none());
+    assert_eq!(
+        unknown.funding.clean_reinstall_infrastructure_unavailable,
+        Some(InfrastructureFundingUnavailable::GenerationInputsNotSupplied)
+    );
     request.estimated_required_cycles = Some(11);
     let estimate = report(&request, "network".into(), 10, None);
     assert_eq!(estimate.estimated_shortfall_cycles, Some(1));
@@ -49,13 +176,15 @@ fn reset_funding_shortfall_is_explicit_without_duplicate_blockers() {
         let mut report = report(&request, "network".into(), 10, None);
         for _ in 0..2 {
             record_reset_forecast(
+                &EnsurePaths::under(&root, "local", "fleet"),
                 &mut report,
                 Some(InfrastructureFundingReadiness {
                     targets: Vec::new(),
                     maximum_funding_cycles: funding,
                     maximum_ledger_transfers: 1,
                 }),
-            );
+            )
+            .unwrap();
         }
         assert_eq!(
             report
@@ -65,6 +194,12 @@ fn reset_funding_shortfall_is_explicit_without_duplicate_blockers() {
         );
         assert_eq!(report.blockers.len(), usize::from(blocked));
         assert!(report.estimated_required_cycles.is_none());
+        assert!(
+            report
+                .funding
+                .clean_reinstall_infrastructure_unavailable
+                .is_none()
+        );
     }
 }
 

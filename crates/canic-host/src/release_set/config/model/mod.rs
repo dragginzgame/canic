@@ -3,15 +3,6 @@ use std::path::PathBuf;
 pub(super) const DEFAULT_INITIAL_CYCLES: u128 = 5_000_000_000_000;
 
 ///
-/// ConfiguredPoolExpectation
-///
-#[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ConfiguredPoolExpectation {
-    pub pool: String,
-    pub canister_role: String,
-}
-
-///
 /// ConfiguredRoleLifecycle
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]

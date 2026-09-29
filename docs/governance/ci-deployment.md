@@ -490,23 +490,20 @@ source. Current and committed version queries must use the shared pinned
 `cargo-get` reader; release scripts must not maintain parallel manifest
 parsers. The governed bump is the one exception: after validating one exact
 clean source commit, it seals an `Unreleased` detailed changelog entry with the
-release date or preserves its existing valid ISO date, then writes that source
-commit into a generated current-status release record. Source
-development and draft preflight require no manually maintained status marker;
-the bump removes stale marker lines and writes the sole candidate marker
-itself. Lineage prose is descriptive and is not a versioning or publication
-authority. The same transaction generates a visible version/source/date/gate
-summary at the start of current status and identifies the preserved handoff as
-pre-transaction development history. It replaces only complete generated summary
-blocks; no manual summary maintenance or prose-based admission check is needed.
-The summary records a validated candidate, not successful tagging or publication.
+release date or preserves its existing valid ISO date, then writes one generated
+`release-validation.json` containing schema `1`, exact release version, validated
+source commit, release date and `complete` or `fast` gate. The transaction restores
+both receipt contents and prior absence if any later bump step fails. Status and
+planning documents are ordinary descriptive handoffs; release scripts do not
+parse, mutate or stage them. The receipt records validation, not successful
+tagging or package publication.
 Immediately before changing version
 files, the bump transaction fetches the current `origin` branch, requires it
 to remain an ancestor of the validated local source, and requires the exact
 planned release tag to be absent remotely. The release commit may then
 differ from the validated source only in the enumerated version, lock,
-installer, changelog and status surfaces. The cheap current-document semantics
-gate still rejects volatile
+installer, changelog and structured receipt surfaces. The cheap current-document
+semantics gate still rejects volatile
 "latest published" and manual release-truth prose elsewhere. After staging,
 `make release-commit` runs the fast
 post-bump `make release-candidate` guard before committing or tagging. That
@@ -514,9 +511,9 @@ guard verifies the sealed changelog, rejects non-release changes in the
 release transaction, and checks locked offline Cargo
 metadata, uniform workspace package versions and the installed-CLI default
 without repeating the already completed full source validation. Current status
-text and markers are informational and never gate candidate admission or
-package publication. The release lane owns validation; the publication guard
-does not infer validation from an editable handoff.
+text is informational and never gates candidate admission or package publication.
+The release lane owns validation; the publication guard does not infer validation
+from an editable handoff.
 
 ### Fast non-runtime patch lane
 
@@ -535,8 +532,11 @@ release-matrix semantics. It runs
 the release integrity and release-flow checks when tooling changed. A lockfile
 change additionally runs the dependency-risk gate, locked offline metadata and
 a locked workspace all-targets check. It deliberately skips workspace tests
-and PocketIC. The sealed status marker records `gate=fast`; it is not evidence
-that `make validate` ran on that patch.
+and PocketIC. The structured receipt records `gate: "fast"`; it is not evidence
+that `make validate` ran on that patch. The reader admits only schema-1 receipts
+from the exact annotated tag, bound to its version and an ancestor source.
+Tags without this receipt require the complete release lane. No prose/marker
+fallback or automatic backfill of historical validation is supported.
 
 Use the fast lane for a compatible patch-only lock correction, documentation/governance
 correction or release-tooling correction whose production source is unchanged.

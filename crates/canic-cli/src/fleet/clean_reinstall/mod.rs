@@ -17,6 +17,25 @@ pub(super) fn run_if_selected(
     workspace: &Path,
     options: &EnsureOptions,
 ) -> Result<bool, FleetCommandError> {
+    if let Some(digest) = &options.cancel_reinstall {
+        let environment = options.environment.as_deref().unwrap_or("local");
+        let record = workflow::cancel_review(workspace, environment, &options.fleet, digest)?;
+        if options.json {
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&serde_json::json!({
+                    "schema_version": 1, "stage": "clean_reinstall_cancelled", "cancelled": true,
+                    "record": record, "payment_authorized": false, "deployment_authorized": false
+                }))?
+            );
+        } else {
+            println!(
+                "Cancelled unpaid reinstall review {}; archive {}. Generate current desired state from complete physical inventory, then review fleet ensure --reinstall.",
+                record.plan_sha256, record.archive_sha256
+            );
+        }
+        return Ok(true);
+    }
     if options.operator_mint || options.observe_funding.is_some() || options.cancel_mint.is_some() {
         return Ok(false);
     }

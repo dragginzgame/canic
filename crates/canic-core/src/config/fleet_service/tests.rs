@@ -540,7 +540,7 @@ placement.minimum_distinct_roots = 1
 }
 
 #[test]
-fn strict_source_rejects_mode_specific_extras_and_old_scalar_targets() {
+fn strict_source_rejects_mode_specific_extras_and_invalid_target_shape() {
     let conditional_extra = Config::parse_toml(&format!(
         "{CONFIG_PREFIX}\n{}",
         VALID_SERVICES.replace(
@@ -557,6 +557,6 @@ fn strict_source_rejects_mode_specific_extras_and_old_scalar_targets() {
     let scalar = Config::parse_toml(&format!(
         "{CONFIG_PREFIX}\n[services.fleet]\ntargets = {{ pool = \"a\" }}\n"
     ))
-    .expect_err("old scalar target shape must reject");
+    .expect_err("targets must contain structured declarations");
     assert!(matches!(scalar, ConfigError::CannotParseToml { .. }));
 }

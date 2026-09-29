@@ -135,16 +135,13 @@ fn fleet_subnet_root_artifact_selects_the_root_protocol_role() {
 }
 
 #[test]
-fn infrastructure_binding_rejects_a_compatibility_sidecar_without_the_exact_release_sidecar() {
+fn infrastructure_binding_requires_the_exact_release_candid_artifact() {
     let root = crate::test_support::temp_dir("canic-host-infrastructure-protocol-binding-exact");
+    fs::create_dir_all(&root).expect("create temp root");
     let candid = b"service : {}\n";
     let role = CanisterRole::from("fleet_coordinator");
     let capabilities = BTreeSet::from([RoleCapabilityKey::FleetCoordinator]);
     let profile = derive_protocol_profile_hashes("0.103.0", &role, &capabilities, candid);
-    let compatibility_did =
-        root.join(".icp/local/canisters/fleet_coordinator/fleet_coordinator.did");
-    fs::create_dir_all(compatibility_did.parent().expect("DID parent")).expect("create DID parent");
-    fs::write(compatibility_did, candid).expect("write compatibility DID");
     let release_build_id = "01".repeat(32).parse().expect("release build");
     let artifact = crate::release_set::CanicInfrastructureArtifactEntry {
         role: crate::release_set::CanicInfrastructureRole::FleetCoordinator,

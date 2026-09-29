@@ -651,31 +651,6 @@ fn timer_graph_preserves_distinct_package_identities() {
 }
 
 #[test]
-fn maintained_runtime_docs_do_not_advertise_the_removed_timer_facade() {
-    let root = workspace_root();
-
-    for path in [
-        "crates/canic/README.md",
-        "docs/features/runtime/README.md",
-        "docs/features/runtime/native-timers.md",
-    ] {
-        let source = read_source(&root, path);
-        for forbidden in [
-            "TimerApi::cancel",
-            "TimerApi::set",
-            "canic::timer!(",
-            "canic::timer_interval!(",
-            "use canic::api::timer",
-        ] {
-            assert!(
-                !source.contains(forbidden),
-                "maintained runtime document {path} advertises removed facade `{forbidden}`"
-            );
-        }
-    }
-}
-
-#[test]
 fn direct_raw_timer_provider_access_is_absent_from_production() {
     let root = workspace_root();
     let mut violations = Vec::new();

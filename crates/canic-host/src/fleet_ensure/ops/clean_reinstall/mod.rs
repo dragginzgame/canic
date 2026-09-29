@@ -1,5 +1,6 @@
 //! Persist current reset authority and import declarations from real observations.
 
+pub(in crate::fleet_ensure) mod cancellation;
 pub(in crate::fleet_ensure) mod terminal;
 
 use crate::{

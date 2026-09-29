@@ -1,4 +1,28 @@
 use super::*;
+
+#[test]
+fn unpaid_reinstall_cancellation_requires_exact_digest_and_excludes_effect_commands() {
+    let digest = "ab".repeat(32);
+    let base = ["ensure", "fleet", "--cancel-reinstall", &digest];
+    let parsed = EnsureOptions::parse(base.map(OsString::from)).unwrap();
+    assert_eq!(parsed.cancel_reinstall.as_deref(), Some(digest.as_str()));
+    assert!(!parsed.reinstall);
+    for extra in [
+        vec!["--apply", &digest],
+        vec!["--reinstall"],
+        vec!["--operator-mint"],
+        vec!["--observe-funding", "root"],
+        vec!["--desired", "new.toml"],
+    ] {
+        assert!(EnsureOptions::parse(base.into_iter().chain(extra).map(OsString::from)).is_err());
+    }
+    assert!(
+        EnsureOptions::parse(
+            ["ensure", "fleet", "--cancel-reinstall", "invalid"].map(OsString::from)
+        )
+        .is_err()
+    );
+}
 use crate::test_support::temp_dir;
 use canic_host::fleet_ensure::dto::FleetEnsurePhase;
 use canic_host::fleet_ensure::{
@@ -307,6 +331,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         mint_cmc: "rkp4c-7iaaa-aaaaa-aaaca-cai".into(),
         mint_icp_ledger: "ryjl3-tyaaa-aaaaa-aaaba-cai".into(),
         cancel_mint: None,
+        cancel_reinstall: None,
         reinstall: false,
         retirement_debit_block: None,
         apply: Some(plan.plan_sha256.clone()),

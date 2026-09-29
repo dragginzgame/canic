@@ -58,23 +58,6 @@ pub fn inspect_completed_inventory(
     )
 }
 
-/// Audit completed current-schema receipts without building, writing or contacting the IC.
-/// Successful local audit still requires fresh live authority and cycle verification.
-pub fn inspect_completed_receipts(
-    workspace: &Path,
-    environment: &str,
-    fleet: &str,
-) -> Result<crate::fleet_ensure::CompletedReceiptAuditView, RetainedContractError> {
-    validate_path_labels(environment, fleet)?;
-    Ok(
-        crate::fleet_ensure::ops::reinstall::terminal::receipt_audit::inspect(
-            &EnsurePaths::under(workspace, environment, fleet),
-            environment,
-            fleet,
-        )?,
-    )
-}
-
 /// A local source contract cannot be used as current execution authority.
 #[derive(Debug, Error)]
 pub enum RetainedContractError {
@@ -125,6 +108,7 @@ pub fn check(
 ) -> Result<(), RetainedContractError> {
     validate_path_labels(environment, fleet)?;
     let paths = EnsurePaths::under(workspace, environment, fleet);
+    crate::fleet_ensure::ops::clean_reinstall::cancellation::require_no_pending(&paths)?;
     crate::fleet_ensure::ops::capacity_import::journal::require_no_approved_import(&paths)?;
     // Publication can leave the active documents between two exact generations.
     // Its recovery owner must resolve that boundary before completion inspection.

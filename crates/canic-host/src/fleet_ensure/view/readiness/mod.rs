@@ -73,7 +73,27 @@ pub struct PrebuildFundingReadiness {
     pub per_step_execution_allowance_cycles: Option<u128>,
     pub conversion: Option<ReadinessConversionQuote>,
     pub clean_reinstall_infrastructure: Option<InfrastructureFundingReadiness>,
+    pub clean_reinstall_infrastructure_unavailable: Option<InfrastructureFundingUnavailable>,
     pub unresolved: Vec<ReadinessUnresolved>,
+}
+
+///
+/// InfrastructureFundingUnavailable
+///
+/// Why readiness cannot quote infrastructure funding; retained reviews remain unchanged.
+///
+
+#[derive(Debug, Eq, PartialEq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum InfrastructureFundingUnavailable {
+    FleetNotCompleted,
+
+    GenerationInputsNotSupplied,
+
+    RetainedInfrastructureReview {
+        operation_id: String,
+        plan_sha256: String,
+    },
 }
 
 ///

@@ -11,13 +11,6 @@ use crate::{
 };
 use thiserror::Error as ThisError;
 
-#[cfg_attr(
-    not(test),
-    expect(
-        dead_code,
-        reason = "B2 pure decisions are consumed by the sequenced B3-B5 runtime batches"
-    )
-)]
 pub mod application_authorization;
 mod root_provisioning;
 

@@ -3,10 +3,10 @@
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
 
-/// Byte identities for a completed operation; never executable replacement authority.
+/// Byte identities for retired local authority; never executable replacement authority.
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct CompletedOperationArchiveRecord {
+pub struct OperationArchiveRecord {
     pub schema_version: u16,
     pub environment: String,
     pub fleet: String,

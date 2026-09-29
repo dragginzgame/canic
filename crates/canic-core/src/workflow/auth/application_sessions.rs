@@ -4,21 +4,12 @@
 //! Does not own: proof decoding/verification, caller/time reads, protected TTL policy, or endpoint DTOs.
 //! Boundary: endpoint workflow supplies one verified authority projection and canonical request identity.
 
-#![cfg_attr(
-    not(test),
-    allow(
-        dead_code,
-        reason = "staged workflow items have compiler-version-dependent liveness until the sequenced endpoint variants consume them"
-    )
-)]
-
 use crate::{
     domain::policy::pure::auth::application_authorization::{
-        ApplicationProofEligibilityError, ApplicationReplayDisposition,
-        ApplicationSessionAdmissionDecision, ApplicationSessionAdmissionError,
-        ApplicationSessionAdmissionInput, ApplicationSessionCapacity,
-        decide_application_session_admission, narrow_application_session_scopes,
-        validate_application_proof_eligibility,
+        ApplicationProofEligibilityError, ApplicationSessionAdmissionDecision,
+        ApplicationSessionAdmissionError, ApplicationSessionAdmissionInput,
+        ApplicationSessionCapacity, decide_application_session_admission,
+        narrow_application_session_scopes, validate_application_proof_eligibility,
     },
     model::auth::application_authorization::{
         ApplicationAuthorityModelError, CanonicalApplicationScopes, LocalApplicationReplay,
@@ -154,7 +145,6 @@ impl ApplicationSessionWorkflow {
         let occupancy =
             LocalApplicationAuthorizationStateOps::application_session_occupancy(caller)?;
         let admission = decide_application_session_admission(ApplicationSessionAdmissionInput {
-            replay: ApplicationReplayDisposition::Absent,
             replacing_existing_session: current_session.is_some(),
             capacity: ApplicationSessionCapacity {
                 active_global: occupancy.active_global,

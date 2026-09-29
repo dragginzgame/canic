@@ -52,8 +52,8 @@ release-batch plan and explicit maintainer acceptance.
    retains accepted B1/B2 contraction and the published `.42` checkpoint.
    [Reviewed Fleet capacity import](0.110-fleet-runtime-contraction/0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043)
    and supplied-infrastructure bootstrap shipped in `.43`; `.44` cut historical
-   receipt schemas and consolidated qualification. The open `.45` batch covers
-   operator feedback, CI corrections and test throughput; see the
+   receipt schemas and consolidated qualification. Published corrections through `.47` cover
+   operator feedback, funding, runtime size and CI throughput; see the
    [current handoff](../status/current.md) for evidence and remaining limits.
    Further B3 records/codecs stop and remaining B4 pruning is deferred.
    B5's `.42` evidence remains a qualified checkpoint; the

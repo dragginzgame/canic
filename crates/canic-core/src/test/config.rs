@@ -185,16 +185,6 @@ impl ConfigTestBuilder {
         install_model_for_role(self.model, role)
     }
 
-    /// Install this builder's model and exact runtime projection for `role`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the model or requested role cannot compile as current authority.
-    #[must_use]
-    pub fn install_for_role(self, role: impl Into<CanisterRole>) -> Arc<ConfigModel> {
-        install_model_for_role(self.model, role)
-    }
-
     #[must_use]
     pub fn canister_config(kind: CanisterKind) -> CanisterConfig {
         CanisterConfig {

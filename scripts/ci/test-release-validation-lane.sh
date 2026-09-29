@@ -17,7 +17,7 @@ cleanup() {
 trap cleanup EXIT
 exec >"$FIXTURE/output.log" 2>&1
 
-mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci" "$FIXTURE/docs/changelog" "$FIXTURE/docs/status"
+mkdir -p "$FIXTURE/bin" "$FIXTURE/scripts/ci" "$FIXTURE/docs/changelog"
 cp "$ROOT/scripts/ci/run-release-validation-lane.sh" \
     "$FIXTURE/scripts/ci/run-release-validation-lane.sh"
 cp "$ROOT/scripts/ci/check-release-draft-ready.sh" \
@@ -25,7 +25,6 @@ cp "$ROOT/scripts/ci/check-release-draft-ready.sh" \
 printf '## 1.2.4 - Unreleased\n' >"$FIXTURE/docs/changelog/1.2.md"
 printf '## 1.3.0 - Unreleased\n' >"$FIXTURE/docs/changelog/1.3.md"
 printf '## 2.0.0 - Unreleased\n' >"$FIXTURE/docs/changelog/2.0.md"
-touch "$FIXTURE/docs/status/current.md"
 
 printf '%s\n' \
     '#!/usr/bin/env bash' \
@@ -94,9 +93,9 @@ assert_no_validation() {
 
 reset_fixture
 status=0
-rm "$FIXTURE/docs/status/current.md"
+mv "$FIXTURE/docs/changelog/1.2.md" "$FIXTURE/changelog.saved"
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
-touch "$FIXTURE/docs/status/current.md"
+mv "$FIXTURE/changelog.saved" "$FIXTURE/docs/changelog/1.2.md"
 [[ "$status" -eq 1 ]] || {
     echo "release validation lane test failed: draft preflight failure status was $status" >&2
     exit 1

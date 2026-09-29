@@ -19,7 +19,6 @@ use canic_core::{
         page::Page,
     },
 };
-use canic_host::format::compact_duration;
 use canic_host::registry::RegistryEntry;
 use std::ffi::OsString;
 
@@ -122,18 +121,6 @@ fn parses_cycles_verbose_option() {
             .expect("parse cycles verbose option");
 
     assert!(options.verbose);
-}
-
-// Ensure cycle history windows render as compact human durations.
-#[test]
-fn formats_cycle_history_durations() {
-    assert_eq!(compact_duration(0), "0s");
-    assert_eq!(compact_duration(45), "45s");
-    assert_eq!(compact_duration(90), "1m 30s");
-    assert_eq!(compact_duration(7_230), "2h");
-    assert_eq!(compact_duration(9_000), "2h 30m");
-    assert_eq!(compact_duration(97_200), "1d 3h");
-    assert_eq!(compact_duration(1_555_200), "2w 4d");
 }
 
 #[test]

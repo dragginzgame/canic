@@ -5684,22 +5684,6 @@ fn render_ledger_transfer_error(error: CyclesLedgerTransferError) -> String {
     }
 }
 
-#[expect(
-    dead_code,
-    reason = "Candid variant is retained for exact response decoding"
-)]
-const fn rejection_code_name(code: RejectionCode) -> &'static str {
-    match code {
-        RejectionCode::CanisterError => "canister_error",
-        RejectionCode::CanisterReject => "canister_reject",
-        RejectionCode::DestinationInvalid => "destination_invalid",
-        RejectionCode::NoError => "no_error",
-        RejectionCode::SysFatal => "sys_fatal",
-        RejectionCode::SysTransient => "sys_transient",
-        RejectionCode::Unknown => "unknown",
-    }
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;

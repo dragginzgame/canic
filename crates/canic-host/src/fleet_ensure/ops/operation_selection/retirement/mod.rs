@@ -8,9 +8,7 @@ mod tests;
 use crate::{
     durable_io::read_optional_regular_bytes_bounded,
     fleet_ensure::{
-        model::completed_operation::{
-            CompletedOperationArchiveRecord, CompletedOperationRetirementRecord,
-        },
+        model::completed_operation::{CompletedOperationRetirementRecord, OperationArchiveRecord},
         ops::{
             EnsurePaths, EnsureStateError, is_sha256, operation_selection, read_current,
             write_current,
@@ -147,24 +145,46 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
     let Some(record) = pending(paths)? else {
         return Ok(());
     };
+    remove_archived(
+        paths,
+        &record.environment,
+        &record.fleet,
+        &record.archive_sha256,
+    )?;
+    let history = history(paths)?;
+    write_current(
+        &history
+            .join("retirements")
+            .join(format!("{}.json", record.archive_sha256)),
+        &record,
+    )?;
+    let intent = intent_path(paths)?;
+    fs::remove_file(&intent).map_err(|source| io(&intent, source))?;
+    sync(&history)
+}
+
+/// Remove only an exact archived snapshot; the caller owns its admitted durable intent and lock.
+pub(in crate::fleet_ensure::ops) fn remove_archived(
+    paths: &EnsurePaths,
+    environment: &str,
+    fleet: &str,
+    archive_sha256: &str,
+) -> Result<(), EnsureStateError> {
     let history = history(paths)?;
     let bytes = read(
         &history
             .join("operations")
-            .join(format!("{}.json", record.archive_sha256)),
+            .join(format!("{archive_sha256}.json")),
     )?
     .ok_or_else(invalid)?;
-    if sha256_hex(&bytes) != record.archive_sha256 {
+    if sha256_hex(&bytes) != archive_sha256 {
         return Err(invalid());
     }
-    let archive: CompletedOperationArchiveRecord =
-        serde_json::from_slice(&bytes).map_err(|_| invalid())?;
-    if archive.schema_version != 1
-        || archive.environment != record.environment
-        || archive.fleet != record.fleet
-    {
+    let archive: OperationArchiveRecord = serde_json::from_slice(&bytes).map_err(|_| invalid())?;
+    if archive.schema_version != 1 || archive.environment != environment || archive.fleet != fleet {
         return Err(invalid());
     }
+    operation_selection::archive::verify_remaining(paths, &archive)?;
     let directory = paths.plan.parent().ok_or_else(invalid)?;
     let mut removals = Vec::new();
     let mut directories = BTreeSet::new();
@@ -222,16 +242,7 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
             Err(error) => return Err(io(path, error)),
         }
     }
-    sync(directory)?;
-    write_current(
-        &history
-            .join("retirements")
-            .join(format!("{}.json", record.archive_sha256)),
-        &record,
-    )?;
-    let intent = intent_path(paths)?;
-    fs::remove_file(&intent).map_err(|source| io(&intent, source))?;
-    sync(&history)
+    sync(directory)
 }
 
 pub(in crate::fleet_ensure) fn pending(
@@ -249,7 +260,9 @@ pub(in crate::fleet_ensure) fn pending(
     Ok(record)
 }
 
-fn history(paths: &EnsurePaths) -> Result<PathBuf, EnsureStateError> {
+pub(in crate::fleet_ensure::ops) fn history(
+    paths: &EnsurePaths,
+) -> Result<PathBuf, EnsureStateError> {
     let fleet = paths
         .plan
         .parent()

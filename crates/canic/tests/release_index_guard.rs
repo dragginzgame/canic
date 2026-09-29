@@ -103,6 +103,9 @@ fn release_index_guard_accepts_complete_release_files() {
     );
     run_git(&root, &["add", "Cargo.toml", "scripts/dev/install_dev.sh"]);
 
+    write_file(&root, "release-validation.json", "{}\n");
+    run_git(&root, &["add", "release-validation.json"]);
+
     let output = run_guard(&root);
 
     assert!(

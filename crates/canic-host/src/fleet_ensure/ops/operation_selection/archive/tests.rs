@@ -38,7 +38,7 @@ fn completed_archive_retains_exact_opaque_evidence_and_shared_objects() {
     let manifest = archive(&paths)
         .join("operations")
         .join(format!("{digest}.json"));
-    let record: CompletedOperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
+    let record: OperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
     for (name, hash) in &record.files {
         let source = name.strip_prefix("estate/").map_or_else(
             || paths.content.join(name.strip_prefix("objects/").unwrap()),
@@ -101,7 +101,7 @@ fn unavailable_historical_publication_content_does_not_require_old_artifacts() {
     let manifest = archive(&paths)
         .join("operations")
         .join(format!("{digest}.json"));
-    let record: CompletedOperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
+    let record: OperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
     assert!(
         record
             .unavailable_objects
@@ -146,7 +146,7 @@ fn inspect_supplied_completed_operation_without_source_mutation() {
         .join(&fleet)
         .join("operations")
         .join(format!("{digest}.json"));
-    let record: CompletedOperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
+    let record: OperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
     assert_eq!(record.operation_id, completed.operation_id);
     assert_eq!(record.plan_sha256, completed.plan_sha256);
     assert_eq!(

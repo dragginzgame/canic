@@ -108,15 +108,6 @@ pub fn discover_workspace_canic_config_choices(
     Ok(choices)
 }
 
-/// Discover candidate `canic.toml` files under one App root.
-pub fn discover_canic_config_choices(root: &Path) -> Result<Vec<PathBuf>, ConfigDiscoveryError> {
-    let mut choices = Vec::new();
-    collect_canic_config_choices(root, &mut choices)?;
-    choices.sort();
-    reject_duplicate_app_names(&choices)?;
-    Ok(choices)
-}
-
 /// Return conventional App roots for one workspace.
 #[must_use]
 pub fn workspace_app_roots(workspace_root: &Path) -> Vec<PathBuf> {

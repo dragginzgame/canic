@@ -11,7 +11,7 @@ mod tests;
 use crate::fleet_ensure::{
     model::FleetEnsureCompletion,
     ops::{EnsurePaths, EnsureStateError, is_sha256},
-    view::readiness::RetainedReadinessOperation,
+    view::readiness::{InfrastructureFundingUnavailable, RetainedReadinessOperation},
 };
 use serde_json::Value;
 use std::path::Path;
@@ -62,7 +62,7 @@ pub(in crate::fleet_ensure) fn completed(
     }))
 }
 
-fn read(path: &Path) -> Result<Option<Value>, EnsureStateError> {
+pub(in crate::fleet_ensure::ops) fn read(path: &Path) -> Result<Option<Value>, EnsureStateError> {
     let bytes = crate::durable_io::read_optional_regular_bytes_bounded(path, 32 * 1024 * 1024)
         .map_err(|_| EnsureStateError::InvalidTerminalSource)?;
     bytes
@@ -73,6 +73,37 @@ fn read(path: &Path) -> Result<Option<Value>, EnsureStateError> {
             })
         })
         .transpose()
+}
+
+/// Explain a missing forecast from bounded operation metadata without admitting execution.
+pub(in crate::fleet_ensure) fn infrastructure_funding_unavailable(
+    paths: &EnsurePaths,
+    environment: &str,
+    fleet: &str,
+) -> Result<InfrastructureFundingUnavailable, EnsureStateError> {
+    let unavailable = InfrastructureFundingUnavailable::FleetNotCompleted;
+    if read(&paths.journal)?.is_some() {
+        return Ok(unavailable);
+    }
+    let Some(plan) = read(&paths.plan)? else {
+        return Ok(unavailable);
+    };
+    if text(&plan, "scope")? != "infrastructure_bootstrap" {
+        return Ok(unavailable);
+    }
+    let operation_id = text(&plan, "operation_id")?;
+    let plan_sha256 = text(&plan, "plan_sha256")?;
+    let identity_matches =
+        text(&plan, "environment")? == environment && text(&plan, "fleet")? == fleet;
+    if !identity_matches || !is_sha256(operation_id) || !is_sha256(plan_sha256) {
+        return Err(EnsureStateError::InvalidTerminalSource);
+    }
+    Ok(
+        InfrastructureFundingUnavailable::RetainedInfrastructureReview {
+            operation_id: operation_id.into(),
+            plan_sha256: plan_sha256.into(),
+        },
+    )
 }
 
 /// Completed import metadata retires its executable receipt format from admission decisions.

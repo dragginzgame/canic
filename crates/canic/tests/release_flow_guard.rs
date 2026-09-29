@@ -76,6 +76,9 @@ fn install_fast_patch_guard(root: &Path) {
         fs::read_to_string(workspace_root().join("scripts/ci/check-fast-patch-eligibility.sh"))
             .expect("fast patch guard should be readable");
     write_executable(root, "scripts/ci/check-fast-patch-eligibility.sh", &source);
+    let reader = fs::read_to_string(workspace_root().join("scripts/ci/read-release-validation.sh"))
+        .expect("validation receipt reader should be readable");
+    write_executable(root, "scripts/ci/read-release-validation.sh", &reader);
 }
 
 fn commit_all(root: &Path, message: &str) {
@@ -187,8 +190,8 @@ fn output_text(output: &Output) -> String {
 }
 
 #[test]
-fn release_draft_preflight_does_not_require_a_manual_status_marker() {
-    let root = unique_temp_repo("draft-without-status-marker");
+fn release_draft_preflight_accepts_release_notes_without_a_handoff() {
+    let root = unique_temp_repo("draft-release-notes");
     fs::create_dir_all(&root).expect("temp repo should be created");
     write_executable(
         &root,
@@ -206,12 +209,6 @@ fn release_draft_preflight_does_not_require_a_manual_status_marker() {
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
     );
-    write_file(
-        &root,
-        "docs/status/current.md",
-        "Current source development remains descriptive.\n",
-    );
-
     let output = Command::new("bash")
         .arg("scripts/ci/check-release-draft-ready.sh")
         .arg("patch")
@@ -221,26 +218,36 @@ fn release_draft_preflight_does_not_require_a_manual_status_marker() {
 
     assert!(
         output.status.success(),
-        "manual status-marker absence must not block a valid draft\n{}",
+        "release notes alone should satisfy draft preflight\n{}",
         output_text(&output)
     );
     let _ = fs::remove_dir_all(root);
 }
 
-#[test]
-fn governed_bump_replaces_stale_status_markers_it_owns() {
-    assert_governed_status_snapshot("");
+fn validation_receipt(version: &str, source: &str, gate: &str) -> String {
+    format!(
+        "{{\"schema\":1,\"version\":\"{version}\",\"source\":\"{source}\",\"date\":\"2026-08-27\",\"gate\":\"{gate}\"}}\n"
+    )
 }
 
 #[test]
-fn governed_bump_replaces_repeated_generated_status_summaries() {
-    assert_governed_status_snapshot(
-        "<!-- canic-status-summary:start -->\nstale snapshot\n<!-- canic-status-summary:end -->\n<!-- canic-status-summary:start -->\nrepeated snapshot\n<!-- canic-status-summary:end -->\n",
-    );
+fn governed_bump_writes_structured_validation_receipt() {
+    assert_governed_receipt(None, "complete", false);
 }
 
-fn assert_governed_status_snapshot(previous_summary: &str) {
-    let root = unique_temp_repo("bump-owns-status-marker");
+#[test]
+fn governed_bump_replaces_structured_validation_receipt() {
+    assert_governed_receipt(Some("original receipt\n"), "fast", false);
+}
+
+#[test]
+fn failed_bump_restores_receipt_presence_and_contents() {
+    assert_governed_receipt(None, "complete", true);
+    assert_governed_receipt(Some("original receipt\n"), "complete", true);
+}
+
+fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_after_receipt: bool) {
+    let root = unique_temp_repo("bump-receipt");
     fs::create_dir_all(&root).expect("temp repo should be created");
     run_git(&root, &["init"]);
     write_file(
@@ -254,13 +261,11 @@ fn assert_governed_status_snapshot(previous_summary: &str) {
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
     );
-    write_file(
-        &root,
-        "docs/status/current.md",
-        &format!(
-            "{previous_summary}Current source remains descriptive.\n\n<!-- canic-release-state: source-development -->\n<!-- canic-release-validation: version=0.92.7 source=1111111111111111111111111111111111111111 date=2026-08-28 gate=complete -->\n"
-        ),
-    );
+    let handoff = "Current source remains descriptive.\n";
+    write_file(&root, "docs/status/current.md", handoff);
+    if let Some(receipt) = previous_receipt {
+        write_file(&root, "release-validation.json", receipt);
+    }
     write_file(
         &root,
         "scripts/dev/install_dev.sh",
@@ -310,6 +315,9 @@ esac
     );
     commit_all(&root, "validated source");
     let validated_head = git_output(&root, &["rev-parse", "HEAD"]);
+    if fail_after_receipt {
+        run_git(&root, &["tag", "v0.92.8"]);
+    }
     let path = format!(
         "{}:{}",
         root.join("fake-bin").display(),
@@ -323,52 +331,38 @@ esac
         .env("CANIC_RELEASE_DATE", "2026-08-29")
         .env("CANIC_RELEASE_VALIDATED", "1")
         .env("CANIC_RELEASE_VALIDATED_HEAD", &validated_head)
-        .env("CANIC_RELEASE_VALIDATION_KIND", "complete")
+        .env("CANIC_RELEASE_VALIDATION_KIND", gate)
         .env("PATH", path)
         .output()
         .expect("bump script should run");
 
-    assert!(
+    assert_eq!(
         output.status.success(),
-        "governed bump should own status-marker replacement\n{}",
+        !fail_after_receipt,
+        "{}",
         output_text(&output)
     );
-    let status = fs::read_to_string(root.join("docs/status/current.md"))
-        .expect("sealed current status should be readable");
-    assert_generated_status_snapshot(&status, &validated_head);
-    let _ = fs::remove_dir_all(root);
-}
-
-fn assert_generated_status_snapshot(status: &str, validated_head: &str) {
-    let expected = format!(
-        "<!-- canic-release-validation: version=0.92.8 source={validated_head} date=2026-08-29 gate=complete -->"
-    );
-    assert_eq!(status.matches(&expected).count(), 1);
-    assert_eq!(status.matches("<!-- canic-release-").count(), 1);
     assert_eq!(
-        status
-            .matches("<!-- canic-status-summary:start -->")
-            .count(),
-        1
+        fs::read_to_string(root.join("docs/status/current.md")).unwrap(),
+        handoff
     );
-    assert_eq!(
-        status.matches("<!-- canic-status-summary:end -->").count(),
-        1
-    );
-    let (summary, handoff) = status
-        .split_once("<!-- canic-status-summary:end -->")
-        .expect("generated summary should precede the original handoff");
-    for field in [
-        "`0.92.8`".to_string(),
-        "`2026-08-29`".to_string(),
-        format!("`{validated_head}`"),
-        "`complete`".to_string(),
-    ] {
-        assert!(summary.contains(&field));
+    if fail_after_receipt {
+        let receipt = fs::read_to_string(root.join("release-validation.json")).ok();
+        assert_eq!(receipt.as_deref(), previous_receipt);
+        assert!(git_output(&root, &["status", "--porcelain"]).is_empty());
+    } else {
+        let parsed = Command::new("jq")
+            .args(["-er", "[.schema, .version, .source, .date, .gate] | @tsv"])
+            .arg(root.join("release-validation.json"))
+            .output()
+            .expect("structured receipt should parse");
+        assert!(parsed.status.success());
+        assert_eq!(
+            String::from_utf8(parsed.stdout).unwrap().trim(),
+            format!("1\t0.92.8\t{validated_head}\t2026-08-29\t{gate}")
+        );
     }
-    assert!(!summary.contains("stale snapshot"));
-    assert!(!summary.contains("repeated snapshot"));
-    assert!(handoff.contains("Current source remains descriptive."));
+    let _ = fs::remove_dir_all(root);
 }
 
 fn create_candidate_repo(name: &str) -> (PathBuf, String) {
@@ -390,11 +384,6 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
         &root,
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
-    );
-    write_file(
-        &root,
-        "docs/status/current.md",
-        "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\n<!-- canic-release-state: source-development -->\n",
     );
     write_file(
         &root,
@@ -438,13 +427,6 @@ fn create_candidate_repo(name: &str) -> (PathBuf, String) {
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n",
     );
-    write_file(
-        &root,
-        "docs/status/current.md",
-        &format!(
-            "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 gate=complete -->\n"
-        ),
-    );
     (root, source)
 }
 
@@ -457,6 +439,10 @@ fn run_candidate_guard(root: &Path) -> Output {
 }
 
 fn create_fast_patch_repo(name: &str) -> PathBuf {
+    create_fast_patch_repo_with_gate(name, "complete")
+}
+
+fn create_fast_patch_repo_with_gate(name: &str, gate: &str) -> PathBuf {
     let root = unique_temp_repo(name);
     fs::create_dir_all(&root).expect("temp repo should be created");
     run_git(&root, &["init"]);
@@ -470,21 +456,14 @@ fn create_fast_patch_repo(name: &str) -> PathBuf {
         "Cargo.lock",
         "[[package]]\nname = \"transitive\"\nversion = \"0.10.1\"\nchecksum = \"old\"\n",
     );
-    write_file(
-        &root,
-        "docs/status/current.md",
-        "<!-- canic-release-state: source-development -->\n",
-    );
     install_version_reader(&root);
     install_fast_patch_guard(&root);
     commit_all(&root, "validated source");
     let source = git_output(&root, &["rev-parse", "HEAD"]);
     write_file(
         &root,
-        "docs/status/current.md",
-        &format!(
-            "<!-- canic-release-validation: version=0.92.7 source={source} date=2026-08-27 gate=complete -->\n"
-        ),
+        "release-validation.json",
+        &validation_receipt("0.92.7", &source, gate),
     );
     commit_all(&root, "Release 0.92.7");
     tag_release(&root, "0.92.7");
@@ -606,7 +585,7 @@ fn failed_version_surface_sync_restores_every_mutated_file() {
         "docs/changelog/0.92.md",
         "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
     );
-    let status_document = "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.\n\n<!-- canic-release-state: source-development -->\n";
+    let status_document = "Development handoff.\n";
     write_file(&root, "docs/status/current.md", status_document);
     write_file(&root, "scripts/dev/install_dev.sh", install_script);
     install_version_reader(&root);
@@ -735,22 +714,6 @@ fn release_candidate_accepts_only_sealed_release_mutation_after_validation() {
 }
 
 #[test]
-fn release_candidate_accepts_sealed_packages_without_a_status_document() {
-    let (root, _) = create_candidate_repo("candidate-sealed-packages");
-    fs::remove_file(root.join("docs/status/current.md"))
-        .expect("descriptive handoff should be removable");
-
-    let output = run_candidate_guard(&root);
-
-    assert!(
-        output.status.success(),
-        "sealed package surfaces should be sufficient for candidate checks\n{}",
-        output_text(&output)
-    );
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
 fn fast_patch_eligibility_accepts_docs_and_rejects_runtime_source() {
     let root = create_fast_patch_repo("fast-eligibility");
     write_file(&root, "docs/note.md", "non-runtime correction\n");
@@ -813,10 +776,8 @@ fn fast_patch_eligibility_reuses_complete_receipt_through_a_fast_release() {
     );
     write_file(
         &root,
-        "docs/status/current.md",
-        &format!(
-            "<!-- canic-release-validation: version=0.92.8 source={first_source} date=2026-08-27 gate=fast -->\n"
-        ),
+        "release-validation.json",
+        &validation_receipt("0.92.8", &first_source, "fast"),
     );
     commit_all(&root, "Release 0.92.8");
     tag_release(&root, "0.92.8");
@@ -866,39 +827,7 @@ fn release_candidate_rejects_unsealed_changelog_and_late_source_change() {
 
 #[test]
 fn release_candidate_does_not_parse_descriptive_release_prose() {
-    let (root, source) = create_candidate_repo("candidate-pending-narrative");
-    write_file(
-        &root,
-        "CHANGELOG.md",
-        "# Descriptive root changelog without a release-summary schema\n",
-    );
-    let validation_marker = format!(
-        "Release lineage: `0.92.8` follows immutable `v0.92.7`.\n\n<!-- canic-release-validation: version=0.92.8 source={source} date=2026-08-25 gate=complete -->"
-    );
-    for pending_status in [
-        "Source development: published `v0.92.7` is the immutable predecessor for open `0.92.8`.",
-        "Release governance: source development state; no validated release candidate is staged.",
-        "Candidate evidence: no validated release candidate is currently staged.",
-        "The complete maintainer-owned release gate remains before publication.",
-    ] {
-        write_file(
-            &root,
-            "docs/status/current.md",
-            &format!("{validation_marker}\n\n{pending_status}\n"),
-        );
-        let status = run_candidate_guard(&root);
-        assert!(
-            status.status.success(),
-            "descriptive status prose must not override sealed release facts: {}",
-            output_text(&status)
-        );
-    }
-
-    write_file(
-        &root,
-        "docs/status/current.md",
-        &format!("{validation_marker}\n"),
-    );
+    let (root, _) = create_candidate_repo("candidate-descriptive-changelog");
     write_file(
         &root,
         "docs/changelog/0.92.md",
@@ -941,4 +870,52 @@ fn make_release_targets_are_sequential_and_push_is_guarded() {
         makefile.contains(release_push),
         "release-push must perform only readiness checking and the atomic push"
     );
+}
+
+#[test]
+fn fast_patch_requires_a_complete_validation_ancestor() {
+    let root = create_fast_patch_repo_with_gate("fast-without-complete", "fast");
+    write_file(&root, "docs/note.md", "documentation correction\n");
+    commit_all(&root, "documentation correction");
+    assert!(!run_fast_patch_eligibility(&root).status.success());
+    let _ = fs::remove_dir_all(root);
+}
+
+#[test]
+fn structured_validation_receipt_rejects_invalid_records() {
+    let root = create_fast_patch_repo("receipt-schema");
+    let source = git_output(&root, &["rev-parse", "HEAD"]);
+    let valid = validation_receipt("0.92.7", &source, "complete");
+    for invalid in [
+        "not json".to_string(),
+        "{}".to_string(),
+        valid.replace("\"schema\":1", "\"schema\":2"),
+        valid.replace("0.92.7", "0.92.6"),
+        valid.replace(&source, "invalid-source"),
+        valid.replace("2026-08-27", "not-a-date"),
+        valid.replace("complete", "unknown"),
+        valid.replace("\"schema\":1", "\"extra\":true,\"schema\":1"),
+        format!("{valid}{valid}"),
+    ] {
+        write_file(&root, "release-validation.json", &invalid);
+        commit_all(&root, "invalid receipt fixture");
+        let output = Command::new("bash")
+            .args(["scripts/ci/read-release-validation.sh", "HEAD", "0.92.7"])
+            .current_dir(&root)
+            .output()
+            .expect("receipt reader should run");
+        assert!(
+            !output.status.success(),
+            "invalid record was admitted: {invalid}"
+        );
+    }
+    fs::remove_file(root.join("release-validation.json")).unwrap();
+    commit_all(&root, "missing receipt fixture");
+    let output = Command::new("bash")
+        .args(["scripts/ci/read-release-validation.sh", "HEAD", "0.92.7"])
+        .current_dir(&root)
+        .output()
+        .expect("receipt reader should run");
+    assert!(!output.status.success());
+    let _ = fs::remove_dir_all(root);
 }

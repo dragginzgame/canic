@@ -194,16 +194,6 @@ pub mod ops {
 
         pub mod install_source {
             pub use crate::ops::runtime::install_source::ApprovedModuleSource;
-
-            /// Resolve one Store-backed chunk source for control-plane installation.
-            pub async fn resolve_approved_module_source(
-                role: &crate::ids::CanisterRole,
-            ) -> Result<ApprovedModuleSource, crate::error::InternalError> {
-                crate::ops::runtime::install_source::ModuleSourceRuntimeApi::approved_module_source(
-                    role,
-                )
-                .await
-            }
         }
 
         pub mod init_payload {

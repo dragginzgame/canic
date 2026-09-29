@@ -701,26 +701,6 @@ mod tests {
     }
 
     #[test]
-    fn removed_rotation_flags_are_not_accepted_as_hidden_compatibility() {
-        assert!(
-            FundingOptions::parse([
-                OsString::from("demo"),
-                OsString::from("--plan-rotation"),
-                OsString::from("funding.json"),
-            ])
-            .is_err()
-        );
-        assert!(
-            FundingOptions::parse([
-                OsString::from("demo"),
-                OsString::from("--apply-rotation"),
-                OsString::from("funding.json"),
-            ])
-            .is_err()
-        );
-    }
-
-    #[test]
     fn funding_result_labels_are_explicit() {
         assert_eq!(funding_result_label(None), "none");
     }

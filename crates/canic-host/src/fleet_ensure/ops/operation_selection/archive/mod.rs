@@ -1,4 +1,4 @@
-//! Archive completed operation files as opaque bytes before selecting a fresh reset.
+//! Archive retired operation files as opaque bytes before selecting a fresh reset.
 //!
 //! Append-only objects precede their manifest. Interrupted writes may leave unused
 //! objects; repeating capture completes the same snapshot without changing its source.
@@ -9,7 +9,7 @@ mod tests;
 use crate::{
     durable_io::{create_new_bytes_with_parents, read_optional_regular_bytes_bounded},
     fleet_ensure::{
-        model::completed_operation::CompletedOperationArchiveRecord,
+        model::completed_operation::OperationArchiveRecord,
         ops::{EnsurePaths, EnsureStateError, is_sha256, operation_selection},
         policy::validate_path_labels,
     },
@@ -36,6 +36,28 @@ pub(in crate::fleet_ensure) fn capture(
     let Some(completed) = operation_selection::completed(paths, environment, fleet)? else {
         return Ok(None);
     };
+    capture_review(
+        paths,
+        environment,
+        fleet,
+        &completed.operation_id,
+        &completed.plan_sha256,
+    )
+    .map(Some)
+}
+
+/// Preserve admitted review bytes; the caller proves cancellation or completion under the lock.
+pub(in crate::fleet_ensure::ops) fn capture_review(
+    paths: &EnsurePaths,
+    environment: &str,
+    fleet: &str,
+    operation_id: &str,
+    plan_sha256: &str,
+) -> Result<String, EnsureStateError> {
+    validate_path_labels(environment, fleet).map_err(|_| invalid())?;
+    if !is_sha256(operation_id) || !is_sha256(plan_sha256) {
+        return Err(invalid());
+    }
     let directory = paths.plan.parent().ok_or_else(invalid)?;
     let mut snapshot = Snapshot {
         archive: paths
@@ -57,12 +79,12 @@ pub(in crate::fleet_ensure) fn capture(
             return Err(invalid());
         }
     }
-    let record = CompletedOperationArchiveRecord {
+    let record = OperationArchiveRecord {
         schema_version: 1,
         environment: environment.into(),
         fleet: fleet.into(),
-        operation_id: completed.operation_id,
-        plan_sha256: completed.plan_sha256,
+        operation_id: operation_id.into(),
+        plan_sha256: plan_sha256.into(),
         files: snapshot.files,
         unavailable_objects: snapshot.unavailable_objects,
     };
@@ -75,7 +97,52 @@ pub(in crate::fleet_ensure) fn capture(
             .join(format!("{digest}.json")),
         &bytes,
     )?;
-    Ok(Some(digest))
+    Ok(digest)
+}
+
+/// Refuse newly introduced state before resuming any archived removal.
+pub(in crate::fleet_ensure::ops) fn verify_remaining(
+    paths: &EnsurePaths,
+    archive: &OperationArchiveRecord,
+) -> Result<(), EnsureStateError> {
+    let root = paths.plan.parent().ok_or_else(invalid)?;
+    verify_directory(paths, archive, root, root, 0)
+}
+
+fn verify_directory(
+    paths: &EnsurePaths,
+    archive: &OperationArchiveRecord,
+    root: &Path,
+    directory: &Path,
+    depth: u8,
+) -> Result<(), EnsureStateError> {
+    if depth > 8 {
+        return Err(invalid());
+    }
+    for entry in fs::read_dir(directory).map_err(|error| io_error(directory, error))? {
+        let entry = entry.map_err(|error| io_error(directory, error))?;
+        let path = entry.path();
+        if path == paths.lock {
+            continue;
+        }
+        let kind = entry.file_type().map_err(|error| io_error(&path, error))?;
+        if kind.is_dir() {
+            verify_directory(paths, archive, root, &path, depth + 1)?;
+        } else if kind.is_file() {
+            let relative = path
+                .strip_prefix(root)
+                .ok()
+                .and_then(Path::to_str)
+                .ok_or_else(invalid)?;
+            if archive.files.get(&format!("estate/{relative}")) != Some(&sha256_hex(&read(&path)?))
+            {
+                return Err(invalid());
+            }
+        } else {
+            return Err(EnsureStateError::Unsafe { path });
+        }
+    }
+    Ok(())
 }
 
 struct Snapshot {

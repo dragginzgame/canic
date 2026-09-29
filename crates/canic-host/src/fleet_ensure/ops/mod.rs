@@ -570,6 +570,17 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error("reset review digest or cancellation evidence differs; preserve retained authority")]
+    ResetReviewConflict,
+
+    #[error(
+        "reset review cancellation {plan_sha256} is incomplete; resume fleet ensure --cancel-reinstall with that exact digest"
+    )]
+    ResetReviewCancellationPending { plan_sha256: String },
+
+    #[error("reset review has execution or side-operation evidence at {}; preserve it and resume its existing owner", path.display())]
+    ResetReviewEffectEvidence { path: PathBuf },
+
     #[error(
         "completed-source preparation owns this Fleet; resume its exact reviewed operation before other Fleet work"
     )]
@@ -724,6 +735,16 @@ pub(in crate::fleet_ensure) fn lock_completed_source(
 }
 
 fn lock_fleet_file(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
+    let lock = lock_fleet_file_without_recovery(paths)?;
+    clean_reinstall::cancellation::require_no_pending(paths)?;
+    operation_selection::retirement::recover(paths)?;
+    Ok(lock)
+}
+
+/// Acquire only the lock inode so exact-digest cancellation can inspect its own intent first.
+pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
+    paths: &EnsurePaths,
+) -> Result<File, EnsureStateError> {
     let lock = lock_regular_file_with_parents(&paths.lock).map_err(|error| match error {
         RegularFileLockError::Io(source) => EnsureStateError::Io {
             path: paths.lock.clone(),
@@ -737,7 +758,6 @@ fn lock_fleet_file(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
             path: paths.lock.clone(),
         },
     })?;
-    operation_selection::retirement::recover(paths)?;
     Ok(lock)
 }
 

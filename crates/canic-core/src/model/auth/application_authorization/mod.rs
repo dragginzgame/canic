@@ -28,6 +28,7 @@ pub const MAX_APPLICATION_SESSION_SCOPES: usize = 16;
 pub const MAX_APPLICATION_SESSION_RECORD_BYTES: usize = 2_048;
 pub const MAX_APPLICATION_SESSION_STABLE_BYTES: usize = 8 * 1024 * 1024;
 pub const MAX_APPLICATION_SESSION_INDEX_BYTES: usize = 4 * 1024 * 1024;
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub const MAX_APPLICATION_SESSION_CLEANUP_REMOVALS: usize = 128;
 pub const MAX_LOCAL_APPLICATION_SESSION_TTL_NS: u64 = 1_800_000_000_000;
 pub const MAX_VERIFIED_APPLICATION_SCOPES: usize = 32;

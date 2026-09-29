@@ -43,7 +43,7 @@ is_release_only_path() {
     case "$1" in
         Cargo.toml | Cargo.lock | scripts/dev/install_dev.sh | \
             scripts/ci/sync-release-surface-version.sh | \
-            docs/status/current.md | "docs/changelog/$minor_line.md" | \
+            release-validation.json | "docs/changelog/$minor_line.md" | \
             */Cargo.toml)
             return 0
             ;;

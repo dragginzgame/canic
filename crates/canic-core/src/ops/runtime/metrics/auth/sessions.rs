@@ -88,6 +88,7 @@ pub fn record_application_session_cleanup(removed: usize) {
 }
 
 /// Record one local authority-generation invalidation.
+#[cfg(any(test, feature = "auth-local-application-authorization"))]
 pub fn record_application_session_generation_invalidation() {
     record(
         AuthMetricOperation::GenerationInvalidation,

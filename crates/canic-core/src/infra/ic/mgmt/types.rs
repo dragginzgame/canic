@@ -117,19 +117,6 @@ pub(super) struct InfraInstallChunkedCodeArgs {
 }
 
 //
-// InfraInstallCodeArgs
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
-pub(super) struct InfraInstallCodeArgs {
-    pub(super) mode: InfraCanisterInstallMode,
-    pub(super) canister_id: Principal,
-    pub(super) wasm_module: Vec<u8>,
-    pub(super) arg: Vec<u8>,
-    pub(super) sender_canister_version: Option<u64>,
-}
-
-//
 // InfraUpdateSettingsArgs
 //
 

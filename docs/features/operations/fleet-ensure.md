@@ -255,6 +255,54 @@ identifies the possible fee count. A missing balance or controller mismatch keep
 the sum unknown. Import, pool and workload funding remain explicitly unresolved
 until their own reviews; this infrastructure forecast is not a whole-Fleet quote.
 
+When no infrastructure forecast is available, readiness reports
+`funding.clean_reinstall_infrastructure_unavailable`. Missing paired inputs use
+`generation_inputs_not_supplied`; an operation outside the completed-Fleet
+forecast boundary uses `fleet_not_completed`. A retained infrastructure plan
+without an execution journal uses `retained_infrastructure_review`, including its
+exact `operation_id` and `plan_sha256`. Plain output explains the same boundary.
+An unavailable quote does not itself block compilation of replacement artifacts
+needed for review. Empty blockers still do not establish funding sufficiency;
+a null forecast is never a zero quote.
+
+This includes an unpaid review selected before a release changed the funding
+calculation. Readiness reads only its bounded operation metadata; it does not
+decode historical executable authority, replace the review, approve payment or
+invent a conversion amount. Preserve retained authority and obtain exact funding
+through the supported current-release review flow before approving effects.
+The unavailable reason is null when an infrastructure forecast is present;
+individual unavailable observations remain on that forecast's targets.
+
+An infrastructure review selected before approval can be cancelled by exact
+digest when a new release or funding policy is required:
+
+```sh
+canic --environment staging fleet ensure <fleet> --cancel-reinstall <plan-sha256> --json
+```
+
+This local command requires no build, signing or network access. It archives the
+original review bytes under `.canic/fleet-ensure/history/<environment>/<fleet>/`
+before releasing the selected desired build. JSON reports
+`stage: "clean_reinstall_cancelled"`, the cancelled operation/plan and archive
+digests, and false payment/deployment authority. Repeating the same cancellation
+replays its receipt while no replacement review exists; a stale digest cannot
+cancel a new review. Cancellation conflicts with apply, reinstall, funding,
+conversion and replacement-input options.
+
+Any execution journal, side-operation evidence, unknown owner file or inspection
+record showing execution began refuses cancellation. Issued work must retain its
+original reconciliation owner. An interrupted cancellation fences other Fleet
+writers; repeat the exact cancellation command to finish archival/removal.
+Changed or newly introduced files stop recovery before further removal. Ordinary
+review observations are archived, including their bounded attempt records.
+
+After cancellation, generate current desired state from the complete explicit
+physical inventory and qualified replacement build, then request a new
+`fleet ensure --reinstall` review. That review refreshes custody and funding under
+the current policy. Inspect its new digest before separately approving effects.
+No historical application schema, manual journal edit or alternative reset driver
+is involved.
+
 Infrastructure review funds each owner's installation and observation window.
 It does not deposit the whole continuation ceiling on every canister. The shared
 execution ceiling is bounded by controlled native surplus above configured
