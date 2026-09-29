@@ -61,8 +61,9 @@ Failure evidence:
 Focused logs: `/tmp/canic-cleanup-lifecycle.log` and
 `/tmp/canic-cleanup-host.log`. The document semantics guard passes with zero
 layout warnings; document behavior, relative file links, scoped formatting,
-shell lint and diff checks pass. Final Host Clippy is in progress; the lifecycle
-test target already passes warning-denied Clippy.
+shell lint and diff checks pass. Host library/tests and the lifecycle test target
+both pass warning-denied Clippy. Logs:
+`/tmp/canic-cleanup-{host,core}-clippy.log`.
 
 ## Evidence and remaining boundaries
 
@@ -81,8 +82,9 @@ untouched; adoption needs a matching CLI/runtime release and fresh review.
 
 The human-owned minor-closeout acceptance gate remains in force. Generic
 continuation does not authorize the next minor, publication or a broad gate.
-This cleanup and failure correction remain uncommitted; final readiness follows
-the focused checks.
+The cleanup and failure correction are committed in `46da84ecb`; the accepted
+.47 batch and changelog are ready for review and the selected validation retry.
+No full test-suite rerun or version/publication action was performed by the agent.
 
 ## History
 
