@@ -154,8 +154,8 @@ pub mod metrics {
             metrics::reset_for_tests();
 
             WasmStoreMetricsApi::record(
-                WasmStoreMetricOperation::SourceResolve,
-                WasmStoreMetricSource::Store,
+                WasmStoreMetricOperation::ReleasePublish,
+                WasmStoreMetricSource::TargetStore,
                 WasmStoreMetricOutcome::Failed,
                 WasmStoreMetricReason::StoreCall,
             );
@@ -166,8 +166,8 @@ pub mod metrics {
                 &entries,
                 &[
                     "wasm_store",
-                    "source_resolve",
-                    "store",
+                    "release_publish",
+                    "target_store",
                     "failed",
                     "store_call",
                 ],

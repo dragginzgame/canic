@@ -291,7 +291,6 @@ mod tests {
     CandidType, Clone, Copy, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
 )]
 pub enum TemplateChunkingMode {
-    Inline,
     Chunked,
 }
 
@@ -333,7 +332,5 @@ pub struct WasmStoreGcStatus {
     CandidType, Clone, Copy, Debug, Eq, Ord, PartialOrd, Deserialize, Serialize, PartialEq,
 )]
 pub enum TemplateManifestState {
-    Staged,
     Approved,
-    Blocked,
 }

@@ -1,16 +1,12 @@
 use super::*;
 use crate::metrics::{
     model::{MetricValue, MetricsKind, MetricsReport},
-    parse::{MetricsStatusResponse, parse_metrics_page},
+    parse::metric_page,
 };
-use candid::{CandidType, Encode, Principal};
-use canic_core::{
-    cdk::utils::hash::hex_bytes,
-    dto::{
-        error::Error as CanicError,
-        metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
-        page::Page,
-    },
+use candid::Principal;
+use canic_core::dto::{
+    metrics::{MetricEntry as MetricEntryDto, MetricValue as MetricValueDto},
+    page::Page,
 };
 
 // Ensure the public kind selector accepts the expected CLI vocabulary.
@@ -110,7 +106,7 @@ fn missing_metrics_fleet_preserves_canonical_typed_error() {
 
 #[test]
 fn parses_typed_metrics_page() {
-    let output = response_json(&Ok::<_, CanicError>(MetricsStatusResponse::Metrics(Page {
+    let entries = metric_page(Page {
         entries: vec![
             MetricEntryDto {
                 labels: vec!["lifecycle".into(), "init".into(), "started".into()],
@@ -132,8 +128,7 @@ fn parses_typed_metrics_page() {
             },
         ],
         total: 3,
-    })));
-    let entries = parse_metrics_page(&output).expect("parse metrics page");
+    });
 
     assert_eq!(entries.len(), 3);
     assert_eq!(entries[0].labels, ["lifecycle", "init", "started"]);
@@ -147,9 +142,4 @@ fn parses_typed_metrics_page() {
             value_u64: 12
         }
     );
-}
-
-fn response_json<T: CandidType>(response: &T) -> String {
-    let bytes = Encode!(response).expect("encode response");
-    serde_json::json!({ "response_bytes": hex_bytes(bytes) }).to_string()
 }

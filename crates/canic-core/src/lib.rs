@@ -17,7 +17,8 @@
 //! - `view/` exposes internal read-only projections over stored/runtime state.
 //! - macro entrypoints live in the `canic` facade crate.
 //!
-//! The dependency flow is: endpoints → workflow → policy → ops → model.
+//! Endpoints call workflow, which may call policy and ops independently.
+//! Ops may call model; policy never calls ops.
 
 #[doc(hidden)]
 pub mod access;

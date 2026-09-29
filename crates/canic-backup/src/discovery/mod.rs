@@ -7,110 +7,9 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    manifest::{
-        DeploymentMember, DeploymentSection, IdentityMode, SourceSnapshot, VerificationCheck,
-    },
-    registry::RegistryEntry,
-    topology::{TopologyHasher, TopologyRecord},
-};
+use crate::registry::RegistryEntry;
 use std::collections::{BTreeMap, BTreeSet, VecDeque};
 use thiserror::Error as ThisError;
-
-///
-/// DiscoveredFleet
-///
-/// Registry-derived fleet snapshot before it is serialized into a manifest.
-/// Owned by backup discovery and consumed by manifest construction.
-///
-
-#[derive(Clone, Debug)]
-pub struct DiscoveredFleet {
-    pub topology_records: Vec<TopologyRecord>,
-    pub members: Vec<DiscoveredMember>,
-}
-
-impl DiscoveredFleet {
-    /// Convert discovered topology and member policy into a manifest fleet section.
-    pub fn into_deployment_section(self) -> Result<DeploymentSection, DiscoveryError> {
-        validate_discovered_members(&self.members)?;
-
-        let topology_hash = TopologyHasher::hash(&self.topology_records);
-        let members = self
-            .members
-            .into_iter()
-            .map(DiscoveredMember::into_deployment_member)
-            .collect();
-
-        Ok(DeploymentSection {
-            topology_hash_algorithm: topology_hash.algorithm,
-            topology_hash_input: topology_hash.input,
-            discovery_topology_hash: topology_hash.hash.clone(),
-            pre_snapshot_topology_hash: topology_hash.hash.clone(),
-            topology_hash: topology_hash.hash,
-            members,
-        })
-    }
-}
-
-///
-/// DiscoveredMember
-///
-/// One discovered deployment member with backup policy and snapshot metadata.
-/// Owned by backup discovery and projected into deployment manifest members.
-///
-
-#[derive(Clone, Debug)]
-pub struct DiscoveredMember {
-    pub role: String,
-    pub canister_id: String,
-    pub parent_canister_id: Option<String>,
-    pub subnet_canister_id: Option<String>,
-    pub controller_hint: Option<String>,
-    pub identity_mode: IdentityMode,
-    pub verification_checks: Vec<VerificationCheck>,
-    pub snapshot_plan: SnapshotPlan,
-}
-
-impl DiscoveredMember {
-    /// Project this discovery member into the manifest restore contract.
-    fn into_deployment_member(self) -> DeploymentMember {
-        DeploymentMember {
-            role: self.role,
-            canister_id: self.canister_id,
-            parent_canister_id: self.parent_canister_id,
-            subnet_canister_id: self.subnet_canister_id,
-            controller_hint: self.controller_hint,
-            identity_mode: self.identity_mode,
-            verification_checks: self.verification_checks,
-            source_snapshot: SourceSnapshot {
-                snapshot_id: self.snapshot_plan.snapshot_id,
-                module_hash: self.snapshot_plan.module_hash,
-                code_version: self.snapshot_plan.code_version,
-                artifact_path: self.snapshot_plan.artifact_path,
-                checksum_algorithm: self.snapshot_plan.checksum_algorithm,
-                checksum: self.snapshot_plan.checksum,
-            },
-        }
-    }
-}
-
-///
-/// SnapshotPlan
-///
-/// Source snapshot metadata planned for one discovered deployment member.
-/// Owned by backup discovery and copied into manifest source snapshots.
-///
-
-#[derive(Clone, Debug)]
-pub struct SnapshotPlan {
-    pub snapshot_id: String,
-    pub module_hash: Option<String>,
-    pub code_version: Option<String>,
-    pub artifact_path: String,
-    pub checksum_algorithm: String,
-    pub checksum: Option<String>,
-}
 
 ///
 /// SnapshotTarget
@@ -136,20 +35,8 @@ pub struct SnapshotTarget {
 
 #[derive(Debug, ThisError)]
 pub enum DiscoveryError {
-    #[error("discovered fleet has no members")]
-    EmptyFleet,
-
-    #[error("duplicate discovered canister id {0}")]
-    DuplicateCanisterId(String),
-
-    #[error("discovered member {0} has no verification checks")]
-    MissingVerificationChecks(String),
-
     #[error("registry JSON did not contain the requested canister {0}")]
     CanisterNotInRegistry(String),
-
-    #[error(transparent)]
-    Json(#[from] serde_json::Error),
 }
 
 /// Resolve selected target and children from registry entries.
@@ -198,27 +85,4 @@ pub fn targets_from_registry(
     }
 
     Ok(targets)
-}
-
-// Validate discovery output before building a manifest projection.
-fn validate_discovered_members(members: &[DiscoveredMember]) -> Result<(), DiscoveryError> {
-    if members.is_empty() {
-        return Err(DiscoveryError::EmptyFleet);
-    }
-
-    let mut canister_ids = BTreeSet::new();
-    for member in members {
-        if !canister_ids.insert(member.canister_id.clone()) {
-            return Err(DiscoveryError::DuplicateCanisterId(
-                member.canister_id.clone(),
-            ));
-        }
-        if member.verification_checks.is_empty() {
-            return Err(DiscoveryError::MissingVerificationChecks(
-                member.canister_id.clone(),
-            ));
-        }
-    }
-
-    Ok(())
 }

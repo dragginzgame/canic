@@ -279,7 +279,7 @@ fn gate_envelope_wraps_policy_report() {
 }
 
 #[test]
-fn gate_manifest_evaluates_project_evidence_and_wraps_report() {
+fn gate_manifest_evaluates_workspace_evidence_and_wraps_report() {
     let root = temp_dir("canic-evidence-gate-manifest");
     fs::create_dir_all(&root).expect("create root");
     let policy = root.join("policy.toml");
@@ -311,7 +311,7 @@ fn gate_manifest_evaluates_project_evidence_and_wraps_report() {
     assert_eq!(report.evidence.len(), 1);
     assert_eq!(
         envelope.payload_schema.id,
-        "canic.project_evidence_gate_report.v1"
+        "canic.workspace_evidence_gate_report.v1"
     );
     assert_eq!(envelope.target.profile.as_deref(), Some("demo"));
     assert_eq!(envelope.inputs.len(), 3);
@@ -403,7 +403,7 @@ fn sample_manifest() -> String {
     r#"
 schema_version = 1
 
-[project]
+[workspace]
 name = "demo"
 root = "."
 

@@ -14,7 +14,8 @@ use crate::fleet_ensure::{
         },
     },
     view::capacity_import::{
-        CapacityImportDestinationView, CapacityImportOwnershipView, CapacityImportSourceView,
+        CapacityImportDestinationView, CapacityImportOwnershipView, CapacityImportRootView,
+        CapacityImportSourceView,
     },
 };
 use candid::Principal;
@@ -65,13 +66,12 @@ pub enum CapacityImportPolicyError {
 
 /// Select by verified placement; selection never substitutes another physical Root.
 pub fn select_destination(
-    roots: &[CapacityImportDestinationView],
+    roots: &[CapacityImportRootView],
     subnet: SubnetId,
     explicit_root: Option<Principal>,
-) -> Result<&CapacityImportDestinationView, CapacityImportPolicyError> {
+) -> Result<&CapacityImportRootView, CapacityImportPolicyError> {
     let mut matches = roots.iter().filter(|root| {
-        root.authority.subnet == subnet
-            && explicit_root.is_none_or(|selected| selected == root.authority.root)
+        root.subnet == subnet && explicit_root.is_none_or(|selected| selected == root.root)
     });
     let selected = matches
         .next()

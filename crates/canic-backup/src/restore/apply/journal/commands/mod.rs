@@ -40,12 +40,6 @@ pub struct RestoreApplyCommandPreview {
 }
 
 impl RestoreApplyCommandPreview {
-    /// Build a no-execute runner command preview from a restore apply journal.
-    #[must_use]
-    pub fn from_journal(journal: &RestoreApplyJournal) -> Self {
-        Self::from_journal_with_config(journal, &RestoreApplyCommandConfig::default())
-    }
-
     /// Build a configured no-execute runner command preview from a journal.
     #[must_use]
     pub fn from_journal_with_config(

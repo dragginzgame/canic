@@ -591,16 +591,6 @@ pub enum ComponentTopologyError {
     #[error("protected Component principal must differ from its Coordinator and root")]
     ComponentPrincipalConflictsWithAuthority,
 
-    #[error("Fleet Subnet Root set contains duplicate root principal {fleet_subnet_root}")]
-    DuplicateFleetSubnetRootPrincipal {
-        fleet_subnet_root: candid::Principal,
-    },
-
-    #[error("Fleet Subnet Root set contains duplicate placement Subnet {placement_subnet}")]
-    DuplicateFleetSubnetRootSubnet {
-        placement_subnet: crate::ids::SubnetId,
-    },
-
     #[error("Component Spec '{component_spec}' Fleet admission sum overflowed")]
     FleetAdmissionOverflow { component_spec: ComponentSpecId },
 
@@ -721,9 +711,6 @@ pub enum ComponentTopologyError {
         maximum_root_instances: u32,
         maximum_fleet_instances: u32,
     },
-
-    #[error("Fleet Subnet Root authority does not match the other roots in this Fleet plan")]
-    RootAuthorityMismatch,
 
     #[error("Fleet Subnet Root principal must differ from its Coordinator principal")]
     RootPrincipalConflictsWithCoordinator,

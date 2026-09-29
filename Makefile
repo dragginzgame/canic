@@ -4,7 +4,7 @@
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
-        blob-storage-inventory-gate blob-storage-cashier-inventory-gate \
+        blob-storage-protocol-evidence-gate \
         audit-method-catalog-gate check-invariants ci-checks ci-preflight ci-security \
         control-plane-feature-gate \
         current-document-semantics-gate dependency-risk-inventory-test layering-gate \
@@ -299,8 +299,7 @@ check-invariants:
 	+@$(VALIDATION_RUNNER) \
 		layering-gate \
 		current-document-semantics-gate \
-		blob-storage-inventory-gate \
-		blob-storage-cashier-inventory-gate \
+		blob-storage-protocol-evidence-gate \
 		dependency-risk-inventory-test \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
@@ -318,8 +317,7 @@ ci-preflight:
 		shellcheck \
 		layering-gate \
 		current-document-semantics-gate \
-		blob-storage-inventory-gate \
-		blob-storage-cashier-inventory-gate \
+		blob-storage-protocol-evidence-gate \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
 		audit-method-catalog-gate \
@@ -398,11 +396,8 @@ control-plane-feature-gate:
 	bash scripts/ci/check-control-plane-feature-matrix.sh
 
 # Temporary product guards: remove with a promoted standalone blob-service hard cut.
-blob-storage-inventory-gate:
-	bash scripts/ci/check-blob-storage-inventory-gate.sh
-
-blob-storage-cashier-inventory-gate:
-	bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
+blob-storage-protocol-evidence-gate:
+	bash scripts/ci/check-blob-storage-protocol-evidence.sh
 
 # Keep ordinary Rust tests parallel. The workspace runner classifies every
 # integration target and serializes only PocketIC suites for deterministic

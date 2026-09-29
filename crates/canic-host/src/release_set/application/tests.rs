@@ -8,7 +8,8 @@ use super::*;
 use crate::release_set::WASM_MAGIC;
 use crate::{
     component_topology::{
-        FleetSubnetRootTopologyInput, RootComponentAdmissionInput, plan_fleet_topology,
+        PlannedFleetSubnetRootTopologyInput, RootComponentAdmissionInput,
+        plan_initial_fleet_topology,
     },
     release_set::fixture::FixtureArtifactEntry,
 };
@@ -139,8 +140,8 @@ fn root(
     subnet_byte: u8,
     component_specs: &[&str],
     maximum_wasm_store_bytes: u64,
-) -> FleetSubnetRootTopologyInput {
-    FleetSubnetRootTopologyInput {
+) -> RootBindingFixture {
+    RootBindingFixture {
         placement_subnet: SubnetId::from_principal(Principal::from_slice(&[subnet_byte; 29])),
         fleet_subnet_root: Principal::from_slice(&[root_byte; 29]),
         component_admissions: component_specs
@@ -216,8 +217,8 @@ fn compile_union(
         .expect("qualified application artifact union")
 }
 
-fn complete_plan(maximum_wasm_store_bytes: u64) -> crate::component_topology::FleetTopologyPlan {
-    plan_fleet_topology(
+fn complete_plan(maximum_wasm_store_bytes: u64) -> BoundTopologyFixture {
+    bind_topology_fixture(
         &config(),
         authority(),
         vec![root(6, 7, &["beta", "alpha"], maximum_wasm_store_bytes)],
@@ -452,7 +453,7 @@ fn projection_preserves_every_spec_role_while_reusing_shared_artifact_evidence()
 #[test]
 fn projection_stores_a_component_role_once_when_another_spec_admits_it_as_a_descendant() {
     let config = config_with_component_role_descendant();
-    let plan = plan_fleet_topology(
+    let plan = bind_topology_fixture(
         &config,
         authority(),
         vec![root(6, 7, &["beta", "alpha"], u64::MAX)],
@@ -497,7 +498,7 @@ fn projection_stores_a_component_role_once_when_another_spec_admits_it_as_a_desc
 
 #[test]
 fn separate_roots_receive_only_their_admitted_spec_closure() {
-    let plan = plan_fleet_topology(
+    let plan = bind_topology_fixture(
         &config(),
         authority(),
         vec![
@@ -809,4 +810,59 @@ fn shared_fixture_sources(union: &ApplicationArtifactUnion) -> FixtureArtifactMa
         })
         .collect();
     fixtures
+}
+
+struct RootBindingFixture {
+    placement_subnet: SubnetId,
+    fleet_subnet_root: Principal,
+    component_admissions: Vec<RootComponentAdmissionInput>,
+    limits: FleetSubnetRootLimits,
+    funding: canic_core::ids::FleetSubnetRootFundingAuthority,
+}
+
+struct BoundTopologyFixture {
+    component_topology: ComponentTopology,
+    fleet_subnet_roots: Vec<canic_core::ids::FleetSubnetRootBinding>,
+}
+
+// Qualify through the production planner before attaching test installation identities.
+fn bind_topology_fixture(
+    config: &ConfigModel,
+    authority: FleetRegistryAuthority,
+    inputs: Vec<RootBindingFixture>,
+) -> Result<BoundTopologyFixture, crate::component_topology::FleetTopologyPlanError> {
+    let plan = plan_initial_fleet_topology(
+        config,
+        inputs
+            .iter()
+            .map(|input| PlannedFleetSubnetRootTopologyInput {
+                placement_subnet: input.placement_subnet,
+                component_admissions: input.component_admissions.clone(),
+                limits: input.limits.clone(),
+            })
+            .collect(),
+    )?;
+    let roots = plan
+        .fleet_subnet_roots
+        .into_iter()
+        .map(|root| {
+            let input = inputs
+                .iter()
+                .find(|input| input.placement_subnet == root.placement_subnet)
+                .expect("planned input");
+            canic_core::ids::FleetSubnetRootBinding {
+                authority: authority.clone(),
+                placement_subnet: root.placement_subnet,
+                fleet_subnet_root: input.fleet_subnet_root,
+                component_admissions: root.component_admissions,
+                component_topology_digest: root.component_topology_digest,
+                limits: root.limits,
+                funding: input.funding.clone(),
+            }
+        })
+        .collect();
+    Ok(BoundTopologyFixture {
+        component_topology: plan.component_topology,
+        fleet_subnet_roots: roots,
+    })
 }

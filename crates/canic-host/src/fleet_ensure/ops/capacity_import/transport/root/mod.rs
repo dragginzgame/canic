@@ -221,8 +221,27 @@ impl CapacityImportTransport {
         .map_err(|_| CapacityImportJournalError::Unresolved)?;
         let response: Result<Response, Error> = candid::decode_one(&bytes)
             .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
-        let Response::ImportPoolCapacity(status) =
-            response.map_err(CapacityImportJournalError::RootRejected)?;
+        let Response::ImportPoolCapacity(status) = match response {
+            Ok(response) => response,
+            Err(error) => {
+                if error.code() == canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+                    && let Ok(status) = self.root_status(plan).await
+                {
+                    return Err(CapacityImportJournalError::RootCapacityLimit {
+                        phase: status.phase,
+                        reserved_debit_cycles: status.reserved_debit_cycles,
+                        maximum_debit_cycles: status.reservation.maximum_root_debit_cycles,
+                        observed_debit_cycles: status
+                            .reservation
+                            .observed_root_cycles
+                            .saturating_sub(status.last_root_cycles),
+                        paid_calls: status.paid_calls,
+                        maximum_paid_calls: status.reservation.maximum_paid_calls,
+                    });
+                }
+                return Err(CapacityImportJournalError::RootRejected(error));
+            }
+        };
         validate_root_status(plan, &status)?;
         Ok(status)
     }

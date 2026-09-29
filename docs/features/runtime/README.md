@@ -46,7 +46,7 @@ Every timer-owning crate linked into the final canister must resolve the same
 exact `ic-timers` Cargo package ID. Two resolved versions contain two separate
 library statics and therefore two inventories; dependency-tree qualification
 is part of combined-framework integration.
-Runtime status schema 3 projects policy-specific scheduler/work instruction
+Runtime status schema 1 projects policy-specific scheduler/work instruction
 aggregates plus bounded latest and maximum-growth Wasm/stable-memory page
 observations. Page extents are runtime-epoch high-water observations, not live
 bytes or exclusive allocation attribution for asynchronous work.

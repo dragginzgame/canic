@@ -23,6 +23,7 @@ pub mod icp_refill;
 pub mod intent;
 pub mod log;
 pub mod placement;
+pub mod pool_import;
 
 use crate::InternalError;
 use thiserror::Error as ThisError;

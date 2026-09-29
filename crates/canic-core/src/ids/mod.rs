@@ -57,7 +57,7 @@ pub use fleet_topology::{
     MAX_FLEET_CAPACITY_IMPORT_SOURCES, MAX_FLEET_ROOT_FUNDING_SLOTS, ManagedCanisterBinding,
 };
 pub use intent::{IntentId, IntentResourceKey};
-pub use metrics::{AccessMetricKind, SystemMetricKind};
+pub use metrics::AccessMetricKind;
 pub use network::{
     CanonicalNetworkId, CanonicalNetworkIdParseError, CanonicalNetworkTrustAnchorError,
 };

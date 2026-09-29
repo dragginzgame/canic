@@ -24,8 +24,8 @@ use crate::{
             RootOwnedCanisterLifecycle, create_balance_is_terminal, reconcile_retirement_transfer,
         },
         ops::{
-            EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, EnsureStateError,
-            TerminalFleetInventory, canic_init, current_protocol, protocol, root_owned_lifecycle,
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
+            canic_init, current_protocol, protocol, root_owned_lifecycle,
         },
     },
     icp::{
@@ -806,9 +806,6 @@ pub enum IcpEnsurePlatformError {
 
     #[error(transparent)]
     Protocol(#[from] protocol::ProtocolEffectError),
-
-    #[error("retained Root status authority is invalid: {0}")]
-    RetainedRootStatusAuthority(#[source] Box<EnsureStateError>),
 }
 
 /// Read evidence shared only by projections of one Fleet observation.

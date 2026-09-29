@@ -8,15 +8,14 @@ Last updated: 2026-06-20
 
 ## Purpose
 
-This inventory is the source-of-truth gate for Canic's 0.69 `blob-storage`
-protocol work.
+This historical inventory retains the source search, accepted immutable Toko
+references, and protocol observations for its original release line. Dated
+search conclusions below describe the evidence available at that time.
 
-No endpoint, DTO, Candid snapshot, macro, stable-record, ops, workflow, or
-internal `BlobStorageApi` implementation may merge from this design until this
-inventory is complete and cites exact upstream protocol sources.
-
-The 0.69 design requires inventory coverage for all six gateway methods, even
-though only four non-billing methods are emitted in 0.69.
+The current [structured evidence record](blob-storage-protocol-evidence.json)
+owns machine-checked method identifiers, source provenance and refresh behavior.
+The [feature guide](../features/blob-storage/README.md) describes the maintained
+surface. Inventory prose is explanatory and is not release authority.
 
 ## Current Finding
 
@@ -748,38 +747,9 @@ Interoperability findings:
 The 0.69 storage schema can now be designed around current Toko
 `blob_root_hash` fit.
 
-## Implementation Gate
+## Current verification
 
-The following actions are blocked while this document remains incomplete:
-
-- Adding the `blob-storage` feature.
-- Adding gateway DTOs.
-- Adding Candid snapshots.
-- Emitting `_immutableObjectStorage*` endpoints.
-- Adding blob storage stable records.
-- Adding blob storage ops or workflow modules.
-- Adding `BlobStorageApi`.
-- Adding PocketIC lifecycle tests that assert protocol behavior.
-- Adding `blob-storage-billing`, Cashier wrappers, gateway-principal sync,
-  funding, or status surfaces that depend on blob-storage implementation.
-
-This gate is enforced in CI and local Make test/release-bump paths by
-`scripts/ci/check-blob-storage-inventory-gate.sh`. While the status remains
-incomplete, the guard rejects blob-storage feature metadata, source/module
-paths, gateway method literals, public blob-storage API/model names, and
-premature blob-storage billing/Cashier implementation surfaces outside this
-protocol inventory/design documentation. When this inventory is marked
-`Complete`, the same guard verifies that all six method sections are present and
-individually complete, have no `TBD` fields, include required common and
-method-specific evidence labels, reject placeholder field values, validate
-method source commit SHA shape, and confirm that the Toko interoperability section
-is also complete with local source, commit, blob-root mapping, and
-migration/read-through strategy evidence.
-
-The only safe next steps are:
-
-- Locate the upstream source or generated `.did`.
-- Fill the method inventory from immutable source references.
-- Add Candid snapshots copied or generated from the inventoried source.
-- Update the 0.69 design if the protocol source contradicts current design
-  assumptions.
+`scripts/ci/check-blob-storage-protocol-evidence.sh` validates the structured
+record and the presence of these source notes. Current protocol, policy and
+workflow tests validate implementation behavior. There is no pre-implementation
+branch or requirement for specific wording in this historical inventory.

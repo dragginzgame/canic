@@ -72,6 +72,7 @@ pub(in crate::fleet_ensure) fn seed_projection(
     };
     let seed: EstateSeed = toml::from_str(original).map_err(|_| invalid())?;
     let mut document: toml::Value = toml::from_str(original).map_err(|_| invalid())?;
+    let original_document = document.clone();
     let bootstrap = desired.bootstrap.as_ref().ok_or_else(invalid)?;
     let configured = |name: &str| desired.canisters.iter().find(|entry| entry.name == name);
     let principal = |name: &str| configured(name).and_then(|entry| entry.principal.as_deref());
@@ -123,6 +124,9 @@ pub(in crate::fleet_ensure) fn seed_projection(
             return Err(invalid());
         }
         document["coordinator"] = toml::Value::String(created.to_text());
+    }
+    if document == original_document {
+        return Ok(original.to_owned());
     }
     toml::to_string_pretty(&document).map_err(|_| invalid())
 }

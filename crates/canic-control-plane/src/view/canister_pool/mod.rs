@@ -84,6 +84,16 @@ pub struct PoolImportCallBudgetView {
     pub observed_root_cycles: u128,
 }
 
+/// Exact in-memory receipt for one persisted paid-call reservation.
+/// Losing it retains the full conservative reserve; it grants no retry authority.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub struct PoolImportCallReservationView {
+    pub paid_calls: u32,
+    pub reserved_debit_cycles: u128,
+    pub before_root_cycles: u128,
+    pub maximum_debit_cycles: u128,
+}
+
 /// Management-history effect that can prove one Root-issued import mutation.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum PoolImportHistoryKind {

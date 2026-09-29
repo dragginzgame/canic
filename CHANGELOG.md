@@ -14,6 +14,10 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- `0.110.49` replaces prose-based gates with structured evidence, removes unused
+  APIs and flows in a pre-1.0 hard cut, and aligns evidence and runtime guidance
+  while documenting the unscheduled backup execution gap. It also corrects whole-import
+  budgets and successful-call reservation accounting, and preserves unchanged seed bytes.
 - `0.110.48` separates release receipts from status documents, removes obsolete
   public APIs (a pre-1.0 hard cut), runtime paths and tests, consolidates tool
   installation, artifact qualification and bounded observations, compacts historical

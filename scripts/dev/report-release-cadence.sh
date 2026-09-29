@@ -4,9 +4,15 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
 MAX_RELEASES_PER_MINOR=12
+FORMAT=plain
+
+if [ "${1:-}" = "--tsv" ]; then
+    FORMAT=tsv
+    shift
+fi
 
 if [ "$#" -gt 1 ]; then
-    echo "usage: scripts/dev/report-release-cadence.sh [VERSION]" >&2
+    echo "usage: scripts/dev/report-release-cadence.sh [--tsv] [VERSION]" >&2
     exit 2
 fi
 
@@ -28,6 +34,10 @@ while IFS= read -r tag; do
 done < <(git tag --list "v$minor_line.*")
 
 next_ordinal=$((published_count + 1))
+if [ "$FORMAT" = tsv ]; then
+    printf '%s\t%s\t%s\t%s\n' "$minor_line" "$published_count" "$MAX_RELEASES_PER_MINOR" "$next_ordinal"
+    exit 0
+fi
 if [ "$next_ordinal" -le "$MAX_RELEASES_PER_MINOR" ]; then
     cadence_status="within guideline"
 else

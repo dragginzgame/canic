@@ -1,6 +1,9 @@
 use super::*;
 use crate::test_support::temp_dir;
-use canic_backup::restore::{RestoreApplyJournal, RestoreApplyOperationState};
+use canic_backup::restore::{
+    RestoreApplyCommandConfig, RestoreApplyCommandPreview, RestoreApplyJournal,
+    RestoreApplyOperationState,
+};
 use serde_json::json;
 use std::{ffi::OsString, fs};
 
@@ -353,7 +356,10 @@ fn run_restore_run_execute_records_uploaded_snapshot_receipt() {
     let updated: RestoreApplyJournal =
         serde_json::from_slice(&fs::read(&journal_path).expect("read updated journal"))
             .expect("decode updated journal");
-    let preview = updated.next_command_preview();
+    let preview = RestoreApplyCommandPreview::from_journal_with_config(
+        &updated,
+        &RestoreApplyCommandConfig::default(),
+    );
 
     fs::remove_dir_all(&root).expect("remove temp root");
     assert_eq!(updated.operation_receipts.len(), 1);

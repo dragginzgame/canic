@@ -163,3 +163,41 @@ fn incomplete_or_conflicting_infrastructure_rejects() {
         ));
     }
 }
+
+#[test]
+fn whole_import_budget_rejects_underfunded_reservations_before_handoff() {
+    use crate::fleet_ensure::{
+        dto::capacity_import::CapacityImportReviewRequest,
+        ops::capacity_import::journal::CapacityImportJournalError,
+    };
+    use canic_core::control_plane_support::policy::pool_import;
+    let quote = 50_000_000_000;
+    let mut request = CapacityImportReviewRequest {
+        environment: "test".into(),
+        fleet: "test".into(),
+        root: Some(principal(1)),
+        canisters: (30..54).map(principal).collect(),
+        declarations: "disposition.toml".into(),
+        policy: "policy.toml".into(),
+        seed: "seed.toml".into(),
+        maximum_source_debit_cycles: 100_000_000_000,
+        maximum_root_debit_cycles: 4_000_000_000_000,
+        maximum_root_paid_calls: pool_import::recommended_calls(24).unwrap(),
+    };
+    assert!(matches!(
+        validate_budget(&request, quote),
+        Err(CapacityImportJournalError::InsufficientRootBudget { .. })
+    ));
+    request.maximum_root_debit_cycles =
+        pool_import::required_debit(quote, request.maximum_root_paid_calls).unwrap();
+    assert!(validate_budget(&request, quote).is_ok());
+    request.maximum_root_paid_calls = pool_import::minimum_calls(24).unwrap() - 1;
+    assert!(matches!(
+        validate_budget(&request, quote),
+        Err(CapacityImportJournalError::InsufficientRootBudget { .. })
+    ));
+    assert!(matches!(
+        validate_budget(&request, 0),
+        Err(CapacityImportJournalError::RequestInvalid)
+    ));
+}

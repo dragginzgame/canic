@@ -109,10 +109,11 @@ Allowed by default:
 | stale compatibility before `1.0.0` | delete when compile/tests prove it |
 | one-caller helper with no invariant | inline |
 
-Pre-`1.0.0` hard-cut applies to unsupported internal protocols by default. It
-does not by itself authorize deletion of stable-state, backup, exported
-snapshot, deployment-truth, or live operator data compatibility without an
-owner decision and migration/recovery proof.
+Pre-`1.0.0` releases are reinstall-only under [AGENTS.md](../../../AGENTS.md).
+Remove obsolete cross-release schemas and compatibility paths. Preserve
+same-release backup/restore and interruption recovery, reconciliation of
+unfinished paid effects, and cycle conservation. Code cleanup does not
+authorize destructive effects against a live installation.
 
 Not allowed without proof or owner decision:
 
@@ -120,7 +121,7 @@ Not allowed without proof or owner decision:
 | ---- | ---- |
 | public facade removal | `BLOCKED` or `DEFER WITH TRIGGER` |
 | generated-boundary removal | `BLOCKED` until macro expansion, generated output, or derive/endpoint tests prove safety |
-| persisted format, stable-memory schema, backup, or recovery behavior | full MSH report and owner decision |
+| current same-release stable-state, backup or interrupted-effect recovery behavior | full MSH report and proof that current recovery and conservation remain intact |
 | hot-path shape change | `MEASURE FIRST` unless shape is unchanged |
 | closure/generic/iterator rewrite in encode/decode, stable-memory, query, or scheduler loops | `MEASURE FIRST` or `RETAIN HOT PATH` |
 | allocation, clone, formatting, or dynamic dispatch added to success path | `REJECT CLEANUP` unless proof exists |

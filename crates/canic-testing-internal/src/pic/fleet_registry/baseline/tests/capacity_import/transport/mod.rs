@@ -446,7 +446,7 @@ pub(super) fn review(
                 .root_funding
                 .request_threshold
                 .to_u128(),
-            maximum_debit_cycles: 2_000_000_000_000,
+            maximum_debit_cycles: context.maximum_call_debit_cycles.checked_mul(24).unwrap(),
             maximum_paid_calls: 24,
         },
     )

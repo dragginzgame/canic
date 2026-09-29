@@ -5,6 +5,7 @@
 
 pub mod bootstrap;
 mod history;
+pub mod quote;
 #[cfg(test)]
 mod tests;
 
@@ -24,8 +25,8 @@ use crate::{
         transient::capacity_import::PoolImportExecutionGuard,
     },
     view::canister_pool::{
-        PoolImportCallBudgetView, PoolImportHistoryKind, PoolImportHistoryView,
-        PoolImportObservationView,
+        PoolImportCallBudgetView, PoolImportCallReservationView, PoolImportHistoryKind,
+        PoolImportHistoryView, PoolImportObservationView,
     },
 };
 use canic_core::{
@@ -251,10 +252,44 @@ impl CanisterPoolImportOps {
         identity: PoolImportIdentity,
         maximum_call_debit: u128,
         observed_root_cycles: u128,
+    ) -> Result<PoolImportCallReservationView, InternalError> {
+        let mut state = CanisterPoolStore::state();
+        let record = required_mut(&mut state, identity)?;
+        let receipt = reserve_call(record, maximum_call_debit, observed_root_cycles)?;
+        CanisterPoolStore::set_state(state);
+        Ok(receipt)
+    }
+
+    /// Settle only the exact successful callback, keeping all older uncertain reserves.
+    /// Errors, lost replies and stale callbacks never refund an allowance.
+    pub fn complete_paid_call(
+        identity: PoolImportIdentity,
+        receipt: PoolImportCallReservationView,
+        observed_root_cycles: u128,
     ) -> Result<(), InternalError> {
         let mut state = CanisterPoolStore::state();
         let record = required_mut(&mut state, identity)?;
-        reserve_call(record, maximum_call_debit, observed_root_cycles)?;
+        let expected = PoolImportCallReservationView {
+            paid_calls: record.paid_calls,
+            reserved_debit_cycles: record.reserved_debit_cycles,
+            before_root_cycles: record.last_root_cycles,
+            maximum_debit_cycles: receipt.maximum_debit_cycles,
+        };
+        if record.root_receipt.is_some() || receipt != expected {
+            return Err(InternalError::conflict());
+        }
+        let debit = receipt
+            .before_root_cycles
+            .checked_sub(observed_root_cycles)
+            .filter(|debit| *debit <= receipt.maximum_debit_cycles)
+            .ok_or_else(InternalError::conflict)?;
+        let retained = record
+            .reserved_debit_cycles
+            .checked_sub(receipt.maximum_debit_cycles)
+            .and_then(|reserved| reserved.checked_add(debit))
+            .ok_or_else(InternalError::invariant)?;
+        record.reserved_debit_cycles = retained;
+        record.last_root_cycles = observed_root_cycles;
         CanisterPoolStore::set_state(state);
         Ok(())
     }
@@ -265,7 +300,7 @@ impl CanisterPoolImportOps {
         observed: &PoolImportObservationView,
         budget: PoolImportCallBudgetView,
         now_ns: u64,
-    ) -> Result<(), InternalError> {
+    ) -> Result<PoolImportCallReservationView, InternalError> {
         let mut state = CanisterPoolStore::state();
         let record = required_mut(&mut state, identity)?;
         let index = source_index(record, observed.canister_id)?;
@@ -293,7 +328,7 @@ impl CanisterPoolImportOps {
             _ => return Err(InternalError::conflict()),
         }
         require_observation(record, index, observed, false, true)?;
-        reserve_call(
+        let receipt = reserve_call(
             record,
             budget.maximum_debit_cycles,
             budget.observed_root_cycles,
@@ -305,7 +340,7 @@ impl CanisterPoolImportOps {
         };
         insert_reserved_asset(observed, now_ns);
         CanisterPoolStore::set_state(state);
-        Ok(())
+        Ok(receipt)
     }
 
     /// Confirm an issued normalization from exact evidence, including after a lost reply.
@@ -347,7 +382,7 @@ impl CanisterPoolImportOps {
         identity: PoolImportIdentity,
         observed: &PoolImportObservationView,
         budget: PoolImportCallBudgetView,
-    ) -> Result<(), InternalError> {
+    ) -> Result<PoolImportCallReservationView, InternalError> {
         advance(identity, observed, |record, index| {
             let PoolImportResetProgressRecord::ControllersConfirmed {
                 retained_total_cycles,
@@ -360,7 +395,7 @@ impl CanisterPoolImportOps {
             if source_total(observed.cycles, observed.reserved_cycles)? > retained_total_cycles {
                 return Err(InternalError::conflict());
             }
-            reserve_call(
+            let receipt = reserve_call(
                 record,
                 budget.maximum_debit_cycles,
                 budget.observed_root_cycles,
@@ -370,7 +405,7 @@ impl CanisterPoolImportOps {
                 before_canister_version: observed.canister_version,
                 sender_canister_version: budget.sender_canister_version,
             };
-            Ok(())
+            Ok(receipt)
         })
     }
 
@@ -380,7 +415,7 @@ impl CanisterPoolImportOps {
         observed: &PoolImportObservationView,
         budget: PoolImportCallBudgetView,
         now_ns: u64,
-    ) -> Result<(), InternalError> {
+    ) -> Result<PoolImportCallReservationView, InternalError> {
         let mut state = CanisterPoolStore::state();
         let record = required_mut(&mut state, identity)?;
         let index = source_index(record, observed.canister_id)?;
@@ -392,7 +427,7 @@ impl CanisterPoolImportOps {
             return Err(InternalError::conflict());
         }
         require_observation(record, index, observed, false, true)?;
-        reserve_call(
+        let receipt = reserve_call(
             record,
             budget.maximum_debit_cycles,
             budget.observed_root_cycles,
@@ -403,7 +438,7 @@ impl CanisterPoolImportOps {
         };
         insert_reserved_asset(observed, now_ns);
         CanisterPoolStore::set_state(state);
-        Ok(())
+        Ok(receipt)
     }
 
     /// Reconcile the stop before controller normalization; the stopped version owns later effects.
@@ -719,11 +754,11 @@ fn source_index(record: &PoolImportRecord, id: Principal) -> Result<usize, Inter
         .ok_or_else(InternalError::conflict)
 }
 
-fn advance(
+fn advance<T>(
     identity: PoolImportIdentity,
     observed: &PoolImportObservationView,
-    transition: impl FnOnce(&mut PoolImportRecord, usize) -> Result<(), InternalError>,
-) -> Result<(), InternalError> {
+    transition: impl FnOnce(&mut PoolImportRecord, usize) -> Result<T, InternalError>,
+) -> Result<T, InternalError> {
     let mut state = CanisterPoolStore::state();
     let record = required_mut(&mut state, identity)?;
     if record.phase != PoolImportPhaseRecord::Reserved {
@@ -731,9 +766,9 @@ fn advance(
     }
     let index = source_index(record, observed.canister_id)?;
     required_reserved_asset(observed.canister_id)?;
-    transition(record, index)?;
+    let result = transition(record, index)?;
     CanisterPoolStore::set_state(state);
-    Ok(())
+    Ok(result)
 }
 
 fn insert_reserved_asset(observed: &PoolImportObservationView, now_ns: u64) {
@@ -932,7 +967,7 @@ fn reserve_call(
     record: &mut PoolImportRecord,
     maximum_call_debit: u128,
     observed_root_cycles: u128,
-) -> Result<(), InternalError> {
+) -> Result<PoolImportCallReservationView, InternalError> {
     if record.root_receipt.is_some()
         || matches!(record.phase, PoolImportPhaseRecord::Released { .. })
     {
@@ -967,7 +1002,12 @@ fn reserve_call(
     record.paid_calls = paid_calls;
     record.reserved_debit_cycles = reserved;
     record.last_root_cycles = observed_root_cycles;
-    Ok(())
+    Ok(PoolImportCallReservationView {
+        paid_calls,
+        reserved_debit_cycles: reserved,
+        before_root_cycles: observed_root_cycles,
+        maximum_debit_cycles: maximum_call_debit,
+    })
 }
 
 fn require_history(

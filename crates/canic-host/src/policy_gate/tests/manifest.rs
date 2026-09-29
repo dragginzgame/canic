@@ -1,7 +1,7 @@
 use super::*;
 
 #[test]
-fn project_evidence_manifest_gate_evaluates_required_envelope() {
+fn workspace_evidence_manifest_gate_evaluates_required_envelope() {
     let root = temp_dir("canic-policy-manifest-pass");
     fs::create_dir_all(&root).expect("create root");
     let policy_path = root.join("policy.toml");
@@ -16,7 +16,7 @@ fn project_evidence_manifest_gate_evaluates_required_envelope() {
     let manifest_source = sample_manifest_source("build.json", true);
     fs::write(&manifest_path, &manifest_source).expect("write manifest");
 
-    let report = evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+    let report = evaluate_workspace_evidence_manifest_gate(WorkspaceEvidenceManifestGateRequest {
         policy_source: BUILD_PROVENANCE_POLICY,
         policy_path: &policy_path,
         manifest_source: &manifest_source,
@@ -34,7 +34,7 @@ fn project_evidence_manifest_gate_evaluates_required_envelope() {
 }
 
 #[test]
-fn project_evidence_manifest_gate_reports_missing_required_and_optional_evidence() {
+fn workspace_evidence_manifest_gate_reports_missing_required_and_optional_evidence() {
     let required_report = evaluate_manifest_gate_for_test(
         &sample_manifest_source("missing.json", true),
         BUILD_PROVENANCE_POLICY,
@@ -73,7 +73,7 @@ fn project_evidence_manifest_gate_reports_missing_required_and_optional_evidence
 }
 
 #[test]
-fn project_evidence_manifest_gate_checks_target_and_payload_schema_expectations() {
+fn workspace_evidence_manifest_gate_checks_target_and_payload_schema_expectations() {
     let mut wrong_schema = sample_envelope();
     wrong_schema.payload_schema = PayloadSchemaRefV1::stable("canic.other.v1", "1");
     let wrong_schema_report = evaluate_manifest_gate_with_envelope(
@@ -112,11 +112,11 @@ fn project_evidence_manifest_gate_checks_target_and_payload_schema_expectations(
 }
 
 #[test]
-fn project_evidence_manifest_rejects_duplicate_evidence_paths() {
+fn workspace_evidence_manifest_rejects_duplicate_evidence_paths() {
     let manifest_source = r#"
 schema_version = 1
 
-[project]
+[workspace]
 name = "demo"
 root = "."
 
@@ -140,7 +140,7 @@ payload_schema = "canic.policy_gate_report.v1"
 fleet = "demo-staging"
 "#;
 
-    let error = parse_project_evidence_manifest_v1(manifest_source)
+    let error = parse_workspace_evidence_manifest_v1(manifest_source)
         .expect_err("duplicate evidence path should fail");
 
     assert!(matches!(error, PolicyGateError::InvalidPolicy(_)));

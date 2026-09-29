@@ -24,6 +24,8 @@ Current stable schemas include:
 ```text
 canic.evidence_envelope.v1
 canic.build_provenance.v1
+canic.workspace_evidence_manifest.v1
+canic.workspace_evidence_gate_report.v1
 ```
 
 Historical adoption and deployment-check payloads may remain in archived
@@ -34,3 +36,26 @@ Envelope generation, comparison and policy evaluation do not install Wasm,
 fund canisters, mutate controllers/topology, or refresh stale live evidence.
 Policy should branch on stable envelope fields and explicitly stable payloads,
 not internal nested DTOs.
+
+A workspace manifest groups saved envelope files relative to its local root:
+
+```toml
+schema_version = 1
+
+[workspace]
+name = "demo"
+root = "."
+
+[[evidence]]
+kind = "build_provenance"
+path = "artifacts/build-provenance.json"
+required = true
+payload_schema = "canic.build_provenance.v1"
+
+[evidence.target]
+app = "demo"
+role = "app"
+```
+
+Manifest gate reports expose `workspace_name`. App and Fleet remain the deployment
+identities; the workspace names the local evidence bundle and filesystem root.

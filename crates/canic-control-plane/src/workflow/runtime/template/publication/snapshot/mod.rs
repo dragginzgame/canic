@@ -7,8 +7,6 @@
 use crate::dto::template::{
     TemplateManifestResponse, WasmStoreCatalogEntryResponse, WasmStoreStatusResponse,
 };
-#[cfg(test)]
-use crate::ids::WasmStoreGcMode;
 use crate::ids::{TemplateReleaseKey, WasmStoreBinding};
 use canic_core::cdk::types::Principal;
 use canic_core::control_plane_support::{
@@ -34,14 +32,6 @@ impl PublicationStoreSnapshot {
     // Return the stable release key for one catalog entry.
     fn release_key(entry: &WasmStoreCatalogEntryResponse) -> TemplateReleaseKey {
         TemplateReleaseKey::new(entry.template_id.clone(), entry.version.clone())
-    }
-
-    // Return whether the store remains eligible for publication and release authority.
-    #[cfg(test)]
-    pub(in crate::workflow::runtime::template::publication) fn is_available_for_publication(
-        &self,
-    ) -> bool {
-        self.status.gc.mode == WasmStoreGcMode::Normal
     }
 
     // Return true when this store already carries the exact release bytes for one manifest.
@@ -195,5 +185,101 @@ impl PublicationStoreSnapshot {
                 .templates
                 .sort_by(|left, right| left.template_id.cmp(&right.template_id));
         }
+    }
+}
+
+// -----------------------------------------------------------------------------
+// Tests
+// -----------------------------------------------------------------------------
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        dto::template::{WasmStoreGcStatusResponse, WasmStoreStatusResponse},
+        ids::{
+            CanisterRole, TemplateChunkingMode, TemplateManifestState, TemplateVersion,
+            WasmStoreGcMode,
+        },
+    };
+    use canic_core::cdk::types::Principal;
+
+    fn manifest() -> TemplateManifestResponse {
+        TemplateManifestResponse {
+            template_id: crate::ids::TemplateId::new("embedded:app"),
+            role: CanisterRole::new("app"),
+            version: TemplateVersion::new("1"),
+            payload_hash: vec![1; 32],
+            payload_size_bytes: 10,
+            store_binding: WasmStoreBinding::new("primary"),
+            chunking_mode: TemplateChunkingMode::Chunked,
+            manifest_state: TemplateManifestState::Approved,
+            approved_at: Some(1),
+            created_at: 1,
+        }
+    }
+
+    fn snapshot(mode: WasmStoreGcMode) -> PublicationStoreSnapshot {
+        PublicationStoreSnapshot {
+            binding: WasmStoreBinding::new("primary"),
+            pid: Principal::anonymous(),
+            status: WasmStoreStatusResponse {
+                inventory: crate::dto::template::WasmStoreInventoryResponse::default(),
+                gc: WasmStoreGcStatusResponse {
+                    mode,
+                    changed_at: 1,
+                    prepared_at: None,
+                    started_at: None,
+                    completed_at: None,
+                    runs_completed: 0,
+                },
+                occupied_store_bytes: 0,
+                occupied_store_size: "0 B".to_string(),
+                max_store_bytes: 100,
+                max_store_size: "100 B".to_string(),
+                remaining_store_bytes: 100,
+                remaining_store_size: "100 B".to_string(),
+                headroom_bytes: None,
+                headroom_size: None,
+                within_headroom: false,
+                template_count: 0,
+                max_templates: None,
+                release_count: 0,
+                max_template_versions_per_template: None,
+                templates: Vec::new(),
+            },
+            releases: Vec::new(),
+            stored_chunk_hashes: None,
+        }
+    }
+
+    #[test]
+    fn catalog_requires_exact_release_identity_and_payload() {
+        let manifest = manifest();
+        let mut store = snapshot(WasmStoreGcMode::Normal);
+        assert!(!store.has_exact_release(&manifest));
+        store.releases.push(WasmStoreCatalogEntryResponse {
+            role: manifest.role.clone(),
+            template_id: manifest.template_id.clone(),
+            version: manifest.version.clone(),
+            payload_hash: manifest.payload_hash.clone(),
+            payload_size_bytes: manifest.payload_size_bytes,
+        });
+        assert!(store.has_exact_release(&manifest));
+        let mut changed = manifest.clone();
+        changed.payload_hash[0] ^= 1;
+        assert!(!store.has_exact_release(&changed));
+        changed = manifest.clone();
+        changed.payload_size_bytes += 1;
+        assert!(!store.has_exact_release(&changed));
+        changed = manifest.clone();
+        changed.version = TemplateVersion::new("other");
+        assert!(!store.has_exact_release(&changed));
+        changed = manifest.clone();
+        changed.template_id = crate::ids::TemplateId::new("other");
+        assert!(!store.has_exact_release(&changed));
+        changed = manifest;
+        changed.role = CanisterRole::new("other");
+        assert!(!store.has_exact_release(&changed));
     }
 }

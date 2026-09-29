@@ -5,7 +5,7 @@
 //! cross-canister orchestration, topology creation, and reconciliation.
 
 use crate::{
-    ids::{BuildNetwork, CanisterRole, TemplateChunkingMode},
+    ids::{BuildNetwork, CanisterRole},
     ops::{
         component_registry::ComponentRegistryOps,
         storage::{state::root_wasm_store::RootWasmStoreStateOps, template::TemplateManifestOps},
@@ -72,8 +72,7 @@ fn root_missing_staged_release_roles(data: &RootBootstrapContext) -> Vec<Caniste
 
         let available =
             TemplateManifestOps::approved_for_role_response(&role).is_ok_and(|manifest| {
-                manifest.chunking_mode == TemplateChunkingMode::Chunked
-                    && RootWasmStoreStateOps::wasm_store_pid(&manifest.store_binding).is_some()
+                RootWasmStoreStateOps::wasm_store_pid(&manifest.store_binding).is_some()
             });
         if !available {
             missing.push(role);

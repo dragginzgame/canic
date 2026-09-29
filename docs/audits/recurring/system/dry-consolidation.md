@@ -103,7 +103,7 @@ Evidence envelope and stable report ownership:
 
 ```bash
 rg -n "EvidenceEnvelopeV1|ExitClassV1|InputFingerprintV1|PayloadSchemaRefV1|CommandProvenanceV1|EvidenceSummaryV1|EvidenceMessageV1" crates/canic-cli crates/canic-host crates/canic-core -g '*.rs'
-rg -n "BuildProvenanceV1|ProjectEvidenceManifestV1|PolicyGateReportV1|DeploymentCatalogReportV1|DeploymentCatalogEntryV1" crates/canic-cli crates/canic-host crates/canic-core -g '*.rs'
+rg -n "BuildProvenanceV1|WorkspaceEvidenceManifestV1|PolicyGateReportV1|DeploymentCatalogReportV1|DeploymentCatalogEntryV1" crates/canic-cli crates/canic-host crates/canic-core -g '*.rs'
 rg -n "write_output|--output|OutputFormat|format json|envelope-json|write_pretty_json|write_text|serde_json::to_string_pretty" crates/canic-cli crates/canic-host -g '*.rs'
 ```
 
@@ -173,7 +173,7 @@ ownership around:
 
 - host-owned stable evidence envelope helpers;
 - host-owned build provenance schema and artifact hashing;
-- host-owned policy gate and project evidence manifest evaluation;
+- host-owned policy gate and workspace evidence manifest evaluation;
 - local-state-only deployment catalog construction;
 - retained installed/packaged proof scripts with clear, separate release
   questions.

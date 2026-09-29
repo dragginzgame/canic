@@ -635,3 +635,76 @@ fn capacity_import_cancelled_execution_keeps_issued_intent_and_spent_allowance()
     )
     .unwrap();
 }
+
+#[test]
+fn successful_paid_callbacks_release_unused_reserve_without_resetting_call_count() {
+    start();
+    let first = CanisterPoolImportOps::reserve_paid_call(identity(), 600, 9_950).unwrap();
+    CanisterPoolImportOps::complete_paid_call(identity(), first, 9_940).unwrap();
+    let status = CanisterPoolImportOps::status(identity()).unwrap();
+    assert_eq!(status.paid_calls, 1);
+    assert_eq!(status.reserved_debit_cycles, 60);
+    assert_eq!(status.last_root_cycles, 9_940);
+    let second = CanisterPoolImportOps::reserve_paid_call(identity(), 900, 9_930).unwrap();
+    CanisterPoolImportOps::complete_paid_call(identity(), second, 9_920).unwrap();
+    let status = CanisterPoolImportOps::status(identity()).unwrap();
+    assert_eq!(status.paid_calls, 2);
+    assert_eq!(status.reserved_debit_cycles, 80);
+}
+
+#[test]
+fn lost_and_stale_callbacks_keep_their_conservative_reservation() {
+    start();
+    let lost = CanisterPoolImportOps::reserve_paid_call(identity(), 600, 9_950).unwrap();
+    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
+    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    let completed = CanisterPoolImportOps::reserve_paid_call(identity(), 300, 9_940).unwrap();
+    CanisterPoolImportOps::complete_paid_call(identity(), completed, 9_930).unwrap();
+    let before = CanisterPoolStore::state();
+    assert_eq!(
+        CanisterPoolImportOps::status(identity())
+            .unwrap()
+            .reserved_debit_cycles,
+        660
+    );
+    assert!(CanisterPoolImportOps::complete_paid_call(identity(), lost, 9_920).is_err());
+    assert!(CanisterPoolImportOps::complete_paid_call(identity(), completed, 9_920).is_err());
+    assert_eq!(CanisterPoolStore::state(), before);
+}
+
+#[test]
+fn complete_mainnet_sized_import_keeps_reserve_separate_from_observed_debit() {
+    use canic_core::control_plane_support::policy::pool_import;
+    CanisterPoolStore::clear();
+    let mut request = reservation();
+    request.sources = (30..54)
+        .map(|id| PoolImportSource {
+            canister_id: principal(id),
+            ..request.sources[0].clone()
+        })
+        .collect();
+    let calls = pool_import::recommended_calls(request.sources.len()).unwrap();
+    let quote = 50_000_000_000;
+    request.maximum_paid_calls = calls;
+    request.maximum_root_debit_cycles = pool_import::required_debit(quote, calls).unwrap();
+    request.observed_root_cycles = 400_000_000_000_000;
+    let mut pool = config();
+    pool.maximum_size = 24;
+    CanisterPoolImportOps::reserve(request.clone(), &pool, 1).unwrap();
+    let mut cycles = request.observed_root_cycles;
+    for _ in 0..pool_import::minimum_calls(request.sources.len()).unwrap() {
+        let receipt = CanisterPoolImportOps::reserve_paid_call(identity(), quote, cycles).unwrap();
+        cycles -= 500_000_000;
+        CanisterPoolImportOps::complete_paid_call(identity(), receipt, cycles).unwrap();
+    }
+    let status = CanisterPoolImportOps::status(identity()).unwrap();
+    assert_eq!(
+        status.reserved_debit_cycles,
+        request.observed_root_cycles - cycles
+    );
+    assert_eq!(
+        status.paid_calls,
+        pool_import::minimum_calls(request.sources.len()).unwrap()
+    );
+    assert!(status.paid_calls < calls);
+}

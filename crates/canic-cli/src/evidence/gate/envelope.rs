@@ -9,7 +9,7 @@ use canic_host::{
         CommandProvenanceV1, EvidenceEnvelopeV1, EvidenceMessageSeverityV1, EvidenceMessageV1,
         EvidenceSummaryV1, EvidenceTargetKindV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1,
         PayloadSchemaRefV1, evidence_envelope_schema, json_payload_sha256,
-        policy_gate_report_schema, project_evidence_gate_report_schema,
+        policy_gate_report_schema, workspace_evidence_gate_report_schema,
     },
     policy_gate::{PolicyFindingSeverityV1, PolicyFindingV1},
 };
@@ -108,7 +108,7 @@ fn push_gate_summary_finding(summary: &mut EvidenceSummaryV1, finding: &PolicyFi
 fn policy_gate_payload_schema(report: &EvidenceGateReport) -> PayloadSchemaRefV1 {
     match report {
         EvidenceGateReport::Envelope(_) => policy_gate_report_schema(),
-        EvidenceGateReport::Manifest(_) => project_evidence_gate_report_schema(),
+        EvidenceGateReport::Manifest(_) => workspace_evidence_gate_report_schema(),
     }
 }
 
@@ -149,7 +149,7 @@ fn policy_gate_target(report: &EvidenceGateReport) -> EvidenceTargetV1 {
             app: None,
             fleet: None,
             role: None,
-            profile: Some(report.project_name.clone()),
+            profile: Some(report.workspace_name.clone()),
             environment: None,
         },
     }

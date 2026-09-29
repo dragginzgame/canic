@@ -108,20 +108,20 @@ mod tests {
         WasmStoreMetrics::reset();
 
         WasmStoreMetrics::record(
-            WasmStoreMetricOperation::SourceResolve,
-            WasmStoreMetricSource::Store,
+            WasmStoreMetricOperation::ReleasePublish,
+            WasmStoreMetricSource::TargetStore,
             WasmStoreMetricOutcome::Completed,
             WasmStoreMetricReason::Ok,
         );
         WasmStoreMetrics::record(
             WasmStoreMetricOperation::ChunkUpload,
-            WasmStoreMetricSource::Store,
+            WasmStoreMetricSource::TargetStore,
             WasmStoreMetricOutcome::Skipped,
             WasmStoreMetricReason::CacheHit,
         );
         WasmStoreMetrics::record(
             WasmStoreMetricOperation::ChunkUpload,
-            WasmStoreMetricSource::Store,
+            WasmStoreMetricSource::TargetStore,
             WasmStoreMetricOutcome::Skipped,
             WasmStoreMetricReason::CacheHit,
         );
@@ -130,8 +130,8 @@ mod tests {
 
         assert_eq!(
             map.get(&WasmStoreMetricKey {
-                operation: WasmStoreMetricOperation::SourceResolve,
-                source: WasmStoreMetricSource::Store,
+                operation: WasmStoreMetricOperation::ReleasePublish,
+                source: WasmStoreMetricSource::TargetStore,
                 outcome: WasmStoreMetricOutcome::Completed,
                 reason: WasmStoreMetricReason::Ok,
             }),
@@ -140,7 +140,7 @@ mod tests {
         assert_eq!(
             map.get(&WasmStoreMetricKey {
                 operation: WasmStoreMetricOperation::ChunkUpload,
-                source: WasmStoreMetricSource::Store,
+                source: WasmStoreMetricSource::TargetStore,
                 outcome: WasmStoreMetricOutcome::Skipped,
                 reason: WasmStoreMetricReason::CacheHit,
             }),

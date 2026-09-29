@@ -675,8 +675,6 @@ fn direct_raw_timer_provider_access_is_absent_from_production() {
 #[test]
 fn pool_and_snapshot_paths_use_exact_native_owners() {
     let root = workspace_root();
-    let timer = read_source(&root, "crates/canic-core/src/workflow/runtime/timer/mod.rs");
-    let timer_api = read_source(&root, "crates/canic-core/src/api/timer.rs");
     let pool = read_source(
         &root,
         "crates/canic-control-plane/src/workflow/canister_pool/mod.rs",
@@ -691,15 +689,6 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
         "crates/canic-core/src/workflow/runtime/authority_restore.rs",
     );
 
-    for forbidden in [
-        "static CLAIMS",
-        "enum TimerClaim",
-        "register_snapshot_resume_participant",
-        "register_async_job_recovery_participant",
-    ] {
-        assert!(!timer.contains(forbidden));
-        assert!(!timer_api.contains(forbidden));
-    }
     for required in [
         "static MAINTENANCE_TIMER: RefCell<Option<AfterCompletionRegistration>>",
         "static RECOVERY_WATCHDOG: RefCell<Option<WatchdogRegistration>>",

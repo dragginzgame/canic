@@ -465,7 +465,9 @@ mod tests {
             StateAllocationKey::FleetCoordinatorRegistry,
             StateAllocationKey::RootComponentRegistry,
             StateAllocationKey::RootFleetRegistryMirror,
+            #[cfg(feature = "root-control-plane")]
             StateAllocationKey::RootCanisterPool,
+            #[cfg(feature = "root-control-plane")]
             StateAllocationKey::RootComponentProvisioning,
             StateAllocationKey::TemplateManifests,
             StateAllocationKey::TemplateChunkSets,
@@ -514,6 +516,7 @@ mod tests {
                 RootFleetRegistryMirrorStateRecord::STATE_CONTRACT_NAME,
                 RootFleetRegistryMirrorData::STATE_CONTRACT_NAME,
             ),
+            #[cfg(feature = "root-control-plane")]
             (
                 StateAllocationKey::RootComponentProvisioning,
                 RootComponentOperationRecord::STATE_CONTRACT_NAME,
@@ -622,6 +625,7 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "root-control-plane")]
     #[test]
     fn root_component_provisioning_declares_exact_consecutive_domains() {
         let descriptors = canic_control_plane_state_descriptors();

@@ -30,9 +30,10 @@ use crate::{
             },
             reinstall::terminal::inventory::custody,
         },
-        policy::capacity_import::{CapacityImportPolicyError, admit_handoffs},
+        policy::capacity_import::{CapacityImportPolicyError, admit_handoffs, select_destination},
         view::capacity_import::{
-            CapacityImportDestinationView, CapacityImportOwnershipView, CapacityImportSourceView,
+            CapacityImportDestinationView, CapacityImportOwnershipView, CapacityImportRootView,
+            CapacityImportSourceView,
         },
     },
     icp::IcpCli,
@@ -97,19 +98,15 @@ impl ReviewSurvey {
             }
             .into());
         }
-        let mut roots = registry.fleet_subnet_roots.iter().filter(|entry| {
-            entry.placement_subnet == subnet
-                && request
-                    .root
-                    .is_none_or(|root| root == entry.fleet_subnet_root)
-        });
-        let root = roots
-            .next()
-            .ok_or(CapacityImportPolicyError::DestinationMissing { subnet })?
-            .fleet_subnet_root;
-        if roots.next().is_some() {
-            return Err(CapacityImportPolicyError::DestinationAmbiguous { subnet }.into());
-        }
+        let roots = registry
+            .fleet_subnet_roots
+            .iter()
+            .map(|entry| CapacityImportRootView {
+                root: entry.fleet_subnet_root,
+                subnet: entry.placement_subnet,
+            })
+            .collect::<Vec<_>>();
+        let root = select_destination(&roots, subnet, request.root)?.root;
         let infrastructure = provenance::inspect(paths, desired, state, &transport.agent).await?;
         if inventory::registry(&transport.agent, registry.authority.binding.coordinator).await?
             != *registry
@@ -117,6 +114,7 @@ impl ReviewSurvey {
             return Err(CapacityImportJournalError::InfrastructureChanged);
         }
         let context = transport.root_context(root).await?;
+        super::validate_budget(request, context.maximum_call_debit_cycles)?;
         if context.active_import.is_some() {
             return Err(CapacityImportJournalError::Conflict);
         }

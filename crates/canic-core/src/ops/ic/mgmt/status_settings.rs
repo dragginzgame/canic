@@ -53,11 +53,7 @@ impl MgmtOps {
     pub async fn canister_history(
         canister_pid: Principal,
     ) -> Result<CanisterHistoryResponse, InternalError> {
-        let response = management_call(
-            ManagementCallMetricOperation::CanisterInfo,
-            MgmtInfra::canister_history(canister_pid),
-        )
-        .await?;
+        let response = management_call(MgmtInfra::canister_history(canister_pid)).await?;
         Ok(CanisterHistoryResponse {
             canister_id: canister_pid,
             history_candid: response.into_bytes(),
@@ -69,18 +65,10 @@ impl MgmtOps {
         canister_pid: Principal,
     ) -> Result<CanisterInspectionOutcome, InternalError> {
         let native_cycles = crate::ops::ic::IcOps::canister_cycle_balance().to_u128();
-        match management_call_infra(
-            ManagementCallMetricOperation::CanisterStatus,
-            MgmtInfra::canister_status(canister_pid),
-        )
-        .await
-        {
-            Ok(status) => {
-                SystemMetrics::increment(SystemMetricKind::CanisterStatus);
-                Ok(CanisterInspectionOutcome::Status(Box::new(
-                    Self::canister_status_to_dto(canister_status_from_infra(status)),
-                )))
-            }
+        match management_call_infra(MgmtInfra::canister_status(canister_pid)).await {
+            Ok(status) => Ok(CanisterInspectionOutcome::Status(Box::new(
+                Self::canister_status_to_dto(canister_status_from_infra(status)),
+            ))),
             Err(error) => inspection_failure(
                 canister_pid,
                 crate::ops::ic::IcOps::canister_self(),
@@ -94,11 +82,7 @@ impl MgmtOps {
     pub async fn canister_history_total_changes(
         canister_pid: Principal,
     ) -> Result<u64, InternalError> {
-        management_call(
-            ManagementCallMetricOperation::CanisterInfo,
-            MgmtInfra::canister_history_total_changes(canister_pid),
-        )
-        .await
+        management_call(MgmtInfra::canister_history_total_changes(canister_pid)).await
     }
 
     #[must_use]
@@ -119,13 +103,7 @@ impl MgmtOps {
 
     /// Internal ops entrypoint used by workflow and other ops helpers.
     pub async fn canister_status(canister_pid: Principal) -> Result<CanisterStatus, InternalError> {
-        let status = management_call(
-            ManagementCallMetricOperation::CanisterStatus,
-            MgmtInfra::canister_status(canister_pid),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::CanisterStatus);
+        let status = management_call(MgmtInfra::canister_status(canister_pid)).await?;
 
         Ok(canister_status_from_infra(status))
     }
@@ -134,22 +112,11 @@ impl MgmtOps {
     pub async fn observe_canister_status(
         canister_pid: Principal,
     ) -> Result<CanisterStatusObservation, InternalError> {
-        match management_call_infra(
-            ManagementCallMetricOperation::CanisterStatus,
-            MgmtInfra::canister_status(canister_pid),
-        )
-        .await
-        {
-            Ok(status) => {
-                SystemMetrics::increment(SystemMetricKind::CanisterStatus);
-                Ok(CanisterStatusObservation::Present(Box::new(
-                    canister_status_from_infra(status),
-                )))
-            }
-            Err(error) if error.is_canister_not_found() => {
-                SystemMetrics::increment(SystemMetricKind::CanisterStatus);
-                Ok(CanisterStatusObservation::Absent)
-            }
+        match management_call_infra(MgmtInfra::canister_status(canister_pid)).await {
+            Ok(status) => Ok(CanisterStatusObservation::Present(Box::new(
+                canister_status_from_infra(status),
+            ))),
+            Err(error) if error.is_canister_not_found() => Ok(CanisterStatusObservation::Absent),
             Err(error) => Err(OpsError::from(error).into()),
         }
     }
@@ -157,13 +124,7 @@ impl MgmtOps {
     /// Updates canister settings via the management canister and records metrics.
     pub async fn update_settings(args: &UpdateSettingsArgs) -> Result<(), InternalError> {
         let infra_args = update_settings_to_infra(args);
-        management_call(
-            ManagementCallMetricOperation::UpdateSettings,
-            MgmtInfra::update_settings(&infra_args),
-        )
-        .await?;
-
-        SystemMetrics::increment(SystemMetricKind::UpdateSettings);
+        management_call(MgmtInfra::update_settings(&infra_args)).await?;
 
         Ok(())
     }

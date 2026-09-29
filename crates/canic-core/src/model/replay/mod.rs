@@ -277,8 +277,6 @@ pub enum RecoveryReason {
     ComponentChildLifecycleInterrupted,
     ResponseCommitFailed,
     CostSettlementFailed,
-    StateProjectionFailed,
-    Other(String),
 }
 
 ///

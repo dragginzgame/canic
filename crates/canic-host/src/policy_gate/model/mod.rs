@@ -154,10 +154,10 @@ pub struct PolicyGateRequest<'a> {
 }
 
 ///
-/// ProjectEvidenceManifestGateRequest
+/// WorkspaceEvidenceManifestGateRequest
 ///
 #[derive(Clone, Debug, Eq, PartialEq)]
-pub struct ProjectEvidenceManifestGateRequest<'a> {
+pub struct WorkspaceEvidenceManifestGateRequest<'a> {
     pub policy_source: &'a str,
     pub policy_path: &'a Path,
     pub manifest_source: &'a str,
@@ -166,45 +166,45 @@ pub struct ProjectEvidenceManifestGateRequest<'a> {
 }
 
 ///
-/// ProjectEvidenceManifestV1
+/// WorkspaceEvidenceManifestV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectEvidenceManifestV1 {
+pub struct WorkspaceEvidenceManifestV1 {
     pub schema_version: u32,
-    pub project: ProjectEvidenceManifestProjectV1,
-    pub evidence: Vec<ProjectEvidenceManifestEntryV1>,
+    pub workspace: WorkspaceEvidenceManifestWorkspaceV1,
+    pub evidence: Vec<WorkspaceEvidenceManifestEntryV1>,
 }
 
 ///
-/// ProjectEvidenceManifestProjectV1
+/// WorkspaceEvidenceManifestWorkspaceV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectEvidenceManifestProjectV1 {
+pub struct WorkspaceEvidenceManifestWorkspaceV1 {
     pub name: String,
     pub root: String,
 }
 
 ///
-/// ProjectEvidenceManifestEntryV1
+/// WorkspaceEvidenceManifestEntryV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectEvidenceManifestEntryV1 {
+pub struct WorkspaceEvidenceManifestEntryV1 {
     pub kind: String,
     pub path: String,
     pub required: bool,
     pub payload_schema: String,
-    pub target: ProjectEvidenceManifestTargetV1,
+    pub target: WorkspaceEvidenceManifestTargetV1,
 }
 
 ///
-/// ProjectEvidenceManifestTargetV1
+/// WorkspaceEvidenceManifestTargetV1
 ///
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
-pub struct ProjectEvidenceManifestTargetV1 {
+pub struct WorkspaceEvidenceManifestTargetV1 {
     pub app: Option<String>,
     pub fleet: Option<String>,
     pub role: Option<String>,
@@ -231,30 +231,30 @@ pub struct PolicyGateReportV1 {
 }
 
 ///
-/// ProjectEvidenceGateReportV1
+/// WorkspaceEvidenceGateReportV1
 ///
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct ProjectEvidenceGateReportV1 {
+pub struct WorkspaceEvidenceGateReportV1 {
     pub schema_version: u32,
     pub manifest_schema_version: u32,
-    pub project_name: String,
+    pub workspace_name: String,
     pub policy_file_fingerprint: InputFingerprintV1,
     pub manifest_file_fingerprint: InputFingerprintV1,
     pub policy_status: PolicyEvaluationStatusV1,
     pub gate_exit_class: ExitClassV1,
-    pub evidence: Vec<ProjectEvidenceGateEntryReportV1>,
+    pub evidence: Vec<WorkspaceEvidenceGateEntryReportV1>,
 }
 
 ///
-/// ProjectEvidenceGateEntryReportV1
+/// WorkspaceEvidenceGateEntryReportV1
 ///
 #[derive(Clone, Debug, Eq, PartialEq, Serialize)]
-pub struct ProjectEvidenceGateEntryReportV1 {
+pub struct WorkspaceEvidenceGateEntryReportV1 {
     pub kind: String,
     pub path: String,
     pub required: bool,
     pub expected_payload_schema: String,
-    pub expected_target: ProjectEvidenceManifestTargetV1,
+    pub expected_target: WorkspaceEvidenceManifestTargetV1,
     pub status: PolicyEvaluationStatusV1,
     pub gate_exit_class: ExitClassV1,
     pub evaluated_envelope_fingerprint: Option<InputFingerprintV1>,
@@ -311,7 +311,7 @@ pub enum PolicyEvaluationStatusV1 {
     Failed,
 }
 
-impl ProjectEvidenceManifestTargetV1 {
+impl WorkspaceEvidenceManifestTargetV1 {
     pub(super) const fn has_selector(&self) -> bool {
         self.app.is_some()
             || self.fleet.is_some()

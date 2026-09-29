@@ -29,7 +29,10 @@ maximum_instances = 8
 
 fn parse(source: &str) -> Result<(ConfigModel, FleetServiceTopology), ConfigError> {
     let config = Config::parse_toml(&format!("{CONFIG_PREFIX}\n{source}"))?;
-    let topology = config.compile_fleet_service_topology()?;
+    let topology = config
+        .compile_component_deployment_configuration()
+        .map_err(ConfigError::from)?
+        .fleet_service_topology;
     Ok((config, topology))
 }
 
@@ -209,11 +212,13 @@ fn target_count_rejects_the_first_value_above_the_structural_bound() {
     }
 
     assert!(matches!(
-        config.compile_fleet_service_topology(),
-        Err(FleetServiceTopologyError::TargetBoundExceeded {
-            actual,
-            maximum: MAX_FLEET_SERVICE_TARGETS,
-        }) if actual == MAX_FLEET_SERVICE_TARGETS + 1
+        config.compile_component_deployment_configuration(),
+        Err(crate::config::ComponentDeploymentConfigurationDigestError::FleetServiceTopology(
+            FleetServiceTopologyError::TargetBoundExceeded {
+                actual,
+                maximum: MAX_FLEET_SERVICE_TARGETS,
+            }
+        )) if actual == MAX_FLEET_SERVICE_TARGETS + 1
     ));
 }
 

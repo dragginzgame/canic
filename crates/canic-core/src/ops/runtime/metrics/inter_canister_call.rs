@@ -4,10 +4,7 @@
 //! Does not own: workflow decisions, persisted records, or endpoint DTOs.
 //! Boundary: ops-layer metrics consumed by workflow metrics projection.
 
-use crate::{
-    ids::SystemMetricKind,
-    ops::{prelude::*, runtime::metrics::system::SystemMetrics},
-};
+use crate::ops::{prelude::*, runtime::metrics::system::SystemMetrics};
 use std::{cell::RefCell, collections::HashMap};
 
 thread_local! {
@@ -71,7 +68,7 @@ impl InterCanisterCallMetrics {
     pub fn record_call(target: impl Into<Principal>, method: &str) {
         let target: Principal = target.into();
 
-        SystemMetrics::increment(SystemMetricKind::CanisterCall);
+        SystemMetrics::increment();
         Self::increment(target, method);
     }
 
@@ -168,7 +165,6 @@ mod tests {
             Some(&2)
         );
 
-        let system: HashMap<_, _> = SystemMetrics::snapshot().into_iter().collect();
-        assert_eq!(system.get(&SystemMetricKind::CanisterCall), Some(&2));
+        assert_eq!(SystemMetrics::count(), 2);
     }
 }

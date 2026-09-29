@@ -246,7 +246,20 @@ fn review_import<E: std::error::Error + 'static>(
         };
         samples.push(sample);
     }
-    let request = storage::import_request(paths, record, root, &samples, &agent.read_root_key())?;
+    let transport = import(
+        crate::fleet_ensure::ops::capacity_import::transport::CapacityImportTransport::from_icp(
+            icp,
+        ),
+    )?;
+    let context = import(runtime.block_on(transport.root_context(root)))?;
+    let request = storage::import_request(
+        paths,
+        record,
+        root,
+        &samples,
+        &agent.read_root_key(),
+        context.maximum_call_debit_cycles,
+    )?;
     drop(survey);
     drop(owner);
     import(imports::plan(&paths.workspace, &request, icp))

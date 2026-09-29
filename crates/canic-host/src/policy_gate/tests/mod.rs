@@ -49,7 +49,7 @@ fn evaluate_policy_for_test(
 fn evaluate_manifest_gate_for_test(
     manifest_source: &str,
     policy_source: &str,
-) -> ProjectEvidenceGateReportV1 {
+) -> WorkspaceEvidenceGateReportV1 {
     let root = temp_dir("canic-policy-manifest-test");
     fs::create_dir_all(&root).expect("create root");
     let policy_path = root.join("policy.toml");
@@ -57,7 +57,7 @@ fn evaluate_manifest_gate_for_test(
     fs::write(&policy_path, policy_source).expect("write policy");
     fs::write(&manifest_path, manifest_source).expect("write manifest");
 
-    let report = evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+    let report = evaluate_workspace_evidence_manifest_gate(WorkspaceEvidenceManifestGateRequest {
         policy_source,
         policy_path: &policy_path,
         manifest_source,
@@ -73,7 +73,7 @@ fn evaluate_manifest_gate_for_test(
 fn evaluate_manifest_gate_with_envelope(
     manifest_source: &str,
     envelope: EvidenceEnvelopeV1,
-) -> ProjectEvidenceGateReportV1 {
+) -> WorkspaceEvidenceGateReportV1 {
     let root = temp_dir("canic-policy-manifest-envelope-test");
     fs::create_dir_all(&root).expect("create root");
     let policy_path = root.join("policy.toml");
@@ -87,7 +87,7 @@ fn evaluate_manifest_gate_with_envelope(
     )
     .expect("write envelope");
 
-    let report = evaluate_project_evidence_manifest_gate(ProjectEvidenceManifestGateRequest {
+    let report = evaluate_workspace_evidence_manifest_gate(WorkspaceEvidenceManifestGateRequest {
         policy_source: BUILD_PROVENANCE_POLICY,
         policy_path: &policy_path,
         manifest_source,
@@ -232,7 +232,7 @@ fn sample_manifest_source(path: &str, required: bool) -> String {
         r#"
 schema_version = 1
 
-[project]
+[workspace]
 name = "demo"
 root = "."
 

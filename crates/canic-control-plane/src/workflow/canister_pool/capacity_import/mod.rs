@@ -4,7 +4,7 @@
 
 use crate::{
     ops::canister_pool::capacity_import::CanisterPoolImportOps,
-    view::canister_pool::PoolImportCallBudgetView,
+    view::canister_pool::{PoolImportCallBudgetView, PoolImportCallReservationView},
     workflow::canister_pool::require_import_candidate,
 };
 use canic_core::{
@@ -60,7 +60,15 @@ pub fn context() -> Result<PoolImportContext, InternalError> {
     }
     CanisterPoolImportOps::require_no_competing_operation()?;
     let binding = authority.binding;
+    let maximum_call_debit_cycles =
+        crate::ops::canister_pool::capacity_import::quote::maximum_call_debit(
+            binding
+                .authority
+                .binding
+                .root_controllers(binding.fleet_subnet_root),
+        )?;
     Ok(PoolImportContext {
+        maximum_call_debit_cycles,
         bootstrap: crate::ops::canister_pool::capacity_import::bootstrap::context(),
         root_authority_sha256: CanisterPoolImportOps::authority_hash(&binding)?,
         next_sequence: CanisterPoolImportOps::next_sequence(),
@@ -73,6 +81,21 @@ pub fn context() -> Result<PoolImportContext, InternalError> {
 pub fn reserve(request: PoolImportReservation) -> Result<PoolImportStatus, InternalError> {
     require_destination(&request)?;
     let binding = FleetActivationWorkflow::root_authority()?.binding;
+    let quote = crate::ops::canister_pool::capacity_import::quote::maximum_call_debit(
+        request.final_controllers.clone(),
+    )?;
+    let minimum_calls = canic_core::control_plane_support::policy::pool_import::minimum_calls(
+        request.sources.len(),
+    )
+    .ok_or_else(InternalError::invalid_input)?;
+    let required = canic_core::control_plane_support::policy::pool_import::required_debit(
+        quote,
+        request.maximum_paid_calls,
+    )
+    .ok_or_else(InternalError::resource_exhausted)?;
+    if request.maximum_paid_calls < minimum_calls || request.maximum_root_debit_cycles < required {
+        return Err(InternalError::resource_exhausted());
+    }
     for source in &request.sources {
         require_import_candidate(source.canister_id)?;
     }
@@ -104,28 +127,32 @@ pub async fn advance(
     require_destination(&retained.reservation)?;
     require_import_candidate(canister_id)?;
     if BuildNetworkOps::build_network() == Some(BuildNetwork::Ic) {
-        reserve_observation(
+        let paid = reserve_observation(
             identity,
             NnsRegistryOps::subnet_lookup_call_cost(canister_id)?,
         )?;
         let subnet = NnsRegistryOps::get_subnet_for_canister(canister_id).await?;
+        complete_call(identity, paid)?;
         if subnet != Some(retained.reservation.subnet) {
             return Err(InternalError::conflict());
         }
     }
-    reserve_observation(
+    let paid = reserve_observation(
         identity,
         MgmtOps::canister_inspection_reserve(canister_id)?.required_liquid_cycles,
     )?;
     let observed = CanisterPoolImportOps::observe_source(canister_id).await?;
+    complete_call(identity, paid)?;
     require_destination(&retained.reservation)?;
     match progress {
         PoolImportSourceProgress::AwaitingHandoff
             if !retained.reservation.sources[index].stopped =>
         {
             let budget = budget(MgmtOps::stop_canister_call_cost(canister_id)?);
-            CanisterPoolImportOps::issue_stop(identity, &observed, budget, IcOps::now_nanos())?;
+            let paid =
+                CanisterPoolImportOps::issue_stop(identity, &observed, budget, IcOps::now_nanos())?;
             MgmtOps::stop_canister(canister_id).await?;
+            complete_call(identity, paid)?;
         }
         PoolImportSourceProgress::AwaitingHandoff | PoolImportSourceProgress::Stopped => {
             let args = UpdateSettingsArgs {
@@ -137,17 +164,20 @@ pub async fn advance(
                 sender_canister_version: None,
             };
             let budget = budget(MgmtOps::update_settings_call_cost(&args)?);
-            CanisterPoolImportOps::issue_controllers(
+            let paid = CanisterPoolImportOps::issue_controllers(
                 identity,
                 &observed,
                 budget,
                 IcOps::now_nanos(),
             )?;
             MgmtOps::update_settings(&args).await?;
+            complete_call(identity, paid)?;
         }
         PoolImportSourceProgress::ControllersIssued => {
-            reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
+            let paid =
+                reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
             let history = CanisterPoolImportOps::observe_history(canister_id).await?;
+            complete_call(identity, paid)?;
             require_destination(&retained.reservation)?;
             CanisterPoolImportOps::observe_controllers(identity, &observed, &history)?;
         }
@@ -156,12 +186,15 @@ pub async fn advance(
         }
         PoolImportSourceProgress::ControllersConfirmed => {
             let budget = budget(MgmtOps::uninstall_code_call_cost(canister_id)?);
-            CanisterPoolImportOps::issue_uninstall(identity, &observed, budget)?;
+            let paid = CanisterPoolImportOps::issue_uninstall(identity, &observed, budget)?;
             MgmtOps::uninstall_code(canister_id).await?;
+            complete_call(identity, paid)?;
         }
         PoolImportSourceProgress::UninstallIssued => {
-            reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
+            let paid =
+                reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
             let history = CanisterPoolImportOps::observe_history(canister_id).await?;
+            complete_call(identity, paid)?;
             require_destination(&retained.reservation)?;
             CanisterPoolImportOps::observe_cleared(
                 identity,
@@ -187,11 +220,12 @@ pub async fn settle(identity: PoolImportIdentity) -> Result<PoolImportStatus, In
     let _execution = CanisterPoolImportOps::claim_execution(identity)?;
     require_destination(&retained.reservation)?;
     let root = IcOps::canister_self();
-    reserve_observation(
+    let paid = reserve_observation(
         identity,
         MgmtOps::canister_inspection_reserve(root)?.required_liquid_cycles,
     )?;
     let observed = CanisterPoolImportOps::observe_source(root).await?;
+    complete_call(identity, paid)?;
     require_destination(&retained.reservation)?;
     CanisterPoolImportOps::settle(identity, observed.cycles, observed.reserved_cycles)
 }
@@ -245,7 +279,7 @@ fn require_destination(request: &PoolImportReservation) -> Result<(), InternalEr
 fn reserve_observation(
     identity: PoolImportIdentity,
     maximum_call_debit: u128,
-) -> Result<(), InternalError> {
+) -> Result<PoolImportCallReservationView, InternalError> {
     CanisterPoolImportOps::reserve_paid_call(
         identity,
         maximum_call_debit,
@@ -259,4 +293,15 @@ fn budget(maximum_debit_cycles: u128) -> PoolImportCallBudgetView {
         maximum_debit_cycles,
         observed_root_cycles: IcOps::canister_cycle_balance().to_u128(),
     }
+}
+
+fn complete_call(
+    identity: PoolImportIdentity,
+    receipt: PoolImportCallReservationView,
+) -> Result<(), InternalError> {
+    CanisterPoolImportOps::complete_paid_call(
+        identity,
+        receipt,
+        IcOps::canister_cycle_balance().to_u128(),
+    )
 }

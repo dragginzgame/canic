@@ -187,7 +187,7 @@ mod tests {
             payload_hash: vec![7; 32],
             payload_size_bytes: 1024,
             store_binding: WasmStoreBinding::new("primary"),
-            chunking_mode: TemplateChunkingMode::Inline,
+            chunking_mode: TemplateChunkingMode::Chunked,
             manifest_state: TemplateManifestState::Approved,
             approved_at: Some(42),
             created_at: 41,
@@ -204,7 +204,6 @@ mod tests {
     #[test]
     fn manifest_listing_does_not_need_staged_chunk_metadata() {
         let mut manifest = manifest();
-        manifest.chunking_mode = TemplateChunkingMode::Chunked;
         manifest.payload_size_bytes = 40 * 1_048_576;
         let chunks = TemplateChunkSetRecord {
             payload_hash: manifest.payload_hash.clone(),

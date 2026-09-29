@@ -31,15 +31,6 @@ pub use canonical::MAX_FLEET_SERVICE_TOPOLOGY_CANONICAL_BYTES;
 /// Maximum logical Fleet-service targets in one App configuration.
 pub const MAX_FLEET_SERVICE_TARGETS: usize = 4_096;
 
-impl ConfigModel {
-    /// Compile every Fleet service against the exact flattened deployment topology.
-    pub fn compile_fleet_service_topology(
-        &self,
-    ) -> Result<FleetServiceTopology, FleetServiceTopologyError> {
-        FleetServiceTopology::compile(self)
-    }
-}
-
 /// Canonical Fleet-service targets in raw service-ID order.
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
@@ -48,13 +39,6 @@ pub struct FleetServiceTopology {
 }
 
 impl FleetServiceTopology {
-    /// Compile strict source targets and validate their complete occurrence relationship.
-    pub fn compile(config: &ConfigModel) -> Result<Self, FleetServiceTopologyError> {
-        let component_topology = config.compile_component_topology()?;
-        let deployment_topology = config.compile_component_group_deployment_topology()?;
-        Self::compile_from_topologies(config, &deployment_topology, &component_topology)
-    }
-
     /// Compile from the exact Component and deployment projections already validated by config.
     pub(super) fn compile_from_topologies(
         config: &ConfigModel,

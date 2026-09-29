@@ -111,8 +111,8 @@ generated-boundary proofs, or intentionally optimized hot-path structure.
 
 Apply these before classifying any finding.
 
-* Dependency direction is strict:
-  `endpoints -> workflow -> policy/domain -> ops -> model/storage`.
+* Endpoints call workflow; workflow may call policy and ops independently;
+  ops may call model/storage. Policy never calls ops.
 * DTOs are passive boundary data. They do not own validation, normalization,
   uniqueness, ordering, replacement semantics, or storage invariants.
 * Stable storage records, runtime state restored from them, and explicit
@@ -138,10 +138,11 @@ Apply these before classifying any finding.
   controllers.
 * Controller mutation, canister install/upgrade, wasm-store chunking, backup,
   and recovery paths are high-risk authority surfaces.
-* Pre-`1.0.0` hard-cut applies to unsupported internal protocols by default. It
-  does not by itself authorize deletion of stable-state, backup, exported
-  snapshot, deployment-truth, or live operator data compatibility without an
-  owner decision and migration/recovery proof.
+* Pre-`1.0.0` releases are reinstall-only under [AGENTS.md](../../../AGENTS.md).
+  Remove obsolete cross-release schemas and compatibility paths. Preserve
+  same-release backup/restore and interruption recovery, reconciliation of
+  unfinished paid effects, and cycle conservation. Code cleanup does not
+  authorize destructive effects against a live installation.
 * For wasm-related deletion decisions, raw non-gzipped `.wasm` bytes are the
   primary size signal; gzip is secondary context.
 

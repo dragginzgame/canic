@@ -137,6 +137,7 @@ pub(in crate::fleet_ensure) fn import_request(
     root: Principal,
     samples: &[CapacityImportSampleRecord],
     root_key: &[u8],
+    maximum_call_debit_cycles: u128,
 ) -> Result<CapacityImportReviewRequest, EnsureStateError> {
     let desired = record.desired.desired();
     let declaration = CapacityImportDeclarations {
@@ -167,11 +168,14 @@ pub(in crate::fleet_ensure) fn import_request(
             source,
         })?,
     }
-    let count =
-        u32::try_from(samples.len()).map_err(|_| EnsureStateError::InvalidTerminalSource)?;
-    let maximum_root_paid_calls = count
-        .checked_mul(16)
-        .and_then(|count| count.checked_add(16))
+    let maximum_root_paid_calls =
+        canic_core::control_plane_support::policy::pool_import::recommended_calls(samples.len())
+            .ok_or(EnsureStateError::InvalidTerminalSource)?;
+    let maximum_root_debit_cycles =
+        canic_core::control_plane_support::policy::pool_import::required_debit(
+            maximum_call_debit_cycles,
+            maximum_root_paid_calls,
+        )
         .ok_or(EnsureStateError::InvalidTerminalSource)?;
     Ok(CapacityImportReviewRequest {
         environment: desired.environment.clone(),
@@ -186,7 +190,7 @@ pub(in crate::fleet_ensure) fn import_request(
         seed: record.seed.clone(),
         // These conservative ceilings are visible in the review before destructive import calls.
         maximum_source_debit_cycles: 100_000_000_000,
-        maximum_root_debit_cycles: 4_000_000_000_000,
+        maximum_root_debit_cycles,
         maximum_root_paid_calls,
     })
 }

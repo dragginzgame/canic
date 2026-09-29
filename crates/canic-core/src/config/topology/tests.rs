@@ -675,47 +675,6 @@ fn protected_bindings_validate_exact_root_component_and_multilevel_child_shape()
 }
 
 #[test]
-fn fleet_subnet_root_bindings_enforce_one_root_per_fleet_subnet_and_admission_sums() {
-    let topology = topology();
-    let first = root_binding(
-        &topology,
-        4,
-        5,
-        vec![
-            admission(&topology, "projects", 2),
-            admission(&topology, "users", 1),
-        ],
-    );
-    let second = root_binding(
-        &topology,
-        6,
-        7,
-        vec![
-            admission(&topology, "projects", 1),
-            admission(&topology, "users", 1),
-        ],
-    );
-
-    topology
-        .validate_fleet_subnet_root_bindings(&[first.clone(), second.clone()])
-        .expect("distinct roots and Subnets");
-
-    let mut duplicate_subnet = second.clone();
-    duplicate_subnet.placement_subnet = first.placement_subnet;
-    std::assert_matches!(
-        topology.validate_fleet_subnet_root_bindings(&[first.clone(), duplicate_subnet]),
-        Err(ComponentTopologyError::DuplicateFleetSubnetRootSubnet { .. })
-    );
-
-    let mut duplicate_root = second;
-    duplicate_root.fleet_subnet_root = first.fleet_subnet_root;
-    std::assert_matches!(
-        topology.validate_fleet_subnet_root_bindings(&[first, duplicate_root]),
-        Err(ComponentTopologyError::DuplicateFleetSubnetRootPrincipal { .. })
-    );
-}
-
-#[test]
 fn protected_binding_contracts_roundtrip_at_the_candid_boundary() {
     let topology = topology();
     let root = root_binding(&topology, 4, 5, vec![admission(&topology, "projects", 2)]);
