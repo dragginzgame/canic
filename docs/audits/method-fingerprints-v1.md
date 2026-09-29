@@ -34,7 +34,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-CHANGE-FRICTION-001` | `3` | `c23af3f87879a3223893b11ef4568340789a291d4c98b33f83d7fab5efa67cda` | `docs/audits/recurring/system/change-friction.md` |
 | `CANIC-COMPLEXITY-001` | `3` | `4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a` | `docs/audits/recurring/system/complexity-accretion.md` |
 | `CANIC-DEPENDENCY-001` | `3` | `e0e4474467664e46a56243ccf41c5b29b9786a0052a9ccf9117e499226384d40` | `docs/audits/recurring/system/dependency-hygiene.md` |
-| `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` |
+| `CANIC-DUPLICATION-001` | `2` | `7d2369e2cafa2f10128c97044c0853d56dc9a58dd912277ba5dcdcc4e82169dc` | `docs/audits/recurring/system/dry-consolidation.md` |
 | `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` |
 | `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
 | `CANIC-STRUCTURE-001` | `2` | `d8ad8f06492d8a37e4f9b9632b83714b4a88125989d44ed7e825e93c2957dd49` | `docs/audits/recurring/system/module-structure.md` |
@@ -42,12 +42,17 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-RELEASE-INTEGRITY-001` | `1` | `3f6b87b30a3c1f9c80803a8be5d45292e73217d260ea435a956bd05f10d63438` | `docs/audits/recurring/system/release-integrity.md` |
 | `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
 | `CANIC-WASM-001` | `6` | `0c8487a989dadaae03cba0437545a2ea236274607622ff3d74623696c1ebe797` | `docs/audits/recurring/system/wasm-footprint.md` |
-| `CANIC-MODULE-SURFACE-001` | `2.1` | `e3cb15bba0909fff96075206d6a4780b2a74f31a98c95ebd143023d0e73e9835` | `docs/audits/modular/module-surface-hardening.md` |
+| `CANIC-MODULE-SURFACE-001` | `2.2` | `982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff` | `docs/audits/modular/module-surface-hardening.md` |
+
+The [September 29 correction report](reports/2026-09/2026-09-29/audit-method-correction.md)
+records the DRY and module-hardening revision scope and affected-result limits.
 
 ## Superseded Definition Identities
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-MODULE-SURFACE-001` | `2.1` | `e3cb15bba0909fff96075206d6a4780b2a74f31a98c95ebd143023d0e73e9835` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.2` |
+| `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` | `CANIC-DUPLICATION-001/v2` |
 | `CANIC-MODULE-SURFACE-001` | `2.0` | `404a359b4448ea7288055f0444e3178ae972f4eb7e1a0814aa693ce67df59030` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.1` |
 | `CANIC-PUBLISH-001` | `1` | `8e2eff6ac0c60c9903cd68f6354f7536636a987fd437306e851643464bdef884` | `docs/audits/recurring/system/publish-surface.md` | `CANIC-PUBLISH-001/v2` |
 | `CANIC-STRUCTURE-001` | `1` | `ca370a2c910c4d9d3755af74099c6d5715086d8b1ff226c29a40c77c5ee9f58e` | `docs/audits/recurring/system/module-structure.md` | `CANIC-STRUCTURE-001/v2` |

@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-DUPLICATION-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `revise`
 - Owner: duplicated behavior, validation, parsing, projection, and authority
 - Kind/profile: `manual`

@@ -97,6 +97,22 @@ is qualified and ready for maintainer review; live recovery remains outstanding.
 Package versions remain `.48`; changes are uncommitted, with `.49` notes ready
 for the maintainer-owned version/publication flow.
 
+## Release gate follow-up
+
+The reported audit-catalog, release-integrity and validation-runner failures are
+corrected. The CANIC-188 example uses testkit's bounded explicit startup; changed
+DRY and module-hardening methods have new versions and current fingerprints,
+with previous identities retained. The [method correction report](../audits/reports/2026-09/2026-09-29/audit-method-correction.md)
+limits affected historical audit conclusions; comparative minor closeout still
+requires the corrected paired audits.
+
+All three exact Make gates pass, as do warning-denied Clippy for the changed
+example and its local PocketIC repair/restoration qualification. Logs are
+`/tmp/canic-gate-repair.log` and `/tmp/canic188-startup-*.log`. The retained repair
+Wasm is unchanged. These gate fixes and updated `.49` notes are ready for review;
+no broad validation, version transaction, commit or publication was run by the
+agent in this follow-up.
+
 ## Unscheduled backup execution gap
 
 Fresh CLI backup execution fails closed because Coordinator-backed Component

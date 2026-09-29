@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-MODULE-SURFACE-001`
-- Method version: `2.1`
+- Method version: `2.2`
 - Disposition: `manual_only`
 - Owner: requested module-level reachability, exposure, deletion pressure, and
   runtime-shape review
