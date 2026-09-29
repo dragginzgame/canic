@@ -11,8 +11,8 @@ use canic::__internal::core::api::lifecycle::metrics::{
 
 pub fn record() {
     WasmStoreMetricsApi::record(
-        WasmStoreMetricOperation::SourceResolve,
-        WasmStoreMetricSource::Store,
+        WasmStoreMetricOperation::ChunkUpload,
+        WasmStoreMetricSource::TargetStore,
         WasmStoreMetricOutcome::Completed,
         WasmStoreMetricReason::Ok,
     );
