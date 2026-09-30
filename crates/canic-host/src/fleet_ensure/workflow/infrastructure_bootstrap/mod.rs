@@ -3,6 +3,7 @@
 //! This phase stops before pool handoff; it never reports a completed workload Fleet.
 
 mod automatic;
+pub mod registration_recovery;
 
 use crate::fleet_ensure::{
     model::{
@@ -22,7 +23,7 @@ use crate::fleet_ensure::{
     view::infrastructure_bootstrap::{
         InfrastructureBootstrapApplyView, InfrastructureBootstrapObservation,
     },
-    workflow::{EnsureWorkflowError, ordered_actions, verify_terminal_conservation_with_total},
+    workflow::{EnsureWorkflowError, verify_terminal_conservation_with_total},
 };
 use std::path::Path;
 
@@ -196,7 +197,18 @@ pub(super) fn advance<P: EnsurePlatform>(
     if !journal.successor_phases.is_empty() {
         return Ok(false);
     }
-    let actions = ordered_actions(plan);
+    if let Some(recovery) = &journal.bootstrap_registration_recovery
+        && !recovery.approved
+    {
+        return Err(InfrastructureBootstrapError::RegistrationApproval {
+            review_sha256: recovery
+                .review
+                .as_ref()
+                .map_or_else(String::new, |review| review.review_sha256.clone()),
+        }
+        .into());
+    }
+    let actions = crate::fleet_ensure::workflow::continuation::actions(plan, journal);
     if actions.len() != journal.effects.len()
         || journal
             .effects
@@ -239,6 +251,12 @@ pub(super) fn advance<P: EnsurePlatform>(
             .insert(sample.binding.canister_id.to_text(), sample.reserved_cycles);
     }
     let phase = bootstrap::registration::compile(root, plan, state, total)?;
+    let actual =
+        verify_terminal_conservation_with_total(plan, journal, state, &observation, total)?;
+    let remaining =
+        crate::fleet_ensure::workflow::continuation::execution_bound::<P::Error>(plan, journal)?
+            .saturating_sub(actual.observed_net_cycle_debit_cycles);
+    bootstrap::registration::require_budget(&phase, remaining)?;
     let desired = plan
         .reviewed_desired
         .as_ref()

@@ -1141,6 +1141,34 @@ interruption, including an interrupted local seed publication. Do not edit
 journals or regenerate a replacement operation. Completed bootstrap replay reads
 its local receipt before resolving ICP, even after ordinary Ensure has begun.
 
+If initialization effects are all applied but registration cannot fit its balance
+or approved execution allowance, preserve the operation directory and selected
+release build. A top-up does not enlarge the original plan's execution budget.
+Review a supplementary registration allowance within that same operation:
+
+```sh
+canic --environment staging fleet bootstrap toko-staging \
+  --recover '<ORIGINAL_PLAN_SHA256>' --json
+```
+
+Use the original operator identity. The review reports the exact Store/Registry
+actions, remaining registration work,
+additional inspection allowance, target-specific Ledger deposits and fees. It
+preserves original cycle baselines and applied receipts. Check these amounts and
+run the returned command, which repeats `--recover <ORIGINAL_PLAN_SHA256>` and
+adds `--approve-recovery <REVIEW_SHA256>`. Approval rechecks installed code,
+controllers, identities, held pool bindings and the selected release inputs.
+Existing operator Ledger funds must cover the reviewed deposits and fees.
+
+The ordinary effect journal executes and reconciles those deposits, then resumes
+registration. Retry the same approved command after interruption; deposits and
+initialization effects are not repeated. Review and approval observations each
+have two retained attempts, and approval adds two registration and terminal
+inspection rounds without clearing previously consumed attempts. This recovery
+is available after initialization and before a registration successor has begun;
+it does not authorize replacement artifacts or pool import. Import the held pool
+canisters only after bootstrap reports `completed: true`.
+
 Next import **every held ID for one Root together**, using pool-only declarations
 with the original reviewed bindings. Repeat separately for each Root. For the
 Root supplied in the staging request, the command shape is:

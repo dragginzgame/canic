@@ -51,9 +51,9 @@ pub(in crate::fleet_ensure) fn compile(
     let burn = successor_phase_burn(desired, &phase)?;
     phase.conservation = crate::fleet_ensure::model::CycleConservation {
         estate_funding_domains: Vec::new(),
-        expected_post_operation_cycles: controlled_cycles
-            .checked_sub(burn)
-            .ok_or(InfrastructureBootstrapError::Integrity)?,
+        // An unfunded candidate is only a quote. Admission below must succeed
+        // before workflow retains it as executable authority.
+        expected_post_operation_cycles: controlled_cycles.saturating_sub(burn),
         maximum_execution_burn_cycles: burn,
         maximum_new_funding_cycles: 0,
         maximum_operator_debit_cycles: 0,
@@ -64,6 +64,27 @@ pub(in crate::fleet_ensure) fn compile(
     };
     phase.plan_sha256 = expected_plan_sha256(&phase);
     Ok(phase)
+}
+
+/// Report both independent shortfalls before retaining a registration successor.
+pub(in crate::fleet_ensure) const fn require_budget(
+    phase: &FleetEnsurePlan,
+    remaining_execution_cycles: u128,
+) -> Result<(), InfrastructureBootstrapError> {
+    let required_cycles = phase.conservation.maximum_execution_burn_cycles;
+    let available_cycles = phase.conservation.observed_controlled_cycles;
+    let funding_shortfall_cycles = required_cycles.saturating_sub(available_cycles);
+    let execution_shortfall_cycles = required_cycles.saturating_sub(remaining_execution_cycles);
+    if funding_shortfall_cycles != 0 || execution_shortfall_cycles != 0 {
+        return Err(InfrastructureBootstrapError::RegistrationBudget {
+            required_cycles,
+            available_cycles,
+            funding_shortfall_cycles,
+            remaining_execution_cycles,
+            execution_shortfall_cycles,
+        });
+    }
+    Ok(())
 }
 
 /// The final activation action binds the exact Registry required by the import owner.

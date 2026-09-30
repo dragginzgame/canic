@@ -22,6 +22,23 @@ use serde_json::{Map, Value};
 
 const STORE_CHUNK_OBJECT_DIRECTORY: &str = ".canic/fleet-ensure/objects/sha256";
 
+/// Report supplementary registration authority using the existing Store content references.
+pub fn registration_recovery_json_value(
+    review: &crate::fleet_ensure::model::infrastructure_bootstrap::registration_recovery::BootstrapRegistrationReviewRecord,
+) -> Result<Value, serde_json::Error> {
+    let mut compact = review.clone();
+    compact.protocol_actions.clear();
+    let mut projection = to_value(&compact)?;
+    projection["protocol_actions"] = Value::Array(
+        review
+            .protocol_actions
+            .iter()
+            .map(action_json_value)
+            .collect::<Result<_, _>>()?,
+    );
+    Ok(projection)
+}
+
 /// Project one complete report without expanding content-addressed Store chunk bytes.
 ///
 /// Each chunk retains a workspace-relative object path, its exact SHA-256 and its byte size.

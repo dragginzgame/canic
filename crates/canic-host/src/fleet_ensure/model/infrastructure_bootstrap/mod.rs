@@ -2,6 +2,8 @@
 //!
 //! These records preserve observations; they never authorize replacement of a supplied ID.
 
+pub mod registration_recovery;
+
 use crate::fleet_ensure::model::capacity_import::{
     CapacityImportDisposition, survey::CapacityImportSampleRecord,
 };
@@ -144,6 +146,8 @@ pub struct InfrastructureBootstrapTerminalRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct InfrastructureBootstrapInspectionRecord {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub registration_recovery_sha256: Option<String>,
     pub schema_version: u16,
     pub source_sha256: [u8; 32],
     pub planned_at_time: u64,

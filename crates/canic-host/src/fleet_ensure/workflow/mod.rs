@@ -1221,6 +1221,14 @@ where
             .map_err(EnsureWorkflowError::Platform)?;
     }
     let operation_desired_sha256 = retained_plan.desired_sha256.as_str();
+    if let Some(review) = retained_journal.as_ref().and_then(
+        crate::fleet_ensure::ops::infrastructure_bootstrap::registration_recovery::approved,
+    ) && !platform
+        .bind_bootstrap_registration_recovery(review)
+        .map_err(EnsureWorkflowError::Platform)?
+    {
+        return Err(EnsureWorkflowError::PlanIntegrity);
+    }
     continuation::verify_inputs(root, operation_desired, &retained_plan)?;
     if let Some(journal) = &retained_journal {
         continuation::verify_canonical(&retained_plan, journal, &state, platform)?;
@@ -1352,6 +1360,7 @@ where
                 platform,
             )?;
             let journal = FleetEnsureJournalRecord {
+                bootstrap_registration_recovery: None,
                 funding_observations: BTreeMap::new(),
                 funding_reviews: Vec::new(),
                 successor_phases: Vec::new(),
@@ -3592,11 +3601,18 @@ fn funding_plan<'a, E: std::error::Error + 'static>(
     plan: &'a FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
 ) -> Result<std::borrow::Cow<'a, FleetEnsurePlan>, EnsureWorkflowError<E>> {
-    if journal.funding_reviews.is_empty() && journal.funding_observations.is_empty() {
+    if journal.funding_reviews.is_empty()
+        && journal.funding_observations.is_empty()
+        && journal.bootstrap_registration_recovery.is_none()
+    {
         return Ok(std::borrow::Cow::Borrowed(plan));
     }
     funding_observation::verify(plan, journal)?;
     let mut funded = plan.clone();
+    funded.conservation =
+        crate::fleet_ensure::ops::infrastructure_bootstrap::registration_recovery::conservation(
+            plan, journal,
+        )?;
     let (amount, fee) = funding::totals::<E>(journal, None)?;
     let conservation = &mut funded.conservation;
     conservation.maximum_execution_burn_cycles = conservation
@@ -4192,6 +4208,9 @@ where
     {
         return Err(EnsureWorkflowError::JournalIntegrity);
     }
+    crate::fleet_ensure::ops::infrastructure_bootstrap::registration_recovery::verify(
+        plan, journal, state,
+    )?;
     funding::verify(plan, journal, state)?;
     funding_observation::verify(plan, journal)?;
     operator_mint::verify(plan, journal)?;
@@ -5044,6 +5063,7 @@ mod tests {
             topology: BTreeMap::new(),
         };
         let journal = FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),

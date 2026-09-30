@@ -91,10 +91,21 @@ fn reserve_inner(
         .infrastructure_bootstrap
         .as_ref()
         .ok_or(InfrastructureBootstrapError::Integrity)?;
+    let journal = crate::fleet_ensure::ops::read_journal(paths)?;
+    let recovery = journal
+        .as_ref()
+        .is_some_and(|journal| super::registration_recovery::approved(journal).is_some());
+    let extended_rounds = BOOTSTRAP_PHASE_INSPECTION_ROUNDS
+        + if recovery {
+            crate::fleet_ensure::model::infrastructure_bootstrap::registration_recovery::RECOVERY_INSPECTION_ROUNDS
+        } else {
+            0
+        };
     let path = record_path(paths, source.source_sha256);
     let mut record = match read(paths, source.source_sha256)? {
         Some(record) => record,
         None => InfrastructureBootstrapInspectionRecord {
+            registration_recovery_sha256: None,
             schema_version: 1,
             source_sha256: source.source_sha256,
             planned_at_time: plan.planned_at_time,
@@ -115,14 +126,11 @@ fn reserve_inner(
     if record.schema_version != 1
         || record.planned_at_time != plan.planned_at_time
         || record.plan_sha256 != plan.plan_sha256
-        || [
-            record.review_attempts,
-            record.apply_attempts,
-            record.terminal_attempts,
-            record.registration_attempts,
-        ]
-        .iter()
-        .any(|n| *n > BOOTSTRAP_PHASE_INSPECTION_ROUNDS)
+        || [record.review_attempts, record.apply_attempts]
+            .iter()
+            .any(|n| *n > BOOTSTRAP_PHASE_INSPECTION_ROUNDS)
+        || record.terminal_attempts > extended_rounds
+        || record.registration_attempts > extended_rounds
     {
         return Err(InfrastructureBootstrapError::Integrity);
     }
@@ -133,6 +141,7 @@ fn reserve_inner(
         .map(crate::fleet_ensure::ops::action_sha256)
         .collect::<std::collections::BTreeSet<_>>();
     let mut expected = expected;
+    bind_recovery_allowances(journal.as_ref(), &mut record, &mut expected)?;
     bind_registration_allowances(paths, plan, &mut record, &mut expected)?;
     if record
         .effect_observations
@@ -157,10 +166,10 @@ fn reserve_inner(
             .get_mut(action.ok_or(InfrastructureBootstrapError::Integrity)?)
             .ok_or(InfrastructureBootstrapError::Integrity)?,
     };
-    let maximum = if matches!(phase, InspectionPhase::Effect) {
-        BOOTSTRAP_EFFECT_INSPECTION_ROUNDS
-    } else {
-        BOOTSTRAP_PHASE_INSPECTION_ROUNDS
+    let maximum = match phase {
+        InspectionPhase::Effect => BOOTSTRAP_EFFECT_INSPECTION_ROUNDS,
+        InspectionPhase::Registration | InspectionPhase::Terminal => extended_rounds,
+        _ => BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
     };
     if *counter >= maximum {
         return Err(InfrastructureBootstrapError::InspectionBudget);
@@ -211,6 +220,44 @@ fn bind_registration_allowances(
         expected.extend(actions.iter().map(crate::fleet_ensure::ops::action_sha256));
     } else if record.registration_plan_sha256.is_some() {
         return Err(InfrastructureBootstrapError::Integrity);
+    }
+    Ok(())
+}
+
+/// Bind supplementary funding counters once without replenishing a retained allowance.
+fn bind_recovery_allowances(
+    journal: Option<&crate::fleet_ensure::model::FleetEnsureJournalRecord>,
+    record: &mut InfrastructureBootstrapInspectionRecord,
+    expected: &mut std::collections::BTreeSet<String>,
+) -> Result<(), InfrastructureBootstrapError> {
+    let approved = journal.and_then(super::registration_recovery::approved);
+    match approved {
+        Some(review) => {
+            let hashes = super::registration_recovery::funding_hashes(
+                journal.ok_or(InfrastructureBootstrapError::Integrity)?,
+            );
+            if record.registration_recovery_sha256.is_none() {
+                if record
+                    .effect_observations
+                    .keys()
+                    .cloned()
+                    .collect::<std::collections::BTreeSet<_>>()
+                    != *expected
+                {
+                    return Err(InfrastructureBootstrapError::Integrity);
+                }
+                record.effect_observations.extend(hashes.clone());
+                record.registration_recovery_sha256 = Some(review.review_sha256.clone());
+            }
+            if record.registration_recovery_sha256.as_ref() != Some(&review.review_sha256) {
+                return Err(InfrastructureBootstrapError::Integrity);
+            }
+            expected.extend(hashes.into_keys());
+        }
+        None if record.registration_recovery_sha256.is_some() => {
+            return Err(InfrastructureBootstrapError::Integrity);
+        }
+        None => {}
     }
     Ok(())
 }

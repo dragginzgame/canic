@@ -1653,6 +1653,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &fresh_apply_paths,
         &FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
@@ -1941,6 +1942,7 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
     write_journal(
         &retained_paths,
         &FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),

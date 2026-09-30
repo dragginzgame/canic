@@ -41,3 +41,45 @@ fn bootstrap_requires_explicit_setup_selection_and_apply_has_no_new_inputs() {
         );
     }
 }
+
+#[test]
+fn registration_recovery_binds_original_plan_and_separate_approval() {
+    let plan = "31".repeat(32);
+    let review = "42".repeat(32);
+    assert!(
+        command()
+            .try_get_matches_from(["bootstrap", "staging", "--recover", &plan])
+            .is_ok()
+    );
+    assert!(
+        command()
+            .try_get_matches_from([
+                "bootstrap",
+                "staging",
+                "--recover",
+                &plan,
+                "--approve-recovery",
+                &review
+            ])
+            .is_ok()
+    );
+    assert!(
+        command()
+            .try_get_matches_from(["bootstrap", "staging", "--approve-recovery", &review])
+            .is_err()
+    );
+    for selector in ["--apply", "--release-build", "--source", "--seed"] {
+        assert!(
+            command()
+                .try_get_matches_from([
+                    "bootstrap",
+                    "staging",
+                    "--recover",
+                    &plan,
+                    selector,
+                    &review
+                ])
+                .is_err()
+        );
+    }
+}

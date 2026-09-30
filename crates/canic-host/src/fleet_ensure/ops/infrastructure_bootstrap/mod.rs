@@ -8,6 +8,7 @@ pub(in crate::fleet_ensure) mod declarations;
 pub(in crate::fleet_ensure) mod inspection;
 pub(in crate::fleet_ensure) mod publication;
 pub(in crate::fleet_ensure) mod registration;
+pub(in crate::fleet_ensure) mod registration_recovery;
 pub(in crate::fleet_ensure) mod survey;
 pub(in crate::fleet_ensure) mod terminal;
 #[cfg(test)]
@@ -53,6 +54,20 @@ use thiserror::Error;
 /// A bootstrap failure preserves supplied identities and all retained effect receipts.
 #[derive(Debug, Error)]
 pub enum InfrastructureBootstrapError {
+    #[error(
+        "bootstrap registration needs {required_cycles} cycles of execution allowance; controlled balance {available_cycles}, funding shortfall {funding_shortfall_cycles}; remaining approved execution allowance {remaining_execution_cycles}, execution-budget shortfall {execution_shortfall_cycles}; preserve the retained operation and review it with fleet bootstrap --recover <plan-sha256>"
+    )]
+    RegistrationBudget {
+        required_cycles: u128,
+        available_cycles: u128,
+        funding_shortfall_cycles: u128,
+        remaining_execution_cycles: u128,
+        execution_shortfall_cycles: u128,
+    },
+    #[error(
+        "bootstrap registration recovery requires approval of review {review_sha256}; the original operation is retained"
+    )]
+    RegistrationApproval { review_sha256: String },
     #[error(
         "bootstrap inspection allowance exhausted; retained effects and original balances remain authoritative"
     )]

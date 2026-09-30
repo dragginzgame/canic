@@ -32,6 +32,11 @@ pub(super) fn actions<'a>(
     journal: &'a FleetEnsureJournalRecord,
 ) -> Vec<&'a EnsureAction> {
     let mut actions = ordered_actions(plan);
+    actions.extend(
+        crate::fleet_ensure::ops::infrastructure_bootstrap::registration_recovery::funding_actions(
+            journal,
+        ),
+    );
     for phase in &journal.successor_phases {
         if let Some(plan) = &phase.plan {
             actions.extend(plan.protocol_actions.iter());
@@ -393,12 +398,14 @@ const fn review<E: std::error::Error + 'static>(
 }
 
 /// Consumed observation allowances travel with the operation into later retained phases.
-fn execution_bound<E: std::error::Error + 'static>(
+pub(super) fn execution_bound<E: std::error::Error + 'static>(
     plan: &FleetEnsurePlan,
     journal: &FleetEnsureJournalRecord,
 ) -> Result<u128, EnsureWorkflowError<E>> {
-    plan.conservation
-        .maximum_execution_burn_cycles
-        .checked_add(super::funding_observation::total(journal)?)
-        .ok_or(EnsureWorkflowError::JournalIntegrity)
+    crate::fleet_ensure::ops::infrastructure_bootstrap::registration_recovery::conservation(
+        plan, journal,
+    )?
+    .maximum_execution_burn_cycles
+    .checked_add(super::funding_observation::total(journal)?)
+    .ok_or(EnsureWorkflowError::JournalIntegrity)
 }

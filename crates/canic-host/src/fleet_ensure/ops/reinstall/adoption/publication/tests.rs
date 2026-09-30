@@ -37,22 +37,7 @@ impl Fixture {
         plan.operation_id = "99".repeat(32);
         plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(&desired)));
         plan.plan_sha256 = expected_plan_sha256(&plan);
-        let journal = FleetEnsureJournalRecord {
-            funding_observations: BTreeMap::new(),
-            funding_reviews: Vec::new(),
-            successor_phases: Vec::new(),
-            completion: FleetEnsureCompletion::InProgress,
-            estate_funding_required: None,
-            effects: Vec::new(),
-            fleet: plan.fleet.clone(),
-            initial_controlled_cycles: plan.conservation.observed_controlled_cycles,
-            initial_estate_funding_cycles_by_root: BTreeMap::new(),
-            initial_operator_cycles: u128::MAX,
-            operation_id: plan.operation_id.clone(),
-            plan_sha256: plan.plan_sha256.clone(),
-            schema_version: 1,
-            stalled_observations: 0,
-        };
+        let journal = Self::journal(&plan);
         let state = FleetEnsureStateRecord {
             active_registry: None,
             completed_reinstall_action_sha256: BTreeMap::new(),
@@ -119,6 +104,26 @@ impl Fixture {
             review,
             before,
             after,
+        }
+    }
+
+    fn journal(plan: &FleetEnsurePlan) -> FleetEnsureJournalRecord {
+        FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
+            funding_observations: BTreeMap::new(),
+            funding_reviews: Vec::new(),
+            successor_phases: Vec::new(),
+            completion: FleetEnsureCompletion::InProgress,
+            estate_funding_required: None,
+            effects: Vec::new(),
+            fleet: plan.fleet.clone(),
+            initial_controlled_cycles: plan.conservation.observed_controlled_cycles,
+            initial_estate_funding_cycles_by_root: BTreeMap::new(),
+            initial_operator_cycles: u128::MAX,
+            operation_id: plan.operation_id.clone(),
+            plan_sha256: plan.plan_sha256.clone(),
+            schema_version: 1,
+            stalled_observations: 0,
         }
     }
 
