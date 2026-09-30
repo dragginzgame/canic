@@ -1,5 +1,53 @@
 # Current handoff — 2026-09-30
 
+## Cargo resolver admission restriction removal — qualified
+
+The maintainer requested removal of Canic's exact Cargo resolver check. The earlier
+resolver update had changed the required value from `2` to `3`; that admission
+restriction is now removed entirely. Cargo owns application resolver selection,
+including an omitted declaration. Actual dependency and role-feature validation
+remains in place. Canic's workspace and generated Fleet packages continue using
+resolver 3. Positive isolated fixtures cover explicit resolvers 1, 2 and 3 and
+Cargo's default in build and passive validation modes. Targeted qualification
+passes 41 Host package/graph tests and seven CLI configuration checks: 48 tests.
+Host all-target/all-feature warning-denied Clippy, scoped formatting, whitespace
+and document semantics pass; the two existing document-layout warnings remain
+advisory. Logs are `target/review-validation/resolver-admission-removal-native.log`
+and `target/review-validation/resolver-admission-removal-clippy.log`. Test scratch
+is removed and build artifacts remain intact.
+
+The urgent `.49` batch, including the previous test repairs, is ready for maintainer
+commit and retry of the governed release validation. Documentation and open `.49`
+notes describe Cargo-owned resolver selection; package versions remain `.48`.
+All changes remain uncommitted. No broad gate, version bump, commit or push ran.
+
+## Maintainer validation test repairs — qualified
+
+The maintainer's release validation failed one Core receipt inventory test and
+three Host unpaid-review cancellation tests. The earlier placement correction
+added a legitimate receipt lookup before discarding an unadmitted index claim,
+but its caller inventory was not updated. The cancellation tests' shared JSON
+fixture omitted the required inspection source digest and original timestamp,
+so decoding masked the intended cancellation behavior. These omissions predate
+the registration recovery supplement.
+
+The maintainer authorized both corrections. The inventory now names the exact
+index creation owner, and the cancellation fixture uses the maintained inspection
+record type. Production behavior is unchanged. Both Core inventory tests and all
+three Host cancellation tests pass, covering every reported failing test.
+Core/Host all-target/all-feature warning-denied Clippy, scoped formatting,
+whitespace and document semantics pass; the two existing document-layout warnings
+remain advisory. Logs are under `target/review-validation/`:
+`receipt-inventory-validation-repair.log`,
+`cancellation-fixture-validation-repair.log` and
+`test-fixture-inventory-repair-clippy.log`. Invocation-owned scratch is removed;
+release and Cargo build artifacts remain intact.
+
+The complete urgent `.49` batch is ready for maintainer commit and retry of the
+governed release validation. Existing `.49` notes are extended; package versions
+remain `.48`. The failed broad run has not been replaced by a successful release
+receipt. No broad gate, version bump, commit or push ran for this correction.
+
 ## Bootstrap registration budget recovery — qualified
 
 The maintainer relayed another developer's `.48` staging bootstrap: twelve applied
@@ -49,10 +97,10 @@ documents the command and boundaries.
 ## Cargo resolver 3 continuation
 
 The maintainer requested Cargo resolver 3. The workspace, generated Fleet
-packages, Host role admission, CLI medic fixtures, maintained isolated manifests
-and generated downstream smoke-test workspaces now select it. The old test that
-rejected resolver 3 is removed. Historical audit snapshots and the frozen CANIC-188
-repair inputs remain evidence for their original source state.
+packages, CLI medic fixtures, maintained isolated manifests and generated downstream
+smoke-test workspaces now select it. The initial Host admission restriction was
+subsequently removed as described above. Historical audit snapshots and the frozen
+CANIC-188 repair inputs remain evidence for their original source state.
 
 Locked offline metadata succeeds and its package/dependency/feature graph exactly
 matches the captured pre-change graph. Resolver selection adds no lockfile changes;
