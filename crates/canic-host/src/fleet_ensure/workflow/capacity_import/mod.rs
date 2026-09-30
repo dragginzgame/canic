@@ -5,6 +5,9 @@
 mod handoff;
 pub mod review;
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     fleet_ensure::{
         model::capacity_import::CapacityImportJournalRecord,
@@ -66,10 +69,11 @@ pub async fn complete(
     journal = publication::publish(store, paths)?;
     let mut observed = transport.root_status(&journal.plan).await?;
     if !matches!(observed.phase, PoolImportPhase::Released { .. }) {
+        let prepared = transport.prepare_release_root(&journal).await?;
         journal = publication::reserve_submission(&journal, "release")?;
         store.save(&journal)?;
         // If this reply is lost, reopening queries the retained Released receipt first.
-        observed = transport.release_root(&journal).await?;
+        observed = prepared.submit().await?;
     }
     journal = publication::retain_released(&journal, &observed)?;
     store.save(&journal)?;
@@ -87,17 +91,19 @@ async fn finish_root(
             &observed.progress[index],
             journal.plan.sources[index].binding.stopped,
         ) {
+            let prepared = transport
+                .prepare_advance_root(journal, journal.plan.sources[index].binding.canister_id)
+                .await?;
             *journal = publication::reserve_submission(journal, &format!("{index}:{step}"))?;
             store.save(journal)?;
-            observed = transport
-                .advance_root(journal, journal.plan.sources[index].binding.canister_id)
-                .await?;
+            observed = prepared.submit().await?;
         }
     }
     if observed.root_receipt.is_none() {
+        let prepared = transport.prepare_settle_root(journal).await?;
         *journal = publication::reserve_submission(journal, "settle")?;
         store.save(journal)?;
-        observed = transport.settle_root(journal).await?;
+        observed = prepared.submit().await?;
     }
     Ok(observed)
 }

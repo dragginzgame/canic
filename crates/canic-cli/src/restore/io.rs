@@ -207,6 +207,7 @@ fn comparable_path(path: &Path) -> PathBuf {
 }
 
 pub(super) fn create_or_adopt_prepare_documents(
+    layout: &canic_backup::persistence::BackupLayoutGuard,
     plan_path: &Path,
     plan: &RestorePlan,
     journal_path: &Path,
@@ -214,7 +215,7 @@ pub(super) fn create_or_adopt_prepare_documents(
 ) -> Result<(), RestoreCommandError> {
     let journal = RestoreApplyJournal::from_dry_run(dry_run)?;
     create_or_adopt_restore_plan(plan_path, plan)?;
-    create_or_adopt_restore_apply_journal(journal_path, &journal)?;
+    create_or_adopt_restore_apply_journal(layout, journal_path, &journal)?;
     Ok(())
 }
 

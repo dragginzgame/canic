@@ -17,6 +17,38 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 
+/// Recover the first review's clock even when its paid observation never completed.
+pub(in crate::fleet_ensure) fn planned_at_time(
+    paths: &EnsurePaths,
+    source_sha256: [u8; 32],
+) -> Result<Option<u64>, InfrastructureBootstrapError> {
+    Ok(read(paths, source_sha256)?.map(|record| record.planned_at_time))
+}
+
+fn record_path(paths: &EnsurePaths, source_sha256: [u8; 32]) -> std::path::PathBuf {
+    paths
+        .plan
+        .with_file_name("infrastructure-bootstrap-inspections")
+        .join(format!("{}.json", hex_bytes(source_sha256)))
+}
+
+fn read(
+    paths: &EnsurePaths,
+    source_sha256: [u8; 32],
+) -> Result<Option<InfrastructureBootstrapInspectionRecord>, InfrastructureBootstrapError> {
+    let Some(bytes) =
+        read_optional_regular_bytes_bounded(&record_path(paths, source_sha256), 256 * 1024)
+            .map_err(|_| InfrastructureBootstrapError::Integrity)?
+    else {
+        return Ok(None);
+    };
+    let record: InfrastructureBootstrapInspectionRecord = serde_json::from_slice(&bytes)?;
+    if record.schema_version != 1 || record.source_sha256 != source_sha256 {
+        return Err(InfrastructureBootstrapError::Integrity);
+    }
+    Ok(Some(record))
+}
+
 /// Inspection boundary whose complete batch is reserved before its first paid read.
 #[derive(Clone, Copy, Debug)]
 pub(in crate::fleet_ensure) enum InspectionPhase {
@@ -59,16 +91,13 @@ fn reserve_inner(
         .infrastructure_bootstrap
         .as_ref()
         .ok_or(InfrastructureBootstrapError::Integrity)?;
-    let path = paths
-        .plan
-        .with_file_name("infrastructure-bootstrap-inspections")
-        .join(format!("{}.json", hex_bytes(source.source_sha256)));
-    let retained = read_optional_regular_bytes_bounded(&path, 256 * 1024)
-        .map_err(|_| InfrastructureBootstrapError::Integrity)?;
-    let mut record: InfrastructureBootstrapInspectionRecord = match retained {
-        Some(bytes) => serde_json::from_slice(&bytes)?,
+    let path = record_path(paths, source.source_sha256);
+    let mut record = match read(paths, source.source_sha256)? {
+        Some(record) => record,
         None => InfrastructureBootstrapInspectionRecord {
             schema_version: 1,
+            source_sha256: source.source_sha256,
+            planned_at_time: plan.planned_at_time,
             plan_sha256: plan.plan_sha256.clone(),
             review_attempts: 0,
             apply_attempts: 0,
@@ -84,6 +113,7 @@ fn reserve_inner(
         },
     };
     if record.schema_version != 1
+        || record.planned_at_time != plan.planned_at_time
         || record.plan_sha256 != plan.plan_sha256
         || [
             record.review_attempts,

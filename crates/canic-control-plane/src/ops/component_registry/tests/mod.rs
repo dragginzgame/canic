@@ -1629,6 +1629,22 @@ fn component_membership_removal_is_atomic_settled_and_response_idempotent() {
 )]
 fn subtree_removal_fence_is_durable_scoped_and_capacity_bounded() {
     let fixture = import_active_component_tree();
+    assert_eq!(
+        ComponentRegistryOps::child_allocation_operation_id(
+            fixture.component,
+            fixture.target.canister_id
+        )
+        .unwrap(),
+        Some(fixture.target.allocation_operation_id)
+    );
+    assert_eq!(
+        ComponentRegistryOps::child_allocation_operation_id(
+            fixture.component,
+            fixture.partition.binding.canister_id
+        )
+        .unwrap(),
+        None
+    );
     let initial = RootComponentRegistryStore::export();
     let registry = component_registry_head(&fixture.partition);
 
@@ -2077,6 +2093,20 @@ fn subtree_removal_fence_is_durable_scoped_and_capacity_bounded() {
     ));
     let deleted_state = restart_component_registry();
     assert_eq!(
+        ComponentRegistryOps::subtree_recycling_claim(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+        )
+        .unwrap(),
+        Some(crate::ops::canister_pool::CanisterPoolClaimKey {
+            component: fixture.component,
+            operation_id: fixture.descendant.allocation_operation_id,
+        }),
+    );
+    assert_eq!(
         ComponentRegistryOps::mark_subtree_leaf_deleted(
             fixture.component,
             [70; 32],
@@ -2408,6 +2438,17 @@ fn subtree_removal_fence_is_durable_scoped_and_capacity_bounded() {
     ));
     let resumed_state = restart_component_registry();
     assert_eq!(resumed_state.subtree_removal_history.len(), 1);
+    assert_eq!(
+        ComponentRegistryOps::subtree_recycling_claim(
+            fixture.component,
+            [70; 32],
+            selected.traversal_steps,
+            fixture.descendant.canister_id,
+            fixture.target.canister_id,
+        )
+        .unwrap(),
+        None
+    );
     assert!(
         resumed_state.partitions[0].encoded_bytes
             <= directory_synchronized_state.partitions[0].encoded_bytes,
@@ -5376,6 +5417,7 @@ fn import_active_component_tree_with_origin(
         active_component_partition(&root, release_set, component, component_canister);
     partition.provisioning_origin = provisioning_origin;
     let target = ComponentRegistryChildRecord {
+        allocation_operation_id: [51; 32],
         component,
         canister_id: candid::Principal::from_slice(&[21; 29]),
         parent_canister_id: component_canister,
@@ -5386,6 +5428,7 @@ fn import_active_component_tree_with_origin(
         status: ComponentLifecycleStatus::Active,
     };
     let descendant = ComponentRegistryChildRecord {
+        allocation_operation_id: [52; 32],
         component,
         canister_id: candid::Principal::from_slice(&[22; 29]),
         parent_canister_id: target.canister_id,
@@ -5396,6 +5439,7 @@ fn import_active_component_tree_with_origin(
         status: ComponentLifecycleStatus::Active,
     };
     let unrelated = ComponentRegistryChildRecord {
+        allocation_operation_id: [53; 32],
         component,
         canister_id: candid::Principal::from_slice(&[23; 29]),
         parent_canister_id: component_canister,
@@ -5406,6 +5450,7 @@ fn import_active_component_tree_with_origin(
         status: ComponentLifecycleStatus::Active,
     };
     let alternate_descendant = ComponentRegistryChildRecord {
+        allocation_operation_id: [54; 32],
         component,
         canister_id: candid::Principal::from_slice(&[24; 29]),
         parent_canister_id: target.canister_id,
@@ -5530,6 +5575,7 @@ fn import_deep_active_component_tree(
             .expect("bounded deep-tree principal");
         let canister_id = candid::Principal::from_slice(&[principal_byte; 29]);
         let child = ComponentRegistryChildRecord {
+            allocation_operation_id: [principal_byte; 32],
             component: fixture.component,
             canister_id,
             parent_canister_id,

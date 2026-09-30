@@ -180,13 +180,27 @@ pub struct ChainKeyRootDelegationBatchInstallPlan {
     pub proofs: Vec<RootDelegationProofBatchProof>,
 }
 
+/// Reject caller-driven work without an enabled issuer before changing epochs or batches.
+pub(in crate::ops::auth) fn require_requested_issuer_template(
+    required_issuer_pid: Option<Principal>,
+) -> Result<(), InternalError> {
+    if required_issuer_pid.is_some_and(|issuer| {
+        RootDelegationStateOps::root_issuer_renewal_template(issuer)
+            .is_none_or(|template| !template.enabled)
+    }) {
+        return Err(InternalError::auth_proof_pending());
+    }
+    Ok(())
+}
+
 pub(in crate::ops::auth) fn plan_due_chain_key_root_delegation_batch(
     input: PrepareDueChainKeyRootDelegationBatchInput<'_>,
 ) -> Result<ChainKeyRootDelegationBatchPreparation, InternalError> {
+    require_requested_issuer_template(input.required_issuer_pid)?;
     RootDelegationStateOps::prune_chain_key_root_delegation_batches(input.now_ns);
     mark_stale_preinstall_chain_key_batches(input.registry_epoch, input.registry_hash);
 
-    if let Some(batch) = reusable_in_flight_chain_key_batch(
+    if let Some(batch) = reusable_chain_key_batch(
         input.now_ns,
         input.required_issuer_pid,
         input.registry_epoch,
@@ -197,7 +211,7 @@ pub(in crate::ops::auth) fn plan_due_chain_key_root_delegation_batch(
                 batch_id: Some(batch.batch_id),
                 prepared_issuers: batch.issuers.len(),
                 skipped_templates: enabled_template_count().saturating_sub(batch.issuers.len()),
-                reused_in_flight: true,
+                reused_in_flight: batch.status != ChainKeyRootDelegationBatchStatus::Installed,
             },
         ));
     }
@@ -290,7 +304,7 @@ pub(in crate::ops::auth) fn signed_chain_key_delegation_proof_for_issuer(
     )
 }
 
-fn reusable_in_flight_chain_key_batch(
+fn reusable_chain_key_batch(
     now_ns: u64,
     required_issuer_pid: Option<Principal>,
     registry_epoch: u64,
@@ -316,7 +330,8 @@ fn reusable_in_flight_chain_key_batch(
                     | ChainKeyRootDelegationBatchStatus::Signed
                     | ChainKeyRootDelegationBatchStatus::Installing
                     | ChainKeyRootDelegationBatchStatus::FailedRetryable
-            )
+            ) || (required_issuer_pid.is_some()
+                && batch.status == ChainKeyRootDelegationBatchStatus::Installed)
         })
         .collect::<Vec<_>>();
     batches.sort_unstable_by(oldest_chain_key_batch_order);
@@ -328,7 +343,7 @@ pub(super) fn current_chain_key_batch_deadline_ns(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> Option<u64> {
-    let batch = reusable_in_flight_chain_key_batch(now_ns, None, registry_epoch, registry_hash)?;
+    let batch = reusable_chain_key_batch(now_ns, None, registry_epoch, registry_hash)?;
     Some(match batch.status {
         ChainKeyRootDelegationBatchStatus::Prepared | ChainKeyRootDelegationBatchStatus::Signed => {
             now_ns
@@ -350,8 +365,7 @@ pub(super) fn defer_retryable_chain_key_batch(
     registry_epoch: u64,
     registry_hash: [u8; 32],
 ) -> bool {
-    let Some(mut batch) =
-        reusable_in_flight_chain_key_batch(now_ns, None, registry_epoch, registry_hash)
+    let Some(mut batch) = reusable_chain_key_batch(now_ns, None, registry_epoch, registry_hash)
     else {
         return false;
     };

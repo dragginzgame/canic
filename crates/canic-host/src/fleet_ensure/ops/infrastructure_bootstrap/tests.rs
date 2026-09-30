@@ -69,6 +69,8 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
     assert_eq!(restored, plan);
     verify_plan(root, &restored).unwrap();
 
+    qualify_review_retry(root, &desired, &source, &plan);
+
     crate::fleet_ensure::workflow::readiness::tests::qualify_unpaid_infrastructure_review(
         &plan,
         &root.join("deployments/retained-multi-component.toml"),
@@ -472,6 +474,74 @@ fn qualify_inspection_budget(root: &Path, plan: &FleetEnsurePlan) {
         inspection::reserve(&paths, &changed, inspection::InspectionPhase::Review),
         Err(InfrastructureBootstrapError::Integrity)
     ));
+}
+
+fn qualify_review_retry(
+    root: &Path,
+    desired: &DesiredFleet,
+    source: &InfrastructureBootstrapRecord,
+    expected: &FleetEnsurePlan,
+) {
+    let paths =
+        crate::fleet_ensure::ops::EnsurePaths::under(root, &desired.environment, &desired.fleet);
+    assert!(!paths.plan.exists());
+    let mut platform = crate::fleet_ensure::tests::MockPlatform::new(desired.clone(), []);
+    platform
+        .bootstrap_observations
+        .push_back(Err(crate::fleet_ensure::tests::MockError));
+    let failed = crate::fleet_ensure::workflow::infrastructure_bootstrap::plan(
+        root,
+        desired,
+        source,
+        "supplied-infrastructure",
+        43,
+        &mut platform,
+    );
+    assert!(matches!(
+        failed,
+        Err(crate::fleet_ensure::workflow::EnsureWorkflowError::Platform(_))
+    ));
+    assert!(!paths.plan.exists());
+    assert!(platform.bootstrap_observations.is_empty());
+    assert_eq!(
+        inspection::planned_at_time(&paths, source.source_sha256).unwrap(),
+        Some(43)
+    );
+    platform
+        .bootstrap_observations
+        .push_back(Ok(Some(InfrastructureBootstrapObservation {
+            held_sources: BTreeMap::new(),
+            canisters: source
+                .sources
+                .iter()
+                .map(|(name, source)| (name.clone(), Some(source.sample.clone())))
+                .collect(),
+            coordinator_registry: None,
+            operator_cycles: source.operator_cycles,
+            ledger_fee_cycles: source.ledger_fee_cycles,
+        })));
+    let recovered = crate::fleet_ensure::workflow::infrastructure_bootstrap::plan(
+        root,
+        desired,
+        source,
+        "supplied-infrastructure",
+        60,
+        &mut platform,
+    )
+    .unwrap();
+    assert_eq!(&recovered, expected);
+    assert!(platform.bootstrap_observations.is_empty());
+    assert!(matches!(
+        inspection::reserve(&paths, &recovered, inspection::InspectionPhase::Review),
+        Err(InfrastructureBootstrapError::InspectionBudget)
+    ));
+    std::fs::remove_file(&paths.plan).unwrap();
+    std::fs::remove_dir_all(
+        paths
+            .plan
+            .with_file_name("infrastructure-bootstrap-inspections"),
+    )
+    .unwrap();
 }
 
 fn qualify_creation(root: &Path, desired: &DesiredFleet, source: &InfrastructureBootstrapRecord) {

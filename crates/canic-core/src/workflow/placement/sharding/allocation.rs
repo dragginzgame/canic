@@ -84,14 +84,24 @@ impl ShardAllocator {
                     return Err(err);
                 }
             };
+        if let Err(error) = permit.require_current_child(pid) {
+            PlacementAllocationWorkflow::finish_retired_child(&permit, pid)?;
+            return Err(error);
+        }
         let created_at = crate::ops::ic::IcOps::now_secs();
-        if let Err(err) =
-            ShardingRegistryOps::create(pid, pool, slot, canister_role, policy.capacity, created_at)
-        {
+        if let Err(err) = ShardingRegistryOps::create(
+            pid,
+            pool,
+            slot,
+            canister_role,
+            policy.capacity,
+            permit.operation_id(),
+            created_at,
+        ) {
             MetricEvent::failed(MetricOperation::CreateShard, &err);
             return Err(err);
         }
-        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid) {
+        if let Err(err) = PlacementAllocationWorkflow::finish_created_child(&permit, pid) {
             MetricEvent::failed(MetricOperation::CreateShard, &err);
             return Err(err);
         }

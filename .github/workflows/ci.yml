@@ -54,6 +54,64 @@ jobs:
         shell: bash
         run: make ci-preflight
 
+  macos-host:
+    needs: [preflight, security]
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15
+            target: aarch64-apple-darwin
+          - runner: macos-15-intel
+            target: x86_64-apple-darwin
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6
+        with:
+          persist-credentials: false
+      - uses: dtolnay/rust-toolchain@e97e2d8cc328f1b50210efc529dca0028893a2d9 # v1
+        with:
+          toolchain: ${{ env.CANIC_INTERNAL_TOOLCHAIN }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@e18b497796c12c097a38f9edb9d0641fb99eee32 # v2
+        with:
+          cache-targets: false
+      - name: Record and verify native host
+        env:
+          EXPECTED_TARGET: ${{ matrix.target }}
+        shell: bash
+        run: |
+          sw_vers
+          uname -m
+          rustc -vV
+          test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_TARGET"
+      - name: Install and qualify pinned native build tools
+        shell: bash
+        run: |
+          source tool-versions.env
+          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
+          bash scripts/ci/install-icp-cli.sh
+          bash scripts/ci/install-ic-wasm.sh
+          bash scripts/ci/install-binaryen.sh
+          pocket_bin="$(bash scripts/ci/install-pocketic.sh)"
+          "$pocket_bin" --version
+          echo "POCKET_IC_BIN=$pocket_bin" >> "$GITHUB_ENV"
+      - name: Compile Host and CLI
+        run: cargo check --locked -p canic-host -p canic-cli --all-targets
+      - name: Qualify native durability and backup recovery
+        shell: bash
+        run: |
+          cargo test --locked -p canic-host --lib durable_io::
+          cargo test --locked -p canic-cli --lib output::tests::
+          cargo test --locked -p canic-cli --lib fleet::tests::generated_desired_output_
+          cargo test --locked -p canic-backup --lib persistence::
+          cargo test --locked -p canic-backup --lib restore::runner::
+      - name: Check canister target from macOS
+        run: cargo check --locked -p canic-control-plane --target wasm32-unknown-unknown --features root-control-plane
+      - name: Build and finalize a representative canister artifact
+        run: cargo run --locked -p canic-cli --bin canic -- build demo user_shard --environment local
+
   security:
     runs-on: ubuntu-24.04
     timeout-minutes: 15

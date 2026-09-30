@@ -1,9 +1,16 @@
 //! Exercise the operator review/apply entrypoint on a genuinely completed current Fleet.
 
 use super::*;
+use canic_core::{
+    control_plane_support::{error::InternalError, policy::pool_import},
+    dto::pool_import::{
+        PoolImportCommand, PoolImportIdentity, PoolImportPhase, PoolImportSourceProgress,
+    },
+};
 use canic_host::{
     fleet_ensure::{
         dto::capacity_import::CapacityImportReviewRequest,
+        model::capacity_import::CapacityImportJournalRecord,
         ops::capacity_import::{
             admission::{
                 CapacityImportDeclaration, CapacityImportDeclarations,
@@ -15,6 +22,124 @@ use canic_host::{
     },
     icp::IcpCli,
 };
+
+pub(super) fn qualify_reset_review(
+    input: &ReinstallJourney<'_>,
+    journal: &CapacityImportJournalRecord,
+) {
+    let plan = &journal.plan;
+    let (workloads, ready) = expected_counts(input);
+    assert_eq!(plan.sources.len(), workloads + ready);
+    assert_eq!(
+        plan.sources
+            .iter()
+            .filter(|source| source.binding.module_sha256.is_some())
+            .count(),
+        workloads
+    );
+    assert_eq!(
+        plan.sources
+            .iter()
+            .filter(|source| source.binding.module_sha256.is_none() && source.binding.stopped)
+            .count(),
+        ready
+    );
+    let operator = plan.authority.operator;
+    let context = super::super::capacity_import::context(input.pic, input.root, operator);
+    assert_eq!(
+        plan.root_budget.maximum_paid_calls,
+        pool_import::recommended_calls(plan.sources.len()).unwrap()
+    );
+    assert!(
+        plan.root_budget.maximum_debit_cycles
+            >= pool_import::required_debit(
+                context.maximum_call_debit_cycles,
+                plan.root_budget.maximum_paid_calls
+            )
+            .unwrap()
+    );
+    let mut insufficient =
+        canic_host::fleet_ensure::ops::capacity_import::root_reservation(plan).unwrap();
+    insufficient.maximum_root_debit_cycles = pool_import::required_debit(
+        context.maximum_call_debit_cycles,
+        insufficient.maximum_paid_calls,
+    )
+    .unwrap()
+        - 1;
+    let before = input
+        .pools
+        .iter()
+        .map(|id| input.pic.canister_status(*id, Some(input.root)).unwrap())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        super::super::capacity_import::command(
+            input.pic,
+            input.root,
+            operator,
+            PoolImportCommand::Reserve(Box::new(insufficient))
+        )
+        .err(),
+        Some(InternalError::resource_exhausted().into())
+    );
+    assert_eq!(
+        super::super::capacity_import::context(input.pic, input.root, operator).active_import,
+        None
+    );
+    for (id, original) in input.pools.iter().zip(before) {
+        let after = input.pic.canister_status(*id, Some(input.root)).unwrap();
+        assert_eq!(after.version, original.version);
+        assert_eq!(after.status, original.status);
+        assert_eq!(after.module_hash, original.module_hash);
+    }
+}
+
+pub(super) fn qualify_reset_completion(
+    input: &ReinstallJourney<'_>,
+    journal: &CapacityImportJournalRecord,
+) {
+    let plan = &journal.plan;
+    let status = super::super::capacity_import::status(
+        input.pic,
+        input.root,
+        plan.authority.operator,
+        PoolImportIdentity {
+            sequence: plan.authority.import_sequence,
+            plan_sha256: plan.plan_sha256,
+        },
+    );
+    assert!(matches!(status.phase, PoolImportPhase::Released { .. }));
+    assert_eq!(status.progress.len(), input.pools.len());
+    assert!(
+        status
+            .progress
+            .iter()
+            .all(|progress| matches!(progress, PoolImportSourceProgress::Ready(_)))
+    );
+    assert!(status.paid_calls <= plan.root_budget.maximum_paid_calls);
+    let receipt = status.root_receipt.unwrap();
+    assert!(receipt.observed_debit_cycles <= plan.root_budget.maximum_debit_cycles);
+    assert_eq!(
+        receipt.retained_cycles + receipt.retained_reserved_cycles + receipt.observed_debit_cycles,
+        plan.root_budget.observed_cycles + plan.root_budget.observed_reserved_cycles
+    );
+    eprintln!(
+        "Capacity import qualified: {} sources, {}/{} paid calls, {}/{} observed/maximum Root debit cycles",
+        status.progress.len(),
+        status.paid_calls,
+        plan.root_budget.maximum_paid_calls,
+        receipt.observed_debit_cycles,
+        plan.root_budget.maximum_debit_cycles
+    );
+    assert_eq!(
+        CapacityImportJournalStore::open(&paths(input))
+            .unwrap()
+            .read()
+            .unwrap()
+            .unwrap()
+            .plan,
+        *plan
+    );
+}
 
 pub(super) fn qualify(input: &ReinstallJourney<'_>, desired: &DesiredFleet, icp: &IcpCli) {
     let span = Span::start("completed_fleet_capacity_import");

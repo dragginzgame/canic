@@ -16,10 +16,7 @@ use crate::{
     log::Topic,
     model::placement::sharding::ShardingPlanState,
     ops::{
-        placement::sharding::mapper::{
-            ShardPartitionKeyAssignmentMapper, ShardPlacementMapper,
-            ShardingPlanStateResponseMapper,
-        },
+        placement::sharding::mapper::{ShardPlacementMapper, ShardingPlanStateResponseMapper},
         runtime::metrics::{
             recording::ShardingMetricEvent as MetricEvent,
             sharding::{
@@ -57,7 +54,7 @@ impl ShardingWorkflow {
     }
 
     #[expect(clippy::too_many_lines)]
-    async fn assign_with_policy(
+    pub(super) async fn assign_with_policy(
         canister_role: &CanisterRole,
         pool: &str,
         partition_key: &str,
@@ -70,6 +67,12 @@ impl ShardingWorkflow {
             return Err(err);
         }
         let active = ShardingRegistryOps::active_shards();
+        let active_set: BTreeSet<_> = active.iter().copied().collect();
+        let routable_active = Self::routable_active_set(&active_set);
+        let assignment_views: Vec<_> =
+            Self::assignment_view(pool, partition_key, &routable_active)?
+                .into_iter()
+                .collect();
         crate::perf!("load_active_shards");
         if active.is_empty() {
             return match Self::assign_bootstrap_created(
@@ -92,9 +95,6 @@ impl ShardingWorkflow {
             };
         }
 
-        let active_set: BTreeSet<_> = active.into_iter().collect();
-        let routable_active = Self::routable_active_set(&active_set);
-
         let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
             .filter(|record| routable_active.contains(&record.pid))
@@ -103,14 +103,6 @@ impl ShardingWorkflow {
 
         let metrics = compute_pool_metrics(pool, &entry_views);
 
-        let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
-        let assignment_views: Vec<_> = assignments_raw
-            .iter()
-            .filter(|record| routable_active.contains(&record.shard))
-            .map(|record| {
-                ShardPartitionKeyAssignmentMapper::record_to_assignment(&record.key, record.shard)
-            })
-            .collect();
         crate::perf!("collect_registry");
 
         let state = ShardingState {
@@ -146,11 +138,14 @@ impl ShardingWorkflow {
             ShardingPlanState::UseExisting { pid } => {
                 MetricEvent::completed(MetricOperation::PlanAssign, MetricReason::ExistingCapacity);
                 MetricEvent::started(MetricOperation::AssignKey);
-                if let Err(err) = ShardingRegistryOps::assign(pool, partition_key, pid) {
-                    MetricEvent::failed(MetricOperation::AssignKey, &err);
-                    MetricEvent::failed(MetricOperation::Assign, &err);
-                    return Err(err);
-                }
+                let pid = match Self::assign_available_key(pool, partition_key, pid) {
+                    Ok(pid) => pid,
+                    Err(err) => {
+                        MetricEvent::failed(MetricOperation::AssignKey, &err);
+                        MetricEvent::failed(MetricOperation::Assign, &err);
+                        return Err(err);
+                    }
+                };
                 MetricEvent::completed(MetricOperation::AssignKey, MetricReason::ExistingCapacity);
                 crate::perf!("assign_existing");
 
@@ -195,22 +190,25 @@ impl ShardingWorkflow {
                 crate::perf!("allocate_shard");
 
                 MetricEvent::started(MetricOperation::AssignKey);
-                if let Err(err) = ShardingRegistryOps::assign(pool, partition_key, pid) {
-                    MetricEvent::failed(MetricOperation::AssignKey, &err);
-                    MetricEvent::failed(MetricOperation::Assign, &err);
-                    return Err(err);
-                }
+                let assigned = match Self::assign_available_key(pool, partition_key, pid) {
+                    Ok(assigned) => assigned,
+                    Err(err) => {
+                        MetricEvent::failed(MetricOperation::AssignKey, &err);
+                        MetricEvent::failed(MetricOperation::Assign, &err);
+                        return Err(err);
+                    }
+                };
                 MetricEvent::completed(MetricOperation::AssignKey, MetricReason::CreateAllowed);
                 crate::perf!("assign_created");
 
                 crate::log!(
                     Topic::Sharding,
                     Ok,
-                    "✨ partition_key={partition_key} created+assigned shard={pid} pool={pool} slot={slot}"
+                    "✨ partition_key={partition_key} assigned shard={assigned}; created shard={pid} pool={pool} slot={slot}"
                 );
 
                 MetricEvent::completed(MetricOperation::Assign, MetricReason::CreateAllowed);
-                Ok(pid)
+                Ok(assigned)
             }
 
             ShardingPlanState::CreateBlocked { reason } => {
@@ -232,12 +230,15 @@ impl ShardingWorkflow {
         ShardingRegistryOps::validate_assignment_key(pool, partition_key)?;
 
         let active = ShardingRegistryOps::active_shards();
+        let active_set: BTreeSet<_> = active.iter().copied().collect();
+        let routable_active = Self::routable_active_set(&active_set);
+        let assignment_views: Vec<_> =
+            Self::assignment_view(pool, partition_key, &routable_active)?
+                .into_iter()
+                .collect();
         if active.is_empty() {
             Self::ensure_bootstrap_capacity(pool, partition_key, &pool_cfg.policy)?;
         }
-
-        let active_set: BTreeSet<_> = active.into_iter().collect();
-        let routable_active = Self::routable_active_set(&active_set);
 
         let entry_views: Vec<_> = ShardingRegistryOps::entries_for_pool(pool)
             .iter()
@@ -246,15 +247,6 @@ impl ShardingWorkflow {
             .collect();
 
         let metrics = compute_pool_metrics(pool, &entry_views);
-
-        let assignments_raw = ShardingRegistryOps::assignments_for_pool(pool);
-        let assignment_views: Vec<_> = assignments_raw
-            .iter()
-            .filter(|record| routable_active.contains(&record.shard))
-            .map(|record| {
-                ShardPartitionKeyAssignmentMapper::record_to_assignment(&record.key, record.shard)
-            })
-            .collect();
 
         let state = ShardingState {
             pool,

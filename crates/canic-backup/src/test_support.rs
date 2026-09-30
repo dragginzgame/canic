@@ -29,6 +29,7 @@ use std::{
 #[derive(Default)]
 pub struct FakeBackupRunnerExecutor {
     pub commands: Vec<String>,
+    pub download_paths: Vec<PathBuf>,
     pub fail_on: Option<FakeBackupRunnerFailure>,
     pub canister_statuses: BTreeMap<String, BackupRunnerCanisterStatus>,
     pub snapshots: BTreeMap<String, Vec<BackupRunnerSnapshot>>,
@@ -212,6 +213,7 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
     ) -> Result<(), BackupRunnerCommandError> {
         self.commands
             .push(format!("download:{canister_id}:{snapshot_id}"));
+        self.download_paths.push(artifact_path.to_path_buf());
         fs::create_dir_all(artifact_path)
             .map_err(|error| BackupRunnerCommandError::failed("io", error.to_string()))?;
         fs::write(artifact_path.join("snapshot.bin"), b"app snapshot")
@@ -222,12 +224,15 @@ impl BackupRunnerExecutor for FakeBackupRunnerExecutor {
 
 // Build a unique temporary directory path for tests that create their own layout.
 pub fn temp_dir(prefix: &str) -> PathBuf {
-    std::env::temp_dir().join(unique_name(prefix))
+    std::env::temp_dir()
+        .canonicalize()
+        .unwrap()
+        .join(unique_name(prefix))
 }
 
 // Build a unique temporary file path for tests that only need one artifact.
 pub fn temp_path(prefix: &str) -> PathBuf {
-    std::env::temp_dir().join(unique_name(prefix))
+    temp_dir(prefix)
 }
 
 // Include process and timestamp data so parallel test runs do not collide.

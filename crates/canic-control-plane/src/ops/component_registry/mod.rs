@@ -1369,6 +1369,21 @@ impl ComponentRegistryOps {
         RootComponentRegistryStore::component_for_principal(canister)
     }
 
+    /// Resolve a currently registered descendant's exact allocation for paid-effect admission.
+    pub(crate) fn child_allocation_operation_id(
+        component: ComponentInstanceId,
+        canister: candid::Principal,
+    ) -> Result<Option<[u8; 32]>, InternalError> {
+        let Some(child) = RootComponentRegistryStore::child(component, canister) else {
+            return Ok(None);
+        };
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(InternalError::invariant)?;
+        validate_partition_record(&partition)?;
+        validate_child_record(&partition, &child)?;
+        Ok(Some(child.allocation_operation_id))
+    }
+
     pub(crate) fn registered_parent(
         component: ComponentInstanceId,
         canister: Principal,
@@ -2317,6 +2332,7 @@ fn subtree_removal_record_to_view(
     record: RootComponentSubtreeRemovalRecord,
 ) -> RootComponentSubtreeRemovalView {
     RootComponentSubtreeRemovalView {
+        target_allocation_operation_id: record.target.allocation_operation_id,
         operation_id: record.operation_id,
         component: record.component,
         target_canister_id: record.target.canister_id,
@@ -2528,6 +2544,7 @@ fn subtree_removal_node_view(
     record: ComponentRegistryChildRecord,
 ) -> RootComponentSubtreeRemovalNodeView {
     RootComponentSubtreeRemovalNodeView {
+        allocation_operation_id: record.allocation_operation_id,
         canister_id: record.canister_id,
         parent_canister_id: record.parent_canister_id,
         role: record.role,
@@ -3297,6 +3314,7 @@ fn child_install_charged_entry_bytes(
     };
     let child = ComponentRegistryChildRecord {
         component: record.component,
+        allocation_operation_id: record.operation_id,
         canister_id: canister,
         parent_canister_id: record.parent_canister_id,
         role: record.child_role.clone(),
@@ -3602,6 +3620,7 @@ fn committed_child_records(
     }
     let child = ComponentRegistryChildRecord {
         component: record.component,
+        allocation_operation_id: record.operation_id,
         canister_id: canister,
         parent_canister_id: record.parent_canister_id,
         role: record.child_role.clone(),
@@ -5874,9 +5893,16 @@ fn validate_completed_subtree_removal(
         && partition.revision >= completed.registry.revision
         && (partition.revision != completed.registry.revision
             || partition.content_hash == completed.registry.content_hash);
-    if !terminal_authority_matches
-        || RootComponentRegistryStore::child(record.component, record.target.canister_id).is_some()
-    {
+    let target_allocation_removed =
+        match RootComponentRegistryStore::child(record.component, record.target.canister_id) {
+            Some(current) => {
+                validate_registered_child_record(partition, &current)?;
+                current.allocation_operation_id != record.target.allocation_operation_id
+                    && partition.revision > completed.registry.revision
+            }
+            None => true,
+        };
+    if !terminal_authority_matches || !target_allocation_removed {
         return Err(InternalError::invariant());
     }
     Ok(())
@@ -6114,6 +6140,7 @@ fn child_record_to_directory_view(
     child: ComponentRegistryChildRecord,
 ) -> ComponentDirectoryChildView {
     ComponentDirectoryChildView {
+        allocation_operation_id: child.allocation_operation_id,
         binding: ComponentChildBinding {
             component: partition.binding.clone(),
             parent_canister_id: child.parent_canister_id,

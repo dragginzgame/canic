@@ -591,7 +591,10 @@ fn terminal_component_membership_removal_response(
     }
     CanisterPoolOps::complete_recycling(
         receipt.deleted.deletion.quiescence.stop.canister_id,
-        request.component,
+        &CanisterPoolClaimKey {
+            component: request.component,
+            operation_id: receipt.allocation_operation_id,
+        },
         IcOps::now_nanos(),
     )?;
     component_deletion_response(draining).map(Some)
@@ -1540,7 +1543,8 @@ pub fn remove_component_membership(
         )?;
     }
     let recycling_canister = component_recycling_canister(&request)?;
-    CanisterPoolOps::validate_complete_recycling(recycling_canister, request.component)?;
+    let claim = ComponentRegistryOps::component_recycling_claim(request.component)?;
+    CanisterPoolOps::validate_complete_recycling(recycling_canister, &claim)?;
     let removed = ComponentRegistryOps::remove_component_membership(
         request.component,
         request.operation_id,
@@ -1558,7 +1562,7 @@ pub fn remove_component_membership(
             | RootComponentDeletionProgressView::Deleted(_) => None,
         })
         .ok_or_else(InternalError::invariant)?;
-    CanisterPoolOps::complete_recycling(canister_id, request.component, IcOps::now_nanos())?;
+    CanisterPoolOps::complete_recycling(canister_id, &claim, IcOps::now_nanos())?;
     component_deletion_response(removed)
 }
 
@@ -2020,10 +2024,15 @@ pub async fn remove_subtree_leaf_membership(
         .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
-    CanisterPoolOps::validate_complete_recycling(
-        request.expected_leaf_canister_id,
+    if let Some(claim) = ComponentRegistryOps::subtree_recycling_claim(
         request.component,
-    )?;
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+    )? {
+        CanisterPoolOps::validate_complete_recycling(request.expected_leaf_canister_id, &claim)?;
+    }
     let removal = ComponentRegistryOps::remove_subtree_leaf_membership(
         request.component,
         request.operation_id,
@@ -2034,11 +2043,7 @@ pub async fn remove_subtree_leaf_membership(
         maximum_registry_bytes,
         fleet_directory,
     )?;
-    CanisterPoolOps::complete_recycling(
-        request.expected_leaf_canister_id,
-        request.component,
-        IcOps::now_nanos(),
-    )?;
+    // Recycling remains fenced until surviving parent routing has converged.
     validate_subtree_removal(
         &authority.binding,
         authority.initial_release_set,
@@ -2050,6 +2055,10 @@ pub async fn remove_subtree_leaf_membership(
 }
 
 /// Converge the post-removal Directory on the surviving owner and distinct parent.
+#[expect(
+    clippy::too_many_lines,
+    reason = "one convergence sequence keeps Directory publication and recycling completion in the same message"
+)]
 pub async fn synchronize_subtree_leaf_directory(
     request: RootComponentSubtreeRemovalDirectorySynchronizationRequest,
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
@@ -2127,6 +2136,22 @@ pub async fn synchronize_subtree_leaf_directory(
         directory_authority_hash,
     )
     .await?;
+    let Some(claim) = ComponentRegistryOps::subtree_recycling_claim(
+        request.component,
+        request.operation_id,
+        request.expected_traversal_steps,
+        request.expected_leaf_canister_id,
+        request.expected_leaf_parent_canister_id,
+    )?
+    else {
+        // Another resumer may have archived this exact leaf during convergence.
+        // Its retained completion already owns the pool transition.
+        let completed =
+            ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
+                .ok_or_else(InternalError::invariant)?;
+        return Ok(subtree_removal_response(completed));
+    };
+    CanisterPoolOps::validate_complete_recycling(request.expected_leaf_canister_id, &claim)?;
     let synchronized = ComponentRegistryOps::mark_subtree_leaf_directory_synchronized(
         request.component,
         request.operation_id,
@@ -2146,6 +2171,14 @@ pub async fn synchronize_subtree_leaf_directory(
         &synchronized,
         None,
     )?;
+    // No await separates prevalidation, Directory publication and pool completion.
+    // Trap on an impossible change so both stable updates roll back together.
+    CanisterPoolOps::complete_recycling(
+        request.expected_leaf_canister_id,
+        &claim,
+        IcOps::now_nanos(),
+    )
+    .expect("prevalidated recycling completion changed during synchronous Directory publication");
     Ok(subtree_removal_response(synchronized))
 }
 
@@ -3967,6 +4000,7 @@ pub(super) fn active_component_direct_children(
         .into_iter()
         .map(|entry| ComponentRuntimeDirectChild {
             canister_id: entry.binding.canister_id,
+            allocation_operation_id: entry.allocation_operation_id,
             role: entry.binding.role,
             protocol_profile_digest: entry.protocol_profile_digest,
         })
@@ -5590,9 +5624,14 @@ async fn observe_or_stop_subtree_leaf(
 async fn observe_or_recycle_subtree_leaf(
     plan: &PreparedSubtreeLeafDeletePlan,
 ) -> Result<(), InternalError> {
-    let canister_id = plan.deletion.stopped.stop.leaf.canister_id;
+    let leaf = &plan.deletion.stopped.stop.leaf;
+    let canister_id = leaf.canister_id;
+    let claim = CanisterPoolClaimKey {
+        component: plan.component,
+        operation_id: leaf.allocation_operation_id,
+    };
     if CanisterPoolOps::contains_asset(canister_id) {
-        return crate::workflow::canister_pool::recycle(canister_id).await;
+        return crate::workflow::canister_pool::recycle(canister_id, &claim).await;
     }
     match observed_subtree_leaf_for_deletion(plan).await? {
         CanisterStatusObservation::Absent => {
@@ -5601,15 +5640,16 @@ async fn observe_or_recycle_subtree_leaf(
         CanisterStatusObservation::Present(_) => {}
     }
 
-    crate::workflow::canister_pool::recycle(canister_id).await
+    crate::workflow::canister_pool::recycle(canister_id, &claim).await
 }
 
 async fn observe_or_recycle_component(
     plan: &PreparedComponentDeletionPlan,
 ) -> Result<(), InternalError> {
     let canister_id = plan.deletion.quiescence.stop.canister_id;
+    let claim = ComponentRegistryOps::component_recycling_claim(plan.component)?;
     if CanisterPoolOps::contains_asset(canister_id) {
-        return crate::workflow::canister_pool::recycle(canister_id).await;
+        return crate::workflow::canister_pool::recycle(canister_id, &claim).await;
     }
     match observed_component_for_deletion(plan).await? {
         CanisterStatusObservation::Absent => {
@@ -5618,7 +5658,7 @@ async fn observe_or_recycle_component(
         CanisterStatusObservation::Present(_) => {}
     }
 
-    crate::workflow::canister_pool::recycle(canister_id).await
+    crate::workflow::canister_pool::recycle(canister_id, &claim).await
 }
 
 async fn observed_component_for_deletion(

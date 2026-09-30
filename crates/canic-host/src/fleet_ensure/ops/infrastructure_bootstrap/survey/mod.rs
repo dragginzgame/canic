@@ -146,12 +146,12 @@ impl BootstrapSurvey {
         authenticated_agent(icp, desired, &self.original)
     }
 
-    /// The workflow reserves the corresponding durable allowance before this one paid read.
-    pub(in crate::fleet_ensure) async fn sample(
+    /// Check custody before workflow reserves the corresponding durable paid-read allowance.
+    pub(in crate::fleet_ensure) async fn prepare_sample(
         agent: &ic_agent::Agent,
         canister: Principal,
-    ) -> Result<CapacityImportSampleRecord, InfrastructureBootstrapError> {
-        Ok(management::observe(agent, canister).await?)
+    ) -> Result<management::PreparedManagementObservation, InfrastructureBootstrapError> {
+        Ok(management::prepare(agent, canister).await?)
     }
 
     /// Retain the original balances and exact operator declarations without rebasing samples.

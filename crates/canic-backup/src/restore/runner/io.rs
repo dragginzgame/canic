@@ -8,7 +8,6 @@ use super::{
     RestoreApplyJournal, RestoreApplyOperationReceiptOutcome, RestoreApplyOperationState,
     types::RestoreRunnerError,
 };
-use crate::restore::write_restore_apply_journal;
 use std::{fs, path::Path};
 
 pub(super) fn read_apply_journal_file(
@@ -25,7 +24,10 @@ pub(super) fn write_apply_journal_file(
     path: &Path,
     journal: &RestoreApplyJournal,
 ) -> Result<(), RestoreRunnerError> {
-    write_restore_apply_journal(path, journal)?;
+    // The runner holds both the journal and layout guards across every write.
+    journal.validate()?;
+    crate::persistence::write_json_durable(path, journal)
+        .map_err(crate::restore::RestorePersistenceError::from)?;
     Ok(())
 }
 

@@ -588,6 +588,7 @@ impl ManagedComponentGroupFixture {
     ) -> Result<ComponentRuntimeDirectChild, ManagedComponentGroupQualificationError> {
         Ok(ComponentRuntimeDirectChild {
             canister_id: node.public.canister_id,
+            allocation_operation_id: node.directory.operation_id,
             role: node.public.role.clone(),
             protocol_profile_digest: ProtocolProfileDigest::from_bytes(
                 overview(&self.pic, node.public.canister_id)?.protocol_profile_digest,

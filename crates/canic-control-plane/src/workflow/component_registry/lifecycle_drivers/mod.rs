@@ -735,6 +735,12 @@ pub(in crate::workflow) async fn advance_existing_subtree_removal(
 ) -> Result<RootComponentSubtreeRemovalResponse, InternalError> {
     let removal = ComponentRegistryOps::subtree_removal(request.component, request.operation_id)?
         .ok_or_else(InternalError::unavailable)?;
+    if matches!(
+        &removal.progress,
+        RootComponentSubtreeRemovalProgressView::Completed(_)
+    ) {
+        return Ok(subtree_removal_response(removal));
+    }
     let removal = Box::pin(advance_subtree_removal_phase(removal)).await?;
     Ok(subtree_removal_response(removal))
 }

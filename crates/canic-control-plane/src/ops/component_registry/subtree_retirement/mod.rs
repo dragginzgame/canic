@@ -7,6 +7,55 @@
 use super::*;
 
 impl ComponentRegistryOps {
+    /// Resolve the original allocation from the retained leaf, never from its current pool use.
+    pub(crate) fn subtree_recycling_claim(
+        component: ComponentInstanceId,
+        operation_id: [u8; 32],
+        traversal_steps: u32,
+        canister_id: Principal,
+        parent_canister_id: Principal,
+    ) -> Result<Option<crate::ops::canister_pool::CanisterPoolClaimKey>, InternalError> {
+        let removal = Self::subtree_removal(component, operation_id)?
+            .ok_or_else(InternalError::unavailable)?;
+        if Self::subtree_removal_completed_leaf_matches(
+            component,
+            operation_id,
+            traversal_steps,
+            canister_id,
+            parent_canister_id,
+        )? {
+            return Ok(None);
+        }
+        let leaf = match &removal.progress {
+            RootComponentSubtreeRemovalProgressView::Deleted(receipt) => {
+                &receipt.deletion.stopped.stop.leaf
+            }
+            RootComponentSubtreeRemovalProgressView::MembershipRemoved(receipt) => {
+                &receipt.deleted.deletion.stopped.stop.leaf
+            }
+            RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt) => {
+                &receipt
+                    .membership_removed
+                    .deleted
+                    .deletion
+                    .stopped
+                    .stop
+                    .leaf
+            }
+            _ => return Err(InternalError::unavailable()),
+        };
+        let selection_matches = removal.traversal_steps == traversal_steps
+            && leaf.canister_id == canister_id
+            && leaf.parent_canister_id == parent_canister_id;
+        if !selection_matches {
+            return Err(InternalError::conflict());
+        }
+        Ok(Some(crate::ops::canister_pool::CanisterPoolClaimKey {
+            component,
+            operation_id: leaf.allocation_operation_id,
+        }))
+    }
+
     pub(crate) fn subtree_removal(
         component: ComponentInstanceId,
         operation_id: [u8; 32],

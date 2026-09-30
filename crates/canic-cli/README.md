@@ -43,6 +43,9 @@ Snapshot restoration uses `restore plan` for offline review, `restore prepare`
 to validate artifacts and create or adopt the plan and journal, `restore run`
 to preview or execute journaled operations, and `restore status` to inspect
 progress. Backup references use the same row ordering as `backup list`.
+`backup prune` counts verified copies for retention and protects unfinished
+restores, including external journals. Its report includes skipped layouts and
+partial deletion failures; see [local retention](../../docs/features/backup-and-restore/README.md#local-retention).
 
 Fresh `backup create` execution is unavailable until Component Registry topology
 preflight is implemented. Dry-run planning does not create a backup or qualify

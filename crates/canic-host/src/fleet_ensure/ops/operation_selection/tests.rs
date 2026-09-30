@@ -208,3 +208,48 @@ fn completed_historical_shape_selects_current_reset_without_desired_decoding() {
     crate::fleet_ensure::ops::retained_contract::check(&paths.workspace, "local", "fleet").unwrap();
     fs::remove_dir_all(paths.workspace).unwrap();
 }
+
+#[test]
+fn completed_reset_selection_does_not_capture_a_later_ordinary_review() {
+    let paths = retained();
+    let selected = crate::fleet_ensure::workflow::clean_reinstall::selected;
+    write_current(
+        &paths.plan.with_file_name("clean-reinstall.json"),
+        &json!({"opaque_completed_selection": true}),
+    )
+    .unwrap();
+    let mut setup = read(&paths.plan).unwrap().unwrap();
+    setup["scope"] = json!("infrastructure_bootstrap");
+    let archive = paths
+        .plan
+        .with_file_name("infrastructure-bootstrap-completed");
+    write_current(&archive.join("b2".repeat(32)).join("plan.json"), &setup).unwrap();
+    assert!(selected(&paths.workspace, "local", "fleet", false, true).unwrap());
+    assert!(!selected(&paths.workspace, "local", "fleet", false, false).unwrap());
+
+    let mut later = read(&paths.plan).unwrap().unwrap();
+    later["operation_id"] = json!("c3".repeat(32));
+    later["plan_sha256"] = json!("d4".repeat(32));
+    write_current(&paths.plan, &later).unwrap();
+    for reinstall in [false, true] {
+        for applying in [false, true] {
+            assert!(!selected(&paths.workspace, "local", "fleet", reinstall, applying).unwrap());
+        }
+    }
+    assert!(
+        crate::fleet_ensure::workflow::clean_reinstall::retained_desired(
+            &paths.workspace,
+            "local",
+            "fleet",
+            false,
+        )
+        .unwrap()
+        .is_none()
+    );
+    // Restore the owned operation without claiming completion: interrupted reset
+    // convergence must continue to select its exact recovery owner.
+    later["operation_id"] = setup["operation_id"].clone();
+    write_current(&paths.plan, &later).unwrap();
+    assert!(selected(&paths.workspace, "local", "fleet", false, true).unwrap());
+    fs::remove_dir_all(paths.workspace).unwrap();
+}

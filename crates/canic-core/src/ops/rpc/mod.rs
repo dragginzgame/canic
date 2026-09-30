@@ -288,6 +288,7 @@ mod tests {
         )));
         assert!(uses_structural_capability_proof(
             &Request::recycle_canister(RecycleCanisterRequest {
+                allocation_operation_id: [1; 32],
                 canister_pid: p(1),
                 metadata: None,
             },)

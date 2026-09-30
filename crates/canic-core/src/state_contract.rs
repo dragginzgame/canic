@@ -374,12 +374,12 @@ fn descriptor(
 }
 
 fn runtime_children_domains() -> Vec<StateDomainManifest> {
-    use crate::storage::{canister::CanisterEntryRecord, stable::children::CanisterChildrenData};
+    use crate::storage::stable::children::{CanisterChildEntryRecord, CanisterChildrenData};
 
     vec![state_domain(
         "runtime_canister_children",
         RUNTIME_CANISTER_CHILDREN_ID,
-        CanisterEntryRecord::STATE_CONTRACT_NAME,
+        CanisterChildEntryRecord::STATE_CONTRACT_NAME,
         CanisterChildrenData::STATE_CONTRACT_NAME,
         30,
         "canister_children_projection_is_imported",
@@ -769,9 +769,7 @@ mod tests {
 
     #[test]
     fn topology_registry_descriptors_reference_canonical_data_types() {
-        use crate::storage::{
-            canister::CanisterEntryRecord, stable::children::CanisterChildrenData,
-        };
+        use crate::storage::stable::children::{CanisterChildEntryRecord, CanisterChildrenData};
 
         let descriptors = canic_state_descriptors();
         let descriptor = descriptors
@@ -784,7 +782,10 @@ mod tests {
             .find(|declaration| declaration.domain == "runtime_canister_children")
             .expect("Canister children state declaration");
 
-        assert_eq!(declaration.record, CanisterEntryRecord::STATE_CONTRACT_NAME);
+        assert_eq!(
+            declaration.record,
+            CanisterChildEntryRecord::STATE_CONTRACT_NAME
+        );
         assert_eq!(
             declaration.snapshot,
             CanisterChildrenData::STATE_CONTRACT_NAME

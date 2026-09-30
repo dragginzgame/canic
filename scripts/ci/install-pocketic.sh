@@ -20,31 +20,27 @@ elif [ -n "${CANIC_POCKET_IC_CACHE_DIR:-}" ]; then
 else
     CACHE_ROOT="${XDG_CACHE_HOME:-${HOME:?HOME must be set}/.cache}/canic"
 fi
-DIR="$CACHE_ROOT/pocket-ic-server-$CANIC_POCKET_IC_VERSION"
+platform="$(bash "$SCRIPT_DIR/pocketic-platform.sh")"
+IFS=$'\t' read -r archive_name archive_digest binary_digest <<<"$platform"
+DIR="$CACHE_ROOT/pocket-ic-server-$CANIC_POCKET_IC_VERSION-${archive_name%.gz}"
 BIN="$DIR/pocket-ic"
-ARCHIVE="$DIR/pocket-ic-x86_64-linux.gz"
-
-if [ "$(uname -s):$(uname -m)" != "Linux:x86_64" ] &&
-    [ "$(uname -s):$(uname -m)" != "Linux:amd64" ]; then
-    echo "unsupported PocketIC platform: $(uname -s) $(uname -m)" >&2
-    exit 1
-fi
+ARCHIVE="$DIR/$archive_name"
 
 mkdir -p "$DIR"
 
 if [ -x "$BIN" ]; then
     bash "$SCRIPT_DIR/verify-file-checksum.sh" \
-        sha256 "$CANIC_POCKET_IC_BINARY_SHA256_LINUX_X86_64" "$BIN"
+        sha256 "$binary_digest" "$BIN"
 else
     tmp_bin="$BIN.part"
     trap 'rm -f "$ARCHIVE" "$tmp_bin"' EXIT
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL -o "$ARCHIVE" \
-        "https://github.com/dfinity/pocketic/releases/download/$CANIC_POCKET_IC_VERSION/pocket-ic-x86_64-linux.gz"
+        "https://github.com/dfinity/pocketic/releases/download/$CANIC_POCKET_IC_VERSION/$archive_name"
     bash "$SCRIPT_DIR/verify-file-checksum.sh" \
-        sha256 "$CANIC_POCKET_IC_ARCHIVE_SHA256_LINUX_X86_64" "$ARCHIVE"
+        sha256 "$archive_digest" "$ARCHIVE"
     gzip -dc "$ARCHIVE" >"$tmp_bin"
     bash "$SCRIPT_DIR/verify-file-checksum.sh" \
-        sha256 "$CANIC_POCKET_IC_BINARY_SHA256_LINUX_X86_64" "$tmp_bin"
+        sha256 "$binary_digest" "$tmp_bin"
     mv "$tmp_bin" "$BIN"
     chmod +x "$BIN"
 fi

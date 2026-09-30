@@ -185,26 +185,23 @@ fn validate_direct_children(
     let mut canonical = direct_children.to_vec();
     canonical.sort();
     canonical.dedup();
-    if canonical != direct_children {
+    if canonical != direct_children
+        || direct_children
+            .windows(2)
+            .any(|pair| pair[0].canister_id == pair[1].canister_id)
+    {
         return Err(InternalError::conflict());
     }
-    if direct_children
-        .iter()
-        .any(|child| child.canister_id == IcOps::canister_self())
-    {
+    if direct_children.iter().any(|child| {
+        child.canister_id == IcOps::canister_self() || child.allocation_operation_id == [0; 32]
+    }) {
         return Err(InternalError::conflict());
     }
     ComponentRuntimeOps::direct_children_hash(direct_children)
 }
 
 fn apply_direct_children(direct_children: Vec<ComponentRuntimeDirectChild>) {
-    CanisterChildrenOps::import_direct_children(
-        IcOps::canister_self(),
-        direct_children
-            .into_iter()
-            .map(|child| (child.canister_id, child.role))
-            .collect(),
-    );
+    CanisterChildrenOps::import_direct_children(IcOps::canister_self(), direct_children);
 }
 
 /// Independently validate and return the target-local Directory preparation state.

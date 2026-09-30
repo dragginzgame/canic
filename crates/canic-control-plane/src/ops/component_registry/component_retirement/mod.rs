@@ -51,6 +51,28 @@ use canic_core::{
 };
 
 impl ComponentRegistryOps {
+    /// Retain the allocation owner across top-level membership removal and exact replay.
+    pub(crate) fn component_recycling_claim(
+        component: ComponentInstanceId,
+    ) -> Result<crate::ops::canister_pool::CanisterPoolClaimKey, InternalError> {
+        if let Some(draining) = Self::component_draining(component)?
+            && let Some(crate::view::component_registry::RootComponentDeletionProgressView::MembershipRemoved(receipt)) = draining.deletion
+        {
+            return Ok(crate::ops::canister_pool::CanisterPoolClaimKey {
+                component,
+                operation_id: receipt.allocation_operation_id,
+            });
+        }
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(InternalError::unavailable)?;
+        validate_partition_record(&partition)?;
+        let allocation = committed_component_allocation(&partition)?;
+        Ok(crate::ops::canister_pool::CanisterPoolClaimKey {
+            component,
+            operation_id: allocation.operation_id,
+        })
+    }
+
     pub(crate) fn component_draining(
         component: ComponentInstanceId,
     ) -> Result<Option<RootComponentDrainingView>, InternalError> {

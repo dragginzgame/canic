@@ -42,6 +42,18 @@ pub(super) const MAX_STATUS_HEX_BYTES: usize = 512 * 1024;
 const MAX_SUBMISSIONS: u32 = 2;
 const MAX_INSPECTIONS: u32 = 4;
 
+pub(in crate::fleet_ensure::ops::capacity_import) const ROOT_SUBMISSION_STEPS: &[&str] =
+    &["reserve", "settle", "release"];
+pub(in crate::fleet_ensure::ops::capacity_import) const SOURCE_SUBMISSION_STEPS: &[&str] = &[
+    "handoff",
+    "controllers",
+    "confirm",
+    "uninstall",
+    "confirm_stop",
+    "stop",
+    "cleared",
+];
+
 /// Attach exact original/replacement inputs before approval or any paid handoff.
 pub fn bind(
     paths: &EnsurePaths,
@@ -238,24 +250,6 @@ fn validate_review(
     Ok(())
 }
 
-/// Check the remaining submission budget before spending a rejection-recovery observation.
-pub fn require_submission_allowance(
-    journal: &CapacityImportJournalRecord,
-    step: &str,
-) -> Result<(), CapacityImportJournalError> {
-    validate(journal)?;
-    if !journal.approved || !valid_step(journal, step) || completed(journal) {
-        return Err(conflict());
-    }
-    let operation = journal.operation.as_ref().ok_or_else(conflict)?;
-    if operation.submissions.get(step).copied().unwrap_or(0) >= MAX_SUBMISSIONS {
-        return Err(CapacityImportJournalError::BudgetExhausted {
-            step: step.to_owned(),
-        });
-    }
-    Ok(())
-}
-
 /// Bound host update retries before submission, including a lost transport reply.
 pub fn reserve_submission(
     journal: &CapacityImportJournalRecord,
@@ -312,19 +306,11 @@ fn consume(
 }
 
 fn valid_step(journal: &CapacityImportJournalRecord, step: &str) -> bool {
-    matches!(step, "reserve" | "settle" | "release")
+    ROOT_SUBMISSION_STEPS.contains(&step)
         || journal.plan.sources.iter().enumerate().any(|(index, _)| {
-            [
-                "handoff",
-                "controllers",
-                "confirm",
-                "uninstall",
-                "confirm_stop",
-                "stop",
-                "cleared",
-            ]
-            .iter()
-            .any(|phase| step == format!("{index}:{phase}"))
+            SOURCE_SUBMISSION_STEPS
+                .iter()
+                .any(|phase| step == format!("{index}:{phase}"))
         })
 }
 

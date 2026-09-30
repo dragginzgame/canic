@@ -63,6 +63,14 @@ where
             let options = BackupPruneOptions::parse(args)?;
             let report = backup_prune(&options)?;
             write_prune_report(&options, &report)?;
+            let failed = report
+                .entries
+                .iter()
+                .filter(|entry| entry.action == super::BackupPruneAction::Failed)
+                .count();
+            if failed != 0 {
+                return Err(BackupCommandError::PruneIncomplete { failed });
+            }
             Ok(())
         }
         "status" => {

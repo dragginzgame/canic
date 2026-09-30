@@ -25,7 +25,15 @@ Supporting implementation evidence does not belong here.
 
 The [OpenChat-class application objective](openchat-scale-application-support/design.md)
 is maintainer-requested; its proposed qualification and implementation packages
-remain unnumbered and unscheduled.
+remain unnumbered and unscheduled. The September 30 developer feedback refocuses
+the objective on easy incremental adoption, shared-user economics, subnet-local
+operations and preserved SNS authority. Passive tooling is the proposed first
+useful contribution; runtime adoption retains its separate lifecycle prerequisite.
+A pinned, test-only OpenChat port is proposed alongside the synthetic fixture to
+measure real integration effort and equivalent application behavior on disposable
+deployments.
+User workloads target MultiUser only, following developer feedback that the
+legacy User canister will soon be deprecated; required user indexes remain in scope.
 
 ## Maintainer Priorities
 

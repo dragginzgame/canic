@@ -9,6 +9,7 @@ use crate::storage::stable::canister_pool::{
     CanisterPoolHandoffReceiptRecord, CanisterPoolHandoffRecord, CanisterPoolRecycleResetRecord,
     CanisterPoolStore,
 };
+use crate::storage::transient::canister_pool::PoolResetExecutionGuard;
 use crate::view::canister_pool::{
     CanisterPoolCreationFailureView, CanisterPoolCreationProgressView, CanisterPoolCreationView,
     CanisterPoolHandoffView,
@@ -61,13 +62,33 @@ pub enum CanisterPoolResetPreparation {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 enum ReadyReinspectionPolicy {
     OnlyWhenUnderfunded,
-    AlwaysForImported,
+    Always,
 }
 
 /// Mechanical state facade for the Fleet Subnet Root's exclusive physical inventory.
 pub struct CanisterPoolOps;
 
 impl CanisterPoolOps {
+    /// Serialize each physical reset while its stable inventory retains recovery authority.
+    pub fn claim_reset_execution(
+        canister_id: Principal,
+    ) -> Result<PoolResetExecutionGuard, InternalError> {
+        capacity_import::CanisterPoolImportOps::require_idle()?;
+        if !matches!(
+            required_asset(canister_id)?.status,
+            CanisterPoolAssetStatusRecord::PendingReset
+                | CanisterPoolAssetStatusRecord::Ready
+                | CanisterPoolAssetStatusRecord::Failed(_)
+                | CanisterPoolAssetStatusRecord::Recycling {
+                    reset: CanisterPoolRecycleResetRecord::Pending,
+                    ..
+                }
+        ) {
+            return Err(InternalError::conflict());
+        }
+        PoolResetExecutionGuard::try_claim(canister_id).ok_or_else(InternalError::unavailable)
+    }
+
     pub fn initialize_store(canister_id: Principal, now_ns: u64) -> Result<(), InternalError> {
         capacity_import::bootstrap::require_store_initialization(canister_id)?;
         match CanisterPoolStore::get(&canister_id) {
@@ -118,7 +139,13 @@ impl CanisterPoolOps {
         let mut additions = Vec::new();
         for canister_id in imports {
             match CanisterPoolStore::get(canister_id) {
-                Some(existing) if existing.origin == CanisterPoolAssetOriginRecord::Imported => {}
+                Some(existing)
+                    if matches!(
+                        existing.status,
+                        CanisterPoolAssetStatusRecord::PendingReset
+                            | CanisterPoolAssetStatusRecord::Ready
+                            | CanisterPoolAssetStatusRecord::Failed(_)
+                    ) => {}
                 Some(_) => {
                     return Err(InternalError::conflict());
                 }
@@ -152,12 +179,14 @@ impl CanisterPoolOps {
 
     pub fn register_recycled_pending(
         canister_id: Principal,
+        expected_claim: &CanisterPoolClaimKey,
         now_ns: u64,
     ) -> Result<(), InternalError> {
         capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
+        let expected = claim_record(expected_claim);
         match &asset.status {
-            CanisterPoolAssetStatusRecord::Workload(claim) => {
+            CanisterPoolAssetStatusRecord::Workload(claim) if claim == &expected => {
                 asset.origin = CanisterPoolAssetOriginRecord::Recycled;
                 asset.status = CanisterPoolAssetStatusRecord::Recycling {
                     claim: claim.clone(),
@@ -167,8 +196,9 @@ impl CanisterPoolOps {
                 CanisterPoolStore::insert(canister_id, asset);
                 Ok(())
             }
-            CanisterPoolAssetStatusRecord::Recycling { .. }
-                if asset.origin == CanisterPoolAssetOriginRecord::Recycled =>
+            CanisterPoolAssetStatusRecord::Recycling { claim, .. }
+                if claim == &expected
+                    && asset.origin == CanisterPoolAssetOriginRecord::Recycled =>
             {
                 Ok(())
             }
@@ -203,18 +233,17 @@ impl CanisterPoolOps {
         Ok(())
     }
 
-    pub fn mark_failed(
+    /// Retain a terminal funding deficit only after observing a completed reset.
+    pub fn mark_underfunded(
         canister_id: Principal,
-        observed_cycles: Option<Cycles>,
+        observed_cycles: Cycles,
         reason: String,
         now_ns: u64,
     ) -> Result<(), InternalError> {
         capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
-        if let Some(cycles) = observed_cycles {
-            retain_first_creation_observation(&mut asset, &cycles)?;
-            asset.cycles = cycles;
-        }
+        retain_first_creation_observation(&mut asset, &observed_cycles)?;
+        asset.cycles = observed_cycles;
         asset.status = match asset.status {
             CanisterPoolAssetStatusRecord::PendingReset
             | CanisterPoolAssetStatusRecord::Failed(_) => {
@@ -292,7 +321,7 @@ impl CanisterPoolOps {
             canister_id,
             required_cycles,
             now_ns,
-            ReadyReinspectionPolicy::AlwaysForImported,
+            ReadyReinspectionPolicy::Always,
         )
     }
 
@@ -305,10 +334,7 @@ impl CanisterPoolOps {
         capacity_import::CanisterPoolImportOps::require_idle()?;
         let mut asset = required_asset(canister_id)?;
         match asset.status {
-            CanisterPoolAssetStatusRecord::Ready
-                if policy == ReadyReinspectionPolicy::AlwaysForImported
-                    && asset.origin == CanisterPoolAssetOriginRecord::Imported =>
-            {
+            CanisterPoolAssetStatusRecord::Ready if policy == ReadyReinspectionPolicy::Always => {
                 asset.status = CanisterPoolAssetStatusRecord::PendingReset;
                 asset.updated_at_ns = now_ns;
                 CanisterPoolStore::insert(canister_id, asset);
@@ -317,20 +343,16 @@ impl CanisterPoolOps {
             CanisterPoolAssetStatusRecord::Ready if asset.cycles >= *required_cycles => {
                 Ok(CanisterPoolResetPreparation::Ready)
             }
-            CanisterPoolAssetStatusRecord::Ready => {
+            CanisterPoolAssetStatusRecord::Ready | CanisterPoolAssetStatusRecord::Failed(_) => {
                 asset.status = CanisterPoolAssetStatusRecord::PendingReset;
                 asset.updated_at_ns = now_ns;
                 CanisterPoolStore::insert(canister_id, asset);
                 Ok(CanisterPoolResetPreparation::Reinspect)
             }
-            CanisterPoolAssetStatusRecord::PendingReset
-            | CanisterPoolAssetStatusRecord::Failed(_)
-                if asset.cycles > Cycles::default() =>
-            {
+            CanisterPoolAssetStatusRecord::PendingReset if asset.cycles > Cycles::default() => {
                 Ok(CanisterPoolResetPreparation::Reinspect)
             }
             CanisterPoolAssetStatusRecord::PendingReset
-            | CanisterPoolAssetStatusRecord::Failed(_)
             | CanisterPoolAssetStatusRecord::Recycling { .. } => {
                 Ok(CanisterPoolResetPreparation::Reset)
             }
@@ -1353,11 +1375,11 @@ impl CanisterPoolOps {
 
     pub fn complete_recycling(
         canister_id: Principal,
-        component: ComponentInstanceId,
+        expected_claim: &CanisterPoolClaimKey,
         now_ns: u64,
     ) -> Result<(), InternalError> {
         let mut asset = required_asset(canister_id)?;
-        let Some((claim, next_status)) = recycling_completion(&asset, component)? else {
+        let Some((claim, next_status)) = recycling_completion(&asset, expected_claim)? else {
             return Ok(());
         };
         asset.status = next_status;
@@ -1371,9 +1393,9 @@ impl CanisterPoolOps {
     /// physical recycling row without mutating either authority.
     pub fn validate_complete_recycling(
         canister_id: Principal,
-        component: ComponentInstanceId,
+        expected_claim: &CanisterPoolClaimKey,
     ) -> Result<(), InternalError> {
-        recycling_completion(&required_asset(canister_id)?, component).map(|_| ())
+        recycling_completion(&required_asset(canister_id)?, expected_claim).map(|_| ())
     }
 
     pub fn require_store(canister_id: Principal) -> Result<(), InternalError> {
@@ -1629,19 +1651,16 @@ fn required_asset(canister_id: Principal) -> Result<CanisterPoolAssetRecord, Int
 
 fn recycling_completion(
     asset: &CanisterPoolAssetRecord,
-    component: ComponentInstanceId,
+    expected_claim: &CanisterPoolClaimKey,
 ) -> Result<Option<(CanisterPoolClaimRecord, CanisterPoolAssetStatusRecord)>, InternalError> {
-    if asset
-        .last_recycle
-        .as_ref()
-        .is_some_and(|claim| claim.component == component)
-    {
+    let expected = claim_record(expected_claim);
+    if asset.last_recycle.as_ref() == Some(&expected) {
         return Ok(None);
     }
     let CanisterPoolAssetStatusRecord::Recycling { claim, reset } = &asset.status else {
         return Err(InternalError::conflict());
     };
-    if claim.component != component {
+    if claim != &expected {
         return Err(InternalError::conflict());
     }
     let next_status = match reset {
@@ -2224,7 +2243,10 @@ mod tests {
         assert_eq!(deleting.store, 0);
         assert_eq!(deleting.store_deletion_pending, 1);
         assert_eq!(deleting.workload, 1);
-        assert!(CanisterPoolOps::mark_failed(store, None, "wrong state".to_string(), 6).is_err());
+        assert!(
+            CanisterPoolOps::mark_underfunded(store, Cycles::new(1), "deficit".to_string(), 6)
+                .is_err()
+        );
 
         CanisterPoolOps::complete_store_deletion(store, [5; 32])
             .expect("remove terminally deleted Store");
@@ -2350,6 +2372,170 @@ mod tests {
     }
 
     #[test]
+    fn reset_execution_excludes_competitors_and_cancellation_preserves_pending_authority() {
+        use std::{
+            future::Future,
+            task::{Context, Poll, Waker},
+        };
+
+        CanisterPoolStore::clear();
+        let canister = principal(1);
+        let independent = principal(2);
+        CanisterPoolOps::initialize_imports(&config(), &[canister, independent], 1).unwrap();
+        let before = required_asset(canister).unwrap();
+        let mut pending = Box::pin(async {
+            let _execution = CanisterPoolOps::claim_reset_execution(canister).unwrap();
+            std::future::pending::<()>().await;
+        });
+        assert_eq!(
+            pending
+                .as_mut()
+                .poll(&mut Context::from_waker(Waker::noop())),
+            Poll::Pending
+        );
+        let _independent = CanisterPoolOps::claim_reset_execution(independent).unwrap();
+        assert_eq!(
+            CanisterPoolOps::claim_reset_execution(canister)
+                .unwrap_err()
+                .public_error(),
+            InternalError::unavailable().public_error()
+        );
+        drop(pending);
+        let _recovery = CanisterPoolOps::claim_reset_execution(canister).unwrap();
+        assert_eq!(required_asset(canister).unwrap(), before);
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn pending_recycling_keeps_reset_authority_until_empty_balance_is_observed() {
+        CanisterPoolStore::clear();
+        let canister = principal(1);
+        imported_ready(canister, Cycles::new(100), 1);
+        let claim = CanisterPoolClaimKey {
+            component: ComponentInstanceId::from_generated_bytes([5; 32]),
+            operation_id: [5; 32],
+        };
+        assert_eq!(
+            CanisterPoolOps::claim_smallest_sufficient_ready(&claim, &Cycles::new(100), 2).unwrap(),
+            Some(canister)
+        );
+        CanisterPoolOps::finalize_claim(&claim, canister, 3).unwrap();
+        CanisterPoolOps::register_recycled_pending(canister, &claim, 4).unwrap();
+        let pending = required_asset(canister).unwrap();
+        for now in [5, 6] {
+            assert_eq!(
+                CanisterPoolOps::prepare_ready_reinspection(canister, &Cycles::new(100), now)
+                    .unwrap(),
+                CanisterPoolResetPreparation::Reset
+            );
+            assert!(!CanisterPoolOps::recycling_reset_is_terminal(canister).unwrap());
+            assert!(CanisterPoolOps::validate_complete_recycling(canister, &claim).is_err());
+            assert_eq!(required_asset(canister).unwrap(), pending);
+        }
+        CanisterPoolOps::mark_underfunded(canister, Cycles::new(10), "deficit".into(), 7).unwrap();
+        CanisterPoolOps::complete_recycling(canister, &claim, 8).unwrap();
+        let completed = required_asset(canister).unwrap();
+        assert_eq!(completed.origin, CanisterPoolAssetOriginRecord::Recycled);
+        CanisterPoolOps::initialize_imports(&config(), &[canister], 9).unwrap();
+        assert_eq!(required_asset(canister).unwrap(), completed);
+        assert_eq!(
+            CanisterPoolOps::prepare_import_reinspection(canister, &Cycles::new(100), 10).unwrap(),
+            CanisterPoolResetPreparation::Reinspect
+        );
+        assert_eq!(
+            required_asset(canister).unwrap().status,
+            CanisterPoolAssetStatusRecord::PendingReset
+        );
+        assert_eq!(
+            CanisterPoolOps::begin_handoff(canister, principal(3), 10)
+                .unwrap_err()
+                .public_error(),
+            InternalError::conflict().public_error()
+        );
+        CanisterPoolOps::mark_ready(canister, Cycles::new(100), 11).unwrap();
+        let refreshed = required_asset(canister).unwrap();
+        assert_eq!(refreshed.origin, completed.origin);
+        assert_eq!(refreshed.last_recycle, completed.last_recycle);
+        let next = CanisterPoolClaimKey {
+            operation_id: [6; 32],
+            ..claim
+        };
+        assert_eq!(
+            CanisterPoolOps::claim_smallest_sufficient_ready(&next, &Cycles::new(100), 12).unwrap(),
+            Some(canister)
+        );
+        let claimed = required_asset(canister).unwrap();
+        assert_eq!(
+            CanisterPoolOps::initialize_imports(&config(), &[canister], 13)
+                .unwrap_err()
+                .public_code(),
+            InternalError::conflict().public_code()
+        );
+        assert_eq!(required_asset(canister).unwrap(), claimed);
+        CanisterPoolStore::clear();
+    }
+
+    #[test]
+    fn repeated_recycling_is_bound_to_each_allocation_and_old_completion_is_effect_free() {
+        CanisterPoolStore::clear();
+        let canister = principal(1);
+        imported_ready(canister, Cycles::new(100), 1);
+        let component = ComponentInstanceId::from_generated_bytes([5; 32]);
+        let first = CanisterPoolClaimKey {
+            component,
+            operation_id: [5; 32],
+        };
+        let second = CanisterPoolClaimKey {
+            component,
+            operation_id: [6; 32],
+        };
+
+        for (index, claim) in [&first, &second].into_iter().enumerate() {
+            let now = 10 + u64::try_from(index).unwrap();
+            assert_eq!(
+                CanisterPoolOps::claim_smallest_sufficient_ready(claim, &Cycles::new(100), now)
+                    .unwrap(),
+                Some(canister),
+            );
+            CanisterPoolOps::finalize_claim(claim, canister, now).unwrap();
+            if index == 1 {
+                let before = required_asset(canister).unwrap();
+                assert_eq!(
+                    CanisterPoolOps::register_recycled_pending(canister, &first, now)
+                        .unwrap_err()
+                        .public_code(),
+                    InternalError::conflict().public_code(),
+                );
+                CanisterPoolOps::complete_recycling(canister, &first, now).unwrap();
+                assert_eq!(required_asset(canister).unwrap(), before);
+            }
+            CanisterPoolOps::register_recycled_pending(canister, claim, now).unwrap();
+            if index == 1 {
+                let before = required_asset(canister).unwrap();
+                CanisterPoolOps::complete_recycling(canister, &first, now).unwrap();
+                assert_eq!(required_asset(canister).unwrap(), before);
+            }
+            assert_eq!(CanisterPoolOps::ready_count(), 0);
+            CanisterPoolOps::mark_ready(canister, Cycles::new(100), now).unwrap();
+            CanisterPoolOps::validate_complete_recycling(canister, claim).unwrap();
+            CanisterPoolOps::complete_recycling(canister, claim, now).unwrap();
+            assert_eq!(CanisterPoolOps::ready_count(), 1);
+            assert_eq!(
+                required_asset(canister).unwrap().last_recycle,
+                Some(claim_record(claim))
+            );
+        }
+        let before = required_asset(canister).unwrap();
+        assert_eq!(
+            CanisterPoolOps::complete_recycling(canister, &first, 20)
+                .unwrap_err()
+                .public_code(),
+            InternalError::conflict().public_code(),
+        );
+        assert_eq!(required_asset(canister).unwrap(), before);
+    }
+
+    #[test]
     fn recycled_assets_remain_visible_at_the_complete_asset_ceiling() {
         CanisterPoolStore::clear();
         let mut asset_config = config();
@@ -2374,7 +2560,7 @@ mod tests {
         CanisterPoolOps::finalize_claim(&claim, recycled, 5).expect("workload");
         imported_ready_with_config(&asset_config, principal(5), Cycles::new(100), 6);
         CanisterPoolOps::require_workload_claim(recycled, &claim).unwrap();
-        CanisterPoolOps::register_recycled_pending(recycled, 6)
+        CanisterPoolOps::register_recycled_pending(recycled, &claim, 6)
             .expect("recycled asset remains managed");
         assert_eq!(
             CanisterPoolOps::require_workload_claim(recycled, &claim)
@@ -2382,7 +2568,7 @@ mod tests {
                 .public_code(),
             InternalError::conflict().public_code()
         );
-        CanisterPoolOps::register_recycled_pending(recycled, 7)
+        CanisterPoolOps::register_recycled_pending(recycled, &claim, 7)
             .expect("exact recycle retry remains idempotent");
         CanisterPoolOps::require_pending_recycling_claim(recycled, &claim)
             .expect("the retained allocation fences grant revocation");
@@ -2391,7 +2577,7 @@ mod tests {
             CanisterPoolOps::response(asset_config.clone(), None, 10).pooled,
             4
         );
-        CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
+        CanisterPoolOps::validate_complete_recycling(recycled, &claim)
             .expect_err("Registry membership cannot settle before reset is terminal");
         CanisterPoolOps::mark_ready(recycled, Cycles::new(100), 8)
             .expect("record terminal physical reset");
@@ -2401,18 +2587,18 @@ mod tests {
                 .public_code(),
             InternalError::conflict().public_code(),
         );
-        CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
+        CanisterPoolOps::validate_complete_recycling(recycled, &claim)
             .expect("terminal recycling is safe to settle with membership");
         assert_eq!(CanisterPoolOps::workload_count(), 1);
         assert_eq!(
             CanisterPoolOps::response(asset_config.clone(), None, 10).pooled,
             4
         );
-        CanisterPoolOps::complete_recycling(recycled, claim.component, 9)
+        CanisterPoolOps::complete_recycling(recycled, &claim, 9)
             .expect("settle Registry membership into pool state");
-        CanisterPoolOps::complete_recycling(recycled, claim.component, 10)
+        CanisterPoolOps::complete_recycling(recycled, &claim, 10)
             .expect("exact recycling settlement replay");
-        CanisterPoolOps::validate_complete_recycling(recycled, claim.component)
+        CanisterPoolOps::validate_complete_recycling(recycled, &claim)
             .expect("terminal recycling settlement remains exact-retry safe");
         let response = CanisterPoolOps::response(asset_config.clone(), None, 2);
         assert_eq!(response.tracked, 5);

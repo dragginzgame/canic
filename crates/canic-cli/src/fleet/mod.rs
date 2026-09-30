@@ -805,7 +805,8 @@ fn publish_generated(
     bytes: &[u8],
     expected_sha256: Option<&str>,
 ) -> Result<(), FleetCommandError> {
-    match fs::read(path) {
+    let resolved = crate::output::resolve_operator_path(path)?;
+    match fs::read(&resolved) {
         Ok(existing) if existing == bytes && expected_sha256.is_none() => return Ok(()),
         Ok(existing) => {
             let actual = sha256_hex(&existing);
@@ -822,7 +823,7 @@ fn publish_generated(
             if existing == bytes {
                 return Ok(());
             }
-            canic_host::durable_io::write_bytes(path, bytes)?;
+            canic_host::durable_io::write_bytes(&resolved, bytes)?;
             return Ok(());
         }
         Err(error) if error.kind() == io::ErrorKind::NotFound && expected_sha256.is_some() => {
@@ -833,7 +834,7 @@ fn publish_generated(
         Err(error) if error.kind() == io::ErrorKind::NotFound => {}
         Err(error) => return Err(error.into()),
     }
-    canic_host::durable_io::create_new_bytes_with_parents(path, bytes)?;
+    canic_host::durable_io::create_new_bytes_with_parents(&resolved, bytes)?;
     Ok(())
 }
 

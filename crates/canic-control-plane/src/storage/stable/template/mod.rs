@@ -2,7 +2,7 @@ pub mod chunked;
 pub mod gc;
 pub mod manifest;
 
-#[cfg(any(test, feature = "wasm-store-canister"))]
+#[cfg(feature = "wasm-store-canister")]
 pub use chunked::TemplateChunkRecord;
 #[cfg(feature = "wasm-store-canister")]
 pub use chunked::TemplateChunkSetEntryRecord;

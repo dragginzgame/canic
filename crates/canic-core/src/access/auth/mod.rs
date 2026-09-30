@@ -249,7 +249,7 @@ mod tests {
     fn validate_application_subject_rejects_direct_child() {
         let _guard = seams::lock();
         let child = p(31);
-        crate::ops::storage::children::CanisterChildrenOps::import_direct_children(
+        crate::ops::storage::children::CanisterChildrenOps::import_topology_children(
             p(30),
             vec![(child, CanisterRole::new("session_subject_child"))],
         );
@@ -258,7 +258,7 @@ mod tests {
             .expect_err("direct child canister must be rejected");
         assert_eq!(err, ApplicationSubjectRejection::DirectChildCanister);
 
-        crate::ops::storage::children::CanisterChildrenOps::import_direct_children(p(30), vec![]);
+        crate::ops::storage::children::CanisterChildrenOps::import_topology_children(p(30), vec![]);
     }
 
     #[test]

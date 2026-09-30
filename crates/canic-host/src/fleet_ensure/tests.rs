@@ -116,6 +116,7 @@ enum MockFundingRead {
 }
 
 pub(super) struct MockPlatform {
+    pub(super) bootstrap_observations: std::collections::VecDeque<Result<Option<crate::fleet_ensure::view::infrastructure_bootstrap::InfrastructureBootstrapObservation>, MockError>>,
     retirement_debit_block: Option<u64>,
     retirement_debit: Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>,
     observation_calls: usize,
@@ -147,6 +148,7 @@ pub(super) struct MockPlatform {
     protocol_command_only: bool,
     protocol_action: Option<EnsureAction>,
     reviewed_protocol_actions: Vec<EnsureAction>,
+    protocol_expected_operation_id: Option<String>,
     publication_journal: Option<PathBuf>,
     publication_attempts_on_issue: Vec<u32>,
     independent_batches: Vec<Vec<String>>,
@@ -179,6 +181,7 @@ impl MockPlatform {
             .map(|cycles| cycles.to_u128())
             .expect("fixture ledger fee");
         Self {
+            bootstrap_observations: std::collections::VecDeque::new(),
             observation_calls: 0,
             reinstall_authority: None,
             root_management: None,
@@ -210,6 +213,7 @@ impl MockPlatform {
             protocol_command_only: false,
             protocol_action: None,
             reviewed_protocol_actions: Vec::new(),
+            protocol_expected_operation_id: None,
             publication_journal: None,
             publication_attempts_on_issue: Vec::new(),
             independent_batches: Vec::new(),
@@ -810,6 +814,18 @@ impl MockPlatform {
 }
 
 impl EnsurePlatform for MockPlatform {
+    fn infrastructure_bootstrap_observation(
+        &mut self,
+        _: &crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+        _: &FleetEnsureStateRecord,
+    ) -> Result<
+        Option<
+            crate::fleet_ensure::view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
+        >,
+        Self::Error,
+    > {
+        self.bootstrap_observations.pop_front().unwrap_or(Ok(None))
+    }
     type Error = MockError;
 
     fn retirement_debit_block(&self) -> Option<u64> {
@@ -1044,6 +1060,13 @@ impl EnsurePlatform for MockPlatform {
         operation_id: &str,
         _state: &FleetEnsureStateRecord,
     ) -> Result<Vec<EnsureAction>, Self::Error> {
+        if self
+            .protocol_expected_operation_id
+            .as_deref()
+            .is_some_and(|expected| expected != operation_id)
+        {
+            return Err(MockError);
+        }
         if !self.reviewed_protocol_actions.is_empty() {
             return Ok(self
                 .reviewed_protocol_actions
@@ -4269,6 +4292,7 @@ fn terminal_protocol_inventory_survives_an_effect_free_successor_plan() {
         .insert(component.clone(), 25);
 
     platform.terminal_inventory_expected_operation_id = Some(first.plan.operation_id.clone());
+    platform.protocol_expected_operation_id = Some(first.plan.operation_id.clone());
     let second = workflow::plan(
         &fixture.root,
         &fixture.desired,

@@ -76,7 +76,7 @@ mod tests {
         let role = CanisterRole::new("shard");
         let shard = p(42);
 
-        ShardingRegistryOps::create(shard, "stale", 0, &role, 2, 0).unwrap();
+        ShardingRegistryOps::create(shard, "stale", 0, &role, 2, [1; 32], 0).unwrap();
         ShardingRegistryOps::assign("stale", "pk1", shard).unwrap();
 
         let err = ShardingWorkflow::release_partition_key("stale", "pk1")
@@ -84,7 +84,7 @@ mod tests {
 
         assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_UNAVAILABLE);
         assert_eq!(
-            ShardingRegistryOps::partition_key_shard("stale", "pk1"),
+            ShardingRegistryOps::assignment_for_key("stale", "pk1").map(|record| record.shard),
             Some(shard)
         );
         assert_eq!(ShardingRegistryOps::get(shard).unwrap().count, 1);
@@ -97,7 +97,7 @@ mod tests {
         let role = CanisterRole::new("shard");
         let shard = p(7);
 
-        ShardingRegistryOps::create(shard, "primary", 0, &role, 2, 0).unwrap();
+        ShardingRegistryOps::create(shard, "primary", 0, &role, 2, [1; 32], 0).unwrap();
         ShardingRegistryOps::assign("primary", "pk1", shard).unwrap();
 
         assert_eq!(
@@ -105,7 +105,7 @@ mod tests {
             Some(shard)
         );
         assert_eq!(
-            ShardingRegistryOps::partition_key_shard("primary", "pk1"),
+            ShardingRegistryOps::assignment_for_key("primary", "pk1").map(|record| record.shard),
             None
         );
         assert_eq!(ShardingRegistryOps::get(shard).unwrap().count, 0);

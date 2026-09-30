@@ -209,7 +209,7 @@ impl TopologyCascadeWorkflow {
             .into_iter()
             .map(|child| (child.pid, child.role))
             .collect();
-        CanisterChildrenOps::import_direct_children(self_pid, entries);
+        CanisterChildrenOps::import_topology_children(self_pid, entries);
         if let Some(prepared) = activation_evidence {
             FleetActivationOps::commit_prepared_snapshot(prepared);
         }

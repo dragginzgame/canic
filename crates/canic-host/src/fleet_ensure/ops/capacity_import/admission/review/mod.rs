@@ -204,11 +204,11 @@ impl ReviewSurvey {
         ids
     }
 
-    /// Issue one status update only after workflow has durably reserved its attempt.
-    pub(crate) async fn sample(
+    /// Complete free checks before workflow durably reserves the one status update.
+    pub(crate) async fn prepare_sample(
         &self,
         canister: Principal,
-    ) -> Result<CapacityImportSampleRecord, CapacityImportJournalError> {
+    ) -> Result<management::PreparedManagementObservation, CapacityImportJournalError> {
         let declarations = declarations::parse(&self.admission.declarations_toml)?;
         let held = declarations
             .canisters
@@ -220,10 +220,10 @@ impl ReviewSurvey {
                 source.canister_id == canister && source.controllers.contains(&self.authority.root)
             });
         if held {
-            management::observe_root_owned(&self.transport.agent, self.authority.root, canister)
+            management::prepare_root_owned(&self.transport.agent, self.authority.root, canister)
                 .await
         } else {
-            management::observe(&self.transport.agent, canister).await
+            management::prepare(&self.transport.agent, canister).await
         }
     }
 

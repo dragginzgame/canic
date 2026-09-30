@@ -3,8 +3,8 @@ use crate::{
     storage::{
         prelude::*,
         stable::sharding::{
-            SHARDING_CORE, ShardKey, ShardingAssignmentRecord, ShardingAssignmentsData,
-            ShardingCore, ShardingRegistryData, ShardingRegistryEntryRecord,
+            SHARDING_CORE, ShardingAssignmentsData, ShardingCore, ShardingRegistryData,
+            ShardingRegistryEntryRecord,
         },
     },
 };
@@ -66,13 +66,6 @@ impl ShardingRegistry {
         })
     }
 
-    /// Returns the shard assigned to the given partition_key (if any).
-    #[must_use]
-    pub(crate) fn partition_key_shard(pool: &str, partition_key: &str) -> Option<Principal> {
-        let key = ShardKey::try_new(pool, partition_key).ok()?;
-        Self::with(|s| s.get_assignment(&key))
-    }
-
     /// Lists all partition_keys currently assigned to the specified shard.
     #[must_use]
     pub(crate) fn partition_keys_in_shard(pool: &str, shard: Principal) -> Vec<String> {
@@ -91,16 +84,6 @@ impl ShardingRegistry {
             .entries
             .into_iter()
             .filter(|record| record.entry.pool.as_ref() == pool)
-            .collect()
-    }
-
-    /// Returns all assignments registered for one pool.
-    #[must_use]
-    pub(crate) fn assignments_for_pool(pool: &str) -> Vec<ShardingAssignmentRecord> {
-        Self::export_assignments()
-            .entries
-            .into_iter()
-            .filter(|record| record.key.pool.as_ref() == pool)
             .collect()
     }
 

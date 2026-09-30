@@ -75,7 +75,7 @@ impl PlacementIndexWorkflow {
         pid: Principal,
         permit: &PlacementAllocationPermit,
     ) -> Result<(), InternalError> {
-        if !CanisterChildrenOps::contains_pid(&pid) {
+        if !CanisterChildrenOps::matches_allocation(pid, permit.operation_id()) {
             MetricEvent::skipped(
                 MetricOperation::RecycleAbandoned,
                 MetricReason::InvalidChild,
@@ -85,7 +85,9 @@ impl PlacementIndexWorkflow {
 
         MetricEvent::started(MetricOperation::RecycleAbandoned);
         let operation_id = PlacementAllocationWorkflow::disposed_child_operation_id(permit, pid);
-        if let Err(err) = RequestOps::recycle_canister(pid, operation_id).await {
+        if let Err(err) =
+            RequestOps::recycle_canister(pid, permit.operation_id(), operation_id).await
+        {
             MetricEvent::failed(MetricOperation::RecycleAbandoned, &err);
             return Err(err);
         }
@@ -150,6 +152,9 @@ impl PlacementIndexWorkflow {
                 instance_pid,
                 bound_at,
             } => {
+                if !PlacementIndexRegistryOps::binding_is_current(pool, key_value) {
+                    return Ok(None);
+                }
                 MetricEvent::skipped(MetricOperation::CleanupStale, MetricReason::AlreadyBound);
                 Ok(Some(PlacementIndexRecoveryResponse::Bound {
                     instance_pid,
@@ -181,11 +186,13 @@ impl PlacementIndexWorkflow {
         };
         let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
         let permit = PlacementAllocationWorkflow::resume_permit(&request)?;
+        permit.require_current_child(provisional_pid)?;
         let repaired = match PlacementIndexRegistryOps::bind_if_claim_matches(
             pool,
             key_value,
             claim_id,
             provisional_pid,
+            permit.operation_id(),
             now,
         ) {
             Ok(repaired) => repaired,
@@ -198,7 +205,7 @@ impl PlacementIndexWorkflow {
             MetricEvent::failed_reason(MetricOperation::RepairStale, MetricReason::ClaimLost);
             return Err(InternalError::invariant());
         }
-        PlacementAllocationWorkflow::finish_registered_child(&permit, provisional_pid)?;
+        PlacementAllocationWorkflow::finish_created_child(&permit, provisional_pid)?;
 
         MetricEvent::completed(MetricOperation::RepairStale, MetricReason::Ok);
         Ok(PlacementIndexStatusResponse::Bound {

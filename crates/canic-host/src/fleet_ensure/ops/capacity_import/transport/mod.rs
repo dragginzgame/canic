@@ -3,7 +3,7 @@
 //! Workflow retains the signed request and issuance before invoking this transport.
 //! Management observations alone cannot prove that a pending request has completed.
 
-mod rejection;
+mod retirement;
 mod root;
 #[cfg(test)]
 pub(crate) mod tests;
@@ -36,7 +36,8 @@ use serde_bytes::ByteBuf;
 use sha2_host::{Digest, Sha256};
 use std::time::Duration;
 
-pub use rejection::{HandoffOutcome, RejectedHandoff};
+pub use retirement::{HandoffOutcome, RetiredHandoff};
+pub use root::PreparedRootCommand;
 
 pub(super) const MAXIMUM_ENVELOPE_BYTES: usize = 4_096;
 const MAXIMUM_RESPONSE_BYTES: usize = 256 * 1024;
@@ -79,6 +80,37 @@ pub struct CapacityImportTransport {
     pub(in crate::fleet_ensure::ops::capacity_import) agent: Agent,
 }
 
+/// A signed handoff whose read-only authority preflight has succeeded.
+/// Submission still requires the matching durable Issued journal record.
+pub struct PreparedHandoffSubmission {
+    agent: Agent,
+    canister_id: Principal,
+    request_id: [u8; 32],
+    plan_sha256: [u8; 32],
+    bytes: Vec<u8>,
+}
+
+impl PreparedHandoffSubmission {
+    /// Submit the exact retained ingress after workflow has durably recorded issuance.
+    pub async fn submit(
+        self,
+        journal: &CapacityImportJournalRecord,
+    ) -> Result<(), CapacityImportJournalError> {
+        let request = issued_request(journal, self.canister_id)?;
+        if journal.plan.plan_sha256 != self.plan_sha256 || request.request_id != self.request_id {
+            return Err(CapacityImportJournalError::RequestInvalid);
+        }
+        tokio::time::timeout(
+            CALL_TIMEOUT,
+            self.agent.update_signed(self.canister_id, self.bytes),
+        )
+        .await
+        .map_err(|_| CapacityImportJournalError::Unresolved)?
+        .map_err(|_| CapacityImportJournalError::Unresolved)?;
+        Ok(())
+    }
+}
+
 impl CapacityImportTransport {
     /// Resolve the selected ICP signer and network; this performs no handoff.
     pub fn from_icp(icp: &IcpCli) -> Result<Self, CapacityImportJournalError> {
@@ -114,27 +146,44 @@ impl CapacityImportTransport {
         Ok(request)
     }
 
-    /// Submit only retained Issued intent. Retry resends identical bytes and request identity.
-    /// A returned transport success alone does not mark the journal Applied.
-    pub async fn submit(
+    /// Complete read-only preflight before workflow charges a submission or marks Intent Issued.
+    pub async fn prepare_submission(
         &self,
         journal: &CapacityImportJournalRecord,
         canister_id: Principal,
-    ) -> Result<(), CapacityImportJournalError> {
-        let request = issued_request(journal, canister_id)?;
+    ) -> Result<PreparedHandoffSubmission, CapacityImportJournalError> {
+        journal::validate(journal)?;
+        let handoff = journal
+            .handoffs
+            .iter()
+            .find(|handoff| handoff.canister_id == canister_id)
+            .ok_or(CapacityImportJournalError::Integrity)?;
+        if handoff
+            .effect
+            .as_ref()
+            .is_none_or(|effect| !matches!(effect.state, EffectState::Intent | EffectState::Issued))
+        {
+            return Err(CapacityImportJournalError::Integrity);
+        }
+        let request = handoff
+            .request
+            .as_ref()
+            .ok_or(CapacityImportJournalError::Integrity)?;
         verify_agent(&self.agent, &journal.plan)?;
         let bytes = validate_request(&journal.plan, canister_id, request)?;
         let context = self.verify_destination(&journal.plan).await?;
         require_active_reservation(&journal.plan, &context)?;
-        tokio::time::timeout(CALL_TIMEOUT, self.agent.update_signed(canister_id, bytes))
-            .await
-            .map_err(|_| CapacityImportJournalError::Unresolved)?
-            .map_err(|_| CapacityImportJournalError::Unresolved)?;
-        Ok(())
+        Ok(PreparedHandoffSubmission {
+            agent: self.agent.clone(),
+            canister_id,
+            request_id: request.request_id,
+            plan_sha256: journal.plan.plan_sha256,
+            bytes,
+        })
     }
 
     /// Observe the certified reply for the original ingress, including after restart.
-    /// Only a certified rejection may enter bounded renewal; uncertain outcomes keep their ingress.
+    /// Certified terminal status permits custody reconciliation; pending outcomes keep their ingress.
     pub async fn completion(
         &self,
         journal: &CapacityImportJournalRecord,
@@ -150,7 +199,7 @@ impl CapacityImportTransport {
         .await
         .map_err(|_| CapacityImportJournalError::Unresolved)?
         .map_err(|_| CapacityImportJournalError::Unresolved)?;
-        rejection::outcome(&journal.plan, canister_id, request, status, &certificate)
+        retirement::outcome(&journal.plan, canister_id, request, status, &certificate)
     }
 }
 
@@ -276,10 +325,8 @@ fn completed(
     request: &CapacityImportHandoffRequestRecord,
     status: RequestStatusResponse,
 ) -> Result<CompletedHandoff, CapacityImportJournalError> {
-    let reply = match status {
-        RequestStatusResponse::Replied(reply) => reply,
-        RequestStatusResponse::Done => return Err(CapacityImportJournalError::HandoffPruned),
-        _ => return Err(CapacityImportJournalError::Unresolved),
+    let RequestStatusResponse::Replied(reply) = status else {
+        return Err(CapacityImportJournalError::Unresolved);
     };
     if reply.arg
         != candid::encode_args(()).map_err(|_| CapacityImportJournalError::RequestInvalid)?

@@ -433,9 +433,17 @@ pub(super) fn validate_subtree_removal_target(
     topology: &canic_core::control_plane_support::config::ComponentTopology,
     removal: &RootComponentSubtreeRemovalView,
 ) -> Result<(), InternalError> {
+    // Storage ops already prove the original allocation's terminal retirement.
+    // A later allocation at the same physical ID is independent of that history.
+    if matches!(
+        &removal.progress,
+        RootComponentSubtreeRemovalProgressView::Completed(_)
+    ) {
+        return Ok(());
+    }
     let registered_target =
         ComponentRegistryOps::registered_parent(removal.component, removal.target_canister_id)?;
-    if subtree_target_membership_is_removed(&removal.progress) {
+    if subtree_target_membership_is_removed(removal) {
         if registered_target.is_some() {
             return Err(InternalError::invariant());
         }
@@ -466,15 +474,26 @@ pub(super) fn validate_subtree_removal_target(
     Ok(())
 }
 
-pub(super) const fn subtree_target_membership_is_removed(
-    progress: &RootComponentSubtreeRemovalProgressView,
+pub(super) fn subtree_target_membership_is_removed(
+    removal: &RootComponentSubtreeRemovalView,
 ) -> bool {
-    matches!(
-        progress,
-        RootComponentSubtreeRemovalProgressView::MembershipRemoved(_)
-            | RootComponentSubtreeRemovalProgressView::DirectorySynchronized(_)
-            | RootComponentSubtreeRemovalProgressView::Completed(_)
-    )
+    let leaf = match &removal.progress {
+        RootComponentSubtreeRemovalProgressView::MembershipRemoved(receipt) => {
+            &receipt.deleted.deletion.stopped.stop.leaf
+        }
+        RootComponentSubtreeRemovalProgressView::DirectorySynchronized(receipt) => {
+            &receipt
+                .membership_removed
+                .deleted
+                .deletion
+                .stopped
+                .stop
+                .leaf
+        }
+        RootComponentSubtreeRemovalProgressView::Completed(_) => return true,
+        _ => return false,
+    };
+    leaf.canister_id == removal.target_canister_id
 }
 
 pub(super) fn validate_child_allocation(

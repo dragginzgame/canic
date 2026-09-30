@@ -19,7 +19,6 @@ use canic_core::{
     diagnostics::codes,
     dto::{
         capability::{RootCapabilityEnvelopeV1, RootCapabilityResponseV1},
-        component_registry::RootComponentSubtreeRemovalStatusRequest,
         error::Error,
         rpc::{CreateCanisterParent, RecycleCanisterRequest, Request},
     },
@@ -30,7 +29,11 @@ use canic_core::{
 pub async fn response_capability_v1_root(
     envelope: RootCapabilityEnvelopeV1,
 ) -> Result<RootCapabilityResponseV1, Error> {
-    let authority = root_capability_authority(IcOps::msg_caller(), &envelope.capability)?;
+    let authority = root_capability_authority(
+        IcOps::msg_caller(),
+        &envelope.capability,
+        envelope.metadata.request_id,
+    )?;
     RpcApi::response_capability_v1_root(
         envelope,
         authority,
@@ -42,6 +45,7 @@ pub async fn response_capability_v1_root(
 fn root_capability_authority(
     caller: candid::Principal,
     request: &Request,
+    operation_id: [u8; 32],
 ) -> Result<RootCapabilityAuthority, Error> {
     let root = IcOps::canister_self();
     let caller = caller_authority(caller, root, request)?;
@@ -51,7 +55,9 @@ fn root_capability_authority(
         Request::AllocatePlacementChild(request) | Request::CreateCanister(request) => Ok(
             authority.with_provision_parent(resolve_provision_parent(&caller, &request.parent)?),
         ),
-        Request::RecycleCanister(request) => recycle_target_authority(caller, authority, request),
+        Request::RecycleCanister(request) => {
+            recycle_target_authority(caller, authority, request, operation_id)
+        }
         Request::AcknowledgePlacementReceipt(_) | Request::Cycles(_) => Ok(authority),
     }
 }
@@ -60,50 +66,36 @@ fn recycle_target_authority(
     caller: RootCapabilityCallerAuthority,
     authority: RootCapabilityAuthority,
     request: &RecycleCanisterRequest,
+    operation_id: [u8; 32],
 ) -> Result<RootCapabilityAuthority, Error> {
-    match resolve_active_member(request.canister_pid) {
-        Ok(target) => Ok(authority.with_target(target)),
-        Err(error) if error.code() == codes::AUTHORITY_UNAUTHORIZED.raw_code() => {
-            recovered_recycle_target_authority(caller, authority, request, error)
-        }
-        Err(error) => Err(error),
-    }
-}
+    use crate::ops::component_registry::ComponentRegistryOps;
 
-fn recovered_recycle_target_authority(
-    caller: RootCapabilityCallerAuthority,
-    authority: RootCapabilityAuthority,
-    request: &RecycleCanisterRequest,
-    missing_target: Error,
-) -> Result<RootCapabilityAuthority, Error> {
-    let RootCapabilityCallerAuthority::ComponentMember(caller) = caller else {
-        return Err(missing_target);
+    let RootCapabilityCallerAuthority::ComponentMember(member) = &caller else {
+        return Err(Error::from_registered(codes::AUTHORITY_UNAUTHORIZED));
     };
-    let Some(metadata) = request.metadata else {
-        return Err(missing_target);
-    };
-    let removal = super::component_registry::existing_subtree_removal(
-        RootComponentSubtreeRemovalStatusRequest {
-            operation_id: metadata.request_id,
-            component: caller.component(),
-        },
-    )
-    .map_err(Error::from)?
-    .ok_or(missing_target)?;
-    if removal.target_canister_id != request.canister_pid {
-        return Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
+    if let Some(removal) = ComponentRegistryOps::subtree_removal(member.component(), operation_id)?
+    {
+        if removal.target_allocation_operation_id != request.allocation_operation_id {
+            return Err(Error::from_registered(codes::AUTHORITY_CONFLICT));
+        }
+        if removal.target_canister_id != request.canister_pid
+            || removal.target_parent_canister_id != member.canister_id()
+        {
+            return Err(Error::from_registered(codes::AUTHORITY_UNAUTHORIZED));
+        }
+        return Ok(authority.with_recovery_target(
+            removal.target_canister_id,
+            removal.target_parent_canister_id,
         ));
     }
-    if removal.target_parent_canister_id != caller.canister_id() {
-        return Err(Error::from_registered(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-        ));
+    if ComponentRegistryOps::child_allocation_operation_id(
+        member.component(),
+        request.canister_pid,
+    )? != Some(request.allocation_operation_id)
+    {
+        return Err(Error::from_registered(codes::AUTHORITY_CONFLICT));
     }
-    Ok(authority.with_recovery_target(
-        removal.target_canister_id,
-        removal.target_parent_canister_id,
-    ))
+    resolve_active_member(request.canister_pid).map(|target| authority.with_target(target))
 }
 
 fn caller_authority(

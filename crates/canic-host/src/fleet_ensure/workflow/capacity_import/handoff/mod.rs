@@ -1,5 +1,8 @@
 //! Sequence exact signed host handoffs before the Root-owned reset and publication workflow.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     fleet_ensure::{
         model::{EffectState, capacity_import::CapacityImportJournalRecord},
@@ -7,7 +10,7 @@ use crate::{
             EnsurePaths,
             capacity_import::{
                 journal::{self, CapacityImportJournalError, CapacityImportJournalStore},
-                observation::CapacityImportObserver,
+                observation::{CapacityImportObserver, PreparedCapacityImportObservation},
                 publication, reservation_evidence,
                 transport::{CapacityImportTransport, HandoffOutcome},
             },
@@ -63,15 +66,23 @@ async fn approve(
     record: &mut CapacityImportJournalRecord,
     observer: &mut impl CapacityImportObserver,
 ) -> Result<(), CapacityImportJournalError> {
+    let destination = observer.prepare_destination(&record.plan).await?;
+    let mut prepared_sources = Vec::with_capacity(record.plan.sources.len());
+    for source in &record.plan.sources {
+        let canister = source.binding.canister_id;
+        prepared_sources.push((
+            canister,
+            observer.prepare_source(&record.plan, canister).await?,
+        ));
+    }
     *record = publication::reserve_inspection(record, record.plan.authority.root)?;
     store.save(record)?;
-    let destination = observer.destination(&record.plan).await?;
+    let destination = destination.observe().await?;
     let mut sources = Vec::with_capacity(record.plan.sources.len());
-    for index in 0..record.plan.sources.len() {
-        let canister = record.plan.sources[index].binding.canister_id;
+    for (canister, prepared) in prepared_sources {
         *record = publication::reserve_inspection(record, canister)?;
         store.save(record)?;
-        sources.push(observer.source(&record.plan, canister).await?);
+        sources.push(prepared.observe().await?);
     }
     *record = journal::approve(record, record.plan.plan_sha256, &destination, &sources)?;
     store.save(record)?;
@@ -94,9 +105,10 @@ async fn reserve(
         if context.active_import.is_some() || record.reservation.is_some() {
             return Err(CapacityImportJournalError::Conflict);
         }
+        let prepared = transport.prepare_reserve_root(record).await?;
         *record = publication::reserve_submission(record, "reserve")?;
         store.save(record)?;
-        transport.reserve_root(record).await?
+        prepared.submit().await?
     };
     *record = journal::reserve(record, reservation_evidence(&record.plan, &status)?)?;
     store.save(record)?;
@@ -115,32 +127,37 @@ async fn handoff(
         return Ok(());
     }
     if record.handoffs[index].effect.is_none() {
+        let prepared = observer.prepare_source(&record.plan, id).await?;
+        let request = transport.prepare(&record.plan, id)?;
         *record = publication::reserve_inspection(record, id)?;
         store.save(record)?;
-        let source = observer.source(&record.plan, id).await?;
-        let request = transport.prepare(&record.plan, id)?;
+        let source = prepared.observe().await?;
         *record = journal::prepare_handoff(record, &source, request)?;
         store.save(record)?;
     }
     loop {
-        if journal::rejection::pending(&record.handoffs[index]) {
-            publication::require_submission_allowance(record, &format!("{index}:handoff"))?;
+        if journal::retirement::pending(&record.handoffs[index]) {
+            let prepared = observer.prepare_source(&record.plan, id).await?;
+            let request = transport.prepare(&record.plan, id)?;
             *record = publication::reserve_inspection(record, id)?;
             store.save(record)?;
-            let source = observer.source(&record.plan, id).await?;
-            let request = transport.prepare(&record.plan, id)?;
-            *record = journal::rejection::renew(record, &source, request)?;
+            let source = prepared.observe().await?;
+            *record = journal::retirement::reconcile(record, &source, request)?;
             store.save(record)?;
+            if journal::custody_ready(record, id) {
+                return Ok(());
+            }
         }
         match submit_or_reconcile(store, record, transport, index).await? {
-            HandoffOutcome::Rejected(rejected) => {
-                *record = journal::rejection::retain(record, id, &rejected)?;
+            HandoffOutcome::Retired(rejected) => {
+                *record = journal::retirement::retain(record, id, &rejected)?;
                 store.save(record)?;
             }
             HandoffOutcome::Completed(completion) => {
+                let prepared = observer.prepare_source(&record.plan, id).await?;
                 *record = publication::reserve_inspection(record, id)?;
                 store.save(record)?;
-                let sample = observer.source(&record.plan, id).await?;
+                let sample = prepared.observe().await?;
                 *record = journal::observe_handoff(record, &sample, &completion)?;
                 store.save(record)?;
                 return Ok(());
@@ -168,17 +185,25 @@ async fn submit_or_reconcile(
             Err(error) => return Err(error),
         }
     }
-    *record = publication::reserve_submission(record, &format!("{index}:handoff"))?;
-    store.save(record)?;
-    if record.handoffs[index]
+    let unissued = record.handoffs[index]
         .effect
         .as_ref()
-        .is_some_and(|effect| effect.state == EffectState::Intent)
-    {
-        *record = journal::issue_handoff(record, id)?;
-        store.save(record)?;
+        .is_some_and(|effect| effect.state == EffectState::Intent);
+    let refreshed = if unissued {
+        let request = transport.prepare(&record.plan, id)?;
+        journal::retirement::refresh_unissued(record, id, request)?
+    } else {
+        record.clone()
+    };
+    let prepared = transport.prepare_submission(&refreshed, id).await?;
+    let mut issued = publication::reserve_submission(&refreshed, &format!("{index}:handoff"))?;
+    if unissued {
+        issued = journal::issue_handoff(&issued, id)?;
     }
-    match transport.submit(record, id).await {
+    // Charge the attempt and retain Issued together, before submitting any bytes.
+    store.save(&issued)?;
+    *record = issued;
+    match prepared.submit(record).await {
         Ok(()) | Err(CapacityImportJournalError::Unresolved) => {}
         Err(error) => return Err(error),
     }

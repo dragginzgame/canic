@@ -161,6 +161,19 @@ grant under the existing pending pool claim. It checks that claim and Root/Store
 authority across calls; revocation failure leaves recycling pending before any
 uninstall. An already revoked exact grant reconciles a lost response. Delayed
 reset callbacks cannot overwrite a completed or replaced recycling claim.
+A disabled grant from an older allocation is a retained tombstone and does not
+block recycling a later allocation without a fixture. Enabled grants still
+require the exact current allocation before revocation. Removal evidence retains
+the original allocation identity through membership removal and Directory
+synchronization; the physical asset becomes reusable only after surviving parent
+routing converges. Each subsequent allocation has its own recycling claim.
+Management-call failures leave cleanup pending. Root uninstalls the workload,
+deletes its retained snapshots and verifies the empty module/snapshot state before
+finishing reset. An observed funding deficit may then retain an empty, underfunded
+asset; reconciliation preserves its created or recycled provenance.
+Manual and background resets share per-canister execution ownership across calls.
+A competing request retries after that execution finishes or is cancelled; it
+cannot replace an outstanding management call merely because a timer lease expired.
 Replacement requires a different installation operation. It cannot revive the
 old installation's grant.
 

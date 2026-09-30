@@ -149,6 +149,13 @@ unchanged, and artifacts without a callback retain the base policy identity.
   same row; selection still checks activation and routing authority. Assignment
   lookup remains in ID 53. The separate active-set allocation and facades are
   removed.
+- Child projection ID 30 retains each Component child's allocation operation ID.
+  Scaling workers (50), bound index keys (51), shard entries (52) and individual
+  partition assignments (53) retain the same identity. Reusing a physical canister
+  does not grant its earlier assignments routing authority. Canonical child
+  snapshots retain this identity; infrastructure topology carries no Component
+  allocation. Directory refresh replaces the bounded child projection without
+  scanning partition assignments.
 
 This is a hard cut of the maintained stable layout. Release transitions are
 reinstall-only. There are no old-layout readers or migration paths. Canonical
@@ -237,7 +244,7 @@ Their IDs are not renumbered into unrelated owners.
 | 40 | `canic.core.log.entries.v1` | B-tree |
 | 41 | `canic.core.intent.meta.v1` | Cell, including application receipt count |
 | 42 | `canic.core.intent.records.v1` | B-tree |
-| 43 | `canic.core.intent.totals.v1` | B-tree |
+| 43 | `canic.core.intent.totals.v1` | B-tree, including explicit quota-window retention |
 | 44 | `canic.core.intent.pending.v1` | B-tree |
 | 45 | `canic.core.intent.receipt_backed_records.v1` | B-tree, including application retention |
 | 46 | `canic.core.intent.expiry_index.v1` | B-tree |

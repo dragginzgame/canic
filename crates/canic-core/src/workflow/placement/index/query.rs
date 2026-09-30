@@ -22,15 +22,24 @@ impl PlacementIndexQuery {
     #[must_use]
     pub fn lookup_key(pool: &str, key_value: &str) -> Option<Principal> {
         PlacementIndexRegistryOps::lookup_key(pool, key_value)
+            .filter(|_| PlacementIndexRegistryOps::binding_is_current(pool, key_value))
     }
 
     #[must_use]
     pub fn lookup_entry(pool: &str, key_value: &str) -> Option<PlacementIndexStatusResponse> {
-        PlacementIndexRegistryOps::lookup_entry(pool, key_value)
+        PlacementIndexRegistryOps::lookup_entry(pool, key_value).filter(|entry| {
+            !matches!(entry, PlacementIndexStatusResponse::Bound { .. })
+                || PlacementIndexRegistryOps::binding_is_current(pool, key_value)
+        })
     }
 
     #[must_use]
     pub fn registry() -> PlacementIndexRegistryResponse {
-        PlacementIndexRegistryOps::entries_response()
+        let mut response = PlacementIndexRegistryOps::entries_response();
+        response.0.retain(|entry| {
+            !matches!(entry.status, PlacementIndexStatusResponse::Bound { .. })
+                || PlacementIndexRegistryOps::binding_is_current(&entry.pool, &entry.key_value)
+        });
+        response
     }
 }

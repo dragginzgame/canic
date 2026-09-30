@@ -44,6 +44,21 @@ pub(super) struct InfraCanisterIdRecordExtended {
     pub(super) sender_canister_version: Option<u64>,
 }
 
+/// Exact management snapshot identity and physical storage observation.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct InfraCanisterSnapshot {
+    pub(super) id: Vec<u8>,
+    pub(super) taken_at_timestamp: u64,
+    pub(super) total_size: u64,
+}
+
+/// Management request deleting one exact retained snapshot.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub(super) struct InfraDeleteCanisterSnapshotArgs {
+    pub(super) canister_id: Principal,
+    pub(super) snapshot_id: Vec<u8>,
+}
+
 //
 // InfraCanisterInfoArgs
 //

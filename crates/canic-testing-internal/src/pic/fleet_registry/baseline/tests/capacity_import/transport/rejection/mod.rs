@@ -1,8 +1,14 @@
 //! An uncertified management refusal cannot authorize new ingress after source mutation.
 
 use super::*;
-use canic_host::fleet_ensure::ops::capacity_import::observation::CapacityImportObserver;
+use canic_host::fleet_ensure::ops::capacity_import::observation::{
+    CapacityImportObserver, PreparedCapacityImportObservation,
+};
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one rejection journey retains the same source and durable request across custody changes"
+)]
 pub(super) fn uncertified_rejection_keeps_original_request(
     pic: &PocketIc,
     paths: &EnsurePaths,
@@ -32,12 +38,16 @@ pub(super) fn uncertified_rejection_keeps_original_request(
     store.stage_review(staged).unwrap();
     let mut reader = CapacityImportLiveObserver::from_icp(icp).unwrap();
     let staged = store.read().unwrap().unwrap();
+    let prepared = runtime.block_on(reader.prepare_destination(&plan)).unwrap();
     let staged = publication::reserve_inspection(&staged, root).unwrap();
     store.save(&staged).unwrap();
-    let destination = runtime.block_on(reader.destination(&plan)).unwrap();
+    let destination = runtime.block_on(prepared.observe()).unwrap();
+    let prepared = runtime
+        .block_on(reader.prepare_source(&plan, source))
+        .unwrap();
     let staged = publication::reserve_inspection(&staged, source).unwrap();
     store.save(&staged).unwrap();
-    let observed = runtime.block_on(reader.source(&plan, source)).unwrap();
+    let observed = runtime.block_on(prepared.observe()).unwrap();
     let approved = journal::approve(
         &staged,
         plan.plan_sha256,
@@ -48,7 +58,15 @@ pub(super) fn uncertified_rejection_keeps_original_request(
     store.save(&approved).unwrap();
     let approved = publication::reserve_submission(&approved, "reserve").unwrap();
     store.save(&approved).unwrap();
-    let status = runtime.block_on(transport.reserve_root(&approved)).unwrap();
+    let status = runtime
+        .block_on(async {
+            transport
+                .prepare_reserve_root(&approved)
+                .await?
+                .submit()
+                .await
+        })
+        .unwrap();
     let reserved =
         journal::reserve(&approved, reservation_evidence(&plan, &status).unwrap()).unwrap();
     store.save(&reserved).unwrap();
@@ -65,7 +83,13 @@ pub(super) fn uncertified_rejection_keeps_original_request(
     pic.set_controllers(source, Some(previous_owner), vec![previous_owner])
         .unwrap();
     assert!(matches!(
-        runtime.block_on(transport.submit(&issued, source)),
+        runtime.block_on(async {
+            transport
+                .prepare_submission(&issued, source)
+                .await?
+                .submit(&issued)
+                .await
+        }),
         Err(CapacityImportJournalError::Unresolved)
     ));
     assert!(matches!(
@@ -79,7 +103,9 @@ pub(super) fn uncertified_rejection_keeps_original_request(
         observed.binding.controllers.clone(),
     )
     .unwrap();
-    let restored = runtime.block_on(reader.source(&plan, source)).unwrap();
+    let restored = runtime
+        .block_on(async { reader.prepare_source(&plan, source).await?.observe().await })
+        .unwrap();
     assert_eq!(restored.binding.controllers, observed.binding.controllers);
     assert_eq!(
         restored.binding.canister_version,
@@ -87,7 +113,7 @@ pub(super) fn uncertified_rejection_keeps_original_request(
     );
     let new_request = transport.prepare(&plan, source).unwrap();
     assert!(matches!(
-        journal::rejection::renew(&issued, &restored, new_request),
+        journal::retirement::renew(&issued, &restored, new_request),
         Err(CapacityImportJournalError::Unresolved)
     ));
     assert_eq!(store.read().unwrap().unwrap(), issued);

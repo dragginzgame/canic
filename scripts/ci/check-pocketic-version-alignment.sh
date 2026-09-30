@@ -13,7 +13,10 @@ fi
 # shellcheck source=/dev/null
 source "$TOOLS"
 
-mapfile -t locked_versions < <(
+locked_versions=()
+while IFS= read -r version; do
+    locked_versions+=("$version")
+done < <(
     awk '
         $0 == "[[package]]" {
             package = ""
@@ -48,8 +51,10 @@ if [ -n "${POCKET_IC_BIN:-}" ]; then
         echo "PocketIC version alignment failed: POCKET_IC_BIN must be an executable file: $POCKET_IC_BIN" >&2
         exit 1
     fi
+    platform="$(bash "$ROOT/scripts/ci/pocketic-platform.sh")"
+    IFS=$'\t' read -r _archive _archive_digest binary_digest <<<"$platform"
     bash "$ROOT/scripts/ci/verify-file-checksum.sh" \
-        sha256 "$CANIC_POCKET_IC_BINARY_SHA256_LINUX_X86_64" "$POCKET_IC_BIN"
+        sha256 "$binary_digest" "$POCKET_IC_BIN"
 fi
 
 echo "PocketIC version alignment passed ($locked_version)"

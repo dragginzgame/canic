@@ -164,6 +164,7 @@ impl AuthOps {
     pub(crate) fn plan_due_chain_key_root_delegation_batch(
         input: PrepareChainKeyRootDelegationBatchInput,
     ) -> Result<ChainKeyRootDelegationBatchPreparation, InternalError> {
+        chain_key_batch::require_requested_issuer_template(input.required_issuer_pid)?;
         let config = ConfigOps::delegated_tokens_config()?;
         let signing_policy = chain_key_signing_policy_from_config(
             &config,

@@ -7,6 +7,7 @@
 mod cycles;
 mod lifecycle;
 mod signing;
+mod snapshots;
 mod status_settings;
 mod types;
 

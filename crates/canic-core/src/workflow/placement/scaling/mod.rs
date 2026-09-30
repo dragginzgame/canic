@@ -265,10 +265,14 @@ impl ScalingWorkflow {
             };
         crate::perf!("create_canister");
 
+        if let Err(error) = permit.require_current_child(pid) {
+            PlacementAllocationWorkflow::finish_retired_child(&permit, pid)?;
+            return Err(error);
+        }
         MetricEvent::started(MetricOperation::RegisterWorker);
         let created_at_secs = IcOps::now_secs();
-        ScalingRegistryOps::upsert(pid, entry_plan, created_at_secs);
-        if let Err(err) = PlacementAllocationWorkflow::finish_registered_child(&permit, pid) {
+        ScalingRegistryOps::upsert(pid, entry_plan, created_at_secs, permit.operation_id());
+        if let Err(err) = PlacementAllocationWorkflow::finish_created_child(&permit, pid) {
             MetricEvent::failed(MetricOperation::RegisterWorker, &err);
             return Err(err);
         }

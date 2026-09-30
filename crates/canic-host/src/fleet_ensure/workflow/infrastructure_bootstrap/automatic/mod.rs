@@ -47,8 +47,9 @@ pub(super) fn survey(
         let sample = if let Some(sample) = persistence.sample(id) {
             sample.clone()
         } else {
+            let prepared = runtime.block_on(BootstrapSurvey::prepare_sample(&agent, id))?;
             persistence.reserve(id)?;
-            let sample = runtime.block_on(BootstrapSurvey::sample(&agent, id))?;
+            let sample = runtime.block_on(prepared.observe())?;
             persistence.retain(sample.clone())?;
             sample
         };

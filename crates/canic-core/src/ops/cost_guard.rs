@@ -193,13 +193,16 @@ impl CostGuardOps {
         enforce_cycle_reserve(&reservation_key, &request)?;
 
         let quota_intent_id = IntentStoreOps::allocate_intent_id()?;
-        let quota_record = IntentStoreOps::try_reserve(
+        let retain_until_secs = request
+            .now_secs
+            .checked_add(request.quota_window_secs - request.now_secs % request.quota_window_secs)
+            .ok_or(CostGuardReserveError::InvalidQuotaWindow)?;
+        let quota_record = IntentStoreOps::try_reserve_quota(
             quota_intent_id,
             quota_key,
-            1,
             request.now_secs,
-            Some(INTENT_TTL_SECONDS),
-            request.now_secs,
+            INTENT_TTL_SECONDS,
+            retain_until_secs,
         )?;
 
         let reservation_id = match IntentStoreOps::allocate_intent_id()
@@ -465,6 +468,56 @@ mod tests {
         );
 
         CostGuardOps::reserve(request(70)).expect("next bucket allowed");
+    }
+
+    #[test]
+    fn completed_quota_windows_reclaim_capacity_and_preserve_exact_replay() {
+        reset();
+        let key = IntentResourceKey::new("application:permanent");
+        let id = IntentStoreOps::allocate_intent_id().expect("permanent id");
+        IntentStoreOps::try_reserve(id, key.clone(), 7, 0, None, 0).expect("reserve");
+        IntentStoreOps::commit_at(id, 0).expect("permanent commit");
+        let first = CostGuardOps::reserve(request(10)).expect("first window");
+        CostGuardOps::complete(&first, 10).expect("complete first");
+        let limit = crate::ops::storage::intent::INTENT_RESOURCE_TOTAL_RECORD_LIMIT;
+        for window in 1..2 * limit {
+            let now = window * 60 + 10;
+            let permit = CostGuardOps::reserve(request(now)).expect("later window admission");
+            CostGuardOps::complete(&permit, now).expect("complete later window");
+        }
+        assert!(IntentStore::totals_len() <= limit);
+        assert_eq!(IntentStoreOps::totals(&key).committed_qty, 7);
+        CostGuardOps::complete(&first, 2 * limit * 60).expect("retained terminal replay");
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
+    }
+
+    #[test]
+    fn quota_reclamation_retains_pending_work_across_windows_and_restore() {
+        reset();
+        let mut initial = request(10);
+        initial.quota_window_secs = 1;
+        let pending = CostGuardOps::reserve(initial).expect("held reservation");
+        let quota_key = IntentStoreOps::load(pending.quota_intent_id)
+            .expect("load")
+            .expect("pending quota")
+            .resource_key;
+        // Canonical storage restoration retains the expiry metadata too.
+        let snapshot = IntentStore::export_totals();
+        IntentStore::import_totals(snapshot);
+        for window in 1..1_100 {
+            let now = 10 + window * 2;
+            let mut next = request(now);
+            next.quota_window_secs = 1;
+            let permit = CostGuardOps::reserve(next).expect("new window with pending predecessor");
+            CostGuardOps::recover(&permit, now).expect("settle later window");
+        }
+        let totals = IntentStoreOps::totals(&quota_key);
+        assert_eq!(totals.pending_count, 1);
+        assert_eq!(totals.reserved_qty, 1);
+        assert_eq!(totals.retain_until_secs, Some(11));
+        CostGuardOps::complete(&pending, 2_300).expect("late exact settlement");
+        CostGuardOps::complete(&pending, 2_301).expect("late replay");
+        assert_eq!(IntentStoreOps::pending_total().expect("pending"), 0);
     }
 
     #[test]

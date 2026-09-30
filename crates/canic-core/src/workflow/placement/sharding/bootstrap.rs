@@ -20,7 +20,6 @@ use crate::{
                 ShardingMetricReason as MetricReason,
             },
         },
-        storage::placement::sharding::ShardingRegistryOps,
     },
     workflow::placement::sharding::ShardingWorkflow,
 };
@@ -82,25 +81,28 @@ impl ShardingWorkflow {
         crate::perf!("bootstrap_empty_active");
 
         MetricEvent::started(MetricOperation::AssignKey);
-        if let Err(err) = ShardingRegistryOps::assign(pool, partition_key, pid) {
-            MetricEvent::failed(MetricOperation::AssignKey, &err);
-            MetricEvent::failed(MetricOperation::BootstrapActive, &err);
-            return Err(err);
-        }
+        let assigned = match Self::assign_available_key(pool, partition_key, pid) {
+            Ok(assigned) => assigned,
+            Err(err) => {
+                MetricEvent::failed(MetricOperation::AssignKey, &err);
+                MetricEvent::failed(MetricOperation::BootstrapActive, &err);
+                return Err(err);
+            }
+        };
         MetricEvent::completed(MetricOperation::AssignKey, MetricReason::CreateAllowed);
         crate::perf!("assign_bootstrap_created");
 
         crate::log!(
             Topic::Sharding,
             Ok,
-            "✨ partition_key={partition_key} created+assigned shard={pid} pool={pool} slot={slot}"
+            "✨ partition_key={partition_key} assigned shard={assigned}; created shard={pid} pool={pool} slot={slot}"
         );
 
         MetricEvent::completed(
             MetricOperation::BootstrapActive,
             MetricReason::CreateAllowed,
         );
-        Ok(pid)
+        Ok(assigned)
     }
 
     // Select a free slot and admit the first active shard for an empty pool.

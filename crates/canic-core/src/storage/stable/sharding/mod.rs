@@ -86,11 +86,12 @@ pub struct ShardEntryRecord {
     pub pool: BoundedString64,
     pub canister_role: CanisterRole,
     pub created_at: u64,
+    pub allocation_operation_id: [u8; 32],
 }
 
 impl ShardEntryRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "ShardEntryRecord";
-    pub const STORABLE_MAX_SIZE: u32 = 256;
+    pub const STORABLE_MAX_SIZE: u32 = 384;
     pub const UNASSIGNED_SLOT: u32 = u32::MAX;
 
     #[cfg(feature = "sharding")]
@@ -100,6 +101,7 @@ impl ShardEntryRecord {
         role: CanisterRole,
         capacity: u32,
         created_at: u64,
+        allocation_operation_id: [u8; 32],
     ) -> Result<Self, String> {
         let pool = BoundedString64::try_new(pool).map_err(|err| format!("pool name: {err}"))?;
 
@@ -111,6 +113,7 @@ impl ShardEntryRecord {
             count: 0,
             pool,
             created_at,
+            allocation_operation_id,
         })
     }
 
@@ -145,7 +148,17 @@ pub struct ShardingRegistryEntryRecord {
 pub struct ShardingAssignmentRecord {
     pub key: ShardKey,
     pub shard: Principal,
+    pub allocation_operation_id: [u8; 32],
 }
+
+/// Exact allocation retained by a partition key, independent of later principal reuse.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct ShardAssignmentTargetRecord {
+    pub shard: Principal,
+    pub allocation_operation_id: [u8; 32],
+}
+
+impl_storable_bounded!(ShardAssignmentTargetRecord, 160, false);
 
 impl ShardingAssignmentRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "ShardingAssignmentRecord";
@@ -189,14 +202,14 @@ impl ShardingAssignmentsData {
 #[cfg(feature = "sharding")]
 pub struct ShardingCore<M: Memory> {
     registry: StableBtreeMap<Principal, ShardEntryRecord, M>,
-    assignments: StableBtreeMap<ShardKey, Principal, M>,
+    assignments: StableBtreeMap<ShardKey, ShardAssignmentTargetRecord, M>,
 }
 
 #[cfg(feature = "sharding")]
 impl<M: Memory> ShardingCore<M> {
     pub const fn new(
         registry: StableBtreeMap<Principal, ShardEntryRecord, M>,
-        assignments: StableBtreeMap<ShardKey, Principal, M>,
+        assignments: StableBtreeMap<ShardKey, ShardAssignmentTargetRecord, M>,
     ) -> Self {
         Self {
             registry,
@@ -230,15 +243,26 @@ impl<M: Memory> ShardingCore<M> {
     // Assignments CRUD
     // ---------------------------
 
-    pub fn insert_assignment(&mut self, key: ShardKey, shard: Principal) {
-        self.assignments.insert(key, shard);
+    pub fn insert_assignment(
+        &mut self,
+        key: ShardKey,
+        shard: Principal,
+        allocation_operation_id: [u8; 32],
+    ) {
+        self.assignments.insert(
+            key,
+            ShardAssignmentTargetRecord {
+                shard,
+                allocation_operation_id,
+            },
+        );
     }
 
-    pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<Principal> {
+    pub fn remove_assignment(&mut self, key: &ShardKey) -> Option<ShardAssignmentTargetRecord> {
         self.assignments.remove(key)
     }
 
-    pub fn get_assignment(&self, key: &ShardKey) -> Option<Principal> {
+    pub fn get_assignment(&self, key: &ShardKey) -> Option<ShardAssignmentTargetRecord> {
         self.assignments.get(key)
     }
 
@@ -247,7 +271,8 @@ impl<M: Memory> ShardingCore<M> {
             .iter()
             .map(|entry| ShardingAssignmentRecord {
                 key: entry.key().clone(),
-                shard: entry.value(),
+                shard: entry.value().shard,
+                allocation_operation_id: entry.value().allocation_operation_id,
             })
             .collect()
     }

@@ -124,8 +124,9 @@ async fn plan_async(
         {
             sample.clone()
         } else {
+            let prepared = survey.prepare_sample(canister).await?;
             persistence.reserve(canister)?;
-            let sample = survey.sample(canister).await?;
+            let sample = prepared.observe().await?;
             persistence.retain(sample.clone())?;
             sample
         };

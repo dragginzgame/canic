@@ -118,3 +118,37 @@ with hashes, logs and structured qualification. The local batch is ready for
 review. No live recovery, payment, sibling edit, Git publication or external
 message occurred. Live completion and immediate effect-free replay remain required
 before declaring CANIC-188 closed.
+
+## September 30 urgent publication qualification
+
+The maintainer prioritized the corrective `.49` publication ahead of the remaining
+review backlog. An explicit current-runtime PocketIC case now exercises nine
+installed Workloads and fifteen empty spares through the public completed-estate
+CLI. It passes insufficient-budget rejection without source mutation, lost-install
+response recovery, all 24 source imports, exact Root conservation, offline import
+replay with unchanged journal bytes, nine-Workload/fifteen-Ready convergence,
+terminal replay and a later ordinary Ensure operation.
+
+The final case passed in 322.32 seconds; its governed invocation took 341 seconds.
+Import consumed 220 of 784 reviewed calls. Root's observed debit was
+51,096,447,856 cycles against a generated ceiling of 33,008,458,000,000 cycles.
+The complete log is `target/review-validation/canic188-24-source-final.log`.
+Earlier attempts retained beside it exposed two new fixture assertions: an
+invalid negative-capacity setup and a Fleet-only receipt field used for import.
+They did not require production-code corrections. The incident-sized case is
+opt-in; the ordinary release catalogue keeps its smaller recovery fixture.
+
+Final native qualification passes 29 Control Plane, two Core and 78 Host
+import/budget tests, plus the exact Host generation journey containing seed-byte
+preservation and changed-ID publication assertions. Logs are
+`target/review-validation/canic188-native-final.log` and `canic187-seed-final.log`.
+Changed Testing-package all-target/all-feature warning-denied Clippy passes in
+`canic188-clippy-final.log`. No complete workspace gate or version mutation ran.
+
+This uses the maintained local-network runtime contract and current artifacts;
+mainnet call-count/cost arithmetic has separate native coverage. It does not
+replay Toko's historical private state or replace the frozen repair qualification.
+All 17 retained repair-bundle checksum checks pass. The new local `.48` import
+reported with an issued uninstall is a different operation and is not authorized
+by the staging-specific repair. Publication readiness and live incident closure
+remain separate decisions.

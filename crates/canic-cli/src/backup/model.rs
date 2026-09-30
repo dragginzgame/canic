@@ -151,6 +151,7 @@ pub struct BackupPruneEntry {
     pub backup_id: String,
     pub status: BackupListStatus,
     pub action: BackupPruneAction,
+    pub detail: Option<String>,
 }
 
 ///
@@ -159,14 +160,22 @@ pub struct BackupPruneEntry {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackupPruneAction {
+    Failed,
     Removed,
+    SkippedBusy,
+    SkippedInvalid,
+    SkippedRestore,
     WouldRemove,
 }
 
 impl BackupPruneAction {
     pub const fn label(self) -> &'static str {
         match self {
+            Self::Failed => "failed",
             Self::Removed => "removed",
+            Self::SkippedBusy => "skipped-busy",
+            Self::SkippedInvalid => "skipped-invalid",
+            Self::SkippedRestore => "skipped-restore",
             Self::WouldRemove => "would-remove",
         }
     }

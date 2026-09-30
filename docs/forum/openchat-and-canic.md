@@ -10,6 +10,14 @@ This post explores both sides: where Canic could help OpenChat, and what Canic w
 
 The assessment uses OpenChat commit [`2611b2e5`](https://github.com/open-chat-labs/open-chat/tree/2611b2e5bdb2cc0dbe397bd04a87989e4c05553b), reviewed on September 29, 2026, and the Canic development checkout at that time. The Canic review includes pending `0.110.47` work; development findings should not all be read as published capabilities. This is a source-level assessment, not a live-fleet census, security audit, or measured performance comparison. It does not imply an adoption commitment from OpenChat.
 
+September 30 follow-up: OpenChat developers asked us to ignore the legacy
+`User` canister because it will soon be deprecated. The proposed fixture and
+configuration below therefore target `MultiUser` and its required indexes.
+Legacy User source references remain historical observations from the pinned
+review, not qualification requirements or evidence about MultiUser behavior.
+Reassess their lifecycle, timer and payload findings against the selected
+MultiUser source before implementing the test port.
+
 **OpenChat already has substantial fleet infrastructure.**
 
 OpenChat is far beyond an application that simply needs a convenient wrapper around `create_canister`:
@@ -117,7 +125,7 @@ Finally, both projects could benefit from shared infrastructure qualification. O
 
    Small fixed costs accumulate across a large fleet: stable-memory allocation slack, periodic timers, sampling, module size, installation cost, cycle reserves, receipt retention, and monitoring calls.
 
-   Canic's recent memory work and pending optional-observability changes address this direction. Qualification should cover different role profiles: a mostly idle dedicated user canister differs from a busy shared-user canister or a storage bucket.
+   Canic's recent memory work and pending optional-observability changes address this direction. Qualification should cover different role profiles: an idle MultiUser canister differs from a busy MultiUser canister or a storage bucket.
 
    Measure incremental Wasm size, touched stable pages, idle cycles, timer executions, and management calls under identical workloads and selected features. Source-code reduction alone does not establish operating savings.
 
@@ -152,10 +160,6 @@ package = "canisters/storage_index"
 [roles.local_user_index]
 kind = "canister"
 package = "canisters/local_user_index"
-
-[roles.user]
-kind = "canister"
-package = "canisters/user"
 
 [roles.multi_user]
 kind = "canister"
@@ -204,14 +208,11 @@ component_role = "local_user_index"
 maximum_instances = 2
 
 [component_specs.local_chat.limits]
-maximum_descendants = 120
+maximum_descendants = 56
 maximum_registry_bytes = 16777216
 
 # Flat catalog of physical child canister roles.
 # A multi_user canister may hold many logical users; they are not children.
-[component_specs.local_chat.children.user]
-kind = "instance"
-
 [component_specs.local_chat.children.multi_user]
 kind = "instance"
 
@@ -222,9 +223,6 @@ kind = "instance"
 kind = "instance"
 
 # The application requests children; the bound Root performs allocation.
-[component_specs.local_chat.spawn_grants.local_user_index.user]
-maximum_instances_per_parent = 64
-
 [component_specs.local_chat.spawn_grants.local_user_index.multi_user]
 maximum_instances_per_parent = 8
 
@@ -251,7 +249,7 @@ kind = "instance"
 maximum_instances_per_parent = 4
 ```
 
-The five Component Specs allow at most seven top-level instances: three global services, two local chat Components, and two media-capacity Components. Each local chat Component admits up to 120 physical descendants, and each media-capacity Component up to four. Byte limits, Root capacity, funding, and other admission checks can bind before those counts are reached. Automatic top-ups are omitted in this small example; actual funding and reserve policies must be selected for the experiment.
+The five Component Specs allow at most seven top-level instances: three global services, two local chat Components, and two media-capacity Components. Each local chat Component admits up to 56 physical descendants, and each media-capacity Component up to four. Byte limits, Root capacity, funding, and other admission checks can bind before those counts are reached. Automatic top-ups are omitted in this small example; actual funding and reserve policies must be selected for the experiment.
 
 Using `kind = "instance"` for `multi_user` is intentional. The fixture leaves logical user placement with the application. Selecting Canic's sharding pools instead would introduce its assignment policy and capacity semantics, which would need a separate comparison with OpenChat's current selection rules. This configuration also does not register global services with one another or wire their application APIs; the fixture must implement those initialization and readiness steps.
 
@@ -269,7 +267,6 @@ The proposed component inventory is shown below. Counts describe the illustrated
 | group_index         | 1 global; subnet A  | Chat directory           |
 | storage_index       | 1 global; subnet A  | Media directory / routing|
 | local_user_index    | 1 on A; 1 on B      | Local chat parent        |
-| user                | <=64 / local parent | Dedicated user state     |
 | multi_user          | <=8 / local parent  | Shared user state        |
 | group               | <=32 / local parent | Group chat state         |
 | community           | <=16 / local parent | Community / channel state|
@@ -297,7 +294,6 @@ Fleet: openchat_lab
 |       +-- storage_index [media_directory Component]
 |       |
 |       +-- local_user_index A [local_chat Component]
-|       |   +-- user canisters         [0..64]
 |       |   +-- multi_user canisters   [0..8]
 |       |   |   `-- logical users     [application data, not canisters]
 |       |   +-- group canisters        [0..32]
@@ -314,7 +310,6 @@ Fleet: openchat_lab
         +-- Wasm Store B [implicit infrastructure]
         |
         +-- local_user_index B [local_chat Component]
-        |   +-- user canisters         [0..64]
         |   +-- multi_user canisters   [0..8]
         |   |   `-- logical users     [application data, not canisters]
         |   +-- group canisters        [0..32]
@@ -342,7 +337,7 @@ I would pursue four bounded pieces of work. These are proposals for scope discus
 | Establish scale and overhead envelopes | Large registry measurements plus real multi-subnet provisioning, contention, funding, interruption, and replay cases. |
 | Evaluate eventual production adoption | An accepted lifecycle and governance contract, followed by an independently qualified implementation. |
 
-The first experimental application should be a disposable OpenChat-shaped workload: global and subnet-local indexes, dedicated and shared user roles, group/community roles, and a storage role. It should exercise registration bursts, pool exhaustion, uncertain replies, funding pressure, and application readiness.
+The first experimental application should be a disposable OpenChat-shaped workload: global and subnet-local indexes, MultiUser workers, group/community roles, and a storage role. It should exercise registration bursts, pool exhaustion, uncertain replies, funding pressure, and application readiness.
 
 Production migration should remain outside that experiment. Pinning Canic forever or restoring snapshots across releases would not resolve the underlying product contract.
 

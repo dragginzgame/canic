@@ -2672,9 +2672,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.261.16"
+version = "0.261.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "44e71cb81a00c962a4c4e4fa83233859c4dca8f84386ed19d8f14b73cbf84d39"
+checksum = "95c71f9a0095375e9c06862bdce7b6aee822e8c50929e2ebd61d698630eebddb"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2690,9 +2690,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.261.16"
+version = "0.261.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "981803dab8055b0e95a21d2233847f71703db078bfc5c9355f25077d20db5074"
+checksum = "8fc1353c2d0f127d229d9eaa86e8cedd281a516d6bf824773ef4d6335833a290"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2715,18 +2715,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.261.16"
+version = "0.261.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d20ed6310c221f23bb5105f655b623c19c710d9dc6ee24e0e74e49b2f767a784"
+checksum = "57ecc4d4e70363d7b00f3e002aa7876b3c3fa8e28d01a8eb93ae2baaf40e96d3"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.261.16"
+version = "0.261.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d93c1a6849a4acc7e7f69eca6041284abc0e9862a4e2c941bf7c477605dc53df"
+checksum = "c21918973cd312c65dcfeb63248216da90dc1c26d892e4f87a0ef7f580f1b5ce"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2746,9 +2746,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.261.16"
+version = "0.261.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2120ee900eca27365349510922c6d44db48df6a9cf2116a5d3d2caed893cf77"
+checksum = "5f789c7af06d9c2c6f3b473ae0dc951a65d90a59f46c1d3b8595d989d0c0b34e"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2763,9 +2763,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.261.16"
+version = "0.261.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4fa27de9c82cdfc888c16e460e75017509ac473ca59f414033d10011bf0bc966"
+checksum = "ec9eba9f271362fd050683021372be4c3d9efa023f183d624892ec22d4c10690"
 dependencies = [
  "candid",
  "derive_more",
@@ -3731,9 +3731,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-proto"
-version = "0.11.18"
+version = "0.11.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a9746dbde176634f4f2f1faf2404e30a31b2bc1e9cafb5329c95d8177a18c9fc"
+checksum = "0e750cca55fe4f0439a15d0bb529da9651e79993e8e72c61a899a36d462befbe"
 dependencies = [
  "aws-lc-rs",
  "bytes",
@@ -3754,9 +3754,9 @@ dependencies = [
 
 [[package]]
 name = "quinn-udp"
-version = "0.5.15"
+version = "0.5.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35a133f956daabe89a61a685c2649f13d82d5aa4bd5d12d1277e1072a21c0694"
+checksum = "af66907df18639dcf4db56ca65490cabc4b27a97dbadd96f2926cca73298f016"
 dependencies = [
  "cfg_aliases",
  "libc",

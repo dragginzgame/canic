@@ -947,6 +947,7 @@ pub struct ComponentRuntimeDirectoryAuthority {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct ComponentRuntimeDirectChild {
     pub canister_id: Principal,
+    pub allocation_operation_id: [u8; 32],
     pub role: CanisterRole,
     pub protocol_profile_digest: ProtocolProfileDigest,
 }

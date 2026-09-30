@@ -495,7 +495,15 @@ const fn is_retryable_maintenance_error(error: &InternalError) -> bool {
         .raw_code()
         .raw()
         || code
+            == canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE
+                .raw_code()
+                .raw()
+        || code
             == canic_core::diagnostics::codes::STATE_FAILED
+                .raw_code()
+                .raw()
+        || code
+            == canic_core::diagnostics::codes::STATE_UNAVAILABLE
                 .raw_code()
                 .raw()
 }
@@ -575,9 +583,12 @@ fn require_import_candidate(canister_id: Principal) -> Result<(), InternalError>
 }
 
 /// Return a stopped Component Canister to durable local prepaid inventory.
-pub async fn recycle(canister_id: Principal) -> Result<(), InternalError> {
+pub async fn recycle(
+    canister_id: Principal,
+    claim: &crate::ops::canister_pool::CanisterPoolClaimKey,
+) -> Result<(), InternalError> {
     let config = pool_config()?;
-    CanisterPoolOps::register_recycled_pending(canister_id, IcOps::now_nanos())?;
+    CanisterPoolOps::register_recycled_pending(canister_id, claim, IcOps::now_nanos())?;
     if CanisterPoolOps::recycling_reset_is_terminal(canister_id)? {
         return Ok(());
     }
@@ -605,6 +616,7 @@ async fn reset_asset(
     config: &FleetSubnetCanisterPoolConfig,
     intent: PoolAssetResetIntent,
 ) -> Result<ResetAssetOutcome, InternalError> {
+    let _execution = CanisterPoolOps::claim_reset_execution(canister_id)?;
     let required_cycles = required_pool_asset_cycles(config)?;
     let now_ns = IcOps::now_nanos();
     let preparation = match intent {
@@ -634,18 +646,17 @@ async fn reset_asset(
         }
         Ok(cycles) => {
             let reason = pool_asset_underfunding_reason(canister_id, &cycles, &required_cycles)?;
-            CanisterPoolOps::mark_failed(
+            CanisterPoolOps::mark_underfunded(
                 canister_id,
-                Some(cycles),
+                cycles,
                 reason.clone(),
                 IcOps::now_nanos(),
             )?;
             Ok(ResetAssetOutcome::Underfunded { reason })
         }
-        Err(error) => {
-            CanisterPoolOps::mark_failed(canister_id, None, error.to_string(), IcOps::now_nanos())?;
-            Err(error)
-        }
+        // An interrupted effect still owes cleanup. In particular, a recycling
+        // claim must not become terminal merely because its old balance is known.
+        Err(error) => Err(error),
     }
 }
 
@@ -654,6 +665,7 @@ async fn observe_reset_asset_cycles(
     root: Principal,
     preparation: CanisterPoolResetPreparation,
 ) -> Result<Cycles, InternalError> {
+    let recycling = CanisterPoolOps::pending_recycling_claim(canister_id)?;
     if preparation == CanisterPoolResetPreparation::Reinspect {
         let status = MgmtOps::canister_status(canister_id).await?;
         if !has_exact_root_controllers(root, &status.settings.controllers)?
@@ -661,12 +673,11 @@ async fn observe_reset_asset_cycles(
         {
             return Err(InternalError::conflict());
         }
-        return Cycles::try_from(status.cycles).map_err(|_error| InternalError::invariant());
+        return finish_empty_asset_reset(canister_id, root, recycling.as_ref()).await;
     }
     if preparation != CanisterPoolResetPreparation::Reset {
         return Err(InternalError::invariant());
     }
-    let recycling = CanisterPoolOps::pending_recycling_claim(canister_id)?;
     // Settle outstanding application calls before discarding their callback state.
     // PendingReset already owns this reset; retries may safely stop an already stopped asset.
     MgmtOps::stop_canister(canister_id).await?;
@@ -686,7 +697,37 @@ async fn observe_reset_asset_cycles(
         CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
     }
     MgmtOps::uninstall_code(canister_id).await?;
-    MgmtOps::get_cycles(canister_id).await
+    if let Some(claim) = &recycling {
+        CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
+    }
+    finish_empty_asset_reset(canister_id, root, recycling.as_ref()).await
+}
+
+// Uninstall leaves snapshots behind. Delete only the observed IDs while the
+// same recycling claim owns the asset; a retry starts with its remaining IDs.
+async fn finish_empty_asset_reset(
+    canister_id: Principal,
+    root: Principal,
+    recycling: Option<&crate::ops::canister_pool::CanisterPoolClaimKey>,
+) -> Result<Cycles, InternalError> {
+    let snapshots = MgmtOps::list_canister_snapshot_ids(canister_id).await?;
+    for snapshot_id in snapshots {
+        if let Some(claim) = recycling {
+            CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
+        }
+        MgmtOps::delete_canister_snapshot(canister_id, snapshot_id).await?;
+    }
+    if let Some(claim) = recycling {
+        CanisterPoolOps::require_pending_recycling_claim(canister_id, claim)?;
+    }
+    let status = MgmtOps::canister_status(canister_id).await?;
+    if !has_exact_root_controllers(root, &status.settings.controllers)?
+        || status.module_hash.is_some()
+        || status.memory_metrics.snapshots_size != 0_u8
+    {
+        return Err(InternalError::conflict());
+    }
+    Cycles::try_from(status.cycles).map_err(|_error| InternalError::invariant())
 }
 
 fn pool_asset_underfunding_reason(
@@ -861,6 +902,30 @@ mod tests {
         let retryable = maintenance_timer_result(Err(InternalError::platform_failure()));
         assert_eq!(
             retryable.completion().outcome(),
+            TimerCompletionOutcome::RetryableFailure
+        );
+
+        let retryable = maintenance_timer_result(Err(InternalError::public(
+            canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE,
+        )));
+        assert_eq!(
+            retryable.completion().outcome(),
+            TimerCompletionOutcome::RetryableFailure
+        );
+        assert_eq!(
+            maintenance_result_completion(&Err(InternalError::public(
+                canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE
+            ))),
+            AsyncJobCompletion::RetryableFailure
+        );
+        assert_eq!(
+            maintenance_result_completion(&Err(InternalError::unavailable())),
+            AsyncJobCompletion::RetryableFailure
+        );
+        assert_eq!(
+            maintenance_timer_result(Err(InternalError::unavailable()))
+                .completion()
+                .outcome(),
             TimerCompletionOutcome::RetryableFailure
         );
 

@@ -30,6 +30,94 @@ use super::*;
 
 const SOURCE_BYTES: &[u8] = b"authoritative snapshot bytes";
 
+#[test]
+fn restore_references_survive_pause_failure_and_release_only_the_completed_journal() {
+    let fixture = ready_restore_operation_fixture(
+        "canic-restore-retention",
+        RestoreApplyOperationKind::StartCanister,
+    );
+    let external = temp_dir("canic-restore-external-retention");
+    let second_path = external.join("custom-journal.json");
+    let journal: RestoreApplyJournal =
+        serde_json::from_slice(&fs::read(&fixture.config.journal).expect("read journal"))
+            .expect("decode journal");
+    write_restore_apply_journal(&second_path, &journal).expect("prepare second restore");
+    let layout = crate::persistence::BackupLayout::new(fixture.root.clone());
+    let mut paused = fixture.config.clone();
+    paused.max_steps = Some(0);
+    let mut executor = ScriptedExecutor::new([]);
+    let response =
+        restore_run_execute_with_executor(&paused, &mut executor).expect("pause restore");
+    assert!(!response.complete);
+    assert!(executor.commands.is_empty());
+    assert!(
+        layout
+            .lock_lifetime()
+            .expect("lock paused layout")
+            .has_restore_references()
+            .expect("read references")
+    );
+
+    let mut failed_executor = ScriptedExecutor::new([RestoreRunnerCommandOutput {
+        success: false,
+        status: "1".to_string(),
+        stdout: Vec::new(),
+        stderr: Vec::new(),
+    }]);
+    let failed = restore_run_execute_result_with_executor(&fixture.config, &mut failed_executor)
+        .expect("persist failed attempt");
+    std::assert_matches!(failed.error, Some(RestoreRunnerError::CommandFailed { .. }));
+    assert!(
+        layout
+            .lock_lifetime()
+            .expect("lock failed layout")
+            .has_restore_references()
+            .expect("failed restore remains protected")
+    );
+    restore_run_retry_failed(&fixture.config).expect("retry failed restore");
+
+    let mut executor = ScriptedExecutor::new(restore_claim_outputs(
+        &RestoreApplyOperationKind::StartCanister,
+        false,
+    ));
+    let response = restore_run_execute_with_executor(&fixture.config, &mut executor)
+        .expect("finish first restore");
+    assert!(response.complete);
+    assert!(
+        layout
+            .lock_lifetime()
+            .expect("lock second restore layout")
+            .has_restore_references()
+            .expect("second reference remains")
+    );
+
+    let mut config = fixture.config.clone();
+    config.journal = second_path;
+    let mut executor = ScriptedExecutor::new(restore_claim_outputs(
+        &RestoreApplyOperationKind::StartCanister,
+        false,
+    ));
+    let response =
+        restore_run_execute_with_executor(&config, &mut executor).expect("finish external restore");
+    assert!(response.complete);
+    assert!(
+        !layout
+            .lock_lifetime()
+            .expect("lock completed layout")
+            .has_restore_references()
+            .expect("all references released")
+    );
+    fs::remove_dir_all(&fixture.root).expect("prune completed backup");
+    std::assert_matches!(write_restore_apply_journal(&fixture.config.journal, &journal), Err(crate::restore::RestorePersistenceError::Lock(crate::persistence::JournalLockError::Io(error))) if error.kind() == std::io::ErrorKind::NotFound);
+    assert!(!fixture.root.exists());
+    let mut executor = ScriptedExecutor::new([]);
+    let response =
+        restore_run_execute_with_executor(&config, &mut executor).expect("replay after retention");
+    assert!(response.complete);
+    assert!(executor.commands.is_empty());
+    fs::remove_dir_all(external).expect("clean external journal");
+}
+
 #[cfg(unix)]
 const STAGING_CHILD_ROOT_ENV: &str = "CANIC_TEST_RESTORE_STAGING_ROOT";
 #[cfg(unix)]
@@ -477,6 +565,14 @@ fn prove_restore_terminal_publication(
         &fs::read(&fixture.config.journal).expect("read interrupted terminal journal"),
     )
     .expect("decode interrupted terminal journal");
+    let layout = crate::persistence::BackupLayout::new(fixture.root.clone());
+    assert!(
+        layout
+            .lock_lifetime()
+            .expect("lock interrupted layout")
+            .has_restore_references()
+            .expect("terminal write has not released reference")
+    );
     assert_restore_terminal_pair(
         &interrupted,
         target_sequence,
@@ -502,6 +598,13 @@ fn prove_restore_terminal_publication(
 
     assert!(response.complete);
     assert_restore_terminal_pair(&recovered, target_sequence, true);
+    assert!(
+        !layout
+            .lock_lifetime()
+            .expect("lock replayed layout")
+            .has_restore_references()
+            .expect("terminal replay releases reference")
+    );
     assert_eq!(recovered.operation_receipts.len(), receipt_count + 1);
     if barrier == "after-directory-sync" {
         assert!(executor.commands.is_empty());
@@ -1890,6 +1993,15 @@ mod command_in_flight {
             serde_json::from_slice(&pending_bytes).expect("decode owner-dead restore journal");
         assert_restore_terminal_pair(&pending, target_sequence, false);
         assert!(!effect_marker(&handshake_root).exists());
+
+        let layout = crate::persistence::BackupLayout::new(fixture.root.clone());
+        assert!(
+            layout
+                .lock_lifetime()
+                .expect("lock owner-dead layout")
+                .has_restore_references()
+                .expect("orphan command retains artifacts")
+        );
 
         fs::write(
             direct_release_marker(&handshake_root),

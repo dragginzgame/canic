@@ -62,7 +62,7 @@ fn complete_pages_bind_one_store_and_every_asset() {
     first.entries.pop();
     first.next_start_after = Some(principal(4));
     second.entries.remove(0);
-    let mut pages = Pages::new(principal(4));
+    let mut pages = Pages::new(principal(4), PoolScope::Destination);
     assert!(!pages.push(first).unwrap());
     assert!(pages.push(second).unwrap());
     assert_eq!(pages.finish().unwrap().tracked, 2);
@@ -72,7 +72,7 @@ fn complete_pages_bind_one_store_and_every_asset() {
 fn missing_or_repeated_membership_and_summary_drift_reject() {
     let mut missing = page();
     missing.entries.pop();
-    let mut pages = Pages::new(principal(4));
+    let mut pages = Pages::new(principal(4), PoolScope::Destination);
     pages.push(missing).unwrap();
     assert!(matches!(
         pages.finish(),
@@ -81,13 +81,13 @@ fn missing_or_repeated_membership_and_summary_drift_reject() {
     let mut first = page();
     first.entries.pop();
     first.next_start_after = Some(principal(4));
-    let mut pages = Pages::new(principal(4));
+    let mut pages = Pages::new(principal(4), PoolScope::Destination);
     pages.push(first.clone()).unwrap();
     assert!(matches!(
         pages.push(first.clone()),
         Err(CapacityImportJournalError::InventoryInvalid)
     ));
-    let mut pages = Pages::new(principal(4));
+    let mut pages = Pages::new(principal(4), PoolScope::Destination);
     pages.push(first).unwrap();
     let mut changed = page();
     changed.entries.remove(0);
@@ -104,9 +104,37 @@ fn pending_physical_assets_block_host_handoffs() {
     pending.entries[1].status = CanisterPoolAssetStatus::PendingReset;
     pending.pending_reset = 1;
     pending.ready = 0;
-    let mut pages = Pages::new(principal(4));
+    let mut pages = Pages::new(principal(4), PoolScope::Destination);
     assert!(matches!(
         pages.push(pending),
         Err(CapacityImportJournalError::InventoryInvalid)
     ));
+}
+
+#[test]
+fn another_roots_pending_reset_still_proves_every_owned_identity() {
+    let mut pending = page();
+    pending.entries[1].status = CanisterPoolAssetStatus::PendingReset;
+    pending.pending_reset = 1;
+    pending.ready = 0;
+    let mut pages = Pages::new(principal(4), PoolScope::OtherRoot);
+    assert!(pages.push(pending).unwrap());
+    assert_eq!(pages.finish().unwrap().tracked, 2);
+    assert!(pages.seen.contains(&principal(5)));
+}
+
+#[test]
+fn failed_assets_remain_owned_without_blocking_a_quiet_destination() {
+    for scope in [PoolScope::Destination, PoolScope::OtherRoot] {
+        let mut failed = page();
+        failed.entries[1].status = CanisterPoolAssetStatus::Failed {
+            reason: "retained reset failure".into(),
+        };
+        failed.failed = 1;
+        failed.ready = 0;
+        let mut pages = Pages::new(principal(4), scope);
+        assert!(pages.push(failed).unwrap());
+        assert_eq!(pages.finish().unwrap().tracked, 2);
+        assert!(pages.seen.contains(&principal(5)));
+    }
 }

@@ -13,7 +13,7 @@ fn claim_pending_returns_bound_when_key_is_already_bound() {
     PlacementIndexRegistryOps::clear_for_test();
 
     let pid = p(1);
-    PlacementIndexRegistryOps::bind("projects", "alpha", pid, 10).expect("initial bind");
+    PlacementIndexRegistryOps::bind("projects", "alpha", pid, [1; 32], 10).expect("initial bind");
 
     let result =
         PlacementIndexRegistryOps::claim_pending("projects", "alpha", p(9), claim_id(9), 20)
@@ -48,7 +48,7 @@ fn bind_promotes_matching_pending_provisional_child() {
         child_pid,
     )
     .expect("attach provisional child");
-    PlacementIndexRegistryOps::bind("projects", "alpha", child_pid, 20)
+    PlacementIndexRegistryOps::bind("projects", "alpha", child_pid, [1; 32], 20)
         .expect("bind should promote matching provisional child");
 
     assert_eq!(
@@ -93,7 +93,7 @@ fn bind_rejects_conflicting_provisional_child() {
     )
     .expect("attach provisional child");
 
-    PlacementIndexRegistryOps::bind("projects", "alpha", p(3), 20)
+    PlacementIndexRegistryOps::bind("projects", "alpha", p(3), [1; 32], 20)
         .expect_err("conflicting provisional child should fail");
 }
 
@@ -247,6 +247,7 @@ fn pending_claim_cannot_be_stolen_after_ttl_without_explicit_recovery() {
         "alpha",
         first_claim.claim_id,
         p(9),
+        [1; 32],
         20,
     )
     .expect("original claim owner should retain bind authority");
@@ -256,4 +257,21 @@ fn pending_claim_cannot_be_stolen_after_ttl_without_explicit_recovery() {
         PlacementIndexRegistryOps::lookup_state("projects", "alpha"),
         Some(PlacementIndexEntryState::Bound { instance_pid, .. }) if instance_pid == p(9)
     );
+}
+
+#[test]
+fn allocation_bound_index_record_survives_stable_reopen() {
+    use crate::cdk::structures::{BTreeMap, VectorMemory};
+    let memory = VectorMemory::default();
+    let mut records = BTreeMap::init(memory.clone());
+    let key = PlacementIndexKey::try_new("projects", "alpha").unwrap();
+    let value = PlacementIndexEntryRecord::Bound {
+        instance_pid: p(255),
+        bound_at: u64::MAX,
+        allocation_operation_id: [255; 32],
+    };
+    records.insert(key.clone(), value.clone());
+    drop(records);
+    let records = BTreeMap::<PlacementIndexKey, PlacementIndexEntryRecord, _>::init(memory);
+    assert_eq!(records.get(&key), Some(value));
 }

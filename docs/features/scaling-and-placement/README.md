@@ -25,13 +25,29 @@ Fleet-wide service publication. Each Fleet Subnet Root owns concrete identity
 allocation and lifecycle effects. Application Components may request admitted
 children, but they do not acquire management-canister or root authority.
 
-The active 0.101 line is still delivering this architecture. Check the current
-status before treating every designed scaling surface as complete.
+## Allocation and recovery
+
+Routing follows the allocation that owns a canister ID. Directory synchronization
+delivers that identity to the parent. Removing a child makes its index bindings
+and shard assignments unavailable; reusing the same physical ID does not restore
+those routes. Scaling counts likewise include only workers from current allocations.
+
+An existing shard key remains owned until the application explicitly releases it
+with `ShardingApi::release_partition_key`. Releasing an old allocation's key leaves
+the replacement shard's count unchanged. Index recovery can release an unavailable
+binding before the application explicitly binds or creates its replacement.
+Ordinary resolution never silently relocates an existing assignment.
+
+Late successful creation replies retain their completed allocation accounting even
+if the child was removed before local registration. They cannot overwrite a newer
+claim or recycle a replacement. Root also checks the expected allocation on every
+new recycle request. An exact completed removal can replay after a later allocation
+reuses that ID; it returns the retained completion without affecting the replacement.
 
 ## Start Here
 
 - [Component configuration](../../../CONFIG.md#component-specs)
 - [Composable Component deployment design](../../design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md)
-- [0.101 implementation status](../../design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/status.md)
+- [Current implementation status](../../design/0.110-fleet-runtime-contraction/status.md)
 - [Fleet ensure bounds](../operations/fleet-ensure.md)
 - [Academic Fleet walkthrough](../../getting-started/local-academic-fleet.md)

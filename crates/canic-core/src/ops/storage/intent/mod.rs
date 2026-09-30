@@ -23,7 +23,7 @@ use crate::{
             SettleReceiptBackedIntentResult, TERMINAL_EVIDENCE_SCHEMA_VERSION, TerminalEvidence,
             is_canic_owned_intent_resource_key, receipt_terminal_eligible_at,
         },
-        placement::allocation::is_placement_resource_key,
+        placement::allocation::{is_index_placement_resource_key, is_placement_resource_key},
         replay::OperationId,
     },
     storage::stable::intent::{
@@ -406,6 +406,49 @@ impl IntentStoreOps {
         ttl_secs: Option<u64>,
         now_secs: u64,
     ) -> Result<IntentRecord, InternalError> {
+        Self::reserve_with_retention(
+            intent_id,
+            resource_key,
+            quantity,
+            created_at,
+            ttl_secs,
+            now_secs,
+            None,
+        )
+    }
+
+    /// Reserve a quota counter whose settled aggregate can leave storage after its window.
+    /// Pending intents and terminal replay records retain their independent lifetimes.
+    pub(crate) fn try_reserve_quota(
+        intent_id: IntentId,
+        resource_key: IntentResourceKey,
+        now_secs: u64,
+        ttl_secs: u64,
+        retain_until_secs: u64,
+    ) -> Result<IntentRecord, InternalError> {
+        if retain_until_secs <= now_secs {
+            return Err(InternalError::invalid_input());
+        }
+        Self::reserve_with_retention(
+            intent_id,
+            resource_key,
+            1,
+            now_secs,
+            Some(ttl_secs),
+            now_secs,
+            Some(retain_until_secs),
+        )
+    }
+
+    fn reserve_with_retention(
+        intent_id: IntentId,
+        resource_key: IntentResourceKey,
+        quantity: u64,
+        created_at: u64,
+        ttl_secs: Option<u64>,
+        now_secs: u64,
+        retain_until_secs: Option<u64>,
+    ) -> Result<IntentRecord, InternalError> {
         let meta = ensure_schema()?;
         let expiry_key = expiry_key(intent_id, created_at, ttl_secs)?;
 
@@ -433,6 +476,12 @@ impl IntentStoreOps {
             .into());
         }
 
+        if IntentStore::get_totals(&resource_key)
+            .is_some_and(|totals| totals.retain_until_secs != retain_until_secs)
+        {
+            return Err(IntentStoreOpsError::Conflict(intent_id).into());
+        }
+        reclaim_expired_resource_totals(now_secs)?;
         ensure_resource_total_admission(&resource_key)?;
 
         let totals = IntentStore::get_totals(&resource_key).unwrap_or_default();
@@ -440,6 +489,7 @@ impl IntentStoreOps {
             reserved_qty: checked_add(totals.reserved_qty, quantity, "reserved_qty")?,
             committed_qty: totals.committed_qty,
             pending_count: checked_add(totals.pending_count, 1, "pending_count")?,
+            retain_until_secs,
         };
 
         let mut meta = meta;
@@ -511,6 +561,7 @@ impl IntentStoreOps {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty: checked_add(totals.committed_qty, record.quantity, "committed_qty")?,
             pending_count: checked_sub(totals.pending_count, 1, "pending_count")?,
+            retain_until_secs: totals.retain_until_secs,
         };
 
         let mut meta = meta;
@@ -553,6 +604,7 @@ impl IntentStoreOps {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty: totals.committed_qty,
             pending_count: checked_sub(totals.pending_count, 1, "pending_count")?,
+            retain_until_secs: totals.retain_until_secs,
         };
 
         let mut meta = meta;
@@ -842,6 +894,7 @@ fn settle_pair_at(
             )?,
             committed_qty,
             pending_count: checked_sub(current_totals.pending_count, 1, "pending_count")?,
+            retain_until_secs: current_totals.retain_until_secs,
         };
         totals_by_resource.insert(record.resource_key.clone(), new_totals);
 
@@ -1111,6 +1164,7 @@ impl ReceiptBackedIntentOps {
             reserved_qty: checked_sub(totals.reserved_qty, record.quantity, "reserved_qty")?,
             committed_qty,
             pending_count: checked_sub(totals.pending_count, 1, "pending_count")?,
+            retain_until_secs: totals.retain_until_secs,
         };
         let revision = checked_add(record.revision, 1, "revision")?;
         let state = match input.evidence.decision {
@@ -1207,7 +1261,7 @@ impl ReceiptBackedIntentOps {
         Ok(())
     }
 
-    /// Delete one exact terminal record without changing its already-settled totals.
+    /// Delete one exact terminal record and release disposable index capacity totals.
     pub(crate) fn remove_terminal(
         input: &RemoveTerminalReceiptBackedIntentInput,
     ) -> Result<RemoveTerminalReceiptBackedIntentResult, InternalError> {
@@ -1256,6 +1310,16 @@ impl ReceiptBackedIntentOps {
                 input.operation_id,
             )
             .into());
+        }
+
+        // The index registry owns completed key membership. Unlike allocation sequences,
+        // these per-key totals have no authority after settlement and acknowledgement.
+        if is_index_placement_resource_key(&record.resource_key)
+            && let Some(totals) = IntentStore::get_totals(&record.resource_key)
+            && totals.pending_count == 0
+            && totals.reserved_qty == 0
+        {
+            IntentStore::remove_totals(&record.resource_key);
         }
 
         Ok(RemoveTerminalReceiptBackedIntentResult::Removed)
@@ -1559,6 +1623,7 @@ fn create_receipt(
     now_ns: u64,
     record_limit: u64,
 ) -> Result<BeginReceiptBackedIntentResult, InternalError> {
+    reclaim_expired_resource_totals(now_ns / NANOS_PER_SECOND)?;
     let resource_total_records = validate_resource_total_record_limit()?;
     let record_count = ReceiptBackedIntentStore::len();
     if record_count >= record_limit {
@@ -1590,6 +1655,7 @@ fn create_receipt(
         reserved_qty: checked_add(totals.reserved_qty, input.quantity, "reserved_qty")?,
         committed_qty: totals.committed_qty,
         pending_count: checked_add(totals.pending_count, 1, "pending_count")?,
+        retain_until_secs: totals.retain_until_secs,
     };
     let revision = 1;
     let record = ReceiptBackedIntentRecord {
@@ -2021,7 +2087,7 @@ fn remove_pending_indexes(record: &IntentRecord) {
 }
 
 fn persist_resource_totals(resource_key: IntentResourceKey, totals: IntentResourceTotalsRecord) {
-    if totals == IntentResourceTotalsRecord::default() {
+    if totals.reserved_qty == 0 && totals.committed_qty == 0 && totals.pending_count == 0 {
         let removed = IntentStore::remove_totals(&resource_key);
         assert!(
             removed.is_some(),
@@ -2030,6 +2096,26 @@ fn persist_resource_totals(resource_key: IntentResourceKey, totals: IntentResour
     } else {
         IntentStore::set_totals(resource_key, totals);
     }
+}
+
+// The bounded aggregate map is scanned only when admission needs space. Permanent
+// totals and any outstanding reservation survive even when a quota window is over.
+fn reclaim_expired_resource_totals(now_secs: u64) -> Result<(), InternalError> {
+    if validate_resource_total_record_limit()? < INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+        return Ok(());
+    }
+    let limit = usize::try_from(INTENT_RESOURCE_TOTAL_RECORD_LIMIT)
+        .map_err(|_| InternalError::invariant())?;
+    for entry in IntentStore::totals_entries(limit) {
+        let totals = entry.record;
+        let expired = totals
+            .retain_until_secs
+            .is_some_and(|deadline| deadline <= now_secs);
+        if expired && totals.pending_count == 0 && totals.reserved_qty == 0 {
+            IntentStore::remove_totals(&entry.resource_key);
+        }
+    }
+    Ok(())
 }
 
 fn expired_err(id: IntentId, r: &IntentRecord) -> IntentStoreOpsError {

@@ -430,6 +430,23 @@ fn generated_desired_output_requires_exact_digest_for_replacement() {
     fs::remove_dir_all(root).expect("remove test directory");
 }
 
+#[cfg(unix)]
+#[test]
+fn generated_desired_output_accepts_linked_parent_with_exact_replacement() {
+    let root = temp_dir("canic-fleet-generated-linked-output");
+    let real = root.join("real");
+    fs::create_dir_all(&real).unwrap();
+    let linked = root.join("linked");
+    std::os::unix::fs::symlink(&real, &linked).unwrap();
+    for relative in ["desired.toml", "nested/desired.toml"] {
+        let path = linked.join(relative);
+        publish_generated(&path, b"first", None).unwrap();
+        publish_generated(&path, b"replacement", Some(&sha256_hex(b"first"))).unwrap();
+        assert_eq!(fs::read(real.join(relative)).unwrap(), b"replacement");
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn generate_replace_requires_canonical_digest() {
     let release = "01".repeat(32);

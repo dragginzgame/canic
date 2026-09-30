@@ -223,3 +223,45 @@ pub(in crate::fleet_ensure) fn completed_fleet(
     Ok(read(&paths.plan)?
         .is_some_and(|plan| plan.get("scope").and_then(Value::as_str) == Some("full")))
 }
+
+/// Route only the current reset's setup or its retained convergence operation.
+/// This envelope check selects an owner; that owner still validates executable authority.
+pub(in crate::fleet_ensure) fn clean_reinstall_current(
+    paths: &EnsurePaths,
+) -> Result<bool, EnsureStateError> {
+    if read(&paths.plan.with_file_name("clean-reinstall.json"))?.is_none() {
+        return Ok(false);
+    }
+    let Some(plan) = read(&paths.plan)? else {
+        return Ok(true);
+    };
+    if text(&plan, "scope")? == "infrastructure_bootstrap" {
+        return Ok(true);
+    }
+    let archive = paths
+        .plan
+        .with_file_name("infrastructure-bootstrap-completed");
+    let mut entries = match std::fs::read_dir(&archive) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(_) => return Err(EnsureStateError::InvalidTerminalSource),
+    };
+    let invalid = || EnsureStateError::InvalidTerminalSource;
+    let entry = entries.next().ok_or_else(invalid)?.map_err(|_| invalid())?;
+    if entries.next().is_some() || !entry.file_type().map_err(|_| invalid())?.is_dir() {
+        return Err(invalid());
+    }
+    let setup = read(&entry.path().join("plan.json"))?.ok_or_else(invalid)?;
+    let setup_digest = text(&setup, "plan_sha256")?;
+    let setup_operation = text(&setup, "operation_id")?;
+    if !is_sha256(setup_digest)
+        || !is_sha256(setup_operation)
+        || entry.file_name() != setup_digest
+        || text(&setup, "scope")? != "infrastructure_bootstrap"
+        || text(&setup, "environment")? != text(&plan, "environment")?
+        || text(&setup, "fleet")? != text(&plan, "fleet")?
+    {
+        return Err(invalid());
+    }
+    Ok(setup_operation == text(&plan, "operation_id")?)
+}

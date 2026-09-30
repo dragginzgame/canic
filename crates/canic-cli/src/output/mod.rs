@@ -10,11 +10,60 @@ mod tests;
 use std::{
     fs,
     io::{self, Write},
-    path::Path,
+    path::{Path, PathBuf},
 };
 
 use canic_host::durable_io::write_bytes;
 use serde::{Serialize, de::DeserializeOwned};
+
+/// Resolve the selected output's existing parent once, including macOS `/tmp`.
+/// Missing directories remain for durable publication; the final file cannot be a link.
+pub fn resolve_operator_path(path: &Path) -> io::Result<PathBuf> {
+    let file_name = path.file_name().ok_or_else(|| {
+        io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "output target has no file name",
+        )
+    })?;
+    let parent_of = |path: &Path| {
+        path.parent()
+            .filter(|parent| !parent.as_os_str().is_empty())
+            .unwrap_or_else(|| Path::new("."))
+            .to_path_buf()
+    };
+    let mut parent = parent_of(path);
+    let mut missing = Vec::new();
+    let mut resolved = loop {
+        match fs::canonicalize(&parent) {
+            Ok(directory) if directory.is_dir() => break directory,
+            Ok(_) => return Err(io::Error::from(io::ErrorKind::NotADirectory)),
+            Err(error) if error.kind() == io::ErrorKind::NotFound => {
+                let Some(name) = parent.file_name() else {
+                    return Err(error);
+                };
+                missing.push(name.to_owned());
+                parent = parent_of(&parent);
+            }
+            Err(error) => return Err(error),
+        }
+    };
+    for directory in missing.into_iter().rev() {
+        resolved.push(directory);
+    }
+    resolved.push(file_name);
+    match fs::symlink_metadata(&resolved) {
+        Ok(metadata) if !metadata.is_file() => {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "output target is not a regular file",
+            ));
+        }
+        Ok(_) => {}
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {}
+        Err(error) => return Err(error),
+    }
+    Ok(resolved)
+}
 
 /// Write a pretty JSON payload to a requested file or stdout.
 pub fn write_pretty_json<T, E>(out: Option<&Path>, value: &T) -> Result<(), E>
@@ -24,7 +73,7 @@ where
 {
     if let Some(path) = out {
         let data = serde_json::to_vec_pretty(value)?;
-        write_bytes(path, &data)?;
+        write_bytes(&resolve_operator_path(path)?, &data)?;
         return Ok(());
     }
 
@@ -42,7 +91,7 @@ where
     E: From<io::Error> + From<serde_json::Error>,
 {
     let data = serde_json::to_vec_pretty(value)?;
-    write_bytes(path, &data)?;
+    write_bytes(&resolve_operator_path(path)?, &data)?;
     Ok(())
 }
 
@@ -52,7 +101,7 @@ where
     E: From<io::Error>,
 {
     if let Some(path) = out {
-        write_bytes(path, text.as_bytes())?;
+        write_bytes(&resolve_operator_path(path)?, text.as_bytes())?;
     } else {
         println!("{text}");
     }

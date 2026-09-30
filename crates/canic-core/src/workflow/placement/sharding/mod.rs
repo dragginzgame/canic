@@ -10,6 +10,8 @@ mod bootstrap;
 pub mod query;
 mod registry;
 mod release;
+#[cfg(test)]
+mod tests;
 
 use crate::{
     InternalError, config::schema::ShardPool,

@@ -5,11 +5,13 @@
 //! Boundary: storage ops facade over child cache records.
 
 use crate::{
-    dto::canister::CanisterInfo,
+    dto::{canister::CanisterInfo, component_registry::ComponentRuntimeDirectChild},
     ops::{prelude::*, storage::canister::record_to_info},
     storage::{
-        canister::{CanisterEntryRecord, CanisterRecord},
-        stable::children::{CanisterChildren, CanisterChildrenData},
+        canister::CanisterRecord,
+        stable::children::{
+            CanisterChildEntryRecord, CanisterChildRecord, CanisterChildren, CanisterChildrenData,
+        },
     },
 };
 
@@ -30,7 +32,18 @@ impl CanisterChildrenOps {
 
     #[must_use]
     pub fn get(pid: Principal) -> Option<CanisterRecord> {
-        CanisterChildren::get(pid)
+        CanisterChildren::get(pid).map(|child| child.canister)
+    }
+
+    /// Return the exact Component allocation currently owning one direct child.
+    #[must_use]
+    pub fn allocation_operation_id(pid: Principal) -> Option<[u8; 32]> {
+        CanisterChildren::get(pid)?.allocation_operation_id
+    }
+
+    #[must_use]
+    pub fn matches_allocation(pid: Principal, operation_id: [u8; 32]) -> bool {
+        Self::allocation_operation_id(pid) == Some(operation_id)
     }
 
     #[must_use]
@@ -47,12 +60,12 @@ impl CanisterChildrenOps {
     pub fn infos() -> Vec<CanisterInfo> {
         Self::records()
             .into_iter()
-            .map(|entry| record_to_info(entry.pid, entry.record))
+            .map(|entry| record_to_info(entry.pid, entry.record.canister))
             .collect()
     }
 
     #[must_use]
-    fn records() -> Vec<CanisterEntryRecord> {
+    fn records() -> Vec<CanisterChildEntryRecord> {
         Self::data().entries
     }
 
@@ -70,7 +83,7 @@ impl CanisterChildrenOps {
         CanisterChildren::export()
     }
 
-    pub(crate) fn import_direct_children(
+    pub(crate) fn import_topology_children(
         parent_pid: Principal,
         children: Vec<(Principal, CanisterRole)>,
     ) {
@@ -79,18 +92,69 @@ impl CanisterChildrenOps {
         let data = CanisterChildrenData {
             entries: children
                 .into_iter()
-                .map(|(pid, role)| CanisterEntryRecord {
+                .map(|(pid, role)| CanisterChildEntryRecord {
                     pid,
-                    record: CanisterRecord {
-                        role,
-                        parent_pid: Some(parent_pid),
-                        module_hash: None,
-                        created_at: 0,
+                    record: CanisterChildRecord {
+                        allocation_operation_id: None,
+                        canister: CanisterRecord {
+                            role,
+                            parent_pid: Some(parent_pid),
+                            module_hash: None,
+                            created_at: 0,
+                        },
                     },
                 })
                 .collect(),
         };
 
         CanisterChildren::import(data);
+    }
+
+    /// Replace the local cache with one validated Root Directory projection.
+    pub(crate) fn import_direct_children(
+        parent_pid: Principal,
+        children: Vec<ComponentRuntimeDirectChild>,
+    ) {
+        CanisterChildren::import(CanisterChildrenData {
+            entries: children
+                .into_iter()
+                .map(|child| CanisterChildEntryRecord {
+                    pid: child.canister_id,
+                    record: CanisterChildRecord {
+                        allocation_operation_id: Some(child.allocation_operation_id),
+                        canister: CanisterRecord {
+                            role: child.role,
+                            parent_pid: Some(parent_pid),
+                            module_hash: None,
+                            created_at: 0,
+                        },
+                    },
+                })
+                .collect(),
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::test::{
+        seams::{lock, p},
+        support::direct_child,
+    };
+
+    #[test]
+    fn canonical_child_snapshot_retains_allocation_identity() {
+        let _guard = lock();
+        let pid = p(3);
+        CanisterChildrenOps::import_direct_children(
+            p(2),
+            vec![direct_child(pid, CanisterRole::new("child"), [255; 32])],
+        );
+        let snapshot = CanisterChildrenOps::data();
+        CanisterChildrenOps::import_direct_children(p(2), vec![]);
+        CanisterChildren::import(snapshot);
+        assert!(CanisterChildrenOps::matches_allocation(pid, [255; 32]));
+        assert!(!CanisterChildrenOps::matches_allocation(pid, [1; 32]));
     }
 }

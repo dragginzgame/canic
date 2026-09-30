@@ -720,7 +720,12 @@ where
         attach_terminal_inventory_cycles(operation_id, &state, platform, &mut observation)?;
     }
     let mut protocol_actions = platform
-        .protocol_actions(&operation_id, &state)
+        .protocol_actions(
+            terminal_inventory_operation_id
+                .as_deref()
+                .unwrap_or(&operation_id),
+            &state,
+        )
         .map_err(EnsureWorkflowError::Platform)?;
     let mut retained_observations = 0_u32;
     let mut plan = loop {
@@ -760,7 +765,12 @@ where
                     )?;
                 }
                 protocol_actions = platform
-                    .protocol_actions(&operation_id, &state)
+                    .protocol_actions(
+                        terminal_inventory_operation_id
+                            .as_deref()
+                            .unwrap_or(&operation_id),
+                        &state,
+                    )
                     .map_err(EnsureWorkflowError::Platform)?;
             }
             Err(error) => return Err(error.into()),
@@ -2095,7 +2105,7 @@ where
                     let observation_started = Instant::now();
                     let converged = loop {
                         let protocol_actions = platform
-                            .protocol_actions(&retained_plan.operation_id, &terminal_state)
+                            .protocol_actions(protocol_operation(&retained_plan), &terminal_state)
                             .map_err(EnsureWorkflowError::Platform)?;
                         match compile_plan(
                             operation_desired,
@@ -2264,7 +2274,7 @@ where
         break;
     }
     let terminal_inventory_operation_id =
-        completed_inventory_operation(&retained_plan, &journal, &terminal_state)?;
+        completed_inventory_operation(&retained_plan, &terminal_state)?;
     let terminal_inventory = platform
         .terminal_inventory(terminal_inventory_operation_id, &terminal_state)
         .map_err(EnsureWorkflowError::Platform)?;
@@ -2804,7 +2814,7 @@ where
     let mut retained_observations = 0_u32;
     let mut current = loop {
         let protocol_actions = platform
-            .protocol_actions(&retained_plan.operation_id, state)
+            .protocol_actions(protocol_operation(retained_plan), state)
             .map_err(EnsureWorkflowError::Platform)?;
         match compile_plan(
             desired,
@@ -3061,18 +3071,22 @@ fn prior_fleet_protocol_effect_started(
         })
 }
 
+// A later Host operation observes the completed Component owner's exact receipts.
+// Changing Host retry settings must not allocate a new infrastructure protocol identity.
+fn protocol_operation(plan: &FleetEnsurePlan) -> &str {
+    plan.terminal_inventory_operation_id
+        .as_deref()
+        .unwrap_or(&plan.operation_id)
+}
+
 fn completed_inventory_operation<'a, E>(
     plan: &'a FleetEnsurePlan,
-    journal: &FleetEnsureJournalRecord,
     state: &FleetEnsureStateRecord,
 ) -> Result<&'a str, EnsureWorkflowError<E>>
 where
     E: std::error::Error + 'static,
 {
-    if plan.protocol_actions.is_empty()
-        && journal.successor_phases.is_empty()
-        && state.active_registry.is_some()
-    {
+    if plan.terminal_inventory_operation_id.is_some() {
         reviewed_terminal_inventory_operation(plan, state)?
             .ok_or(EnsureWorkflowError::PlanIntegrity)
     } else {

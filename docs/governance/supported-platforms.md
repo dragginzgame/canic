@@ -9,12 +9,12 @@ not create a support claim.
 | Host environment | Native target | Canister target | Status | Evidence owner |
 | --- | --- | --- | --- | --- |
 | Ubuntu 24.04, x86_64 | `x86_64-unknown-linux-gnu` | `wasm32-unknown-unknown` | Release-supported | Native lanes and the explicit serial PocketIC/Wasm lane in `.github/workflows/ci.yml`; RC/final gates in `docs/operations/release-validation-matrix.md`. |
-| macOS, Apple Silicon | `aarch64-apple-darwin` | `wasm32-unknown-unknown` | Release-supported; qualification outstanding | Host/CLI macOS CI coverage in `.github/workflows/ci.yml` or retained maintainer-run evidence on this target; coverage must be added. |
-| macOS, Intel | `x86_64-apple-darwin` | `wasm32-unknown-unknown` | Release-supported; qualification outstanding | Host/CLI macOS CI coverage in `.github/workflows/ci.yml` or retained maintainer-run evidence on this target; coverage must be added. |
+| macOS, Apple Silicon | `aarch64-apple-darwin` | `wasm32-unknown-unknown` | Release-supported; qualification outstanding | `macos-host` on `macos-15` in `.github/workflows/ci.yml`; native results, tool installation and artifact qualification outstanding. |
+| macOS, Intel | `x86_64-apple-darwin` | `wasm32-unknown-unknown` | Release-supported; qualification outstanding | `macos-host` on `macos-15-intel` in `.github/workflows/ci.yml`; native results, tool installation and artifact qualification outstanding. |
 
 The supported cells cover the Canic CLI, host/build helpers, native checks and
 tests, native release packages, and IC canister Wasm production. Existing CI
-selects the fixed `ubuntu-24.04` runner image. The Rust toolchain versions,
+selects fixed `ubuntu-24.04`, `macos-15` and `macos-15-intel` runner images. The Rust toolchain versions,
 downloaded tool versions, and archive digests are fixed by the workflow and
 `tool-versions.env`.
 The MSRV, ordinary-check and release-build lanes are native-target evidence.
@@ -36,11 +36,18 @@ native types; path handling must accommodate normal macOS paths while preserving
 symlink and authority protections. Linux results and cross-compilation alone do
 not prove these native filesystem behaviors.
 
-The current `durable_io` file-mode compilation failure and macOS filesystem
-coverage identified in the code review remain outstanding qualification work.
-The existing governed PocketIC runner and installer remain Linux x86_64 tooling;
-their platform restriction does not exclude macOS Host/CLI support. Adding a
-macOS PocketIC runner requires its own installer and execution evidence.
+Durable file creation uses the portable Rustix mode type. The `macos-host`
+matrix installs and runs the pinned ICP CLI, ic-wasm, Binaryen and PocketIC tools,
+checks Host/CLI compilation, native durability, backup persistence and restore
+recovery, and builds a representative application canister through the CLI. It
+also checks the Control Plane's Wasm target. Its first successful
+native results remain outstanding; the Wasm check does not qualify a linked
+release artifact or its installation tools. Runner architectures follow
+[GitHub's runner reference](https://docs.github.com/en/actions/reference/runners/github-hosted-runners).
+The PocketIC installer selects pinned binaries for all three declared hosts.
+The complete serial PocketIC lane is qualified on Linux; native macOS execution
+of that lane still needs evidence. Linux-only process resource observations are
+reported as unavailable on hosts without `/proc`.
 
 ## Install-Capable But Not Release-Supported
 
@@ -56,7 +63,8 @@ does not widen this matrix.
 ## Explicit Exclusions
 
 - Windows is not release-supported and the repository installers reject it.
-- PocketIC's repository installer supports Linux x86_64 only.
+- PocketIC's repository installer supports the three declared native hosts;
+  upstream Linux ARM assets do not extend this release matrix.
 - Native targets outside the three declared matrix entries are not release
   targets.
 - Canister targets other than `wasm32-unknown-unknown`, including WASI

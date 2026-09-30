@@ -3,7 +3,7 @@
 //! Workflow must retain each changed journal under the shared operation lock before effects.
 //! These helpers never dispatch an IC request or infer success from an unavailable reply.
 
-pub mod rejection;
+pub mod retirement;
 mod store;
 #[cfg(test)]
 mod tests;
@@ -74,6 +74,8 @@ pub enum CapacityImportJournalError {
     )]
     ObservationUnavailable { canister: Principal },
     #[error(transparent)]
+    Inspection(Box<crate::canister_protocol::CanisterProtocolError>),
+    #[error(transparent)]
     Prerequisite(
         #[from] crate::fleet_ensure::ops::capacity_import::CapacityImportPrerequisiteError,
     ),
@@ -123,10 +125,6 @@ pub enum CapacityImportJournalError {
     Unresolved,
 
     #[error(
-        "the original handoff reply was pruned; retain its intent, since management state alone cannot prove that request completed"
-    )]
-    HandoffPruned,
-    #[error(
         "capacity import exhausted its reviewed {step} attempts; preserve the original journal"
     )]
     BudgetExhausted { step: String },
@@ -146,6 +144,12 @@ pub enum CapacityImportJournalError {
     Encoding(#[from] serde_json::Error),
 }
 
+impl From<crate::canister_protocol::CanisterProtocolError> for CapacityImportJournalError {
+    fn from(error: crate::canister_protocol::CanisterProtocolError) -> Self {
+        Self::Inspection(Box::new(error))
+    }
+}
+
 /// Construct the initial journal without approval or effects.
 pub fn reviewed(
     plan: CapacityImportPlanRecord,
@@ -157,7 +161,7 @@ pub fn reviewed(
             .iter()
             .map(|source| CapacityImportHandoffRecord {
                 canister_id: source.binding.canister_id,
-                rejections: Vec::new(),
+                retirements: Vec::new(),
                 effect: None,
                 request: None,
                 before_reserved_cycles: None,
@@ -286,6 +290,24 @@ pub fn observe_handoff(
 ) -> Result<CapacityImportJournalRecord, CapacityImportJournalError> {
     validate(journal)?;
     let index = source_index(journal, observed.binding.canister_id)?;
+    let source = &journal.plan.sources[index];
+    let request = journal.handoffs[index]
+        .request
+        .as_ref()
+        .ok_or(CapacityImportJournalError::Integrity)?;
+    if !completion.matches(&journal.plan, source.binding.canister_id, request) {
+        return Err(CapacityImportJournalError::Unresolved);
+    }
+    apply_observed_handoff(journal, observed)
+}
+
+// Called only after exact certified reply or retained terminal ingress evidence.
+fn apply_observed_handoff(
+    journal: &CapacityImportJournalRecord,
+    observed: &CapacityImportSourceView,
+) -> Result<CapacityImportJournalRecord, CapacityImportJournalError> {
+    validate(journal)?;
+    let index = source_index(journal, observed.binding.canister_id)?;
     let effect = journal.handoffs[index]
         .effect
         .as_ref()
@@ -297,13 +319,6 @@ pub fn observe_handoff(
         return Err(CapacityImportJournalError::Integrity);
     }
     let source = &journal.plan.sources[index];
-    let request = journal.handoffs[index]
-        .request
-        .as_ref()
-        .ok_or(CapacityImportJournalError::Integrity)?;
-    if !completion.matches(&journal.plan, source.binding.canister_id, request) {
-        return Err(CapacityImportJournalError::Unresolved);
-    }
     let mut expected = source.binding.clone();
     expected
         .controllers
@@ -337,6 +352,7 @@ pub fn observe_handoff(
     // The receipt records the observed version, not a synthetic IC request ID.
     effect.receipt = Some(expected.canister_version.to_string());
     updated.handoffs[index].after_reserved_cycles = Some(observed.reserved_cycles);
+    validate(&updated)?;
     Ok(updated)
 }
 
@@ -354,12 +370,12 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
     }
     for (index, handoff) in journal.handoffs.iter().enumerate() {
         let source = &journal.plan.sources[index];
-        rejection::validate(&journal.plan, handoff)?;
+        retirement::validate(&journal.plan, handoff)?;
         if handoff.canister_id != source.binding.canister_id {
             return Err(CapacityImportJournalError::Integrity);
         }
         let Some(effect) = &handoff.effect else {
-            if !handoff.rejections.is_empty()
+            if !handoff.retirements.is_empty()
                 || handoff.request.is_some()
                 || handoff.before_reserved_cycles.is_some()
                 || handoff.after_reserved_cycles.is_some()
@@ -461,7 +477,7 @@ pub fn custody_ready(journal: &CapacityImportJournalRecord, canister: Principal)
     } else {
         handoff.effect.is_none()
             && handoff.request.is_none()
-            && handoff.rejections.is_empty()
+            && handoff.retirements.is_empty()
             && handoff.before_reserved_cycles.is_none()
             && handoff.after_reserved_cycles.is_none()
     }

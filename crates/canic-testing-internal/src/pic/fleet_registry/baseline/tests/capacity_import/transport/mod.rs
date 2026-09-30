@@ -1,6 +1,7 @@
 //! Qualify signed host handoff and the protected Root client on the real HTTP gateway.
 
 mod admission;
+mod expiry;
 mod rejection;
 
 use super::*;
@@ -126,12 +127,20 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
     )
     .unwrap();
     store.save(&approved).unwrap();
-    let reserved = runtime.block_on(transport.reserve_root(&approved)).unwrap();
+    let reserved = runtime
+        .block_on(async {
+            transport
+                .prepare_reserve_root(&approved)
+                .await?
+                .submit()
+                .await
+        })
+        .unwrap();
     let reserved =
         journal::reserve(&approved, reservation_evidence(&plan, &reserved).unwrap()).unwrap();
     store.save(&reserved).unwrap();
     assert!(matches!(
-        runtime.block_on(transport.advance_root(&reserved, source)),
+        runtime.block_on(transport.prepare_advance_root(&reserved, source)),
         Err(CapacityImportJournalError::Unresolved)
     ));
     let request = transport.prepare(&plan, source).unwrap();
@@ -140,7 +149,15 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
     let issued = journal::issue_handoff(&intent, source).unwrap();
     store.save(&issued).unwrap();
     // Discard the submission response and reopen the durable owner with a new Agent.
-    runtime.block_on(transport.submit(&issued, source)).unwrap();
+    runtime
+        .block_on(async {
+            transport
+                .prepare_submission(&issued, source)
+                .await?
+                .submit(&issued)
+                .await
+        })
+        .unwrap();
     drop(transport);
     drop(store);
     let store = CapacityImportJournalStore::open(&paths).unwrap();
@@ -150,7 +167,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
         for _ in 0..40 {
             match transport.completion(&issued, source).await {
                 Ok(HandoffOutcome::Completed(completion)) => return completion,
-                Ok(HandoffOutcome::Rejected(_)) => panic!("unexpected rejected handoff"),
+                Ok(HandoffOutcome::Retired(_)) => panic!("unexpected rejected handoff"),
                 Err(CapacityImportJournalError::Unresolved) => {
                     tokio::time::sleep(Duration::from_millis(100)).await;
                 }
@@ -165,7 +182,13 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
     store.save(&handed_off).unwrap();
     for _ in 0..2 {
         runtime
-            .block_on(transport.advance_root(&handed_off, source))
+            .block_on(async {
+                transport
+                    .prepare_advance_root(&handed_off, source)
+                    .await?
+                    .submit()
+                    .await
+            })
             .unwrap();
         // Root progress stays readable after direct source authority has been removed.
         let reader = CapacityImportTransport::from_icp(&icp).unwrap();
@@ -200,7 +223,13 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
     );
     assert_eq!(
         runtime
-            .block_on(transport.advance_root(&handed_off, source))
+            .block_on(async {
+                transport
+                    .prepare_advance_root(&handed_off, source)
+                    .await?
+                    .submit()
+                    .await
+            })
             .unwrap(),
         settled
     );
@@ -271,6 +300,7 @@ fn fresh_handoff(
     .unwrap();
     let digest = staged.operation.as_ref().unwrap().review.review_sha256;
     store.stage_review(staged).unwrap();
+    let expired_request = expiry::retain_expired_intent(store, icp, runtime, transport);
     let mut reader = CapacityImportLiveObserver::from_icp(icp).unwrap();
     let completed = runtime
         .block_on(canic_host::fleet_ensure::workflow::capacity_import::apply(
@@ -282,6 +312,17 @@ fn fresh_handoff(
         ))
         .unwrap();
     assert!(publication::completed(&completed));
+    let handoff = &completed.handoffs[0];
+    assert_eq!(handoff.retirements.len(), 1);
+    assert_eq!(handoff.retirements[0].request.request_id, expired_request);
+    assert_ne!(
+        handoff.request.as_ref().unwrap().request_id,
+        expired_request
+    );
+    assert_eq!(
+        completed.operation.as_ref().unwrap().submissions["0:handoff"],
+        2
+    );
     let status = pic.canister_status(source, Some(root)).unwrap();
     assert!(status.module_hash.is_none());
     assert_eq!(status.version, stopped.version + 3);

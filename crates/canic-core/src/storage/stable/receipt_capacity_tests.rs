@@ -40,7 +40,6 @@ const RECORDS: u64 = 1_000;
 fn intent_resource_totals_bound_covers_every_u64_value() {
     let record = max_totals();
     let encoded = record.to_bytes();
-    assert_eq!(encoded.len(), 69);
     assert_eq!(
         encoded.len(),
         IntentResourceTotalsRecord::STORABLE_MAX_SIZE as usize
@@ -180,6 +179,7 @@ fn max_totals() -> IntentResourceTotalsRecord {
         reserved_qty: u64::MAX,
         committed_qty: u64::MAX,
         pending_count: u64::MAX,
+        retain_until_secs: Some(u64::MAX),
     }
 }
 

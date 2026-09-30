@@ -9,7 +9,8 @@ use crate::{
     journal::DownloadJournal,
     manifest::DeploymentBackupManifest,
     persistence::{
-        BackupExecutionIntegrityReport, BackupIntegrityReport, PersistenceError,
+        BackupExecutionGuard, BackupExecutionIntegrityReport, BackupIntegrityReport,
+        BackupLayoutGuard, JournalLock, JournalLockError, PersistenceError,
         integrity::{verify_execution_integrity, verify_layout_integrity},
         json::{create_json_durable, read_json, write_json_durable},
     },
@@ -42,6 +43,15 @@ impl BackupLayout {
         Self { root }
     }
 
+    /// Resolve an existing operator-selected root before deriving executor and artifact paths.
+    pub(crate) fn resolve_root(&self) -> Result<Self, PersistenceError> {
+        let root = self.root.canonicalize()?;
+        if !root.is_dir() {
+            return Err(std::io::Error::from(std::io::ErrorKind::NotADirectory).into());
+        }
+        Ok(Self::new(root))
+    }
+
     /// Return the root backup directory path.
     #[must_use]
     pub fn root(&self) -> &Path {
@@ -72,6 +82,22 @@ impl BackupLayout {
         self.root.join(EXECUTION_JOURNAL_FILE_NAME)
     }
 
+    /// Serialize plan and execution-journal initialization with runner mutation.
+    /// The backup directory must exist; release this guard before invoking the runner.
+    pub fn lock_execution(&self) -> Result<BackupExecutionGuard, JournalLockError> {
+        let lifetime = self.lock_lifetime()?;
+        let journal = JournalLock::acquire(&lifetime.root().join(EXECUTION_JOURNAL_FILE_NAME))?;
+        Ok(BackupExecutionGuard {
+            _lifetime: lifetime,
+            _journal: journal,
+        })
+    }
+
+    /// Exclude backup creation, execution, restore and prune for this existing layout.
+    pub fn lock_lifetime(&self) -> Result<BackupLayoutGuard, JournalLockError> {
+        BackupLayoutGuard::acquire(&self.root)
+    }
+
     /// Publish a validated manifest or adopt the exact existing manifest.
     pub fn publish_manifest(
         &self,
@@ -95,7 +121,14 @@ impl BackupLayout {
 
     /// Read and validate a manifest from this backup layout.
     pub fn read_manifest(&self) -> Result<DeploymentBackupManifest, PersistenceError> {
-        let manifest = read_json(&self.manifest_path())?;
+        let path = self.manifest_path();
+        let metadata = std::fs::symlink_metadata(&path)?;
+        if metadata.file_type().is_symlink() || !metadata.is_file() {
+            return Err(PersistenceError::ManifestConflict {
+                path: path.display().to_string(),
+            });
+        }
+        let manifest = read_json(&path)?;
         DeploymentBackupManifest::validate(&manifest)?;
         Ok(manifest)
     }
@@ -105,12 +138,6 @@ impl BackupLayout {
         expected: &DeploymentBackupManifest,
     ) -> Result<(), PersistenceError> {
         let path = self.manifest_path();
-        let metadata = std::fs::symlink_metadata(&path)?;
-        if metadata.file_type().is_symlink() || !metadata.is_file() {
-            return Err(PersistenceError::ManifestConflict {
-                path: path.display().to_string(),
-            });
-        }
         let actual = self.read_manifest()?;
         if serde_json::to_vec(&actual)? == serde_json::to_vec(expected)? {
             std::fs::File::open(&path)?.sync_all()?;
@@ -199,9 +226,10 @@ impl BackupLayout {
 
     /// Validate the manifest, journal, and durable artifact checksums.
     pub fn verify_integrity(&self) -> Result<BackupIntegrityReport, PersistenceError> {
-        let manifest = self.read_manifest()?;
-        let journal = self.read_journal()?;
-        verify_layout_integrity(self, &manifest, &journal)
+        let layout = self.resolve_root()?;
+        let manifest = layout.read_manifest()?;
+        let journal = layout.read_journal()?;
+        verify_layout_integrity(&layout, &manifest, &journal)
     }
 
     /// Validate the persisted backup plan and execution journal agree.

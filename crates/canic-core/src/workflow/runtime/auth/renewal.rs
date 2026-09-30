@@ -390,11 +390,18 @@ fn checked_work_count(work_count: u64, additional_work: u64) -> Result<u64, Rene
 
 fn is_retryable_renewal_error(err: &InternalError) -> bool {
     let public_code = err.public_error().code();
-    err.code() == codes::PLATFORM_FAILED
-        || err.code() == codes::STATE_FAILED
-        || public_code == codes::SECURITY_UNAVAILABLE.raw_code()
-        || public_code == codes::STATE_CONFLICT.raw_code()
-        || public_code == codes::STATE_UNAVAILABLE.raw_code()
+    [
+        codes::PLATFORM_FAILED,
+        codes::PLATFORM_UNAVAILABLE,
+        codes::STATE_FAILED,
+    ]
+    .contains(&err.code())
+        || [
+            codes::SECURITY_UNAVAILABLE.raw_code(),
+            codes::STATE_CONFLICT.raw_code(),
+            codes::STATE_UNAVAILABLE.raw_code(),
+        ]
+        .contains(&public_code)
 }
 
 fn retry_delay(streak: u64, now_ns: u64, active_proof_expires_at_ns: Option<u64>) -> Duration {
@@ -452,6 +459,17 @@ fn delegated_token_max_ttl_ns() -> Result<u64, InternalError> {
 mod tests {
     use super::*;
     use crate::test::seams;
+
+    #[test]
+    fn transport_rejection_remains_retryable_without_admitting_authority_failures() {
+        let rejection = ic_cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
+        let failure = InternalError::from(crate::infra::ic::IcInfraError::from(
+            ic_cdk::call::CallFailed::CallRejected(rejection),
+        ));
+        assert!(is_retryable_renewal_error(&failure));
+        assert!(!is_retryable_renewal_error(&InternalError::forbidden()));
+        assert!(!is_retryable_renewal_error(&InternalError::invariant()));
+    }
 
     #[test]
     fn timer_failure_records_the_exact_diagnostic_in_recent_failures() {

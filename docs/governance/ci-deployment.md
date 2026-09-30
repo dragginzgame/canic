@@ -198,6 +198,11 @@ and require an explicitly reviewed successor; exact import identities, controlle
 drift, lost replies, conservation and terminal replay remain real-canister proofs.
 Native policy checks own the 19-Workload/five-Ready arithmetic boundary. Neither
 reset journey is a deployment-scale qualification.
+An explicitly selected CANIC-188 incident qualification exercises nine Workloads
+and fifteen Ready assets through the same completed-source public CLI journey.
+It is ignored by ordinary test selection and excluded from the governed release
+catalogue. Native policy tests separately exercise mainnet call-cost bounds;
+the incident-sized local journey does not establish live incident completion.
 The mixed-topology journey owns the changed-build wipe, application-row reset,
 interruption and replay proof. The small retained-estate journey owns a second
 same-build reset with a distinct operation, lost identical-Wasm response,

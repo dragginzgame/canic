@@ -149,12 +149,14 @@ impl RequestOps {
     /// Dispatch a recycle request for a child canister through root RPC.
     pub(crate) async fn recycle_canister(
         canister_pid: Principal,
+        allocation_operation_id: [u8; 32],
         operation_id: OperationId,
     ) -> Result<(), InternalError> {
         let root_pid = EnvOps::root_pid()?;
         RpcOps::execute_response_rpc(
             root_pid,
             RecycleCanisterRpc {
+                allocation_operation_id,
                 canister_pid,
                 metadata: Some(operation_request_metadata(operation_id)),
             },
@@ -271,6 +273,7 @@ impl Rpc for CreateCanisterRpc {
 ///
 
 struct RecycleCanisterRpc {
+    allocation_operation_id: [u8; 32],
     canister_pid: Principal,
     metadata: Option<RootRequestMetadata>,
 }
@@ -280,6 +283,7 @@ impl Rpc for RecycleCanisterRpc {
 
     fn into_request(self) -> Request {
         Request::recycle_canister(RecycleCanisterRequest {
+            allocation_operation_id: self.allocation_operation_id,
             canister_pid: self.canister_pid,
             metadata: self.metadata,
         })
@@ -375,6 +379,7 @@ mod tests {
         let canister_pid = p(43);
         let recycle_metadata = metadata(8);
         let recycle_request = RecycleCanisterRpc {
+            allocation_operation_id: [1; 32],
             canister_pid,
             metadata: Some(recycle_metadata),
         }

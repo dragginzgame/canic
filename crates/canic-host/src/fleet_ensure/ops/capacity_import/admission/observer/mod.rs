@@ -12,7 +12,7 @@ use crate::{
             capacity_import::{
                 admission::{declarations::hash, registry},
                 journal::CapacityImportJournalError,
-                observation::CapacityImportObserver,
+                observation::{CapacityImportObserver, PreparedCapacityImportObservation},
                 transport::{CapacityImportTransport, verify_agent},
                 validate_destination_authority,
             },
@@ -36,11 +36,57 @@ pub struct CapacityImportLiveObserver {
     transport: CapacityImportTransport,
 }
 
+/// Prepared destination checks; no paid request has been sent yet.
+pub struct PreparedDestinationObservation {
+    context: PreparedImportContext,
+    inspection: management::PreparedManagementObservation,
+}
+
+/// Prepared source checks; the retained disposition belongs to the exact reviewed source.
+pub struct PreparedSourceObservation {
+    context: PreparedImportContext,
+    inspection: management::PreparedManagementObservation,
+    disposition: [u8; 32],
+}
+
+struct PreparedImportContext {
+    observer: CapacityImportLiveObserver,
+    plan: CapacityImportPlanRecord,
+    registry: FleetRegistry,
+    inventory: inventory::Inventory,
+}
+
 impl CapacityImportLiveObserver {
     /// Resolve operator authentication. Completed replay should precede this call.
     pub fn from_icp(icp: &IcpCli) -> Result<Self, CapacityImportJournalError> {
         Ok(Self {
             transport: CapacityImportTransport::from_icp(icp)?,
+        })
+    }
+
+    async fn prepare_context(
+        &self,
+        plan: &CapacityImportPlanRecord,
+    ) -> Result<PreparedImportContext, CapacityImportJournalError> {
+        let registry = self.infrastructure(plan).await?;
+        let inventory = inventory::observe(
+            &self.transport.agent,
+            plan.admission
+                .as_ref()
+                .ok_or(CapacityImportJournalError::InfrastructureRequired)?,
+            plan.authority.root,
+            &registry,
+        )
+        .await?;
+        Ok(PreparedImportContext {
+            observer: Self {
+                transport: CapacityImportTransport {
+                    agent: self.transport.agent.clone(),
+                },
+            },
+            plan: plan.clone(),
+            registry,
+            inventory,
         })
     }
 
@@ -132,24 +178,64 @@ pub(in crate::fleet_ensure::ops::capacity_import) async fn verify_infrastructure
 }
 
 impl CapacityImportObserver for CapacityImportLiveObserver {
-    async fn destination(
+    type Destination = PreparedDestinationObservation;
+    type Source = PreparedSourceObservation;
+
+    async fn prepare_destination(
         &mut self,
         plan: &CapacityImportPlanRecord,
-    ) -> Result<CapacityImportDestinationView, CapacityImportJournalError> {
-        let registry = self.infrastructure(plan).await?;
-        let inventory = inventory::observe(
-            &self.transport.agent,
-            plan.admission
-                .as_ref()
-                .ok_or(CapacityImportJournalError::InfrastructureRequired)?,
-            plan.authority.root,
-            &registry,
-        )
-        .await?;
-        let status = management::observe(&self.transport.agent, plan.authority.root).await?;
-        self.infrastructure(plan).await?;
+    ) -> Result<Self::Destination, CapacityImportJournalError> {
+        let context = self.prepare_context(plan).await?;
+        let inspection = management::prepare(&self.transport.agent, plan.authority.root).await?;
+        Ok(PreparedDestinationObservation {
+            context,
+            inspection,
+        })
+    }
+
+    async fn prepare_source(
+        &mut self,
+        plan: &CapacityImportPlanRecord,
+        canister: Principal,
+    ) -> Result<Self::Source, CapacityImportJournalError> {
+        let source = plan
+            .sources
+            .iter()
+            .find(|source| source.binding.canister_id == canister)
+            .ok_or(CapacityImportJournalError::Integrity)?;
+        let context = self.prepare_context(plan).await?;
+        if context.inventory.assigned.contains(&canister) {
+            return Err(CapacityImportJournalError::InventoryInvalid);
+        }
+        let inspection =
+            if crate::fleet_ensure::policy::capacity_import::requires_handoff(plan, source) {
+                management::prepare(&self.transport.agent, canister).await?
+            } else {
+                management::prepare_root_owned(&self.transport.agent, plan.authority.root, canister)
+                    .await?
+            };
+        Ok(PreparedSourceObservation {
+            context,
+            inspection,
+            disposition: disposition_digest(source),
+        })
+    }
+}
+
+impl PreparedCapacityImportObservation for PreparedDestinationObservation {
+    type View = CapacityImportDestinationView;
+
+    async fn observe(self) -> Result<Self::View, CapacityImportJournalError> {
+        let status = self.inspection.observe().await?;
+        let PreparedImportContext {
+            observer,
+            plan,
+            inventory,
+            ..
+        } = self.context;
+        observer.infrastructure(&plan).await?;
         Ok(CapacityImportDestinationView {
-            authority: plan.authority.clone(),
+            authority: plan.authority,
             ready: true,
             draining: false,
             competing_operation: false,
@@ -161,40 +247,23 @@ impl CapacityImportObserver for CapacityImportLiveObserver {
             assigned_canisters: inventory.assigned,
         })
     }
+}
 
-    async fn source(
-        &mut self,
-        plan: &CapacityImportPlanRecord,
-        canister: Principal,
-    ) -> Result<CapacityImportSourceView, CapacityImportJournalError> {
-        let source = plan
-            .sources
-            .iter()
-            .find(|source| source.binding.canister_id == canister)
-            .ok_or(CapacityImportJournalError::Integrity)?;
-        let registry = self.infrastructure(plan).await?;
-        let inventory = inventory::observe(
-            &self.transport.agent,
-            plan.admission
-                .as_ref()
-                .ok_or(CapacityImportJournalError::InfrastructureRequired)?,
-            plan.authority.root,
-            &registry,
-        )
-        .await?;
-        if inventory.assigned.contains(&canister) {
-            return Err(CapacityImportJournalError::InventoryInvalid);
-        }
-        let status = if crate::fleet_ensure::policy::capacity_import::requires_handoff(plan, source)
-        {
-            management::observe(&self.transport.agent, canister).await?
-        } else {
-            management::observe_root_owned(&self.transport.agent, plan.authority.root, canister)
-                .await?
-        };
-        // A concurrent membership or infrastructure change cannot be hidden by a paid sample.
+impl PreparedCapacityImportObservation for PreparedSourceObservation {
+    type View = CapacityImportSourceView;
+
+    async fn observe(self) -> Result<Self::View, CapacityImportJournalError> {
+        let status = self.inspection.observe().await?;
+        let PreparedImportContext {
+            observer,
+            plan,
+            registry,
+            inventory,
+        } = self.context;
+        // Recheck this source's absence and destination capacity. Other Roots may
+        // change unrelated assets while the destination's import is reserved.
         let refreshed = inventory::observe(
-            &self.transport.agent,
+            &observer.transport.agent,
             plan.admission
                 .as_ref()
                 .ok_or(CapacityImportJournalError::InfrastructureRequired)?,
@@ -202,8 +271,11 @@ impl CapacityImportObserver for CapacityImportLiveObserver {
             &registry,
         )
         .await?;
-        self.infrastructure(plan).await?;
-        if refreshed != inventory {
+        observer.infrastructure(&plan).await?;
+        if refreshed.assigned.contains(&status.binding.canister_id)
+            || refreshed.occupied != inventory.occupied
+            || refreshed.maximum != inventory.maximum
+        {
             return Err(CapacityImportJournalError::InventoryInvalid);
         }
         Ok(CapacityImportSourceView {
@@ -211,7 +283,7 @@ impl CapacityImportObserver for CapacityImportLiveObserver {
             cycles: status.cycles,
             reserved_cycles: status.reserved_cycles,
             ownership: CapacityImportOwnershipView::Unassigned,
-            disposition_evidence_sha256: Some(disposition_digest(source)),
+            disposition_evidence_sha256: Some(self.disposition),
         })
     }
 }

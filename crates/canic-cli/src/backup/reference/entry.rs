@@ -11,7 +11,7 @@ use crate::backup::{
 use canic_backup::persistence::BackupLayout;
 use std::path::PathBuf;
 
-pub(super) fn backup_list_entry(dir: PathBuf) -> Option<BackupListEntry> {
+pub(in crate::backup) fn backup_list_entry(dir: PathBuf) -> Option<BackupListEntry> {
     let layout = BackupLayout::new(dir.clone());
     if layout.manifest_path().is_file() {
         return Some(manifest_backup_list_entry(dir, &layout));

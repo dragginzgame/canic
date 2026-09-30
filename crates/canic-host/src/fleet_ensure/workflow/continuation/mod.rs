@@ -189,7 +189,7 @@ pub(super) fn replay<P: EnsurePlatform>(
     // the merged estate once, after its paid inspections, and use that same fresh
     // evidence for convergence and conservation. No effect occurs between them.
     let inventory = platform
-        .terminal_inventory(completed_inventory_operation(plan, journal, state)?, state)
+        .terminal_inventory(completed_inventory_operation(plan, state)?, state)
         .map_err(EnsureWorkflowError::Platform)?;
     let cycles = inventory.controlled_cycles_by_principal.clone();
     let mut verified_state = state.clone();
@@ -203,7 +203,7 @@ pub(super) fn replay<P: EnsurePlatform>(
             .map_err(EnsureWorkflowError::Platform)?;
         attach_terminal_cycles(&mut final_observation, cycles)?;
         let protocol = platform
-            .protocol_actions(&plan.operation_id, &verified_state)
+            .protocol_actions(super::protocol_operation(plan), &verified_state)
             .map_err(EnsureWorkflowError::Platform)?;
         let current = compile_plan(
             desired,

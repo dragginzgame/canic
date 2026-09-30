@@ -94,7 +94,12 @@ pub(in crate::fleet_ensure::ops::capacity_import) async fn observe(
                     }
             })
             .ok_or(CapacityImportJournalError::InventoryInvalid)?;
-        let mut inventory = Pages::new(store.principal);
+        let scope = if root.fleet_subnet_root == selected_root {
+            PoolScope::Destination
+        } else {
+            PoolScope::OtherRoot
+        };
+        let mut inventory = Pages::new(store.principal, scope);
         loop {
             let argument = candid::encode_one(RootRequest::Pool(CanisterPoolStatusRequest {
                 start_after: inventory.cursor,
@@ -161,32 +166,42 @@ pub(in crate::fleet_ensure::ops::capacity_import) async fn observe(
 
 struct Pages {
     store: Principal,
+    scope: PoolScope,
     summary: Option<CanisterPoolResponse>,
     cursor: Option<Principal>,
     seen: BTreeSet<Principal>,
     stores: BTreeSet<Principal>,
     ready: u32,
     workload: u32,
+    failed: u32,
+}
+
+#[derive(Clone, Copy, Eq, PartialEq)]
+enum PoolScope {
+    Destination,
+    OtherRoot,
 }
 
 impl Pages {
-    const fn new(store: Principal) -> Self {
+    const fn new(store: Principal, scope: PoolScope) -> Self {
         Self {
             store,
+            scope,
             summary: None,
             cursor: None,
             seen: BTreeSet::new(),
             stores: BTreeSet::new(),
             ready: 0,
             workload: 0,
+            failed: 0,
         }
     }
 
     fn push(&mut self, mut page: CanisterPoolResponse) -> Result<bool, CapacityImportJournalError> {
         if page.entries.len() > usize::from(PAGE_SIZE)
             || page.tracked as usize > MAXIMUM_ASSETS
-            || page.pending_creation.is_some()
-            || page.pending_handoff.is_some()
+            || (self.scope == PoolScope::Destination
+                && (page.pending_creation.is_some() || page.pending_handoff.is_some()))
         {
             return Err(CapacityImportJournalError::InventoryInvalid);
         }
@@ -205,6 +220,8 @@ impl Pages {
                 }
                 CanisterPoolAssetStatus::Ready => self.ready += 1,
                 CanisterPoolAssetStatus::Workload { .. } => self.workload += 1,
+                CanisterPoolAssetStatus::Failed { .. } => self.failed += 1,
+                _ if self.scope == PoolScope::OtherRoot => {}
                 _ => return Err(CapacityImportJournalError::InventoryInvalid),
             }
         }
@@ -230,15 +247,11 @@ impl Pages {
             .as_ref()
             .ok_or(CapacityImportJournalError::InventoryInvalid)?;
         let incomplete = self.cursor.is_some() || self.seen.len() != page.tracked as usize;
-        let counts = (
-            page.store,
-            page.ready,
-            page.workload,
-            page.pending_reset as usize,
-        );
+        let counts = (page.store, page.ready, page.workload, page.failed);
         if incomplete
             || self.stores != BTreeSet::from([self.store])
-            || counts != (1, self.ready, self.workload, 0)
+            || counts != (1, self.ready, self.workload, self.failed)
+            || (self.scope == PoolScope::Destination && page.pending_reset != 0)
         {
             return Err(CapacityImportJournalError::InventoryInvalid);
         }
