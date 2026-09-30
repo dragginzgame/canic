@@ -1,5 +1,32 @@
 # Current handoff — 2026-09-30
 
+## Low-reserve child fixture contention — qualified
+
+The next maintainer validation reached
+`pic::fleet_registry::baseline::tests::child_reserve::low_native_reserve_retains_child_failure_and_recovers_same_claim`.
+It failed while preparing its spare, before the low-reserve assertions:
+background maintenance owned the physical reset and correctly returned
+`STATE_UNAVAILABLE` (`E140`), while the fixture still expected `STATE_CONFLICT`
+(`E132`). The earlier pool-reset serialization correction deliberately uses
+retryable unavailability for a busy execution owner.
+
+The fixture now retries that exact contention result. Authority conflicts still
+fail, and it still requires the same funded Ready spare before reducing Root's
+reserve. Production behavior is unchanged. The exact PocketIC case passes in
+34.53 seconds, including retained failure, funding recovery on the original
+claim and effect-free replay. Testing-package all-target/all-feature
+warning-denied Clippy, scoped formatting, whitespace and document semantics
+pass; the two existing layout warnings remain advisory. Logs are
+`target/review-validation/child-reserve-contention-pocketic.log` and
+`target/review-validation/child-reserve-contention-clippy.log`.
+
+The complete urgent `.49` batch remains ready for maintainer commit and retry
+of governed release validation. The detailed `.49` notes include this fixture
+repair; package versions remain `.48`. This follow-up is uncommitted. Test-owned
+scratch is cleared and build artifacts remain intact. No broad gate, version
+transaction, commit, push or live deployment ran; the failed full validation has
+not been replaced with a successful release receipt.
+
 ## Managed child fixture and Candid diagnostics — qualified
 
 The maintainer's governed PocketIC failure was
