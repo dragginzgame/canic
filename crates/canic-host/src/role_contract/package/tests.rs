@@ -73,18 +73,25 @@ fn validate_test_role_package(
 }
 
 #[test]
-fn isolated_supported_role_workspace_is_accepted() {
-    let fixture = FixtureWorkspace::materialize("supported");
+fn isolated_role_workspaces_follow_cargo_resolver_selection() {
+    for resolver in [None, Some("1"), Some("2"), Some("3")] {
+        let fixture = FixtureWorkspace::materialize("supported");
+        let declaration =
+            resolver.map_or_else(String::new, |value| format!("resolver = \"{value}\"\n"));
+        fixture.rewrite("Cargo.toml", "resolver = \"3\"\n", &declaration);
 
-    let validation = validate_test_role_package(
-        &fixture.root.join("canic.toml"),
-        &CanisterRole::owned("app".to_string()),
-        PackageValidationMode::Build,
-    );
-    assert!(
-        matches!(validation, RolePackageValidation::Supported(_)),
-        "unexpected validation: {validation:?}"
-    );
+        for mode in [PackageValidationMode::Build, PackageValidationMode::Passive] {
+            let validation = validate_test_role_package(
+                &fixture.root.join("canic.toml"),
+                &CanisterRole::owned("app".to_string()),
+                mode,
+            );
+            assert!(
+                matches!(validation, RolePackageValidation::Supported(_)),
+                "resolver {resolver:?}, mode {mode:?}: {validation:?}"
+            );
+        }
+    }
 }
 
 #[test]
@@ -196,21 +203,6 @@ fn isolated_protected_sibling_workspace_reports_the_exact_path() {
         reason.contains("fixture_protected_sibling_role -> fixture_protected_helper -> canic-core"),
         "unexpected reason: {reason}"
     );
-}
-
-#[test]
-fn isolated_role_workspace_rejects_missing_explicit_resolver() {
-    let fixture = FixtureWorkspace::materialize("supported");
-    fixture.rewrite("Cargo.toml", "resolver = \"3\"\n", "");
-    let validation = validate_test_role_package(
-        &fixture.root.join("canic.toml"),
-        &CanisterRole::owned("app".to_string()),
-        PackageValidationMode::Build,
-    );
-    assert!(matches!(
-        validation,
-        RolePackageValidation::Unsupported(RoleContractFinding::DependencyShapeUnsupported { .. })
-    ));
 }
 
 #[test]

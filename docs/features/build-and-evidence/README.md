@@ -5,9 +5,10 @@ build attached roles, record exactly what produced an artifact, compare saved
 evidence envelopes, and apply passive policy without turning those reads into
 Fleet mutation authority.
 
-Managed application workspaces explicitly select Cargo `resolver = "3"` in their
-top-level workspace manifest (or package manifest for a standalone package).
-Host admission and generated Fleet packages use the same resolver contract.
+Application workspaces use Cargo's resolver selection and defaults. Canic validates
+the resolved dependencies and role features without requiring an explicit resolver
+declaration or a particular resolver version. Canic's own workspace and generated
+Fleet packages select `resolver = "3"`.
 
 ## What It Provides
 

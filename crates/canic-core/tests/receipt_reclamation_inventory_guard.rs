@@ -32,6 +32,7 @@ fn receipt_backed_authority_and_consumer_inventory_is_explicit() {
             "crates/canic-core/src/ops/storage/intent/tests.rs".to_string(),
             "crates/canic-core/src/workflow/placement/acknowledgement.rs".to_string(),
             "crates/canic-core/src/workflow/placement/allocation.rs".to_string(),
+            "crates/canic-core/src/workflow/placement/index/create.rs".to_string(),
             "crates/canic-core/src/workflow/runtime/intent.rs".to_string(),
             "crates/canic-core/src/workflow/runtime/mod.rs".to_string(),
         ]),

@@ -1023,20 +1023,6 @@ fn validate_cargo_declarations(
 ) -> Result<(), RoleContractFinding> {
     let workspace_manifest = metadata.workspace_root.join("Cargo.toml");
     let workspace_document = read_cargo_document(&workspace_manifest)?;
-    let resolver = workspace_document
-        .get("workspace")
-        .and_then(|workspace| workspace.get("resolver"))
-        .or_else(|| {
-            workspace_document
-                .get("package")
-                .and_then(|package| package.get("resolver"))
-        })
-        .and_then(toml::Value::as_str);
-    if resolver != Some("3") {
-        return Err(unsupported_finding(
-            "the top-level Cargo workspace or package must declare resolver = \"3\"",
-        ));
-    }
     validate_workspace_canic_declaration(&workspace_document)?;
 
     let role_document = read_cargo_document(&package.manifest_path)?;

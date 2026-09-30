@@ -1,5 +1,7 @@
 use super::*;
 use crate::{fleet_ensure::ops::lock_operation, test_support::temp_dir};
+use std::collections::BTreeMap;
+
 use serde_json::{Value, json};
 
 fn unpaid() -> EnsurePaths {
@@ -15,11 +17,19 @@ fn unpaid() -> EnsurePaths {
     .unwrap();
     write_current(
         &inspection(&paths),
-        &json!({
-            "schema_version": 1, "plan_sha256": "b2".repeat(32), "review_attempts": 1,
-            "apply_attempts": 0, "terminal_attempts": 0, "registration_attempts": 0,
-            "registration_plan_sha256": null, "effect_observations": { "effect": 0 }
-        }),
+        &InfrastructureBootstrapInspectionRecord {
+            registration_recovery_sha256: None,
+            schema_version: 1,
+            source_sha256: [0xe5; 32],
+            planned_at_time: 1,
+            plan_sha256: "b2".repeat(32),
+            review_attempts: 1,
+            apply_attempts: 0,
+            terminal_attempts: 0,
+            registration_attempts: 0,
+            registration_plan_sha256: None,
+            effect_observations: BTreeMap::from([("effect".into(), 0)]),
+        },
     )
     .unwrap();
     paths
