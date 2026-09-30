@@ -7,6 +7,28 @@ use crate::fleet_ensure::{
 use ic_agent::agent::{Envelope, ReplyResponse};
 use std::borrow::Cow;
 
+pub fn with_agent(agent: Agent) -> CapacityImportTransport {
+    CapacityImportTransport { agent }
+}
+
+pub fn root_context() -> canic_core::dto::pool_import::PoolImportContext {
+    crate::fleet_ensure::ops::capacity_import::destination::tests::fixture().1
+}
+
+pub fn awaiting_handoff_status(
+    plan: &CapacityImportPlanRecord,
+) -> canic_core::dto::pool_import::PoolImportStatus {
+    use canic_core::dto::pool_import::{PoolImportPhase, PoolImportSourceProgress};
+    let mut status = crate::fleet_ensure::ops::capacity_import::evidence::tests::settled(plan);
+    status.progress = vec![PoolImportSourceProgress::AwaitingHandoff; plan.sources.len()];
+    status.phase = PoolImportPhase::Reserved;
+    status.paid_calls = 0;
+    status.reserved_debit_cycles = 0;
+    status.last_root_cycles = plan.root_budget.observed_cycles;
+    status.root_receipt = None;
+    status
+}
+
 pub fn request(
     plan: &CapacityImportPlanRecord,
     canister_id: Principal,
@@ -80,16 +102,13 @@ fn capacity_import_handoff_rejects_substituted_ingress_and_nonterminal_status() 
         RequestStatusResponse::Unknown,
         RequestStatusResponse::Received,
         RequestStatusResponse::Processing,
+        RequestStatusResponse::Done,
     ] {
         assert!(matches!(
             completed(&plan, id, &original, status),
             Err(CapacityImportJournalError::Unresolved)
         ));
     }
-    assert!(matches!(
-        completed(&plan, id, &original, RequestStatusResponse::Done),
-        Err(CapacityImportJournalError::HandoffPruned)
-    ));
     let completion = completion(&plan, id, &original);
     assert!(completion.matches(&plan, id, &original));
     wrong.request_id[0] ^= 1;
@@ -133,7 +152,7 @@ pub fn rejected(
     plan: &CapacityImportPlanRecord,
     canister_id: Principal,
     request: &CapacityImportHandoffRequestRecord,
-) -> RejectedHandoff {
+) -> RetiredHandoff {
     let certificate = ic_agent::Certificate {
         tree: ic_certification::empty(),
         signature: vec![1],
@@ -144,8 +163,141 @@ pub fn rejected(
         reject_message: "transient failure".into(),
         error_code: None,
     });
-    match rejection::outcome(plan, canister_id, request, status, &certificate).unwrap() {
-        HandoffOutcome::Rejected(witness) => witness,
+    match retirement::outcome(plan, canister_id, request, status, &certificate).unwrap() {
+        HandoffOutcome::Retired(witness) => witness,
         HandoffOutcome::Completed(_) => panic!("rejected response classified as success"),
     }
+}
+
+pub fn retired(
+    plan: &CapacityImportPlanRecord,
+    canister_id: Principal,
+    request: &CapacityImportHandoffRequestRecord,
+    status: RequestStatusResponse,
+    certified_at_ns: u64,
+) -> RetiredHandoff {
+    match retirement::outcome(
+        plan,
+        canister_id,
+        request,
+        status,
+        &timed_certificate(certified_at_ns),
+    )
+    .unwrap()
+    {
+        HandoffOutcome::Retired(witness) => witness,
+        HandoffOutcome::Completed(_) => panic!("expected terminal evidence without a reply"),
+    }
+}
+
+fn timed_certificate(mut time: u64) -> ic_agent::Certificate {
+    let mut bytes = Vec::new();
+    loop {
+        let byte = (time & 0x7f) as u8;
+        time >>= 7;
+        bytes.push(byte | if time == 0 { 0 } else { 0x80 });
+        if time == 0 {
+            break;
+        }
+    }
+    ic_agent::Certificate {
+        tree: ic_certification::labeled(b"time".to_vec(), ic_certification::leaf(bytes)),
+        signature: vec![1],
+        delegation: None,
+    }
+}
+
+#[test]
+fn capacity_import_retirement_requires_certified_absence_after_expiry() {
+    let plan = plan();
+    let id = plan.sources[0].binding.canister_id;
+    for expiry in [1, 127, 128, u64::MAX - 1] {
+        let request = request_with_expiry(&plan, id, expiry);
+        for time in [expiry - 1, expiry] {
+            assert!(matches!(
+                retirement::outcome(
+                    &plan,
+                    id,
+                    &request,
+                    RequestStatusResponse::Unknown,
+                    &timed_certificate(time)
+                ),
+                Err(CapacityImportJournalError::Unresolved)
+            ));
+        }
+        let witness = retired(
+            &plan,
+            id,
+            &request,
+            RequestStatusResponse::Unknown,
+            expiry + 1,
+        );
+        assert!(witness.matches(&plan, id, &request));
+        for status in [
+            RequestStatusResponse::Received,
+            RequestStatusResponse::Processing,
+        ] {
+            assert!(matches!(
+                retirement::outcome(&plan, id, &request, status, &timed_certificate(expiry + 1)),
+                Err(CapacityImportJournalError::Unresolved)
+            ));
+        }
+    }
+    let request = request(&plan, id);
+    let expired = request.ingress_expiry;
+    assert!(matches!(
+        retirement::outcome(
+            &plan,
+            id,
+            &request,
+            RequestStatusResponse::Unknown,
+            &timed_certificate(expired + 300_000_000_000)
+        ),
+        Ok(HandoffOutcome::Retired(_))
+    ));
+    assert!(matches!(
+        retirement::outcome(
+            &plan,
+            id,
+            &request,
+            RequestStatusResponse::Unknown,
+            &timed_certificate(expired + 300_000_000_001)
+        ),
+        Err(CapacityImportJournalError::Unresolved)
+    ));
+    let witness = retired(&plan, id, &request, RequestStatusResponse::Done, 0);
+    assert!(witness.matches(&plan, id, &request));
+    for bytes in [
+        vec![],
+        vec![0x80],
+        vec![0xff; 10],
+        vec![0x80; 11],
+        vec![2, 0],
+    ] {
+        let mut certificate = timed_certificate(2);
+        certificate.tree =
+            ic_certification::labeled(b"time".to_vec(), ic_certification::leaf(bytes));
+        assert!(matches!(
+            retirement::outcome(
+                &plan,
+                id,
+                &request,
+                RequestStatusResponse::Unknown,
+                &certificate
+            ),
+            Err(CapacityImportJournalError::Unresolved)
+        ));
+    }
+    let mut incomplete = timed_certificate(2);
+    incomplete.tree = ic_certification::empty();
+    assert!(matches!(
+        retirement::outcome(
+            &plan,
+            id,
+            &request,
+            RequestStatusResponse::Unknown,
+            &incomplete
+        ),
+        Err(CapacityImportJournalError::Unresolved)
+    ));
 }

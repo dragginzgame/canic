@@ -188,6 +188,14 @@ pub fn requires_handoff(
     !source.binding.controllers.contains(&plan.authority.root)
 }
 
+/// IC certified absence proves non-execution only in its specified five-minute expiry window.
+#[must_use]
+pub fn expired_absence_proves_retirement(ingress_expiry: u64, certified_at_ns: u64) -> bool {
+    certified_at_ns
+        .checked_sub(ingress_expiry)
+        .is_some_and(|elapsed| elapsed > 0 && elapsed <= 300_000_000_000)
+}
+
 /// Minimum version advance before uninstall, excluding running activity and stop transitions.
 #[must_use]
 pub fn controller_version_delta(

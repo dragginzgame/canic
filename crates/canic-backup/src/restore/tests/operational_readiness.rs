@@ -63,12 +63,15 @@ fn initial_restore_documents_survive_process_death_on_both_write_sides() {
             &barrier,
             &handshake_root,
         ),
-        "journal" => publish_document_at_barrier(
-            &root.join("restore-apply-journal.json"),
-            &journal,
-            &barrier,
-            &handshake_root,
-        ),
+        "journal" => {
+            let layout = BackupLayout::new(root.clone())
+                .lock_lifetime()
+                .expect("lock journal publication");
+            let path = root.join("restore-apply-journal.json");
+            crate::restore::persistence::retain_restore(&layout, &path, &journal)
+                .expect("retain source before publication");
+            publish_document_at_barrier(&path, &journal, &barrier, &handshake_root);
+        }
         _ => panic!("unsupported restore publication document: {document}"),
     }
     panic!("restore publication child passed its armed barrier");
@@ -152,7 +155,17 @@ fn prove_initial_restore_document_publication(document: &str, barrier: &str) {
         read_json::<RestorePlan>(&plan_path).expect("restart reads exact restore plan"),
         expected_plan
     );
-    create_or_adopt_restore_apply_journal(&journal_path, &expected_journal)
+    let layout = BackupLayout::new(root.clone())
+        .lock_lifetime()
+        .expect("lock restore layout");
+    if document == "journal" {
+        assert!(
+            layout
+                .has_restore_references()
+                .expect("interrupted publication retains source")
+        );
+    }
+    create_or_adopt_restore_apply_journal(&layout, &journal_path, &expected_journal)
         .expect("restart publishes or adopts exact restore journal");
     let recovered_journal = read_json::<RestoreApplyJournal>(&journal_path)
         .expect("restart reads exact restore journal");

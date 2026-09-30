@@ -244,6 +244,7 @@ fn idempotent_ops_do_not_double_count() {
                 reserved_qty: 5,
                 committed_qty: 0,
                 pending_count: 1,
+                retain_until_secs: None,
             },
             pending_total: 1,
             committed_total: 0,
@@ -257,6 +258,7 @@ fn idempotent_ops_do_not_double_count() {
                 reserved_qty: 0,
                 committed_qty: 5,
                 pending_count: 0,
+                retain_until_secs: None,
             },
             pending_total: 0,
             committed_total: 1,
@@ -270,6 +272,7 @@ fn idempotent_ops_do_not_double_count() {
                 reserved_qty: 0,
                 committed_qty: 0,
                 pending_count: 0,
+                retain_until_secs: None,
             },
             pending_total: 0,
             committed_total: 0,
@@ -530,6 +533,7 @@ fn prevents_aggregate_underflow() {
             reserved_qty: 0,
             committed_qty: 0,
             pending_count: 1,
+            retain_until_secs: None,
         },
     );
 
@@ -554,6 +558,7 @@ fn prevents_aggregate_overflow() {
             reserved_qty: u64::MAX,
             committed_qty: 0,
             pending_count: 0,
+            retain_until_secs: None,
         },
     );
 
@@ -1333,6 +1338,7 @@ fn resource_total_limit_rejects_preexisting_state_above_the_hard_cut() {
                 reserved_qty: 0,
                 committed_qty: 1,
                 pending_count: 0,
+                retain_until_secs: None,
             },
         );
     }

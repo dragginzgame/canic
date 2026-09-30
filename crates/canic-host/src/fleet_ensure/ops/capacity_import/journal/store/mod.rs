@@ -8,13 +8,18 @@ use crate::{
             capacity_import::{
                 CapacityImportHandoffRequestRecord, CapacityImportJournalRecord,
                 CapacityImportPlanRecord, CapacityImportReservationRecord,
-                rejection::CapacityImportHandoffRejectionRecord,
+                retirement::{
+                    CapacityImportHandoffRetirementReason, CapacityImportHandoffRetirementRecord,
+                },
             },
         },
         ops::{
             EnsurePaths, EnsureStateError,
-            capacity_import::journal::{
-                CapacityImportJournalError, handoff_intent, rejection, reviewed, validate,
+            capacity_import::{
+                journal::{
+                    CapacityImportJournalError, handoff_intent, retirement, reviewed, validate,
+                },
+                publication::{ROOT_SUBMISSION_STEPS, SOURCE_SUBMISSION_STEPS},
             },
             lock_capacity_import_operation,
         },
@@ -219,27 +224,29 @@ fn require_completion_fits(
             ),
         });
         // Size the terminal rejection case as well as the successful path before any effects.
-        handoff.rejections = vec![
-            CapacityImportHandoffRejectionRecord {
+        handoff.retirements = vec![
+            CapacityImportHandoffRetirementRecord {
                 request: handoff
                     .request
                     .clone()
                     .ok_or(CapacityImportJournalError::Integrity)?,
-                reject_code: u8::MAX,
-                reject_message_sha256: [u8::MAX; 32],
+                reason: CapacityImportHandoffRetirementReason::Rejected {
+                    reject_code: u8::MAX,
+                    reject_message_sha256: [u8::MAX; 32],
+                },
                 certificate_sha256: [u8::MAX; 32],
             };
-            rejection::MAXIMUM_REQUESTS
+            retirement::MAXIMUM_REQUESTS
         ];
         handoff.before_reserved_cycles = Some(u128::MAX);
         handoff.after_reserved_cycles = Some(u128::MAX);
     }
     if let Some(operation) = &mut largest.operation {
-        for step in ["reserve", "settle", "release"] {
-            operation.submissions.insert(step.into(), u32::MAX);
+        for step in ROOT_SUBMISSION_STEPS {
+            operation.submissions.insert((*step).into(), u32::MAX);
         }
         for (index, source) in record.plan.sources.iter().enumerate() {
-            for phase in ["handoff", "controllers", "confirm", "uninstall", "cleared"] {
+            for phase in SOURCE_SUBMISSION_STEPS {
                 operation
                     .submissions
                     .insert(format!("{index}:{phase}"), u32::MAX);
@@ -281,7 +288,7 @@ fn require_monotonic(
         return Err(CapacityImportJournalError::Conflict);
     }
     for (old, new) in before.handoffs.iter().zip(&after.handoffs) {
-        if !rejection::monotonic(old, new) {
+        if !retirement::monotonic(old, new) {
             return Err(CapacityImportJournalError::Conflict);
         }
         if old.before_reserved_cycles.is_some()
@@ -294,7 +301,7 @@ fn require_monotonic(
         {
             return Err(CapacityImportJournalError::Conflict);
         }
-        let renewal = rejection::is_renewal(old, new);
+        let renewal = retirement::is_renewal(old, new);
         match (&old.effect, &new.effect) {
             (None, None) => {}
             (None, Some(effect)) if effect.state == EffectState::Intent => {}

@@ -112,6 +112,9 @@ fn restore_prepare(
     options: &RestorePrepareOptions,
 ) -> Result<RestorePrepareReport, RestoreCommandError> {
     let backup_dir = restore_prepare_backup_dir(options)?;
+    let layout = canic_backup::persistence::BackupLayout::new(backup_dir.clone())
+        .lock_lifetime()
+        .map_err(canic_backup::restore::RestoreRunnerError::from)?;
     let plan_path = options
         .plan_out
         .clone()
@@ -132,7 +135,7 @@ fn restore_prepare(
     let plan = plan_restore(&plan_options)?;
     enforce_restore_plan_requirements(&plan_options, &plan)?;
     let dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &backup_dir)?;
-    create_or_adopt_prepare_documents(&plan_path, &plan, &journal_path, &dry_run)?;
+    create_or_adopt_prepare_documents(&layout, &plan_path, &plan, &journal_path, &dry_run)?;
 
     Ok(RestorePrepareReport {
         backup_dir: backup_dir.display().to_string(),

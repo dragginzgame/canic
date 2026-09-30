@@ -6200,6 +6200,34 @@ fn coordinator_policy_rotation_converges_once_and_preserves_application_registry
     FleetCoordinatorOps::begin_funding_policy_rotation(begin.clone(), 99)
         .expect("begin response-loss replay");
     assert_eq!(FleetCoordinatorFundingStore::export(), after_begin);
+    let lost_grant = exhausted_root.last.as_ref().unwrap();
+    let replay = FleetCoordinatorOps::prepare_root_funding(
+        first.fleet_subnet_root,
+        lost_grant.request.clone(),
+        2_000_000_000_000_000,
+        100,
+    )
+    .expect("rotation must allow the Root to recover its exact completed grant");
+    assert!(
+        matches!(replay, FleetRootFundingDisposition::Current(response) if response == lost_grant.response)
+    );
+    let fresh_grant = root_funding_request(
+        coordinator,
+        &first,
+        predecessor_registry.clone(),
+        lost_grant.request.operation_sequence + 1,
+        0,
+    );
+    let Err(error) = FleetCoordinatorOps::prepare_root_funding(
+        first.fleet_subnet_root,
+        fresh_grant,
+        2_000_000_000_000_000,
+        101,
+    ) else {
+        panic!("rotation must fence a new grant");
+    };
+    assert_eq!(error.code(), InternalError::conflict().code());
+    assert_eq!(FleetCoordinatorFundingStore::export(), after_begin);
     FleetCoordinatorOps::set_root_funding_enabled(false)
         .expect_err("kill-switch mutation must not cross the rotation fence");
 

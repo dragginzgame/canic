@@ -25,6 +25,12 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum PersistenceError {
+    #[error("restore reference conflicts with retained recovery authority: {path}")]
+    RestoreReferenceConflict { path: String },
+
+    #[error("invalid restore reference record: {path}")]
+    InvalidRestoreReferences { path: String },
+
     #[error(
         "artifact commit paths must be distinct siblings: temporary={temporary}, canonical={canonical}"
     )]

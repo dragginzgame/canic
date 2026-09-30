@@ -647,6 +647,7 @@ pub enum RootComponentChildAllocationProgressView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentSubtreeRemovalView {
+    pub target_allocation_operation_id: [u8; 32],
     pub operation_id: [u8; 32],
     pub component: ComponentInstanceId,
     pub target_canister_id: Principal,
@@ -696,6 +697,7 @@ pub enum RootComponentSubtreeRemovalProgressView {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct RootComponentSubtreeRemovalNodeView {
+    pub allocation_operation_id: [u8; 32],
     pub canister_id: Principal,
     pub parent_canister_id: Principal,
     pub role: CanisterRole,
@@ -892,6 +894,7 @@ pub struct ComponentDirectoryCanonicalCursor {
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct ComponentDirectoryChildView {
     pub binding: ComponentChildBinding,
+    pub allocation_operation_id: [u8; 32],
     pub kind: ComponentChildKind,
     pub installed_artifact_hash: [u8; 32],
     pub protocol_profile_digest: ProtocolProfileDigest,

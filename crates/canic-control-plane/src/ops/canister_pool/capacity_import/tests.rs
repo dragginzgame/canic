@@ -173,7 +173,7 @@ fn capacity_import_root_reservation_fences_all_pool_mutations() {
     assert!(CanisterPoolOps::initialize_imports(&config(), &[principal(9)], 2).is_err());
     assert!(CanisterPoolOps::prepare_import_reinspection(id, &Cycles::new(500), 2).is_err());
     assert!(CanisterPoolOps::mark_ready(id, Cycles::new(990), 2).is_err());
-    assert!(CanisterPoolOps::mark_failed(id, None, "failure".into(), 2).is_err());
+    assert!(CanisterPoolOps::mark_underfunded(id, Cycles::new(100), "deficit".into(), 2).is_err());
     assert!(CanisterPoolOps::retry_reset(id, &Cycles::new(500), 2).is_err());
     assert!(CanisterPoolImportOps::release(identity(), [5; 32]).is_err());
     assert_eq!(CanisterPoolStore::state(), before);

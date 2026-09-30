@@ -7,6 +7,7 @@
 use super::super::{BackupCommandError, layout::ensure_execution_journal_exists};
 use canic_backup::{
     execution::BackupExecutionJournal, persistence::BackupLayout, plan::BackupPlan,
+    runner::BackupRunnerError,
 };
 use std::path::Path;
 
@@ -19,7 +20,9 @@ pub(super) fn persist_backup_create_layout(
     out: &Path,
     plan: &BackupPlan,
 ) -> Result<PersistedBackupCreateLayout, BackupCommandError> {
-    let layout = BackupLayout::new(out.to_path_buf());
+    std::fs::create_dir_all(out)?;
+    let layout = BackupLayout::new(out.canonicalize()?);
+    let _lock = layout.lock_execution().map_err(BackupRunnerError::from)?;
     if layout.backup_plan_path().is_file() {
         let existing = layout.read_backup_plan()?;
         ensure_resume_plan_compatible(&existing, plan)?;

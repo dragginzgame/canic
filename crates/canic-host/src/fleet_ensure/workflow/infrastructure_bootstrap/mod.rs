@@ -55,8 +55,9 @@ pub fn survey(
         let sample = if let Some(sample) = persistence.sample(id) {
             sample.clone()
         } else {
+            let prepared = runtime.block_on(BootstrapSurvey::prepare_sample(&agent, id))?;
             persistence.reserve(id)?;
-            let sample = runtime.block_on(BootstrapSurvey::sample(&agent, id))?;
+            let sample = runtime.block_on(prepared.observe())?;
             persistence.retain(sample.clone())?;
             sample
         };
@@ -75,9 +76,11 @@ pub fn plan<P: EnsurePlatform>(
     time: u64,
     platform: &mut P,
 ) -> Result<FleetEnsurePlan, EnsureWorkflowError<P::Error>> {
-    let planned = bootstrap::prepare(root, desired, source, desired_sha256, time)?;
     let paths = EnsurePaths::under(root, &desired.environment, &desired.fleet);
     let _lock = ops::lock_operation(&paths)?;
+    let time =
+        bootstrap::inspection::planned_at_time(&paths, source.source_sha256)?.unwrap_or(time);
+    let planned = bootstrap::prepare(root, desired, source, desired_sha256, time)?;
     if let Some(retained) = ops::read_plan(&paths)? {
         if retained == planned {
             return Ok(retained);

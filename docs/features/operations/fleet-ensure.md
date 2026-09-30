@@ -1131,7 +1131,9 @@ canic --environment staging fleet bootstrap toko-staging \
 
 Review lists each original subnet, controllers, code, native/reserved balance and
 operator disposition, plus exact effects, funding and maximum debit. It preserves
-initial survey samples and spent inspection allowances. Apply uses retained
+initial survey samples and spent inspection allowances. A failed review retains
+its original timestamp, so retrying can use the remaining inspection allowance
+without changing the plan identity. Apply uses retained
 current typed authority, establishes the Coordinator before Root/Store effects,
 registers infrastructure and publishes the estate seed. Pool IDs remain held;
 workloads do not run at this point. Repeat the exact apply digest after an
@@ -1307,14 +1309,38 @@ publication remain durable. Completed current or archived receipt replay returns
 before ICP resolution and has no remote effects. A new review cannot replace an
 approved unfinished operation. Do not edit the journal to bypass a rejection.
 
-A certified rejection of the exact controller request is retained before any
-renewal. Apply permits one new signed request only after a fresh inspection proves
-the source still has its original version, controllers, code and disposition.
+Root, signed-handoff and management-inspection allowances are retained after their
+local and read-only authority preflight succeeds, immediately before the update.
+Approval prepares every source before spending its first inspection allowance.
+A failed preflight leaves those allowances and handoff issuance state unchanged.
+Root-owned inspection preflight reports an outbound-reserve shortfall with its
+observed and required cycle amounts. Unknown submitted outcomes still require
+reconciliation with the original request.
+
+Only the destination pool must be quiet. Complete inventories still exclude any
+candidate already owned elsewhere, including pending or failed assets. Unrelated
+Roots may continue maintenance and allocation; unrelated membership changes do not
+invalidate an otherwise matching source observation.
+
+Apply retains certified terminal evidence for the exact controller request before
+reconciling custody. A rejected request can renew only after a fresh inspection
+proves the source still has its original version, controllers, code and disposition.
+A certified `done` response also permits reconciliation after its reply is pruned.
+Certified absence permits it only when the certified subnet time is after expiry
+and within the IC's specified five-minute absence window. Host wall-clock expiry,
+an HTTP refusal and a still-processing request do not establish that boundary.
+These rules follow the [IC request lifecycle](https://docs.internetcomputer.org/references/ic-interface-spec/https-interface/#overview-of-canister-calling).
+
+For a retired request, exact transitional controllers and the single expected
+version advance complete the handoff without another update. An unchanged source
+may use a new signed request within the original budget. Foreign changes remain
+blocked. Unissued intent can refresh its envelope without an effect; submission
+allowance and issuance are published together before sending any bytes.
 The original cycle baseline and debit allowance remain in force. New requests
 and resubmissions share the same two-submission limit; paid observations retain
-their separate four-per-canister limit. Unknown outcomes keep the original signed
-request, and a pruned reply cannot authorize renewal. Changed authority or an
-exhausted allowance stops apply with the operation still fenced.
+their separate four-per-canister limit. An unknown request observed beyond the
+certified absence window or an exhausted allowance remains fenced for recovery.
+
 
 
 ## Desired State

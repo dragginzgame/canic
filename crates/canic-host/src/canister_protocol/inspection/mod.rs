@@ -113,7 +113,8 @@ fn declares_inspection_reserve(contract: &str) -> Result<bool, String> {
     Ok(true)
 }
 
-fn validate_inspection_reserve(
+/// Bind reserve evidence to the exact Root and target before any paid inspection.
+pub fn validate_inspection_reserve(
     root: Principal,
     target: Principal,
     evidence: CanisterInspectionReserveResponse,

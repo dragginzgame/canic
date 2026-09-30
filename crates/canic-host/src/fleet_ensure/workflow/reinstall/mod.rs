@@ -99,7 +99,7 @@ pub fn plan_reinstall<P: EnsurePlatform>(
     if state.active_registry.is_none() {
         return Err(EnsureWorkflowError::ReinstallConflict);
     }
-    let source = completed_inventory_operation(&prior, &journal, &state)?;
+    let source = completed_inventory_operation(&prior, &state)?;
     let source_desired = prior
         .reviewed_desired
         .as_ref()

@@ -33,6 +33,7 @@ use super::{
 };
 use crate::{
     persistence::{CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
+    restore::persistence::{lock_restore_layout, release_restore, retain_restore},
     timestamp::state_updated_at,
 };
 use std::{collections::BTreeSet, ops::ControlFlow, path::Path};
@@ -82,6 +83,12 @@ fn restore_run_execute_result_with_terminal_writer(
 ) -> Result<RestoreRunnerOutcome, RestoreRunnerError> {
     let _lock = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
+    let layout = lock_restore_layout(&journal)?;
+    if let Some(layout) = &layout
+        && !journal.report().complete
+    {
+        retain_restore(layout, &config.journal, &journal)?;
+    }
     let mut executed_operations = Vec::new();
     let mut operation_receipts = Vec::new();
 
@@ -90,6 +97,15 @@ fn restore_run_execute_result_with_terminal_writer(
         let max_steps_reached =
             restore_run_max_steps_reached(config, executed_operations.len(), &report);
         if report.complete || max_steps_reached {
+            if report.complete {
+                // Prove inherited command descriptors are quiescent before releasing artifacts.
+                for operation in &journal.operations {
+                    let _command_lock = restore_command_lock(config, operation)?;
+                }
+                if let Some(layout) = &layout {
+                    release_restore(layout, &config.journal, &journal)?;
+                }
+            }
             return Ok(RestoreRunnerOutcome::ok(restore_run_execute_summary(
                 &journal,
                 executed_operations,

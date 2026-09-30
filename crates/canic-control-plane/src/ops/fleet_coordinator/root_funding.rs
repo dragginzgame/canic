@@ -95,12 +95,6 @@ impl FleetCoordinatorOps {
         now_ns: u64,
     ) -> Result<FleetRootFundingDisposition, InternalError> {
         let registry = Self::current()?;
-        if FleetCoordinatorFundingStore::export()
-            .current
-            .is_some_and(|funding| funding.rotation_current.is_some())
-        {
-            return Err(InternalError::conflict());
-        }
         let root = exact_registry_root(&registry, caller)?;
         let coordinator = registry.authority.binding.coordinator;
         let policy_hash = fleet_subnet_root_funding_policy_hash(&root.funding);
@@ -135,6 +129,11 @@ impl FleetCoordinatorOps {
             && last.request == request
         {
             return Ok(FleetRootFundingDisposition::Current(last.response.clone()));
+        }
+        // A Root may still be awaiting its completed grant's lost reply when rotation starts.
+        // Reconciliation preserves that receipt; only new grants cross the rotation fence.
+        if current.rotation_current.is_some() {
+            return Err(InternalError::conflict());
         }
 
         let expected_sequence = root_ledger

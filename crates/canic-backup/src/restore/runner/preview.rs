@@ -13,7 +13,11 @@ use super::{
         RestoreRunnerConfig, RestoreRunnerError,
     },
 };
-use crate::{persistence::JournalLock, timestamp::state_updated_at};
+use crate::{
+    persistence::JournalLock,
+    restore::persistence::{lock_restore_layout, retain_restore},
+    timestamp::state_updated_at,
+};
 
 /// Build a no-mutation native restore runner preview from a journal file.
 pub fn restore_run_dry_run(
@@ -43,6 +47,10 @@ pub fn restore_run_retry_failed(
 ) -> Result<RestoreRunResponse, RestoreRunnerError> {
     let _lock = JournalLock::acquire(&config.journal)?;
     let mut journal = read_apply_journal_file(&config.journal)?;
+    let layout = lock_restore_layout(&journal)?;
+    if let Some(layout) = &layout {
+        retain_restore(layout, &config.journal, &journal)?;
+    }
     let recovered_operation = journal
         .next_transition_operation()
         .filter(|operation| operation.state == RestoreApplyOperationState::Failed)

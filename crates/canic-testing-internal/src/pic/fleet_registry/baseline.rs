@@ -180,7 +180,8 @@ mod tests {
                 FleetFundingPolicyRotationPlacementEvidence, FleetFundingPolicyRotationPlan,
                 FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
                 FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationStageRootRequest,
-                FleetFundingPolicyUsage, FleetRootFundingNoGrantReason, FleetRootFundingResponse,
+                FleetFundingPolicyUsage, FleetRootFundingNoGrantReason, FleetRootFundingRequest,
+                FleetRootFundingResponse,
             },
             icp_refill::{IcpRefillStatus, IcpRefillTrigger},
         },
@@ -3610,6 +3611,7 @@ exec icp "$@"
         let mut forbidden = descendant_funding_request(pic, 0xb5);
         forbidden.capability =
             canic::dto::rpc::Request::RecycleCanister(canic::dto::rpc::RecycleCanisterRequest {
+                allocation_operation_id: [1; 32],
                 canister_pid: hub,
                 metadata: None,
             });
@@ -3753,8 +3755,9 @@ exec icp "$@"
             pic.update_candid(hub, "create_account", (user,)).unwrap();
         assert_eq!(replay.unwrap(), shard);
         assert_eq!(root_pool_status(pic, fixture.root_id), after);
-        qualify_fixture_revocation_before_recycling(pic, fixture, shard, &grant);
-        qualify_fixture_replacement(pic, fixture, hub, shard, &grant);
+        let first_removal =
+            qualify_fixture_revocation_before_recycling(pic, fixture, shard, &grant, [0xe5; 32]);
+        qualify_fixture_replacement(pic, fixture, hub, shard, &grant, first_removal);
     }
 
     /// Unavailable Store authority prevents removal; successful removal revokes before reset.
@@ -3764,7 +3767,8 @@ exec icp "$@"
         fixture: &BootstrappedRootFixture,
         shard: Principal,
         grant: &canic::dto::fixture_provisioning::FixtureGrant,
-    ) {
+        operation_id: [u8; 32],
+    ) -> canic::dto::component_registry::RootComponentSubtreeRemovalRequest {
         let ManagedCanisterBinding::ComponentChild(binding) = &grant.binding.target else {
             unreachable!()
         };
@@ -3782,11 +3786,19 @@ exec icp "$@"
             panic!("expected current Component partition");
         };
         let request = canic::dto::component_registry::RootComponentSubtreeRemovalRequest {
-            operation_id: [0xe5; 32],
+            operation_id,
             component,
             target_canister_id: shard,
             expected_registry: partition.head,
         };
+        pic.stop_canister(shard, Some(root)).unwrap();
+        let snapshot = pic.take_canister_snapshot(shard, Some(root), None).unwrap();
+        assert!(
+            pic.list_canister_snapshots(shard, Some(root))
+                .unwrap()
+                .contains(&snapshot)
+        );
+        pic.start_canister(shard, Some(root)).unwrap();
         let before = root_pool_status(pic, root)
             .entries
             .into_iter()
@@ -3826,12 +3838,18 @@ exec icp "$@"
         .unwrap();
         wait_for_fixture_subtree_removal(pic, root, request.operation_id);
         assert!(
+            pic.list_canister_snapshots(shard, Some(root))
+                .unwrap()
+                .is_empty()
+        );
+        assert!(
             pic.canister_status(shard, Some(root))
                 .unwrap()
                 .module_hash
                 .is_none()
         );
-        assert_fixture_revocation_and_replay(pic, root, store, shard, grant, request);
+        assert_fixture_revocation_and_replay(pic, root, store, shard, grant, request.clone());
+        request
     }
 
     #[cfg(test)]
@@ -3937,8 +3955,10 @@ exec icp "$@"
         hub: Principal,
         shard: Principal,
         previous: &canic::dto::fixture_provisioning::FixtureGrant,
+        first_removal: canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
     ) {
         let root = fixture.root_id;
+        assert_retired_shard_routing_unavailable(pic, hub);
         pic.stop_canister(shard, Some(root)).unwrap();
         let operation_id: [u8; 32] = [0xe6; 32];
         let mut last = None;
@@ -4000,6 +4020,115 @@ exec icp "$@"
             .update_candid_as(hub, root, "test_create_fixture_child", (operation_id,))
             .unwrap();
         assert_eq!(replay.unwrap(), shard);
+        assert_retired_shard_routing_unavailable(pic, hub);
+        assert_replacement_authority_isolated(pic, root, store, hub, shard, previous, &grant);
+        assert_completed_recycle_rpc_replays(pic, root, hub, previous, &first_removal);
+        qualify_fixture_revocation_before_recycling(pic, fixture, shard, &grant, [0xe7; 32]);
+        let target_asset = || {
+            root_pool_status(pic, root)
+                .entries
+                .into_iter()
+                .find(|entry| entry.canister_id == shard)
+                .unwrap()
+        };
+        let after_second_recycle = target_asset();
+        root_command(pic, root, RootCommandFragment::RemoveSubtree(first_removal)).unwrap();
+        assert_eq!(target_asset(), after_second_recycle);
+        qualify_recycled_asset_reinspection_recovery(pic, root, shard);
+    }
+
+    /// A retained completed removal still replays after its target has been reused.
+    #[cfg(test)]
+    fn assert_completed_recycle_rpc_replays(
+        pic: &PocketIc,
+        root: Principal,
+        hub: Principal,
+        previous: &canic::dto::fixture_provisioning::FixtureGrant,
+        removal: &canic::dto::component_registry::RootComponentSubtreeRemovalRequest,
+    ) {
+        let target_asset = || {
+            root_pool_status(pic, root)
+                .entries
+                .into_iter()
+                .find(|entry| entry.canister_id == removal.target_canister_id)
+                .unwrap()
+        };
+        let before = target_asset();
+        let mut request = descendant_funding_request(pic, 0xe9);
+        request.metadata.request_id = removal.operation_id;
+        request.capability =
+            canic::dto::rpc::Request::RecycleCanister(canic::dto::rpc::RecycleCanisterRequest {
+                canister_pid: removal.target_canister_id,
+                allocation_operation_id: previous.binding.installation,
+                metadata: None,
+            });
+        for _ in 0..2 {
+            root_command(
+                pic,
+                root,
+                RootCommandFragment::RemoveSubtree(removal.clone()),
+            )
+            .unwrap();
+            assert_eq!(target_asset(), before);
+            let response = root_command_as(
+                pic,
+                root,
+                hub,
+                RootCommandFragment::RespondCapability(request.clone()),
+            )
+            .unwrap();
+            let RootCommandResponseFragment::RespondCapability(response) = response else {
+                panic!("recycle capability response");
+            };
+            assert!(matches!(
+                response.response,
+                canic::dto::rpc::Response::RecycleCanister
+            ));
+            assert_eq!(target_asset(), before);
+        }
+    }
+
+    /// Old recycle and grant requests cannot affect the replacement allocation.
+    #[cfg(test)]
+    fn assert_replacement_authority_isolated(
+        pic: &PocketIc,
+        root: Principal,
+        store: Principal,
+        hub: Principal,
+        shard: Principal,
+        previous: &canic::dto::fixture_provisioning::FixtureGrant,
+        grant: &canic::dto::fixture_provisioning::FixtureGrant,
+    ) {
+        let before_rejected_recycle = root_pool_status(pic, root)
+            .entries
+            .into_iter()
+            .find(|entry| entry.canister_id == shard)
+            .unwrap();
+        let mut obsolete = descendant_funding_request(pic, 0xe8);
+        obsolete.capability =
+            canic::dto::rpc::Request::RecycleCanister(canic::dto::rpc::RecycleCanisterRequest {
+                canister_pid: shard,
+                allocation_operation_id: previous.binding.installation,
+                metadata: None,
+            });
+        let error = root_command_as(
+            pic,
+            root,
+            hub,
+            RootCommandFragment::RespondCapability(obsolete),
+        )
+        .err()
+        .expect("old allocation cannot recycle its replacement");
+        assert_eq!(
+            error.code(),
+            canic::diagnostics::codes::AUTHORITY_CONFLICT.raw_code()
+        );
+        let after_rejected_recycle = root_pool_status(pic, root)
+            .entries
+            .into_iter()
+            .find(|entry| entry.canister_id == shard)
+            .unwrap();
+        assert_eq!(after_rejected_recycle, before_rejected_recycle);
         let StoreCommandResponse::FixtureGrant(stale) = store_command_as(
             pic,
             store,
@@ -4027,7 +4156,133 @@ exec icp "$@"
         let StoreCatalogResponse::FixtureGrant(retained) = response.unwrap() else {
             panic!("exact grant response");
         };
-        assert_eq!(retained, Some(grant));
+        assert_eq!(retained.as_deref(), Some(grant));
+    }
+
+    /// Reusing a canister ID never restores a key assigned to its earlier allocation.
+    #[cfg(test)]
+    fn assert_retired_shard_routing_unavailable(pic: &PocketIc, hub: Principal) {
+        let user = Principal::from_slice(&[0xe4; 29]);
+        let plan: Result<String, Error> = pic
+            .query_candid(hub, "plan_create_account", (user,))
+            .unwrap();
+        assert_eq!(
+            plan.unwrap_err().code(),
+            canic::diagnostics::codes::POSITION_UNAVAILABLE.raw_code()
+        );
+        let result: Result<Principal, Error> =
+            pic.update_candid(hub, "create_account", (user,)).unwrap();
+        assert_eq!(
+            result.unwrap_err().code(),
+            canic::diagnostics::codes::POSITION_UNAVAILABLE.raw_code()
+        );
+    }
+
+    /// A management rejection preserves pending cleanup and the recycled asset's provenance.
+    #[cfg(test)]
+    fn qualify_recycled_asset_reinspection_recovery(
+        pic: &PocketIc,
+        root: Principal,
+        canister: Principal,
+    ) {
+        let controllers = pic
+            .canister_status(canister, Some(root))
+            .unwrap()
+            .settings
+            .controllers;
+        pic.set_controllers(canister, Some(root), vec![Principal::anonymous()])
+            .unwrap();
+        let request = RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+            canister_id: canister,
+        });
+        let rejected = root_command(pic, root, request)
+            .err()
+            .expect("management rejection");
+        assert_eq!(
+            rejected,
+            Error::from_registered(canic_core::diagnostics::codes::PLATFORM_UNAVAILABLE)
+        );
+        let pending = root_pool_status(pic, root)
+            .entries
+            .into_iter()
+            .find(|entry| entry.canister_id == canister)
+            .unwrap();
+        assert_eq!(pending.status, CanisterPoolAssetStatus::PendingReset);
+        assert_eq!(
+            pending.origin,
+            canic::dto::pool::CanisterPoolAssetOrigin::Recycled
+        );
+        pic.set_controllers(canister, None, controllers).unwrap();
+        let response = root_command(
+            pic,
+            root,
+            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                canister_id: canister,
+            }),
+        )
+        .unwrap();
+        assert!(
+            matches!(response, RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == canister)
+        );
+        let ready = root_pool_status(pic, root)
+            .entries
+            .into_iter()
+            .find(|entry| entry.canister_id == canister)
+            .unwrap();
+        assert_eq!(ready.status, CanisterPoolAssetStatus::Ready);
+        assert_eq!(ready.origin, pending.origin);
+        qualify_concurrent_pool_reinspection(pic, root, canister);
+    }
+
+    /// Concurrent manual resets share one live execution owner for the physical target.
+    #[cfg(test)]
+    fn qualify_concurrent_pool_reinspection(pic: &PocketIc, root: Principal, canister: Principal) {
+        let args = encode_one(RootCommandFragment::ImportPoolCanister(
+            PoolCanisterRequest {
+                canister_id: canister,
+            },
+        ))
+        .unwrap();
+        let first = pic
+            .submit_call(
+                root,
+                Principal::anonymous(),
+                canic::protocol::CANIC_ROOT_COMMAND,
+                args.clone(),
+            )
+            .unwrap();
+        let second = pic
+            .submit_call(
+                root,
+                Principal::anonymous(),
+                canic::protocol::CANIC_ROOT_COMMAND,
+                args,
+            )
+            .unwrap();
+        let replies = [first, second].map(|message| {
+            decode_one::<Result<RootCommandResponseFragment, Error>>(
+                &pic.await_call(message).unwrap(),
+            )
+            .unwrap()
+        });
+        assert!(replies.iter().any(|reply| matches!(reply, Ok(RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id })) if *canister_id == canister)));
+        let busy = Error::from_registered(canic_core::diagnostics::codes::STATE_UNAVAILABLE);
+        assert!(
+            replies
+                .iter()
+                .any(|reply| reply.as_ref().err() == Some(&busy))
+        );
+        let response = root_command(
+            pic,
+            root,
+            RootCommandFragment::ImportPoolCanister(PoolCanisterRequest {
+                canister_id: canister,
+            }),
+        )
+        .unwrap();
+        assert!(
+            matches!(response, RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported { canister_id }) if canister_id == canister)
+        );
     }
 
     #[cfg(test)]
@@ -4512,7 +4767,19 @@ exec icp "$@"
             panic!("Coordinator returned a differently correlated terminal replay");
         };
         assert_eq!(terminal_receipt, first_receipt);
-        assert_eq!(root_pool_status(&pic, fixture.root_id), replay_pool);
+        let replayed_pool = root_pool_status(&pic, fixture.root_id);
+        assert_eq!(replayed_pool.tracked, replay_pool.tracked);
+        assert_eq!(replayed_pool.claimed, replay_pool.claimed);
+        assert_eq!(replayed_pool.pending_creation, replay_pool.pending_creation);
+        // Terminal replay preserves every workload allocation. Independent pool
+        // maintenance may finish an already pending empty-asset reset meanwhile.
+        let workloads = |pool: CanisterPoolResponse| {
+            pool.entries
+                .into_iter()
+                .filter(|entry| matches!(entry.status, CanisterPoolAssetStatus::Workload { .. }))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(workloads(replayed_pool), workloads(replay_pool));
         for (canister, grant) in grants {
             let response: Result<StoreCatalogResponse, Error> = pic
                 .query_candid_as(
@@ -7687,6 +7954,9 @@ esac
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
         let config_path = workspace_root.join(match (funding, initial_workload_count) {
+            (FundingJourney::CompletedReset, completed_reset::INCIDENT_WORKLOADS) => {
+                "canisters/audit/root_probe/import-estate.toml"
+            }
             (
                 FundingJourney::Reinstall | FundingJourney::CompletedReset,
                 RETAINED_ESTATE_WORKLOADS,
@@ -7766,6 +8036,9 @@ esac
             .expect("one application Subnet");
 
         let ready_count = match (funding, initial_workload_count) {
+            (FundingJourney::CompletedReset, completed_reset::INCIDENT_WORKLOADS) => {
+                completed_reset::INCIDENT_READY
+            }
             (FundingJourney::Reinstall | FundingJourney::CompletedReset, _) => {
                 RETAINED_ESTATE_READY
             }
@@ -11007,19 +11280,22 @@ esac
         let original = std::fs::read_to_string(request.source).expect("read reviewed policy");
         let insufficient = original.replace(
             &format!("maximum_size = {}", workloads + ready),
-            &format!("maximum_size = {workloads}"),
+            &format!("maximum_size = {}", workloads + ready - 1),
         );
         assert_ne!(insufficient, original);
         std::fs::write(request.source, insufficient).expect("write capacity-negative policy");
         let Err(error) = canic_host::fleet_ensure::generate_desired_fleet(request) else {
-            panic!("Workloads alone cannot satisfy the independent Ready reserve");
+            panic!("pool capacity below Workloads plus Ready reserve must reject");
         };
-        assert!(matches!(
-            error,
-            canic_host::fleet_ensure::FleetGenerateError::Policy(
-                canic_host::fleet_ensure::policy::EnsurePolicyError::TerminalPoolCapacity { .. }
-            )
-        ));
+        assert!(
+            matches!(
+                error,
+                canic_host::fleet_ensure::FleetGenerateError::Policy(
+                    canic_host::fleet_ensure::policy::EnsurePolicyError::TerminalPoolCapacity { .. }
+                )
+            ),
+            "unexpected capacity rejection: {error:?}"
+        );
         std::fs::write(request.source, original).expect("restore exact reviewed fixture policy");
     }
 
@@ -11947,6 +12223,41 @@ cycles = "80T"
             CoordinatorCommand::BeginFundingPolicyRotation(begin.clone()),
             operation_id,
         );
+        let mut before_replay = coordinator_funding_status(&fixture);
+        let request = FleetRootFundingRequest {
+            operation_id: first_grant.request.operation_id,
+            operation_sequence: first_grant.request.operation_sequence,
+            expected_registry: first_grant.request.expected_registry.clone(),
+            observed_balance: first_grant.request.observed_balance.clone(),
+            requested_cycles: first_grant.request.granted_cycles.clone(),
+            policy_hash: first_grant.request.policy_hash,
+        };
+        let replay: Result<CoordinatorCommandResponse, Error> = fixture
+            .pic
+            .update_candid_as(
+                fixture.coordinator,
+                fixture.root,
+                canic::protocol::CANIC_COORDINATOR_COMMAND,
+                (CoordinatorCommand::RequestRootFunding(request),),
+            )
+            .expect("retained grant replay should reach the Coordinator during rotation");
+        let CoordinatorCommandResponse::RequestRootFunding(replayed) = replay.unwrap() else {
+            panic!("expected a funding receipt");
+        };
+        assert_eq!(
+            replayed,
+            FleetRootFundingResponse::Granted(first_grant.clone())
+        );
+        let after_replay = coordinator_funding_status(&fixture);
+        // Executing the ingress costs cycles even when the retained grant is replayed.
+        let replay_debit = before_replay
+            .current_cycles
+            .to_u128()
+            .checked_sub(after_replay.current_cycles.to_u128())
+            .expect("grant replay must not credit the Coordinator");
+        assert!(replay_debit < 1_000_000_000);
+        before_replay.current_cycles = after_replay.current_cycles.clone();
+        assert_eq!(after_replay, before_replay);
         assert_rotation_command_accepted(
             &fixture,
             "stage Root",

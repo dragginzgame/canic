@@ -92,6 +92,7 @@ pub enum PlacementIndexEntryRecord {
     Bound {
         instance_pid: Principal,
         bound_at: u64,
+        allocation_operation_id: [u8; 32],
     },
 }
 

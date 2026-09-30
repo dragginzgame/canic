@@ -20,14 +20,41 @@ use crate::{
 pub struct ScalingRegistryOps;
 
 impl ScalingRegistryOps {
-    pub fn upsert(pid: Principal, worker: ScalingWorkerEntry, created_at_secs: u64) {
-        let entry = WorkerEntryRecordMapper::validated_to_record(worker, created_at_secs);
+    fn entry_is_current(
+        record: &crate::storage::stable::scaling::ScalingRegistryEntryRecord,
+    ) -> bool {
+        crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+            record.pid,
+            record.entry.allocation_operation_id,
+        )
+    }
+
+    pub fn upsert(
+        pid: Principal,
+        worker: ScalingWorkerEntry,
+        created_at_secs: u64,
+        allocation_operation_id: [u8; 32],
+    ) {
+        let entry = WorkerEntryRecordMapper::validated_to_record(
+            worker,
+            created_at_secs,
+            allocation_operation_id,
+        );
         ScalingRegistry::upsert(pid, entry);
     }
 
     #[must_use]
     pub fn count_by_pool(pool: &str) -> u32 {
-        ScalingRegistry::count_by_pool(pool)
+        u32::try_from(
+            ScalingRegistry::export()
+                .entries
+                .into_iter()
+                .filter(|record| {
+                    record.entry.pool.as_ref() == pool && Self::entry_is_current(record)
+                })
+                .count(),
+        )
+        .unwrap_or(u32::MAX)
     }
 
     #[must_use]
@@ -35,6 +62,7 @@ impl ScalingRegistryOps {
         let entries = ScalingRegistry::export()
             .entries
             .into_iter()
+            .filter(Self::entry_is_current)
             .map(|record| ScalingRegistryEntry {
                 pid: record.pid,
                 entry: WorkerEntryRecordMapper::record_to_view(&record.entry),
@@ -42,5 +70,51 @@ impl ScalingRegistryOps {
             .collect();
 
         ScalingRegistryResponse(entries)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::{
+        cdk::types::BoundedString64,
+        ops::storage::children::CanisterChildrenOps,
+        test::{
+            seams::{lock, p},
+            support::direct_child,
+        },
+    };
+
+    #[test]
+    fn recycled_worker_is_not_counted_or_returned_until_registered_for_its_allocation() {
+        let _guard = lock();
+        let pid = p(17);
+        let role = CanisterRole::new("worker");
+        let worker = ScalingWorkerEntry {
+            pool: BoundedString64::new("reuse"),
+            canister_role: role.clone(),
+        };
+        CanisterChildrenOps::import_direct_children(
+            p(2),
+            vec![direct_child(pid, role.clone(), [1; 32])],
+        );
+        ScalingRegistryOps::upsert(pid, worker.clone(), 1, [1; 32]);
+        assert_eq!(ScalingRegistryOps::count_by_pool("reuse"), 1);
+        CanisterChildrenOps::import_direct_children(p(2), vec![direct_child(pid, role, [2; 32])]);
+        assert_eq!(ScalingRegistryOps::count_by_pool("reuse"), 0);
+        assert!(
+            !ScalingRegistryOps::entries_response()
+                .0
+                .iter()
+                .any(|record| record.pid == pid)
+        );
+        ScalingRegistryOps::upsert(pid, worker, 2, [2; 32]);
+        assert_eq!(ScalingRegistryOps::count_by_pool("reuse"), 1);
+        assert!(
+            ScalingRegistryOps::entries_response()
+                .0
+                .iter()
+                .any(|record| record.pid == pid)
+        );
     }
 }

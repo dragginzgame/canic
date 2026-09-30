@@ -83,10 +83,10 @@ pub fn selected(
     }
     if ops::operation_selection::completed_fleet(&paths, environment, fleet)? {
         return Ok(
-            reinstall || (applying && paths.plan.with_file_name("clean-reinstall.json").exists())
+            reinstall || (applying && ops::operation_selection::clean_reinstall_current(&paths)?)
         );
     }
-    Ok(paths.plan.with_file_name("clean-reinstall.json").exists())
+    ops::operation_selection::clean_reinstall_current(&paths)
 }
 
 /// A same-operation retry uses its frozen current desired authority.
@@ -101,6 +101,9 @@ pub fn retained_desired(
         return Ok(None);
     }
     if reinstall && ops::operation_selection::completed_fleet(&paths, environment, fleet)? {
+        return Ok(None);
+    }
+    if !ops::operation_selection::clean_reinstall_current(&paths)? {
         return Ok(None);
     }
     Ok(storage::read(&paths)?.map(|record| record.desired.desired().clone()))
@@ -151,9 +154,13 @@ pub fn review<P: EnsurePlatform>(
                 platform,
             )?)));
         }
+        let completed = journal.is_some_and(|journal| {
+            journal.completion == FleetEnsureCompletion::Converged
+                && journal.operation_id == plan.operation_id
+                && journal.plan_sha256 == plan.plan_sha256
+        });
         return Ok(CleanReinstallReport::Fleet(Box::new(report(
-            plan,
-            journal.is_some_and(|journal| journal.completion == FleetEnsureCompletion::Converged),
+            plan, completed,
         ))));
     }
     if !journal.is_some_and(|journal| journal.completion == FleetEnsureCompletion::Converged) {

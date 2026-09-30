@@ -73,6 +73,7 @@ impl From<PlacementIndexWorkflowError> for InternalError {
 
 #[derive(Debug, Eq, PartialEq)]
 pub(super) enum PlacementIndexEntryClassification {
+    Unavailable,
     Bound {
         instance_pid: Principal,
         bound_at: u64,

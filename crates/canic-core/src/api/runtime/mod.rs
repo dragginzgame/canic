@@ -890,6 +890,7 @@ mod tests {
                     reserved_qty: 0,
                     committed_qty: 1,
                     pending_count: 0,
+                    retain_until_secs: None,
                 },
             );
         }

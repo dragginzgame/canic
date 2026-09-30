@@ -59,6 +59,34 @@ pub struct PlacementAllocationPermit {
     root_receipt_may_exist: bool,
 }
 
+impl PlacementAllocationPermit {
+    /// Exact Root allocation identity carried by this local receipt.
+    #[must_use]
+    pub const fn operation_id(&self) -> [u8; 32] {
+        self.identity.operation_id.into_bytes()
+    }
+
+    /// Reject an old allocation reply after its physical canister has been removed or reused.
+    pub fn require_current_child(&self, pid: Principal) -> Result<(), InternalError> {
+        if crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+            pid,
+            self.operation_id(),
+        ) {
+            Ok(())
+        } else {
+            Err(InternalError::public(
+                crate::diagnostics::codes::POSITION_UNAVAILABLE,
+            ))
+        }
+    }
+}
+
+/// A locally reserved request that has not yet crossed the Root call boundary.
+pub(super) struct PreparedPlacementAllocation {
+    request: PlacementAllocationRequest,
+    permit: PlacementAllocationPermit,
+}
+
 ///
 /// PlacementAllocationWorkflow
 ///
@@ -101,7 +129,24 @@ impl PlacementAllocationWorkflow {
     pub async fn create_child(
         request: PlacementAllocationRequest,
     ) -> Result<(PlacementAllocationPermit, Principal), InternalError> {
-        let mut permit = begin_allocation(&request)?;
+        Self::create_prepared_child(Self::prepare_child(request)?).await
+    }
+
+    /// Complete local admission before a domain owner commits to an async create.
+    pub(super) fn prepare_child(
+        request: PlacementAllocationRequest,
+    ) -> Result<PreparedPlacementAllocation, InternalError> {
+        let permit = begin_allocation(&request)?;
+        Ok(PreparedPlacementAllocation { request, permit })
+    }
+
+    pub(super) async fn create_prepared_child(
+        prepared: PreparedPlacementAllocation,
+    ) -> Result<(PlacementAllocationPermit, Principal), InternalError> {
+        let PreparedPlacementAllocation {
+            request,
+            mut permit,
+        } = prepared;
         let response = RequestOps::allocate_placement_child::<Vec<u8>>(
             &request.canister_role,
             CreateCanisterParent::ThisCanister,
@@ -149,13 +194,29 @@ impl PlacementAllocationWorkflow {
         settle_allocation(permit, child_pid, TerminalEvidenceDecision::RolledBack)
     }
 
-    /// Commit registered membership, then hand retained receipt release to the durable drain.
-    pub fn finish_registered_child(
+    /// Commit completed creation after registration or observed retirement, then drain its receipt.
+    pub fn finish_created_child(
         permit: &PlacementAllocationPermit,
         child_pid: Principal,
     ) -> Result<(), InternalError> {
         Self::commit_registered_child(permit, child_pid)?;
         finish_terminal_allocation(permit)
+    }
+
+    /// A retired result may already have been disposed by another resumer before its reply.
+    pub fn finish_retired_child(
+        permit: &PlacementAllocationPermit,
+        child_pid: Principal,
+    ) -> Result<(), InternalError> {
+        if let Some(intent) = ReceiptBackedIntentOps::load(permit.identity.operation_id)? {
+            if intent.payload_binding != permit.identity.payload_binding {
+                return Err(InternalError::invariant());
+            }
+            if matches!(intent.state, ReceiptBackedIntentState::RolledBack { .. }) {
+                return finish_terminal_allocation(permit);
+            }
+        }
+        Self::finish_created_child(permit, child_pid)
     }
 
     /// Roll back a disposed child, then hand retained receipt release to the durable drain.
@@ -187,6 +248,13 @@ fn settle_allocation(
         SettleReceiptBackedIntentResult::Settled { state, .. }
         | SettleReceiptBackedIntentResult::AlreadySettled { state, .. }
             if state_matches_decision(&state, decision) =>
+        {
+            Ok(())
+        }
+        // A valid permit may outlive acknowledgement cleanup while another resumer awaits Root.
+        // The caller has proved either registered membership or a completed, now-retired creation.
+        SettleReceiptBackedIntentResult::NotFound
+            if decision == TerminalEvidenceDecision::Committed =>
         {
             Ok(())
         }
@@ -498,5 +566,56 @@ mod tests {
                 .state,
             ReceiptBackedIntentState::RolledBack { .. }
         ));
+    }
+
+    #[test]
+    fn completed_index_keys_do_not_consume_lifetime_quota_capacity() {
+        use crate::ops::storage::intent::INTENT_RESOURCE_TOTAL_RECORD_LIMIT;
+
+        reset_intents();
+        for key in 0..=INTENT_RESOURCE_TOTAL_RECORD_LIMIT {
+            let mut request = request(0, 1);
+            request.identity = PlacementAllocationIdentity::index(
+                p(1),
+                "pool",
+                &key.to_string(),
+                1,
+                &request.canister_role,
+                None,
+            );
+            let permit = begin_allocation(&request).unwrap();
+            PlacementAllocationWorkflow::finish_created_child(&permit, p(9)).unwrap();
+            PlacementAllocationWorkflow::finish_created_child(&permit, p(9)).unwrap();
+            let capacity = ReceiptBackedIntentOps::receipt_capacity().unwrap();
+            assert_eq!(capacity.resource_total_records, 0);
+            assert_eq!(capacity.total_records, 0);
+        }
+    }
+
+    #[test]
+    fn index_cleanup_preserves_another_pending_reservation_for_the_key() {
+        reset_intents();
+        let mut first = request(0, 1);
+        first.identity =
+            PlacementAllocationIdentity::index(p(1), "pool", "key", 1, &first.canister_role, None);
+        let first_permit = begin_allocation(&first).unwrap();
+        let mut second = first.clone();
+        second.identity =
+            PlacementAllocationIdentity::index(p(1), "pool", "key", 2, &second.canister_role, None);
+        second.reservation_limit = 2;
+        let second_permit = begin_allocation(&second).unwrap();
+        PlacementAllocationWorkflow::finish_created_child(&first_permit, p(8)).unwrap();
+        let retained = IntentStoreOps::totals(&first.identity.resource_key);
+        assert_eq!(retained.pending_count, 1);
+        assert_eq!(retained.reserved_qty, 1);
+        assert_eq!(retained.committed_qty, 1);
+
+        PlacementAllocationWorkflow::finish_created_child(&second_permit, p(9)).unwrap();
+        assert_eq!(
+            ReceiptBackedIntentOps::receipt_capacity()
+                .unwrap()
+                .resource_total_records,
+            0
+        );
     }
 }

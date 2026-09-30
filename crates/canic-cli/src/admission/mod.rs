@@ -296,7 +296,7 @@ fn run_plan(options: AdmissionPlanOptions) -> Result<(), AdmissionCommandError> 
     )?;
     let mut bytes = serde_json::to_vec_pretty(&plan)?;
     bytes.push(b'\n');
-    write_bytes(&options.out, &bytes)?;
+    write_bytes(&crate::output::resolve_operator_path(&options.out)?, &bytes)?;
     println!(
         "Fleet-admission plan written to {}\nOperation: {}\nGeneration: {} -> {}\nRegistry revision: {}\nParticipant Roots: {}\nManaged participants: {}",
         options.out.display(),

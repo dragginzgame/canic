@@ -417,9 +417,9 @@ mod supported {
         create_parent_hierarchy(parent, &mut before)?;
         let parent_fd = open_directory(parent)?;
         let permissions = if mode == FileCommitMode::CreatePrivateWithParents {
-            0o600
+            Mode::RUSR | Mode::WUSR
         } else {
-            0o666
+            Mode::RUSR | Mode::WUSR | Mode::RGRP | Mode::WGRP | Mode::ROTH | Mode::WOTH
         };
         let (temp_name, temp_path, mut temp_file) =
             create_sibling_temp(&parent_fd, parent, file_name, permissions, &mut before)?;
@@ -582,7 +582,7 @@ mod supported {
         parent_fd: &impl AsFd,
         parent: &Path,
         file_name: &OsStr,
-        permissions: u32,
+        permissions: Mode,
         before: &mut impl FnMut(FileCommitStep, &Path) -> io::Result<()>,
     ) -> io::Result<(OsString, PathBuf, fs::File)> {
         for _ in 0..TEMP_ATTEMPTS {
@@ -596,7 +596,7 @@ mod supported {
                 parent_fd,
                 &temp_name,
                 OFlags::WRONLY | OFlags::CREATE | OFlags::EXCL | OFlags::CLOEXEC,
-                Mode::from_raw_mode(permissions),
+                permissions,
             ) {
                 Ok(file) => return Ok((temp_name, temp_path, fs::File::from(file))),
                 Err(error) if error == rustix::io::Errno::EXIST => {}

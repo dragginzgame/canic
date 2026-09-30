@@ -9,7 +9,7 @@ use crate::{
         BackupExecutionJournal, BackupExecutionOperationReceipt,
         BackupExecutionOperationReceiptOutcome, BackupExecutionOperationState,
     },
-    persistence::{BackupLayout, CommandLifetimeLock, CommandLifetimeLockError, JournalLock},
+    persistence::{BackupLayout, CommandLifetimeLock, CommandLifetimeLockError},
     plan::{BackupOperationKind, BackupPlan},
     timestamp::{current_timestamp_marker, state_updated_at, timestamp_marker, timestamp_seconds},
 };
@@ -59,8 +59,8 @@ fn backup_run_execute_with_terminal_writer(
         &BackupExecutionJournal,
     ) -> Result<(), crate::persistence::PersistenceError>,
 ) -> Result<BackupRunResponse, BackupRunnerError> {
-    let layout = BackupLayout::new(config.out.clone());
-    let _lock = JournalLock::acquire(&layout.execution_journal_path())?;
+    let layout = BackupLayout::new(config.out.clone()).resolve_root()?;
+    let _lock = layout.lock_execution()?;
     let mut plan = layout.read_backup_plan()?;
     let mut journal = if layout.execution_journal_path().is_file() {
         layout.read_execution_journal()?

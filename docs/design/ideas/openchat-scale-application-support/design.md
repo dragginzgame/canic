@@ -1,12 +1,107 @@
 # Idea: OpenChat-Class Application Support
 
-Date: 2026-09-29
+Date: 2026-09-30
 
 **Product direction and planning status**
 
 The maintainer requires Canic to support an application like OpenChat. Treat that as a product capability objective: a large, persistent, multi-subnet application with heterogeneous canisters, shared and dedicated tenancy, substantial background traffic, and governed operations. Supporting the vocabulary in configuration is insufficient; the operating behavior needs reproducible qualification.
 
 This note turns the [OpenChat source review](../../../forum/openchat-and-canic.md) into proposed work packages. The product direction is maintainer-requested; the package ordering below is a recommendation, not an accepted implementation queue or numbered release allocation. It does not change the open 0.110 batch, the human minor-closeout gate, or the selected 0.111 blob extraction. No OpenChat modification or production deployment is authorized.
+
+**Maintainer direction: make OpenChat adoption easy**
+
+The September 30 direction is to build towards infrastructure that OpenChat has a
+compelling reason to adopt, with a small and reversible evaluation commitment.
+Canic should aim to outperform the incumbent in operating cost, reliability,
+maintenance burden and usability. Those are engineering targets to demonstrate,
+not a present superiority claim. OpenChat's confidence in its existing system is
+a baseline requirement, not a reason to abandon the objective.
+
+The adoption experience is part of the product: useful tooling before runtime
+integration, clearly separable capabilities, familiar infrastructure boundaries,
+and an explicit account of the work each capability removes. A mandatory rewrite
+of OpenChat's application, controller hierarchy, storage or treasury before the
+first useful result would fail this objective. The future runtime-adoption goal
+remains subject to the lifecycle boundary below; this note does not design or
+authorize adoption of an existing installation under today's pre-1.0 policy.
+
+**Developer feedback received September 30**
+
+Source: the maintainer supplied an OpenChat developer's message in this session.
+The statements below are developer-reported operational facts and plans, separate
+from the September 29 pinned source review. The message's original date and a
+public permalink were not supplied. Its reference to starting migration
+“tomorrow” is not evidence that migration has started or completed.
+
+Follow-up developer feedback asks us to ignore the legacy `User` canister
+because it will soon be deprecated. Exclude that role from the test port,
+synthetic OpenChat fixture, integration adapters and qualification targets.
+Use `MultiUser` for user workloads; retain the required user indexes, which
+are distinct roles. Group and community canisters remain in scope. This is
+direction for our evaluation, not confirmation that deprecation is complete.
+Recheck lifecycle, memory, timer and payload assumptions against the selected
+MultiUser revision instead of transferring findings from legacy User code.
+
+| Reported OpenChat behaviour | Consequence for the Canic objective |
+| --- | --- |
+| Roughly 250,000 canisters, with a reported recurring base charge of approximately 0.4T per canister-year introduced in mid-June. | Count physical canisters and fixed overhead explicitly, including infrastructure and spare pools. Do not optimise only instructions or logical tenant capacity. |
+| MultiUser canisters are ready to launch, targeting roughly 10,000 users per canister and about 25 user canisters. | Make shared tenancy the primary comparison. User placement, isolation and application readiness remain application-owned. The 25 figure is a user-canister target, not the total future estate including groups, communities and infrastructure. |
+| One SNS-controlled CyclesDispenser holds ICP, converts it when its cycle balance falls below a threshold, serves top-level requests and sweeps SNS-registered canisters every 24 hours. | Preserve treasury and governance ownership. Compare against an autonomous funding service, not a manual operator top-up baseline. Distinguish ICP conversion, cycles transferred, consumption and retained reserves. |
+| Busy children request funding from their subnet LocalIndex during updates; LocalIndexes sweep children weekly. | Qualify prompt demand-driven funding and bounded idle-canister coverage. Neither permanent fine-grained polling nor traffic-only funding is an adequate default. |
+| Wasm is relayed from top-level owners to LocalIndexes, which upgrade their children. Local creation, funding and upgrades stay on the child's subnet. | Preserve subnet locality and hierarchical distribution. Measure cross-subnet calls and bytes; do not add a central round trip to every child operation. |
+| Funding and upgrades have worked for years under SNS control; fewer canisters should simplify operations further. | Demonstrate an incremental advantage over that working system. Generic top-up and installation APIs alone offer little reason to switch. |
+
+Using the reported fee, 250,000 × 0.4T = 100,000T per year, or 100 quadrillion
+cycles. Applying the same rate to 25 user canisters gives 10T per year for that
+population's base charge. This is conditional arithmetic, not an observed saving
+or the total future OpenChat bill. It excludes other canisters, storage, execution,
+messages, transition costs and Canic overhead. A quoted initial cycle deposit is
+retained spendable funding, not itself consumption; keep it separate from creation
+fees and later resource charges.
+
+The official [cycle-cost reference](https://docs.internetcomputer.org/references/cycle-costs/)
+confirms the listed 0.5T creation charge for a 13-node application subnet and
+subnet-size scaling. The references checked on September 30 did not independently
+confirm the reported June recurring fee. Retain its provenance and request the
+applicable fee schedule or measured debit before freezing a benchmark; do not
+hard-code 0.4T as a universal current tariff. Use the platform's
+[current cost functions](https://docs.internetcomputer.org/references/management-canister/#cycle-costs)
+where available and record the subnet and fee assumptions for other charges.
+
+**Adoption path and concrete next actions**
+
+The initial deliverable should be useful even if OpenChat never installs Canic.
+This is an adoption sequence, not a new release allocation or authority to contact
+OpenChat, build its repository, change its canisters or execute a migration.
+
+| Priority | Action and owner | Evidence of completion |
+| --- | --- | --- |
+| First | OC-6/Host: specify a passive report over externally supplied Wasm and proposal inputs, preserving their exact bytes. | A reviewer can compare supplied artifacts, hashes, exports and sizes without a Canic runtime, controller change, new canister or alternate release pipeline. Provenance that cannot be established is marked unknown. |
+| First | OC-1/OC-2: write a dependency and integration-cost matrix for each proposed capability. | Every capability lists required crates, state/memory/timer ownership, canisters, caller permissions, configuration, operational obligations and existing code it could replace. Hidden dependencies prevent a claim of independent adoption. |
+| Next | OC-1/OC-3: benchmark a shared-user estate against the reported LocalIndex topology. | Separate cost per physical canister, occupied subnet and logical user; record warm-spare cost, idle checks, active-load latency, cross-subnet traffic and failure impact. The same user's workload stays equivalent on both sides. |
+| Next | OC-4: qualify reactive funding plus coarse idle coverage, with exact funding owners and finite debit authority. | Busy workers obtain timely funding; idle workers remain funded through the declared sweep/outage window; interrupted conversion or transfer cannot duplicate spending. Operator absence, depleted treasury and stale observations have explicit outcomes. |
+| Next | OC-6: document the actual SNS trust boundary and testable approval/effect bindings. | No Canic operator key bypasses SNS. Existing treasury, artifact approval and subnet execution responsibilities remain explicit; support is unclaimed until the real authority path is qualified. |
+| Conditional future | OC-2/OC-6: evaluate replacing one infrastructure responsibility at a time after a production lifecycle contract is separately accepted. | Each integration has one effect owner and a demonstrated reduction in total work, not two competing funding, deployment or recovery systems. No live adoption is specified or authorized here. |
+
+For any future runtime integration, prefer preserving the CyclesDispenser and
+LocalIndex responsibilities unless measurements establish a benefit from changing
+them. Reusing Canic code inside an existing infrastructure owner may be a better
+fit than introducing additional controller canisters, but this remains an option
+to evaluate, not a claimed supported embedding API. Package boundaries and runtime
+requirements must prove which capabilities can be consumed independently.
+
+Define an adoption budget before selecting runtime work: person-days to first
+useful result, application files and lines changed, additional physical canisters,
+new permissions, extra idle cycles, new operational steps and systems retired.
+Use OpenChat's own priorities to set acceptable values. A capability that requires
+full migration to deliver any value fails the first-use objective. A generic
+framework that merely moves maintenance into adapters has not reduced it.
+
+If OpenChat is willing to provide further input, ask for the post-consolidation
+physical topology, shared-worker resource targets, any remaining operational pain,
+and the smallest evidence/tooling contribution they would actually use. Treat
+these as validation questions, not prerequisites for writing the Canic-owned
+fixture specification. Do not send messages on the maintainer's behalf.
 
 **Comparison scope: scaling and infrastructure only**
 
@@ -34,9 +129,9 @@ Before claiming persistent production support, the maintainer must make a separa
 
 **Success means replacing operational work, with evidence**
 
-An application team should retain its user model, routing decisions, membership, message ordering, storage semantics, authorization, and business transactions. Canic should own physical canister allocation, artifact qualification, protected infrastructure identity, admitted funding, bounded management effects, and their recovery. The application must not need a second implementation of those same management operations.
+An application team should retain its user model, routing decisions, membership, message ordering, storage semantics, authorization, and business transactions. For each capability selected for future adoption, Canic should remove the corresponding physical allocation, artifact qualification, infrastructure identity, funding or management-effect recovery work. Adoption must not require selecting every capability together. Each paid effect must still have one authoritative owner; an adapter cannot leave two systems independently managing the same operation.
 
-Measure success using application-owned operational code and state machines removed, incremental runtime cost, operator interventions, recovery outcomes, and explicitly supported capacity. A smaller integration diff or successful empty-canister installation does not establish success. No savings percentage or live OpenChat fleet size is inferred from the source review.
+Measure success using application-owned operational code and state machines removed, incremental runtime cost, operator interventions, recovery outcomes, and explicitly supported capacity. A smaller integration diff or successful empty-canister installation does not establish success. No savings percentage or live OpenChat fleet size is inferred from the source review. Developer-reported population and cost figures above remain explicitly attributed rather than measured evidence.
 
 **Comparative audit: establish a compelling reason to choose Canic**
 
@@ -79,27 +174,78 @@ These extend the comparative criteria within OC-1 through OC-6; they do not crea
 | Long-running state growth | Run repeated same-release allocate/settle/recycle cycles while holding the live population roughly constant. Track receipts, tombstones, journal history, indexes, diagnostics, and physical stable pages. Explain retained historical growth, reuse, and capacity exhaustion; do not claim physical memory shrinks because logical records were deleted. Never reclaim genuinely unfinished obligations. | OC-3, OC-4, OC-5 |
 | Artifact-distribution economics | Install the same qualified artifact into many fresh workers. Measure compilation/finalization count, Store writes, uploaded/downloaded bytes, management calls, peak artifact storage, and time per additional worker. Include multiple role artifacts and interrupted publication; cleanup must retain bytes still required by exact retries. Keep this experiment within fresh-install/same-release policy. | OC-1, OC-3, OC-6 |
 | Operator absence | Close the CLI and interrupt host collection after convergence. Prove which admitted runtime allocation, top-up, and recovery work remains autonomous, and which budget/authority boundaries correctly require the next operator review. Report interventions per unit of sustained growth; automation must not gain unlimited spending authority. | OC-4, OC-5 |
-| Physical-topology overhead | Measure fixed cost per Fleet, occupied subnet, Component, physical worker, and logical assignment separately. Compare dedicated and shared-worker populations using the same application load; include idle infrastructure, pool reserves, and deployment calls. Attribute the effect of each extra layer rather than assuming it is free or necessarily redundant. | OC-1, OC-2, OC-3 |
+| Physical-topology overhead | Measure fixed cost per Fleet, occupied subnet, Component, physical worker, and logical assignment separately. Compare equivalent MultiUser populations on the upstream and Canic variants; include idle infrastructure, pool reserves, and deployment calls. Attribute the effect of each extra layer rather than assuming it is free or necessarily redundant. | OC-1, OC-2, OC-3 |
 | Operational task completion | Give an operator an injected fault and the supported CLI/docs. Record elapsed diagnosis/recovery time, required observations and decisions, wrong turns, and whether private implementation knowledge was necessary. Validate that the indicated next action belongs to the actual recovery owner. | OC-5, OC-6 |
 
 For each concern, distinguish a confirmed correctness defect, a limit of the maintained contract, a performance tradeoff, and missing evidence. An undocumented or untested property is not automatically an implementation bug. Keep claims scoped to the actual measured application profile and fault model.
 
 **OC-1: Establish one representative qualification application**
 
-Outcome: a Canic-owned fixture that can expose infrastructure failures before they reach a downstream app. It models global directories, local indexes on two subnets, dedicated tenants, shared-tenant workers, stateful workers, large-payload workers, and application-owned cross-subnet traffic. OpenChat's user/group/community/media roles motivate these workload shapes; full chat behavior is unnecessary. Logical users and channels are data, not automatically additional canisters. The forum configuration is an illustration; its proposed storage allocator is not a required new Canic abstraction.
+Outcome: a Canic-owned fixture that can expose infrastructure failures before they reach a downstream app. Its profile models global directories, subnet-local indexes on two subnets, MultiUser workers, stateful workers, large-payload workers, and application-owned cross-subnet traffic. OpenChat's MultiUser/group/community/media roles motivate these workload shapes; full chat behavior is unnecessary. Logical users and channels are data, not automatically additional canisters. The legacy User role is excluded, including as a secondary comparator. The forum configuration is an illustration; its proposed storage allocator is not a required new Canic abstraction.
 
 Owners: `canic-testing-internal` for infrastructure journeys; `canic-tests` for public consumer integration; public examples only after their surface is qualified.
 
 Deliverables and acceptance:
 
 - A workload manifest describes physical topology, logical tenant population, payload distributions, traffic, fault points, source/artifact hashes, and observation windows. Use current Canic-owned TOML for human-authored parameters and structured records for results.
-- Start with a real two-subnet PocketIC estate of approximately 32 workload canisters. Derive test membership and actual totals from the manifest. Include both shared and dedicated tenancy, a hot destination, idle leaves, and a slow or unavailable peer.
+- Start with a real two-subnet PocketIC estate of approximately 32 workload canisters. Derive test membership and totals from the manifest; distinguish user workers from groups, communities and infrastructure. Model the reported 10,000-user packing target with representative per-user state and active fractions, not empty counters. Include a hot shared worker, idle leaves and a slow or unavailable peer. Larger packing claims require measured storage, instruction, latency and failure-isolation evidence; shared tenancy increases the population affected by one worker failure.
 - Exercise registration, child allocation, application initialization, a representative message exchange, and media-sized payloads through production adapters. A canister answering a health query is insufficient: application readiness must be observed.
 - Keep large-scale storage/algorithm benchmarks separate: proposed population tiers are 100, 1,000, 10,000, and 100,000 physical inventory records, plus up to one million logical assignments. These are experiment inputs, not advertised supported capacities or required PocketIC canister counts.
 - Publish p50/p95 operation timings, instructions, stable/heap extents, calls, bytes, queue age, and cycle observations with attribution limits. Record uncertainty instead of converting instructions into cycle savings.
 - Freeze numeric cost and latency budgets after the baseline, before optimization work is selected. Until budgets and evidence are accepted, record the capability as unqualified rather than silently treating a benchmark run as a pass.
 
 First slice: a source-level fixture specification and baseline manifest, reusing existing Canic recovery cases where they already cover a requirement. Avoid another expensive end-to-end suite that repeats infrastructure setup for every assertion.
+
+**Real OpenChat qualification companion**
+
+The maintainer proposed keeping a test-only copy of OpenChat and getting it
+working on Canic. Add this as a proposed OC-1/OC-2 qualification lane: the
+synthetic fixture provides controlled fault experiments, while real application
+code exposes integration costs and assumptions that the fixture could miss.
+Neither lane alone establishes production adoption readiness.
+
+Keep a pinned upstream revision and a separately reviewable integration patch
+series. Record the source URL, commit, license/notice obligations, dependency
+locks, toolchain, build inputs and final artifact hashes. Verify that the chosen
+revision actually contains the MultiUser path being evaluated. First reproduce
+the selected upstream journey without Canic; then run the equivalent journey
+with the patches applied. Keep application semantics and assertions equivalent,
+and report any excluded behavior explicitly. Do not maintain an independently
+evolving chat product or weaken upstream tests to accommodate Canic.
+
+The initial scope is one complete local journey using the real MultiUser role
+and its required index/registration dependencies: create synthetic users, route
+them to a shared worker, exchange and retrieve messages, and observe application
+readiness. Inventory dependencies before promising that this is a small port.
+Then integrate one funding responsibility through maintained Canic APIs, with
+one effect owner and the former funding path disabled for that responsibility.
+Measure low-balance funding under traffic, idle coverage, treasury exhaustion,
+interruption and duplicate requests. Existing Canic parent funding, autonomous
+balance timers, Coordinator-backed Root funding and protected Root ICP refill
+are baseline capabilities to exercise; hierarchical funding is not a missing
+feature to recreate.
+
+Use fresh disposable PocketIC deployments and synthetic data for both variants.
+Identify memory, lifecycle, timer, codec, controller and subnet ownership before
+changing initialization. Repeat at one exact Canic release for same-release
+recovery evidence. Cross-release state retention and existing-installation
+adoption remain outside this lane under current policy. A governance stand-in
+qualifies only its caller boundary; actual SNS support still requires OC-6.
+
+Acceptance evidence includes equivalent application results, the exact patch
+footprint and integration effort, operating calls/cycles and retained reserves,
+extra canisters, subnet traffic, failure outcomes and maintenance steps removed.
+PocketIC comparisons establish behavior under the recorded test conditions;
+they do not establish mainnet latency or cost savings. Refresh the upstream pin
+deliberately and rerun both variants so patch growth and upstream divergence are
+visible. Keep this expensive lane separately selectable from focused Canic tests.
+
+The reproducible harness, source manifest and adaptation patches should live in
+Canic; a generated source copy is disposable test input. This planning update
+does not create or modify an external repository. If a maintained sibling copy
+is selected instead, name its exact path and obtain the repository authority
+required by AGENTS.md before creating it. The lane remains unscheduled pending
+the same batch selection as OC-1/OC-2; no clone, port or execution is claimed here.
 
 **OC-2: Qualify an affordable application integration boundary**
 
@@ -148,9 +294,9 @@ Deliverables and acceptance:
 - In PocketIC, lose replies around funding, allocation, install, and application registration; reconstruct the same-release owner and reconcile the exact operation. Prove bounded paid effects, conserved observed cycles, and immediate effect-free terminal replay.
 - Combine a failed owner with continuing application traffic and another requester. Test stale callbacks, expired leases, repeated transient failures, and application pressure that deliberately pauses nonessential work.
 - Expose durable pending demand, next admissible retry, dependency, and accounting uncertainty. Scheduler activity and callback counts are not evidence of progress.
-- Measure idle maintenance and watchdog costs separately. Any quiescence change must prove re-arming after every demand transition and same-release restoration without weakening recovery liveness.
+- Measure idle maintenance and watchdog costs separately against the reported reactive-request and periodic-sweep baseline. Prove idle-canister discovery, bounded sweep continuation, sufficient runway for the declared sweep/outage interval, and prompt funding under bursts. Any quiescence change must prove re-arming after demand transitions and same-release restoration without weakening recovery liveness. OpenChat's daily/weekly schedules are comparison inputs, not universal Canic constants.
 
-First slice: add a sustained-growth/funding-pressure scenario to OC-1 using current reviewed funding boundaries. Reconsider autonomous replenishment only if operator-intervention measurements establish a need and an explicit bounded authority is accepted.
+First slice: add a sustained-growth/funding-pressure scenario to OC-1 using current reviewed funding boundaries. Treat autonomous funding as an explicit incumbent capability to match, while identifying which Canic operating-funding paths already provide it and which estate-replenishment or ICP-conversion paths remain deferred. Promote only the demonstrated gap under explicit bounded authority; do not substitute repeated manual funding for the reported operational contract.
 
 Related existing ideas: [demand-driven pool maintenance](../demand-driven-canister-pool-maintenance/design.md), [estate budget replenishment](../estate-budget-replenishment/design.md), and [cross-subnet transport groundwork](../cross-subnet-data-transport-groundwork/design.md). Their promotion remains separate; merge overlapping outcomes into their existing owners rather than implementing duplicate mechanisms.
 
@@ -191,10 +337,10 @@ First slice: passive artifact comparison tied to one reviewable effect descripti
 
 | Candidate batch | Bounded outcome | Dependency / exit evidence |
 | --- | --- | --- |
-| A: Comparative consumer baseline | Source-backed comparative gap register, OC-1 fixture contract, and OC-2 composition baseline | Explicit incumbent/Canic responsibilities and evidence gaps, fresh-install behavior, invalid integration cases, measured overhead, budgets, docs and bindings |
+| A: Low-friction comparative baseline | Source-backed gap register, passive OC-6 artifact-report specification, capability dependency matrix, OC-1 shared-user fixture and OC-2 composition baseline | Useful evaluation without a runtime switch; explicit incumbent/Canic owners, first-use/adoption costs, fresh-install behaviour, invalid integration cases, measured overhead, budgets and docs |
 | B: Sustained same-release operation | Selected OC-3/OC-4 bottlenecks and recovery gaps | Allocation under contention and application pressure, funding interruption, cycle accounting, terminal replay, diagnostics and cleanup |
 | C: Operator coverage | OC-5 dynamic inventory and bounded observation | Autonomous child coverage, partial failures, backup boundaries, CLI/JSON/docs propagation |
-| D: Governed integration | OC-6 immutable evidence and selected authority adapter | Exact approval binding, unauthorized/altered/replayed requests, effect recovery and real authority-path qualification |
+| D: Governed integration | Extend OC-6 passive evidence into a separately admitted authority integration | Exact SNS approval binding, unauthorized/altered/replayed requests, effect recovery and real authority-path qualification; existing-installation adoption remains blocked by the lifecycle boundary |
 
 These are outcome groupings, not a four-release commitment. Retain narrow slices inside each accepted batch until its positive, invalid, recovery, propagation, and cleanup obligations are complete. Select performance fixes from measurements rather than scheduling every candidate mechanism. Any new persistent-production lifecycle work needs its own later decision; completing A-D cannot silently claim that requirement has been met.
 
@@ -207,4 +353,18 @@ These are outcome groupings, not a four-release commitment. Retain narrow slices
 
 **Next planning action**
 
-Select candidate batch A for detailed scope review after the already accepted sequencing permits it. Begin with the source-backed comparative gap register; use it to define the fixture/workload manifest, ownership map, reused-test inventory, and measurement plan. No production API expansion is needed to write those artifacts. Use the findings to decide which OC-2 integration defects and OC-3 capacity costs warrant implementation. Independently keep the future lifecycle decision visible as a prerequisite to persistent production support. Completion means evidence that supports a bounded adoption recommendation, not an assumption that a general framework must outperform a specialized application.
+Prepare candidate batch A for detailed scope review after the accepted sequencing
+permits it. Start with the passive artifact-report specification, capability
+dependency/adoption-cost matrix and source-backed gap register. Use the reported
+MultiUser topology and existing SNS/local-index funding system to define the
+fixture, workload, cost budgets and fault schedule. Specify the pinned real
+OpenChat companion's dependencies, first application journey and comparison
+protocol alongside the synthetic fixture. No production API expansion,
+external build or live operation is needed for these planning artifacts.
+
+The maintainer's requested direction is easy adoption and demonstrably better
+infrastructure. Select later fixes by the measurable value of one independently
+usable capability, then the total burden removed as more capabilities are chosen.
+Keep the separately accepted future lifecycle contract as a hard prerequisite to
+persistent runtime adoption. The next deliverable should help OpenChat evaluate
+Canic with little commitment; it must not require them to accept a rewrite first.

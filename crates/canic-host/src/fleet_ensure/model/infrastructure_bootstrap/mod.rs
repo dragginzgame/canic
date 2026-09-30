@@ -145,6 +145,8 @@ pub struct InfrastructureBootstrapTerminalRecord {
 #[serde(deny_unknown_fields)]
 pub struct InfrastructureBootstrapInspectionRecord {
     pub schema_version: u16,
+    pub source_sha256: [u8; 32],
+    pub planned_at_time: u64,
     pub plan_sha256: String,
     pub review_attempts: u32,
     pub apply_attempts: u32,

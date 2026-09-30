@@ -12,6 +12,7 @@ mod integrity;
 mod journal_lock;
 mod json;
 mod layout;
+mod layout_lifetime;
 
 pub(crate) use artifact_commit::commit_artifact_directory;
 #[cfg(all(
@@ -27,13 +28,14 @@ pub use integrity::{
     ArtifactIntegrityReport, BackupExecutionIntegrityReport, BackupIntegrityReport,
     resolve_backup_artifact_path,
 };
-pub(crate) use journal_lock::{JournalLock, JournalLockError};
+pub use journal_lock::{JournalLock, JournalLockError};
 #[cfg(test)]
 pub(crate) use json::{
     DurableWriteBarrier, create_json_durable_at_barriers, write_json_durable_at_barriers,
 };
 pub(crate) use json::{create_json_durable, read_json, write_json_durable};
 pub use layout::BackupLayout;
+pub use layout_lifetime::{BackupExecutionGuard, BackupLayoutGuard};
 
 #[cfg(test)]
 mod tests;

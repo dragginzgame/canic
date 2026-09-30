@@ -24,6 +24,19 @@ Verification and restore of existing valid same-release backups retain their
 own artifact, identity and journal checks. Preserve the backup runner and its
 recovery machinery while the missing live preflight remains fail-closed.
 
+The local runner resolves the selected backup directory once before deriving
+download and verification paths. Relative paths and directory links selected by
+the operator are supported; links inside artifact trees remain rejected.
+CLI layout creation and runner execution share the execution-journal lock.
+They also share a layout lifetime lock with restore preparation, execution and
+prune. That lock lives beside the backup directory so deletion cannot replace
+its identity while another process still holds it.
+
+If manifest publication finishes before its completion receipt, retry preserves
+the published timestamp and tool metadata. It verifies the backup identity,
+topology, snapshots and artifact checksums against the retained plan and journal
+before adopting that file. Conflicting content is never overwritten.
+
 ## Maintained Primitives
 
 - topology-aware full-Fleet and subtree backup selection
@@ -40,6 +53,26 @@ For an existing backup, the operator path is:
 canic backup verify <backup>
 canic restore prepare <backup> --require-verified --require-restore-ready
 ```
+
+## Local Retention
+
+`canic backup prune --keep N` retains the newest N verified complete backups.
+It verifies artifact checksums before counting a copy toward retention and keeps
+those retained copies locked while deleting older eligible copies. `--dry-run`
+uses the same eligibility checks. `--keep 0` explicitly selects no ordinary
+retained copies.
+
+Prepared restores retain a durable reference to their source backup, including
+when `--journal-out` selects an external path. Paused, failed and interrupted
+restores keep that reference. Removing or moving an unfinished journal does not
+release its artifacts. Resume using its original journal location. Once the
+restore completes and its external commands have exited, the runner releases its
+reference. If interrupted at terminal publication, rerun the same journal to
+finish that release without repeating completed effects.
+
+Prune reports busy, restore-referenced and invalid layouts as skipped. A deletion
+failure is reported alongside any directories already removed and makes the
+command fail. Failed backup journals remain recovery evidence and are retained.
 
 ## Boundary
 

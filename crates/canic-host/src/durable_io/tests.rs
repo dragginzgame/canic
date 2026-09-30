@@ -456,7 +456,7 @@ fn temp_root(label: &str) -> PathBuf {
         .duration_since(UNIX_EPOCH)
         .expect("system time after unix epoch")
         .as_nanos();
-    std::env::temp_dir().join(format!(
+    std::env::temp_dir().canonicalize().unwrap().join(format!(
         "canic-host-durable-io-{label}-{}-{nanos}",
         std::process::id()
     ))

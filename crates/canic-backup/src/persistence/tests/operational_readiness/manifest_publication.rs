@@ -73,7 +73,7 @@ fn pending_finalize_rejects_conflicting_manifest_without_replacing_it() {
     assert_case_defined("CANIC-094-C06/publication-journal-disagreement/rejection");
     let (root, layout, finalize, _canonical, mut expected) =
         prepared_pending_manifest("manifest-publication-conflict");
-    expected.created_at = "unix:999".to_string();
+    expected.backup_id = "another-backup-run".to_string();
     layout
         .publish_manifest(&expected)
         .expect("publish conflicting valid manifest");
@@ -97,6 +97,104 @@ fn pending_finalize_rejects_conflicting_manifest_without_replacing_it() {
     assert!(executor.commands.is_empty());
 
     fs::remove_dir_all(root).expect("remove conflicting manifest layout");
+}
+
+#[test]
+fn pending_finalize_adopts_original_provenance_with_live_clock_and_changed_tool() {
+    let (root, layout, finalize, canonical, expected) =
+        prepared_pending_manifest("manifest-publication-provenance");
+    layout
+        .publish_manifest(&expected)
+        .expect("publish manifest before interrupted terminal receipt");
+    let bytes_before = fs::read(layout.manifest_path()).expect("read published manifest");
+    let inode = layout
+        .manifest_path()
+        .metadata()
+        .expect("manifest metadata")
+        .ino();
+
+    let mut config = runner_config(root.clone(), Some(1));
+    config.updated_at = None;
+    config.tool_name = "resuming-publisher".to_string();
+    config.tool_version = "different-build".to_string();
+    let mut executor = FakeBackupRunnerExecutor::default();
+    let response = backup_run_execute_with_executor(&config, &mut executor)
+        .expect("adopt manifest written by the original publisher");
+
+    assert!(response.complete);
+    assert_eq!(response.executed_operation_count, 1);
+    assert!(executor.commands.is_empty());
+    assert_eq!(
+        fs::read(layout.manifest_path()).expect("read adopted manifest"),
+        bytes_before
+    );
+    assert_eq!(
+        layout
+            .manifest_path()
+            .metadata()
+            .expect("manifest metadata")
+            .ino(),
+        inode
+    );
+    let execution = layout
+        .read_execution_journal()
+        .expect("read completed journal");
+    assert_eq!(
+        execution.operations[finalize.sequence].state,
+        BackupExecutionOperationState::Completed
+    );
+    assert_eq!(
+        execution
+            .operation_receipts
+            .iter()
+            .filter(|receipt| receipt.sequence == finalize.sequence)
+            .count(),
+        1
+    );
+    assert_eq!(
+        ArtifactChecksum::from_path(&canonical)
+            .expect("verify adopted artifact")
+            .hash,
+        expected.deployment.members[0]
+            .source_snapshot
+            .checksum
+            .clone()
+            .expect("manifest checksum")
+    );
+
+    let replay =
+        backup_run_execute_with_executor(&config, &mut executor).expect("replay completed backup");
+    assert!(replay.complete);
+    assert_eq!(replay.executed_operation_count, 0);
+    assert!(executor.commands.is_empty());
+    fs::remove_dir_all(root).expect("remove adopted manifest layout");
+}
+
+#[test]
+fn pending_finalize_rejects_manifest_links_and_special_entries_before_reading() {
+    for linked in [false, true] {
+        let (root, layout, _, _, expected) =
+            prepared_pending_manifest("manifest-publication-unsafe-entry");
+        if linked {
+            let target = root.join("linked-manifest.json");
+            fs::write(
+                &target,
+                serde_json::to_vec(&expected).expect("manifest bytes"),
+            )
+            .expect("write link target");
+            std::os::unix::fs::symlink(target, layout.manifest_path()).expect("link manifest");
+        } else {
+            fs::create_dir(layout.manifest_path()).expect("replace manifest with directory");
+        }
+        let mut executor = FakeBackupRunnerExecutor::default();
+        let error =
+            backup_run_execute_with_executor(&runner_config(root.clone(), Some(1)), &mut executor)
+                .expect_err("manifest must be a direct regular file before adoption");
+        std::assert_matches!(error, BackupRunnerError::Persistence(PersistenceError::ManifestConflict { path })
+            if path == layout.manifest_path().display().to_string());
+        assert!(executor.commands.is_empty());
+        fs::remove_dir_all(root).expect("remove unsafe manifest layout");
+    }
 }
 
 #[test]

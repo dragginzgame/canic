@@ -334,11 +334,15 @@ pub struct IntentResourceTotalsRecord {
     pub reserved_qty: u64,
     pub committed_qty: u64,
     pub pending_count: u64,
+    /// Window counters may be reclaimed after this deadline once nothing is pending.
+    /// Permanent resource accounting has no deadline.
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub retain_until_secs: Option<u64>,
 }
 
 impl IntentResourceTotalsRecord {
     pub const STATE_CONTRACT_NAME: &'static str = "IntentResourceTotalsRecord";
-    pub const STORABLE_MAX_SIZE: u32 = 69;
+    pub const STORABLE_MAX_SIZE: u32 = 96;
 }
 
 impl_storable_bounded!(
@@ -716,6 +720,19 @@ impl IntentStore {
     #[must_use]
     pub(crate) fn totals_len() -> u64 {
         INTENT_TOTALS.with_borrow(StableBtreeMap::len)
+    }
+
+    /// Read a bounded prefix for aggregate reclamation after admission validates map size.
+    pub(crate) fn totals_entries(limit: usize) -> Vec<IntentTotalsEntryRecord> {
+        INTENT_TOTALS.with_borrow(|map| {
+            map.iter()
+                .take(limit)
+                .map(|entry| IntentTotalsEntryRecord {
+                    resource_key: entry.key().clone(),
+                    record: entry.value(),
+                })
+                .collect()
+        })
     }
 
     pub(crate) fn set_totals(
@@ -1298,6 +1315,7 @@ mod tests {
             reserved_qty: 11,
             committed_qty: 19,
             pending_count: 1,
+            retain_until_secs: None,
         };
         let pending = IntentPendingEntryRecord {
             resource_key: resource_key.clone(),
@@ -1343,6 +1361,19 @@ mod tests {
         assert_eq!(IntentStore::export_pending(), pending_data);
         assert_eq!(IntentStore::export_expiry_index(), expiry_data);
         IntentStore::reset_for_tests();
+    }
+
+    #[test]
+    fn maximum_resource_totals_fit_the_stable_bound() {
+        let record = IntentResourceTotalsRecord {
+            reserved_qty: u64::MAX,
+            committed_qty: u64::MAX,
+            pending_count: u64::MAX,
+            retain_until_secs: Some(u64::MAX),
+        };
+        let bytes = record.to_bytes();
+        assert!(bytes.len() <= IntentResourceTotalsRecord::STORABLE_MAX_SIZE as usize);
+        assert_eq!(IntentResourceTotalsRecord::from_bytes(bytes), record);
     }
 
     #[test]

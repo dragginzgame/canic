@@ -6,19 +6,31 @@
 use std::{fs, io, path::Path, path::PathBuf};
 
 use super::file_lock::{self, FileLockError};
+use thiserror::Error as ThisError;
 
-#[derive(Debug)]
+///
+/// JournalLockError
+///
+/// Typed failure to acquire exclusive access to a journal's regular sidecar file.
+///
+
+#[derive(Debug, ThisError)]
 pub enum JournalLockError {
+    #[error("filesystem authority is locked: {lock_path}")]
     Locked { lock_path: String },
+
+    #[error("unsafe lock entry at {lock_path}: {kind}")]
     UnsafeEntry { lock_path: String, kind: String },
-    Io(io::Error),
+
+    #[error(transparent)]
+    Io(#[from] io::Error),
 }
 
-impl From<io::Error> for JournalLockError {
-    fn from(error: io::Error) -> Self {
-        Self::Io(error)
-    }
-}
+///
+/// JournalLock
+///
+/// Exclusive journal mutation guard. Dropping it releases the host file lock.
+///
 
 #[derive(Debug)]
 pub struct JournalLock {

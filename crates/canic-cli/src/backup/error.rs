@@ -20,6 +20,9 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum BackupCommandError {
+    #[error("backup prune could not fully remove {failed} selected layouts; see the prune report")]
+    PruneIncomplete { failed: usize },
+
     #[error("{0}")]
     Usage(String),
 

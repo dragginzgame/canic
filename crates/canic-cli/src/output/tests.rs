@@ -4,6 +4,36 @@ use crate::test_support::temp_dir;
 use serde::ser::{Error as _, SerializeMap};
 use serde_json::json;
 
+#[cfg(unix)]
+#[test]
+fn operator_output_resolves_linked_parents_before_creating_missing_directories() {
+    let root = temp_dir("canic-cli-output-linked-parent");
+    let real = root.join("real");
+    fs::create_dir_all(&real).unwrap();
+    let linked = root.join("linked");
+    std::os::unix::fs::symlink(&real, &linked).unwrap();
+    for relative in ["report.txt", "nested/report.txt"] {
+        let selected = linked.join(relative);
+        write_text::<io::Error>(Some(&selected), "first").unwrap();
+        write_text::<io::Error>(Some(&selected), "replacement").unwrap();
+        assert_eq!(
+            fs::read_to_string(real.join(relative)).unwrap(),
+            "replacement"
+        );
+    }
+    let target = real.join("report.txt");
+    let final_link = linked.join("file-link.txt");
+    std::os::unix::fs::symlink(&target, &final_link).unwrap();
+    assert_eq!(
+        write_text::<io::Error>(Some(&final_link), "unexpected")
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::InvalidInput
+    );
+    assert_eq!(fs::read_to_string(target).unwrap(), "replacement");
+    fs::remove_dir_all(root).unwrap();
+}
+
 // Ensure --out style JSON writes can create nested output directories.
 #[test]
 fn write_pretty_json_creates_parent_directories() {

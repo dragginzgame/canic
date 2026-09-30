@@ -3,7 +3,7 @@
 
 pub mod admission;
 pub mod operation;
-pub mod rejection;
+pub mod retirement;
 pub mod survey;
 
 use candid::Principal;
@@ -94,8 +94,8 @@ pub struct CapacityImportPlanRecord {
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportHandoffRecord {
     pub canister_id: Principal,
-    /// Authenticated terminal failures remain attached to their original signed ingress.
-    pub rejections: Vec<rejection::CapacityImportHandoffRejectionRecord>,
+    /// Authenticated terminal status remains attached to its original signed ingress.
+    pub retirements: Vec<retirement::CapacityImportHandoffRetirementRecord>,
     #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
     pub effect: Option<crate::fleet_ensure::model::EffectRecord>,
     #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]

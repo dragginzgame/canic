@@ -291,6 +291,7 @@ fn root_capability_from_request_maps_placement_allocation() {
 #[test]
 fn root_capability_from_request_maps_recycle_canister() {
     let req = Request::RecycleCanister(RecycleCanisterRequest {
+        allocation_operation_id: [1; 32],
         canister_pid: p(4),
         metadata: None,
     });
@@ -327,6 +328,7 @@ fn root_capability_metadata_projection_covers_replay_protected_families() {
             metadata: None,
         }),
         Request::RecycleCanister(RecycleCanisterRequest {
+            allocation_operation_id: [1; 32],
             canister_pid: p(2),
             metadata: None,
         }),
@@ -380,6 +382,7 @@ fn authorize_recycle_rejects_non_child_caller() {
         now: 5,
     };
     let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        allocation_operation_id: [1; 32],
         canister_pid: child,
         metadata: None,
     });
@@ -417,6 +420,7 @@ fn authorize_recycle_allows_direct_child_caller() {
         now: 5,
     };
     let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        allocation_operation_id: [1; 32],
         canister_pid: child,
         metadata: None,
     });
@@ -443,6 +447,7 @@ fn authorize_recycle_rejects_a_fresh_request_without_target_authority() {
         now: 5,
     };
     let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        allocation_operation_id: [1; 32],
         canister_pid: p(85),
         metadata: None,
     });
@@ -1544,6 +1549,7 @@ fn response_commit_retry_promotes_staged_response_without_reexecution() {
         now: 1_000,
     };
     let capability = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        allocation_operation_id: [1; 32],
         canister_pid: p(55),
         metadata: Some(meta(20, secs_to_ns(60))),
     });
@@ -1626,6 +1632,7 @@ fn check_replay_rejects_cross_variant_same_request_id() {
         now: 2_000,
     };
     let recycle = RootCapability::RecycleCanister(RecycleCanisterRequest {
+        allocation_operation_id: [1; 32],
         canister_pid: p(9),
         metadata: Some(meta(8, secs_to_ns(60))),
     });
@@ -1795,4 +1802,20 @@ fn check_replay_rejects_when_caller_capacity_reached() {
     });
     RootResponseWorkflow::check_replay(&ctx, &capability)
         .expect_err("reservation must fail when caller is at capacity");
+}
+
+#[test]
+fn recycle_replay_payload_binds_the_target_allocation() {
+    let request = RecycleCanisterRequest {
+        canister_pid: p(3),
+        allocation_operation_id: [1; 32],
+        metadata: None,
+    };
+    let first = RootCapability::RecycleCanister(request.clone()).payload_hash();
+    let mut replacement = request;
+    replacement.allocation_operation_id = [2; 32];
+    assert_ne!(
+        first,
+        RootCapability::RecycleCanister(replacement).payload_hash()
+    );
 }

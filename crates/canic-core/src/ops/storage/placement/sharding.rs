@@ -42,9 +42,6 @@ pub enum ShardingRegistryOpsError {
         pid: Principal,
     },
 
-    #[error("partition_key '{partition_key}' is not assigned to any shard in pool '{pool}'")]
-    PartitionKeyNotAssigned { pool: String, partition_key: String },
-
     #[error("shard {pid} conflicts with its existing registry entry")]
     ShardConflict { pid: Principal },
 
@@ -64,9 +61,7 @@ impl From<ShardingRegistryOpsError> for InternalError {
             ShardingRegistryOpsError::PoolMismatch { .. } => codes::CAPACITY_CONFLICT,
             ShardingRegistryOpsError::ShardNotFound(_) => codes::AUTHORITY_UNAVAILABLE,
             ShardingRegistryOpsError::SlotOccupied { .. } => codes::STORAGE_INVALID_STATE,
-            ShardingRegistryOpsError::PartitionKeyNotAssigned { .. } => {
-                codes::AUTHORITY_INVALID_STATE
-            }
+
             ShardingRegistryOpsError::ShardConflict { .. } => codes::AUTHORITY_CONFLICT,
             ShardingRegistryOpsError::AssignmentCountUnderflow { .. } => {
                 codes::CAPACITY_INSUFFICIENT
@@ -100,7 +95,7 @@ impl ShardingRegistryOps {
         canister_role: &CanisterRole,
         capacity: u32,
     ) -> Result<(), InternalError> {
-        ShardEntryRecord::try_new(pool, slot, canister_role.clone(), capacity, 0)
+        ShardEntryRecord::try_new(pool, slot, canister_role.clone(), capacity, 0, [0; 32])
             .map(|_| ())
             .map_err(|err| ShardingRegistryOpsError::InvalidKey(err).into())
     }
@@ -123,12 +118,15 @@ impl ShardingRegistryOps {
         slot: u32,
         canister_role: &CanisterRole,
         capacity: u32,
+        allocation_operation_id: [u8; 32],
         created_at: u64,
     ) -> Result<(), InternalError> {
         // NOTE: Slot uniqueness is enforced by linear scan.
         // Shard counts are expected to be small and bounded.
         ShardingRegistry::with_mut(|core| {
-            if let Some(existing) = core.get_entry(&pid) {
+            if let Some(existing) = core.get_entry(&pid)
+                && existing.allocation_operation_id == allocation_operation_id
+            {
                 if existing.pool.as_ref() == pool
                     && existing.slot == slot
                     && existing.canister_role == *canister_role
@@ -145,6 +143,7 @@ impl ShardingRegistryOps {
                     if record.pid != pid
                         && record.entry.pool.as_ref() == pool
                         && record.entry.slot == slot
+                        && Self::entry_is_current(&record)
                     {
                         return Err(ShardingRegistryOpsError::SlotOccupied {
                             pool: pool.to_string(),
@@ -156,9 +155,15 @@ impl ShardingRegistryOps {
                 }
             }
 
-            let entry =
-                ShardEntryRecord::try_new(pool, slot, canister_role.clone(), capacity, created_at)
-                    .map_err(ShardingRegistryOpsError::InvalidKey)?;
+            let entry = ShardEntryRecord::try_new(
+                pool,
+                slot,
+                canister_role.clone(),
+                capacity,
+                created_at,
+                allocation_operation_id,
+            )
+            .map_err(ShardingRegistryOpsError::InvalidKey)?;
             core.insert_entry(pid, entry);
 
             Ok(())
@@ -170,25 +175,6 @@ impl ShardingRegistryOps {
     #[must_use]
     pub(crate) fn get(pid: Principal) -> Option<ShardEntryRecord> {
         ShardingRegistry::with(|core| core.get_entry(&pid))
-    }
-
-    /// Returns the shard assigned to the given partition_key (if any).
-    #[must_use]
-    pub fn partition_key_shard(pool: &str, partition_key: &str) -> Option<Principal> {
-        ShardingRegistry::partition_key_shard(pool, partition_key)
-    }
-
-    pub fn partition_key_shard_required(
-        pool: &str,
-        partition_key: &str,
-    ) -> Result<Principal, InternalError> {
-        Self::partition_key_shard(pool, partition_key).ok_or_else(|| {
-            ShardingRegistryOpsError::PartitionKeyNotAssigned {
-                pool: pool.to_string(),
-                partition_key: partition_key.to_string(),
-            }
-            .into()
-        })
     }
 
     /// Lookup the slot index for a given shard principal.
@@ -203,14 +189,18 @@ impl ShardingRegistryOps {
         ShardingRegistry::partition_keys_in_shard(pool, shard)
     }
 
-    /// Assign (or reassign) a partition_key to a shard.
-    ///
-    /// Storage responsibilities:
-    /// - enforce referential integrity (target shard must exist)
-    /// - enforce pool consistency (assignment pool must match shard entry pool)
-    /// - maintain derived counters (`ShardEntryRecord.count`)
-    pub fn assign(pool: &str, partition_key: &str, shard: Principal) -> Result<(), InternalError> {
+    /// Claim a key once, preserving existing ownership across concurrent completions.
+    /// Referential integrity, pool membership and counters are checked before mutation.
+    pub fn assign(
+        pool: &str,
+        partition_key: &str,
+        requested_shard: Principal,
+    ) -> Result<Principal, InternalError> {
         ShardingRegistry::with_mut(|core| {
+            let key = ShardKey::try_new(pool, partition_key)
+                .map_err(ShardingRegistryOpsError::InvalidKey)?;
+            let current = core.get_assignment(&key);
+            let shard = current.map_or(requested_shard, |target| target.shard);
             let mut target_entry = core
                 .get_entry(&shard)
                 .ok_or(ShardingRegistryOpsError::ShardNotFound(shard))?;
@@ -224,46 +214,24 @@ impl ShardingRegistryOps {
                 .into());
             }
 
-            let key = ShardKey::try_new(pool, partition_key)
-                .map_err(ShardingRegistryOpsError::InvalidKey)?;
-
-            let previous_entry = if let Some(current) = core.get_assignment(&key) {
-                if current == shard {
-                    return Ok(());
+            if let Some(current) = current {
+                if current.allocation_operation_id != target_entry.allocation_operation_id {
+                    return Err(InternalError::public(
+                        crate::diagnostics::codes::POSITION_UNAVAILABLE,
+                    ));
                 }
-
-                let mut old_entry = core
-                    .get_entry(&current)
-                    .ok_or(ShardingRegistryOpsError::ShardNotFound(current))?;
-                if old_entry.pool.as_ref() != pool {
-                    return Err(ShardingRegistryOpsError::PoolMismatch {
-                        pid: current,
-                        expected: pool.to_string(),
-                        actual: old_entry.pool.to_string(),
-                    }
-                    .into());
-                }
-                old_entry.count = old_entry
-                    .count
-                    .checked_sub(1)
-                    .ok_or(ShardingRegistryOpsError::AssignmentCountUnderflow { pid: current })?;
-                Some((current, old_entry))
-            } else {
-                None
-            };
+                return Ok(shard);
+            }
 
             target_entry.count = target_entry
                 .count
                 .checked_add(1)
                 .ok_or(ShardingRegistryOpsError::AssignmentCountOverflow { pid: shard })?;
 
-            if let Some((previous, entry)) = previous_entry {
-                core.insert_entry(previous, entry);
-            }
-            core.insert_assignment(key, shard);
+            core.insert_assignment(key, shard, target_entry.allocation_operation_id);
             core.insert_entry(shard, target_entry);
 
-            Ok(())
+            Ok(shard)
         })
     }
 
@@ -276,13 +244,18 @@ impl ShardingRegistryOps {
             let key = ShardKey::try_new(pool, partition_key)
                 .map_err(ShardingRegistryOpsError::InvalidKey)?;
 
-            let Some(shard) = core.get_assignment(&key) else {
+            let Some(target) = core.get_assignment(&key) else {
                 return Ok(None);
             };
 
+            let shard = target.shard;
             let mut entry = core
                 .get_entry(&shard)
                 .ok_or(ShardingRegistryOpsError::ShardNotFound(shard))?;
+            if entry.allocation_operation_id != target.allocation_operation_id {
+                let _ = core.remove_assignment(&key);
+                return Ok(Some(shard));
+            }
             if entry.pool.as_ref() != pool {
                 return Err(ShardingRegistryOpsError::PoolMismatch {
                     pid: shard,
@@ -303,12 +276,38 @@ impl ShardingRegistryOps {
         })
     }
 
-    /// NOTE:
-    /// Returns canonical assignment keys. Callers should not stringify unless required
-    /// at an API or DTO boundary.
+    /// Read only the requested assignment; routing must not export the unbounded map.
     #[must_use]
-    pub fn assignments_for_pool(pool: &str) -> Vec<ShardingAssignmentRecord> {
-        ShardingRegistry::assignments_for_pool(pool)
+    pub fn assignment_for_key(pool: &str, partition_key: &str) -> Option<ShardingAssignmentRecord> {
+        let key = ShardKey::try_new(pool, partition_key).ok()?;
+        ShardingRegistry::with(|core| core.get_assignment(&key)).map(|target| {
+            ShardingAssignmentRecord {
+                key,
+                shard: target.shard,
+                allocation_operation_id: target.allocation_operation_id,
+            }
+        })
+    }
+
+    /// Bound registry membership remains routable only under its retained allocation.
+    #[must_use]
+    pub fn entry_is_current(record: &ShardingRegistryEntryRecord) -> bool {
+        crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+            record.pid,
+            record.entry.allocation_operation_id,
+        )
+    }
+
+    #[must_use]
+    pub fn assignment_is_current(record: &ShardingAssignmentRecord) -> bool {
+        crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+            record.shard,
+            record.allocation_operation_id,
+        ) && ShardingRegistry::with(|core| core.get_entry(&record.shard)).is_some_and(|entry| {
+            entry.active
+                && entry.pool == record.key.pool
+                && entry.allocation_operation_id == record.allocation_operation_id
+        })
     }
 
     /// Return all shard entries registered for one pool.
@@ -357,7 +356,7 @@ mod tests {
 
     fn insert_assignment(pool: &str, partition_key: &str, shard: Principal) {
         let key = ShardKey::try_new(pool, partition_key).expect("test assignment key");
-        ShardingRegistry::with_mut(|core| core.insert_assignment(key, shard));
+        ShardingRegistry::with_mut(|core| core.insert_assignment(key, shard, [1; 32]));
     }
 
     #[test]
@@ -365,7 +364,8 @@ mod tests {
         let memory = VectorMemory::default();
         let mut records = BTreeMap::init(memory.clone());
         let active =
-            ShardEntryRecord::try_new("pool", 0, CanisterRole::new("shard"), 10, 1).unwrap();
+            ShardEntryRecord::try_new("pool", 0, CanisterRole::new("shard"), 10, 1, [1; 32])
+                .unwrap();
         assert!(active.active);
         let mut inactive = active.clone();
         inactive.active = false;
@@ -392,7 +392,7 @@ mod tests {
         let shard_pid = p(1);
         let created_at = 0;
 
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, created_at).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, [1; 32], created_at).unwrap();
         ShardingRegistryOps::assign("poolA", "partition_key1", shard_pid).unwrap();
         let count_after = ShardingRegistryOps::get(shard_pid).unwrap().count;
         assert_eq!(count_after, 1);
@@ -404,7 +404,7 @@ mod tests {
         let role = CanisterRole::new("alpha");
         let shard_pid = p(1);
 
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 0).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, [1; 32], 0).unwrap();
         ShardingRegistryOps::assign("poolA", "pk1", shard_pid).unwrap();
         assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 1);
 
@@ -413,7 +413,11 @@ mod tests {
         let released = ShardingRegistryOps::release("poolA", "pk1").unwrap();
         assert_eq!(released, Some(shard_pid));
         assert_eq!(ShardingRegistryOps::get(shard_pid).unwrap().count, 0);
-        assert!(ShardingRegistryOps::partition_key_shard("poolA", "pk1").is_none());
+        assert!(
+            ShardingRegistryOps::assignment_for_key("poolA", "pk1")
+                .map(|record| record.shard)
+                .is_none()
+        );
 
         // Releasing an unknown key is a no-op returning None.
         assert_eq!(ShardingRegistryOps::release("poolA", "pk1").unwrap(), None);
@@ -426,9 +430,9 @@ mod tests {
         let role = CanisterRole::new("alpha");
         let shard_pid = p(1);
 
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 10).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, [1; 32], 10).unwrap();
         ShardingRegistryOps::assign("poolA", "pk1", shard_pid).unwrap();
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 20).unwrap();
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, [1; 32], 20).unwrap();
 
         let entry = ShardingRegistryOps::get(shard_pid).unwrap();
         assert_eq!(entry.count, 1);
@@ -441,8 +445,8 @@ mod tests {
         let role = CanisterRole::new("alpha");
         let shard_pid = p(1);
 
-        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, 10).unwrap();
-        let err = ShardingRegistryOps::create(shard_pid, "poolA", 1, &role, 2, 20)
+        ShardingRegistryOps::create(shard_pid, "poolA", 0, &role, 2, [1; 32], 10).unwrap();
+        let err = ShardingRegistryOps::create(shard_pid, "poolA", 1, &role, 2, [1; 32], 20)
             .expect_err("same shard principal with a different slot must reject");
 
         assert_eq!(err.code(), crate::diagnostics::codes::AUTHORITY_CONFLICT);
@@ -458,27 +462,42 @@ mod tests {
     }
 
     #[test]
-    fn reassignment_rejects_counter_underflow_without_mutation() {
+    fn concurrent_assignment_completion_preserves_the_first_mapping_and_its_count() {
         ShardingRegistryOps::clear_for_test();
         let role = CanisterRole::new("alpha");
-        let old_shard = p(1);
-        let new_shard = p(2);
-
-        ShardingRegistryOps::create(old_shard, "poolA", 0, &role, 2, 0).unwrap();
-        ShardingRegistryOps::create(new_shard, "poolA", 1, &role, 2, 0).unwrap();
-        ShardingRegistryOps::assign("poolA", "pk1", old_shard).unwrap();
-        set_count(old_shard, 0);
-
-        let err = ShardingRegistryOps::assign("poolA", "pk1", new_shard)
-            .expect_err("a corrupt old counter must reject reassignment");
-
-        assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_INSUFFICIENT);
+        let first = p(1);
+        let second = p(2);
+        ShardingRegistryOps::create(first, "poolA", 0, &role, 2, [1; 32], 10).unwrap();
+        ShardingRegistryOps::create(second, "poolA", 1, &role, 2, [1; 32], 20).unwrap();
+        assert!(ShardingRegistryOps::assignment_for_key("poolA", "key").is_none());
         assert_eq!(
-            ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
-            Some(old_shard)
+            ShardingRegistryOps::assign("poolA", "key", first).unwrap(),
+            first
         );
-        assert_eq!(ShardingRegistryOps::get(old_shard).unwrap().count, 0);
-        assert_eq!(ShardingRegistryOps::get(new_shard).unwrap().count, 0);
+        assert_eq!(
+            ShardingRegistryOps::assign("poolA", "key", second).unwrap(),
+            first
+        );
+        assert_eq!(
+            ShardingRegistryOps::assignment_for_key("poolA", "key")
+                .unwrap()
+                .shard,
+            first
+        );
+        assert_eq!(ShardingRegistryOps::get(first).unwrap().count, 1);
+        assert_eq!(ShardingRegistryOps::get(second).unwrap().count, 0);
+        assert!(ShardingRegistryOps::assignment_for_key("poolB", "key").is_none());
+        assert!(ShardingRegistryOps::assignment_for_key("poolA", "other").is_none());
+
+        // A caller must explicitly release ownership before placing the key elsewhere.
+        ShardingRegistryOps::release("poolA", "key").unwrap();
+        ShardingRegistryOps::assign("poolA", "key", second).unwrap();
+        assert_eq!(ShardingRegistryOps::get(first).unwrap().count, 0);
+        assert_eq!(ShardingRegistryOps::get(second).unwrap().count, 1);
+        assert_eq!(
+            ShardingRegistryOps::assignment_for_key("poolA", "key").map(|record| record.shard),
+            Some(second)
+        );
     }
 
     #[test]
@@ -487,14 +506,18 @@ mod tests {
         let role = CanisterRole::new("alpha");
         let shard = p(1);
 
-        ShardingRegistryOps::create(shard, "poolA", 0, &role, u32::MAX, 0).unwrap();
+        ShardingRegistryOps::create(shard, "poolA", 0, &role, u32::MAX, [1; 32], 0).unwrap();
         set_count(shard, u32::MAX);
 
         let err = ShardingRegistryOps::assign("poolA", "pk1", shard)
             .expect_err("a full-width counter must reject assignment");
 
         assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_LIMIT);
-        assert!(ShardingRegistryOps::partition_key_shard("poolA", "pk1").is_none());
+        assert!(
+            ShardingRegistryOps::assignment_for_key("poolA", "pk1")
+                .map(|record| record.shard)
+                .is_none()
+        );
         assert_eq!(ShardingRegistryOps::get(shard).unwrap().count, u32::MAX);
     }
 
@@ -509,19 +532,19 @@ mod tests {
 
         assert_eq!(err.code(), crate::diagnostics::codes::AUTHORITY_UNAVAILABLE);
         assert_eq!(
-            ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
+            ShardingRegistryOps::assignment_for_key("poolA", "pk1").map(|record| record.shard),
             Some(missing_shard)
         );
     }
 
     #[test]
-    fn reassignment_rejects_missing_old_shard_without_mutation() {
+    fn assignment_preserves_dangling_ownership_without_mutation() {
         ShardingRegistryOps::clear_for_test();
         let role = CanisterRole::new("alpha");
         let missing_shard = p(1);
         let target_shard = p(2);
 
-        ShardingRegistryOps::create(target_shard, "poolA", 0, &role, 2, 0).unwrap();
+        ShardingRegistryOps::create(target_shard, "poolA", 0, &role, 2, [1; 32], 0).unwrap();
         insert_assignment("poolA", "pk1", missing_shard);
 
         let err = ShardingRegistryOps::assign("poolA", "pk1", target_shard)
@@ -529,7 +552,7 @@ mod tests {
 
         assert_eq!(err.code(), crate::diagnostics::codes::AUTHORITY_UNAVAILABLE);
         assert_eq!(
-            ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
+            ShardingRegistryOps::assignment_for_key("poolA", "pk1").map(|record| record.shard),
             Some(missing_shard)
         );
         assert_eq!(ShardingRegistryOps::get(target_shard).unwrap().count, 0);
@@ -541,7 +564,7 @@ mod tests {
         let role = CanisterRole::new("alpha");
         let shard = p(1);
 
-        ShardingRegistryOps::create(shard, "poolA", 0, &role, 2, 0).unwrap();
+        ShardingRegistryOps::create(shard, "poolA", 0, &role, 2, [1; 32], 0).unwrap();
         insert_assignment("poolA", "pk1", shard);
 
         let err = ShardingRegistryOps::release("poolA", "pk1")
@@ -549,7 +572,7 @@ mod tests {
 
         assert_eq!(err.code(), crate::diagnostics::codes::CAPACITY_INSUFFICIENT);
         assert_eq!(
-            ShardingRegistryOps::partition_key_shard("poolA", "pk1"),
+            ShardingRegistryOps::assignment_for_key("poolA", "pk1").map(|record| record.shard),
             Some(shard)
         );
         assert_eq!(ShardingRegistryOps::get(shard).unwrap().count, 0);

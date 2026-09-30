@@ -22,11 +22,13 @@ impl WorkerEntryRecordMapper {
     pub fn validated_to_record(
         entry: ScalingWorkerEntry,
         created_at_secs: u64,
+        allocation_operation_id: [u8; 32],
     ) -> WorkerEntryRecord {
         WorkerEntryRecord {
             pool: entry.pool,
             canister_role: entry.canister_role,
             created_at_secs,
+            allocation_operation_id,
         }
     }
 

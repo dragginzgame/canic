@@ -664,7 +664,8 @@ mod tests {
     fn shard_occupancy_samples_assignments_and_capacity_without_keys() {
         let shard = crate::cdk::types::Principal::from_slice(&[42; 29]);
         ShardingRegistryOps::clear_for_test();
-        ShardingRegistryOps::create(shard, "demo", 0, &CanisterRole::new("shard"), 4, 0).unwrap();
+        ShardingRegistryOps::create(shard, "demo", 0, &CanisterRole::new("shard"), 4, [1; 32], 0)
+            .unwrap();
         ShardingRegistryOps::assign("demo", "private-key-a", shard).unwrap();
         ShardingRegistryOps::assign("demo", "private-key-b", shard).unwrap();
         let family = PublicMetricFamily::ShardOccupancy;
@@ -772,8 +773,16 @@ mod tests {
         ShardingRegistryOps::clear_for_test();
         for value in 0_u32..300 {
             let shard = crate::cdk::types::Principal::from_slice(&value.to_be_bytes());
-            ShardingRegistryOps::create(shard, "bounded", value, &CanisterRole::new("shard"), 4, 0)
-                .unwrap();
+            ShardingRegistryOps::create(
+                shard,
+                "bounded",
+                value,
+                &CanisterRole::new("shard"),
+                4,
+                [1; 32],
+                0,
+            )
+            .unwrap();
         }
         assert_eq!(
             ShardingRegistryOps::bounded_registry_entries(129).len(),

@@ -97,7 +97,7 @@ checkout_count="$(rg -o --no-filename 'uses:[[:space:]]*actions/checkout@' "${wo
 nonpersisting_checkout_count="$(rg -o --no-filename 'persist-credentials:[[:space:]]*false' "${workflow_files[@]}" | wc -l)"
 [ "$checkout_count" -eq "$nonpersisting_checkout_count" ] ||
     fail "every checkout must disable persisted GitHub credentials"
-job_count="$(rg -o --no-filename '^[[:space:]]{4}runs-on:[[:space:]]*ubuntu-24\.04$' "${workflow_files[@]}" | wc -l)"
+job_count="$(rg -o --no-filename '^[[:space:]]{4}runs-on:' "${workflow_files[@]}" | wc -l)"
 timeout_count="$(rg -o --no-filename '^[[:space:]]{4}timeout-minutes:[[:space:]]*[0-9]+$' "${workflow_files[@]}" | wc -l)"
 [ "$job_count" -eq "$timeout_count" ] || fail "every CI job must declare a timeout"
 
@@ -117,8 +117,11 @@ done
 
 rg -F 'runs-on: ubuntu-24.04' "$CI" >/dev/null ||
     fail "CI does not declare a job on the canonical ubuntu-24.04 host"
-if rg '^[[:space:]]+runs-on:' "$CI" | rg -v '^[[:space:]]+runs-on: ubuntu-24\.04$' >/dev/null; then
-    fail "a CI job selects a host outside the canonical ubuntu-24.04 support cell"
+if rg '^[[:space:]]+runs-on:' "$CI" | rg -v '^[[:space:]]+runs-on: (ubuntu-24\.04|\$\{\{ matrix\.runner \}\})$' >/dev/null; then
+    fail "a CI job selects a host outside the supported Linux/macOS cells"
+fi
+if rg '^[[:space:]]+- runner:' "$CI" | rg -v '^[[:space:]]+- runner: macos-15(-intel)?$' >/dev/null; then
+    fail "a CI matrix selects an unsupported host"
 fi
 rg -F 'bash scripts/ci/install-ic-wasm.sh' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound ic-wasm installer"
@@ -131,18 +134,30 @@ for binaryen_platform in DARWIN_ARM64 DARWIN_X64 LINUX_X64; do
         "$ROOT/scripts/ci/install-binaryen.sh" >/dev/null ||
         fail "Binaryen installer does not verify the executable for ${binaryen_platform}"
 done
-for single_use_tool in \
-    'cargo install candid-extractor' \
-    'bash scripts/ci/install-icp-cli.sh' \
-    'bash scripts/ci/install-binaryen.sh'; do
-    [ "$(rg -c -F "$single_use_tool" "$CI")" -eq 1 ] ||
-        fail "CI must install $single_use_tool exactly once in its owning lane"
+require_ci_job_command() {
+    local job="$1"
+    local command="$2"
+    awk -v job="$job" -v command="$command" '
+        /^  [a-zA-Z0-9_-]+:$/ { selected = ($0 == "  " job ":") }
+        selected && index($0, command) { found = 1 }
+        END { exit !found }
+    ' "$CI" || fail "CI job $job must execute $command"
+}
+
+# Each native build lane owns its prerequisites. Additional lanes are allowed.
+for job in macos-host tests-pocketic; do
+    for required_tool in \
+        'cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked' \
+        'bash scripts/ci/install-icp-cli.sh' \
+        'bash scripts/ci/install-ic-wasm.sh' \
+        'bash scripts/ci/install-binaryen.sh'; do
+        require_ci_job_command "$job" "$required_tool"
+    done
 done
-cargo_get_install='cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked'
-[ "$(rg -c -F "$cargo_get_install" "$CI")" -eq 2 ] ||
-    fail "CI must install the exact pinned cargo-get version in both owning jobs"
-[ "$(rg -c -F 'cargo get --version' "$CI")" -eq 2 ] ||
-    fail "CI must verify cargo-get in both owning jobs"
+for job in preflight tests-ordinary; do
+    require_ci_job_command "$job" 'cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked'
+    require_ci_job_command "$job" 'cargo get --version'
+done
 rg -F 'BIN="$(bash scripts/ci/install-gitleaks.sh)"' "$CI" >/dev/null ||
     fail "CI does not use the checksum-bound Gitleaks installer"
 rg -F 'run: make ci-preflight' "$CI" >/dev/null ||
@@ -151,11 +166,6 @@ rg -F 'run: make ci-security' "$CI" >/dev/null ||
     fail "CI does not run the failure-collecting security boundary"
 rg -F 'run: make ci-checks' "$CI" >/dev/null ||
     fail "CI does not run the failure-collecting Rust-check boundary"
-preflight_job="$(sed -n '/^  preflight:/,/^  security:/p' "$CI")"
-rg -F "$cargo_get_install" <<<"$preflight_job" >/dev/null ||
-    fail "CI preflight does not install the pinned cargo-get helper"
-rg -F 'cargo get --version' <<<"$preflight_job" >/dev/null ||
-    fail "CI preflight does not verify the cargo-get helper"
 checks_job="$(sed -n '/^  checks:/,/^  tests-ordinary:/p' "$CI")"
 rg -F 'needs: [preflight, security]' <<<"$checks_job" >/dev/null ||
     fail "CI checks must wait for both cheap preflight and security jobs"
@@ -164,10 +174,6 @@ rg -F 'needs: [checks]' <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests must wait for the complete Rust checks job"
 rg -F 'fetch-depth: 0' <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests cannot read immutable Git baselines from a shallow checkout"
-rg -F "$cargo_get_install" <<<"$ordinary_job" >/dev/null ||
-    fail "CI ordinary tests do not install the pinned cargo-get helper"
-rg -F 'cargo get --version' <<<"$ordinary_job" >/dev/null ||
-    fail "CI ordinary tests do not verify the cargo-get helper"
 rg -F 'cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2' \
     <<<"$ordinary_job" >/dev/null ||
     fail "CI ordinary tests do not install the feature-qualified ripgrep test helper"
@@ -785,13 +791,17 @@ done <"$TOOLS"
 [ "$sha256_count" -gt 0 ] || fail "no SHA-256 pins were found"
 
 for installer in "${installers[@]}"; do
+    checksum_sources=("$installer")
+    if [ "$installer" = "$ROOT/scripts/ci/install-pocketic.sh" ]; then
+        checksum_sources+=("$ROOT/scripts/ci/pocketic-platform.sh")
+    fi
     rg -F 'verify-file-checksum.sh' "$installer" >/dev/null ||
         fail "installer does not verify downloaded content: $installer"
     rg -F -- "--proto-redir '=https'" "$installer" >/dev/null ||
         fail "installer does not constrain redirect protocols: $installer"
     rg '\$CANIC_[A-Z0-9_]*_VERSION' "$installer" >/dev/null ||
         fail "installer does not use a repository version pin: $installer"
-    rg '\$CANIC_[A-Z0-9_]+_SHA(256|512)_[A-Z0-9_]+' "$installer" >/dev/null ||
+    rg '\$CANIC_[A-Z0-9_]+_SHA(256|512)_[A-Z0-9_]+' "${checksum_sources[@]}" >/dev/null ||
         fail "installer does not use a repository checksum pin: $installer"
 done
 
@@ -808,7 +818,7 @@ done
 
 mapfile -t referenced_checksum_vars < <(
     rg -o --no-filename '\$CANIC_[A-Z0-9_]+_SHA(256|512)_[A-Z0-9_]+' \
-        "${installers[@]}" | sed 's/^\$//' | sort -u
+        "${installers[@]}" "$ROOT/scripts/ci/pocketic-platform.sh" | sed 's/^\$//' | sort -u
 )
 [ "${#referenced_checksum_vars[@]}" -gt 0 ] ||
     fail "installers do not reference repository checksum pins"

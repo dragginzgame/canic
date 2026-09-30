@@ -57,7 +57,7 @@ pub(in crate::backup) fn backup_prune_command() -> ClapCommand {
                 .value_name("count")
                 .value_parser(clap::value_parser!(usize))
                 .required(true)
-                .help("Keep the newest count completed backups"),
+                .help("Keep the newest count verified complete backups"),
         )
         .arg(
             flag_arg("dry-run")

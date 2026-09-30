@@ -122,6 +122,7 @@ pub enum CreateCanisterParent {
 
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RecycleCanisterRequest {
+    pub allocation_operation_id: [u8; 32],
     pub canister_pid: Principal,
     pub metadata: Option<RootRequestMetadata>,
 }

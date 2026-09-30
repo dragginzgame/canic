@@ -170,6 +170,7 @@ impl PlacementIndexRegistryOps {
             Some(PlacementIndexEntryRecord::Bound {
                 instance_pid,
                 bound_at,
+                ..
             }) => Ok(PlacementIndexClaimResult::Bound {
                 instance_pid,
                 bound_at,
@@ -207,6 +208,29 @@ impl PlacementIndexRegistryOps {
                 ))
             }
         }
+    }
+
+    /// Check the allocation retained by a bound key without projecting away its identity.
+    #[must_use]
+    pub fn binding_matches_allocation(
+        pool: &str,
+        key_value: &str,
+        pid: Principal,
+        operation_id: [u8; 32],
+    ) -> bool {
+        let Ok(key) = PlacementIndexKey::try_new(pool, key_value) else {
+            return false;
+        };
+        matches!(PlacementIndexRegistry::get(&key), Some(PlacementIndexEntryRecord::Bound { instance_pid, allocation_operation_id, .. }) if instance_pid == pid && allocation_operation_id == operation_id)
+    }
+
+    /// A historical assignment grants routing only to its original current allocation.
+    #[must_use]
+    pub fn binding_is_current(pool: &str, key_value: &str) -> bool {
+        let Ok(key) = PlacementIndexKey::try_new(pool, key_value) else {
+            return false;
+        };
+        matches!(PlacementIndexRegistry::get(&key), Some(PlacementIndexEntryRecord::Bound { instance_pid, allocation_operation_id, .. }) if crate::ops::storage::children::CanisterChildrenOps::matches_allocation(instance_pid, allocation_operation_id))
     }
 
     // Read one entry with its internal claim state for workflow classification.
@@ -269,6 +293,98 @@ impl PlacementIndexRegistryOps {
         PlacementIndexRegistry::get(&key).map(entry_to_response)
     }
 
+    /// Release only this claim after Root returned a completed allocation that is now absent.
+    pub fn discard_retired_claim(
+        pool: &str,
+        key_value: &str,
+        expected: PlacementIndexPendingClaim,
+        pid: Principal,
+        allocation_operation_id: [u8; 32],
+    ) -> Result<bool, InternalError> {
+        if crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+            pid,
+            allocation_operation_id,
+        ) {
+            return Err(InternalError::conflict());
+        }
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
+        let Some(PlacementIndexEntryRecord::Pending {
+            claim_id,
+            owner_pid,
+            created_at,
+            provisional_pid,
+        }) = PlacementIndexRegistry::get(&key)
+        else {
+            return Ok(false);
+        };
+        let observed = PlacementIndexPendingClaim {
+            claim_id,
+            owner_pid,
+            created_at,
+        };
+        if observed != expected || provisional_pid.is_some_and(|provisional| provisional != pid) {
+            return Ok(false);
+        }
+        let _ = PlacementIndexRegistry::remove(&key);
+        Ok(true)
+    }
+
+    /// Explicit recovery may release an assignment whose original allocation is absent.
+    pub fn release_unavailable_binding(
+        pool: &str,
+        key_value: &str,
+        now: u64,
+    ) -> Result<crate::dto::placement::index::PlacementIndexRecoveryResponse, InternalError> {
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
+        let Some(PlacementIndexEntryRecord::Bound {
+            instance_pid,
+            bound_at,
+            allocation_operation_id,
+        }) = PlacementIndexRegistry::get(&key)
+        else {
+            return Err(InternalError::conflict());
+        };
+        if crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+            instance_pid,
+            allocation_operation_id,
+        ) {
+            return Err(InternalError::conflict());
+        }
+        let _ = PlacementIndexRegistry::remove(&key);
+        Ok(crate::dto::placement::index::PlacementIndexRecoveryResponse::ReleasedUnavailableBinding { instance_pid, bound_at, released_at: now })
+    }
+
+    /// Remove a fresh claim after synchronous admission failed before any Root call.
+    pub(crate) fn discard_unadmitted_claim(
+        pool: &str,
+        key_value: &str,
+        expected: PlacementIndexPendingClaim,
+    ) -> Result<bool, InternalError> {
+        let key = PlacementIndexKey::try_new(pool, key_value)
+            .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
+        let Some(PlacementIndexEntryRecord::Pending {
+            claim_id,
+            owner_pid,
+            created_at,
+            provisional_pid: None,
+        }) = PlacementIndexRegistry::get(&key)
+        else {
+            return Ok(false);
+        };
+        let observed = PlacementIndexPendingClaim {
+            claim_id,
+            owner_pid,
+            created_at,
+        };
+        if observed != expected {
+            return Ok(false);
+        }
+        let _ = PlacementIndexRegistry::remove(&key);
+        Ok(true)
+    }
+
     // Release one stale pending claim so recovery/admin paths can clear dead keys.
     pub fn release_stale_pending_if_claim_matches(
         pool: &str,
@@ -287,6 +403,7 @@ impl PlacementIndexRegistryOps {
             PlacementIndexEntryRecord::Bound {
                 instance_pid,
                 bound_at,
+                ..
             } => Ok(PlacementIndexReleaseResult::Bound {
                 instance_pid,
                 bound_at,
@@ -330,15 +447,18 @@ impl PlacementIndexRegistryOps {
         pool: &str,
         key_value: &str,
         pid: Principal,
+        allocation_operation_id: [u8; 32],
         bound_at: u64,
     ) -> Result<(), InternalError> {
         let key = PlacementIndexKey::try_new(pool, key_value)
             .map_err(PlacementIndexRegistryOpsError::InvalidKey)?;
 
         match PlacementIndexRegistry::get(&key) {
-            Some(PlacementIndexEntryRecord::Bound { instance_pid, .. }) if instance_pid == pid => {
-                Ok(())
-            }
+            Some(PlacementIndexEntryRecord::Bound {
+                instance_pid,
+                allocation_operation_id: existing_allocation,
+                ..
+            }) if instance_pid == pid && existing_allocation == allocation_operation_id => Ok(()),
 
             Some(PlacementIndexEntryRecord::Bound { instance_pid, .. }) => {
                 Err(PlacementIndexRegistryOpsError::KeyBound {
@@ -367,6 +487,7 @@ impl PlacementIndexRegistryOps {
                     key,
                     PlacementIndexEntryRecord::Bound {
                         instance_pid: pid,
+                        allocation_operation_id,
                         bound_at,
                     },
                 );
@@ -381,6 +502,7 @@ impl PlacementIndexRegistryOps {
         key_value: &str,
         expected_claim_id: u64,
         pid: Principal,
+        allocation_operation_id: [u8; 32],
         bound_at: u64,
     ) -> Result<bool, InternalError> {
         let key = PlacementIndexKey::try_new(pool, key_value)
@@ -412,6 +534,7 @@ impl PlacementIndexRegistryOps {
                     key,
                     PlacementIndexEntryRecord::Bound {
                         instance_pid: pid,
+                        allocation_operation_id,
                         bound_at,
                     },
                 );
@@ -464,6 +587,7 @@ const fn entry_to_response(entry: PlacementIndexEntryRecord) -> PlacementIndexSt
         PlacementIndexEntryRecord::Bound {
             instance_pid,
             bound_at,
+            ..
         } => PlacementIndexStatusResponse::Bound {
             instance_pid,
             bound_at,
@@ -487,6 +611,7 @@ const fn entry_to_state(entry: PlacementIndexEntryRecord) -> PlacementIndexEntry
         PlacementIndexEntryRecord::Bound {
             instance_pid,
             bound_at,
+            ..
         } => PlacementIndexEntryState::Bound {
             instance_pid,
             bound_at,

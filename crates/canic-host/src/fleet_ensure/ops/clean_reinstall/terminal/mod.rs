@@ -56,7 +56,9 @@ pub(in crate::fleet_ensure) fn retain(
     actual: &ActualCycleConservation,
     conservation: &CycleConservation,
 ) -> Result<(), EnsureStateError> {
-    if plan.scope != FleetEnsurePlanScope::Full {
+    if plan.scope != FleetEnsurePlanScope::Full
+        || !crate::fleet_ensure::ops::operation_selection::clean_reinstall_current(paths)?
+    {
         return Ok(());
     }
     let Some(selection) = super::read(paths)? else {

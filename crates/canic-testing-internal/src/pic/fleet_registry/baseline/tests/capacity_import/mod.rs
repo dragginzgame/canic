@@ -432,7 +432,7 @@ fn install_capacity_root(
     }
 }
 
-fn command(
+pub(super) fn command(
     pic: &PocketIc,
     root: Principal,
     caller: Principal,
@@ -464,7 +464,7 @@ pub(super) fn context(pic: &PocketIc, root: Principal, caller: Principal) -> Poo
     *context
 }
 
-fn status(
+pub(super) fn status(
     pic: &PocketIc,
     root: Principal,
     caller: Principal,

@@ -66,8 +66,8 @@ fn capacity_import_rejected_handoff_resumes_after_restart_without_rebasing() {
     );
     assert_eq!(renewed.handoffs[0].before_reserved_cycles, Some(100));
     assert_eq!(
-        renewed.handoffs[0].rejections,
-        failed.handoffs[0].rejections
+        renewed.handoffs[0].retirements,
+        failed.handoffs[0].retirements
     );
     assert!(matches!(
         store.save(&failed),
@@ -88,7 +88,7 @@ fn capacity_import_rejected_handoff_resumes_after_restart_without_rebasing() {
     )
     .unwrap();
     store.save(&done).unwrap();
-    assert_eq!(done.handoffs[0].rejections.len(), 1);
+    assert_eq!(done.handoffs[0].retirements.len(), 1);
     assert_eq!(store.read().unwrap().unwrap(), done);
     drop(store);
     std::fs::remove_dir_all(root).unwrap();
@@ -165,7 +165,7 @@ fn capacity_import_second_rejection_is_terminal_and_history_cannot_be_erased() {
     assert!(!monotonic(&issued.handoffs[0], &renewed.handoffs[0]));
     let sent = journal::issue_handoff(&renewed, source.binding.canister_id).unwrap();
     let terminal = reject(&sent);
-    assert_eq!(terminal.handoffs[0].rejections.len(), 2);
+    assert_eq!(terminal.handoffs[0].retirements.len(), 2);
     let third = request_with_expiry(&terminal.plan, source.binding.canister_id, 3);
     assert!(matches!(
         renew(&terminal, &source, third),
@@ -173,9 +173,93 @@ fn capacity_import_second_rejection_is_terminal_and_history_cannot_be_erased() {
     ));
     assert!(!monotonic(&terminal.handoffs[0], &sent.handoffs[0]));
     let mut corrupt = terminal;
-    corrupt.handoffs[0].rejections[0].certificate_sha256 = [0; 32];
+    corrupt.handoffs[0].retirements[0].certificate_sha256 = [0; 32];
     assert!(matches!(
         journal::validate(&corrupt),
         Err(CapacityImportJournalError::Integrity)
+    ));
+}
+
+#[test]
+fn retired_pruned_handoff_reconciles_exact_custody_or_renews_original() {
+    use crate::fleet_ensure::ops::capacity_import::transport::tests::retired;
+    use ic_agent::agent::RequestStatusResponse;
+    for status in [RequestStatusResponse::Done, RequestStatusResponse::Unknown] {
+        let (issued, source) = issued();
+        let id = source.binding.canister_id;
+        let witness = retired(
+            &issued.plan,
+            id,
+            issued.handoffs[0].request.as_ref().unwrap(),
+            status,
+            2,
+        );
+        let retired = retain(&issued, id, &witness).unwrap();
+        let bytes = serde_json::to_vec(&retired).unwrap();
+        let reopened: CapacityImportJournalRecord = serde_json::from_slice(&bytes).unwrap();
+        let replacement = request_with_expiry(&issued.plan, id, 3);
+        let renewed = reconcile(&reopened, &source, replacement.clone()).unwrap();
+        assert_eq!(
+            renewed.handoffs[0].effect.as_ref().unwrap().state,
+            EffectState::Intent
+        );
+        assert_eq!(
+            renewed.handoffs[0].effect.as_ref().unwrap().pre_cycles,
+            issued.handoffs[0].effect.as_ref().unwrap().pre_cycles
+        );
+        assert!(monotonic(&reopened.handoffs[0], &renewed.handoffs[0]));
+
+        let mut completed_source = source.clone();
+        completed_source.binding.controllers = issued.plan.transitional_controllers.clone();
+        completed_source.binding.canister_version += 1;
+        completed_source.cycles -= 25;
+        let completed = reconcile(&reopened, &completed_source, replacement.clone()).unwrap();
+        journal::validate(&completed).unwrap();
+        assert!(journal::custody_ready(&completed, id));
+        assert_eq!(completed.handoffs[0].request, issued.handoffs[0].request);
+        assert_eq!(
+            completed.handoffs[0].retirements,
+            reopened.handoffs[0].retirements
+        );
+        assert_eq!(
+            completed.handoffs[0].effect.as_ref().unwrap().post_cycles,
+            Some(completed_source.cycles)
+        );
+        assert!(monotonic(&reopened.handoffs[0], &completed.handoffs[0]));
+        assert!(!monotonic(&completed.handoffs[0], &issued.handoffs[0]));
+
+        completed_source.binding.canister_version += 1;
+        assert!(matches!(
+            reconcile(&reopened, &completed_source, replacement.clone()),
+            Err(CapacityImportJournalError::Unresolved)
+        ));
+        completed_source.binding.canister_version = source.binding.canister_version;
+        assert!(matches!(
+            reconcile(&reopened, &completed_source, replacement),
+            Err(CapacityImportJournalError::Unresolved)
+        ));
+    }
+}
+
+#[test]
+fn refresh_never_issued_ingress_preserves_effect_authority_and_rejects_issued_state() {
+    let reserved = journal::tests::reserved();
+    let source = sources(&reserved.plan).remove(0);
+    let id = source.binding.canister_id;
+    let first = request_with_expiry(&reserved.plan, id, 1);
+    let original = journal::prepare_handoff(&reserved, &source, first).unwrap();
+    let replacement = request_with_expiry(&reserved.plan, id, 2);
+    let refreshed = refresh_unissued(&original, id, replacement.clone()).unwrap();
+    assert_eq!(original.handoffs[0].effect, refreshed.handoffs[0].effect);
+    assert_eq!(
+        original.handoffs[0].before_reserved_cycles,
+        refreshed.handoffs[0].before_reserved_cycles
+    );
+    assert!(refreshed.handoffs[0].retirements.is_empty());
+    let issued = journal::issue_handoff(&refreshed, id).unwrap();
+    assert!(monotonic(&original.handoffs[0], &issued.handoffs[0]));
+    assert!(matches!(
+        refresh_unissued(&issued, id, replacement),
+        Err(CapacityImportJournalError::Unresolved)
     ));
 }

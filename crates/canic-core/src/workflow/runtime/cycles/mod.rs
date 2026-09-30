@@ -964,8 +964,12 @@ const fn permits_automatic_refill(reason: FleetRootFundingNoGrantReason) -> bool
 }
 
 fn is_retryable_funding_error(err: &InternalError) -> bool {
-    err.code() == codes::PLATFORM_FAILED
-        || err.code() == codes::STATE_FAILED
+    [
+        codes::PLATFORM_FAILED,
+        codes::PLATFORM_UNAVAILABLE,
+        codes::STATE_FAILED,
+    ]
+    .contains(&err.code())
         || err.public_error().code() == codes::STATE_CONFLICT.raw_code()
 }
 
@@ -1009,6 +1013,14 @@ mod tests {
 
     #[test]
     fn only_transport_and_in_flight_funding_failures_retry() {
+        let rejection = ic_cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
+        let failure = InternalError::from(crate::infra::ic::IcInfraError::from(
+            ic_cdk::call::CallFailed::CallRejected(rejection),
+        ));
+        let retry = CycleWorkflow::finish_funding_failure(&failure);
+        assert!(
+            matches!(retry.directive(), TimerDirective::RetryAfter(delay) if delay <= RETRY_MAX)
+        );
         assert!(is_retryable_funding_error(&InternalError::state_failure()));
         assert!(is_retryable_funding_error(&InternalError::public(
             crate::diagnostics::codes::STATE_CONFLICT

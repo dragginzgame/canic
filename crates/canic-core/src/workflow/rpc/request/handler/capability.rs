@@ -185,6 +185,7 @@ fn hash_recycle_payload(req: &RecycleCanisterRequest) -> [u8; 32] {
     let mut hasher = super::replay::payload_hasher();
     super::replay::hash_str(&mut hasher, "RecycleCanister");
     super::replay::hash_principal(&mut hasher, &req.canister_pid);
+    super::replay::hash_bytes(&mut hasher, &req.allocation_operation_id);
     super::replay::finish_payload_hash(hasher)
 }
 

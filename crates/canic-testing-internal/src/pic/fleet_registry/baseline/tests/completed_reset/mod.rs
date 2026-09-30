@@ -13,6 +13,9 @@ use std::collections::BTreeMap;
 
 const CLI_ARGUMENTS: &str = "CANIC_COMPLETED_RESET_CLI_ARGUMENTS";
 const CLI_TEST: &str = "pic::fleet_registry::baseline::tests::completed_reset::completed_estate_reset_recovers_and_replays";
+// The explicit incident qualification retains the observed physical inventory.
+pub(super) const INCIDENT_WORKLOADS: usize = 9;
+pub(super) const INCIDENT_READY: usize = 15;
 
 #[test]
 pub(super) fn completed_estate_reset_recovers_and_replays() {
@@ -22,6 +25,24 @@ pub(super) fn completed_estate_reset_recovers_and_replays() {
         return;
     }
     assert_literal_zero_host_journey(FundingJourney::CompletedReset, RETAINED_ESTATE_WORKLOADS);
+}
+
+#[test]
+#[ignore = "explicit CANIC-188 retained-estate qualification; ordinary release coverage uses a smaller estate"]
+fn incident_estate_reset_recovers_and_replays() {
+    assert_literal_zero_host_journey(FundingJourney::CompletedReset, INCIDENT_WORKLOADS);
+}
+
+fn expected_counts(input: &ReinstallJourney<'_>) -> (usize, usize) {
+    if input.pools.len() == INCIDENT_WORKLOADS + INCIDENT_READY {
+        (INCIDENT_WORKLOADS, INCIDENT_READY)
+    } else {
+        assert_eq!(
+            input.pools.len(),
+            RETAINED_ESTATE_WORKLOADS + RETAINED_ESTATE_READY
+        );
+        (RETAINED_ESTATE_WORKLOADS, RETAINED_ESTATE_READY)
+    }
 }
 
 fn paths(input: &ReinstallJourney<'_>) -> EnsurePaths {
@@ -136,7 +157,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
                 "--reinstall",
                 "--json",
             ],
-            "ensure",
+            true,
             None,
             true,
         )
@@ -283,6 +304,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     let import_digest = canic_core::cdk::utils::hash::hex_bytes(
         import.operation.as_ref().unwrap().review.review_sha256,
     );
+    capacity_import::qualify_reset_review(&input, &import);
     cli_apply_receipt(
         root,
         &executable,
@@ -290,6 +312,32 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         &import_digest,
         true,
         true,
+    );
+    capacity_import::qualify_reset_completion(&input, &import);
+    let completed_import_bytes =
+        std::fs::read(paths.plan.with_file_name("capacity-import.json")).unwrap();
+    let replay = cli_apply_receipt(
+        root,
+        Path::new("/missing/reset-icp"),
+        &desired.fleet,
+        &import_digest,
+        true,
+        true,
+    );
+    let replay_authority = replay
+        .iter()
+        .find(|event| event["event"] == "clean_reinstall_authority")
+        .unwrap();
+    assert_eq!(replay_authority["data"]["phase"], "import");
+    assert_eq!(replay_authority["data"]["phase_completed"], true);
+    assert!(
+        replay
+            .iter()
+            .all(|event| event["event"] != "icp_request_timing")
+    );
+    assert_eq!(
+        std::fs::read(paths.plan.with_file_name("capacity-import.json")).unwrap(),
+        completed_import_bytes
     );
     for child in input.pools {
         let status = input.pic.canister_status(*child, Some(input.root)).unwrap();
@@ -311,6 +359,16 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         true,
     );
     assert_eq!(completed.last().unwrap()["data"]["terminal"], true);
+    let pool = root_pool_status_as(input.pic, input.root, operator);
+    let (workloads, ready) = expected_counts(&input);
+    assert_eq!(
+        (pool.workload, pool.ready, pool.pending_reset),
+        (
+            u32::try_from(workloads).unwrap(),
+            u32::try_from(ready).unwrap(),
+            0
+        )
+    );
     assert_eq!(
         read_state(&paths, &desired.fleet).unwrap().principals,
         originals
@@ -392,8 +450,72 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         std::fs::read(root.join("reinstall-mutations.log")).unwrap(),
         mutations
     );
+    qualify_ordinary_ensure_after_reset(&input, &desired, &executable, &plan);
     capacity_import::qualify(&input, &desired, &icp);
     span.finish();
+}
+
+fn qualify_ordinary_ensure_after_reset(
+    input: &ReinstallJourney<'_>,
+    desired: &DesiredFleet,
+    executable: &Path,
+    reset_plan: &FleetEnsurePlan,
+) {
+    let root = input.adapter_root;
+    let mut next = reset_plan
+        .reviewed_desired
+        .as_ref()
+        .unwrap()
+        .desired()
+        .clone();
+    next.maximum_stalled_observations += 1;
+    std::fs::write(
+        root.join("desired-next.toml"),
+        toml::to_string_pretty(&next).unwrap(),
+    )
+    .unwrap();
+    let args = [
+        "fleet",
+        "ensure",
+        &desired.fleet,
+        "--desired",
+        "desired-next.toml",
+        "--json",
+    ];
+    cli_receipt(root, executable, &args, false, None, true);
+    let plan = read_plan(&paths(input)).unwrap().unwrap();
+    assert_ne!(plan.operation_id, reset_plan.operation_id);
+    assert!(
+        !canic_host::fleet_ensure::workflow::clean_reinstall::selected(
+            root,
+            "local",
+            &desired.fleet,
+            false,
+            true,
+        )
+        .unwrap()
+    );
+    let mut apply = args.to_vec();
+    apply.extend(["--apply", &plan.plan_sha256]);
+    let result = cli_receipt(
+        root,
+        executable,
+        &apply,
+        false,
+        Some(&plan.plan_sha256),
+        true,
+    );
+    assert_eq!(result.last().unwrap()["data"]["terminal"], true);
+    assert!(
+        canic_host::fleet_ensure::workflow::clean_reinstall::selected(
+            root,
+            "local",
+            &desired.fleet,
+            true,
+            false,
+        )
+        .unwrap()
+    );
 }
 
 fn cli_apply_receipt(
@@ -408,14 +530,14 @@ fn cli_apply_receipt(
     if json {
         args.push("--json");
     }
-    cli_receipt(root, executable, &args, "ensure", Some(approval), succeeds)
+    cli_receipt(root, executable, &args, true, Some(approval), succeeds)
 }
 
 fn cli_receipt(
     root: &Path,
     executable: &Path,
     args: &[&str],
-    command: &str,
+    reset: bool,
     approval: Option<&str>,
     succeeds: bool,
 ) -> Vec<serde_json::Value> {
@@ -443,7 +565,7 @@ fn cli_receipt(
         .map(|line| serde_json::from_str::<serde_json::Value>(line).unwrap())
         .collect::<Vec<_>>();
     assert_eq!(events[0]["event"], "invocation_started");
-    assert_eq!(events[0]["data"]["command"], command);
+    assert_eq!(events[0]["data"]["command"], "ensure");
     let invocation = &events[0]["data"];
     assert_eq!(
         invocation["applied_plan_sha256"]
@@ -456,10 +578,11 @@ fn cli_receipt(
             || invocation["applied_review_sha256"].is_null()
     );
     if succeeds {
-        assert!(
+        assert_eq!(
             events
                 .iter()
-                .any(|event| event["event"] == "clean_reinstall_authority")
+                .any(|event| event["event"] == "clean_reinstall_authority"),
+            reset
         );
     }
     assert_eq!(events.last().unwrap()["event"], "invocation_finished");

@@ -435,7 +435,15 @@ pub(super) fn execute_finalize_manifest(
         download_journal = completed_journal;
     }
 
-    let manifest = build_manifest(config, plan, &download_journal)?;
+    let mut manifest = build_manifest(config, plan, &download_journal)?;
+    if layout.manifest_path().exists() {
+        // Publication can finish before its terminal receipt. Keep the original
+        // publisher's provenance while rebuilding every authority and artifact
+        // field from the retained plan and verified download journal.
+        let published = layout.read_manifest()?;
+        manifest.created_at = published.created_at;
+        manifest.tool = published.tool;
+    }
     layout.publish_manifest(&manifest)?;
     Ok(BackupExecutionOperationReceipt::completed(
         journal,

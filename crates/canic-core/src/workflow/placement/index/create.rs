@@ -19,6 +19,7 @@ use crate::{
             },
             recording::PlacementIndexMetricEvent as MetricEvent,
         },
+        storage::intent::ReceiptBackedIntentOps,
         storage::placement::index::{
             PlacementIndexClaimResult, PlacementIndexPendingClaim, PlacementIndexRegistryOps,
         },
@@ -42,6 +43,37 @@ impl PlacementIndexWorkflow {
         permit: &PlacementAllocationPermit,
     ) -> Result<Option<PlacementIndexStatusResponse>, InternalError> {
         MetricEvent::started(MetricOperation::Finalize);
+        if let Err(error) = permit.require_current_child(pid) {
+            PlacementAllocationWorkflow::finish_retired_child(permit, pid)?;
+            PlacementIndexRegistryOps::discard_retired_claim(
+                pool,
+                key_value,
+                claim,
+                pid,
+                permit.operation_id(),
+            )?;
+            return Err(error);
+        }
+        if let Some(PlacementIndexStatusResponse::Bound {
+            instance_pid,
+            bound_at,
+        }) = PlacementIndexRegistryOps::lookup_entry(pool, key_value)
+            && PlacementIndexRegistryOps::binding_matches_allocation(
+                pool,
+                key_value,
+                instance_pid,
+                permit.operation_id(),
+            )
+            && instance_pid == pid
+        {
+            // Another resumer can bind the same Root result while this caller awaits it.
+            PlacementAllocationWorkflow::finish_created_child(permit, pid)?;
+            MetricEvent::completed(MetricOperation::Finalize, MetricReason::AlreadyBound);
+            return Ok(Some(PlacementIndexStatusResponse::Bound {
+                instance_pid,
+                bound_at,
+            }));
+        }
         if !PlacementIndexRegistryOps::set_provisional_pid_if_claim_matches(
             pool,
             key_value,
@@ -60,6 +92,7 @@ impl PlacementIndexWorkflow {
             key_value,
             claim.claim_id,
             pid,
+            permit.operation_id(),
             bound_at,
         ) {
             Ok(bound) => bound,
@@ -72,7 +105,7 @@ impl PlacementIndexWorkflow {
             MetricEvent::failed_reason(MetricOperation::Finalize, MetricReason::ClaimLost);
             return Err(InternalError::invariant());
         }
-        PlacementAllocationWorkflow::finish_registered_child(permit, pid)?;
+        PlacementAllocationWorkflow::finish_created_child(permit, pid)?;
 
         MetricEvent::completed(MetricOperation::Finalize, MetricReason::Ok);
         Ok(Some(PlacementIndexStatusResponse::Bound {
@@ -106,6 +139,11 @@ impl PlacementIndexWorkflow {
                 instance_pid,
                 bound_at,
             } => {
+                if !PlacementIndexRegistryOps::binding_is_current(pool, key_value) {
+                    return Err(InternalError::public(
+                        crate::diagnostics::codes::POSITION_UNAVAILABLE,
+                    ));
+                }
                 MetricEvent::skipped(MetricOperation::Claim, MetricReason::AlreadyBound);
                 return Ok(Some(PlacementIndexStatusResponse::Bound {
                     instance_pid,
@@ -158,16 +196,28 @@ impl PlacementIndexWorkflow {
         Self::finalize_created_instance(pool, key_value, claim, pid, &permit).await
     }
 
-    async fn create_and_finalize_claim(
+    pub(super) async fn create_and_finalize_claim(
         pool: &str,
         key_value: &str,
         pool_cfg: &IndexPool,
         claim: PlacementIndexPendingClaim,
     ) -> Result<Option<PlacementIndexStatusResponse>, InternalError> {
         let request = placement_index_allocation_request(pool, key_value, pool_cfg, claim);
+        let operation_id = request.identity.operation_id;
 
         MetricEvent::started(MetricOperation::CreateInstance);
-        let (permit, pid) = match PlacementAllocationWorkflow::create_child(request).await {
+        let prepared = match PlacementAllocationWorkflow::prepare_child(request) {
+            Ok(prepared) => prepared,
+            Err(err) => {
+                if ReceiptBackedIntentOps::load(operation_id)?.is_none() {
+                    PlacementIndexRegistryOps::discard_unadmitted_claim(pool, key_value, claim)?;
+                }
+                MetricEvent::failed(MetricOperation::CreateInstance, &err);
+                return Err(err);
+            }
+        };
+        let (permit, pid) = match PlacementAllocationWorkflow::create_prepared_child(prepared).await
+        {
             Ok(result) => {
                 MetricEvent::completed(MetricOperation::CreateInstance, MetricReason::Ok);
                 result

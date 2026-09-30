@@ -41,6 +41,11 @@ pub enum PlacementIndexStatusResponse {
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub enum PlacementIndexRecoveryResponse {
+    ReleasedUnavailableBinding {
+        instance_pid: Principal,
+        bound_at: u64,
+        released_at: u64,
+    },
     Missing,
     FreshPending {
         owner_pid: Principal,

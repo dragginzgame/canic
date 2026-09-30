@@ -62,6 +62,11 @@ impl PlacementIndexWorkflow {
             let now = IcOps::now_secs();
 
             match Self::classify_entry(pool, key_value, &pool_cfg, now) {
+                Some(PlacementIndexEntryClassification::Unavailable) => {
+                    return Err(InternalError::public(
+                        crate::diagnostics::codes::POSITION_UNAVAILABLE,
+                    ));
+                }
                 Some(PlacementIndexEntryClassification::Bound {
                     instance_pid,
                     bound_at,
@@ -193,6 +198,11 @@ impl PlacementIndexWorkflow {
             let now = IcOps::now_secs();
 
             match Self::classify_entry(pool, key_value, &pool_cfg, now) {
+                Some(PlacementIndexEntryClassification::Unavailable) => {
+                    return PlacementIndexRegistryOps::release_unavailable_binding(
+                        pool, key_value, now,
+                    );
+                }
                 None => {
                     MetricEvent::skipped(MetricOperation::Recover, MetricReason::Missing);
                     return Ok(PlacementIndexRecoveryResponse::Missing);
@@ -323,7 +333,14 @@ impl PlacementIndexWorkflow {
             MetricEvent::failed_reason(MetricOperation::Bind, reason);
             return Err(err);
         }
-        if let Err(err) = PlacementIndexRegistryOps::bind(pool, key_value, pid, IcOps::now_secs()) {
+        if let Err(err) = PlacementIndexRegistryOps::bind(
+            pool,
+            key_value,
+            pid,
+            crate::ops::storage::children::CanisterChildrenOps::allocation_operation_id(pid)
+                .ok_or_else(InternalError::unavailable)?,
+            IcOps::now_secs(),
+        ) {
             MetricEvent::failed(MetricOperation::Bind, &err);
             return Err(err);
         }

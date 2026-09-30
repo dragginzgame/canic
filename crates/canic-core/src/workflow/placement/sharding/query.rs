@@ -26,14 +26,17 @@ pub struct ShardingQuery;
 impl ShardingQuery {
     #[must_use]
     pub fn lookup_partition_key(pool: &str, partition_key: &str) -> Option<Principal> {
-        ShardingRegistryOps::partition_key_shard(pool, partition_key)
+        ShardingRegistryOps::assignment_for_key(pool, partition_key)
+            .filter(ShardingRegistryOps::assignment_is_current)
+            .map(|record| record.shard)
     }
 
     pub fn resolve_shard_for_key(
         pool: &str,
         partition_key: &str,
     ) -> Result<Principal, InternalError> {
-        ShardingRegistryOps::partition_key_shard_required(pool, partition_key)
+        Self::lookup_partition_key(pool, partition_key)
+            .ok_or_else(|| InternalError::public(crate::diagnostics::codes::POSITION_UNAVAILABLE))
     }
 
     #[must_use]
@@ -43,6 +46,7 @@ impl ShardingQuery {
         let view = data
             .entries
             .into_iter()
+            .filter(ShardingRegistryOps::entry_is_current)
             .map(|record| ShardingRegistryEntry {
                 pid: record.pid,
                 entry: ShardEntryMapper::record_to_view(&record.entry),
@@ -54,7 +58,10 @@ impl ShardingQuery {
 
     #[must_use]
     pub fn partition_keys(pool: &str, shard: Principal) -> ShardingPartitionKeysResponse {
-        let partition_keys = ShardingRegistryOps::partition_keys_in_shard(pool, shard);
+        let partition_keys = ShardingRegistryOps::partition_keys_in_shard(pool, shard)
+            .into_iter()
+            .filter(|key| Self::lookup_partition_key(pool, key) == Some(shard))
+            .collect();
         ShardingPartitionKeysResponse(partition_keys)
     }
 }

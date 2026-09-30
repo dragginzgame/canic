@@ -9,7 +9,7 @@ use crate::persistence::PersistenceError;
 use std::{
     ffi::OsString,
     fs::{self, File, OpenOptions},
-    io::{self, Write},
+    io::{self, BufReader, Write},
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
@@ -39,7 +39,7 @@ where
     T: DeserializeOwned,
 {
     let file = File::open(path)?;
-    Ok(serde_json::from_reader(file)?)
+    Ok(serde_json::from_reader(BufReader::new(file))?)
 }
 
 fn create_bytes_at_barriers(

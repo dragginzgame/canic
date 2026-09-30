@@ -25,8 +25,9 @@ pub(super) fn due_chain_key_templates(
         .into_iter()
         .filter(|template| template.enabled)
         .filter_map(|template| {
-            if required_issuer_pid.is_some_and(|issuer_pid| issuer_pid == template.issuer_pid) {
-                return Some(DueChainKeyTemplate { template });
+            if let Some(issuer_pid) = required_issuer_pid {
+                return (issuer_pid == template.issuer_pid)
+                    .then_some(DueChainKeyTemplate { template });
             }
             let template_fingerprint =
                 super::super::root_issuer_renewal::renewal_template_fingerprint(&template);

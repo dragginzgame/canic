@@ -286,11 +286,14 @@ pub fn revocation_request(
         component,
         operation_id: grant.binding.installation,
     };
-    if target != canister_id || &granted_claim != claim || grant.revision == 0 {
+    if target != canister_id || grant.revision == 0 {
         return Err(InternalError::conflict());
     }
     if !grant.enabled {
         return Ok(None);
+    }
+    if &granted_claim != claim {
+        return Err(InternalError::conflict());
     }
     grant
         .revision
@@ -441,6 +444,25 @@ mod tests {
             None
         );
         claim.operation_id = [9; 32];
+        assert_eq!(
+            revocation_request(canister, &claim, Some(&grant)).unwrap(),
+            None
+        );
+        grant.enabled = true;
+        assert_eq!(
+            revocation_request(canister, &claim, Some(&grant))
+                .unwrap_err()
+                .public_code(),
+            InternalError::conflict().public_code()
+        );
+        grant.enabled = false;
+        assert_eq!(
+            revocation_request(Principal::anonymous(), &claim, Some(&grant))
+                .unwrap_err()
+                .public_code(),
+            InternalError::conflict().public_code()
+        );
+        grant.revision = 0;
         assert_eq!(
             revocation_request(canister, &claim, Some(&grant))
                 .unwrap_err()

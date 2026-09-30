@@ -52,6 +52,23 @@ enum CoordinatorResponse {
     Registry(Box<FleetRegistry>),
 }
 
+/// One Root update whose local checks and read-only authority preflight succeeded.
+/// Workflow persists its submission allowance before consuming this one-use value.
+pub struct PreparedRootCommand {
+    transport: CapacityImportTransport,
+    plan: CapacityImportPlanRecord,
+    argument: Vec<u8>,
+}
+
+impl PreparedRootCommand {
+    /// Submit without repeating preflight after the durable submission boundary.
+    pub async fn submit(self) -> Result<PoolImportStatus, CapacityImportJournalError> {
+        self.transport
+            .submit_root_command(&self.plan, self.argument)
+            .await
+    }
+}
+
 impl CapacityImportTransport {
     /// Verify operator-established Coordinator authority and active Root registration.
     /// Module/provenance observations remain prerequisites owned by the review workflow.
@@ -126,12 +143,12 @@ impl CapacityImportTransport {
     }
 
     /// Establish the exact allocation fence only after durable host approval.
-    pub async fn reserve_root(
+    pub async fn prepare_reserve_root(
         &self,
         journal: &CapacityImportJournalRecord,
-    ) -> Result<PoolImportStatus, CapacityImportJournalError> {
+    ) -> Result<PreparedRootCommand, CapacityImportJournalError> {
         require_approved(journal)?;
-        self.root_command(
+        self.prepare_root_command(
             &journal.plan,
             PoolImportCommand::Reserve(Box::new(root_reservation(&journal.plan)?)),
         )
@@ -140,16 +157,16 @@ impl CapacityImportTransport {
 
     /// Advance only a source whose original host ingress has certified completion.
     /// Root owns all reset intent, paid-call bounds and lost-response reconciliation.
-    pub async fn advance_root(
+    pub async fn prepare_advance_root(
         &self,
         journal: &CapacityImportJournalRecord,
         canister_id: Principal,
-    ) -> Result<PoolImportStatus, CapacityImportJournalError> {
+    ) -> Result<PreparedRootCommand, CapacityImportJournalError> {
         require_approved(journal)?;
         if !journal::custody_ready(journal, canister_id) {
             return Err(CapacityImportJournalError::Unresolved);
         }
-        self.root_command(
+        self.prepare_root_command(
             &journal.plan,
             PoolImportCommand::Advance {
                 identity: identity(&journal.plan),
@@ -160,15 +177,15 @@ impl CapacityImportTransport {
     }
 
     /// Request Root's terminal accounting after every retained host handoff has completed.
-    pub async fn settle_root(
+    pub async fn prepare_settle_root(
         &self,
         journal: &CapacityImportJournalRecord,
-    ) -> Result<PoolImportStatus, CapacityImportJournalError> {
+    ) -> Result<PreparedRootCommand, CapacityImportJournalError> {
         require_approved(journal)?;
         if !journal::all_custody_ready(journal) {
             return Err(CapacityImportJournalError::Unresolved);
         }
-        self.root_command(
+        self.prepare_root_command(
             &journal.plan,
             PoolImportCommand::Settle(identity(&journal.plan)),
         )
@@ -176,10 +193,10 @@ impl CapacityImportTransport {
     }
 
     /// Release allocation only after recoverable local inventory publication completed.
-    pub async fn release_root(
+    pub async fn prepare_release_root(
         &self,
         journal: &CapacityImportJournalRecord,
-    ) -> Result<PoolImportStatus, CapacityImportJournalError> {
+    ) -> Result<PreparedRootCommand, CapacityImportJournalError> {
         require_approved(journal)?;
         if journal
             .operation
@@ -190,7 +207,7 @@ impl CapacityImportTransport {
         }
         let publication_sha256 =
             crate::fleet_ensure::ops::capacity_import::publication::publication_digest(journal)?;
-        self.root_command(
+        self.prepare_root_command(
             &journal.plan,
             PoolImportCommand::Release {
                 identity: identity(&journal.plan),
@@ -200,15 +217,29 @@ impl CapacityImportTransport {
         .await
     }
 
-    async fn root_command(
+    async fn prepare_root_command(
         &self,
         plan: &CapacityImportPlanRecord,
         command: PoolImportCommand,
-    ) -> Result<PoolImportStatus, CapacityImportJournalError> {
+    ) -> Result<PreparedRootCommand, CapacityImportJournalError> {
         verify_agent(&self.agent, plan)?;
         self.verify_destination(plan).await?;
         let argument = candid::encode_one(Command::ImportPoolCapacity(command))
             .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
+        Ok(PreparedRootCommand {
+            transport: Self {
+                agent: self.agent.clone(),
+            },
+            plan: plan.clone(),
+            argument,
+        })
+    }
+
+    async fn submit_root_command(
+        &self,
+        plan: &CapacityImportPlanRecord,
+        argument: Vec<u8>,
+    ) -> Result<PoolImportStatus, CapacityImportJournalError> {
         let bytes = tokio::time::timeout(
             CALL_TIMEOUT,
             self.agent

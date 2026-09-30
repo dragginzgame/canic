@@ -24,6 +24,7 @@ pub(super) fn render_prune_report(report: &BackupPruneReport) -> String {
                 entry.backup_id.clone(),
                 entry.status.label().to_string(),
                 entry.action.label().to_string(),
+                entry.detail.clone().unwrap_or_default(),
             ]
         })
         .collect::<Vec<_>>();
@@ -36,10 +37,11 @@ pub(super) fn render_prune_report(report: &BackupPruneReport) -> String {
         ),
         String::new(),
         render_table(
-            &["#", "DIR", "BACKUP_ID", "STATUS", "ACTION"],
+            &["#", "DIR", "BACKUP_ID", "STATUS", "ACTION", "DETAIL"],
             &entry_rows,
             &[
                 ColumnAlign::Right,
+                ColumnAlign::Left,
                 ColumnAlign::Left,
                 ColumnAlign::Left,
                 ColumnAlign::Left,

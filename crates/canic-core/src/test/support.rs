@@ -219,3 +219,17 @@ pub fn import_test_env(
 
     EnvOps::import(EnvData { record: snapshot }).expect("import test env");
 }
+
+/// Build one allocation-bound direct child for native storage/workflow tests.
+pub(crate) fn direct_child(
+    canister_id: crate::cdk::types::Principal,
+    role: crate::ids::CanisterRole,
+    allocation_operation_id: [u8; 32],
+) -> crate::dto::component_registry::ComponentRuntimeDirectChild {
+    crate::dto::component_registry::ComponentRuntimeDirectChild {
+        canister_id,
+        role,
+        allocation_operation_id,
+        protocol_profile_digest: crate::role_contract::ProtocolProfileDigest::from_bytes([1; 32]),
+    }
+}

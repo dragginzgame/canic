@@ -143,6 +143,80 @@ fn runner_executes_plan_and_finalizes_manifest() {
     );
 }
 
+#[test]
+fn runner_resolves_relative_dot_and_parent_paths_before_download() {
+    let name = temp_dir("canic-backup-relative-output");
+    let name = name.file_name().expect("unique relative directory");
+    let root = std::env::current_dir()
+        .expect("working directory")
+        .join(name);
+    let selected = PathBuf::from(".")
+        .join(name)
+        .join("..")
+        .join(name)
+        .join("backup");
+    assert_selected_backup_path(&selected);
+    fs::remove_dir_all(root).expect("remove relative backup layout");
+}
+
+#[cfg(unix)]
+#[test]
+fn runner_resolves_selected_directory_links_but_rejects_artifact_links() {
+    let root = temp_dir("canic-backup-linked-output");
+    fs::create_dir_all(root.join("physical")).expect("create physical parent");
+    std::os::unix::fs::symlink(root.join("physical"), root.join("selected"))
+        .expect("create selected parent link");
+    let selected = root.join("selected/backup");
+    assert_selected_backup_path(&selected);
+
+    let layout = BackupLayout::new(selected);
+    let manifest = layout.read_manifest().expect("read manifest");
+    let artifact = layout
+        .root()
+        .join(&manifest.deployment.members[0].source_snapshot.artifact_path);
+    let outside = root.join("outside-artifact");
+    fs::rename(&artifact, &outside).expect("move artifact outside backup");
+    std::os::unix::fs::symlink(&outside, &artifact).expect("replace artifact with link");
+    std::assert_matches!(
+        layout.verify_integrity(),
+        Err(crate::persistence::PersistenceError::Checksum(_))
+    );
+    fs::remove_dir_all(root).expect("remove linked backup layout");
+}
+
+fn assert_selected_backup_path(selected: &std::path::Path) {
+    let layout = BackupLayout::new(selected.to_path_buf());
+    let plan = plan();
+    layout.write_backup_plan(&plan).expect("write plan");
+    layout
+        .write_execution_journal(&BackupExecutionJournal::from_plan(&plan).expect("journal"))
+        .expect("write execution journal");
+    let canonical = selected.canonicalize().expect("resolve selected directory");
+    let mut executor = FakeExecutor::default();
+    // Pause after downloading so the next invocation also checks the retained staging path.
+    let paused = backup_run_execute_with_executor(
+        &runner_config(selected.to_path_buf(), Some(4)),
+        &mut executor,
+    )
+    .expect("download under selected output root");
+    assert!(!paused.complete);
+    assert_eq!(executor.download_paths.len(), 1);
+    assert!(executor.download_paths[0].is_absolute());
+    assert!(executor.download_paths[0].starts_with(&canonical));
+    let resumed = backup_run_execute_with_executor(
+        &runner_config(selected.to_path_buf(), None),
+        &mut executor,
+    )
+    .expect("resume verification and publication under selected root");
+    assert!(resumed.complete);
+    assert_eq!(executor.download_paths.len(), 1);
+    let integrity = layout
+        .verify_integrity()
+        .expect("verify using the selected path");
+    assert_eq!(integrity.backup_id, plan.run_id);
+    assert_eq!(integrity.durable_artifacts, 1);
+}
+
 // Ensure root-omitted deployment backups describe each disconnected branch separately.
 #[test]
 fn runner_finalizes_root_omitted_deployment_plan_as_multiple_backup_units() {

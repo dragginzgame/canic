@@ -277,6 +277,10 @@ impl PlacementAcknowledgementWorkflow {
 
 const fn is_retryable_root_failure(err: &InternalError) -> bool {
     err.code().raw_code().raw() == crate::diagnostics::codes::PLATFORM_FAILED.raw_code().raw()
+        || err.code().raw_code().raw()
+            == crate::diagnostics::codes::PLATFORM_UNAVAILABLE
+                .raw_code()
+                .raw()
         || err.code().raw_code().raw() == crate::diagnostics::codes::STATE_FAILED.raw_code().raw()
 }
 
@@ -310,6 +314,11 @@ mod tests {
 
     #[test]
     fn only_transport_classes_are_retryable() {
+        let rejection = ic_cdk::call::CallRejected::with_rejection(2, "temporary failure".into());
+        let failure = InternalError::from(crate::infra::ic::IcInfraError::from(
+            ic_cdk::call::CallFailed::CallRejected(rejection),
+        ));
+        assert!(is_retryable_root_failure(&failure));
         assert!(is_retryable_root_failure(&InternalError::state_failure()));
         assert!(is_retryable_root_failure(&InternalError::platform_failure()));
         assert!(!is_retryable_root_failure(&InternalError::public(

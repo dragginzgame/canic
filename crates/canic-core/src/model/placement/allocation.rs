@@ -18,6 +18,7 @@ const ALLOCATION_OPERATION_COMMAND: &str = "placement.allocate_child";
 const ALLOCATION_RESOURCE_DOMAIN: &[u8] = b"canic-placement-allocation-resource";
 const DISPOSED_CHILD_OPERATION_DOMAIN: &[u8] = b"canic-placement-disposed-child-operation-v1";
 const PLACEMENT_RESOURCE_PREFIX: &str = "canic:placement:";
+const INDEX_RESOURCE_PREFIX: &str = "canic:placement:index:";
 
 ///
 /// PlacementAllocationIdentity
@@ -160,10 +161,15 @@ impl PlacementAllocationIdentity {
             hash_bytes(&mut resource_hasher, subject);
         }
         let resource_digest: [u8; 32] = resource_hasher.finalize().into();
-        let resource_key = IntentResourceKey::new(format!(
-            "{PLACEMENT_RESOURCE_PREFIX}{}",
-            hex_encode(&resource_digest)
-        ));
+        // Index claims have independent generations; their completed totals do not
+        // select future operations. Scaling and sharding retain their sequence totals.
+        let prefix = if placement_kind == "index" {
+            INDEX_RESOURCE_PREFIX
+        } else {
+            PLACEMENT_RESOURCE_PREFIX
+        };
+        let resource_key =
+            IntentResourceKey::new(format!("{prefix}{}", hex_encode(&resource_digest)));
 
         Self {
             operation_id,
@@ -175,10 +181,18 @@ impl PlacementAllocationIdentity {
 
 #[must_use]
 pub fn is_placement_resource_key(resource_key: &IntentResourceKey) -> bool {
-    let Some(digest) = resource_key
-        .as_ref()
-        .strip_prefix(PLACEMENT_RESOURCE_PREFIX)
-    else {
+    is_resource_key_with_prefix(resource_key, PLACEMENT_RESOURCE_PREFIX)
+        || is_index_placement_resource_key(resource_key)
+}
+
+/// Index capacity totals can be discarded after exact terminal receipt cleanup.
+#[must_use]
+pub fn is_index_placement_resource_key(resource_key: &IntentResourceKey) -> bool {
+    is_resource_key_with_prefix(resource_key, INDEX_RESOURCE_PREFIX)
+}
+
+fn is_resource_key_with_prefix(resource_key: &IntentResourceKey, prefix: &str) -> bool {
+    let Some(digest) = resource_key.as_ref().strip_prefix(prefix) else {
         return false;
     };
     digest.len() == 64

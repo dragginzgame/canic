@@ -8,6 +8,12 @@ manifests, topology hashing, download journals, durable artifact integrity,
 backup layout validation, restore planning, restore apply journals, and native
 runner summaries.
 
+Backup creation/execution, restore preparation/run and prune share a parent-side
+layout lock. Restore journal publication requires a `BackupLayoutGuard` and
+durably retains the source layout before publishing recovery authority. Paused
+or failed restores retain that reference; terminal runner replay releases it
+after verifying command quiescence. Custom external journals use the same contract.
+
 Fresh CLI backup execution currently rejects because Component Registry topology
 preflight is unimplemented. The runner and same-release recovery contracts remain
 maintained; this gap has no accepted implementation slice. See the

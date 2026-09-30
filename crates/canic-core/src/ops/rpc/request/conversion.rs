@@ -80,6 +80,7 @@ mod tests {
                 metadata: Some(expected),
             }),
             Request::RecycleCanister(RecycleCanisterRequest {
+                allocation_operation_id: [1; 32],
                 canister_pid: Principal::from_slice(&[2; 29]),
                 metadata: Some(expected),
             }),

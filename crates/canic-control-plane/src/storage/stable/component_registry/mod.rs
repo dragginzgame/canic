@@ -2212,6 +2212,7 @@ pub struct ComponentRegistryParentRoleCountRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRegistryChildRecord {
     pub component: ComponentInstanceId,
+    pub allocation_operation_id: [u8; 32],
     pub canister_id: Principal,
     pub parent_canister_id: Principal,
     pub role: CanisterRole,

@@ -37,6 +37,11 @@ impl PlacementIndexWorkflow {
             return None;
         };
 
+        if matches!(&state, PlacementIndexEntryState::Bound { .. })
+            && !PlacementIndexRegistryOps::binding_is_current(pool, key_value)
+        {
+            return Some(PlacementIndexEntryClassification::Unavailable);
+        }
         let classification = match state {
             PlacementIndexEntryState::Bound {
                 instance_pid,
@@ -76,7 +81,21 @@ impl PlacementIndexWorkflow {
                 owner_pid,
                 provisional_pid: Some(pid),
                 ..
-            } if validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok() => {
+            } if validate_bind_target_with_reason(pid, &pool_cfg.canister_role).is_ok()
+                && crate::ops::storage::children::CanisterChildrenOps::matches_allocation(
+                    pid,
+                    crate::model::placement::allocation::PlacementAllocationIdentity::index(
+                        owner_pid,
+                        pool,
+                        key_value,
+                        claim_id,
+                        &pool_cfg.canister_role,
+                        None,
+                    )
+                    .operation_id
+                    .into_bytes(),
+                ) =>
+            {
                 PlacementIndexEntryClassification::Repairable {
                     claim_id,
                     owner_pid,
@@ -108,6 +127,7 @@ impl PlacementIndexWorkflow {
         classification: &PlacementIndexEntryClassification,
     ) -> MetricReason {
         match classification {
+            PlacementIndexEntryClassification::Unavailable => MetricReason::InvalidChild,
             PlacementIndexEntryClassification::Bound { .. } => MetricReason::AlreadyBound,
             PlacementIndexEntryClassification::PendingFresh { .. } => MetricReason::PendingFresh,
             PlacementIndexEntryClassification::Repairable { .. } => MetricReason::StaleRepairable,

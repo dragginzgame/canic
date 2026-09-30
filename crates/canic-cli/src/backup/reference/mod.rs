@@ -9,6 +9,7 @@ mod list;
 mod resolve;
 mod timestamp;
 
+pub(super) use entry::backup_list_entry;
 pub(super) use list::backup_list;
 pub(super) use resolve::resolve_backup_dir;
 pub use resolve::resolve_backup_reference;

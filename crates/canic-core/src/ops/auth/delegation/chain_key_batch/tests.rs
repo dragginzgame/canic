@@ -1098,6 +1098,99 @@ fn chain_key_lazy_repair_get_or_create_signs_once_then_reuses_cached_proof() {
 
     assert_eq!(cached.cert_hash, proof.cert_hash);
     assert_eq!(cached_signer.sign_calls, 0);
+
+    let batch = RootDelegationStateOps::chain_key_root_delegation_batches()
+        .into_iter()
+        .next()
+        .expect("signed batch should remain retained");
+    start_chain_key_root_delegation_batch_install(batch.batch_id, 2_000)
+        .expect("installation should start");
+    assert!(record_chain_key_root_delegation_install_success(
+        batch.batch_id,
+        issuer,
+        proof.cert_hash,
+        3_000,
+    ));
+    let retained = RootDelegationStateOps::chain_key_root_delegation_batches();
+    let epoch = RootDelegationStateOps::delegated_auth_proof_epoch();
+    let mut installed_input = input(&signing_policy);
+    installed_input.now_ns = 4_000;
+    let installed = block_on(prepare_sign_and_find_test_issuer_proof(
+        installed_input,
+        issuer,
+        &mut cached_signer,
+    ))
+    .expect("installed proof should remain reusable")
+    .expect("installed proof should be returned");
+    assert_eq!(installed.cert_hash, proof.cert_hash);
+    assert_eq!(cached_signer.sign_calls, 0);
+    assert_eq!(RootDelegationStateOps::delegated_auth_proof_epoch(), epoch);
+    assert_eq!(
+        RootDelegationStateOps::chain_key_root_delegation_batches(),
+        retained
+    );
+}
+
+#[test]
+fn chain_key_lazy_repair_rejects_unknown_or_disabled_issuer_before_paid_work() {
+    let signing_policy = signing_policy();
+    let due_issuer = p(54);
+    let disabled_issuer = p(55);
+    RootDelegationStateOps::upsert_root_issuer_policy(policy(due_issuer));
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(template(
+        due_issuer,
+        60_000_000_000,
+    ));
+    let mut disabled = template(disabled_issuer, 60_000_000_000);
+    disabled.enabled = false;
+    RootDelegationStateOps::upsert_root_issuer_renewal_template(disabled);
+    let epoch = RootDelegationStateOps::delegated_auth_proof_epoch();
+    let mut signer = DynamicMockSigner { sign_calls: 0 };
+    for issuer in [p(56), disabled_issuer, p(56), disabled_issuer] {
+        let error = block_on(prepare_sign_and_find_test_issuer_proof(
+            input(&signing_policy),
+            issuer,
+            &mut signer,
+        ))
+        .expect_err("issuer must be admitted before preparing any signing work");
+        assert_eq!(error.code(), InternalError::auth_proof_pending().code());
+    }
+    assert_eq!(signer.sign_calls, 0);
+    assert_eq!(RootDelegationStateOps::delegated_auth_proof_epoch(), epoch);
+    assert!(RootDelegationStateOps::chain_key_root_delegation_batches().is_empty());
+}
+
+#[test]
+fn chain_key_lazy_repair_selects_requested_issuer_independently_of_other_due_templates() {
+    let signing_policy = signing_policy();
+    let requested = p(54);
+    let unrelated = p(55);
+    for issuer in [requested, unrelated] {
+        RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer));
+        RootDelegationStateOps::upsert_root_issuer_renewal_template(template(
+            issuer,
+            60_000_000_000,
+        ));
+    }
+    let mut signer = DynamicMockSigner { sign_calls: 0 };
+    let proof = block_on(prepare_sign_and_find_test_issuer_proof(
+        input(&signing_policy),
+        requested,
+        &mut signer,
+    ))
+    .expect("requested issuer should sign")
+    .expect("requested proof should be returned");
+    assert_eq!(proof.issuer_pid, requested);
+    assert_eq!(signer.sign_calls, 1);
+    let batches = RootDelegationStateOps::chain_key_root_delegation_batches();
+    assert_eq!(batches.len(), 1);
+    assert_eq!(batches[0].issuers.len(), 1);
+    assert_eq!(batches[0].issuers[0].issuer_pid, requested);
+    assert!(
+        selection::due_chain_key_templates(1_000, None)
+            .iter()
+            .any(|due| due.template.issuer_pid == unrelated)
+    );
 }
 
 #[test]
