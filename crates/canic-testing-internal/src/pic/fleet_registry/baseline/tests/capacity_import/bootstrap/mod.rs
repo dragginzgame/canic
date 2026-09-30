@@ -2,7 +2,7 @@
 
 use super::*;
 use canic::dto::pool_import::PoolImportBootstrap;
-use canic_host::fleet_ensure::ops::capacity_import::{prepare_review, root_reservation};
+use canic_host::fleet_ensure::ops::capacity_import::root_reservation;
 
 #[test]
 #[expect(
@@ -66,11 +66,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn supplied_capacity_fences_
     );
     let current = context(&pic, root, operator);
     assert_eq!(current.bootstrap, Some(hold.clone()));
-    let first = transport::review(&pic, root, sources[0], operator, &current);
-    let second = transport::review(&pic, root, sources[1], operator, &current);
-    let mut entries = first.sources;
-    entries.extend(second.sources);
-    let plan = prepare_review(first.authority, entries, first.root_budget).unwrap();
+    let plan = transport::review(&pic, root, &sources, operator, &current);
     let reservation = root_reservation(&plan).unwrap();
     let identity = PoolImportIdentity {
         sequence: reservation.sequence,

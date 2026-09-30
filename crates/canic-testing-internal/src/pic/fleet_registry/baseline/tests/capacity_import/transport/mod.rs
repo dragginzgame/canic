@@ -4,6 +4,7 @@ mod admission;
 mod rejection;
 
 use super::*;
+use canic_core::control_plane_support::policy::pool_import;
 use canic_host::{
     fleet_ensure::{
         model::capacity_import::{
@@ -65,7 +66,7 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
         .unwrap();
     let transport = CapacityImportTransport::from_icp(&icp).unwrap();
     let context = runtime.block_on(transport.root_context(root)).unwrap();
-    let plan = review(&pic, root, source, operator, &context);
+    let plan = review(&pic, root, &[source], operator, &context);
     let source_version = pic.canister_status(source, Some(operator)).unwrap().version;
     assert!(matches!(
         runtime.block_on(transport.verify_destination(&plan)),
@@ -260,7 +261,7 @@ fn fresh_handoff(
     pic.set_controllers(source, None, vec![operator]).unwrap();
     let stopped = pic.canister_status(source, Some(operator)).unwrap();
     let context = runtime.block_on(transport.root_context(root)).unwrap();
-    let plan = admission::review(pic, review(pic, root, source, operator, &context));
+    let plan = admission::review(pic, review(pic, root, &[source], operator, &context));
     let staged = publication::bind(
         paths,
         &journal::reviewed(plan.clone()).unwrap(),
@@ -384,11 +385,11 @@ pool_imports = [{}]
 pub(super) fn review(
     pic: &PocketIc,
     root: Principal,
-    source: Principal,
+    sources: &[Principal],
     operator: Principal,
     context: &PoolImportContext,
 ) -> CapacityImportPlanRecord {
-    let source_status = pic.canister_status(source, Some(operator)).unwrap();
+    let maximum_paid_calls = pool_import::recommended_calls(sources.len()).unwrap();
     let root_status = pic.canister_status(root, Some(operator)).unwrap();
     prepare_review(
         CapacityImportAuthority {
@@ -407,36 +408,42 @@ pub(super) fn review(
                 .recovery_controllers
                 .clone(),
         },
-        vec![CapacityImportSourceRecord {
-            binding: CapacityImportSourceBinding {
-                canister_id: source,
-                subnet: context.binding.placement_subnet,
-                controllers: source_status.settings.controllers,
-                module_sha256: source_status
-                    .module_hash
-                    .map(|hash| hash.try_into().unwrap()),
-                canister_version: source_status.version,
-                stopped: true,
-                snapshots_size_bytes: source_status
-                    .memory_metrics
-                    .snapshots_size
-                    .0
-                    .try_into()
-                    .unwrap(),
-            },
-            disposition: CapacityImportDisposition::AbsenceEvidence {
-                evidence_sha256: [0x43; 32],
-            },
-            observed_cycles: source_status.cycles.0.try_into().unwrap(),
-            observed_reserved_cycles: source_status.reserved_cycles.0.try_into().unwrap(),
-            minimum_ready_cycles: context
-                .binding
-                .limits
-                .canister_pool
-                .canister_cycles
-                .to_u128(),
-            maximum_debit_cycles: 1_000_000_000_000,
-        }],
+        sources
+            .iter()
+            .map(|&source| {
+                let source_status = pic.canister_status(source, Some(operator)).unwrap();
+                CapacityImportSourceRecord {
+                    binding: CapacityImportSourceBinding {
+                        canister_id: source,
+                        subnet: context.binding.placement_subnet,
+                        controllers: source_status.settings.controllers,
+                        module_sha256: source_status
+                            .module_hash
+                            .map(|hash| hash.try_into().unwrap()),
+                        canister_version: source_status.version,
+                        stopped: true,
+                        snapshots_size_bytes: source_status
+                            .memory_metrics
+                            .snapshots_size
+                            .0
+                            .try_into()
+                            .unwrap(),
+                    },
+                    disposition: CapacityImportDisposition::AbsenceEvidence {
+                        evidence_sha256: [0x43; 32],
+                    },
+                    observed_cycles: source_status.cycles.0.try_into().unwrap(),
+                    observed_reserved_cycles: source_status.reserved_cycles.0.try_into().unwrap(),
+                    minimum_ready_cycles: context
+                        .binding
+                        .limits
+                        .canister_pool
+                        .canister_cycles
+                        .to_u128(),
+                    maximum_debit_cycles: 1_000_000_000_000,
+                }
+            })
+            .collect(),
         CapacityImportRootBudget {
             observed_cycles: root_status.cycles.0.try_into().unwrap(),
             observed_reserved_cycles: root_status.reserved_cycles.0.try_into().unwrap(),
@@ -446,8 +453,12 @@ pub(super) fn review(
                 .root_funding
                 .request_threshold
                 .to_u128(),
-            maximum_debit_cycles: context.maximum_call_debit_cycles.checked_mul(24).unwrap(),
-            maximum_paid_calls: 24,
+            maximum_debit_cycles: pool_import::required_debit(
+                context.maximum_call_debit_cycles,
+                maximum_paid_calls,
+            )
+            .unwrap(),
+            maximum_paid_calls,
         },
     )
     .unwrap()

@@ -21,7 +21,7 @@ pub(super) fn uncertified_rejection_keeps_original_request(
     pic.set_controllers(source, None, vec![operator, previous_owner])
         .unwrap();
     let context = runtime.block_on(transport.root_context(root)).unwrap();
-    let plan = admission::review(pic, review(pic, root, source, operator, &context));
+    let plan = admission::review(pic, review(pic, root, &[source], operator, &context));
     let staged = publication::bind(
         paths,
         &journal::reviewed(plan.clone()).unwrap(),
