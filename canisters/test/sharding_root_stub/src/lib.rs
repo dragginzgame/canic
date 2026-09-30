@@ -2,7 +2,7 @@
 //!
 //! Responsibility: provide a replay-safe Root allocation peer for public managed-tree tests.
 //! Does not own: production Component Registry state, installation, or placement policy.
-//! Boundary: creates empty PocketIC children and exposes their exact retained request identity.
+//! Boundary: host settlement installs children and synchronizes their parent before replies.
 
 use candid::{CandidType, Deserialize, Nat, Principal};
 use canic::{
@@ -18,6 +18,7 @@ use ic_cdk::call::Call;
 use std::cell::RefCell;
 
 const CREATE_CANISTER_CYCLES: u128 = 1_000_000_000_000;
+const MAX_SETTLEMENT_POLLS: usize = 4_096;
 
 thread_local! {
     static ALLOCATIONS: RefCell<Vec<FixtureChildAllocation>> = const { RefCell::new(Vec::new()) };
@@ -30,6 +31,7 @@ struct FixtureChildAllocation {
     canister_role: CanisterRole,
     extra_arg: Option<Vec<u8>>,
     child: Principal,
+    settled: bool,
     acknowledged: bool,
 }
 
@@ -102,11 +104,33 @@ fn testing_component_child_allocations() -> Vec<FixtureChildAllocation> {
     ALLOCATIONS.with_borrow(Clone::clone)
 }
 
+#[ic_cdk::query]
+fn testing_component_child_is_settled(request_id: [u8; 32]) -> bool {
+    ALLOCATIONS.with_borrow(|allocations| {
+        allocations
+            .iter()
+            .any(|allocation| allocation.request_id == request_id && allocation.settled)
+    })
+}
+
+#[ic_cdk::update]
+fn testing_settle_component_child(request_id: [u8; 32]) -> Result<(), Error> {
+    ALLOCATIONS.with_borrow_mut(|allocations| {
+        let allocation = allocations
+            .iter_mut()
+            .find(|allocation| allocation.request_id == request_id)
+            .ok_or_else(|| Error::from_registered(canic::diagnostics::codes::STATE_CONFLICT))?;
+        allocation.settled = true;
+        Ok(())
+    })
+}
+
 async fn handle_request(request_id: [u8; 32], request: Request) -> Result<Response, Error> {
     match request {
         Request::AcknowledgePlacementReceipt(request) => acknowledge(request_id, &request),
         Request::AllocatePlacementChild(request) | Request::CreateCanister(request) => {
             let pid = allocate_child(request_id, request).await?;
+            await_settlement(request_id).await?;
             Ok(Response::CreateCanister(CreateCanisterResponse {
                 new_canister_pid: pid,
             }))
@@ -157,10 +181,34 @@ async fn allocate_child(
             canister_role: request.canister_role,
             extra_arg: request.extra_arg,
             child,
+            settled: false,
             acknowledged: false,
         });
     });
     Ok(child)
+}
+
+// Yield through actual IC calls while the host installs and publishes the child.
+// Returning before settlement would violate the production allocation protocol.
+async fn await_settlement(request_id: [u8; 32]) -> Result<(), Error> {
+    for _ in 0..MAX_SETTLEMENT_POLLS {
+        let response = Call::bounded_wait(
+            ic_cdk::api::canister_self(),
+            "testing_component_child_is_settled",
+        )
+        .with_arg(request_id)
+        .await
+        .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        let settled: bool = response
+            .candid()
+            .map_err(|_| Error::from_registered(canic::diagnostics::codes::STATE_FAILED))?;
+        if settled {
+            return Ok(());
+        }
+    }
+    Err(Error::from_registered(
+        canic::diagnostics::codes::STATE_UNAVAILABLE,
+    ))
 }
 
 fn acknowledge(
@@ -182,6 +230,9 @@ fn acknowledge(
         else {
             return false;
         };
+        if !allocation.settled {
+            return false;
+        }
         allocation.acknowledged = true;
         true
     });

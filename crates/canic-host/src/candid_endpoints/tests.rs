@@ -15,6 +15,19 @@ service : (record { init : text }) -> {
 }
 "#;
 
+#[test]
+fn rejects_candid_syntax_and_type_errors() {
+    for source in [
+        "invalid Candid",
+        "service : { read : () -> (Missing) query }",
+    ] {
+        assert!(matches!(
+            parse_candid_service_endpoints(source),
+            Err(CandidEndpointError::InvalidCandid(_))
+        ));
+    }
+}
+
 // Ensure generated Candid service files can be reduced to endpoint signatures.
 #[test]
 fn parses_candid_service_endpoints() {
