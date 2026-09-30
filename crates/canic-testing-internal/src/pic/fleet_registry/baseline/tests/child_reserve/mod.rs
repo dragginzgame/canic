@@ -366,9 +366,11 @@ fn prepare_spare(pic: &PocketIc, root: Principal) {
             Ok(RootCommandResponseFragment::ImportPoolCanister(PoolImportResponse::Imported {
                 ..
             })) => {}
+            // Background maintenance may already own this physical reset.
+            // Retry only its transient contention result; authority conflicts fail.
             Err(error) => assert_eq!(
                 error.code(),
-                canic_core::diagnostics::codes::STATE_CONFLICT.raw_code()
+                canic_core::diagnostics::codes::STATE_UNAVAILABLE.raw_code()
             ),
             _ => panic!("correlated pool import"),
         }
