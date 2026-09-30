@@ -5,14 +5,13 @@
 //! Boundary: query through the caller's exact Candid binding; actual call admission remains on IC.
 
 use crate::{
-    canister_protocol::{CanisterProtocolError, query_with_candid},
+    canister_protocol::{CanisterProtocolError, contract::parse_text, query_with_candid},
     icp::IcpCli,
 };
 use candid::{
     CandidType, Deserialize, Principal,
     types::{FuncMode, TypeInner},
 };
-use candid_parser::utils::CandidSource;
 use canic_core::{
     dto::canister::{CanisterInspectionRequest, CanisterInspectionReserveResponse},
     protocol,
@@ -69,9 +68,7 @@ pub fn preflight_inspection(
 }
 
 fn declares_inspection_reserve(contract: &str) -> Result<bool, String> {
-    let (environment, actor) = CandidSource::Text(contract)
-        .load()
-        .map_err(|error| error.to_string())?;
+    let (environment, actor) = parse_text(contract).map_err(|error| error.to_string())?;
     let actor = actor.ok_or_else(|| "missing service declaration".to_string())?;
     let service = environment
         .as_service(&actor)

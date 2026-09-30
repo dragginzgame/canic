@@ -91,10 +91,15 @@ let mut fixture = install_managed_component_group(input)?;
 ```
 
 Configured initial sharding and scaling children are installed before the
-constructor returns. After an application call requests an on-demand indexed,
-sharded or scaled child, call `fixture.settle_requested_children(maximum_ticks)`
-to install and activate the exact child already allocated by the production
-placement workflow. `fixture.nodes()` exposes the resulting read-only tree;
+constructor returns. Submit an on-demand indexed, sharded or scaled child request
+with `fixture.pic().submit_call(...)`, then call
+`fixture.settle_submitted_call(&message_id, maximum_ticks)` before reading the ingress
+reply with `fixture.pic().await_call(message_id)`. Allocation replies remain
+pending until the fixture installs and activates the exact child and publishes
+its allocation identity in the parent's Directory. Settlement also waits for the
+submitted request's terminal result, including when application work precedes its
+allocation. A synchronous update call cannot drive this host-owned settlement.
+`fixture.nodes()` exposes the resulting read-only tree;
 `binding`, `runtime_status`, `admission_status`, `upgrade_same_release` and
 `prepare_admission_successor` exercise its protected lifecycle without asking
 the downstream to construct Canic authority DTOs.

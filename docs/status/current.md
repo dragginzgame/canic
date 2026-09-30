@@ -1,5 +1,44 @@
 # Current handoff — 2026-09-30
 
+## Managed child fixture and Candid diagnostics — qualified
+
+The maintainer's governed PocketIC failure was
+`pic::lifecycle::tests::published_managed_component_group_support_drives_child_lifecycle`.
+Its embedded Root peer returned an empty child before host installation and
+parent Directory synchronization. The maintained placement guard correctly
+rejected the absent allocation identity with `E118`, leaving initial Hub
+bootstrap failed until the fixture's 96-tick settlement limit. Increasing that
+limit would not repair the ordering.
+
+The rebuilt peer now holds its allocation reply until host settlement installs
+the child and synchronizes the exact allocation identity. On-demand application
+calls use `submit_call` and the fixture's `settle_submitted_call`, which waits
+for terminal ingress as well as ready children. Production allocation checks
+are unchanged. The published fixture guide and embedded Wasm hash are updated.
+
+The repeated `invalid Candid` parser diagnostics came from two passing Host
+negative tests. Upstream's pretty loader wrote directly to stderr, bypassing
+libtest capture and receiving the validation runner's error decoration. Host
+inspection and endpoint parsing now use the same parser and type checker without
+that unsolicited output; their existing returned error types remain intact.
+
+Targeted qualification passes 11 Host Candid/inspection tests, with one opt-in
+measurement intentionally ignored and no raw parser diagnostics. The final exact
+PocketIC case passes in 59.06 seconds, including initial and on-demand child
+allocation, terminal ingress, admission and same-release lifecycle checks.
+All-target/all-feature warning-denied Clippy passes for the facade, Host,
+internal testing package and Root fixture. Scoped formatting, whitespace and
+document semantics pass; the two existing layout warnings remain advisory.
+Logs under `target/review-validation/` are `candid-diagnostics-native.log`,
+`managed-child-settlement-pocketic-final.log` and
+`candid-managed-child-clippy-final.log`. Test-owned scratch is cleared; release
+builds and retained operations remain intact.
+
+The complete urgent `.49` batch is ready for maintainer commit and retry of the
+governed release validation. The root and detailed `.49` notes are updated;
+package versions remain `.48`. These follow-up changes are uncommitted. No broad
+suite, version transaction, commit, push or live deployment ran.
+
 ## Cargo resolver admission restriction removal — qualified
 
 The maintainer requested removal of Canic's exact Cargo resolver check. The earlier

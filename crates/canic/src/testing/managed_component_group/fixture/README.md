@@ -15,6 +15,9 @@ Then copy
 `target/wasm32-unknown-unknown/fast/sharding_root_stub.wasm` over the adjacent
 fixture. The governed managed Component-tree PocketIC journey validates the
 embedded Wasm through the production allocation and acknowledgement protocol.
+The peer retains allocation replies until host settlement has installed the child
+and synchronized its parent's exact allocation identity. On-demand calls must be
+submitted before host settlement and awaited afterward.
 
 Current SHA-256:
-`fc2c6d931733e9946464059f39066d580c8f259a0d20862a17ee2f11be2e982f`.
+`f2aaa3bafcd7b4e8c45d8e5e3725283e03d5dd7602758c8ead4346e3c9871d6b`.

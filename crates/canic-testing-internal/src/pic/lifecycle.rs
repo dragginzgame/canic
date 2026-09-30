@@ -1587,13 +1587,30 @@ mod tests {
         );
         assert_eq!(assigned, Ok(user_shard));
 
-        let indexed: Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error> =
-            fixture.pic().update_candid_as_or_panic(
+        let index_request = fixture
+            .pic()
+            .submit_call(
                 index_hub,
                 admitted,
                 "resolve_item",
-                ("alpha".to_string(),),
-            );
+                candid::encode_args(("alpha".to_string(),)).expect("index request arguments"),
+            )
+            .expect("submit on-demand index allocation");
+        assert_eq!(
+            fixture
+                .settle_submitted_call(&index_request, 30)
+                .expect("settle on-demand index child"),
+            1
+        );
+        let indexed: Result<canic::dto::placement::index::PlacementIndexStatusResponse, Error> =
+            candid::decode_one(
+                &fixture
+                    .pic()
+                    .ingress_status(index_request)
+                    .expect("index ingress is terminal after settlement")
+                    .expect("settled index allocation reply"),
+            )
+            .expect("decode index allocation reply");
         let canic::dto::placement::index::PlacementIndexStatusResponse::Bound {
             instance_pid: indexed,
             ..
@@ -1601,12 +1618,6 @@ mod tests {
         else {
             panic!("fresh index resolution must bind its created child");
         };
-        assert_eq!(
-            fixture
-                .settle_requested_children(30)
-                .expect("settle on-demand index child"),
-            1
-        );
         let indexed_node = fixture
             .nodes()
             .into_iter()
@@ -1622,17 +1633,30 @@ mod tests {
         );
         assert_eq!(indexed_probe, Ok(admitted));
 
-        let created: Result<Principal, Error> =
-            fixture
-                .pic()
-                .update_candid_as_or_panic(scale_hub, admitted, "create_worker", ());
-        let created = created.expect("scaling Hub requests one on-demand child");
+        let scale_request = fixture
+            .pic()
+            .submit_call(
+                scale_hub,
+                admitted,
+                "create_worker",
+                candid::encode_args(()).expect("scaling request arguments"),
+            )
+            .expect("submit on-demand scaling allocation");
         assert_eq!(
             fixture
-                .settle_requested_children(30)
+                .settle_submitted_call(&scale_request, 30)
                 .expect("settle on-demand scaling child"),
             1
         );
+        let created: Result<Principal, Error> = candid::decode_one(
+            &fixture
+                .pic()
+                .ingress_status(scale_request)
+                .expect("scaling ingress is terminal after settlement")
+                .expect("settled scaling allocation reply"),
+        )
+        .expect("decode scaling allocation reply");
+        let created = created.expect("scaling Hub requests one on-demand child");
         let created_node = fixture
             .nodes()
             .into_iter()

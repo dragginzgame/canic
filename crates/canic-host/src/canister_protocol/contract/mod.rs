@@ -10,6 +10,17 @@ use candid::{
 };
 use std::collections::HashSet;
 
+/// Parse and type-check a text contract without printing diagnostics to stderr.
+///
+/// Callers own error reporting. The parser's pretty loader writes directly to
+/// stderr, bypassing both structured diagnostics and libtest's output capture.
+pub fn parse_text(source: &str) -> candid_parser::Result<(TypeEnv, Option<Type>)> {
+    let program = source.parse::<candid_parser::IDLProg>()?;
+    let mut environment = TypeEnv::new();
+    let actor = candid_parser::check_prog(&mut environment, &program)?;
+    Ok((environment, actor))
+}
+
 /// Find one exact variant label after resolving Candid type references.
 pub fn variant(env: &TypeEnv, ty: &Type, name: &str) -> Option<Type> {
     let ty = env.trace_type(ty).ok()?;

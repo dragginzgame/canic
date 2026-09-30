@@ -72,8 +72,9 @@ use canic_core::{
         compile_fleet_admission_projection, compile_installed_fleet_admission_policy,
     },
 };
-use ic_testkit::pic::{
-    CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder,
+use ic_testkit::{
+    pic::{CandidCallError, CandidCallExt, CanisterInstallExt, PocketIc, PocketIcBuilder},
+    pocket_ic::common::rest::RawMessageId,
 };
 use std::{
     collections::{BTreeMap, BTreeSet},
@@ -149,11 +150,35 @@ impl ManagedComponentGroupFixture {
 
     /// Install allocations already requested through sharding, scaling, or index placement.
     ///
-    /// Call this after an application request that may create an on-demand index or scaling
-    /// child. Configured initial sharding and scaling children are settled during installation.
+    /// Configured initial children are settled during installation. Use
+    /// `settle_submitted_call` for an application request that can allocate later.
     pub fn settle_requested_children(
         &mut self,
         maximum_ticks: usize,
+    ) -> Result<usize, ManagedComponentGroupQualificationError> {
+        self.settle_children(maximum_ticks, |_| true)
+    }
+
+    /// Settle a submitted application request and every child it allocates.
+    ///
+    /// Submit with `pic().submit_call`, settle here, then read the ingress result.
+    /// Quiet observations count only once the request has a terminal reply, so
+    /// application work before allocation cannot cause premature settlement.
+    /// A rejected ingress is terminal too; its error remains in the ingress result.
+    pub fn settle_submitted_call(
+        &mut self,
+        message_id: &RawMessageId,
+        maximum_ticks: usize,
+    ) -> Result<usize, ManagedComponentGroupQualificationError> {
+        self.settle_children(maximum_ticks, |pic| {
+            pic.ingress_status(message_id.clone()).is_some()
+        })
+    }
+
+    fn settle_children(
+        &mut self,
+        maximum_ticks: usize,
+        request_finished: impl Fn(&PocketIc) -> bool,
     ) -> Result<usize, ManagedComponentGroupQualificationError> {
         let before = self.nodes.len();
         let mut last_allocation_count = None;
@@ -166,7 +191,10 @@ impl ManagedComponentGroupFixture {
                 .iter()
                 .filter(|node| node.public.parent_canister_id.is_some())
                 .count();
-            if self.all_nodes_ready()? && allocation_count == installed_child_count {
+            if request_finished(&self.pic)
+                && self.all_nodes_ready()?
+                && allocation_count == installed_child_count
+            {
                 if last_allocation_count == Some(allocation_count) {
                     quiet_observations = quiet_observations.saturating_add(1);
                 } else {
@@ -473,7 +501,17 @@ impl ManagedComponentGroupFixture {
             public,
         });
         self.synchronize_component_tree(component_index)?;
-        Ok(())
+        self.complete_child_allocation(allocation.request_id)
+    }
+
+    fn complete_child_allocation(
+        &self,
+        request_id: [u8; 32],
+    ) -> Result<(), ManagedComponentGroupQualificationError> {
+        let settled: Result<(), Error> =
+            self.pic
+                .update_candid(self.root(), "testing_settle_component_child", (request_id,))?;
+        settled.map_err(ManagedComponentGroupQualificationError::Canic)
     }
 
     fn directory_for_new_node(

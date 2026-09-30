@@ -1,10 +1,10 @@
 mod payload;
 
+use crate::canister_protocol::contract::parse_text;
 use candid::{
     TypeEnv,
     types::{FuncMode, Function, Label, Type, TypeInner},
 };
-use candid_parser::utils::CandidSource;
 use serde::Serialize;
 use thiserror::Error as ThisError;
 
@@ -148,9 +148,8 @@ pub struct EndpointServiceMethod {
 pub fn parse_candid_service_endpoints(
     candid: &str,
 ) -> Result<Vec<EndpointEntry>, CandidEndpointError> {
-    let (env, actor) = CandidSource::Text(candid)
-        .load()
-        .map_err(|err| CandidEndpointError::InvalidCandid(err.to_string()))?;
+    let (env, actor) =
+        parse_text(candid).map_err(|err| CandidEndpointError::InvalidCandid(err.to_string()))?;
     let Some(actor) = actor else {
         return Err(CandidEndpointError::MissingService);
     };
