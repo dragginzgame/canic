@@ -199,13 +199,18 @@ fn isolated_protected_sibling_workspace_reports_the_exact_path() {
 }
 
 #[test]
-fn isolated_role_workspace_rejects_missing_resolver_two() {
+fn isolated_role_workspace_rejects_missing_explicit_resolver() {
     let fixture = FixtureWorkspace::materialize("supported");
-    fixture.rewrite("Cargo.toml", "resolver = \"2\"\n", "");
-
-    let reason = fixture.rejection_reason();
-
-    assert!(reason.contains("must declare resolver = \"2\""));
+    fixture.rewrite("Cargo.toml", "resolver = \"3\"\n", "");
+    let validation = validate_test_role_package(
+        &fixture.root.join("canic.toml"),
+        &CanisterRole::owned("app".to_string()),
+        PackageValidationMode::Build,
+    );
+    assert!(matches!(
+        validation,
+        RolePackageValidation::Unsupported(RoleContractFinding::DependencyShapeUnsupported { .. })
+    ));
 }
 
 #[test]
@@ -339,16 +344,6 @@ fn cargo_evidence_failure_does_not_echo_unrecognized_source() {
 }
 
 #[test]
-fn isolated_role_workspace_rejects_unreviewed_resolver_three() {
-    let fixture = FixtureWorkspace::materialize("supported");
-    fixture.rewrite("Cargo.toml", "resolver = \"2\"", "resolver = \"3\"");
-
-    let reason = fixture.rejection_reason();
-
-    assert!(reason.contains("must declare resolver = \"2\""));
-}
-
-#[test]
 fn isolated_role_workspace_rejects_enabled_workspace_defaults() {
     let fixture = FixtureWorkspace::materialize("supported");
     fixture.rewrite(
@@ -367,7 +362,7 @@ fn workspace_canic_declaration_never_owns_features() {
     let workspace = toml::from_str(
         r#"
 [workspace]
-resolver = "2"
+resolver = "3"
 
 [workspace.dependencies]
 canic = { path = "canic", default-features = false, features = ["sharding"] }

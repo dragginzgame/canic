@@ -66,7 +66,7 @@ prepare_blob_storage_workspace() {
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
 members = []
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 version = "0.0.0"

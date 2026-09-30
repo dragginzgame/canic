@@ -5,6 +5,10 @@ build attached roles, record exactly what produced an artifact, compare saved
 evidence envelopes, and apply passive policy without turning those reads into
 Fleet mutation authority.
 
+Managed application workspaces explicitly select Cargo `resolver = "3"` in their
+top-level workspace manifest (or package manifest for a standalone package).
+Host admission and generated Fleet packages use the same resolver contract.
+
 ## What It Provides
 
 - role-aware Wasm and Candid artifact construction
