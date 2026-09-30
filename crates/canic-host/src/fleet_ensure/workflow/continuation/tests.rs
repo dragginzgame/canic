@@ -163,6 +163,7 @@ fn fixture() -> (
     });
     phase.plan_sha256 = expected_plan_sha256(&phase);
     let journal = FleetEnsureJournalRecord {
+        bootstrap_registration_recovery: None,
         funding_observations: BTreeMap::new(),
         funding_reviews: Vec::new(),
         successor_phases: Vec::new(),

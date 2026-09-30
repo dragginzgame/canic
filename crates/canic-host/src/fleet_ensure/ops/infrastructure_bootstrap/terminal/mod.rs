@@ -68,9 +68,10 @@ pub(in crate::fleet_ensure) fn retain(
             .collect::<Result<_, _>>()?,
     };
     let bytes = serde_json::to_vec_pretty(&receipt)?;
+    super::registration_recovery::verify(plan, journal, state)?;
     verify_effects(plan, journal)?;
     verify_registration(journal, state)?;
-    verify_accounting(plan, &receipt.actual)?;
+    verify_accounting(plan, journal, &receipt.actual)?;
     verify_membership(plan, state, &receipt)?;
     if bytes.len() > MAXIMUM_BYTES {
         return Err(InfrastructureBootstrapError::Integrity);
@@ -114,15 +115,16 @@ pub(in crate::fleet_ensure) fn read_receipt(
         return Ok(None);
     };
     let receipt: InfrastructureBootstrapTerminalRecord = serde_json::from_slice(&bytes)?;
+    super::registration_recovery::verify(plan, journal, state)?;
+    let bounds = super::registration_recovery::conservation(plan, journal)?;
     if receipt.schema_version != 1
         || receipt.plan_sha256 != plan.plan_sha256
         || receipt.journal_sha256 != journal_digest(journal)?
         || receipt.state_sha256 != digest(state)?
         || receipt.canisters.len() != plan.canisters.len()
         || receipt.actual.observed_starting_cycles != plan.conservation.observed_controlled_cycles
-        || receipt.actual.observed_net_cycle_debit_cycles
-            > plan.conservation.maximum_execution_burn_cycles
-        || receipt.actual.operator_debit_cycles > plan.conservation.maximum_operator_debit_cycles
+        || receipt.actual.observed_net_cycle_debit_cycles > bounds.maximum_execution_burn_cycles
+        || receipt.actual.operator_debit_cycles > bounds.maximum_operator_debit_cycles
     {
         return Err(InfrastructureBootstrapError::Integrity);
     }
@@ -139,7 +141,7 @@ pub(in crate::fleet_ensure) fn read_receipt(
     }
     verify_effects(plan, journal)?;
     verify_registration(journal, state)?;
-    verify_accounting(plan, &receipt.actual)?;
+    verify_accounting(plan, journal, &receipt.actual)?;
     verify_membership(plan, state, &receipt)?;
     Ok(Some(receipt))
 }
@@ -152,6 +154,7 @@ fn verify_effects(
         .canisters
         .iter()
         .flat_map(|canister| &canister.actions)
+        .chain(super::registration_recovery::funding_actions(journal))
         .chain(
             journal
                 .successor_phases
@@ -187,9 +190,10 @@ fn verify_effects(
 
 fn verify_accounting(
     plan: &FleetEnsurePlan,
+    journal: &FleetEnsureJournalRecord,
     actual: &ActualCycleConservation,
 ) -> Result<(), InfrastructureBootstrapError> {
-    let reviewed = &plan.conservation;
+    let reviewed = super::registration_recovery::conservation(plan, journal)?;
     let funding_is_exact = actual.estate_funding_cycles == 0
         && actual.exact_estate_creation_fee_cycles == 0
         && actual.exact_unavoidable_fee_cycles == reviewed.maximum_unavoidable_fee_cycles

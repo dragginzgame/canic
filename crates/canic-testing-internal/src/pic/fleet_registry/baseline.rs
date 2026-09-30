@@ -6625,6 +6625,7 @@ exec icp "$@"
     enum FundingJourney {
         ActivationReset,
         InfrastructureBootstrap,
+        RegistrationRecovery,
         CompletedReset,
         Fresh,
         Reinstall,
@@ -8300,6 +8301,7 @@ esac
                     | FundingJourney::Reinstall
                     | FundingJourney::CompletedReset
                     | FundingJourney::InfrastructureBootstrap
+                    | FundingJourney::RegistrationRecovery
             )
         {
             pic.add_cycles(cycles_ledger, operator_balance);
@@ -8384,19 +8386,25 @@ esac
         } else {
             desired
         };
-        if matches!(funding, FundingJourney::InfrastructureBootstrap) {
-            infrastructure_bootstrap::assert_journey(ReinstallJourney {
-                adapter_root: &adapter_root,
-                config: &config_path,
-                icp_wrapper: &icp_wrapper,
-                local_replica: &local_replica,
-                pic: &pic,
-                desired: &desired,
-                coordinator,
-                root,
-                store,
-                pools: &pools,
-            });
+        if matches!(
+            funding,
+            FundingJourney::InfrastructureBootstrap | FundingJourney::RegistrationRecovery
+        ) {
+            infrastructure_bootstrap::assert_journey(
+                ReinstallJourney {
+                    adapter_root: &adapter_root,
+                    config: &config_path,
+                    icp_wrapper: &icp_wrapper,
+                    local_replica: &local_replica,
+                    pic: &pic,
+                    desired: &desired,
+                    coordinator,
+                    root,
+                    store,
+                    pools: &pools,
+                },
+                matches!(funding, FundingJourney::RegistrationRecovery),
+            );
             pic.stop_live();
             phase.finish();
             journey_span.finish();
@@ -10301,6 +10309,7 @@ exec '{}' "$@"
         plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(plan);
         canic_host::fleet_ensure::ops::write_plan(&paths, plan).unwrap();
         let mut journal = canic_host::fleet_ensure::model::FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),
@@ -17566,6 +17575,10 @@ cycles = "80T"
             (
                 "supplied infrastructure initializes and recovers through Ensure",
                 infrastructure_bootstrap::supplied_infrastructure_initializes_and_recovers,
+            ),
+            (
+                "bootstrap registration reviews funding and resumes its retained operation",
+                infrastructure_bootstrap::registration_budget_recovery_preserves_applied_effects,
             ),
             (
                 "supplied capacity fences bootstrap until publication",

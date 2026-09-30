@@ -749,6 +749,7 @@ fn qualify_terminal_publication(
         })
         .collect();
     let mut journal = FleetEnsureJournalRecord {
+        bootstrap_registration_recovery: None,
         schema_version: 1,
         operation_id: plan.operation_id.clone(),
         plan_sha256: plan.plan_sha256.clone(),
@@ -777,6 +778,7 @@ fn qualify_terminal_publication(
         received_new_funding_cycles: plan.conservation.maximum_new_funding_cycles,
     };
     let phase = registration::compile(root, plan, &state, actual.final_controlled_cycles).unwrap();
+    registration_recovery::tests::qualify(plan, &journal, &phase, &state, &observed);
     state.active_registry = Some(registration::registry(&phase).unwrap());
     let template = journal.effects.last().unwrap().clone();
     journal

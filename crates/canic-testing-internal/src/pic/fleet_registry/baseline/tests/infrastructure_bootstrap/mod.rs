@@ -22,11 +22,16 @@ pub(super) fn supplied_infrastructure_initializes_and_recovers() {
     assert_literal_zero_host_journey(FundingJourney::InfrastructureBootstrap, 1);
 }
 
+#[test]
+pub(super) fn registration_budget_recovery_preserves_applied_effects() {
+    assert_literal_zero_host_journey(FundingJourney::RegistrationRecovery, 1);
+}
+
 #[expect(
     clippy::too_many_lines,
     reason = "the single infrastructure journey binds physical observations, interruption and effect-free replay"
 )]
-pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
+pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
     let operator = Principal::from_text(&input.desired.operator).unwrap();
     let mut desired = input.desired.clone();
     let mut names = BTreeMap::from([
@@ -85,6 +90,15 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         );
     }
     assert!(samples["root"].binding.module_sha256.is_none());
+    if recovery {
+        // An ordinary valid plan funds initialization but has too little shared
+        // surplus for registration. Never edit the resulting immutable plan.
+        for target in &mut desired.canisters {
+            if ["coordinator", "root", "store"].contains(&target.name.as_str()) {
+                target.minimum_cycles = samples[&target.name].cycles.to_string();
+            }
+        }
+    }
     let declarations = CapacityImportDeclarations {
         schema_version: 1,
         operator: operator.to_text(),
@@ -199,7 +213,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         input.local_replica.clone(),
         true,
     );
-    let interrupted = fleet_ensure_workflow::apply(
+    let mut interrupted = fleet_ensure_workflow::apply(
         input.adapter_root,
         &desired,
         &digest,
@@ -207,6 +221,112 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         &reviewed.plan_sha256,
         &mut resumed,
     );
+    if recovery {
+        let paths = EnsurePaths::under(input.adapter_root, &desired.environment, &desired.fleet);
+        let plan_bytes = std::fs::read(&paths.plan).unwrap();
+        let before = canic_host::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap();
+        assert!(
+            matches!(interrupted, Err(EnsureWorkflowError::InfrastructureBootstrap(
+            canic_host::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError::RegistrationBudget { execution_shortfall_cycles, .. }
+        )) if execution_shortfall_cycles > 0),
+            "{interrupted:?}"
+        );
+        // Exhaust the original registration allowance; recovery must extend it,
+        // never reset counters or discard the paid prefix.
+        let blocked = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            &mut resumed,
+        );
+        assert!(matches!(blocked, Err(EnsureWorkflowError::InfrastructureBootstrap(
+            canic_host::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError::RegistrationBudget { .. }
+        ))), "{blocked:?}");
+        let review = infrastructure_bootstrap::registration_recovery::review(
+            input.adapter_root,
+            &desired.environment,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            1_800_000_000_000_000_101,
+            &mut resumed,
+        )
+        .unwrap();
+        assert!(review.additional_funding_cycles > 0);
+        assert!(
+            review.maximum_execution_burn_cycles
+                > reviewed.conservation.maximum_execution_burn_cycles
+        );
+        assert_eq!(review.plan_sha256, reviewed.plan_sha256);
+        let repeated = infrastructure_bootstrap::registration_recovery::review(
+            input.adapter_root,
+            &desired.environment,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            1_800_000_000_000_000_999,
+            &mut resumed,
+        )
+        .unwrap();
+        assert_eq!(repeated, review);
+        let wrong = infrastructure_bootstrap::registration_recovery::approve(
+            input.adapter_root,
+            &desired.environment,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            &"ff".repeat(32),
+            &mut resumed,
+        );
+        assert!(matches!(wrong, Err(EnsureWorkflowError::InfrastructureBootstrap(
+            canic_host::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError::RegistrationApproval { .. }
+        ))));
+        infrastructure_bootstrap::registration_recovery::approve(
+            input.adapter_root,
+            &desired.environment,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            &review.review_sha256,
+            &mut resumed,
+        )
+        .unwrap();
+        std::fs::write(input.adapter_root.join("lose-funding-response"), []).unwrap();
+        let lost = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            &mut resumed,
+        );
+        assert!(
+            matches!(lost, Err(EnsureWorkflowError::Platform(_))),
+            "{lost:?}"
+        );
+        assert!(input.adapter_root.join("lost-funding-response").exists());
+        let after = canic_host::fleet_ensure::ops::read_journal(&paths)
+            .unwrap()
+            .unwrap();
+        assert_eq!(&after.effects[..before.effects.len()], &before.effects);
+        assert_eq!(
+            after.initial_controlled_cycles,
+            before.initial_controlled_cycles
+        );
+        assert_eq!(
+            after.initial_operator_cycles,
+            before.initial_operator_cycles
+        );
+        assert_eq!(std::fs::read(&paths.plan).unwrap(), plan_bytes);
+        interrupted = fleet_ensure_workflow::apply(
+            input.adapter_root,
+            &desired,
+            &digest,
+            &desired.fleet,
+            &reviewed.plan_sha256,
+            &mut resumed,
+        );
+    }
     assert!(
         matches!(interrupted, Err(EnsureWorkflowError::Platform(_))),
         "{interrupted:?}"

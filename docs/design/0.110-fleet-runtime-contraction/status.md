@@ -32,7 +32,9 @@ observability and blob-contract work; it did not restart the full B3/B4 matrix.
 
 The maintainer has prioritized publication because CANIC-188 blocks downstream
 work. The urgent batch includes the implemented CANIC-187/188 corrections,
-qualified cleanup and completed review corrections already in this worktree.
+qualified cleanup and completed review corrections already in this worktree,
+the dependency-gate and Cargo resolver 3 repairs, and same-operation bootstrap
+registration budget/funding recovery in Host/CLI.
 The remaining R2–R8 findings below stay accepted, sequenced follow-up work;
 finishing all 401 review findings is not a prerequisite for this corrective release.
 This boundary supersedes earlier handoffs that required the entire expanded
@@ -45,6 +47,11 @@ all-target/all-feature warning-denied lint. The journey covers all-source comple
 conservation, offline replay and later ordinary Ensure. Ordinary release qualification
 retains the smaller estate; the incident-sized journey is opt-in. The
 [current handoff](../../status/current.md) records exact results and retained logs.
+Bootstrap registration recovery additionally passes 28 targeted native tests,
+the recovery and ordinary bootstrap PocketIC journeys, and Host/CLI/Testing lint.
+The recovery journey preserves applied effects through lost replies and verifies
+pool import only after completion, followed by ordinary Ensure. The external
+developer's retained operation has not been executed here.
 Package versions remain `.48` and `.49` release notes remain open until the governed
 version transaction. No broad gate or Git publication has run; native macOS evidence
 remains for CI.

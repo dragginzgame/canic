@@ -349,6 +349,7 @@ fn retain_terminal_fleet(root: &Path, environment: &str, fleet_name: &str) {
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
             successor_phases: Vec::new(),

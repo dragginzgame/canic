@@ -222,11 +222,10 @@ pub(in crate::fleet_ensure) fn verify_origin(
         &directory.join("plan.json"),
         MAX_BYTES,
     )?)?;
-    let mut journal: FleetEnsureJournalRecord = serde_json::from_slice(&read_regular_bytes(
-        &directory.join("journal.json"),
-        MAX_BYTES,
-    )?)?;
-    crate::fleet_ensure::ops::continuation::hydrate_phases(paths, &mut journal.successor_phases)?;
+    let journal = crate::fleet_ensure::ops::decode_journal(
+        paths,
+        &read_regular_bytes(&directory.join("journal.json"), MAX_BYTES)?,
+    )?;
     let original_state: FleetEnsureStateRecord = serde_json::from_slice(&read_regular_bytes(
         &directory.join("state.json"),
         MAX_BYTES,

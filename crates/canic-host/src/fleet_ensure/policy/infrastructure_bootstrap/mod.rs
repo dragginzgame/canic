@@ -5,6 +5,8 @@
 #[cfg(test)]
 mod tests;
 
+pub(in crate::fleet_ensure) mod registration_recovery;
+
 use crate::fleet_ensure::{
     model::{
         DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, DesiredPresence,

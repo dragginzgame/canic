@@ -1,5 +1,51 @@
 # Current handoff — 2026-09-30
 
+## Bootstrap registration budget recovery — qualified
+
+The maintainer relayed another developer's `.48` staging bootstrap: twelve applied
+infrastructure effects, 193.92T controlled native balance, a 237T registration
+successor, and a retained 154T execution ceiling. The reported plan begins
+`3b6d5c327ad7cc56`; its workspace is on the other project's machine. No live
+observation, downstream mutation, cleanup or release build change was performed.
+
+The source confirms the independent balance and budget blockers. Registration's
+balance underflow returned generic integrity; additional funding alone could not
+raise continuation authority. The original registration inspection allowance can
+also be consumed by failed attempts. The maintainer explicitly authorized repair.
+The active maintainer release command ended before source edits began.
+
+Implementation adds `fleet bootstrap --recover <plan-sha256>` with separately
+approved `--approve-recovery <review-sha256>`. It retains one supplementary review
+inside the existing operation, exact Ledger funding actions, execution bounds and
+finite additional inspections while preserving the original plan and applied
+prefix. It reports the two shortfalls directly. Qualification exposed and corrected
+the review-to-receipt funding margin and inline review payloads exceeding the import
+reader's journal size bound. Review JSON and durable journals reuse the existing
+content-addressed Store objects, including archive hydration. Funding rechecks exact
+installed destination authority through the existing effect status read.
+
+Final targeted qualification passes 28 native Host/CLI tests; one explicit retained
+workspace fixture remains intentionally ignored. The new recovery PocketIC case
+passes in 113.36 seconds, covering exhausted original inspections, exact approval,
+lost funding and registration replies, unchanged original plan/applied prefix,
+terminal conservation, offline replay, subsequent pool import and ordinary Ensure.
+The existing ordinary bootstrap case also passes in 80.40 seconds. Host, CLI and
+Testing all-target/all-feature warning-denied Clippy passes. Logs are retained under
+`target/review-validation/`: `bootstrap-registration-native-final.log`,
+`bootstrap-registration-pocketic-final.log`, `bootstrap-registration-ordinary.log`
+and `bootstrap-registration-clippy-final.log`. Formatting, whitespace, layering,
+hard-cut and document-semantics checks pass; two existing document-layout warnings
+remain advisory. Invocation-owned scratch is removed and build artifacts remain.
+
+The complete urgent `.49` batch, including this correction, is ready for maintainer
+commit and the governed release flow. Existing `.49` notes are extended; versions
+remain `.48`. No broad gate, version bump, commit, push or live execution ran for
+this correction. The other developer needs a CLI containing this fix, the original
+workspace and identity, retained operation and release build. Review the supplement
+and its Ledger funding before approving; import the eight held IDs only after
+bootstrap reports completion. The [operator procedure](../features/operations/fleet-ensure.md)
+documents the command and boundaries.
+
 ## Cargo resolver 3 continuation
 
 The maintainer requested Cargo resolver 3. The workspace, generated Fleet

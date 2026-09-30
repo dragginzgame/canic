@@ -362,6 +362,14 @@ pub trait EnsurePlatform {
         Ok(())
     }
 
+    /// Bind fresh funding observations to the separately approved initialization targets.
+    fn bind_bootstrap_registration_recovery(
+        &mut self,
+        _review: &crate::fleet_ensure::model::infrastructure_bootstrap::registration_recovery::BootstrapRegistrationReviewRecord,
+    ) -> Result<bool, Self::Error> {
+        Ok(false)
+    }
+
     /// Verify exact current Coordinator genesis before dependent infrastructure effects.
     fn verify_bootstrap_coordinator(
         &mut self,
@@ -764,11 +772,36 @@ pub(in crate::fleet_ensure::ops) fn lock_fleet_file_without_recovery(
 pub fn read_journal(
     paths: &EnsurePaths,
 ) -> Result<Option<FleetEnsureJournalRecord>, EnsureStateError> {
-    let mut value: Option<FleetEnsureJournalRecord> = read_current(&paths.journal)?;
-    if let Some(journal) = &mut value {
-        continuation::hydrate_phases(paths, &mut journal.successor_phases)?;
-    }
-    validate_schema(value, &paths.journal, |record| record.schema_version)
+    let Some(bytes) = read_document_bytes(&paths.journal)? else {
+        return Ok(None);
+    };
+    let journal = decode_journal(paths, &bytes)?;
+    validate_schema(Some(journal), &paths.journal, |record| {
+        record.schema_version
+    })
+}
+
+/// Resolve content references before any current or archived journal is interpreted.
+pub(super) fn decode_journal(
+    paths: &EnsurePaths,
+    bytes: &[u8],
+) -> Result<FleetEnsureJournalRecord, EnsureStateError> {
+    let decode = |source| EnsureStateError::Decode {
+        path: paths.journal.clone(),
+        source,
+    };
+    let mut projection: serde_json::Value = serde_json::from_slice(bytes).map_err(decode)?;
+    let mut journal: FleetEnsureJournalRecord = if let Some(review) = projection
+        .pointer_mut("/bootstrap_registration_recovery/review")
+        .filter(|review| !review.is_null())
+    {
+        plan_content::hydrate(paths, review)?;
+        serde_json::from_value(projection).map_err(decode)?
+    } else {
+        serde_json::from_slice(bytes).map_err(decode)?
+    };
+    continuation::hydrate_phases(paths, &mut journal.successor_phases)?;
+    Ok(journal)
 }
 
 pub fn read_plan(paths: &EnsurePaths) -> Result<Option<FleetEnsurePlan>, EnsureStateError> {
@@ -953,6 +986,20 @@ pub fn write_journal(
     paths: &EnsurePaths,
     journal: &FleetEnsureJournalRecord,
 ) -> Result<(), EnsureStateError> {
+    if journal
+        .bootstrap_registration_recovery
+        .as_ref()
+        .is_some_and(|record| record.review.is_some())
+    {
+        let projection = infrastructure_bootstrap::registration_recovery::journal_projection(
+            journal,
+        )
+        .map_err(|source| EnsureStateError::Decode {
+            path: paths.journal.clone(),
+            source,
+        })?;
+        return write_current(&paths.journal, &projection);
+    }
     write_current(&paths.journal, journal)
 }
 

@@ -886,6 +886,8 @@ pub struct IcpEnsurePlatform {
     pool_reader: RootPoolReader,
     infrastructure_bootstrap:
         Option<crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord>,
+    bootstrap_registration_recovery:
+        Option<crate::fleet_ensure::model::infrastructure_bootstrap::registration_recovery::BootstrapRegistrationReviewRecord>,
     retirement_debit_block: Option<u64>,
     pub(super) desired: DesiredFleet,
     pub(super) icp: IcpCli,
@@ -941,6 +943,7 @@ impl IcpEnsurePlatform {
             desired,
             icp,
             infrastructure_bootstrap: None,
+            bootstrap_registration_recovery: None,
             retirement_debit_block: None,
             initial_observation_delay: INITIAL_PROTOCOL_OBSERVATION_DELAY,
             maximum_observation_delay: MAXIMUM_PROTOCOL_OBSERVATION_DELAY,
@@ -3554,6 +3557,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
 
     fn bind_reviewed_desired(&mut self, desired: &DesiredFleet) -> Result<(), Self::Error> {
         self.infrastructure_bootstrap = None;
+        self.bootstrap_registration_recovery = None;
         self.invalidate_observation_snapshot();
         self.desired = desired.clone();
         Ok(())
@@ -3565,6 +3569,14 @@ impl EnsurePlatform for IcpEnsurePlatform {
     ) -> Result<(), Self::Error> {
         self.infrastructure_bootstrap = Some(source.clone());
         Ok(())
+    }
+
+    fn bind_bootstrap_registration_recovery(
+        &mut self,
+        review: &crate::fleet_ensure::model::infrastructure_bootstrap::registration_recovery::BootstrapRegistrationReviewRecord,
+    ) -> Result<bool, Self::Error> {
+        self.bootstrap_registration_recovery = Some(review.clone());
+        Ok(true)
     }
 
     fn verify_bootstrap_coordinator(
@@ -5086,6 +5098,13 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 || self.status_optional(principal),
                 |configured| self.observe_configured_canister(configured, principal, state),
             )?;
+        if let Some(review) = &self.bootstrap_registration_recovery {
+            super::infrastructure_bootstrap::registration_recovery::verify_funding_target(
+                review,
+                action,
+                observed.as_ref(),
+            )?;
+        }
         Ok(observed.map(|live| live.cycles))
     }
 

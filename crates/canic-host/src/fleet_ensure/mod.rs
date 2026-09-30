@@ -35,7 +35,7 @@ pub use inventory::{
     read_last_converged_fleet_inventory, resolve_current_fleet,
 };
 #[doc(hidden)]
-pub use json::report_json_value;
+pub use json::{registration_recovery_json_value, report_json_value};
 pub use model::{FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureReport};
 #[doc(hidden)]
 pub use ops::current_protocol::{

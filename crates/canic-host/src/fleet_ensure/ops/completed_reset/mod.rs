@@ -150,6 +150,7 @@ fn initial_journal(
     observation: &FleetObservation,
 ) -> Result<FleetEnsureJournalRecord, CompletedResetError> {
     Ok(FleetEnsureJournalRecord {
+        bootstrap_registration_recovery: None,
         funding_observations: BTreeMap::new(),
         funding_reviews: Vec::new(),
         successor_phases: Vec::new(),

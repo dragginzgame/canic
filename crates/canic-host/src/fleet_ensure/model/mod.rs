@@ -1467,6 +1467,11 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
+    /// An explicit extension of this operation's registration authority; absent until requested.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub bootstrap_registration_recovery: Option<
+        infrastructure_bootstrap::registration_recovery::BootstrapRegistrationRecoveryRecord,
+    >,
     pub funding_observations: BTreeMap<String, funding_observation::FundingObservationReviewRecord>,
     pub funding_reviews: Vec<FundingReviewRecord>,
     pub successor_phases: Vec<FleetEnsureSuccessorPhaseRecord>,
