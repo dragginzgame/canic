@@ -1,4 +1,4 @@
-# Current handoff — 2026-09-29
+# Current handoff — 2026-09-30
 
 ## Baseline and accepted cleanup batch
 
@@ -123,6 +123,19 @@ Warning-denied library and test-target Clippy also pass. Logs are
 `/tmp/canic-bootstrap-import-*.log`; the exact test output is
 `target/test-runs/20260929T200342Z-61806.ofa9Iw/1.log`. The `.49` notes include
 this fixture correction; no broad suite or release command was rerun.
+
+The September 30 failure was a second stale fixture composition: the bootstrap
+hold case combined two source reviews while retaining one source's 24-call
+budget. The shared review helper now takes the complete source slice and derives
+its call/debit bounds from that count and the Root quote. Bootstrap and all
+signed-handoff callers use it directly; no merged single-source budget remains.
+The exact bootstrap-hold case passes in 17.05 seconds, and the signed-handoff
+recovery case passes in 27.51 seconds. Warning-denied test-target Clippy passes.
+Logs are `/tmp/canic-bootstrap-capacity-regression.log`,
+`/tmp/canic-import-transport-regression.log` and
+`/tmp/canic-capacity-fixture-clippy.log`. The `.49` changelog includes this fix.
+The accepted local batch is ready for maintainer review; these targeted checks
+do not claim a full-suite rerun or change the outstanding live recovery boundary.
 
 ## Unscheduled backup execution gap
 

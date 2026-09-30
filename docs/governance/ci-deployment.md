@@ -432,6 +432,10 @@ versioning, or release boundaries in this document.
 The sole supported host and Rust target authority is the
 [supported host and target matrix](supported-platforms.md). Installer branches
 outside a declared and validated cell do not create support claims.
+macOS on Apple Silicon and Intel is required Host/CLI support. Its outstanding
+native build and filesystem qualification must be tracked as support work;
+Linux-only CI success does not establish macOS validation. Follow the matrix's
+qualification requirements before claiming macOS checks have passed.
 
 ## Git Boundary
 
