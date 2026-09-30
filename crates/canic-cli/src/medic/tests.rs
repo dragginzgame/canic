@@ -1293,7 +1293,7 @@ fn write_medic_role_contract_workspace(root: &std::path::Path, features: &[&str]
         format!(
             r#"[workspace]
 members = ["crates/canic", "crates/canic-core", "apps/demo/*"]
-resolver = "2"
+resolver = "3"
 
 [workspace.dependencies]
 canic = {{ path = "crates/canic", default-features = false, features = [{features}] }}

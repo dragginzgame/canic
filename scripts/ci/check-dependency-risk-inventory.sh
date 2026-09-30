@@ -73,12 +73,14 @@ expected="$tmp_dir/expected.tsv"
 actual="$tmp_dir/actual.tsv"
 awk -F '\t' 'NF && $1 !~ /^#/ { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' "$INVENTORY" |
     LC_ALL=C sort >"$expected"
+# Yanked warnings have no RustSec advisory ID. Keep a nonempty field so Bash's
+# whitespace IFS handling cannot shift the warning kind, package and version.
 jq -r '
     (.warnings // {})
     | to_entries[]
     | .value[]
     | [
-        .advisory.id,
+        (.advisory.id // "-"),
         .kind,
         .package.name,
         .package.version,

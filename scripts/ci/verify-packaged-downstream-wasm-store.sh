@@ -106,7 +106,7 @@ prepare_tool_root() {
     cat > "$tool_root/Cargo.toml" <<EOF
 [workspace]
 members = ["package-root/canic-host-$VERSION"]
-resolver = "2"
+resolver = "3"
 
 [patch.crates-io]
 canic = { path = "package-root/canic-$VERSION" }

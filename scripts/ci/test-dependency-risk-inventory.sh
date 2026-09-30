@@ -8,6 +8,14 @@ fail() {
     exit 1
 }
 
+classification_only=0
+# The focused lane checks classification without creating a Git database fixture.
+case "$#:${1:-}" in
+0:) ;;
+1:--classification-only) classification_only=1 ;;
+*) fail "usage: $0 [--classification-only]" ;;
+esac
+
 command -v git >/dev/null 2>&1 || fail "git is unavailable"
 command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
 mkdir -p "$ROOT/.tmp"
@@ -67,9 +75,10 @@ jq -n --arg checksum "$checksum" '{
     }] }
 }' >"$base"
 
-mkdir -p "$audit_db/crates/canic-risk-transitive-fixture"
-tracked_advisory="crates/canic-risk-transitive-fixture/RUSTSEC-2099-0001.md"
-cat >"$audit_db/$tracked_advisory" <<'ADVISORY'
+test_offline_database_isolation() {
+    local tracked_advisory="crates/canic-risk-transitive-fixture/RUSTSEC-2099-0001.md"
+    mkdir -p "$audit_db/crates/canic-risk-transitive-fixture"
+    cat >"$audit_db/$tracked_advisory" <<'ADVISORY'
 ```toml
 [advisory]
 id = "RUSTSEC-2099-0001"
@@ -85,31 +94,35 @@ patched = []
 
 Local gate fixture; no upstream advisory is represented.
 ADVISORY
-git -C "$audit_db" init --quiet
-git -C "$audit_db" add -- "$tracked_advisory"
-git -C "$audit_db" -c user.name='Canic gate fixture' \
-    -c user.email='fixture@example.invalid' -c core.hooksPath=/dev/null \
-    -c commit.gpgsign=false commit --quiet -m 'Local advisory fixture'
+    git -C "$audit_db" init --quiet
+    git -C "$audit_db" add -- "$tracked_advisory"
+    git -C "$audit_db" -c user.name='Canic gate fixture' \
+        -c user.email='fixture@example.invalid' -c core.hooksPath=/dev/null \
+        -c commit.gpgsign=false commit --quiet -m 'Local advisory fixture'
+
+    # A shared cache may retain an untracked copy after an upstream advisory is
+    # renamed or moved. Offline isolation must copy only the selected tracked
+    # database revision so the stale file cannot create a duplicate advisory ID.
+    mkdir -p "$audit_db/crates/canic-stale-duplicate"
+    cp "$audit_db/$tracked_advisory" \
+        "$audit_db/crates/canic-stale-duplicate/${tracked_advisory##*/}"
+    if (
+        cd "$fixture"
+        cargo audit --no-fetch --db "$audit_db" --json
+    ) >"$tmp_dir/duplicate.json" 2>"$tmp_dir/duplicate.stderr"; then
+        fail "unisolated duplicate advisory fixture was accepted"
+    fi
+    CANIC_CARGO_AUDIT_NO_FETCH=1 CANIC_CARGO_AUDIT_DB="$audit_db" \
+        bash "$GATE" >"$tmp_dir/offline.log" 2>&1 || {
+        cat "$tmp_dir/offline.log" >&2
+        fail "tracked advisory isolation failed"
+    }
+}
 
 bash "$GATE" --audit-json "$base" >/dev/null
-
-# A shared cache may retain an untracked copy after an upstream advisory is
-# renamed or moved. Offline isolation must copy only the selected tracked
-# database revision so the stale file cannot create a duplicate advisory ID.
-mkdir -p "$audit_db/crates/canic-stale-duplicate"
-cp "$audit_db/$tracked_advisory" \
-    "$audit_db/crates/canic-stale-duplicate/${tracked_advisory##*/}"
-if (
-    cd "$fixture"
-    cargo audit --no-fetch --db "$audit_db" --json
-) >"$tmp_dir/duplicate.json" 2>"$tmp_dir/duplicate.stderr"; then
-    fail "unisolated duplicate advisory fixture was accepted"
+if [ "$classification_only" -eq 0 ]; then
+    test_offline_database_isolation
 fi
-CANIC_CARGO_AUDIT_NO_FETCH=1 CANIC_CARGO_AUDIT_DB="$audit_db" \
-    bash "$GATE" >"$tmp_dir/offline.log" 2>&1 || {
-    cat "$tmp_dir/offline.log" >&2
-    fail "tracked advisory isolation failed"
-}
 
 vulnerability="$tmp_dir/vulnerability.json"
 jq '.vulnerabilities.found = true | .vulnerabilities.count = 1 | .vulnerabilities.list = [{}]' \
@@ -150,12 +163,17 @@ fi
 
 yanked_warning="$tmp_dir/yanked-warning.json"
 jq '.warnings.yanked = [(.warnings.unmaintained[0]
-    | .advisory.id = "RUSTSEC-2099-0004"
+    | del(.advisory)
     | .kind = "yanked"
     | .package.name = "transitive-yanked-package")]' \
     "$base" >"$yanked_warning"
 if bash "$GATE" --audit-json "$yanked_warning" >/dev/null 2>&1; then
     fail "yanked dependency fixture was accepted"
 fi
+
+missing_advisory="$tmp_dir/missing-advisory.json"
+jq 'del(.warnings.unmaintained[0].advisory)' "$base" >"$missing_advisory"
+bash "$GATE" --audit-json "$missing_advisory" >/dev/null 2>&1 ||
+    fail "missing optional advisory shifted warning kind and package fields"
 
 echo "dependency risk gate tests passed"

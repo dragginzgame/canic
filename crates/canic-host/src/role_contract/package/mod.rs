@@ -1032,9 +1032,9 @@ fn validate_cargo_declarations(
                 .and_then(|package| package.get("resolver"))
         })
         .and_then(toml::Value::as_str);
-    if resolver != Some("2") {
+    if resolver != Some("3") {
         return Err(unsupported_finding(
-            "the top-level Cargo workspace or package must declare resolver = \"2\"",
+            "the top-level Cargo workspace or package must declare resolver = \"3\"",
         ));
     }
     validate_workspace_canic_declaration(&workspace_document)?;

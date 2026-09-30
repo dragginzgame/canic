@@ -85,7 +85,7 @@ pub fn materialize(
             "edition": "2024", "publish": false,
             "metadata": { "canic": { "app": spec.app, "role": spec.role } },
         },
-        "workspace": { "resolver": "2" },
+        "workspace": { "resolver": "3" },
         "lib": { "name": spec.crate_name, "crate-type": ["cdylib"] },
         "dependencies": {
             "canic": { "path": canic_root, "default-features": false, "features": spec.features },

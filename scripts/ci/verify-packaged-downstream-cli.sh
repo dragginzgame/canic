@@ -82,7 +82,7 @@ prepare_tool_root() {
     cat > "$TOOL_ROOT/Cargo.toml" <<EOF
 [workspace]
 members = ["package-root/canic-cli-$VERSION"]
-resolver = "2"
+resolver = "3"
 
 [patch.crates-io]
 canic = { path = "package-root/canic-$VERSION" }
@@ -115,7 +115,7 @@ prepare_downstream_root() {
     cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
 [workspace]
 members = []
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 version = "0.0.0"

@@ -24,7 +24,7 @@ write_workspace_manifest() {
     cat > "$TMP_ROOT/Cargo.toml" <<'EOF'
 [workspace]
 members = []
-resolver = "2"
+resolver = "3"
 EOF
 }
 

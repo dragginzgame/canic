@@ -1,5 +1,50 @@
 # Current handoff — 2026-09-30
 
+## Cargo resolver 3 continuation
+
+The maintainer requested Cargo resolver 3. The workspace, generated Fleet
+packages, Host role admission, CLI medic fixtures, maintained isolated manifests
+and generated downstream smoke-test workspaces now select it. The old test that
+rejected resolver 3 is removed. Historical audit snapshots and the frozen CANIC-188
+repair inputs remain evidence for their original source state.
+
+Locked offline metadata succeeds and its package/dependency/feature graph exactly
+matches the captured pre-change graph. Resolver selection adds no lockfile changes;
+the prior `yoke-derive 0.8.4` repair remains retained. Focused qualification passes
+45 Host role/package tests, 41 CLI medic tests and two generated Fleet wrapper
+admission tests: **88 tests**. Host/CLI all-target/all-feature warning-denied Clippy
+passes, as do shell syntax, targeted ShellCheck, formatting and document semantics
+(two existing advisory layout warnings). Logs are under
+`target/review-validation/`: `resolver3-targeted.log`, `resolver3-generated.log`
+and `resolver3-clippy.log`. Invocation-owned scratch is removed.
+
+The urgent `.49` batch remains ready for maintainer commit and the governed release
+flow, with these resolver and dependency-gate corrections included. Package
+versions remain `.48`, and the existing open `.49` notes are extended. No broad
+validation, version bump, commit or push ran.
+
+## Dependency gate repair after maintainer validation
+
+The maintainer committed the urgent batch at `239a49173` and started the governed
+release validation. Its dependency gate found newly yanked `yoke-derive 0.8.3`.
+The warning has no advisory ID; Bash collapsed the empty first TSV field and
+misreported the package as `0.8.3` and the warning kind as `yoke-derive`.
+
+Only that locked package and its checksum now advance to compatible `0.8.4`.
+The gate uses a nonempty placeholder for absent advisory IDs. Focused classification
+regressions accept advisory-free informational warnings and still reject yanked
+dependencies, known vulnerabilities and direct unmaintained dependencies.
+`--classification-only` runs these cases without creating the separate Git
+database fixture; that unchanged offline-isolation scenario was not rerun.
+Shell syntax and targeted ShellCheck pass. The real `make dependency-risk-gate`
+passes with zero vulnerabilities and the two existing transitive warnings;
+log: `target/review-validation/dependency-risk-yoke-final.log`.
+Locked offline Host/CLI compilation passes in
+`target/review-validation/dependency-risk-yoke-compile.log`. The corrective slice
+is ready for maintainer commit and retry of the governed release command. No broad
+validation was rerun; package versions remain `.48`, and changes extend the open
+`.49` notes. The failed release gate has not produced a completed validation receipt.
+
 ## Urgent CANIC-188 publication preparation
 
 The maintainer now wants to publish because CANIC-188 is blocking downstream

@@ -41,7 +41,7 @@ members = [
     "crates/canic-testing-internal",
     "crates/canic-tests",
 ]
-resolver = "2"
+resolver = "3"
 
 [workspace.package]
 rust-version = "1.91.0"
