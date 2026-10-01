@@ -171,6 +171,12 @@ dependencies share Canic's memory runtime. This includes the IcyDB-backed
 provisioning journeys within that target. It is a test consumer, not a deployed
 Canic dependency; its separate dependency schedule does not block Canic releases.
 The production Wasm dependency graph still requires exactly one memory runtime.
+Complete and PocketIC-only runs first verify the checked-in embedded allocation
+peer against its current producer inputs, before test suites or server startup.
+Changed inputs use the existing build cache for byte qualification; stale bytes
+fail immediately with the explicit refresh command. This check never rewrites
+the fixture. Narrow targeted, ordinary and fast lanes do not inherit it; the
+owning lifecycle proof retains its own verification.
 Ordinary tests
 retain libtest's default parallelism. PocketIC suites remain ordered, with two
 isolated internal workers after the source-bound recovery barrier. Each worker
