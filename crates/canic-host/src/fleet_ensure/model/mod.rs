@@ -6,20 +6,14 @@
 
 pub mod capacity_import;
 pub mod clean_reinstall;
-pub mod completed_handoff;
 pub mod completed_operation;
 pub mod funding_observation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
-mod retirement;
 pub(in crate::fleet_ensure) mod serialization;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
-
-pub use retirement::{
-    FleetRetirementConservationRecord, RetirementExternalDebitRecord, RetirementWithdrawalRecord,
-};
 
 pub const FLEET_ENSURE_SCHEMA_VERSION: u16 = 1;
 pub const MAX_FLEET_ENSURE_CANISTERS: usize = 4_096;
@@ -472,14 +466,6 @@ pub struct ReinstallRootWitnessRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(rename_all = "snake_case", tag = "kind")]
 pub enum EnsureAction {
-    /// Seal one authority's mutation and timer owners before inventory capture.
-    SealAuthority {
-        candid: String,
-        candid_sha256: String,
-        authority_kind: DesiredCanisterKind,
-        name: String,
-        principal: String,
-    },
     Create {
         controller_canisters: Vec<String>,
         controllers: Vec<String>,
@@ -619,8 +605,7 @@ impl EnsureAction {
     #[must_use]
     pub fn name(&self) -> &str {
         match self {
-            Self::SealAuthority { name, .. }
-            | Self::Create { name, .. }
+            Self::Create { name, .. }
             | Self::Delete { name, .. }
             | Self::FleetProtocol { name, .. }
             | Self::Fund { name, .. }
@@ -1081,57 +1066,18 @@ impl FleetEnsurePlanScope {
     }
 }
 
-/// Exact source estate and selected target authority for one requested database wipe.
+/// Exact unfinished activation and observed authority for its reviewed reset.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetReinstallRecord {
-    /// Selected build content identity bound before preparation effects.
-    #[serde(deserialize_with = "serialization::required_option")]
-    pub target_artifacts_sha256: Option<String>,
-    /// Completed source authority; partial activation retains its separate evidence.
-    #[serde(deserialize_with = "serialization::required_option")]
-    pub source: Option<Box<FleetReinstallSourceRecord>>,
     #[serde(deserialize_with = "serialization::required_option")]
     pub activation_reset: Option<Box<FleetActivationResetRecord>>,
-    #[serde(deserialize_with = "serialization::required_option")]
-    pub completed_reset: Option<Box<completed_handoff::CompletedEstateResetRecord>>,
+
     pub operation_id: String,
     pub source_operation_id: String,
     pub authorities: Vec<RootManagementBinding>,
     /// Empty during preparation; the full plan binds every sealed physical asset.
     pub assets: Vec<FleetReinstallAssetRecord>,
-}
-
-/// Immutable completed-source input and artifact identities retained before sealing.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FleetReinstallSourceRecord {
-    /// Byte-bound completed evidence; never a source of executable actions.
-    #[serde(deserialize_with = "serialization::required_option")]
-    pub terminal_retirement: Option<Box<FleetTerminalRetirementRecord>>,
-    pub reviewed_desired: ReviewedDesiredFleetRecord,
-    pub wasm_sha256_by_canister: BTreeMap<String, String>,
-    pub candid_sha256_by_path: BTreeMap<String, String>,
-}
-
-/// Exact documents bound by a separately reviewed completed-operation retirement.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FleetTerminalSourceRecord {
-    pub operation_id: String,
-    pub plan_sha256: String,
-    pub plan_document_sha256: String,
-    pub journal_document_sha256: String,
-    pub state_document_sha256: String,
-    pub phase_document_sha256: BTreeMap<String, String>,
-}
-
-/// Source document bindings and fresh conservation presented by a separate retirement review.
-#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(deny_unknown_fields)]
-pub struct FleetTerminalRetirementRecord {
-    pub source: FleetTerminalSourceRecord,
-    pub conservation: FleetRetirementConservationRecord,
 }
 
 /// Exact retained source bytes and issued protocol effects inspected for activation recovery.

@@ -215,7 +215,7 @@ fn retained_work_is_reported_without_rewriting_evidence_or_opening_a_lock() {
     plan.reviewed_desired = Some(Box::new(
         crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(&fixture.desired),
     ));
-    crate::fleet_ensure::tests::retain_recorded_retirement(&mut plan, Vec::new());
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
     let (_, mut journal) = super::super::tests::retained_evidence();
     journal.plan_sha256.clone_from(&plan.plan_sha256);
     journal.operation_id.clone_from(&plan.operation_id);
@@ -302,7 +302,7 @@ fn unsafe_paths_and_unreadable_retained_evidence_fail_before_signer_or_network_a
     assert!(matches!(
         inspect(&request),
         Err(FleetReadinessError::RetainedContract(
-            crate::fleet_ensure::ops::retained_contract::RetainedContractError::ReceiptAudit(
+            crate::fleet_ensure::ops::retained_contract::RetainedContractError::State(
                 EnsureStateError::Decode { path, .. }
             )
         )) if path == paths.journal

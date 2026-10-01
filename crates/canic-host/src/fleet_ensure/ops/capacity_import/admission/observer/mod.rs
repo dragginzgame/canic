@@ -16,7 +16,7 @@ use crate::{
                 transport::{CapacityImportTransport, verify_agent},
                 validate_destination_authority,
             },
-            reinstall::terminal::inventory::custody,
+            certified_custody,
         },
         policy::capacity_import::disposition_digest,
         view::capacity_import::{
@@ -100,9 +100,10 @@ impl CapacityImportLiveObserver {
             .as_ref()
             .ok_or(CapacityImportJournalError::InfrastructureRequired)?;
         for expected in &admission.infrastructure {
-            let observed = custody::observe_one(&self.transport.agent, expected.principal)
-                .await
-                .map_err(|_| CapacityImportJournalError::InfrastructureChanged)?;
+            let observed =
+                certified_custody::observe_one(&self.transport.agent, expected.principal)
+                    .await
+                    .map_err(|_| CapacityImportJournalError::InfrastructureChanged)?;
             let module = observed.module_sha256.as_deref().map(hash).transpose()?;
             if (observed.subnet, &observed.controllers, module)
                 != (
@@ -160,7 +161,7 @@ pub(in crate::fleet_ensure::ops::capacity_import) async fn verify_infrastructure
         return Err(CapacityImportJournalError::InfrastructureChanged);
     }
     for expected in &admission.infrastructure {
-        let observed = custody::observe_one(agent, expected.principal)
+        let observed = certified_custody::observe_one(agent, expected.principal)
             .await
             .map_err(|_| CapacityImportJournalError::InfrastructureChanged)?;
         let module = observed.module_sha256.as_deref().map(hash).transpose()?;

@@ -142,6 +142,12 @@ invocation first syntax-checks and executes a private immutable copy of itself;
 an unrelated edit to the workspace script during a long test cannot splice new
 shell text into the process after the tests have completed.
 
+CI cancels superseded pull-request runs. Main-branch runs have distinct concurrency
+identities and retain their own results even when another commit arrives. Release
+accounting must name the exact source revision for local validation, CI results
+and package qualification; a later passing branch run is not evidence for an
+earlier package. Publication does not wait for or manufacture CI evidence.
+
 The repository owns one `pre-commit` hook, configured by `make install-dev` or
 `make install-hooks`. It runs only `make fmt`; it does not run tests, Clippy,
 builds, validation, versioning, commits, or pushes. A partially staged file
@@ -537,7 +543,7 @@ from an editable handoff.
 
 `make patch-fast` is a governed alternative only when the current workspace
 version has an exact immutable published tag and every attributable change
-after that tag is confined to documentation/governance, the lockfile, or the
+after that tag is confined to documentation/governance or the
 release tooling that owns this lane. Runtime, build, package, protocol,
 generated, Candid, configuration and product-fixture changes reject before
 version mutation. `make release-patch-fast` performs the same eligible gate and
@@ -547,17 +553,17 @@ The fast lane verifies the immutable tag's structured validation receipt,
 requires that receipt or its fast-release chain to retain a complete validated
 release ancestor, and checks ancestry, diff hygiene, current-document and
 release-matrix semantics. It runs
-the release integrity and release-flow checks when tooling changed. A lockfile
-change additionally runs the dependency-risk gate, locked offline metadata and
-a locked workspace all-targets check. It deliberately skips workspace tests
+the release integrity and release-flow checks when tooling changed. Dependency
+resolution changes require the complete lane; matching version prefixes do not
+establish unchanged behavior. It deliberately skips workspace tests
 and PocketIC. The structured receipt records `gate: "fast"`; it is not evidence
 that `make validate` ran on that patch. The reader admits only schema-1 receipts
 from the exact annotated tag, bound to its version and an ancestor source.
 Tags without this receipt require the complete release lane. No prose/marker
 fallback or automatic backfill of historical validation is supported.
 
-Use the fast lane for a compatible patch-only lock correction, documentation/governance
-correction or release-tooling correction whose production source is unchanged.
+Use the fast lane for a documentation/governance correction or release-tooling
+correction whose production source and dependency resolution are unchanged.
 Any ineligible path, missing receipt, non-ancestor tag or targeted failure
 falls back to the complete path; there is no override flag.
 

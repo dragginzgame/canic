@@ -36,7 +36,6 @@ fn bounded_target(name: &str) -> String {
 
 const fn action_kind(action: &EnsureAction) -> FleetEnsureActionKind {
     match action {
-        EnsureAction::SealAuthority { .. } => FleetEnsureActionKind::SealAuthority,
         EnsureAction::Create { .. } => FleetEnsureActionKind::Create,
         EnsureAction::Delete { .. } => FleetEnsureActionKind::Delete,
         EnsureAction::Fund { .. } => FleetEnsureActionKind::Fund,

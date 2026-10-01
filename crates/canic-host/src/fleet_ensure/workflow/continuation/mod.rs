@@ -202,7 +202,7 @@ pub(super) fn replay<P: EnsurePlatform>(
     // This is one read-only replanning decision after the inventory's paid reads.
     // Share configured-owner status with protocol planning, then expire it before
     // the separate terminal authority checks or any later replay.
-    let (mut final_observation, current) = platform.with_planning_observations(|platform| {
+    let (final_observation, current) = platform.with_planning_observations(|platform| {
         let mut final_observation = platform
             .observe(&plan.operation_id, &verified_state)
             .map_err(EnsureWorkflowError::Platform)?;
@@ -228,15 +228,7 @@ pub(super) fn replay<P: EnsurePlatform>(
     }
     super::reinstall::verify_terminal_estate(plan, &final_observation)?;
     super::reinstall::verify_terminal_authority(plan, &verified_state, platform)?;
-    let paths = EnsurePaths::under(root, &plan.environment, &plan.fleet);
-    let balances = super::completed_reset::sample(&paths, plan, &mut final_observation, platform)?;
     let actual = verify_terminal_conservation(plan, journal, &verified_state, &final_observation)?;
-    super::completed_reset::verify(plan, journal, &actual, balances.as_ref())?;
-    if let Some(balances) = balances {
-        crate::fleet_ensure::ops::completed_reset::terminal::retain(
-            &paths, plan, &actual, balances,
-        )?;
-    }
     Ok(actual)
 }
 

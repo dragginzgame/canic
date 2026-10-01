@@ -56,6 +56,34 @@ supplement the retained plan and journal; they never prove deployment completion
 or authorize continuation. Funding-observation and operator-mint subcommands
 retain their existing output owners.
 
+## Automation results
+
+Use `--json` for deployment wrappers. Successful Ensure, clean-reinstall,
+bootstrap and import responses include `automation` with `phase`, nullable
+`operation_id`, `plan_sha256` and `review_sha256`, `phase_completed`,
+`fleet_completed` and nullable `next_action`. Only `fleet_completed: true` means
+the complete Fleet has converged. Infrastructure and import completion do not
+imply workload completion.
+
+`next_action.kind` distinguishes `review`, `apply`, `resume` and `review_funding`.
+An `apply` or `review_funding` action requires explicit operator approval;
+`resume` retains the exact already approved digest. A completed clean-reinstall
+phase returns a `review` for the next phase, which produces a new approval to
+inspect. The fields `executable` and `arguments` describe a direct process call
+in the same workspace. Pass the array as arguments without shell splitting or
+`eval`; paths and identities may contain spaces or quotes. A null executable
+requires an operator decision, such as the separately reported funding review.
+Explicit bootstrap/import completion may have no next action because selecting
+the next capacity or desired document is a separate decision.
+
+A typed successor-budget or post-creation balance pause exits nonzero with JSON
+on stderr, `code: "successor_review_required"` and a `next_action` for review.
+Other failures report `code: "operation_failed"` and no automatic continuation.
+Wrappers should follow these decisions and explicit approvals, and preserve
+unhandled failures. They should not infer completion from private journals or
+use a fixed number of repeated commands. Older human `next_command` and
+`apply_command` renderings are for display, not process execution.
+
 Clean reinstall selects its local owner and current input before opening the
 receipt; local selection is outside the measured interval. Remote review and
 apply use the shared receipt owner with `invocation_started.command: ensure`.
@@ -720,8 +748,8 @@ the dependent Fleet finishes. A changed input after that prerequisite is refused
 before Store effects. Reusing a Root module alone does not prove that its
 activation operation matches a new Store install.
 
-CANIC-157's single-Root partial-activation recovery is qualified against the
-affected 0.110.12 runtime. Preserve the source plan, journal, paid
+Single-Root partial-activation recovery is qualified with current artifacts.
+Preserve the source plan, journal, paid
 receipts, artifacts and complete estate seed. An explicit `--reinstall` review
 inspects the issued source prefix without executing the old plan. It requires
 exact source modules/controllers, complete physical assets, unchanged Root
@@ -1030,7 +1058,7 @@ This authorizes one ICP transfer and its CMC notification, not Fleet withdrawals
 Retries use the identical transfer and notification arguments. Canic authenticates
 the ICP transaction and the memo/account-bound Cycles Ledger deposit, then records
 gross cycles, actual deposit fee and net credit exactly once. Original Fleet
-starting balances, source seals and withdrawal identity remain unchanged.
+starting balances, original operation authority and withdrawal identity remain unchanged.
 
 After `credit_admitted: true`, repeat ensure without `--operator-mint`, using
 the original plan digest for the original retained withdrawal, or the separately
@@ -1046,24 +1074,20 @@ and unavailable or over-budget receipt history remain unresolved. Do not reset
 the journal, change timestamps, or independently mint into a retained operation.
 An Intent without a receipt is not proof that its original withdrawal did not pay.
 
-Completed retirement accounting embedded at
-`reinstall.source.terminal_retirement.conservation` is immutable evidence. Its
-recorded field names and canonical encoding remain part of the original plan
-digest, including recorded execution/settlement observations. They are not
-converted into current net debit/credit observations or used to admit a new
-payment. Active plans, actions, journals and fresh conservation still require
-their complete current contracts.
+Completed Fleet records are historical evidence. Clean reinstall uses the
+selected current build, explicit inventory and observed controllers, without
+requiring old plan schemas, receipt decoding or source interface reconstruction.
+Unfinished paid effects retain their reconciliation owner and exact bounds.
 
-For CANIC-166/172's retained withdrawal, resume ordinary Ensure without
-`--reinstall` to obtain its funding review, then follow the conversion and
-original-plan apply sequence above. The original desired input and source seals
-remain bound throughout recovery. A request for a new reinstall while that
-operation is in progress returns `RetainedOperationRecoveryRequired`, naming
-the original operation and plan digest. After original convergence and
-effect-free replay, request a separate `--reinstall` review selecting the new
-release. This does not establish that a live withdrawal is unpaid, that its
-Ledger retry window remains open, or that live source authority still matches;
-the existing receipt, retry, seal and conservation checks retain those decisions.
+For a retained original withdrawal, resume ordinary Ensure without `--reinstall`
+to obtain its funding review, then follow the conversion and original-plan apply
+sequence above. The original desired input, operation authority and withdrawal
+identity remain bound throughout recovery. A new reinstall request during that
+operation returns `RetainedOperationRecoveryRequired`, naming the original
+operation and plan digest. After original convergence and effect-free replay,
+request a separate `--reinstall` review selecting the current build. Existing
+receipt, retry, authority and conservation checks determine whether the
+withdrawal paid and which recovery effects remain admissible.
 
 Every autonomous pool creation retains its exact Ledger block, operation,
 amount, Ledger fee, management creation fee, readiness floor, execution margin

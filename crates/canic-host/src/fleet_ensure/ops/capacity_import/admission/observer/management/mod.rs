@@ -11,9 +11,9 @@ use crate::{
         model::capacity_import::{CapacityImportSourceBinding, survey::CapacityImportSampleRecord},
         ops::{
             capacity_import::{admission::declarations::hash, journal::CapacityImportJournalError},
-            reinstall::terminal::inventory::custody,
+            certified_custody,
         },
-        view::terminal_source::inventory::CompletedCanisterCustodyView,
+        view::certified_custody::CertifiedCanisterCustodyView,
     },
 };
 use candid::{CandidType, Nat, Principal};
@@ -79,7 +79,7 @@ enum RootResponse {
 pub(in crate::fleet_ensure) struct PreparedManagementObservation {
     agent: Agent,
     canister: Principal,
-    before: CompletedCanisterCustodyView,
+    before: CertifiedCanisterCustodyView,
     argument: Vec<u8>,
     root: Option<Principal>,
 }
@@ -116,7 +116,7 @@ pub(in crate::fleet_ensure) async fn prepare_root_owned(
     canister: Principal,
 ) -> Result<PreparedManagementObservation, CapacityImportJournalError> {
     let invalid = || CapacityImportJournalError::ObservationUnavailable { canister };
-    let before = custody::observe_one(agent, canister)
+    let before = certified_custody::observe_one(agent, canister)
         .await
         .map_err(|_| invalid())?;
     if !before.controllers.contains(&root) {
@@ -191,7 +191,7 @@ async fn observe_root_prepared(
         .module_hash
         .map(|value| value.try_into().map_err(|_| invalid()))
         .transpose()?;
-    let after = custody::observe_one(&agent, canister)
+    let after = certified_custody::observe_one(&agent, canister)
         .await
         .map_err(|_| invalid())?;
     let expected = (
@@ -240,7 +240,7 @@ pub(in crate::fleet_ensure) async fn prepare(
     canister: Principal,
 ) -> Result<PreparedManagementObservation, CapacityImportJournalError> {
     let invalid = || CapacityImportJournalError::ObservationUnavailable { canister };
-    let before = custody::observe_one(agent, canister)
+    let before = certified_custody::observe_one(agent, canister)
         .await
         .map_err(|_| invalid())?;
     let argument = candid::encode_one(Request {
@@ -284,7 +284,7 @@ async fn observe_direct_prepared(
         .module_hash
         .map(|value| value.try_into().map_err(|_| invalid()))
         .transpose()?;
-    let after = custody::observe_one(&agent, canister)
+    let after = certified_custody::observe_one(&agent, canister)
         .await
         .map_err(|_| invalid())?;
     let before_module = before.module_sha256.as_deref().map(hash).transpose()?;

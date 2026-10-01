@@ -270,7 +270,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("parse current desired fixture");
     let desired_sha256 = "35".repeat(32);
-    let mut plan = compile_plan(
+    let plan = compile_plan(
         &desired,
         &DesiredFleetArtifacts::default(),
         &[],
@@ -324,7 +324,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         },
     )
     .expect("retain in-progress journal");
-    let mut options = EnsureOptions {
+    let options = EnsureOptions {
         seed: PathBuf::from("deployments/fleet.estate.toml"),
         source: PathBuf::from("deployments/fleet.toml"),
         observe_funding: None,
@@ -334,7 +334,6 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         cancel_mint: None,
         cancel_reinstall: None,
         reinstall: false,
-        retirement_debit_block: None,
         apply: Some(plan.plan_sha256.clone()),
         desired: PathBuf::from("missing.toml"),
         environment: Some("local".to_string()),
@@ -348,41 +347,6 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         .expect("load exact retained desired without working TOML");
     assert_eq!(loaded.desired, desired);
     assert_eq!(loaded.sha256, desired_sha256);
-
-    // An exact completed wipe apply also recovers its selected input after a lost final acknowledgement.
-    plan.reinstall = Some(Box::new(
-        canic_host::fleet_ensure::model::FleetReinstallRecord {
-            activation_reset: None,
-            completed_reset: None,
-            source: Some(Box::new(
-                canic_host::fleet_ensure::model::FleetReinstallSourceRecord {
-                    terminal_retirement: None,
-                    reviewed_desired: *plan.reviewed_desired.clone().unwrap(),
-                    wasm_sha256_by_canister: BTreeMap::new(),
-                    candid_sha256_by_path: BTreeMap::new(),
-                },
-            )),
-            target_artifacts_sha256: Some("51".repeat(32)),
-            operation_id: plan.operation_id.clone(),
-            source_operation_id: "52".repeat(32),
-            authorities: Vec::new(),
-            assets: Vec::new(),
-        },
-    ));
-    plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(&plan);
-    write_plan(&paths, &plan).unwrap();
-    let mut journal = canic_host::fleet_ensure::ops::read_journal(&paths)
-        .unwrap()
-        .unwrap();
-    journal.completion = FleetEnsureCompletion::Converged;
-    journal.plan_sha256.clone_from(&plan.plan_sha256);
-    write_journal(&paths, &journal).unwrap();
-    options.apply = Some(plan.plan_sha256.clone());
-    let replay = load_ensure_authority(&root, &root.join("missing.toml"), &options).unwrap();
-    assert_eq!(replay.desired, desired);
-    assert_eq!(replay.sha256, desired_sha256);
-    options.apply = Some("53".repeat(32));
-    assert!(load_ensure_authority(&root, &root.join("missing.toml"), &options).is_err());
 
     let mut reset_options = options;
     reset_options.reinstall = true;
@@ -465,7 +429,7 @@ fn generate_replace_requires_canonical_digest() {
     assert!(matches!(error, FleetCommandError::Usage(_)));
 }
 
-fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
+pub(super) fn cycle_quantity_report(principal: &str) -> FleetEnsureReport {
     FleetEnsureReport {
         funding_review: None,
         actual_conservation: Some(ActualCycleConservation {
@@ -1081,7 +1045,10 @@ fn concise_apply_success_requires_full_terminal_verification() {
 
 #[test]
 fn json_workflow_errors_keep_machine_output_and_typed_source() {
-    let error = json_error(FleetCommandError::Io(io::ErrorKind::Interrupted.into()));
+    let error = json_error(
+        FleetCommandError::Io(io::ErrorKind::Interrupted.into()),
+        None,
+    );
     let FleetCommandError::JsonReported { source, .. } = &error else {
         panic!("JSON error boundary")
     };
@@ -1163,54 +1130,4 @@ fn timing_outcome_retains_exact_plan_scope_and_never_promotes_prerequisite_succe
         serde_json::to_value(report.plan.scope).unwrap()
     );
     fs::remove_dir_all(root).unwrap();
-}
-
-#[test]
-fn retirement_debit_requires_an_explicit_new_review() {
-    let parse = |args: &[&str]| EnsureOptions::parse(args.iter().map(OsString::from));
-    let valid = parse(&[
-        "ensure",
-        "staging",
-        "--reinstall",
-        "--retirement-debit-block",
-        "42",
-    ])
-    .unwrap();
-    assert_eq!(valid.retirement_debit_block, Some(42));
-    for args in [
-        vec![
-            "ensure",
-            "staging",
-            "--reinstall",
-            "--retirement-debit-block",
-            "42",
-            "--apply",
-            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-        ],
-        vec!["ensure", "staging", "--retirement-debit-block", "42"],
-        vec![
-            "ensure",
-            "staging",
-            "--reinstall",
-            "--retirement-debit-block",
-            "-1",
-        ],
-        vec![
-            "ensure",
-            "staging",
-            "--reinstall",
-            "--retirement-debit-block",
-            "18446744073709551616",
-        ],
-        vec![
-            "ensure",
-            "staging",
-            "--reinstall",
-            "--retirement-debit-block",
-            "42",
-            "--operator-mint",
-        ],
-    ] {
-        assert!(parse(&args).is_err());
-    }
 }

@@ -28,7 +28,16 @@ observability and blob-contract work; it did not restart the full B3/B4 matrix.
 
 | CANIC-187/188 | Implemented and locally qualified in the open .49 batch: whole-operation import budgets, successful-call settlement, seed-byte preservation and an exact issued-import repair. Live repair and downstream convergence remain outstanding; see the [repair decision](issued-import-recovery.md). |
 
-## Urgent .49 publication boundary — 2026-09-30
+## Current completed-Fleet cleanup — 2026-10-01
+
+The maintainer accepted removal of superseded completed-source preparation,
+receipt/interface reconstruction, sealing and reset paths. Current clean
+reinstall owns completed-Fleet replacement; shared certified custody observation,
+unfinished activation and paid-import reconciliation remain. The
+[current handoff](../../status/current.md) owns qualification and complete-batch
+readiness alongside the concurrent deployment-reliability corrections.
+
+## Urgent .49 publication checkpoint — 2026-09-30
 
 The maintainer has prioritized publication because CANIC-188 blocks downstream
 work. The urgent batch includes the implemented CANIC-187/188 corrections,
@@ -40,7 +49,9 @@ finishing all 401 review findings is not a prerequisite for this corrective rele
 This boundary supersedes earlier handoffs that required the entire expanded
 review batch before publication. It does not close those findings or the minor.
 
-The urgent batch is ready for maintainer commit and the governed release flow.
+At this checkpoint the urgent batch was ready for maintainer review. Later
+deployment-audit corrections and the accepted cleanup supersede that readiness;
+consult the current handoff before publication.
 Qualification passes an explicit public CLI reset journey with nine Workloads and
 fifteen Ready spares, 110 targeted import/budget/seed tests and changed Testing-package
 all-target/all-feature warning-denied lint. The journey covers all-source completion,

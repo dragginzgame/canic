@@ -5,7 +5,6 @@
 //! Boundary: release artifacts are local authority; every retained Principal is explicit and live-verified.
 
 pub mod capacity_import;
-mod completed_source;
 pub mod infrastructure_bootstrap;
 pub mod preflight;
 mod startup_funding;
@@ -124,8 +123,6 @@ pub struct FreshEstateSeedRequest<'a> {
 pub struct GeneratedDesiredFleet {
     /// Current replacement authority compiled without querying the completed release.
     pub clean_reinstall: bool,
-    /// Completed-source native samples are bound to this preparation, not fresh usage queries.
-    pub completed_preparation_sha256: Option<String>,
     pub desired: DesiredFleet,
     pub observed_canisters: usize,
     pub observed_controlled_cycles: u128,
@@ -153,8 +150,6 @@ impl GenerationOutput {
 /// Typed no-effect Fleet generation failure.
 #[derive(Debug, ThisError)]
 pub enum FleetGenerateError {
-    #[error("completed-source generation failed: {0}")]
-    CompletedPreparation(#[from] Box<crate::fleet_ensure::ops::completed_preparation::CompletedPreparationError>),
     #[error("mainnet Subnet Catalog acquisition failed: {0}")]
     SubnetCatalog(#[from] Box<crate::subnet_catalog::acquisition::CatalogAcquisitionError>),
 
@@ -898,24 +893,7 @@ fn generate(
     let subnet_catalog = catalog
         .as_ref()
         .map(|outcome| crate::subnet_catalog::ops::observation(outcome, generation_time));
-    let completed = if initialization.is_some() {
-        None
-    } else {
-        completed_source::observe(
-            request,
-            &source,
-            &seed,
-            config.model().app_id(),
-            local_replica,
-        )?
-    };
-    let preparing_reset = completed.is_some();
-    let completed_preparation_sha256 = completed
-        .as_ref()
-        .map(|estate| estate.review_sha256.clone());
-    let observed = if let Some(completed) = completed {
-        completed.balances
-    } else if seed.fresh_estate || initialization.is_some() {
+    let observed = if seed.fresh_estate || initialization.is_some() {
         BTreeMap::new()
     } else {
         observe_estate(&EstateObservationRequest {
@@ -975,7 +953,6 @@ fn generate(
         return Ok(GenerationOutput::Ordinary(Box::new(
             GeneratedDesiredFleet {
                 clean_reinstall: true,
-                completed_preparation_sha256: None,
                 desired,
                 observed_canisters: 0,
                 observed_controlled_cycles: 0,
@@ -991,7 +968,7 @@ fn generate(
         })
     })?;
     let mut startup_funding = startup_funding::forecast(config.model(), &desired, &observed)?;
-    if !preparing_reset && initialization.is_none() {
+    if initialization.is_none() {
         startup_funding.coordinator_usage = startup_funding::observe_usage(
             request,
             &desired,
@@ -1013,7 +990,6 @@ fn generate(
     Ok(GenerationOutput::Ordinary(Box::new(
         GeneratedDesiredFleet {
             clean_reinstall,
-            completed_preparation_sha256,
             desired,
             observed_canisters: observed.len(),
             observed_controlled_cycles,

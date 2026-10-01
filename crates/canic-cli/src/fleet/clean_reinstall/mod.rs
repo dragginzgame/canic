@@ -1,7 +1,7 @@
 //! Select clean reset before any predecessor desired or execution contract is decoded.
 
 use super::{
-    EnsureOptions, FleetCommandError, now_nanoseconds, progress, quote_review_argument,
+    EnsureOptions, FleetCommandError, automation, now_nanoseconds, progress, quote_review_argument,
     render_report, resolve_from_root,
 };
 use canic_host::{
@@ -60,12 +60,6 @@ pub(super) fn run_if_selected(
     };
     if desired.environment != environment || desired.fleet != options.fleet {
         return Err(FleetCommandError::Usage("clean reinstall desired authority does not match the explicitly selected Fleet/environment".into()));
-    }
-    if options.retirement_debit_block.is_some() {
-        return Err(FleetCommandError::Usage(
-            "clean reinstall retains supplied canisters; --retirement-debit-block does not apply"
-                .into(),
-        ));
     }
     let report = execute(workspace, options, environment, &desired)?;
     render(report, options, environment)?;
@@ -239,6 +233,8 @@ fn render(
                 value["stage"] = serde_json::json!(if report.plan.scope == canic_host::fleet_ensure::model::FleetEnsurePlanScope::InfrastructureBootstrap { "clean_reinstall_infrastructure" } else { "clean_reinstall_fleet" });
                 value["phase_completed"] = serde_json::json!(complete);
                 value["fleet_completed"] = serde_json::json!(fleet_complete);
+                value["automation"] =
+                    serde_json::to_value(automation::ensure(&report, options, true))?;
                 value["next_command"] = if fleet_complete {
                     serde_json::Value::Null
                 } else {
@@ -254,7 +250,9 @@ fn render(
                 println!(
                     "{}",
                     serde_json::to_string_pretty(
-                        &serde_json::json!({"schema_version":1,"stage":"clean_reinstall_import","completed":complete,"record":record,"next_command":next})
+                        &serde_json::json!({"schema_version":1,"stage":"clean_reinstall_import","completed":complete,"record":record,"next_command":next,
+                            "automation": automation::import(digest, complete, options.apply.is_some(),
+                                if complete { automation::reinstall_review_command(options, environment) } else { automation::ensure_command(options, environment) }, true)})
                     )?
                 );
             } else {

@@ -64,7 +64,7 @@ fn retirement_resumes_each_removal_boundary_and_refuses_changed_bytes() {
 }
 
 #[test]
-fn unfinished_import_or_preparation_cannot_be_retired() {
+fn unfinished_import_or_activation_handoff_cannot_be_retired() {
     let paths = retained();
     let import = paths.plan.with_file_name("capacity-import.json");
     write_current(
@@ -76,17 +76,8 @@ fn unfinished_import_or_preparation_cannot_be_retired() {
     assert!(paths.plan.exists());
     fs::remove_file(import).unwrap();
     write_current(
-        &paths
-            .plan
-            .with_file_name("completed-preparation-review.json"),
-        &json!({"review_sha256": "d4".repeat(32), "source": {"operation_id": "a1".repeat(32)}}),
-    )
-    .unwrap();
-    write_current(
-        &paths
-            .plan
-            .with_file_name("completed-preparation-journal.json"),
-        &json!({"review_sha256": "d4".repeat(32), "prepared": true}),
+        &paths.plan.with_file_name("activation-reset-adoption.json"),
+        &json!({"complete": false}),
     )
     .unwrap();
     assert!(begin(&paths, "local", "fleet", &"c3".repeat(32)).is_err());

@@ -128,7 +128,6 @@ pub enum FleetEnsureActionKind {
     PublishStoreChunk,
     PublishStoreFixtureChunk,
     ReconcilePoolAsset,
-    SealAuthority,
     SetControllers,
     Start,
     Stop,

@@ -1,6 +1,7 @@
 //! Exercise reviewed Root custody, destructive reset and retained completion on PocketIC.
 
 mod bootstrap;
+pub(super) mod reset;
 mod transport;
 
 use super::*;

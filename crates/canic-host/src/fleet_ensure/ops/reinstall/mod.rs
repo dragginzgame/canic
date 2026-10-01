@@ -5,129 +5,12 @@
 //! Boundary: derived desired state is retained in the reviewed operation only.
 
 pub(in crate::fleet_ensure) mod adoption;
-pub(in crate::fleet_ensure) mod debit;
 pub(in crate::fleet_ensure) mod source;
-pub(in crate::fleet_ensure) mod terminal;
 
-use super::{EnsureStateError, FleetReinstallObservation};
 use crate::fleet_ensure::model::{
     DesiredCanister, DesiredCanisterKind, DesiredFleet, DesiredPresence, FleetReinstallRecord,
-    FleetReinstallSourceRecord, ReviewedDesiredFleetRecord,
 };
-use std::{collections::BTreeMap, path::Path};
-
-/// Reconstruct the exact source seal to inspect before a reviewed authority credit.
-pub(in crate::fleet_ensure) fn funding_seal(
-    source: &FleetReinstallSourceRecord,
-    binding: &crate::fleet_ensure::model::RootManagementBinding,
-    kind: DesiredCanisterKind,
-) -> Option<crate::fleet_ensure::model::EnsureAction> {
-    let protocol = source.reviewed_desired.desired().protocol.as_ref()?;
-    let candid = match kind {
-        DesiredCanisterKind::Root => &protocol.root_candid,
-        DesiredCanisterKind::Coordinator => &protocol.coordinator_candid,
-        _ => return None,
-    };
-    Some(crate::fleet_ensure::model::EnsureAction::SealAuthority {
-        authority_kind: kind,
-        candid: candid.clone(),
-        candid_sha256: source.candid_sha256_by_path.get(candid)?.clone(),
-        name: binding.name.clone(),
-        principal: binding.principal.clone(),
-    })
-}
-
-/// Bind every resolved target artifact, including generated continuation contracts.
-pub(in crate::fleet_ensure) fn target_artifacts_sha256(
-    root: &Path,
-    desired: &DesiredFleet,
-) -> Result<String, EnsureStateError> {
-    let artifacts = super::resolve_desired_artifacts(root, desired)?;
-    let steps = artifacts
-        .protocol_by_step
-        .iter()
-        .map(|(name, step)| {
-            (
-                name,
-                &step.candid_sha256,
-                &step.command_args_sha256,
-                &step.expected_status_sha256,
-                &step.status_args_sha256,
-            )
-        })
-        .collect::<Vec<_>>();
-    let continuation = artifacts.continuation.as_ref().map(|authority| {
-        (
-            &authority.app_config_sha256,
-            &authority.application_artifact_union_sha256,
-            &authority.coordinator_candid_sha256,
-            &authority.root_candid_sha256,
-            &authority.store_candid_sha256,
-        )
-    });
-    let bytes = crate::fleet_ensure::json::to_vec(&(
-        continuation,
-        artifacts.drain_candid_sha256_by_canister,
-        artifacts.init_arg_sha256_by_canister,
-        artifacts.init_candid_sha256_by_canister,
-        artifacts.wasm_sha256_by_canister,
-        steps,
-    ))
-    .map_err(|source| EnsureStateError::Decode {
-        path: root.to_path_buf(),
-        source,
-    })?;
-    Ok(canic_core::cdk::utils::hash::sha256_hex(&bytes))
-}
-
-/// Bind the completed source input to its local infrastructure and protocol bytes.
-pub(in crate::fleet_ensure) fn capture_source(
-    root: &Path,
-    desired: &DesiredFleet,
-) -> Result<FleetReinstallSourceRecord, EnsureStateError> {
-    let mut wasm_sha256_by_canister = BTreeMap::new();
-    for canister in &desired.canisters {
-        if let Some(path) = &canister.wasm {
-            wasm_sha256_by_canister
-                .insert(canister.name.clone(), super::artifact_sha256(root, path)?);
-        }
-    }
-    Ok(FleetReinstallSourceRecord {
-        terminal_retirement: None,
-        reviewed_desired: ReviewedDesiredFleetRecord::capture(desired),
-        wasm_sha256_by_canister,
-        candid_sha256_by_path: candid_hashes(root, desired)?,
-    })
-}
-
-/// Refresh artifact bindings without turning completed source evidence into a desired plan.
-pub(in crate::fleet_ensure) fn refresh_source(
-    root: &Path,
-    source: &FleetReinstallSourceRecord,
-) -> Result<FleetReinstallSourceRecord, EnsureStateError> {
-    let mut refreshed = capture_source(root, source.reviewed_desired.desired())?;
-    refreshed
-        .terminal_retirement
-        .clone_from(&source.terminal_retirement);
-    Ok(refreshed)
-}
-
-pub(in crate::fleet_ensure) fn candid_hashes(
-    root: &Path,
-    desired: &DesiredFleet,
-) -> Result<BTreeMap<String, String>, EnsureStateError> {
-    let mut hashes = BTreeMap::new();
-    if let Some(protocol) = &desired.protocol {
-        for path in [
-            &protocol.coordinator_candid,
-            &protocol.root_candid,
-            &protocol.store_candid,
-        ] {
-            hashes.insert(path.clone(), super::artifact_sha256(root, path)?);
-        }
-    }
-    Ok(hashes)
-}
+use crate::fleet_ensure::ops::FleetReinstallObservation;
 
 pub(in crate::fleet_ensure) fn capture_imports(
     desired: &DesiredFleet,
@@ -199,15 +82,6 @@ pub(in crate::fleet_ensure) fn capture_imports(
         root.canister_pool_imports.sort();
     }
     Some(retained)
-}
-
-pub(in crate::fleet_ensure) fn capture_intent(
-    preparation: &FleetReinstallRecord,
-    inventory: &FleetReinstallObservation,
-) -> FleetReinstallRecord {
-    let mut intent = preparation.clone();
-    intent.assets.clone_from(&inventory.assets);
-    intent
 }
 
 /// Retain the newly observed infrastructure and pool bindings after the reviewed Root reset.

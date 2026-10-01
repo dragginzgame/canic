@@ -138,9 +138,9 @@ fn execute(matches: &ArgMatches) -> Result<(), FleetCommandError> {
         quote_review_argument(&executable),
         quote_review_argument(&fleet)
     );
-    if let Some(identity) = identity {
+    if let Some(identity) = &identity {
         command.push_str(" --identity ");
-        command.push_str(&quote_review_argument(&identity));
+        command.push_str(&quote_review_argument(identity));
     }
     command.push_str(" --apply ");
     command.push_str(&hex_bytes(operation.review.review_sha256));
@@ -151,6 +151,10 @@ fn execute(matches: &ArgMatches) -> Result<(), FleetCommandError> {
                 "schema_version":1, "stage":"capacity_import", "completed":publication::completed(&record),
                 "maximum_operator_debit_cycles":"0", "maximum_initial_status_attempts_per_canister":MAXIMUM_ATTEMPTS,
                 "journal":record, "apply_command":command,
+                "automation": super::automation::import(
+                    hex_bytes(operation.review.review_sha256), publication::completed(&record),
+                    matches.get_one::<String>("apply").is_some(),
+                    super::automation::command(&environment, &executable, identity.as_deref(), "import", &fleet), false),
             }))?
         );
     } else {

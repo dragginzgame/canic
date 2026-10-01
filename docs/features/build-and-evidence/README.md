@@ -5,6 +5,14 @@ build attached roles, record exactly what produced an artifact, compare saved
 evidence envelopes, and apply passive policy without turning those reads into
 Fleet mutation authority.
 
+`canic build <app> --json` writes one schema-1 result to stdout; progress and
+tool diagnostics stay on stderr. Read `release_build_id` and `release_manifest`
+for a complete App build. A cache hit returns the same identity with `reused: true`.
+For a selected role, `artifact` contains the Wasm, compressed Wasm and Candid paths,
+and the release fields are `null`. `role`, `artifact` and both release fields are
+always present. Automation should use these fields instead of parsing build
+headings or artifact tables. A failing build returns a nonzero exit status.
+
 Application workspaces use Cargo's resolver selection and defaults. Canic validates
 the resolved dependencies and role features without requiring an explicit resolver
 declaration or a particular resolver version. Canic's own workspace and generated

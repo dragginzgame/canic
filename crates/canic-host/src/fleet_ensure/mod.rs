@@ -46,21 +46,7 @@ pub use ops::current_protocol::{
     compile_current_registry_sequence, compile_current_registry_sequence_with_status,
     compile_current_store_sequence_from_union,
 };
-pub use ops::reinstall::terminal::inventory::protocols::CompletedSourceProtocolError;
 pub use ops::{EnsurePaths, IcpEnsurePlatform, IcpEnsurePlatformError};
-pub use view::terminal_source::CompletedReceiptAuditView;
-pub use view::terminal_source::inventory::coordinator::CompletedCoordinatorMembershipView;
-pub use view::terminal_source::inventory::ledger::{
-    CompletedLedgerAccountView, CompletedLedgerBalancesView,
-};
-pub use view::terminal_source::inventory::membership::{
-    CompletedEstateMembershipView, CompletedPoolAssetView, CompletedRootMembershipView,
-    CompletedWorkloadAllocationView,
-};
-pub use view::terminal_source::inventory::{
-    CompletedCanisterCustodyView, CompletedCanisterInventoryView, CompletedEstateCustodyView,
-    CompletedEstateInventoryView, CompletedSourceInspectionView,
-};
 pub use workflow::{
     EnsureWorkflowError, apply, plan, plan_reinstall, retained_in_progress_plan,
     retained_reinstall_apply_plan,

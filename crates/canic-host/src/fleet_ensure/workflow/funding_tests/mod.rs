@@ -11,7 +11,7 @@ use super::{
 };
 use crate::fleet_ensure::{
     model::*,
-    ops::{EffectObservation, EffectOutcome, read_journal},
+    ops::{EffectObservation, EffectOutcome, read_journal, read_plan},
 };
 use std::{io, path::PathBuf};
 

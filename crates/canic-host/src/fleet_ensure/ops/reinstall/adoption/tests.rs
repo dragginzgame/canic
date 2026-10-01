@@ -30,18 +30,6 @@ fn completed_review_is_evidence_and_only_a_new_review_requires_execution_decodin
     fs::remove_dir_all(root).unwrap();
 }
 
-#[test]
-#[ignore = "requires the explicit read-only external evidence path"]
-fn inspect_supplied_completed_review_without_external_mutation() {
-    let root = std::env::var_os("CANIC_COMPLETED_SOURCE_WORKSPACE").unwrap();
-    let environment = std::env::var("CANIC_COMPLETED_SOURCE_ENVIRONMENT").unwrap();
-    let fleet = std::env::var("CANIC_COMPLETED_SOURCE_FLEET").unwrap();
-    let paths = EnsurePaths::under(Path::new(&root), &environment, &fleet);
-    let before = fs::read(review_paths(&paths).plan).unwrap();
-    assert!(review(&paths).unwrap().is_none());
-    assert_eq!(fs::read(review_paths(&paths).plan).unwrap(), before);
-}
-
 /// Exercise durable handoff with the source-parser fixture's real issued-action evidence.
 pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
     source_paths: &EnsurePaths,
@@ -59,172 +47,6 @@ pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
     let plan = fixture_plan(source.clone());
     assert_handoff(&paths, plan);
     fs::remove_dir_all(root).unwrap();
-}
-
-pub(in crate::fleet_ensure) fn assert_terminal_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
-    let evidence = terminal_retirement(&plan).unwrap().clone();
-    assert_handoff(paths, plan.clone());
-    for digest in evidence.phase_document_sha256.values() {
-        exact_bytes(&object_path(paths, digest), digest).unwrap();
-        let mut interrupted = marker(paths).unwrap().unwrap();
-        interrupted.complete = false;
-        let journal = exact_bytes(
-            &object_path(paths, &interrupted.replacement_journal_sha256),
-            &interrupted.replacement_journal_sha256,
-        )
-        .unwrap();
-        write_bytes(&paths.journal, &journal).unwrap();
-        write_current(&marker_path(paths), &interrupted).unwrap();
-        // With an otherwise valid interrupted pair, this archive corruption alone rejects.
-        let original_phase = exact_bytes(&object_path(paths, digest), digest).unwrap();
-        write_bytes(&object_path(paths, digest), b"changed phase archive").unwrap();
-        let before = read_document_bytes(&paths.plan).unwrap();
-        assert!(matches!(
-            recover(paths),
-            Err(EnsureStateError::ActivationResetAdoptionConflict)
-        ));
-        assert_eq!(read_document_bytes(&paths.plan).unwrap(), before);
-        write_bytes(&object_path(paths, digest), &original_phase).unwrap();
-        recover(paths).unwrap();
-    }
-    assert_historical_phase_recovery(paths, plan);
-}
-
-/// Simulate committed, reviewed byte authority at each local crash boundary.
-/// Admission is deliberately outside this recovery test: these bytes must never
-/// be converted to a current phase or submitted to an effect driver.
-fn assert_historical_phase_recovery(paths: &EnsurePaths, mut replacement: FleetEnsurePlan) {
-    let mut intent = marker(paths).unwrap().unwrap();
-    let (phase_digest, phase_bytes) = retain_historical_phase(paths, &mut replacement);
-    replacement.plan_sha256 = expected_plan_sha256(&replacement);
-    let replacement_bytes = serde_json::to_vec(&replacement).unwrap();
-    let replacement_journal = serde_json::to_vec(&fixture_journal(&replacement)).unwrap();
-    intent.replacement_plan_sha256 = sha256_hex(&replacement_bytes);
-    intent.replacement_journal_sha256 = sha256_hex(&replacement_journal);
-    retain(paths, &intent.replacement_plan_sha256, &replacement_bytes).unwrap();
-    retain(
-        paths,
-        &intent.replacement_journal_sha256,
-        &replacement_journal,
-    )
-    .unwrap();
-    for replaced in 0..=2 {
-        intent.complete = false;
-        write_current(&marker_path(paths), &intent).unwrap();
-        let before_plan = exact_bytes(
-            &object_path(paths, &intent.source_plan_sha256),
-            &intent.source_plan_sha256,
-        )
-        .unwrap();
-        let before_journal = exact_bytes(
-            &object_path(paths, &intent.source_journal_sha256),
-            &intent.source_journal_sha256,
-        )
-        .unwrap();
-        write_bytes(
-            &paths.plan,
-            if replaced >= 1 {
-                &replacement_bytes
-            } else {
-                &before_plan
-            },
-        )
-        .unwrap();
-        write_bytes(
-            &paths.journal,
-            if replaced >= 2 {
-                &replacement_journal
-            } else {
-                &before_journal
-            },
-        )
-        .unwrap();
-        recover(paths).unwrap();
-        assert_eq!(fs::read(&paths.plan).unwrap(), replacement_bytes);
-        assert_eq!(fs::read(&paths.journal).unwrap(), replacement_journal);
-        assert_eq!(
-            fs::read(object_path(paths, &phase_digest)).unwrap(),
-            phase_bytes
-        );
-    }
-    let before = fs::metadata(&paths.journal).unwrap().modified().unwrap();
-    recover(paths).unwrap();
-    assert_eq!(
-        fs::metadata(&paths.journal).unwrap().modified().unwrap(),
-        before
-    );
-    // A hash mismatch still rejects before either active file is changed.
-    intent.complete = false;
-    write_current(&marker_path(paths), &intent).unwrap();
-    write_bytes(
-        &object_path(paths, &phase_digest),
-        b"tampered historical phase",
-    )
-    .unwrap();
-    assert!(matches!(
-        recover(paths),
-        Err(EnsureStateError::ActivationResetAdoptionConflict)
-    ));
-    assert_eq!(fs::read(&paths.plan).unwrap(), replacement_bytes);
-    assert_eq!(fs::read(&paths.journal).unwrap(), replacement_journal);
-    write_bytes(&object_path(paths, &phase_digest), &phase_bytes).unwrap();
-    recover(paths).unwrap();
-}
-
-fn retain_historical_phase(
-    paths: &EnsurePaths,
-    replacement: &mut FleetEnsurePlan,
-) -> (String, Vec<u8>) {
-    let source = replacement
-        .reinstall
-        .as_mut()
-        .unwrap()
-        .source
-        .as_mut()
-        .unwrap()
-        .terminal_retirement
-        .as_mut()
-        .unwrap();
-    let label = source
-        .source
-        .phase_document_sha256
-        .keys()
-        .next()
-        .unwrap()
-        .clone();
-    let old_digest = source.source.phase_document_sha256.get(&label).unwrap();
-    let mut phase: serde_json::Value =
-        serde_json::from_slice(&exact_bytes(&object_path(paths, old_digest), old_digest).unwrap())
-            .unwrap();
-    remove_controller_declarations(&mut phase);
-    // The .38 generated bootstrap and registry binding omit this field.
-    assert!(
-        phase
-            .pointer("/reviewed_desired/desired/bootstrap/recovery_controllers")
-            .is_none()
-    );
-    assert!(serde_json::from_value::<FleetEnsurePlan>(phase.clone()).is_err());
-    let phase_bytes = serde_json::to_vec(&phase).unwrap();
-    let phase_digest = sha256_hex(&phase_bytes);
-    retain(paths, &phase_digest, &phase_bytes).unwrap();
-    source
-        .source
-        .phase_document_sha256
-        .insert(label, phase_digest.clone());
-    (phase_digest, phase_bytes)
-}
-
-fn remove_controller_declarations(value: &mut serde_json::Value) {
-    match value {
-        serde_json::Value::Object(fields) => {
-            fields.remove("recovery_controllers");
-            fields.values_mut().for_each(remove_controller_declarations);
-        }
-        serde_json::Value::Array(values) => {
-            values.iter_mut().for_each(remove_controller_declarations);
-        }
-        _ => {}
-    }
 }
 
 fn assert_handoff(paths: &EnsurePaths, plan: FleetEnsurePlan) {
@@ -423,13 +245,10 @@ fn fixture_plan(source: FleetActivationSourceRecord) -> FleetEnsurePlan {
         protocol_actions: Vec::new(),
         recovery_review: None,
         reinstall: Some(Box::new(FleetReinstallRecord {
-            target_artifacts_sha256: None,
-            source: None,
             operation_id,
             source_operation_id: source.operation_id.clone(),
             authorities: Vec::new(),
             assets: Vec::new(),
-            completed_reset: None,
             activation_reset: Some(Box::new(FleetActivationResetRecord {
                 preparation: None,
                 source,

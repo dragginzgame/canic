@@ -25,8 +25,7 @@ is_release_file() {
     Cargo.toml | \
       Cargo.lock | \
       release-validation.json | \
-      scripts/dev/install_dev.sh | \
-      scripts/ci/sync-release-surface-version.sh)
+      scripts/dev/install_dev.sh)
       return 0
       ;;
     docs/changelog/[0-9]*.[0-9]*.md)

@@ -45,6 +45,7 @@ const EXPLICIT_SELECTIONS: &[&str] = &[
     "pic::fleet_registry::baseline::tests::completed_reset::incident_estate_reset_recovers_and_replays",
     "pic::fleet_registry::baseline::tests::frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust",
     "pic::fleet_registry::baseline::tests::persistent_local_fleet_converges_two_roots_through_public_host",
+    "pic::fleet_registry::baseline::tests::packaged_consumer::installed_package_build_deploy_recover_and_replay",
     "pic::fleet_registry::baseline::tests::pipelined_release_artifacts_match_serial_builds",
     "pic::fleet_registry::baseline::tests::release_artifacts::tests::batched_fixture_role_evidence_matches_isolated_validation",
     "pic::governed_suite::governed_internal_pocketic_suite",

@@ -23,10 +23,6 @@ use std::{collections::BTreeSet, io, path::PathBuf};
 use thiserror::Error as ThisError;
 
 pub use release::{ReleaseProtocolBindingError, resolve_release_registry_protocol_binding};
-pub(crate) use release::{
-    require_contained_sidecar, resolve_infrastructure_registry_protocol_binding,
-};
-
 /// Complete immutable protocol identity selected before one role call.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]

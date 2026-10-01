@@ -29,8 +29,6 @@ static NEXT_FILE: AtomicU64 = AtomicU64::new(1);
 #[derive(Clone, Copy, Serialize)]
 #[serde(rename_all = "snake_case")]
 pub(in crate::fleet) enum CommandKind {
-    CompletedPreparation,
-    CompletedReset,
     Ensure,
     Generate,
 }

@@ -11,7 +11,7 @@ use crate::{
         ops::{
             EnsurePaths,
             capacity_import::{admission::declarations::hash, journal::CapacityImportJournalError},
-            reinstall::terminal::inventory::custody,
+            certified_custody,
         },
     },
     protocol_binding::resolve_infrastructure_protocol_binding,
@@ -101,7 +101,7 @@ pub(super) async fn inspect(
         {
             return Err(changed());
         }
-        let observed = custody::observe_one(agent, principal)
+        let observed = certified_custody::observe_one(agent, principal)
             .await
             .map_err(|_| changed())?;
         if observed.module_sha256.as_deref().map(hash).transpose()? != Some(expected) {

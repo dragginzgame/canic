@@ -5,13 +5,12 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 BINARY="${1:?compiled internal test binary required}"
 shift
 [[ "$#" -eq 2 && -x "$BINARY" ]] || exit 2
-command -v setsid >/dev/null
 [[ ! -L "$ROOT/.tmp" ]] || exit 2
 mkdir -p "$ROOT/.tmp"
 PIDS=()
 SCRATCHES=()
 
-# Each worker is a distinct session: cancellation reaches its test, server and
+# Each worker has a distinct process group: cancellation reaches its test, server and
 # CLI descendants without signalling the caller or another validation process.
 # shellcheck disable=SC2329 # Invoked by the EXIT trap.
 finish() {
@@ -32,16 +31,20 @@ trap 'exit 130' INT
 trap 'exit 143' TERM
 
 worker=0
+# Bash job control creates a process group for each background job on all
+# supported Unix hosts, including macOS. Disable notifications after launching.
+set -m
 for selection in "$@"; do
     worker=$((worker + 1))
     [[ -s "$selection" ]] || exit 2
     scratch="$(mktemp -d "$ROOT/.tmp/test-runtime.XXXXXX")"
     SCRATCHES+=("$scratch")
-    setsid env CANIC_TEST_SCRATCH="$scratch" TMPDIR="$scratch" \
+    env CANIC_TEST_SCRATCH="$scratch" TMPDIR="$scratch" \
         CANIC_POCKETIC_WORKER="$worker" \
         bash "$ROOT/scripts/ci/run-pocketic-worker.sh" "$BINARY" "$selection" &
     PIDS+=("$!")
 done
+set +m
 status=0
 for pid in "${PIDS[@]}"; do
     wait "$pid" || status=1
