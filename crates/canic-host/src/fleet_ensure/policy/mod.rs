@@ -689,24 +689,6 @@ pub fn compile_plan(
         &protocol_actions,
         observation.additional_controlled_cycles.len(),
     )?;
-    let observation_count = checked_add(
-        observation_count,
-        reinstall::funding_observation_count(desired, reinstall, &accumulator.canisters)?,
-        "reinstall funding observations",
-    )?;
-    let observation_count = checked_add(
-        observation_count,
-        if let Some(completed) = reinstall.and_then(|intent| intent.completed_reset.as_deref()) {
-            (desired.canisters.len() as u128)
-                .checked_mul(u128::from(completed.maximum_terminal_observations))
-                .ok_or(EnsurePolicyError::ArithmeticOverflow {
-                    field: "completed reset terminal inspections",
-                })?
-        } else {
-            0
-        },
-        "completed reset terminal inspections",
-    )?;
     accumulator.add_burn(
         bounds
             .observation_burn
@@ -3294,8 +3276,7 @@ fn maximum_observation_count(
                 EnsureAction::Fund { .. }
                 | EnsureAction::FundEstate { .. }
                 | EnsureAction::Transfer { .. } => 2,
-                EnsureAction::SealAuthority { .. }
-                | EnsureAction::Install { .. }
+                EnsureAction::Install { .. }
                 | EnsureAction::FleetProtocol { .. }
                 | EnsureAction::Protocol { .. }
                 | EnsureAction::SetControllers { .. }

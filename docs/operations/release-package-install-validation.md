@@ -78,9 +78,9 @@ RC and final release reports should account for these artifact expectations:
 - Packaged Canister proof must compile one typed endpoint through packaged
   `build!`, `start!` and `finish!` at the MSRV with warnings denied, extract
   that endpoint from local Wasm and prove IC Wasm omits the local export.
-- Packaged `wasm_store` proof must exercise both the generated wrapper fallback
-  and canonical packaged sibling paths, verifying packaged Canic sources are
-  used instead of repository crate paths.
+- Packaged `wasm_store` proof must build the generated infrastructure entrypoint
+  from extracted current packages, verifying the selected facade and dependencies
+  resolve from package contents rather than repository crate paths.
 - Release build validation should use locked resolver commands where the
   command supports it.
 - Any checksum, reproducibility, or artifact-signing requirement belongs to

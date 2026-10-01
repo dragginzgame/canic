@@ -20,6 +20,7 @@ case "$1" in
     info) [[ -f "$PUBLICATION_TEST_REGISTRY/${2%@*}" ]] ;;
     publish)
         [[ "$2" == -p && "$4" == --locked ]] || exit 98
+        [[ " $* " != *' --no-verify '* ]] || exit 97
         [[ "${FAKE_FAIL_PACKAGE:-}" != "$3" ]] || exit 37
         if [[ " $* " != *' --dry-run '* ]]; then
             touch "$PUBLICATION_TEST_REGISTRY/$3"
@@ -91,5 +92,4 @@ for package in "${expected_packages[@]}"; do
     [[ ! -e "$PUBLICATION_TEST_REGISTRY/$package" ]]
 done
 [[ "$(rg -c '^publish .* --dry-run$' "$PUBLICATION_TEST_EVENTS")" -eq "${#expected_packages[@]}" ]]
-rg -F 'publish -p canic-core --locked --no-verify --dry-run' "$PUBLICATION_TEST_EVENTS" >/dev/null
 echo "publication runner fixtures passed (no registry effects)"

@@ -1,6 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if ((BASH_VERSINFO[0] < 4 || (BASH_VERSINFO[0] == 4 && BASH_VERSINFO[1] < 4))); then
+    echo 'Canic test runners require Bash 4.4 or newer; see docs/governance/supported-platforms.md for macOS setup.' >&2
+    exit 2
+fi
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INVENTORY="$ROOT/scripts/ci/workspace-test-inventory.tsv"
 MODE="${1:-full}"
@@ -508,9 +513,8 @@ is_governed_canic_host_pocketic_test() {
         'canister_build::release_binding::tests::governed_pocketic_release_binding_retains_runtime_identity' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::operator_mint_tests::governed_pocketic_operator_mint_recovers_receipts' ||
-        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::real_mint_funding::governed_pocketic_mint_credit_resumes_original_native_withdrawal' ||
-        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::ops::reinstall::terminal::inventory::custody::tests::governed_pocketic_completed_estate_certified_custody' ||
-        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::ops::reinstall::terminal::inventory::ledger::tests::governed_pocketic_completed_estate_ledger_accounts' ]]
+        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::real_mint_funding::governed_pocketic_mint_credit_resumes_original_native_withdrawal'
+        ]]
 }
 
 run_inventory_tests() {

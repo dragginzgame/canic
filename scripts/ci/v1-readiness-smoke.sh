@@ -121,7 +121,6 @@ main() {
     assert_contains attach-store.txt "state: attached"
     assert_contains inspect-attached.txt "state: attached"
     assert_contains inspect-attached.txt "deploy artifact: eligible"
-    assert_contains fleet-ensure-help.txt "Plan or apply one idempotent Fleet convergence"
     assert_contains gate.json "\"policy_status\": \"passed\""
     assert_contains gate.json "\"gate_exit_class\": \"success\""
 

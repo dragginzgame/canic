@@ -30,7 +30,7 @@ use crate::{
                 transport::CapacityImportTransport,
                 validate_destination_authority, with_admission, with_funding,
             },
-            reinstall::terminal::inventory::custody,
+            certified_custody,
         },
         policy::capacity_import::{CapacityImportPolicyError, admit_handoffs, select_destination},
         view::capacity_import::{
@@ -440,7 +440,7 @@ async fn verify_sources(
             }
             .into());
         }
-        let observed = custody::observe_one(agent, binding.canister_id)
+        let observed = certified_custody::observe_one(agent, binding.canister_id)
             .await
             .map_err(|_| CapacityImportJournalError::ObservationUnavailable {
                 canister: binding.canister_id,

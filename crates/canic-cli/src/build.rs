@@ -136,6 +136,10 @@ impl BuildCommandError {
 /// Parsed `canic build` command options.
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+#[expect(
+    clippy::struct_excessive_bools,
+    reason = "independent Cargo selection and CLI presentation switches are not mutually exclusive states"
+)]
 struct BuildOptions {
     app: String,
     role: Option<String>,
@@ -146,6 +150,7 @@ struct BuildOptions {
     config: Option<String>,
     features: BTreeSet<String>,
     no_default_features: bool,
+    json: bool,
     provenance: Option<PathBuf>,
     standalone_local: bool,
     verbose: bool,
@@ -173,6 +178,7 @@ impl BuildOptions {
                 .cloned()
                 .collect(),
             no_default_features: matches.get_flag("no-default-features"),
+            json: matches.get_flag("json"),
             provenance: string_option(&matches, "provenance").map(PathBuf::from),
             standalone_local: matches.get_flag("standalone-local"),
             verbose: matches.get_flag("verbose"),
@@ -220,15 +226,17 @@ where
         }
     }
 
-    TerminalStyle::detected().print_section(
-        "Build App",
-        &format!(
-            "{} | {} profile | {} network",
-            options.app,
-            context.profile.target_dir_name(),
-            context.build_network
-        ),
-    );
+    if !options.json {
+        TerminalStyle::detected().print_section(
+            "Build App",
+            &format!(
+                "{} | {} profile | {} network",
+                options.app,
+                context.profile.target_dir_name(),
+                context.build_network
+            ),
+        );
+    }
     let builder = CanisterArtifactBuilder::for_profile(context.profile)?;
     if options.verbose {
         eprintln!(
@@ -245,6 +253,12 @@ where
         )?;
         copy_icp_wasm_output(role, &output)?;
         write_build_provenance_if_requested(&options, &context, output.clone())?;
+        if options.json {
+            return output::write_pretty_json(
+                None,
+                &build_result_json(&options, None, None, Some(&output), false),
+            );
+        }
         TerminalStyle::detected().print_section(
             "Build complete",
             &build_completion_detail(1, "role", "roles", started_at.elapsed()),
@@ -292,21 +306,14 @@ fn build_complete_app(
                     .verify_unchanged(&context.icp_root, &context.config_path)
                     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
                 eprintln!("{}", cache_report(hit.roles.len(), None, options.verbose));
-                TerminalStyle::detected().print_section(
-                    "Build complete",
-                    &build_completion_detail(
-                        hit.roles.len(),
-                        "artifact",
-                        "artifacts",
-                        started_at.elapsed(),
-                    ),
-                );
-                println!(
-                    "Release build: {}\nRelease manifest: {}",
+                return render_complete_build(
+                    options,
                     hit.release_build_id,
-                    hit.manifest_path.display()
+                    &hit.manifest_path,
+                    hit.roles.len(),
+                    started_at.elapsed(),
+                    true,
                 );
-                return Ok(());
             }
             Ok(None) => {
                 if let Some(reuse) = &reuse {
@@ -344,27 +351,68 @@ fn build_complete_app(
             .record(release.record.release_build_id, all_roles)
             .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
     }
+    render_complete_build(
+        options,
+        release.record.release_build_id,
+        &manifest_path,
+        artifact_count,
+        started_at.elapsed(),
+        false,
+    )
+}
+
+fn render_complete_build(
+    options: &BuildOptions,
+    identity: ReleaseBuildId,
+    manifest: &Path,
+    artifacts: usize,
+    elapsed: Duration,
+    reused: bool,
+) -> Result<(), BuildCommandError> {
+    if options.json {
+        return output::write_pretty_json(
+            None,
+            &build_result_json(options, Some(identity), Some(manifest), None, reused),
+        );
+    }
     TerminalStyle::detected().print_section(
         "Build complete",
-        &build_completion_detail(
-            artifact_count,
-            "artifact",
-            "artifacts",
-            started_at.elapsed(),
-        ),
+        &build_completion_detail(artifacts, "artifact", "artifacts", elapsed),
     );
     println!(
-        "Release build: {}\nArtifacts: {}\nRelease manifest: {}",
-        release.record.release_build_id,
-        context
-            .icp_root
-            .join(".canic/release-builds")
-            .join(release.record.release_build_id.to_string())
-            .join("artifacts")
-            .display(),
-        manifest_path.display()
+        "Release build: {}\nRelease manifest: {}",
+        identity,
+        manifest.display()
     );
     Ok(())
+}
+
+fn build_result_json(
+    options: &BuildOptions,
+    release_build_id: Option<ReleaseBuildId>,
+    manifest: Option<&Path>,
+    artifact: Option<&canic_host::canister_build::CanisterArtifactBuildOutput>,
+    reused: bool,
+) -> serde_json::Value {
+    serde_json::json!({
+        "schema_version": 1,
+        "event": "build_completed",
+        "app": options.app,
+        "environment": options.environment,
+        "profile": options.profile.target_dir_name(),
+        "role": options.role,
+        "completed": true,
+        "reused": reused,
+        "release_build_id": release_build_id,
+        "release_manifest": manifest,
+        "artifact": artifact.map(|artifact| serde_json::json!({
+            "wasm": artifact.wasm_path,
+            "wasm_gz": artifact.wasm_gz_path,
+            "candid": artifact.did_path,
+            "package": artifact.package_name,
+            "package_version": artifact.package_version,
+        })),
+    })
 }
 
 fn prepare_build_reuse(
@@ -476,6 +524,11 @@ fn build_command() -> ClapCommand {
         )
         .arg(internal_environment_arg())
         .arg(
+            flag_arg("json")
+                .long("json")
+                .help("Write one structured build result to stdout; diagnostics stay on stderr"),
+        )
+        .arg(
             flag_arg("verbose")
                 .long("verbose")
                 .help("Show tool/configuration details and the complete bounded cache explanation"),
@@ -529,7 +582,7 @@ fn build_app(
     fixture_sources: &canic_host::release_set::fixture::ConfiguredFixtureSources,
 ) -> Result<PathBuf, BuildCommandError> {
     let style = TerminalStyle::detected();
-    if options.verbose {
+    if options.verbose && !options.json {
         println!(
             "App config: {}",
             display_workspace_path(&context.workspace_root, &context.config_path)
@@ -597,30 +650,32 @@ fn build_app(
         fixture_sources,
     )?;
 
-    style.print_section(
-        "Infrastructure Wasm",
-        "placement comes from current desired Fleet state during ensure",
-    );
-    println!(
-        "{}",
-        render_infrastructure_build_table(&infrastructure, context.profile, style)?
-    );
-    println!();
+    if !options.json {
+        style.print_section(
+            "Infrastructure Wasm",
+            "placement comes from current desired Fleet state during ensure",
+        );
+        println!(
+            "{}",
+            render_infrastructure_build_table(&infrastructure, context.profile, style)?
+        );
+        println!();
 
-    style.print_section(
-        "Application Wasm",
-        &format!(
-            "{} | {} Component artifacts | {:.2}s shared batch",
-            options.app,
-            artifacts.application.len(),
-            configured_elapsed.as_secs_f64()
-        ),
-    );
-    println!(
-        "{}",
-        render_app_build_table(&artifacts.application, context.profile, style)?
-    );
-    println!();
+        style.print_section(
+            "Application Wasm",
+            &format!(
+                "{} | {} Component artifacts | {:.2}s shared batch",
+                options.app,
+                artifacts.application.len(),
+                configured_elapsed.as_secs_f64()
+            ),
+        );
+        println!(
+            "{}",
+            render_app_build_table(&artifacts.application, context.profile, style)?
+        );
+        println!();
+    }
 
     Ok(release_manifest)
 }
@@ -1649,6 +1704,27 @@ mod tests {
         assert_eq!(roles, ["root", "app"]);
     }
 
+    #[test]
+    fn complete_build_json_keeps_release_identity_across_fresh_and_reused_results() {
+        let options =
+            BuildOptions::parse(["demo", "--json", "--verbose"].map(OsString::from)).unwrap();
+        assert!(options.json && options.verbose);
+        let identity: ReleaseBuildId = "12".repeat(32).parse().unwrap();
+        let manifest = Path::new("workspace with spaces/release.json");
+        for reused in [false, true] {
+            let result = build_result_json(&options, Some(identity), Some(manifest), None, reused);
+            assert_eq!(result["release_build_id"], identity.to_string());
+            assert_eq!(
+                result["release_manifest"],
+                manifest.to_string_lossy().as_ref()
+            );
+            assert_eq!(result["completed"], true);
+            assert_eq!(result["reused"], reused);
+            assert!(result["role"].is_null());
+            assert!(result["artifact"].is_null());
+        }
+    }
+
     fn build_options(root: &std::path::Path, app: &str, role: &str) -> BuildOptions {
         BuildOptions {
             app: app.to_string(),
@@ -1660,6 +1736,7 @@ mod tests {
             config: None,
             features: BTreeSet::new(),
             no_default_features: false,
+            json: false,
             provenance: None,
             standalone_local: false,
             verbose: false,

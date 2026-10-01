@@ -28,6 +28,16 @@ failure is a support defect to correct, not grounds for classifying macOS as
 unsupported. The support decision does not establish that existing releases
 have passed macOS validation.
 
+Maintainer Make and shell automation requires Bash 4.4 or newer, GNU coreutils,
+GNU sed, jq and ripgrep. On macOS install them with
+`brew install bash coreutils gnu-sed jq ripgrep` and put Bash's `bin`, coreutils'
+`libexec/gnubin` and GNU sed's `libexec/gnubin` from `brew --prefix <formula>`
+before system tools on `PATH`. This is a maintainer-runner prerequisite; installed
+Canic CLI users do not need a replacement shell. Both macOS CI cells select these
+tools and run the same success, failed-worker, interrupted-worker and owned-scratch
+cleanup fixtures as Linux. Worker process groups use Bash job control and do not
+require Linux's `setsid` utility.
+
 Qualification must name the macOS version, architecture and Rust toolchain and
 cover both declared native targets. It must include locked Host/CLI compilation,
 targeted native durability and backup/restore tests, tool installation, and a

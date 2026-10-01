@@ -4,10 +4,9 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod automation;
 mod bootstrap;
 mod clean_reinstall;
-mod completed_preparation;
-mod completed_reset;
 mod funding_observation;
 mod import;
 mod operator_mint;
@@ -51,7 +50,7 @@ use canic_host::{
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
-use clap::{Arg, ArgAction, Command};
+use clap::{ArgAction, Command};
 use std::{
     ffi::OsString,
     fs, io,
@@ -78,10 +77,6 @@ pub enum FleetCommandError {
     InfrastructureBootstrap(Box<canic_host::fleet_ensure::ops::infrastructure_bootstrap::InfrastructureBootstrapError>),
     #[error(transparent)]
     CapacityImport(Box<canic_host::fleet_ensure::ops::capacity_import::journal::CapacityImportJournalError>),
-    #[error(transparent)]
-    CompletedReset(Box<canic_host::fleet_ensure::workflow::completed_reset::CompletedResetError>),
-    #[error(transparent)]
-    CompletedPreparation(Box<canic_host::fleet_ensure::workflow::completed_preparation::CompletedPreparationError>),
     #[error(transparent)]
     FundingObservationStatus(Box<EnsureWorkflowError<io::Error>>),
     #[error(transparent)]
@@ -250,7 +245,6 @@ struct EnsureOptions {
     cancel_mint: Option<String>,
     cancel_reinstall: Option<String>,
     reinstall: bool,
-    retirement_debit_block: Option<u64>,
     apply: Option<String>,
     desired: PathBuf,
     environment: Option<String>,
@@ -286,7 +280,6 @@ impl EnsureOptions {
                 PathBuf::from,
             ),
             reinstall: ensure.get_flag("reinstall"),
-            retirement_debit_block: ensure.get_one::<u64>("retirement-debit-block").copied(),
             operator_mint: ensure.get_flag("operator-mint"),
             mint_cmc: required_string(ensure, "mint-cmc"),
             mint_icp_ledger: required_string(ensure, "mint-icp-ledger"),
@@ -447,9 +440,6 @@ fn ensure_command() -> Command {
         )
         .arg(value_arg("seed").long("seed").value_name("PATH").requires("reinstall").help("Retained canister inventory; apply may publish resolved IDs here (defaults to deployments/<fleet>.estate.toml)"))
         .arg(value_arg("source").long("source").value_name("PATH").requires("reinstall").help("Current Fleet policy for reset/import publication; defaults to deployments/<fleet>.toml"))
-        .arg(Arg::new("retirement-debit-block").long("retirement-debit-block").value_name("BLOCK")
-            .value_parser(clap::value_parser!(u64)).requires("reinstall")
-            .help("Verify one external operator withdrawal during completed-source retirement review"))
         .arg(value_arg("operator-mint").long("operator-mint").action(ArgAction::SetTrue).num_args(0)
             .help("Review, inspect or apply one receipt-bound ICP conversion for a retained operator shortfall"))
         .arg(value_arg("mint-cmc").long("mint-cmc").default_value("rkp4c-7iaaa-aaaaa-aaaca-cai").requires("operator-mint")
@@ -459,7 +449,7 @@ fn ensure_command() -> Command {
         .arg(value_arg("cancel-mint").long("cancel-mint").value_parser(parse_digest).requires("operator-mint").conflicts_with("apply")
             .help("Cancel an unapproved conversion review by its exact digest"))
         .arg(value_arg("cancel-reinstall").long("cancel-reinstall").value_name("PLAN_SHA256").value_parser(parse_digest)
-            .conflicts_with_all(["apply", "reinstall", "operator-mint", "observe-funding", "desired", "source", "seed", "retirement-debit-block"])
+            .conflicts_with_all(["apply", "reinstall", "operator-mint", "observe-funding", "desired", "source", "seed"])
             .help("Archive and cancel an unpaid clean-reinstall review by exact digest; no live effects"))
         .arg(internal_environment_arg())
         .arg(internal_icp_arg())
@@ -499,38 +489,53 @@ where
     }
     let options = EnsureOptions::parse(args)?;
     let json = options.json;
-    run_ensure(options).map_err(|error| if json { json_error(error) } else { error })
+    run_ensure(&options).map_err(|error| {
+        if json {
+            json_error(error, Some(&options))
+        } else {
+            error
+        }
+    })
 }
 
-fn json_error(source: FleetCommandError) -> FleetCommandError {
+fn json_error(source: FleetCommandError, options: Option<&EnsureOptions>) -> FleetCommandError {
+    let successor = matches!(&source, FleetCommandError::Workflow(error) if matches!(error.as_ref(),
+        EnsureWorkflowError::SuccessorReviewRequired { .. } | EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift { .. }));
+    let next_action = options.filter(|_| successor).map(|options| {
+        let mut args =
+            automation::ensure_command(options, options.environment.as_deref().unwrap_or("local"));
+        if options.reinstall {
+            args = automation::reinstall_review_command(
+                options,
+                options.environment.as_deref().unwrap_or("local"),
+            );
+        }
+        automation::action(automation::ActionKind::Review, args)
+    });
     FleetCommandError::JsonReported {
-        report: serde_json::json!({"event": "fleet_ensure_error", "schema_version": 1, "message": source.to_string()}).to_string(),
+        report: serde_json::json!({"event": "fleet_ensure_error", "schema_version": 1,
+            "code": if successor { "successor_review_required" } else { "operation_failed" },
+            "message": source.to_string(), "next_action": next_action})
+        .to_string(),
         source: Box::new(source),
     }
 }
 
-fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
+fn run_ensure(options: &EnsureOptions) -> Result<(), FleetCommandError> {
     let root = resolve_current_canic_icp_root()?;
-    if clean_reinstall::run_if_selected(&root, &options)? {
-        return Ok(());
-    }
-    completed_reset::retire_if_selected(&root, &options)?;
-    if completed_reset::run_if_selected(&root, &options)? {
-        return Ok(());
-    }
-    if completed_preparation::run_if_selected(&root, &options)? {
+    if clean_reinstall::run_if_selected(&root, options)? {
         return Ok(());
     }
     let desired_path = resolve_from_root(&root, &options.desired);
-    let loaded = load_ensure_authority(&root, &desired_path, &options)?;
+    let loaded = load_ensure_authority(&root, &desired_path, options)?;
     if let Some(root_name) = &options.observe_funding {
-        return funding_observation::run(&root, &loaded, &options, root_name);
+        return funding_observation::run(&root, &loaded, options, root_name);
     }
     if options.operator_mint {
-        return operator_mint::run(&root, &loaded, &options);
+        return operator_mint::run(&root, &loaded, options);
     }
     let json_progress = options.json;
-    let next_review = next_review_command(&options, &loaded.desired.environment, &desired_path);
+    let next_review = next_review_command(options, &loaded.desired.environment, &desired_path);
     let progress_review = next_review.clone();
     let progress_session = progress::ProgressSession::new(json_progress);
     progress_session.retain_receipt(
@@ -550,7 +555,6 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
     let observation_sink = progress_session.sink();
     let request_sink = progress_session.sink();
     let platform = IcpEnsurePlatform::new(loaded.desired.clone(), &options.icp, &root)
-        .with_retirement_debit(options.retirement_debit_block)
         .with_identity(options.identity.as_deref())
         .with_progress_handler(move |mut progress| {
             if let FleetEnsureProgressState::ReviewRequired {
@@ -604,13 +608,23 @@ fn run_ensure(options: EnsureOptions) -> Result<(), FleetCommandError> {
     progress_session.finish(result.as_ref().ok());
     drop(progress_session);
     let report = result?;
-    if options.apply.is_some() && !options.json {
-        output::write_text(None, &render_apply_report(&report))
-    } else {
-        render_report(&report, options.json)
-    }
+    render_ensure_result(&report, options)
 }
 
+fn render_ensure_result(
+    report: &FleetEnsureReport,
+    options: &EnsureOptions,
+) -> Result<(), FleetCommandError> {
+    if options.json {
+        let mut value = report_json_value(report)?;
+        value["automation"] = serde_json::to_value(automation::ensure(report, options, false))?;
+        output::write_pretty_json(None, &value)
+    } else if options.apply.is_some() {
+        output::write_text(None, &render_apply_report(report))
+    } else {
+        render_report(report, false)
+    }
+}
 fn render_apply_report(report: &FleetEnsureReport) -> String {
     if report.terminal
         && report.plan.scope == canic_host::fleet_ensure::model::FleetEnsurePlanScope::Full
@@ -769,12 +783,6 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
         println!("deployment: clean reinstall; completed records are historical evidence");
         println!(
             "balances: not sampled during generation; review current custody with fleet ensure --reinstall"
-        );
-    }
-    if let Some(preparation) = &generated.completed_preparation_sha256 {
-        println!("completed_preparation: {preparation}");
-        println!(
-            "balances: retained preparation samples; target runtime usage is not yet available"
         );
     }
     println!("observed_canisters: {}", generated.observed_canisters);
@@ -1120,25 +1128,6 @@ fn append_reinstall_guidance(lines: &mut Vec<String>, report: &FleetEnsureReport
             "reinstall: application data will be discarded; logical pool roles may be reassigned"
                 .to_string(),
         );
-        if let Some(source) = &intent.source {
-            let source_build = source
-                .reviewed_desired
-                .desired()
-                .bootstrap
-                .as_ref()
-                .map(|bootstrap| bootstrap.release_build_id);
-            let target_build = report
-                .plan
-                .reviewed_desired
-                .as_ref()
-                .and_then(|reviewed| reviewed.desired().bootstrap.as_ref())
-                .map(|bootstrap| bootstrap.release_build_id);
-            if let (Some(source), Some(target)) = (source_build, target_build) {
-                lines.push(format!(
-                    "reinstall builds: source={source} selected={target}"
-                ));
-            }
-        }
         if let Some(activation) = &intent.activation_reset {
             lines.push(format!(
                 "activation recovery: source_operation={} source_plan_document_sha256={}",
@@ -1243,7 +1232,6 @@ fn append_canister_summaries(lines: &mut Vec<String>, report: &FleetEnsureReport
 
 const fn action_label(action: &EnsureAction) -> &'static str {
     match action {
-        EnsureAction::SealAuthority { .. } => "seal authority",
         EnsureAction::Create { .. } => "create",
         EnsureAction::Delete { .. } => "delete",
         EnsureAction::FleetProtocol { .. } => "fleet_protocol",

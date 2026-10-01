@@ -218,7 +218,7 @@ release-stage:
 	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
 		minor_line="$${version%.*}"; \
 		git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
-			scripts/ci/sync-release-surface-version.sh release-validation.json \
+			release-validation.json \
 			"docs/changelog/$$minor_line.md" \
 			$$(git ls-files -m -- '*/Cargo.toml' || true)
 
@@ -228,13 +228,7 @@ release-candidate:
 release-commit:
 	@scripts/ci/check-release-index.sh
 	@$(MAKE) --no-print-directory release-candidate
-	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
-	if git rev-parse "v$$version" >/dev/null 2>&1; then \
-		echo "❌ Tag v$$version already exists. Aborting." >&2; \
-		exit 1; \
-	fi; \
-	git commit -m "Release $$version"; \
-	git tag -a "v$$version" -m "Release $$version"
+	@bash scripts/ci/commit-release.sh
 
 release-push:
 	@bash scripts/ci/check-release-push-ready.sh

@@ -640,9 +640,17 @@ fn cli_output(
 }
 
 pub(super) fn local_icp(input: &ReinstallJourney<'_>) -> PathBuf {
+    local_icp_route(input.adapter_root, input.icp_wrapper, input.local_replica)
+}
+
+pub(super) fn local_icp_route(
+    root: &Path,
+    wrapper: &Path,
+    replica: &LocalReplicaTarget,
+) -> PathBuf {
     use std::os::unix::fs::PermissionsExt as _;
-    let path = input.adapter_root.join("completed-reset-icp");
-    let network = serde_json::json!({"api_url": input.local_replica.url, "root_key": input.local_replica.root_key});
+    let path = root.join("local-icp-route");
+    let network = serde_json::json!({"api_url": replica.url, "root_key": replica.root_key});
     std::fs::write(
         &path,
         format!(
@@ -663,10 +671,10 @@ case " $* " in
   *) exec '{}' "$@" ;;
 esac
 "#,
-            input.icp_wrapper.display(),
-            input.local_replica.url,
-            input.local_replica.root_key,
-            input.icp_wrapper.display()
+            wrapper.display(),
+            replica.url,
+            replica.root_key,
+            wrapper.display()
         ),
     )
     .unwrap();

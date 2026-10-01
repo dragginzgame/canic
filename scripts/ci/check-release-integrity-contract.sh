@@ -593,9 +593,7 @@ bash "$RELEASE_VALIDATION_LANE_TEST" >/dev/null ||
 # post-validation source rejection cases. Diagnostic wording is not evidence.
 for fast_patch_boundary in \
     'cargo fmt --all -- --check' \
-    'cargo test --locked -p canic --test release_flow_guard' \
-    'bash scripts/ci/check-dependency-risk-inventory.sh' \
-    'cargo check --locked --workspace --all-targets'; do
+    'cargo test --locked -p canic --test release_flow_guard'; do
     rg -F "$fast_patch_boundary" "$FAST_PATCH_GATE" >/dev/null ||
         fail "the fast patch gate omits boundary: $fast_patch_boundary"
 done
@@ -634,10 +632,10 @@ done
 release_commit_recipe="$(sed -n '/^release-commit:/,/^$/p' "$MAKEFILE")"
 rg -F '$(MAKE) --no-print-directory release-candidate' <<<"$release_commit_recipe" >/dev/null ||
     fail "release commit does not verify the exact post-bump candidate"
-release_push_recipe="$(sed -n '/^release-push:/,/^$/p' "$MAKEFILE")"
-expected_release_push_recipe=$'release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh'
-[ "$release_push_recipe" = "$expected_release_push_recipe" ] ||
-    fail "release push is not limited to readiness and the atomic network update"
+bash "$ROOT/scripts/ci/test-commit-release.sh" >/dev/null ||
+    fail "release commit/tag failure boundaries are not preserved"
+bash "$ROOT/scripts/ci/test-release-recipes.sh" >/dev/null ||
+    fail "release Make sequencing or failure boundaries changed"
 for release_push_script in "$RELEASE_PUSH_READY" "$RELEASE_PUSH"; do
     rg -F 'read-workspace-version.sh' "$release_push_script" >/dev/null ||
         fail "release push does not use the canonical workspace-version reader"

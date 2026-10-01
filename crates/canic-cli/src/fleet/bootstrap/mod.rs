@@ -146,13 +146,13 @@ fn execute(matches: &ArgMatches) -> Result<(), FleetCommandError> {
         quote_review_argument(&executable),
         quote_review_argument(&fleet)
     );
-    if let Some(identity) = identity {
+    if let Some(identity) = &identity {
         next.push_str(" --identity ");
-        next.push_str(&quote_review_argument(&identity));
+        next.push_str(&quote_review_argument(identity));
     }
     next.push_str(" --apply ");
     next.push_str(&plan.plan_sha256);
-    render(plan, completed, matches.get_flag("json"), &next)
+    render(plan, completed, matches, &next)
 }
 
 fn recover(
@@ -198,12 +198,7 @@ fn recover(
             infrastructure_bootstrap::apply(workspace, environment, fleet, digest, &mut platform)?;
         command.push_str(" --approve-recovery ");
         command.push_str(&approved);
-        return render(
-            published.plan,
-            published.completed,
-            matches.get_flag("json"),
-            &command,
-        );
+        return render(published.plan, published.completed, matches, &command);
     }
     let review = infrastructure_bootstrap::registration_recovery::review(
         workspace,
@@ -216,11 +211,20 @@ fn recover(
     command.push_str(" --approve-recovery ");
     command.push_str(&review.review_sha256);
     if matches.get_flag("json") {
+        let mut args =
+            super::automation::command(environment, executable, identity, "bootstrap", fleet);
+        args.extend([
+            "--recover".into(),
+            digest.into(),
+            "--approve-recovery".into(),
+            review.review_sha256.clone(),
+        ]);
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "schema_version": 1, "stage": "infrastructure_registration_recovery", "completed": false,
                 "registration_recovery": canic_host::fleet_ensure::registration_recovery_json_value(&review)?, "apply_command": command,
+                "automation": super::automation::bootstrap(&plan, false, Some(review.review_sha256.clone()), false, args),
             }))?
         );
     } else {
@@ -258,7 +262,7 @@ fn recover(
 fn render(
     plan: canic_host::fleet_ensure::model::FleetEnsurePlan,
     completed: bool,
-    json: bool,
+    matches: &ArgMatches,
     next: &str,
 ) -> Result<(), FleetCommandError> {
     let report = FleetEnsureReport {
@@ -269,13 +273,34 @@ fn render(
         actual_conservation: None,
     };
     let plan = &report.plan;
-    if json {
+    if matches.get_flag("json") {
+        let executable = string_option_or_else(matches, "icp", default_icp);
+        let identity = string_option(matches, "identity");
+        let mut args = super::automation::command(
+            &plan.environment,
+            &executable,
+            identity.as_deref(),
+            "bootstrap",
+            &plan.fleet,
+        );
+        let recovery = string_option(matches, "approve-recovery");
+        if let Some(review) = &recovery {
+            args.extend([
+                "--recover".into(),
+                plan.plan_sha256.clone(),
+                "--approve-recovery".into(),
+                review.clone(),
+            ]);
+        } else {
+            args.extend(["--apply".into(), plan.plan_sha256.clone()]);
+        }
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "schema_version": 1, "stage": "infrastructure_bootstrap", "completed": completed,
                 "plan": plan, "apply_command": next,
                 "continuation_forecast": canic_host::fleet_ensure::policy::continuation_forecast::forecast(&report),
+                "automation": super::automation::bootstrap(plan, completed, recovery.clone(), matches.get_one::<String>("apply").is_some() || recovery.is_some(), args),
             }))?
         );
     } else {

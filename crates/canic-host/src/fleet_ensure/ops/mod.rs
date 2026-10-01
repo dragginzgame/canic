@@ -4,13 +4,11 @@
 //! Does not own: plan decisions or multi-step orchestration.
 //! Boundary: workflow persists an intent here before invoking one platform effect.
 
-mod authority_seal;
 mod bounded_observations;
 mod canic_init;
 pub mod capacity_import;
+pub(in crate::fleet_ensure) mod certified_custody;
 pub(super) mod clean_reinstall;
-pub mod completed_preparation;
-pub mod completed_reset;
 pub(super) mod continuation;
 mod current_inventory;
 pub(super) mod current_protocol;
@@ -70,7 +68,6 @@ pub(crate) use platform::{
     native_funding_applied,
 };
 pub use platform::{IcpEnsurePlatform, IcpEnsurePlatformError};
-pub use reinstall::adoption::publication as completed_handoff;
 
 /// Decode the reviewed bounds for Create execution and its first live observation.
 pub(crate) fn maximum_creation_observation_burn(desired: &DesiredFleet) -> Option<u128> {
@@ -206,30 +203,6 @@ pub trait EnsurePlatform {
         Ok(None)
     }
 
-    /// Current post-reset physical balances, including reserved cycles and every default account.
-    fn completed_reset_balances(
-        &mut self,
-        _intent: &crate::fleet_ensure::model::FleetReinstallRecord,
-    ) -> Result<
-        Option<crate::fleet_ensure::view::completed_reset::CompletedResetBalancesView>,
-        Self::Error,
-    > {
-        Ok(None)
-    }
-
-    /// Optional exact external Ledger block requested for a new retirement review.
-    fn retirement_debit_block(&self) -> Option<u64> {
-        None
-    }
-
-    /// Authenticate that block and current control of its destination, without a payment.
-    fn observe_retirement_debit(
-        &mut self,
-        _block: u64,
-    ) -> Result<Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>, Self::Error> {
-        Ok(None)
-    }
-
     /// Reuse observations only within one read-only planning transaction. Adapters
     /// must expire evidence on exit, retries, changed inputs and before any effect.
     fn with_planning_observations<T, E>(
@@ -281,15 +254,6 @@ pub trait EnsurePlatform {
     /// Report informational progress without changing operation authority or effects.
     fn report_progress(&mut self, _progress: crate::fleet_ensure::dto::FleetEnsureProgress) {}
 
-    /// Observe whether this exact operation owns the durable authority seal.
-    fn authority_sealed(
-        &mut self,
-        _operation_id: &str,
-        _action: &EnsureAction,
-    ) -> Result<bool, Self::Error> {
-        Ok(false)
-    }
-
     /// Reinspect the reviewed pool closure immediately before its Root loses old records.
     fn reinstall_assets_match(
         &mut self,
@@ -308,15 +272,6 @@ pub trait EnsurePlatform {
         Option<BTreeMap<String, crate::fleet_ensure::model::RootManagementCanisterObservation>>,
         Self::Error,
     > {
-        Ok(None)
-    }
-
-    /// Capture the complete controlled pool after the existing authority seal.
-    fn reinstall_inventory(
-        &mut self,
-        _source_operation_id: &str,
-        _state: &FleetEnsureStateRecord,
-    ) -> Result<Option<FleetReinstallObservation>, Self::Error> {
         Ok(None)
     }
 
@@ -589,28 +544,6 @@ pub enum EnsureStateError {
     #[error("reset review has execution or side-operation evidence at {}; preserve it and resume its existing owner", path.display())]
     ResetReviewEffectEvidence { path: PathBuf },
 
-    #[error(
-        "completed-source preparation owns this Fleet; resume its exact reviewed operation before other Fleet work"
-    )]
-    CompletedPreparationInProgress,
-    #[error("fresh certified source custody is required before committing local authority")]
-    CompletedHandoffCustodyRequired,
-
-    #[error("completed-estate certified custody admission failed: {0}")]
-    CompletedHandoffCustody(#[source] Box<retained_contract::CompletedCustodyError>),
-
-    #[error(
-        "completed-estate publication evidence changed; preserve its archive and resume the original reviewed handoff"
-    )]
-    CompletedHandoffConflict,
-
-    #[error(
-        "completed reset final accounting exhausted its reviewed observation allowance; preserve the journal and receipts"
-    )]
-    CompletedResetAccountingBudget,
-
-    #[error("completed-estate publication source inspection failed: {0}")]
-    CompletedHandoffSource(#[source] Box<retained_contract::RetainedContractError>),
     #[error("approved Fleet capacity import at {} must resume under its original authority before other Fleet operations", path.display())]
     CapacityImportInProgress { path: PathBuf },
 
@@ -703,10 +636,7 @@ pub enum EnsureStateError {
 
 pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
     let lock = lock_fleet_file(paths)?;
-    completed_handoff::retirement::recover(paths)?;
     capacity_import::journal::require_no_approved_import(paths)?;
-    completed_handoff::recover(paths)?;
-    completed_preparation::require_no_intent(paths)?;
     reinstall::adoption::recover(paths)?;
     Ok(lock)
 }
@@ -714,31 +644,6 @@ pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
 /// The capacity owner resumes its retained journal while holding the ordinary Fleet lock.
 fn lock_capacity_import_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
     let lock = lock_fleet_file(paths)?;
-    completed_preparation::require_no_intent(paths)?;
-    Ok(lock)
-}
-
-/// Preparation owns the same Fleet file lock while preserving the source operation.
-pub(in crate::fleet_ensure) fn lock_completed_preparation(
-    paths: &EnsurePaths,
-) -> Result<File, EnsureStateError> {
-    let lock = lock_completed_source(paths)?;
-    if completed_handoff::pending(paths)?.is_some() {
-        return Err(EnsureStateError::CompletedPreparationInProgress);
-    }
-    Ok(lock)
-}
-
-/// Local completed-source publication shares the Fleet lock and may recover its own intent.
-pub(in crate::fleet_ensure) fn lock_completed_source(
-    paths: &EnsurePaths,
-) -> Result<File, EnsureStateError> {
-    let lock = lock_fleet_file(paths)?;
-    completed_handoff::retirement::recover(paths)?;
-    capacity_import::journal::require_no_approved_import(paths)?;
-    if reinstall::adoption::review(paths)?.is_some() {
-        return Err(EnsureStateError::CompletedPreparationInProgress);
-    }
     Ok(lock)
 }
 

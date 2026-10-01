@@ -17,13 +17,12 @@ use crate::{
             capacity_import::admission::{
                 CapacityImportDeclaration, CapacityImportDispositionKind,
             },
+            certified_custody,
             infrastructure_bootstrap::{
                 InfrastructureBootstrapError,
                 declarations::{BootstrapDeclarations, HeldDeclaration, custody_from_binding},
             },
-            read_current,
-            reinstall::terminal::inventory::custody,
-            write_current,
+            read_current, write_current,
         },
     },
     icp::IcpCli,
@@ -92,7 +91,7 @@ pub(in crate::fleet_ensure) async fn custody(
             .as_deref()
             .and_then(|id| Principal::from_text(id).ok())
             .ok_or(InfrastructureBootstrapError::Integrity)?;
-        let entry = custody::observe_one(agent, id)
+        let entry = certified_custody::observe_one(agent, id)
             .await
             .map_err(|error| InfrastructureBootstrapError::Observation(error.to_string()))?;
         let module_sha256 = entry

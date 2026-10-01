@@ -128,9 +128,11 @@ make test-auth
 make test-auth-chain-key
 ```
 
-When stable memory or upgrade behavior changes, add focused ABI/storage and
-PocketIC upgrade tests for that state owner. The current audit method and dated
-report establish compatibility; a literal documentation guard does not.
+When stable memory or lifecycle behavior changes, add focused storage and
+PocketIC restoration tests for that state owner. Ordinary pre-1.0 release changes
+qualify clean reinstall and cycle conservation. Same-release interruption recovery
+remains required; the exact CANIC-188 repair retains its separately governed
+incident exception. These tests do not promise general cross-release compatibility.
 
 When diagnostics change, assert typed causes internally and exact text, JSON,
 or exit behavior only where it is a documented operator contract.
@@ -176,10 +178,9 @@ It starts from an inconsistent multi-role estate, conserves cycles through
 convergence and immediately repeats with zero mutation actions. Removed local
 install and test-canister targets are not maintained release gates.
 
-The two Canic-owned blob inventory gates are temporary product guards. They
-remain required while Canic owns the embedded blob subsystem and retire with
-a promoted standalone blob-service hard cut; historical inventory documents remain evidence
-after their executable gate wiring is removed.
+The blob protocol evidence gate checks the structured method and dependency
+records while Canic owns the embedded subsystem. Historical inventory prose is
+descriptive evidence and is not a release gate.
 
 ## Final Release And Artifact Gates
 

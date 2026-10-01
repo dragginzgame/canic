@@ -11,12 +11,6 @@ use crate::fleet_ensure::{
     policy::{RootStartPlanInput, reinstall::activation as admission},
 };
 
-pub(super) fn is_activation_reset(plan: &FleetEnsurePlan) -> bool {
-    plan.reinstall
-        .as_ref()
-        .is_some_and(|intent| intent.activation_reset.is_some())
-}
-
 #[expect(
     clippy::too_many_arguments,
     reason = "the locked review binds source evidence, desired input, observed estate and time"

@@ -278,20 +278,10 @@ fn governed_pocketic_mint_credit_resumes_original_native_withdrawal() {
     };
     assert_eq!(platform.balance(), 0);
     let source = sha256_hex(b"minimal real native funding recovery");
-    let mut plan = workflow::plan(&root, &desired, &source, "mint-fleet", now(), &mut platform)
+    let plan = workflow::plan(&root, &desired, &source, "mint-fleet", now(), &mut platform)
         .unwrap()
         .plan;
     let paths = EnsurePaths::under(&root, "local", "mint-fleet");
-    crate::fleet_ensure::tests::retain_recorded_retirement(
-        &mut plan,
-        vec![RootManagementBinding {
-            controllers: vec![operator.to_text()],
-            module_sha256: sha256_hex(wasm),
-            name: "treasury".into(),
-            principal: destination.to_text(),
-            subnet: platform.pic.get_subnet(destination).unwrap().to_text(),
-        }],
-    );
     ops::write_plan(&paths, &plan).unwrap();
     let original_plan = fs::read(&paths.plan).unwrap();
     let actions = workflow::ordered_actions(&plan);

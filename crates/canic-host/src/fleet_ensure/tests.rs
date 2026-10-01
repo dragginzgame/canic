@@ -11,9 +11,7 @@ use crate::{
             DrainAuthority, EffectRecord, EffectState, EnsureAction,
             EstateFundingDomainObservation, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion,
             FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord, FleetObservation,
-            FleetReinstallRecord, FleetReinstallSourceRecord, FleetTerminalRetirementRecord,
-            FleetTerminalSourceRecord, LiveCanister, RootOwnedCanisterLifecycle,
-            create_balance_is_terminal,
+            LiveCanister, RootOwnedCanisterLifecycle, create_balance_is_terminal,
             operator_mint::{
                 OperatorMintAuthority, OperatorMintNotificationOutcomeRecord,
                 OperatorMintReceiptRecord, OperatorMintTransferOutcomeRecord,
@@ -117,15 +115,11 @@ enum MockFundingRead {
 
 pub(super) struct MockPlatform {
     pub(super) bootstrap_observations: std::collections::VecDeque<Result<Option<crate::fleet_ensure::view::infrastructure_bootstrap::InfrastructureBootstrapObservation>, MockError>>,
-    retirement_debit_block: Option<u64>,
-    retirement_debit: Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>,
     observation_calls: usize,
     pub(super) root_management: Option<crate::fleet_ensure::model::RootManagementObservation>,
     pub(super) operator_funding: Option<crate::fleet_ensure::view::OperatorFundingObservation>,
     pub(super) reinstall_authority:
         Option<BTreeMap<String, crate::fleet_ensure::model::RootManagementCanisterObservation>>,
-    pub(super) seal_identity: Option<(String, String)>,
-    pub(super) seal_reads: Vec<(String, EnsureAction)>,
     pub(super) retained_activation_checks: Vec<(String, String)>,
     pub(super) rejected_activation_root: Option<String>,
     completed: BTreeMap<String, EffectOutcome>,
@@ -186,8 +180,6 @@ impl MockPlatform {
             reinstall_authority: None,
             root_management: None,
             operator_funding: None,
-            seal_identity: None,
-            seal_reads: Vec::new(),
             retained_activation_checks: Vec::new(),
             rejected_activation_root: None,
             completed: BTreeMap::new(),
@@ -229,8 +221,6 @@ impl MockPlatform {
             typed_protocol_burns: Vec::new(),
             skip_transfer_credit: false,
             stall_before_mutation: BTreeMap::new(),
-            retirement_debit_block: None,
-            retirement_debit: None,
             terminal_inventory: TerminalFleetInventory::default(),
             terminal_inventory_expected_operation_id: None,
             terminal_inventory_operation_ids: Vec::new(),
@@ -348,9 +338,6 @@ impl MockPlatform {
         action: &'a EnsureAction,
     ) -> Option<&'a str> {
         let principal = match action {
-            EnsureAction::SealAuthority { .. } => {
-                panic!("authority sealing uses the production PocketIC adapter")
-            }
             EnsureAction::Create { .. } => return None,
             EnsureAction::Delete { principal, .. }
             | EnsureAction::FleetProtocol { principal, .. }
@@ -509,9 +496,6 @@ impl MockPlatform {
     ) -> bool {
         let principal = Self::principal(state, action);
         match action {
-            EnsureAction::SealAuthority { .. } => {
-                panic!("authority sealing uses the production PocketIC adapter")
-            }
             EnsureAction::Delete { .. } => {
                 principal.is_none_or(|value| !self.live.contains_key(value))
             }
@@ -610,9 +594,6 @@ impl MockPlatform {
     fn mutate(&mut self, action: &EnsureAction, state: &FleetEnsureStateRecord) -> EffectOutcome {
         let principal = Self::principal(state, action).map(str::to_string);
         match action {
-            EnsureAction::SealAuthority { .. } => {
-                panic!("authority sealing uses the production PocketIC adapter")
-            }
             EnsureAction::Create {
                 controller_canisters,
                 controllers,
@@ -828,20 +809,6 @@ impl EnsurePlatform for MockPlatform {
     }
     type Error = MockError;
 
-    fn retirement_debit_block(&self) -> Option<u64> {
-        self.retirement_debit_block
-    }
-
-    fn observe_retirement_debit(
-        &mut self,
-        block: u64,
-    ) -> Result<Option<crate::fleet_ensure::model::RetirementWithdrawalRecord>, Self::Error> {
-        Ok(self
-            .retirement_debit
-            .clone()
-            .filter(|receipt| receipt.block_index == block))
-    }
-
     fn apply_independent_effects(
         &mut self,
         operation_id: &str,
@@ -893,15 +860,6 @@ impl EnsurePlatform for MockPlatform {
         Self::Error,
     > {
         Ok(self.reinstall_authority.clone())
-    }
-
-    fn authority_sealed(
-        &mut self,
-        operation: &str,
-        action: &EnsureAction,
-    ) -> Result<bool, Self::Error> {
-        self.seal_reads.push((operation.to_owned(), action.clone()));
-        Ok(self.seal_identity.as_ref() == Some(&(operation.to_owned(), action_sha256(action))))
     }
 
     fn report_progress(&mut self, progress: FleetEnsureProgress) {
@@ -3252,7 +3210,7 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
         )],
     );
     let source = sha256_hex(b"retained initial operator shortfall");
-    let mut report = workflow::plan(
+    let report = workflow::plan(
         &fixture.root,
         &fixture.desired,
         &source,
@@ -3286,16 +3244,6 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
     journal.effects.push(prepared.record);
     journal.initial_operator_cycles = 0;
     let live = fixture.platform.live[TREASURY].clone();
-    retain_recorded_retirement(
-        &mut report.plan,
-        vec![crate::fleet_ensure::model::RootManagementBinding {
-            controllers: live.controllers.clone(),
-            module_sha256: live.module_sha256.clone().unwrap(),
-            name: "treasury".into(),
-            principal: TREASURY.into(),
-            subnet: SUBNET.into(),
-        }],
-    );
     fixture.platform.reinstall_authority = Some(BTreeMap::from([(
         "treasury".into(),
         crate::fleet_ensure::model::RootManagementCanisterObservation {
@@ -3323,8 +3271,7 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
     assert!(!workflow::operator_mint::fresh_quote_available(&paths).unwrap());
     assert!(workflow::operator_mint::status(&paths).unwrap().is_none());
     let mut tampered: serde_json::Value = serde_json::from_slice(&original_plan).unwrap();
-    tampered["reinstall"]["source"]["terminal_retirement"]["conservation"]["observed_net_cycle_debit_cycles"] =
-        serde_json::json!("0");
+    tampered["conservation"]["maximum_operator_debit_cycles"] = serde_json::json!("0");
     fs::write(&paths.plan, serde_json::to_vec(&tampered).unwrap()).unwrap();
     assert!(matches!(
         workflow::retained_in_progress_plan::<MockError>(&fixture.root, "local", "test-fleet"),
@@ -3423,54 +3370,6 @@ fn operator_mint_review_preserves_an_underfunded_original_withdrawal() {
     assert_eq!(fixture.platform.mutations, mutations);
     assert_eq!(fs::read(&paths.plan).unwrap(), original_plan);
     fs::remove_dir_all(fixture.root).unwrap();
-}
-
-/// Attach immutable retirement history to the native funding fixture. This is
-/// evidence-only coverage; managed reset/seal journeys retain their own fixtures.
-pub(super) fn retain_recorded_retirement(
-    plan: &mut FleetEnsurePlan,
-    authorities: Vec<crate::fleet_ensure::model::RootManagementBinding>,
-) {
-    let source_operation = sha256_hex(b"completed retirement source");
-    plan.reinstall = Some(Box::new(FleetReinstallRecord {
-        target_artifacts_sha256: None,
-        activation_reset: None,
-        completed_reset: None,
-        operation_id: plan.operation_id.clone(),
-        source_operation_id: source_operation.clone(),
-        authorities,
-        assets: Vec::new(),
-        source: Some(Box::new(FleetReinstallSourceRecord {
-            reviewed_desired: *plan.reviewed_desired.clone().unwrap(),
-            wasm_sha256_by_canister: BTreeMap::new(),
-            candid_sha256_by_path: BTreeMap::new(),
-            terminal_retirement: Some(Box::new(FleetTerminalRetirementRecord {
-                source: FleetTerminalSourceRecord {
-                    operation_id: source_operation,
-                    plan_sha256: sha256_hex(b"source plan"),
-                    plan_document_sha256: sha256_hex(b"source plan bytes"),
-                    journal_document_sha256: sha256_hex(b"source journal bytes"),
-                    state_document_sha256: sha256_hex(b"source state bytes"),
-                    phase_document_sha256: BTreeMap::new(),
-                },
-                conservation:
-                    crate::fleet_ensure::model::FleetRetirementConservationRecord::NetBalance(
-                        crate::fleet_ensure::model::ActualCycleConservation {
-                            estate_funding_cycles: 0,
-                            exact_estate_creation_fee_cycles: 0,
-                            exact_unavoidable_fee_cycles: 10,
-                            final_controlled_cycles: 600,
-                            observed_net_cycle_debit_cycles: 10,
-                            observed_starting_cycles: 500,
-                            observed_net_cycle_credit_cycles: 0,
-                            operator_debit_cycles: 120,
-                            received_new_funding_cycles: 110,
-                        },
-                    ),
-            })),
-        })),
-    }));
-    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(plan);
 }
 
 fn retain_operator_credit_fixture(
@@ -3886,9 +3785,6 @@ fn funding_margin_is_bounded_by_the_target_observation_only() {
         .find(|canister| canister.name == "app")
         .and_then(|canister| {
             canister.actions.iter().find_map(|action| match action {
-                EnsureAction::SealAuthority { .. } => {
-                    panic!("authority sealing uses the production PocketIC adapter")
-                }
                 EnsureAction::Fund {
                     amount,
                     expected_post_cycles,
@@ -5496,9 +5392,6 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
         .protocol_actions
         .iter()
         .find_map(|action| match action {
-            EnsureAction::SealAuthority { .. } => {
-                panic!("authority sealing uses the production PocketIC adapter")
-            }
             EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
                 CurrentFleetProtocolAction::JoinRoot {
                     expected_registry,
@@ -5514,9 +5407,6 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
         .protocol_actions
         .iter()
         .find_map(|action| match action {
-            EnsureAction::SealAuthority { .. } => {
-                panic!("authority sealing uses the production PocketIC adapter")
-            }
             EnsureAction::FleetProtocol { action, .. } => match action.as_ref() {
                 CurrentFleetProtocolAction::BootstrapStore { expected, .. } => {
                     Some(expected.clone())
@@ -5883,9 +5773,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 });
             }
             let principal = match action {
-                EnsureAction::SealAuthority { .. } => {
-                    panic!("authority sealing uses the production PocketIC adapter")
-                }
                 EnsureAction::Delete { principal, .. }
                 | EnsureAction::FleetProtocol { principal, .. }
                 | EnsureAction::FundEstate { principal, .. }
@@ -5899,9 +5786,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 EnsureAction::Create { .. } | EnsureAction::Fund { .. } => None,
             };
             let applied = match action {
-                EnsureAction::SealAuthority { .. } => {
-                    panic!("authority sealing uses the production PocketIC adapter")
-                }
                 EnsureAction::Install {
                     mode, wasm_sha256, ..
                 } => principal
@@ -5955,9 +5839,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
             state: &FleetEnsureStateRecord,
         ) -> Result<Option<u128>, Self::Error> {
             let principal = match action {
-                EnsureAction::SealAuthority { .. } => {
-                    panic!("authority sealing uses the production PocketIC adapter")
-                }
                 EnsureAction::Create { .. } => return Ok(None),
                 EnsureAction::Delete { principal, .. }
                 | EnsureAction::FleetProtocol { principal, .. }
@@ -5988,9 +5869,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
             state: &FleetEnsureStateRecord,
         ) -> Result<Option<u64>, Self::Error> {
             let principal = match action {
-                EnsureAction::SealAuthority { .. } => {
-                    panic!("authority sealing uses the production PocketIC adapter")
-                }
                 EnsureAction::Install { principal, .. } => Self::principal(state, principal),
                 _ => None,
             };
@@ -6017,9 +5895,6 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 return Ok(outcome.clone());
             }
             let outcome = match action {
-                EnsureAction::SealAuthority { .. } => {
-                    panic!("authority sealing uses the production PocketIC adapter")
-                }
                 EnsureAction::Create {
                     requested_initial_cycles,
                     controllers,
@@ -6877,9 +6752,6 @@ fn current_protocol_variants(plan: &FleetEnsurePlan) -> BTreeSet<&'static str> {
     plan.protocol_actions
         .iter()
         .filter_map(|action| match action {
-            EnsureAction::SealAuthority { .. } => {
-                panic!("authority sealing uses the production PocketIC adapter")
-            }
             EnsureAction::FleetProtocol { action, .. } => Some(match action.as_ref() {
                 CurrentFleetProtocolAction::ReconcilePoolAsset { .. } => "reconcile_pool_asset",
                 CurrentFleetProtocolAction::ObservePoolReadiness { .. } => "observe_pool_readiness",
@@ -7083,227 +6955,6 @@ fn empty_outcome() -> EffectOutcome {
 }
 
 #[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one source authority table covers selected protocol admission and each independent live drift"
-)]
-fn reinstall_preparation_binds_exact_running_authority_before_sealing() {
-    use crate::fleet_ensure::{
-        model::{
-            FleetReinstallSourceRecord, ReviewedDesiredFleetRecord,
-            RootManagementCanisterObservation, RootManagementObservation,
-        },
-        policy::{
-            EnsurePolicyError,
-            reinstall::{PreparationInput, preparation},
-        },
-    };
-    let fixture = protocol_tranche_fixture(Vec::new());
-    let hash = sha256_hex(b"current-wasm");
-    let source = FleetReinstallSourceRecord {
-        terminal_retirement: None,
-        reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
-        wasm_sha256_by_canister: BTreeMap::from([("treasury".to_string(), hash.clone())]),
-        candid_sha256_by_path: BTreeMap::from([("coordinator.did".to_string(), "11".repeat(32))]),
-    };
-    let observed = RootManagementCanisterObservation {
-        live: live(TREASURY, 500, Some(&hash), true, &[CONTROLLER]),
-        name: "treasury".to_string(),
-        subnet: SUBNET.to_string(),
-    };
-    let mut target = fixture.desired.clone();
-    target.protocol.as_mut().unwrap().coordinator_candid = "selected-new-coordinator.did".into();
-    let plan = |desired: &DesiredFleet, observed: RootManagementCanisterObservation| {
-        preparation(PreparationInput {
-            desired,
-            source: &source,
-            target_artifacts_sha256: &"42".repeat(32),
-            observation: &RootManagementObservation {
-                operator_cycles: 0,
-                roots: BTreeMap::from([("treasury".to_string(), observed)]),
-            },
-            source_operation_id: &"21".repeat(32),
-            desired_sha256: &"22".repeat(32),
-            operation_id: &"23".repeat(32),
-            time: 100,
-        })
-    };
-    let accepted = plan(&target, observed.clone()).expect("exact current authority");
-    assert!(matches!(
-        accepted.canisters[0].actions.as_slice(),
-        [EnsureAction::SealAuthority { candid, .. }] if candid == "coordinator.did"
-    ));
-    assert_eq!(
-        accepted.reviewed_desired.as_ref().unwrap().desired(),
-        &target
-    );
-    assert_eq!(
-        accepted.reinstall.as_ref().unwrap().source.as_deref(),
-        Some(&source)
-    );
-    assert!(
-        plan(&fixture.desired, observed.clone()).is_ok(),
-        "identical rebuild remains a wipe"
-    );
-    let mut changed = target.clone();
-    changed.operator = OLD_APP.into();
-    assert!(matches!(
-        plan(&changed, observed.clone()),
-        Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
-    ));
-    let mut foreign = target.clone();
-    foreign.cycles_ledger = OLD_APP.into();
-    assert!(matches!(
-        plan(&foreign, observed.clone()),
-        Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
-    ));
-    foreign = target.clone();
-    foreign.canisters[0].subnet = OLD_APP.into();
-    assert!(matches!(
-        plan(&foreign, observed.clone()),
-        Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
-    ));
-
-    assert_eq!(
-        accepted.reinstall.as_ref().unwrap().authorities[0].principal,
-        TREASURY
-    );
-    let mut conflicts = Vec::new();
-    let mut changed = observed.clone();
-    changed.live.controllers = vec![OLD_APP.to_string()];
-    conflicts.push(changed);
-    let mut changed = observed.clone();
-    changed.live.principal = OLD_APP.to_string();
-    conflicts.push(changed);
-    let mut changed = observed.clone();
-    changed.subnet = OLD_APP.to_string();
-    conflicts.push(changed);
-    let mut changed = observed.clone();
-    changed.live.module_sha256 = Some("ff".repeat(32));
-    conflicts.push(changed);
-    let mut changed = observed.clone();
-    changed.live.status = CanisterRuntimeStatus::Stopped;
-    conflicts.push(changed);
-    let mut changed = observed;
-    changed.name = "foreign".to_string();
-    conflicts.push(changed);
-    for changed in conflicts {
-        assert!(matches!(
-            plan(&target, changed),
-            Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
-        ));
-    }
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn reinstall_preparation_requires_each_authority_to_cover_its_own_seal() {
-    use crate::fleet_ensure::{
-        model::{
-            FleetReinstallSourceRecord, ReviewedDesiredFleetRecord,
-            RootManagementCanisterObservation, RootManagementObservation,
-        },
-        policy::{
-            EnsurePolicyError,
-            reinstall::{PreparationInput, preparation},
-        },
-    };
-    let mut fixture = protocol_tranche_fixture(Vec::new());
-    fixture.desired.maximum_observation_burn_cycles = "2".into();
-    fixture.desired.maximum_update_burn_cycles = "3".into();
-    let mut root = fixture.desired.canisters[0].clone();
-    root.name = "root".into();
-    root.kind = DesiredCanisterKind::Root;
-    root.parent = Some("treasury".into());
-    root.principal = Some(OLD_APP.into());
-    fixture.desired.canisters.push(root);
-    let hash = sha256_hex(b"current-wasm");
-    let source = FleetReinstallSourceRecord {
-        terminal_retirement: None,
-        reviewed_desired: ReviewedDesiredFleetRecord::capture(&fixture.desired),
-        wasm_sha256_by_canister: BTreeMap::from([
-            ("treasury".into(), hash.clone()),
-            ("root".into(), hash.clone()),
-        ]),
-        candid_sha256_by_path: BTreeMap::from([
-            ("coordinator.did".into(), "11".repeat(32)),
-            ("root.did".into(), "22".repeat(32)),
-        ]),
-    };
-    let plan = |treasury_cycles, root_cycles| {
-        let roots = [
-            ("treasury", TREASURY, treasury_cycles),
-            ("root", OLD_APP, root_cycles),
-        ]
-        .into_iter()
-        .map(|(name, principal, cycles)| {
-            (
-                name.into(),
-                RootManagementCanisterObservation {
-                    live: live(principal, cycles, Some(&hash), true, &[CONTROLLER]),
-                    name: name.into(),
-                    subnet: SUBNET.into(),
-                },
-            )
-        })
-        .collect();
-        preparation(PreparationInput {
-            desired: &fixture.desired,
-            source: &source,
-            target_artifacts_sha256: &"42".repeat(32),
-            observation: &RootManagementObservation {
-                operator_cycles: 0,
-                roots,
-            },
-            source_operation_id: &"21".repeat(32),
-            desired_sha256: &"22".repeat(32),
-            operation_id: &"23".repeat(32),
-            time: 100,
-        })
-    };
-    for (treasury_cycles, root_cycles, name, principal) in [
-        (1000, 18, "root", OLD_APP),
-        (18, 1000, "treasury", TREASURY),
-    ] {
-        assert_eq!(
-            plan(treasury_cycles, root_cycles),
-            Err(EnsurePolicyError::AuthoritySealHeadroom {
-                name: name.into(),
-                principal: principal.into(),
-                available: 18,
-                required: 19,
-                shortfall: 1,
-            })
-        );
-    }
-    let accepted = plan(19, 19).expect("each authority covers its own bound");
-    assert_eq!(accepted.conservation.maximum_execution_burn_cycles, 38);
-    assert_eq!(accepted.conservation.expected_post_operation_cycles, 0);
-    assert_eq!(accepted.conservation.maximum_new_funding_cycles, 0);
-    assert_eq!(accepted.conservation.maximum_operator_debit_cycles, 0);
-    assert!(accepted.canisters.iter().all(|canister| matches!(
-        canister.actions.as_slice(),
-        [EnsureAction::SealAuthority { .. }]
-    )));
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn reinstall_seals_roots_before_coordinator_to_finish_inflight_funding() {
-    let seal = |authority_kind| EnsureAction::SealAuthority {
-        authority_kind,
-        candid: "root.did".into(),
-        candid_sha256: "11".repeat(32),
-        name: "authority".into(),
-        principal: Principal::anonymous().to_text(),
-    };
-    assert!(
-        workflow::action_order(&seal(DesiredCanisterKind::Root))
-            < workflow::action_order(&seal(DesiredCanisterKind::Coordinator))
-    );
-}
-
-#[test]
 fn reinstall_history_accepts_only_the_exact_intended_root_replacement() {
     use crate::fleet_ensure::model::{
         ReinstallHistoryWitness, ReinstallRootWitnessRecord, RootManagementBinding,
@@ -7364,27 +7015,6 @@ fn reinstall_history_accepts_only_the_exact_intended_root_replacement() {
 }
 
 #[test]
-fn reinstall_selected_artifact_identity_detects_in_place_changes() {
-    let mut fixture = protocol_tranche_fixture(Vec::new());
-    let wasm = fixture.root.join("selected.wasm");
-    fs::write(&wasm, b"selected release bytes").unwrap();
-    fixture.desired.canisters[0].wasm = Some(wasm.to_string_lossy().into_owned());
-    let digest = || {
-        crate::fleet_ensure::ops::reinstall::target_artifacts_sha256(
-            &fixture.root,
-            &fixture.desired,
-        )
-        .unwrap()
-    };
-    let selected = digest();
-    fs::write(&wasm, b"different release bytes").unwrap();
-    assert_ne!(digest(), selected);
-    fs::write(&wasm, b"selected release bytes").unwrap();
-    assert_eq!(digest(), selected);
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
 fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
     let mut fixture = publication_retry_fixture(1);
     let planned = workflow::plan(
@@ -7427,541 +7057,6 @@ fn fixture_publication_rejects_a_journal_counter_beyond_its_reviewed_limit() {
         Err(workflow::EnsureWorkflowError::JournalIntegrity)
     ));
     assert!(fixture.platform.mutations.is_empty());
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-/// A completed current-contract source with an immutable receipted phase.
-pub(super) fn terminal_retirement_fixture() -> (
-    Fixture,
-    crate::fleet_ensure::ops::EnsurePaths,
-    FleetEnsurePlan,
-) {
-    terminal_retirement_payment_fixture(true)
-}
-
-#[expect(
-    clippy::too_many_lines,
-    reason = "one completed-source fixture binds its plan, immutable phase and paid receipts"
-)]
-fn terminal_retirement_payment_fixture(
-    paid: bool,
-) -> (
-    Fixture,
-    crate::fleet_ensure::ops::EnsurePaths,
-    FleetEnsurePlan,
-) {
-    use crate::fleet_ensure::{model::*, ops, policy::expected_plan_sha256};
-    let mut fixture = protocol_tranche_fixture(Vec::new());
-    fixture.desired.ledger_fee_cycles = "0.00000001B".into();
-    fixture.platform.desired = fixture.desired.clone();
-    for file in ["coordinator.did", "root.did", "store.did"] {
-        fs::write(fixture.root.join(file), b"service : {};").unwrap();
-    }
-    let mut plan = workflow::plan(
-        &fixture.root,
-        &fixture.desired,
-        &sha256_hex(b"terminal-source"),
-        "test-fleet",
-        1,
-        &mut fixture.platform,
-    )
-    .unwrap()
-    .plan;
-    let mut source_desired = fixture.desired.clone();
-    source_desired.canisters[0].wasm = Some("app.wasm".into());
-    plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(
-        &source_desired,
-    )));
-    plan.conservation.maximum_new_funding_cycles = if paid { 110 } else { 0 };
-    plan.conservation.maximum_unavoidable_fee_cycles = if paid { 10 } else { 0 };
-    plan.conservation.maximum_operator_debit_cycles = if paid { 120 } else { 0 };
-    plan.conservation.maximum_execution_burn_cycles = 200;
-    plan.continuation = Some(FleetEnsureContinuationAuthority {
-        fixture_publication_retry_attempts: 0,
-        app_config_sha256: sha256_hex(b"config"),
-        application_artifact_union_sha256: sha256_hex(b"artifacts"),
-        coordinator_candid_sha256: sha256_hex(b"service : {};"),
-        maximum_successor_actions: 5,
-        root_candid_sha256: sha256_hex(b"service : {};"),
-        store_candid_sha256: sha256_hex(b"service : {};"),
-    });
-    let fund = EnsureAction::Fund {
-        pool_funding: None,
-        amount: 110,
-        created_at_time: 1,
-        expected_post_cycles: 610,
-        funding_deficit_cycles: 100,
-        funding_margin_cycles: 10,
-        ledger: LEDGER.into(),
-        name: "treasury".into(),
-        principal: TREASURY.into(),
-    };
-    plan.canisters[0].actions = if paid { vec![fund] } else { Vec::new() };
-    plan.protocol_actions.clear();
-    plan.plan_sha256 = expected_plan_sha256(&plan);
-    let mut phase = plan.clone();
-    phase.continuation = None;
-    phase.canisters[0].actions.clear();
-    phase.protocol_actions = vec![typed_protocol_action(&plan.operation_id)];
-    phase.plan_sha256 = expected_plan_sha256(&phase);
-    let paths = ops::EnsurePaths::under(&fixture.root, "local", "test-fleet");
-    let mut phase_paths = paths.clone();
-    phase_paths.plan = paths
-        .plan
-        .with_file_name("phases")
-        .join(format!("{}.json", phase.plan_sha256));
-    ops::write_plan(&phase_paths, &phase).unwrap();
-    ops::write_plan(&paths, &plan).unwrap();
-    let effects = plan.canisters[0]
-        .actions
-        .iter()
-        .chain(phase.protocol_actions.iter())
-        .map(|action| EffectRecord {
-            publication_attempts: 0,
-            maintenance_attempts: 0,
-            action_sha256: action_sha256(action),
-            created_principal: None,
-            destination_post_cycles: None,
-            destination_pre_cycles: None,
-            post_cycles: Some(610),
-            pre_cycles: Some(500),
-            pre_canister_version: None,
-            progress_identity: None,
-            receipt: Some("receipt-fixture".into()),
-            state: EffectState::Applied,
-        })
-        .collect();
-    let journal = FleetEnsureJournalRecord {
-        bootstrap_registration_recovery: None,
-        funding_observations: BTreeMap::new(),
-        funding_reviews: Vec::new(),
-        successor_phases: vec![FleetEnsureSuccessorPhaseRecord {
-            execution_burn_before_phase: 0,
-            plan_sha256: phase.plan_sha256.clone(),
-            plan: None,
-        }],
-        completion: FleetEnsureCompletion::Converged,
-        estate_funding_required: None,
-        effects,
-        fleet: plan.fleet.clone(),
-        initial_controlled_cycles: 500,
-        initial_estate_funding_cycles_by_root: BTreeMap::new(),
-        initial_operator_cycles: 1000,
-        operation_id: plan.operation_id.clone(),
-        plan_sha256: plan.plan_sha256.clone(),
-        schema_version: 1,
-        stalled_observations: 0,
-    };
-    ops::write_journal(&paths, &journal).unwrap();
-    let mut state = ops::read_state(&paths, "test-fleet").unwrap();
-    state.active_registry = Some(empty_active_registry());
-    ops::write_state(&paths, &state).unwrap();
-    (fixture, paths, phase)
-}
-
-#[test]
-fn terminal_retirement_reads_current_receipts_without_reauthorizing_execution() {
-    use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let (fixture, paths, _) = terminal_retirement_fixture();
-    let plan = ops::read_plan(&paths).unwrap().unwrap();
-    assert_eq!(
-        plan.plan_sha256,
-        crate::fleet_ensure::policy::expected_plan_sha256(&plan)
-    );
-    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
-    assert_eq!(source.actions.len(), 2);
-    assert_eq!(source.documents.phase_document_sha256.len(), 1);
-    assert!(fixture.platform.mutations.is_empty());
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn terminal_retirement_requires_the_retained_continuation_action_bound() {
-    use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let (mut fixture, paths, _) = terminal_retirement_fixture();
-    terminal::read(&paths, "local", "test-fleet").unwrap();
-    let mut raw: serde_json::Value =
-        serde_json::from_slice(&fs::read(&paths.plan).unwrap()).unwrap();
-    raw["continuation"]
-        .as_object_mut()
-        .unwrap()
-        .remove("maximum_successor_actions")
-        .unwrap();
-    fs::write(&paths.plan, serde_json::to_vec(&raw).unwrap()).unwrap();
-    let before = [
-        fs::read(&paths.plan).unwrap(),
-        fs::read(&paths.journal).unwrap(),
-        fs::read(&paths.state).unwrap(),
-    ];
-    assert!(matches!(
-        terminal::read(&paths, "local", "test-fleet"),
-        Err(ops::EnsureStateError::InvalidTerminalSource)
-    ));
-    assert!(matches!(
-        workflow::plan_reinstall(
-            &fixture.root,
-            &fixture.desired,
-            "target",
-            "test-fleet",
-            2,
-            &mut fixture.platform,
-        ),
-        Err(workflow::EnsureWorkflowError::State(
-            ops::EnsureStateError::Decode { .. }
-        ))
-    ));
-    assert!(fixture.platform.mutations.is_empty());
-    for (index, path) in [&paths.plan, &paths.journal, &paths.state]
-        .into_iter()
-        .enumerate()
-    {
-        assert_eq!(fs::read(path).unwrap(), before[index]);
-    }
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn terminal_retirement_rejects_incomplete_or_changed_receipts_and_phases() {
-    use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let (fixture, paths, phase) = terminal_retirement_fixture();
-    let original = ops::read_journal(&paths).unwrap().unwrap();
-    for change in 0..8 {
-        let mut journal = original.clone();
-        match change {
-            0 => journal.effects[0].state = EffectState::Issued,
-            1 => journal.effects[0].receipt = None,
-            2 => journal.effects[0].post_cycles = Some(500),
-            3 => journal.effects[0].action_sha256 = sha256_hex(b"wrong effect"),
-            4 => {
-                journal.effects.pop();
-            }
-            5 => journal.effects[1].maintenance_attempts = 1,
-            6 => journal.effects[1].publication_attempts = 1,
-            7 => journal.completion = FleetEnsureCompletion::InProgress,
-            _ => unreachable!(),
-        }
-        ops::write_journal(&paths, &journal).unwrap();
-        assert!(
-            matches!(
-                terminal::read(&paths, "local", "test-fleet"),
-                Err(ops::EnsureStateError::InvalidTerminalSource)
-            ),
-            "case {change}"
-        );
-    }
-    ops::write_journal(&paths, &original).unwrap();
-    let phase_path = paths
-        .plan
-        .with_file_name("phases")
-        .join(format!("{}.json", phase.plan_sha256));
-    let mut raw: serde_json::Value =
-        serde_json::from_slice(&fs::read(&phase_path).unwrap()).unwrap();
-    raw["operation_id"] = serde_json::json!(sha256_hex(b"different operation"));
-    fs::write(phase_path, serde_json::to_vec(&raw).unwrap()).unwrap();
-    assert!(terminal::read(&paths, "local", "test-fleet").is_err());
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn terminal_retirement_requires_exact_paid_debit_and_bounded_live_conservation() {
-    use crate::fleet_ensure::{
-        ops::reinstall::terminal, policy::reinstall::terminal::conservation,
-    };
-    let (fixture, paths, _) = terminal_retirement_fixture();
-    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
-    let observation = FleetObservation {
-        additional_controlled_cycles: BTreeMap::new(),
-        canisters: BTreeMap::new(),
-        estate_funding_domains: BTreeMap::new(),
-        ledger_fee_cycles: 10,
-        operator_cycles: 880,
-        protocol_ready: BTreeMap::new(),
-    };
-    let actual = conservation(&source, &observation, 600).unwrap();
-    assert_eq!(actual.observed_net_cycle_debit_cycles, 10);
-    assert_eq!(actual.received_new_funding_cycles, 110);
-    assert_eq!(actual.operator_debit_cycles, 120);
-    for balance in [879, 881, 1001] {
-        let mut changed = observation.clone();
-        changed.operator_cycles = balance;
-        assert!(conservation(&source, &changed, 600).is_none());
-    }
-    assert!(conservation(&source, &observation, 409).is_none());
-    let donated = conservation(&source, &observation, 611).unwrap();
-    assert_eq!(donated.observed_net_cycle_credit_cycles, 1);
-    assert_eq!(donated.observed_net_cycle_debit_cycles, 0);
-    let mut changed = source;
-    changed.conservation.scheduled_transfer_cycles = 1;
-    assert!(conservation(&changed, &observation, 600).is_none());
-    if let EnsureAction::Fund { ledger, .. } = &mut changed.actions[0] {
-        *ledger = CONTROLLER.into();
-    }
-    assert!(conservation(&changed, &observation, 600).is_none());
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn terminal_retirement_archives_phases_and_recovers_every_handoff_boundary() {
-    use crate::fleet_ensure::{
-        model::*,
-        ops::{self, reinstall::terminal},
-        policy::expected_plan_sha256,
-    };
-    let (fixture, paths, mut replacement) = terminal_retirement_fixture();
-    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
-    replacement.operation_id = sha256_hex(b"new reviewed operation");
-    replacement.scope = FleetEnsurePlanScope::ReinstallPreparation;
-    replacement.protocol_actions.clear();
-    replacement.reinstall = Some(Box::new(FleetReinstallRecord {
-        target_artifacts_sha256: None,
-        source: Some(Box::new(
-            terminal::capture(
-                &fixture.root,
-                &source,
-                ActualCycleConservation {
-                    estate_funding_cycles: 0,
-                    exact_estate_creation_fee_cycles: 0,
-                    exact_unavoidable_fee_cycles: 10,
-                    final_controlled_cycles: 600,
-                    observed_net_cycle_debit_cycles: 10,
-                    observed_starting_cycles: 500,
-                    observed_net_cycle_credit_cycles: 0,
-                    operator_debit_cycles: 120,
-                    received_new_funding_cycles: 110,
-                },
-            )
-            .unwrap(),
-        )),
-        operation_id: replacement.operation_id.clone(),
-        source_operation_id: source.documents.operation_id.clone(),
-        authorities: Vec::new(),
-        assets: Vec::new(),
-        activation_reset: None,
-        completed_reset: None,
-    }));
-    replacement.plan_sha256 = expected_plan_sha256(&replacement);
-    ops::reinstall::adoption::tests::assert_terminal_handoff(&paths, replacement);
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one review journey checks inventory rejection, staged review and pre-apply drift without effects"
-)]
-fn terminal_retirement_review_binds_fresh_inventory_and_rechecks_before_apply() {
-    use crate::fleet_ensure::{model::*, ops};
-    let (mut fixture, paths, phase) = terminal_retirement_fixture();
-    let mut state = ops::read_state(&paths, "test-fleet").unwrap();
-    state.principals.insert("treasury".into(), TREASURY.into());
-    state.topology.insert(
-        "treasury".into(),
-        FleetEnsureTopologyRecord {
-            kind: DesiredCanisterKind::Coordinator,
-            module_hash: Some(sha256_hex(b"current-wasm")),
-            parent: None,
-            protocol_binding: None,
-            role: Some("coordinator".into()),
-        },
-    );
-    ops::write_state(&paths, &state).unwrap();
-    fixture.platform.operator_cycles = 880;
-    fixture.platform.live.get_mut(TREASURY).unwrap().cycles = 600;
-    let inventory = TerminalFleetInventory {
-        active_registry: state.active_registry.clone(),
-        controlled_cycles_by_principal: BTreeMap::new(),
-        entries: vec![RegistryEntry {
-            pid: TREASURY.into(),
-            role: Some("coordinator".into()),
-            parent_pid: None,
-            module_hash: Some(sha256_hex(b"current-wasm")),
-            protocol_binding: None,
-        }],
-    };
-    fixture.platform.terminal_inventory_expected_operation_id = Some(phase.operation_id.clone());
-    fixture.platform.reinstall_authority = Some(BTreeMap::from([(
-        "treasury".into(),
-        RootManagementCanisterObservation {
-            name: "treasury".into(),
-            subnet: SUBNET.into(),
-            live: fixture.platform.live[TREASURY].clone(),
-        },
-    )]));
-    let original = [
-        fs::read(&paths.plan).unwrap(),
-        fs::read(&paths.journal).unwrap(),
-        fs::read(&paths.state).unwrap(),
-    ];
-    // Missing or duplicate inventory cannot be masked by retained state or the burn allowance.
-    for change in 0..5 {
-        fixture.platform.terminal_inventory = inventory.clone();
-        let entries = &mut fixture.platform.terminal_inventory.entries;
-        match change {
-            0 => entries.clear(),
-            1 => entries.push(inventory.entries[0].clone()),
-            2 => entries[0].parent_pid = Some(RETIRED.into()),
-            3 => entries[0].module_hash = Some(sha256_hex(b"drifted module")),
-            4 => entries[0].role = Some("drifted-role".into()),
-            _ => unreachable!(),
-        }
-        assert!(matches!(
-            workflow::plan_reinstall(
-                &fixture.root,
-                &fixture.desired,
-                "target",
-                "test-fleet",
-                2,
-                &mut fixture.platform
-            ),
-            Err(workflow::EnsureWorkflowError::ConvergenceDrift)
-        ));
-        assert_eq!(fixture.platform.desired, fixture.desired);
-        assert!(fixture.platform.mutations.is_empty());
-    }
-    fixture.platform.terminal_inventory = inventory;
-    let review = workflow::plan_reinstall(
-        &fixture.root,
-        &fixture.desired,
-        "target",
-        "test-fleet",
-        2,
-        &mut fixture.platform,
-    )
-    .unwrap();
-    assert_eq!(
-        review.plan.scope,
-        FleetEnsurePlanScope::ReinstallPreparation
-    );
-    assert_ne!(review.plan.operation_id, phase.operation_id);
-    assert!(
-        review
-            .plan
-            .reinstall
-            .as_ref()
-            .unwrap()
-            .source
-            .as_ref()
-            .unwrap()
-            .terminal_retirement
-            .is_some()
-    );
-    assert_eq!(fixture.platform.desired, fixture.desired);
-    assert!(fixture.platform.mutations.is_empty());
-    // Independent operator activity invalidates apply before the old operation is replaced.
-    fixture.platform.operator_cycles -= 1;
-    assert!(matches!(
-        workflow::apply(
-            &fixture.root,
-            &fixture.desired,
-            "target",
-            "test-fleet",
-            &review.plan.plan_sha256,
-            &mut fixture.platform
-        ),
-        Err(workflow::EnsureWorkflowError::Conservation(_))
-    ));
-    assert!(fixture.platform.mutations.is_empty());
-    assert_eq!(fixture.platform.desired, fixture.desired);
-    for (index, path) in [&paths.plan, &paths.journal, &paths.state]
-        .into_iter()
-        .enumerate()
-    {
-        assert_eq!(fs::read(path).unwrap(), original[index]);
-    }
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn terminal_retirement_preserves_every_root_account_and_pool_identity() {
-    use crate::fleet_ensure::{
-        model::*, ops::reinstall::terminal, policy::reinstall::terminal::conservation,
-    };
-    let (fixture, paths, _) = terminal_retirement_fixture();
-    let mut source = terminal::read(&paths, "local", "test-fleet").unwrap();
-    source
-        .conservation
-        .estate_funding_domains
-        .push(EstateFundingDomainPlan {
-            allocated_workloads: 1,
-            available_cycles: Some(30),
-            available_pool_slots: 0,
-            creation_amount_cycles: 50,
-            cycles_ledger: LEDGER.into(),
-            creation_execution_margin_cycles: 0,
-            readiness_floor_cycles: 20,
-            eligible_ready_pool_assets: 1,
-            initial_pool_assets: vec![OLD_APP.into()],
-            ledger_fee_cycles: 10,
-            management_creation_fee_cycles: 50,
-            maximum_creation_debit_cycles: 0,
-            maximum_creation_fee_cycles: 0,
-            maximum_funding_cycles: 0,
-            occupied_pool_assets: 1,
-            pending_creation_count: 0,
-            pending_creation: None,
-            pool_maximum_size: 1,
-            planned_initial_workloads: 1,
-            required_creation_count: 0,
-            root: "root".into(),
-            root_principal: Some(TREASURY.into()),
-            shortfall_cycles: 0,
-        });
-    source
-        .journal
-        .initial_estate_funding_cycles_by_root
-        .insert("root".into(), 30);
-    let observation = FleetObservation {
-        additional_controlled_cycles: BTreeMap::new(),
-        canisters: BTreeMap::new(),
-        estate_funding_domains: BTreeMap::from([(
-            "root".into(),
-            EstateFundingDomainObservation {
-                balance_cycles: Some(30),
-                cycles_ledger: LEDGER.into(),
-                root_principal: Some(TREASURY.into()),
-                pool: Some(EstatePoolInventoryObservation {
-                    assets: vec![EstatePoolAssetObservation {
-                        creation_receipt: None,
-                        cycles: 20,
-                        lifecycle: EstatePoolAssetLifecycle::Workload,
-                        origin: EstatePoolAssetOrigin::Imported,
-                        principal: OLD_APP.into(),
-                    }],
-                    maximum_size: 1,
-                    minimum_size: 0,
-                    pending_creation: None,
-                    readiness_floor_cycles: 20,
-                    creation_execution_margin_cycles: 0,
-                }),
-            },
-        )]),
-        ledger_fee_cycles: 10,
-        operator_cycles: 880,
-        protocol_ready: BTreeMap::new(),
-    };
-    assert!(conservation(&source, &observation, 600).is_some());
-    for change in 0..6 {
-        let mut changed = observation.clone();
-        let domain = changed.estate_funding_domains.get_mut("root").unwrap();
-        match change {
-            0 => domain.balance_cycles = Some(29),
-            1 => domain.balance_cycles = None,
-            2 => domain.root_principal = Some(RETIRED.into()),
-            3 => domain.cycles_ledger = CONTROLLER.into(),
-            4 => domain.pool.as_mut().unwrap().assets.clear(),
-            5 => {
-                let assets = &mut domain.pool.as_mut().unwrap().assets;
-                assets.push(assets[0].clone());
-            }
-            _ => unreachable!(),
-        }
-        assert!(
-            conservation(&source, &changed, 600).is_none(),
-            "case {change}"
-        );
-    }
-    source.conservation.estate_funding_domains[0].required_creation_count = 1;
-    assert!(conservation(&source, &observation, 600).is_none());
     fs::remove_dir_all(fixture.root).unwrap();
 }
 
@@ -8313,296 +7408,5 @@ fn store_chunks_stall_bound_reports_the_failed_chunk_after_draining() {
             Some(&1)
         );
     }
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-fn terminal_retirement_funding_observations_cannot_add_allowance_or_hide_invalid_evidence() {
-    use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let (fixture, paths, _) = terminal_retirement_fixture();
-    let raw: serde_json::Value =
-        serde_json::from_slice(&fs::read(&paths.journal).unwrap()).unwrap();
-    let original = serde_json::to_vec(&raw).unwrap();
-    fs::write(&paths.journal, &original).unwrap();
-    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
-    assert_eq!(source.conservation.maximum_execution_burn_cycles, 200);
-    assert_eq!(
-        source.documents.journal_document_sha256,
-        sha256_hex(&original)
-    );
-    assert!(ops::read_journal(&paths).unwrap().is_some());
-    assert_eq!(fs::read(&paths.journal).unwrap(), original);
-    assert!(fixture.platform.mutations.is_empty());
-    let mut missing = raw.clone();
-    missing
-        .as_object_mut()
-        .unwrap()
-        .remove("funding_observations");
-    fs::write(&paths.journal, serde_json::to_vec(&missing).unwrap()).unwrap();
-    assert!(matches!(
-        terminal::read(&paths, "local", "test-fleet"),
-        Err(ops::EnsureStateError::InvalidTerminalSource)
-    ));
-    for (field, value) in [
-        ("funding_observations", serde_json::Value::Null),
-        ("funding_observations", serde_json::json!({"root": {}})),
-        ("unreviewed_payment", serde_json::json!({"cycles": "1"})),
-        ("schema_version", serde_json::json!(2)),
-        ("completion", serde_json::json!("in_progress")),
-        ("initial_controlled_cycles", serde_json::Value::Null),
-    ] {
-        let mut changed = raw.clone();
-        changed[field] = value;
-        fs::write(&paths.journal, serde_json::to_vec(&changed).unwrap()).unwrap();
-        assert!(matches!(
-            terminal::read(&paths, "local", "test-fleet"),
-            Err(ops::EnsureStateError::InvalidTerminalSource)
-        ));
-    }
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-#[ignore = "read-only inspection of an explicitly selected retained workspace"]
-fn terminal_retirement_inspects_selected_workspace_without_mutation() {
-    use crate::fleet_ensure::ops::{self, reinstall::terminal};
-    let root = PathBuf::from(
-        std::env::var_os("CANIC_RETAINED_REVIEW_WORKSPACE").expect("selected workspace"),
-    );
-    let environment =
-        std::env::var("CANIC_RETAINED_REVIEW_ENVIRONMENT").expect("selected environment");
-    let fleet = std::env::var("CANIC_RETAINED_REVIEW_FLEET").expect("selected Fleet");
-    let paths = ops::EnsurePaths::under(&root, &environment, &fleet);
-    let original = [&paths.plan, &paths.journal, &paths.state].map(|path| fs::read(path).unwrap());
-    let source = terminal::read(&paths, &environment, &fleet).unwrap();
-    println!(
-        "source={:?}; effects={}; phases={}",
-        source.documents,
-        source.actions.len(),
-        source.journal.successor_phases.len()
-    );
-    for (path, before) in [&paths.plan, &paths.journal, &paths.state]
-        .into_iter()
-        .zip(original)
-    {
-        assert_eq!(fs::read(path).unwrap(), before);
-    }
-}
-
-#[test]
-fn terminal_retirement_external_debit_is_exact_and_separate_from_source_payments() {
-    use crate::fleet_ensure::{
-        model::*, ops::reinstall::terminal,
-        policy::reinstall::terminal::external_debit_conservation,
-    };
-    let (fixture, paths, _) = terminal_retirement_payment_fixture(false);
-    let source = terminal::read(&paths, "local", "test-fleet").unwrap();
-    let state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet").unwrap();
-    let observation = FleetObservation {
-        additional_controlled_cycles: BTreeMap::new(),
-        canisters: BTreeMap::new(),
-        estate_funding_domains: BTreeMap::new(),
-        ledger_fee_cycles: 10,
-        operator_cycles: 880,
-        protocol_ready: BTreeMap::new(),
-    };
-    let debit = RetirementWithdrawalRecord {
-        ledger: LEDGER.into(),
-        operator: source.reviewed_desired.desired().operator.clone(),
-        destination: RETIRED.into(),
-        network_identity_sha256: sha256_hex(b"network"),
-        block_sha256: sha256_hex(b"block"),
-        block_index: 7,
-        timestamp_ns: 2,
-        amount_cycles: 110,
-        fee_cycles: 10,
-    };
-    let actual = external_debit_conservation(&source, &observation, 500, &state, &debit).unwrap();
-    assert_eq!(actual.operator_debit_cycles, 0);
-    assert_eq!(actual.received_new_funding_cycles, 0);
-    assert_eq!(observation.operator_cycles, 880);
-    assert_eq!(source.journal.initial_operator_cycles, 1000);
-    for balance in [879, 881, 990, 1000] {
-        let mut changed = observation.clone();
-        changed.operator_cycles = balance;
-        assert!(external_debit_conservation(&source, &changed, 500, &state, &debit).is_none());
-    }
-    for case in 0..5 {
-        let mut changed = debit.clone();
-        match case {
-            0 => changed.operator = RETIRED.into(),
-            1 => changed.ledger = RETIRED.into(),
-            2 => changed.timestamp_ns = 1,
-            3 => changed.amount_cycles = 0,
-            4 => changed.fee_cycles = u128::MAX,
-            _ => unreachable!(),
-        }
-        assert!(
-            external_debit_conservation(&source, &observation, 500, &state, &changed).is_none()
-        );
-    }
-    let mut inside = state.clone();
-    inside
-        .principals
-        .insert("external".into(), debit.destination.clone());
-    assert!(external_debit_conservation(&source, &observation, 500, &inside, &debit).is_none());
-    let mut additional = observation.clone();
-    additional
-        .additional_controlled_cycles
-        .insert(debit.destination.clone(), 1);
-    assert!(external_debit_conservation(&source, &additional, 500, &state, &debit).is_none());
-    let mut retained = state.clone();
-    retained
-        .retained_cycles_by_principal
-        .insert(debit.destination.clone(), 1);
-    assert!(external_debit_conservation(&source, &observation, 500, &retained, &debit).is_none());
-    let mut paid = source.clone();
-    paid.conservation.maximum_operator_debit_cycles = 1;
-    assert!(external_debit_conservation(&paid, &observation, 500, &state, &debit).is_none());
-    assert!(external_debit_conservation(&source, &observation, 0, &state, &debit).is_none());
-    fs::remove_dir_all(fixture.root).unwrap();
-}
-
-#[test]
-#[expect(
-    clippy::too_many_lines,
-    reason = "one review journey verifies receipt and balance drift before immutable evidence handoff"
-)]
-fn terminal_retirement_external_debit_review_rechecks_receipt_and_balance_before_effects() {
-    use crate::fleet_ensure::{model::*, ops};
-    let (mut fixture, paths, phase) = terminal_retirement_payment_fixture(false);
-    let mut state = ops::read_state(&paths, "test-fleet").unwrap();
-    state.principals.insert("treasury".into(), TREASURY.into());
-    state.topology.insert(
-        "treasury".into(),
-        FleetEnsureTopologyRecord {
-            kind: DesiredCanisterKind::Coordinator,
-            module_hash: Some(sha256_hex(b"current-wasm")),
-            parent: None,
-            protocol_binding: None,
-            role: Some("coordinator".into()),
-        },
-    );
-    ops::write_state(&paths, &state).unwrap();
-    fixture.platform.operator_cycles = 880;
-    fixture.platform.live.get_mut(TREASURY).unwrap().cycles = 490;
-    fixture.platform.terminal_inventory = TerminalFleetInventory {
-        active_registry: state.active_registry.clone(),
-        controlled_cycles_by_principal: BTreeMap::new(),
-        entries: vec![RegistryEntry {
-            pid: TREASURY.into(),
-            role: Some("coordinator".into()),
-            parent_pid: None,
-            module_hash: Some(sha256_hex(b"current-wasm")),
-            protocol_binding: None,
-        }],
-    };
-    fixture.platform.terminal_inventory_expected_operation_id = Some(phase.operation_id);
-    fixture.platform.reinstall_authority = Some(BTreeMap::from([(
-        "treasury".into(),
-        RootManagementCanisterObservation {
-            name: "treasury".into(),
-            subnet: SUBNET.into(),
-            live: fixture.platform.live[TREASURY].clone(),
-        },
-    )]));
-    let debit = RetirementWithdrawalRecord {
-        ledger: LEDGER.into(),
-        operator: fixture.desired.operator.clone(),
-        destination: RETIRED.into(),
-        network_identity_sha256: sha256_hex(b"network"),
-        block_sha256: sha256_hex(b"block"),
-        block_index: 7,
-        timestamp_ns: 2,
-        amount_cycles: 110,
-        fee_cycles: 10,
-    };
-    fixture.platform.retirement_debit_block = Some(7);
-    fixture.platform.retirement_debit = Some(debit.clone());
-    let original = [&paths.plan, &paths.journal, &paths.state].map(|path| fs::read(path).unwrap());
-    let review = workflow::plan_reinstall(
-        &fixture.root,
-        &fixture.desired,
-        "target",
-        "test-fleet",
-        3,
-        &mut fixture.platform,
-    )
-    .unwrap();
-    let record = &review
-        .plan
-        .reinstall
-        .as_ref()
-        .unwrap()
-        .source
-        .as_ref()
-        .unwrap()
-        .terminal_retirement
-        .as_ref()
-        .unwrap()
-        .conservation;
-    let FleetRetirementConservationRecord::ExternalDebit(record) = record else {
-        panic!("external debit review")
-    };
-    assert_eq!(record.external_debit, debit);
-    assert_eq!(record.source_conservation.operator_debit_cycles, 0);
-    assert!(fixture.platform.mutations.is_empty());
-    // Apply uses its retained digest; the review-only input is no longer needed.
-    fixture.platform.retirement_debit_block = None;
-    for changed in 0..5 {
-        fixture.platform.retirement_debit = Some(debit.clone());
-        fixture.platform.operator_cycles = 880;
-        match changed {
-            0 => fixture.platform.retirement_debit = None,
-            1 => {
-                fixture
-                    .platform
-                    .retirement_debit
-                    .as_mut()
-                    .unwrap()
-                    .network_identity_sha256 = sha256_hex(b"other network");
-            }
-            2 => {
-                fixture
-                    .platform
-                    .retirement_debit
-                    .as_mut()
-                    .unwrap()
-                    .block_sha256 = sha256_hex(b"other block");
-            }
-            3 => fixture.platform.operator_cycles = 879,
-            4 => fixture.platform.operator_cycles = 1000,
-            _ => unreachable!(),
-        }
-        let result = workflow::apply(
-            &fixture.root,
-            &fixture.desired,
-            "target",
-            "test-fleet",
-            &review.plan.plan_sha256,
-            &mut fixture.platform,
-        );
-        if changed < 3 {
-            assert!(matches!(
-                result,
-                Err(workflow::EnsureWorkflowError::DriftedBeforeApply)
-            ));
-        } else {
-            assert!(matches!(
-                result,
-                Err(workflow::EnsureWorkflowError::Conservation(_))
-            ));
-        }
-        assert!(fixture.platform.mutations.is_empty());
-        for (index, path) in [&paths.plan, &paths.journal, &paths.state]
-            .into_iter()
-            .enumerate()
-        {
-            assert_eq!(fs::read(path).unwrap(), original[index]);
-        }
-    }
-    // Exercise the existing archive owner at every interrupted handoff boundary.
-    // Authority sealing itself remains owned by the production PocketIC tests.
-    ops::reinstall::adoption::tests::assert_terminal_handoff(&paths, review.plan);
     fs::remove_dir_all(fixture.root).unwrap();
 }

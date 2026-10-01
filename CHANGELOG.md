@@ -19,6 +19,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Cargo resolver 3, release-guard corrections, quieter Candid diagnostics and
   complete test-failure reporting, bootstrap budget admission and reviewed
   held-capacity funding recovery, with dependency and artifact-build drift fixes.
+  It removes superseded completed-Fleet reset/receipt flows so current clean
+  reinstall owns completed-Fleet replacement, and compacts the status handoff.
   API removals and current-schema changes are potentially breaking pre-1.0 hard
   cuts requiring reinstall; fresh backup execution remains unavailable.
 - `0.110.48` separates release receipts from status documents, removes obsolete

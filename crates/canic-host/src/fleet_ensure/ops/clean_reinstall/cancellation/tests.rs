@@ -103,8 +103,6 @@ fn cancellation_rejects_stale_digests_and_all_execution_or_side_operation_files(
         "state.json",
         "capacity-import.json",
         "operator-mint.json",
-        "completed-estate-publication.json",
-        "completed-preparation-journal.json",
         "activation-reset-adoption.json",
         "unknown-owner.json",
     ] {

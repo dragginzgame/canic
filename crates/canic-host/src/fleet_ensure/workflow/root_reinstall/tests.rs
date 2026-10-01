@@ -207,7 +207,6 @@ fn payment_and_install_require_stopped_exact_source_authority() {
                 ),
                 "{drift}"
             );
-            assert!(fixture.platform.seal_reads.is_empty());
         }
     }
 }

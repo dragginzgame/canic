@@ -42,7 +42,6 @@ fi
 is_release_only_path() {
     case "$1" in
         Cargo.toml | Cargo.lock | scripts/dev/install_dev.sh | \
-            scripts/ci/sync-release-surface-version.sh | \
             release-validation.json | "docs/changelog/$minor_line.md" | \
             */Cargo.toml)
             return 0
@@ -59,11 +58,19 @@ mapfile -t candidate_changes < <(
 for changed_path in "${candidate_changes[@]}"; do
     is_release_only_path "$changed_path" ||
         fail "validated source is followed by non-release change: $changed_path"
+    case "$changed_path" in
+        Cargo.toml | */Cargo.toml | Cargo.lock)
+            git -C "$ROOT" cat-file -e "$validated_source:$changed_path" ||
+                fail "release version mutation added an unvalidated Cargo file: $changed_path"
+            ;;
+    esac
 done
 while IFS= read -r untracked_path; do
     [ -z "$untracked_path" ] ||
         fail "release candidate contains untracked state: $untracked_path"
 done < <(git -C "$ROOT" ls-files --others --exclude-standard)
+
+bash "$ROOT/scripts/ci/check-release-surface-content.sh" "$validated_source" "$workspace_version" "$release_date"
 
 metadata="$(cd "$ROOT" && cargo metadata --locked --offline --format-version 1 --no-deps)" ||
     fail "locked offline Cargo metadata is unavailable"

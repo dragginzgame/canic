@@ -361,7 +361,7 @@ fn capacity_import_approval_fences_other_fleet_operations_across_restart() {
     assert!(matches!(
         crate::fleet_ensure::ops::retained_contract::check(&root, "local", "staging"),
         Err(
-            crate::fleet_ensure::ops::retained_contract::RetainedContractError::ReceiptAudit(
+            crate::fleet_ensure::ops::retained_contract::RetainedContractError::State(
                 EnsureStateError::CapacityImportInProgress { .. }
             )
         )

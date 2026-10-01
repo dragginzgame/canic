@@ -4,8 +4,6 @@
 //! Does not own: reset admission, remote effects or source-plan execution.
 //! Boundary: exact source documents are archived before replacement intent is committed.
 
-mod content;
-pub mod publication;
 #[cfg(test)]
 pub(in crate::fleet_ensure) mod tests;
 
@@ -99,21 +97,6 @@ pub(in crate::fleet_ensure) fn adopt(
         let bytes = exact_bytes(path, digest)?;
         retain(paths, digest, &bytes)?;
     }
-    if let Some(source) = terminal_retirement(plan) {
-        content::retain(
-            paths,
-            &exact_bytes(&paths.plan, &intent.source_plan_sha256)?,
-        )?;
-        for (label, digest) in &source.phase_document_sha256 {
-            let path = paths
-                .plan
-                .with_file_name("phases")
-                .join(format!("{label}.json"));
-            let bytes = exact_bytes(&path, digest)?;
-            retain(paths, digest, &bytes)?;
-            content::retain(paths, &bytes)?;
-        }
-    }
     retain(paths, &intent.replacement_plan_sha256, &plan_bytes)?;
     retain(paths, &intent.replacement_journal_sha256, &journal_bytes)?;
     write_current(&marker_path(paths), &intent)?;
@@ -139,18 +122,6 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
         .map_err(|_| conflict())?
         .ok_or_else(conflict)?;
     validate_plan(&replacement)?;
-    if let Some(source) = terminal_retirement(&replacement) {
-        content::verify(
-            paths,
-            &exact_bytes(
-                &object_path(paths, &intent.source_plan_sha256),
-                &intent.source_plan_sha256,
-            )?,
-        )?;
-        for (label, digest) in &source.phase_document_sha256 {
-            verify_archived_phase(paths, &replacement, source, label, digest)?;
-        }
-    }
     exact_bytes(&paths.state, &intent.source_state_sha256)?;
     let replacements = [
         (
@@ -180,112 +151,12 @@ pub(in crate::fleet_ensure) fn recover(paths: &EnsurePaths) -> Result<(), Ensure
     write_current(&marker_path(paths), &intent)
 }
 
-/// Recovery authenticates the exact bytes admitted by the reviewed replacement.
-/// Source receipt and semantic digest checks belong to admission, before intent;
-/// decoding an archived phase as a current executable plan invents that dependency.
-fn verify_archived_phase(
-    paths: &EnsurePaths,
-    replacement: &FleetEnsurePlan,
-    source: &crate::fleet_ensure::model::FleetTerminalSourceRecord,
-    label: &str,
-    digest: &str,
-) -> Result<(), EnsureStateError> {
-    if !is_sha256(label) || !is_sha256(digest) {
-        return Err(conflict());
-    }
-    let bytes = exact_bytes(&object_path(paths, digest), digest)?;
-    let phase: ArchivedPhaseIdentity = serde_json::from_slice(&bytes).map_err(|_| conflict())?;
-    let expected = ArchivedPhaseIdentity {
-        schema_version: 1,
-        plan_sha256: label.to_string(),
-        operation_id: source.operation_id.clone(),
-        environment: replacement.environment.clone(),
-        fleet: replacement.fleet.clone(),
-    };
-    if phase != expected {
-        return Err(conflict());
-    }
-    content::verify(paths, &bytes)?;
-    Ok(())
-}
-
-/// Identity-only projection; the reviewed document hash binds all other fields.
-#[derive(serde::Deserialize, Eq, PartialEq)]
-struct ArchivedPhaseIdentity {
-    schema_version: u16,
-    plan_sha256: String,
-    operation_id: String,
-    environment: String,
-    fleet: String,
-}
-
 /// Borrow common byte bindings while preserving each source's distinct admission rules.
 struct SourceDocumentBinding<'a> {
     operation_id: &'a str,
     plan: &'a str,
     journal: &'a str,
     state: &'a str,
-}
-
-fn terminal_retirement(
-    plan: &FleetEnsurePlan,
-) -> Option<&crate::fleet_ensure::model::FleetTerminalSourceRecord> {
-    plan.reinstall
-        .as_ref()?
-        .source
-        .as_ref()?
-        .terminal_retirement
-        .as_deref()
-        .map(|retirement| &retirement.source)
-}
-
-fn source_binding(plan: &FleetEnsurePlan) -> Result<SourceDocumentBinding<'_>, EnsureStateError> {
-    let intent = plan.reinstall.as_ref().ok_or_else(conflict)?;
-    match (intent.activation_reset.as_deref(), intent.source.as_deref()) {
-        (Some(activation), None) => {
-            let source = &activation.source;
-            Ok(SourceDocumentBinding {
-                operation_id: &source.operation_id,
-                plan: &source.plan_document_sha256,
-                journal: &source.journal_document_sha256,
-                state: &source.state_document_sha256,
-            })
-        }
-        (None, Some(source)) => {
-            let source = &source
-                .terminal_retirement
-                .as_deref()
-                .ok_or_else(conflict)?
-                .source;
-            Ok(SourceDocumentBinding {
-                operation_id: &source.operation_id,
-                plan: &source.plan_document_sha256,
-                journal: &source.journal_document_sha256,
-                state: &source.state_document_sha256,
-            })
-        }
-        _ => Err(conflict()),
-    }
-}
-
-fn verify_source(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
-    let intent = plan.reinstall.as_ref().ok_or_else(conflict)?;
-    if let Some(expected) = terminal_retirement(plan) {
-        let current = super::terminal::read(paths, &plan.environment, &plan.fleet)?;
-        if current.documents != *expected {
-            return Err(conflict());
-        }
-    } else {
-        let expected = &intent
-            .activation_reset
-            .as_ref()
-            .ok_or_else(conflict)?
-            .source;
-        if super::source::read(paths, &plan.environment, &plan.fleet)? != *expected {
-            return Err(conflict());
-        }
-    }
-    Ok(())
 }
 
 fn validate_plan(plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
@@ -414,4 +285,36 @@ fn io_error(path: &Path, source: io::Error) -> EnsureStateError {
 
 const fn conflict() -> EnsureStateError {
     EnsureStateError::ActivationResetAdoptionConflict
+}
+
+fn source_binding(plan: &FleetEnsurePlan) -> Result<SourceDocumentBinding<'_>, EnsureStateError> {
+    let source = &plan
+        .reinstall
+        .as_ref()
+        .ok_or_else(conflict)?
+        .activation_reset
+        .as_ref()
+        .ok_or_else(conflict)?
+        .source;
+    Ok(SourceDocumentBinding {
+        operation_id: &source.operation_id,
+        plan: &source.plan_document_sha256,
+        journal: &source.journal_document_sha256,
+        state: &source.state_document_sha256,
+    })
+}
+
+fn verify_source(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> Result<(), EnsureStateError> {
+    let expected = &plan
+        .reinstall
+        .as_ref()
+        .ok_or_else(conflict)?
+        .activation_reset
+        .as_ref()
+        .ok_or_else(conflict)?
+        .source;
+    if super::source::read(paths, &plan.environment, &plan.fleet)? != *expected {
+        return Err(conflict());
+    }
+    Ok(())
 }

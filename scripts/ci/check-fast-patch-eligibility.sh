@@ -10,41 +10,6 @@ fail() {
     exit 1
 }
 
-validate_compatible_lock_patch() {
-    local line old_minor new_minor
-    local -a old_versions=()
-    local -a new_versions=()
-
-    while IFS= read -r line; do
-        case "$line" in
-            diff\ --git* | index\ * | ---\ * | +++\ * | @@\ *) ;;
-            -version\ =\ \"*\" | +version\ =\ \"*\" | \
-                -checksum\ =\ \"*\" | +checksum\ =\ \"*\") ;;
-            -* | +*)
-                fail "Cargo.lock fast patches may change only compatible package versions and checksums"
-                ;;
-        esac
-        case "$line" in
-            -version\ =\ \"*\") old_versions+=("${line#-version = \"}") ;;
-            +version\ =\ \"*\") new_versions+=("${line#+version = \"}") ;;
-        esac
-    done < <(git diff --unified=0 "$base_tag"..HEAD -- Cargo.lock)
-
-    [ "${#old_versions[@]}" -eq "${#new_versions[@]}" ] ||
-        fail "Cargo.lock package additions or removals require the complete release gate"
-    [ "${#old_versions[@]}" -gt 0 ] || fail "Cargo.lock changed without a package version change"
-    for ((index = 0; index < ${#old_versions[@]}; index += 1)); do
-        old_versions[index]="${old_versions[index]%\"}"
-        new_versions[index]="${new_versions[index]%\"}"
-        old_minor="${old_versions[index]%.*}"
-        new_minor="${new_versions[index]%.*}"
-        [ "$old_minor" = "$new_minor" ] ||
-            fail "Cargo.lock change ${old_versions[index]} -> ${new_versions[index]} is not patch-compatible"
-        [ "${old_versions[index]}" != "${new_versions[index]}" ] ||
-            fail "Cargo.lock version did not advance"
-    done
-}
-
 case "${1:-}" in
     "") ;;
     --eligibility-only) ELIGIBILITY_ONLY=1 ;;
@@ -96,7 +61,6 @@ fi
 mapfile -t changed_paths < <(git diff --name-only "$base_tag"..HEAD)
 [ "${#changed_paths[@]}" -gt 0 ] || fail "no patch changes exist after $base_tag"
 
-lock_changed=0
 release_tooling_changed=0
 changelog_changed=0
 for changed_path in "${changed_paths[@]}"; do
@@ -105,9 +69,6 @@ for changed_path in "${changed_paths[@]}"; do
             ;;
         CHANGELOG.md)
             changelog_changed=1
-            ;;
-        Cargo.lock)
-            lock_changed=1
             ;;
         Makefile | \
             scripts/ci/bump-version.sh | \
@@ -126,7 +87,6 @@ for changed_path in "${changed_paths[@]}"; do
 done
 
 git diff --check "$base_tag"..HEAD || fail "diff hygiene failed"
-[ "$lock_changed" -eq 0 ] || validate_compatible_lock_patch
 echo "fast patch eligibility passed against $base_tag using complete basis $validation_basis_tag (${#changed_paths[@]} changed paths)"
 
 [ "$ELIGIBILITY_ONLY" -eq 0 ] || exit 0
@@ -145,10 +105,5 @@ if [ "$changelog_changed" -eq 1 ]; then
     cargo test --locked -p canic --test changelog_governance -- --nocapture
 fi
 
-if [ "$lock_changed" -eq 1 ]; then
-    bash scripts/ci/check-dependency-risk-inventory.sh
-    cargo metadata --locked --offline --format-version 1 >/dev/null
-    cargo check --locked --workspace --all-targets
-fi
 
 echo "FAST PATCH VALIDATION PASSED: targeted non-runtime gates succeeded; PocketIC was not run"

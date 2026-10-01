@@ -306,7 +306,6 @@ const fn action_label(kind: FleetEnsureActionKind) -> &'static str {
         FleetEnsureActionKind::PublishStoreChunk
         | FleetEnsureActionKind::PublishStoreFixtureChunk => "Upload artifact chunk",
         FleetEnsureActionKind::ReconcilePoolAsset => "Reconcile pool canister",
-        FleetEnsureActionKind::SealAuthority => "Seal canister authority",
         FleetEnsureActionKind::SetControllers => "Set canister controllers",
         FleetEnsureActionKind::Start => "Start canister",
         FleetEnsureActionKind::Stop => "Stop canister",

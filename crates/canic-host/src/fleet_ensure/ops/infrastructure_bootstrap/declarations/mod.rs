@@ -12,8 +12,8 @@ use crate::fleet_ensure::{
     },
     ops::{
         capacity_import::admission::{CapacityImportDeclaration, CapacityImportDispositionKind},
+        certified_custody,
         infrastructure_bootstrap::InfrastructureBootstrapError,
-        reinstall::terminal::inventory::custody,
     },
 };
 use candid::Principal;
@@ -145,7 +145,7 @@ pub(in crate::fleet_ensure) async fn observe_held(
     agent: &ic_agent::Agent,
     expected: &InfrastructureBootstrapHeldSourceRecord,
 ) -> Result<InfrastructureBootstrapCustodyRecord, InfrastructureBootstrapError> {
-    let observed = custody::observe_one(agent, expected.custody.canister)
+    let observed = certified_custody::observe_one(agent, expected.custody.canister)
         .await
         .map_err(|error| InfrastructureBootstrapError::Observation(error.to_string()))?;
     let actual = InfrastructureBootstrapCustodyRecord {

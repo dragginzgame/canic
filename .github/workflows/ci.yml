@@ -9,8 +9,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.run_id }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 on:
   push:
@@ -86,6 +86,20 @@ jobs:
           uname -m
           rustc -vV
           test "$(rustc -vV | sed -n 's/^host: //p')" = "$EXPECTED_TARGET"
+      - name: Install supported maintainer shell tools
+        shell: bash
+        run: |
+          brew install bash coreutils gnu-sed jq ripgrep
+          {
+            echo "$(brew --prefix bash)/bin"
+            echo "$(brew --prefix coreutils)/libexec/gnubin"
+            echo "$(brew --prefix gnu-sed)/libexec/gnubin"
+          } >> "$GITHUB_PATH"
+      - name: Qualify test worker failure and cancellation cleanup
+        shell: bash
+        run: |
+          bash scripts/ci/test-pocketic-workers.sh
+          bash scripts/ci/test-workspace-test-runner.sh
       - name: Install and qualify pinned native build tools
         shell: bash
         run: |
@@ -111,6 +125,8 @@ jobs:
         run: cargo check --locked -p canic-control-plane --target wasm32-unknown-unknown --features root-control-plane
       - name: Build and finalize a representative canister artifact
         run: cargo run --locked -p canic-cli --bin canic -- build demo user_shard --environment local
+      - name: Qualify one managed lifecycle through the Make PocketIC runner
+        run: make test-pocketic-case CASE=pic::lifecycle::tests::published_managed_component_group_support_drives_child_lifecycle
 
   security:
     runs-on: ubuntu-24.04

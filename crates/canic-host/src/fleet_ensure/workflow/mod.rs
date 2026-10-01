@@ -8,8 +8,6 @@
 mod balance_observation;
 pub mod capacity_import;
 pub mod clean_reinstall;
-pub mod completed_preparation;
-pub mod completed_reset;
 mod continuation;
 mod funding;
 pub mod funding_observation;
@@ -37,8 +35,8 @@ use crate::fleet_ensure::{
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
         compact_inline_plan, continuation::verify_release_transition,
-        effect_preparation::prepare_effect, lock_operation, read_plan, read_root_start_authority,
-        read_state, reserve_fixture_publication_attempt, resolve_desired_artifacts,
+        effect_preparation::prepare_effect, lock_operation, read_root_start_authority, read_state,
+        reserve_fixture_publication_attempt, resolve_desired_artifacts,
         retain_configured_principal_bindings, write_journal, write_plan, write_state,
     },
     policy::{
@@ -208,7 +206,7 @@ where
     ReinstallConflict,
 
     #[error(
-        "retained Fleet operation {operation_id} must recover before a new reinstall; preserve original plan {plan_sha256}, journal, source seals and receipts; run ensure without --reinstall to review retained funding, use --operator-mint if conversion is required, and resume the original reviewed operation before requesting a selected-release reinstall"
+        "retained Fleet operation {operation_id} must recover before a new reinstall; preserve original plan {plan_sha256}, journal and receipts; run ensure without --reinstall to review retained funding, use --operator-mint if conversion is required, and resume the original reviewed operation before requesting a selected-release reinstall"
     )]
     RetainedOperationRecoveryRequired {
         operation_id: String,
@@ -1183,22 +1181,6 @@ where
         crate::fleet_ensure::ops::infrastructure_bootstrap::verify_plan(root, &retained_plan)?;
     }
     verify_release_transition(root, operation_desired, retained_plan.scope)?;
-    if let Some(journal) = retained_journal.as_ref()
-        && let Some(actual) = crate::fleet_ensure::ops::completed_reset::terminal::read(
-            &paths,
-            &retained_plan,
-            journal,
-        )?
-    {
-        verify_journal(journal, &retained_plan, requested_fleet, &state)?;
-        return Ok(FleetEnsureReport {
-            funding_review: None,
-            actual_conservation: Some(actual),
-            effects_applied: 0,
-            plan: retained_plan,
-            terminal: true,
-        });
-    }
     if in_progress {
         compact_inline_plan(&paths, &retained_plan)?;
     }
@@ -2296,19 +2278,11 @@ where
     attach_terminal_cycles(&mut final_observation, terminal_cycles)?;
     reinstall::verify_terminal_estate(&retained_plan, &final_observation)?;
     reinstall::verify_terminal_authority(&retained_plan, &terminal_state, platform)?;
-    let completed_balances =
-        completed_reset::sample(&paths, &retained_plan, &mut final_observation, platform)?;
     let actual_conservation = verify_terminal_conservation(
         &retained_plan,
         &journal,
         &terminal_state,
         &final_observation,
-    )?;
-    completed_reset::verify(
-        &retained_plan,
-        &journal,
-        &actual_conservation,
-        completed_balances.as_ref(),
     )?;
     terminal_state.completed_reinstall_action_sha256.clear();
     terminal_state.completed_reinstall_operation_id = None;
@@ -2326,14 +2300,6 @@ where
         &funding_plan::<P::Error>(&retained_plan, &journal)?.conservation,
     )?;
     write_journal(&paths, &journal)?;
-    if let Some(balances) = completed_balances {
-        crate::fleet_ensure::ops::completed_reset::terminal::retain(
-            &paths,
-            &retained_plan,
-            &actual_conservation,
-            balances,
-        )?;
-    }
     report_progress(
         platform,
         &retained_plan,
@@ -4886,14 +4852,8 @@ fn deferred_create_observation_is_exact(
 
 pub(super) const fn action_order(action: &EnsureAction) -> u8 {
     match action {
-        EnsureAction::SealAuthority {
-            authority_kind: crate::fleet_ensure::model::DesiredCanisterKind::Root,
-            ..
-        }
-        | EnsureAction::Create { .. } => 0,
-        EnsureAction::SealAuthority { .. }
-        | EnsureAction::Fund { .. }
-        | EnsureAction::FundEstate { .. } => 1,
+        EnsureAction::Create { .. } => 0,
+        EnsureAction::Fund { .. } | EnsureAction::FundEstate { .. } => 1,
         EnsureAction::Install {
             canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Coordinator),
             ..
@@ -5816,10 +5776,7 @@ mod tests {
         let mut plan = estate_funding_plan();
         plan.conservation.estate_funding_domains.clear();
         plan.reinstall = Some(Box::new(FleetReinstallRecord {
-            target_artifacts_sha256: Some("11".repeat(32)),
-            source: None,
             activation_reset: None,
-            completed_reset: None,
             operation_id: plan.operation_id.clone(),
             source_operation_id: "source-operation".into(),
             authorities: Vec::new(),

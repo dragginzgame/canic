@@ -32,7 +32,6 @@ mod tests {
     #[cfg(test)]
     mod child_reserve;
     #[cfg(test)]
-    mod completed_preparation;
     #[cfg(test)]
     mod completed_reset;
     #[cfg(test)]
@@ -45,6 +44,8 @@ mod tests {
     mod native_funding;
     #[cfg(test)]
     mod operator_shortfall;
+    #[cfg(test)]
+    mod packaged_consumer;
     #[cfg(test)]
     mod release_artifacts;
     #[cfg(test)]
@@ -17593,16 +17594,12 @@ cycles = "80T"
                 capacity_import::host_import_transport_recovers_signed_handoff_and_root_progress,
             ),
             (
-                "completed preparation seals reconcile lost responses",
-                completed_preparation::completed_preparation_seals_reconcile_lost_responses,
-            ),
-            (
                 "completed estate reset recovers and replays",
                 completed_reset::completed_estate_reset_recovers_and_replays,
             ),
             (
-                "completed reset stops and clears retained application once",
-                completed_preparation::completed_reset_stops_and_clears_retained_application_once,
+                "running application import clears state once",
+                capacity_import::reset::running_application_import_clears_state_once,
             ),
             (
                 "initial child failure reaches Coordinator and recovers same claim",

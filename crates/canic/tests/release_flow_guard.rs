@@ -370,79 +370,6 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
     let _ = fs::remove_dir_all(root);
 }
 
-fn create_candidate_repo(name: &str) -> (PathBuf, String) {
-    let root = unique_temp_repo(name);
-    fs::create_dir_all(&root).expect("temp repo should be created");
-    run_git(&root, &["init"]);
-    write_file(
-        &root,
-        "Cargo.toml",
-        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.7\"\n",
-    );
-    write_file(&root, "Cargo.lock", "# lock\n");
-    write_file(
-        &root,
-        "CHANGELOG.md",
-        "# Descriptive root changelog without a release-summary schema\n",
-    );
-    write_file(
-        &root,
-        "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
-    );
-    write_file(
-        &root,
-        "scripts/dev/install_dev.sh",
-        "CANIC_CLI_VERSION=\"${CANIC_CLI_VERSION:-0.92.7}\"\n",
-    );
-    install_version_reader(&root);
-    let candidate_guard =
-        fs::read_to_string(workspace_root().join("scripts/ci/check-release-candidate.sh"))
-            .expect("candidate guard should be readable");
-    write_executable(
-        &root,
-        "scripts/ci/check-release-candidate.sh",
-        &candidate_guard,
-    );
-    write_file(&root, "src/lib.rs", "pub fn validated_source() {}\n");
-    commit_all(&root, "validated source");
-    let source = Command::new("git")
-        .args(["rev-parse", "HEAD"])
-        .current_dir(&root)
-        .output()
-        .expect("source revision should resolve");
-    assert!(source.status.success());
-    let source = String::from_utf8(source.stdout)
-        .expect("source revision should be UTF-8")
-        .trim()
-        .to_string();
-
-    write_file(
-        &root,
-        "Cargo.toml",
-        "[workspace]\nmembers = []\n\n[workspace.package]\nversion = \"0.92.8\"\n",
-    );
-    write_file(
-        &root,
-        "scripts/dev/install_dev.sh",
-        "CANIC_CLI_VERSION=\"${CANIC_CLI_VERSION:-0.92.8}\"\n",
-    );
-    write_file(
-        &root,
-        "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n",
-    );
-    (root, source)
-}
-
-fn run_candidate_guard(root: &Path) -> Output {
-    Command::new("bash")
-        .arg("scripts/ci/check-release-candidate.sh")
-        .current_dir(root)
-        .output()
-        .expect("candidate guard should run")
-}
-
 fn create_fast_patch_repo(name: &str) -> PathBuf {
     create_fast_patch_repo_with_gate(name, "complete")
 }
@@ -701,17 +628,15 @@ esac
 
 #[test]
 fn release_candidate_accepts_only_sealed_release_mutation_after_validation() {
-    let (root, source) = create_candidate_repo("candidate-release-only");
-
-    let output = run_candidate_guard(&root);
-
+    let output = Command::new("bash")
+        .arg(workspace_root().join("scripts/ci/test-release-candidate.sh"))
+        .output()
+        .expect("release content fixtures should execute");
     assert!(
         output.status.success(),
-        "guard should accept governed release mutation\n{}",
+        "guard must accept only governed release mutations\n{}",
         output_text(&output)
     );
-    assert!(output_text(&output).contains(&source));
-    let _ = fs::remove_dir_all(root);
 }
 
 #[test]
@@ -735,31 +660,12 @@ fn fast_patch_eligibility_accepts_docs_and_rejects_runtime_source() {
 }
 
 #[test]
-fn fast_patch_eligibility_accepts_only_patch_compatible_lock_changes() {
-    let root = create_fast_patch_repo("fast-lock-eligibility");
-    write_file(
-        &root,
-        "Cargo.lock",
-        "[[package]]\nname = \"transitive\"\nversion = \"0.10.2\"\nchecksum = \"new\"\n",
-    );
-    commit_all(&root, "compatible lock correction");
-
-    let accepted = run_fast_patch_eligibility(&root);
-    assert!(
-        accepted.status.success(),
-        "patch-compatible lock change should be eligible\n{}",
-        output_text(&accepted)
-    );
-
-    write_file(
-        &root,
-        "Cargo.lock",
-        "[[package]]\nname = \"transitive\"\nversion = \"0.11.0\"\nchecksum = \"other\"\n",
-    );
-    commit_all(&root, "incompatible lock correction");
-    let rejected = run_fast_patch_eligibility(&root);
-    assert!(!rejected.status.success());
-    let _ = fs::remove_dir_all(root);
+fn fast_patch_eligibility_rejects_dependency_resolution_changes() {
+    let output = Command::new("bash")
+        .arg(workspace_root().join("scripts/ci/test-fast-patch-eligibility.sh"))
+        .output()
+        .expect("fast eligibility fixtures should run");
+    assert!(output.status.success(), "{}", output_text(&output));
 }
 
 #[test]
@@ -793,76 +699,12 @@ fn fast_patch_eligibility_reuses_complete_receipt_through_a_fast_release() {
 }
 
 #[test]
-fn release_candidate_rejects_unsealed_changelog_and_late_source_change() {
-    let (root, _) = create_candidate_repo("candidate-rejections");
-    write_file(
-        &root,
-        "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
-    );
-    let unsealed = run_candidate_guard(&root);
-    assert!(!unsealed.status.success());
-
-    write_file(
-        &root,
-        "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n",
-    );
-    write_file(
-        &root,
-        "src/lib.rs",
-        "pub fn validated_source() {}\npub fn late_change() {}\n",
-    );
-    let late_change = run_candidate_guard(&root);
-    assert!(!late_change.status.success());
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
-fn release_candidate_does_not_parse_descriptive_release_prose() {
-    let (root, _) = create_candidate_repo("candidate-descriptive-changelog");
-    write_file(
-        &root,
-        "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - 2026-08-25\n\n## Complete validation evidence pending refresh\n",
-    );
-    let changelog = run_candidate_guard(&root);
-    assert!(
-        changelog.status.success(),
-        "descriptive changelog prose must not override sealed release facts: {}",
-        output_text(&changelog)
-    );
-    let _ = fs::remove_dir_all(root);
-}
-
-#[test]
 fn make_release_targets_are_sequential_and_push_is_guarded() {
-    let makefile =
-        fs::read_to_string(workspace_root().join("Makefile")).expect("Makefile should be readable");
-
-    let release_patch = "release-patch:\n\t@$(MAKE) patch\n\t@$(MAKE) release-stage\n\t@$(MAKE) release-commit\n\t@$(MAKE) release-push";
-    assert!(
-        makefile.contains(release_patch),
-        "release-patch must invoke each phase sequentially"
-    );
-
-    let release_patch_fast = "release-patch-fast:\n\t@$(MAKE) patch-fast\n\t@$(MAKE) release-stage\n\t@$(MAKE) release-commit\n\t@$(MAKE) release-push";
-    assert!(
-        makefile.contains(release_patch_fast),
-        "release-patch-fast must use the targeted gate and normal publication phases"
-    );
-
-    let release_commit = "release-commit:\n\t@scripts/ci/check-release-index.sh\n\t@$(MAKE) --no-print-directory release-candidate";
-    assert!(
-        makefile.contains(release_commit),
-        "release-commit must verify the exact post-bump candidate before tagging"
-    );
-
-    let release_push = "release-push:\n\t@bash scripts/ci/check-release-push-ready.sh\n\t@CANIC_RELEASE_PUSH_READY=1 bash scripts/ci/push-release.sh";
-    assert!(
-        makefile.contains(release_push),
-        "release-push must perform only readiness checking and the atomic push"
-    );
+    let output = Command::new("bash")
+        .arg(workspace_root().join("scripts/ci/test-release-recipes.sh"))
+        .output()
+        .expect("release recipe fixtures should run");
+    assert!(output.status.success(), "{}", output_text(&output));
 }
 
 #[test]

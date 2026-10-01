@@ -64,13 +64,13 @@ pub(in crate::fleet_ensure) fn begin(
         }
         return recover(paths);
     }
-    let Some(completed) = operation_selection::completed(paths, environment, fleet)? else {
+    let Some(_) = operation_selection::completed(paths, environment, fleet)? else {
         return Err(invalid());
     };
     if operation_selection::capacity_import_in_progress(paths)? {
         return Err(invalid());
     }
-    require_terminal_side_effects(paths, &completed.operation_id)?;
+    require_terminal_side_effects(paths)?;
     let archive_sha256 =
         operation_selection::archive::capture(paths, environment, fleet)?.ok_or_else(invalid)?;
     let record = CompletedOperationRetirementRecord {
@@ -87,55 +87,12 @@ pub(in crate::fleet_ensure) fn begin(
 /// Inspect only side-operation completion metadata; no old executable payload is admitted.
 pub(in crate::fleet_ensure) fn require_terminal_side_effects(
     paths: &EnsurePaths,
-    operation: &str,
 ) -> Result<(), EnsureStateError> {
     use serde_json::Value;
-    for name in [
-        "completed-estate-publication.json",
-        "activation-reset-adoption.json",
-    ] {
-        if let Some(record) = super::read(&paths.plan.with_file_name(name))?
-            && record.get("complete").and_then(Value::as_bool) != Some(true)
-        {
-            return Err(invalid());
-        }
-    }
-    if let Some(journal) = super::read(
-        &paths
-            .plan
-            .with_file_name("completed-preparation-journal.json"),
-    )? {
-        let review = super::read(
-            &paths
-                .plan
-                .with_file_name("completed-preparation-review.json"),
-        )?
-        .ok_or_else(invalid)?;
-        let source = review
-            .pointer("/source/operation_id")
-            .and_then(Value::as_str)
-            .ok_or_else(invalid)?;
-        let review_digest = review
-            .get("review_sha256")
-            .and_then(Value::as_str)
-            .filter(|digest| is_sha256(digest))
-            .ok_or_else(invalid)?;
-        if source == operation
-            || journal.get("prepared").and_then(Value::as_bool) != Some(true)
-            || journal.get("review_sha256").and_then(Value::as_str) != Some(review_digest)
-        {
-            return Err(invalid());
-        }
-        // The replacement's completed operation supersedes preparation of a different source.
-        let publication = super::read(
-            &paths
-                .plan
-                .with_file_name("completed-estate-publication.json"),
-        )?
-        .ok_or_else(invalid)?;
-        if publication.get("complete").and_then(Value::as_bool) != Some(true) {
-            return Err(invalid());
-        }
+    if let Some(record) = super::read(&paths.plan.with_file_name("activation-reset-adoption.json"))?
+        && record.get("complete").and_then(Value::as_bool) != Some(true)
+    {
+        return Err(invalid());
     }
     Ok(())
 }

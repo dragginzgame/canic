@@ -5,14 +5,13 @@
 //! Boundary: projections describe assumptions and never authorize spending.
 
 pub mod capacity_import;
+pub mod certified_custody;
 pub mod clean_reinstall;
-pub mod completed_reset;
 pub mod continuation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod readiness;
 pub mod startup_funding;
-pub(in crate::fleet_ensure) mod terminal_source;
 
 /// Live operator account and fee at the configured Cycles Ledger.
 ///
