@@ -251,38 +251,47 @@ Cargo target caching stays disabled in CI to bound disk use. Final PocketIC
 artifacts retain their independent exact-input validation and cache.
 Cargo continues across independently selected ordinary test binaries and records
 their failures before returning one nonzero result. Serial PocketIC commands
-stop after a failed binary, and a failed suite skips all remaining serial suites
-while retaining failure logs, timing summaries and invocation cleanup.
+retain failures across independent binaries and suites, preserving logs, timing
+summaries and invocation cleanup. Compile errors and empty selections fail before
+the full PocketIC tier starts. Failure excerpts include the assertion and case
+identity after bounded trace context.
 A failed ordinary tier is a hard barrier in the combined local
 runner: it reports all ordinary failures and skips the serial PocketIC tier.
 Plan-only inventory resolution still enumerates both tiers, and the explicit
 PocketIC-only mode remains independently runnable. The governed internal harness
 runs source-bound activation-reset recovery before starting two isolated workers.
-One worker retains Fleet deployment restore, autonomous Root removal and the
-remaining short regressions in catalogue order, keeping their process-local
-baseline. The other runs the independent published managed-App and Component
+One worker runs the short lifecycle contracts first, then Fleet deployment
+restore, autonomous Root removal and the remaining regressions in catalogue
+order, keeping their process-local baseline. The other runs the independent published managed-App and Component
 Group lifecycle cases before the complete Fleet journeys. This balances the
 retained timing baseline without adding processes or sharing mutable estates.
-Partition membership derives from the registered cases; native tests require
-exact coverage, unique identities, nonempty groups, per-worker catalogue order
-and the recovery prefix. Build and compiler-cache unit tests live in separate
+Partition membership derives from the registered cases. Native checks reconcile
+compiled libtest identities with the registered journeys, native selectors and
+explicit opt-in proofs. They require unique identities, nonempty selections,
+per-worker catalogue order and the recovery prefix. Build and compiler-cache unit tests live in separate
 modules so assertion-only edits do not invalidate the fixture artifact producer;
 production inputs and concurrent-change checks remain complete.
 
 Workers execute the parent's already compiled binary, with independent servers,
 ports, native ICP shims and invocation-owned scratch. Only validated immutable
 artifact caches and their locked build targets are shared. Each worker reports
-case progress and its slowest cases. A failed worker cancels both owned process
-groups, stops their servers and CLI children, joins them and clears their scratch;
-handled interruption follows the same boundary. The failed internal suite still
-blocks every later suite. Exact single-case selection stays serial.
+case progress and its slowest cases. A case panic stops its process. An exact
+completed-prefix report permits only the unexecuted suffix to run in a fresh
+process, server and scratch. Passed and failed cases are never retried; any
+failure keeps the overall result failed. Missing, malformed or inconsistent
+reports stop that worker. Independent workers and later suites finish. The
+source-bound recovery prerequisite remains a barrier for its dependent cases.
+Completion and handled interruption stop owned process groups, join them and
+clear their scratch. Exact single-case selection stays serial.
 The measured two-case qualification uses identical warmed artifacts and retains
 success, cancellation and interruption evidence. It does not establish the
 elapsed time of a complete release gate.
 
 The restore proof uses the process-local baseline; destructive Root removal uses
-an exclusive fresh instance because deletion is outside snapshot reset. Pure
-internal tests run through ordinary libtest discovery before PocketIC. The lane
+an exclusive fresh instance because deletion is outside snapshot reset. Ordinary
+validation executes the feature-gated native runner/cache tests, Host local-Fleet
+native tests and workspace doctests, including compile-fail public contracts.
+Stateful cases stay under the serial PocketIC owner. The lane
 clears transient heavy Wasm targets once before its integration-suite group and
 once at invocation cleanup, retaining Cargo freshness between ordered suites.
 The ignored instruction-audit target shares the runtime Cargo invocation for

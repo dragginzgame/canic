@@ -172,6 +172,7 @@ pub(super) fn qualify(input: &ReinstallJourney<'_>, desired: &DesiredFleet, icp:
     )
     .unwrap();
     let request = CapacityImportReviewRequest {
+        funding_credits: Vec::new(),
         environment: "local".into(),
         fleet: desired.fleet.clone(),
         canisters: vec![source],

@@ -168,13 +168,32 @@ fn source_digest(
     Ok(hash.finalize().into())
 }
 
-/// Produce exact install/funding/controller effects from current artifacts and sealed source custody.
+/// Quote initialization and registration from current artifacts and sealed source custody.
+/// Workflow must admit the complete budget before retaining this as a fresh review.
 pub fn prepare(
     root: &Path,
     desired: &DesiredFleet,
     record: &InfrastructureBootstrapRecord,
     desired_sha256: &str,
     time: u64,
+) -> Result<FleetEnsurePlan, InfrastructureBootstrapError> {
+    prepare_with_funding(
+        root,
+        desired,
+        record,
+        desired_sha256,
+        time,
+        &BTreeMap::new(),
+    )
+}
+
+fn prepare_with_funding(
+    root: &Path,
+    desired: &DesiredFleet,
+    record: &InfrastructureBootstrapRecord,
+    desired_sha256: &str,
+    time: u64,
+    funding_minima: &BTreeMap<String, u128>,
 ) -> Result<FleetEnsurePlan, InfrastructureBootstrapError> {
     if source_digest(record)? != record.source_sha256 {
         return Err(InfrastructureBootstrapError::Integrity);
@@ -183,16 +202,103 @@ pub fn prepare(
     publication::validate_seed(desired, record)?;
     verify_ready_coordinator(root, desired, record)?;
     let observation = original_observation(desired, record);
-    let plan = infrastructure_bootstrap::compile(
+    let artifacts = resolve_desired_artifacts(root, desired)?;
+    let mut plan = infrastructure_bootstrap::compile(
         desired,
-        &resolve_desired_artifacts(root, desired)?,
+        &artifacts,
         record,
         &observation,
         desired_sha256,
         time,
+        funding_minima,
     )?;
+    let registration = registration::quote(root, &plan, &artifacts)?;
+    plan.conservation.maximum_execution_burn_cycles = plan
+        .conservation
+        .maximum_execution_burn_cycles
+        .checked_add(registration)
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "bootstrap initialization and registration",
+        })?;
+    let available = plan
+        .conservation
+        .observed_controlled_cycles
+        .checked_add(plan.conservation.maximum_new_funding_cycles)
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "bootstrap available cycles",
+        })?;
+    plan.conservation.expected_post_operation_cycles =
+        available.saturating_sub(plan.conservation.maximum_execution_burn_cycles);
+    plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
     publication::validate_capacity(&plan)?;
     Ok(plan)
+}
+
+/// Put an affordable shortfall into the same explicit funding approval before effects.
+pub(in crate::fleet_ensure) fn prepare_review(
+    root: &Path,
+    desired: &DesiredFleet,
+    record: &InfrastructureBootstrapRecord,
+    desired_sha256: &str,
+    time: u64,
+) -> Result<FleetEnsurePlan, InfrastructureBootstrapError> {
+    let plan = prepare(root, desired, record, desired_sha256, time)?;
+    let shortfall = match infrastructure_bootstrap::admit_review(&plan) {
+        Ok(()) => return Ok(plan),
+        Err(EnsurePolicyError::InfrastructureBootstrap(
+            infrastructure_bootstrap::InfrastructureBootstrapError::Budget { shortfall, .. },
+        )) => shortfall,
+        Err(error) => return Err(error.into()),
+    };
+    // Store owns artifact publication. Keep this exact credit in the ordinary
+    // funding journal; it adds shared native surplus, never an untracked top-up.
+    let target = plan
+        .canisters
+        .iter()
+        .find(|target| {
+            desired.canisters.iter().any(|configured| {
+                configured.name == target.name
+                    && configured.kind == crate::fleet_ensure::model::DesiredCanisterKind::Store
+            })
+        })
+        .ok_or(InfrastructureBootstrapError::Integrity)?;
+    let sample = &record
+        .sources
+        .get(&target.name)
+        .ok_or(InfrastructureBootstrapError::Integrity)?
+        .sample;
+    let deficit = target
+        .actions
+        .iter()
+        .find_map(|action| {
+            if let crate::fleet_ensure::model::EnsureAction::Fund {
+                funding_deficit_cycles,
+                ..
+            } = action
+            {
+                Some(*funding_deficit_cycles)
+            } else {
+                None
+            }
+        })
+        .unwrap_or(0);
+    let minimum = sample
+        .cycles
+        .checked_add(deficit)
+        .and_then(|amount| amount.checked_add(shortfall))
+        .ok_or(EnsurePolicyError::ArithmeticOverflow {
+            field: "bootstrap registration funding",
+        })?;
+    let funded = prepare_with_funding(
+        root,
+        desired,
+        record,
+        desired_sha256,
+        time,
+        &BTreeMap::from([(target.name.clone(), minimum)]),
+    )?;
+    infrastructure_bootstrap::admit_review(&funded)?;
+    Ok(funded)
 }
 
 /// Reject altered phase shape before the generic Ensure driver can issue an effect.
@@ -209,15 +315,55 @@ pub(in crate::fleet_ensure) fn verify_plan(
         .as_ref()
         .ok_or(InfrastructureBootstrapError::Integrity)?
         .desired();
-    if plan.scope != FleetEnsurePlanScope::InfrastructureBootstrap
-        || prepare(
-            root,
-            desired,
-            record,
-            &plan.desired_sha256,
-            plan.planned_at_time,
-        )? != *plan
-    {
+    let mut funding_minima = BTreeMap::new();
+    for target in &plan.canisters {
+        for action in &target.actions {
+            if let crate::fleet_ensure::model::EnsureAction::Fund {
+                funding_deficit_cycles,
+                ..
+            } = action
+            {
+                let sample = &record
+                    .sources
+                    .get(&target.name)
+                    .ok_or(InfrastructureBootstrapError::Integrity)?
+                    .sample;
+                let minimum = sample
+                    .cycles
+                    .checked_add(*funding_deficit_cycles)
+                    .ok_or(InfrastructureBootstrapError::Integrity)?;
+                if funding_minima
+                    .insert(target.name.clone(), minimum)
+                    .is_some()
+                {
+                    return Err(InfrastructureBootstrapError::Integrity);
+                }
+            }
+        }
+    }
+    let mut expected = prepare_with_funding(
+        root,
+        desired,
+        record,
+        &plan.desired_sha256,
+        plan.planned_at_time,
+        &funding_minima,
+    )?;
+    // A retained approval owns its numeric ceiling. Re-estimating current work
+    // must not rewrite that authority or strand its already issued effects.
+    // All effects, funding, source bindings and conservation arithmetic still match.
+    let available = expected
+        .conservation
+        .observed_controlled_cycles
+        .checked_add(expected.conservation.maximum_new_funding_cycles)
+        .ok_or(InfrastructureBootstrapError::Integrity)?;
+    expected.conservation.maximum_execution_burn_cycles =
+        plan.conservation.maximum_execution_burn_cycles;
+    expected.conservation.expected_post_operation_cycles = available
+        .checked_sub(plan.conservation.maximum_execution_burn_cycles)
+        .ok_or(InfrastructureBootstrapError::Integrity)?;
+    expected.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&expected);
+    if plan.scope != FleetEnsurePlanScope::InfrastructureBootstrap || expected != *plan {
         return Err(InfrastructureBootstrapError::Integrity);
     }
     Ok(())

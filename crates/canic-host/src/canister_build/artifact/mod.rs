@@ -1,5 +1,6 @@
 //! Build and qualify configured canister artifacts with exact Cargo feature contracts.
 
+mod output;
 #[cfg(test)]
 mod tests;
 
@@ -14,7 +15,7 @@ use std::{
 };
 
 use crate::{
-    artifact_io::{WasmArtifactFinalization, finalize_wasm_artifact},
+    artifact_io::{CapturedWasmArtifact, WasmArtifactFinalization, finalize_wasm_artifact},
     bootstrap_coordinator::{
         build_bootstrap_fleet_coordinator_artifact, compile_bootstrap_fleet_coordinator_artifact,
     },
@@ -35,9 +36,8 @@ use super::{
     AppCanisterArtifactBuildOutput, CanisterBuildProfile, TimedCanisterArtifactBuildOutput,
     WorkspaceBuildContext,
     cache::{
-        CargoBuildProgress, canister_build_target_root, configure_canister_cargo_command,
-        configure_declaration_command, declaration_target_root, lock_canister_build_target,
-        output_canister_cargo_command,
+        CargoBuildProgress, configure_canister_cargo_command, configure_declaration_command,
+        lock_canister_build_target, output_canister_cargo_command,
     },
     candid::remove_stale_icp_candid_sidecars,
     candid_cache::{
@@ -316,12 +316,8 @@ fn build_workspace_canister_artifact_from_spec(
 
     prepare_canister_artifact_output(spec)?;
 
-    let release_wasm_path = run_canister_profile_candid_build(
-        context,
-        &spec.package_manifest_path,
-        &spec.package_name,
-        options,
-    )?;
+    let release_wasm_path =
+        run_canister_profile_candid_build(context, &spec.package_manifest_path, options)?;
     let cache = CandidExtractionCache::prepare(context);
     let candid = extract_configured_candid(cache.as_ref(), &spec.role, &release_wasm_path)?;
     let profile = canic_core::role_contract::derive_protocol_profile_hashes(
@@ -333,7 +329,6 @@ fn build_workspace_canister_artifact_from_spec(
     let release_wasm_path = run_canister_build(
         context,
         &spec.package_manifest_path,
-        &spec.package_name,
         Some(profile.protocol_profile_digest),
         options,
     )?;
@@ -348,6 +343,10 @@ fn build_workspace_canister_artifact_from_spec(
     )
 }
 
+#[expect(
+    clippy::too_many_lines,
+    reason = "one locked build session orders declaration extraction, runtime capture and finalization across workspace batches"
+)]
 fn build_workspace_canister_artifacts_from_specs_with_toolchain(
     context: &WorkspaceBuildContext,
     specs: &[CanisterArtifactBuildSpec],
@@ -368,36 +367,33 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
         workspace_groups.len()
     );
     let started = Instant::now();
+    let mut profiles = BTreeMap::new();
+    let cache = CandidExtractionCache::prepare(context);
     for (index, group) in workspace_groups.iter().enumerate() {
-        run_canister_build_batch(
+        let messages = run_canister_build_batch(
             context,
             group,
             group.progress(index + 1, workspace_groups.len(), started),
         )?;
+        // Extract this batch before another workspace can replace Cargo's uplifted filenames.
+        let declarations = declaration_inputs(&group.specs, &messages)?;
+        let candids = extract_configured_candids(cache.as_ref(), &declarations)?;
+        for (spec, candid) in group.specs.iter().zip(candids) {
+            let profile = canic_core::role_contract::derive_protocol_profile_hashes(
+                &spec.canic_version,
+                &canic_core::ids::CanisterRole::owned(spec.role.clone()),
+                &spec.capabilities,
+                &candid,
+            );
+            profiles.insert(spec.role.clone(), (candid, profile));
+        }
     }
     eprintln!(
-        "Build phase declaration: {:.2}s",
+        "Build phase declaration and Candid extraction: {:.2}s",
         started.elapsed().as_secs_f64()
     );
     let started = Instant::now();
-    let mut profiles = BTreeMap::new();
-    let cache = CandidExtractionCache::prepare(context);
-    let declarations = declaration_inputs(context, specs);
-    let candids = extract_configured_candids(cache.as_ref(), &declarations)?;
-    for (spec, candid) in specs.iter().zip(candids) {
-        let profile = canic_core::role_contract::derive_protocol_profile_hashes(
-            &spec.canic_version,
-            &canic_core::ids::CanisterRole::owned(spec.role.clone()),
-            &spec.capabilities,
-            &candid,
-        );
-        profiles.insert(spec.role.clone(), (candid, profile));
-    }
-    eprintln!(
-        "Build phase Candid extraction: {:.2}s",
-        started.elapsed().as_secs_f64()
-    );
-    let started = Instant::now();
+    let mut captured = BTreeMap::new();
     for (index, group) in workspace_groups.iter().enumerate() {
         let entries = group
             .specs
@@ -412,12 +408,19 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
             .collect();
         let batch =
             canic_core::role_contract::build_context::encode_protocol_build_context(entries)?;
-        run_canister_runtime_batch(
+        let messages = run_canister_runtime_batch(
             context,
             group,
             batch,
             group.progress(index + 1, workspace_groups.len(), started),
         )?;
+        for spec in &group.specs {
+            let wasm = output::select(&messages, &spec.package_manifest_path)?;
+            captured.insert(
+                spec.role.clone(),
+                CapturedWasmArtifact::capture(&wasm, &spec.wasm_path)?,
+            );
+        }
     }
     eprintln!(
         "Build phase runtime Cargo/link: {:.2}s",
@@ -427,13 +430,12 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
         let mut handles = Vec::with_capacity(specs.len());
         for spec in specs {
             let (candid, profile) = profiles.remove(&spec.role).expect("derived role profile");
+            let source = captured.remove(&spec.role).expect("captured role output");
             handles.push(scope.spawn(move || {
-                let release_wasm_path =
-                    built_canister_wasm_path(context, context.profile, spec.package_name.as_str());
                 finish_canister_artifact_output(
                     context,
                     spec,
-                    &release_wasm_path,
+                    source.path(),
                     &candid,
                     profile,
                     false,
@@ -456,19 +458,18 @@ fn build_workspace_canister_artifacts_from_specs_with_toolchain(
 }
 
 fn declaration_inputs<'a>(
-    context: &WorkspaceBuildContext,
-    specs: &'a [CanisterArtifactBuildSpec],
-) -> Vec<CandidExtractionInput<'a>> {
+    specs: &[&'a CanisterArtifactBuildSpec],
+    messages: &[u8],
+) -> Result<Vec<CandidExtractionInput<'a>>, output::CargoArtifactError> {
     specs
         .iter()
-        .map(|spec| CandidExtractionInput {
-            role: &spec.role,
-            wasm: declaration_target_root(&context.workspace_root)
-                .join(WASM_TARGET)
-                .join(context.profile.target_dir_name())
-                .join(format!("{}.wasm", spec.package_name.replace('-', "_"))),
+        .map(|spec| {
+            Ok(CandidExtractionInput {
+                role: &spec.role,
+                wasm: output::select(messages, &spec.package_manifest_path)?,
+            })
         })
-        .collect::<Vec<_>>()
+        .collect()
 }
 
 fn group_build_specs_by_workspace(
@@ -515,7 +516,7 @@ fn run_canister_runtime_batch(
     group: &CanisterBuildGroup<'_>,
     batch: String,
     progress: CargoBuildProgress,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut command = canister_cargo_build_command(
         context,
         &group.workspace_root.join("Cargo.toml"),
@@ -536,7 +537,7 @@ fn run_canister_runtime_batch(
         )
         .into());
     }
-    Ok(())
+    Ok(output.stdout)
 }
 
 fn prepare_canister_artifact_output(
@@ -760,7 +761,6 @@ fn validate_artifact_role_deployable(
 fn run_canister_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
-    package_name: &str,
     protocol_profile_digest: Option<canic_core::role_contract::ProtocolProfileDigest>,
     options: &CanisterArtifactBuildOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
@@ -784,17 +784,12 @@ fn run_canister_build(
         .into());
     }
 
-    Ok(built_canister_wasm_path(
-        context,
-        context.profile,
-        package_name,
-    ))
+    Ok(output::select(&output.stdout, manifest_path)?)
 }
 
 fn run_canister_profile_candid_build(
     context: &WorkspaceBuildContext,
     manifest_path: &Path,
-    package_name: &str,
     options: &CanisterArtifactBuildOptions,
 ) -> Result<PathBuf, Box<dyn std::error::Error>> {
     let mut command =
@@ -809,10 +804,7 @@ fn run_canister_profile_candid_build(
         )
         .into());
     }
-    Ok(declaration_target_root(&context.workspace_root)
-        .join(WASM_TARGET)
-        .join(context.profile.target_dir_name())
-        .join(format!("{}.wasm", package_name.replace('-', "_"))))
+    Ok(output::select(&output.stdout, manifest_path)?)
 }
 
 fn canister_profile_candid_command(
@@ -858,7 +850,7 @@ fn run_canister_build_batch(
     context: &WorkspaceBuildContext,
     group: &CanisterBuildGroup<'_>,
     progress: CargoBuildProgress,
-) -> Result<(), Box<dyn std::error::Error>> {
+) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
     let mut command = canister_cargo_batch_command(
         context,
         &group.workspace_root,
@@ -868,7 +860,7 @@ fn run_canister_build_batch(
 
     let output = output_canister_cargo_command(&mut command, progress)?;
     if output.status.success() {
-        return Ok(());
+        return Ok(output.stdout);
     }
     let roles = group
         .specs
@@ -927,6 +919,7 @@ fn canister_cargo_command(
             cargo_subcommand,
             "--locked",
             "--keep-going",
+            "--message-format=json-render-diagnostics",
             "--manifest-path",
             &manifest_path.display().to_string(),
             "--target",
@@ -935,15 +928,4 @@ fn canister_cargo_command(
         .args(profile.cargo_args());
     configure_canister_cargo_command(&mut command, &build_context.workspace_root);
     command
-}
-
-fn built_canister_wasm_path(
-    context: &WorkspaceBuildContext,
-    profile: CanisterBuildProfile,
-    package_name: &str,
-) -> PathBuf {
-    canister_build_target_root(&context.workspace_root)
-        .join(WASM_TARGET)
-        .join(profile.target_dir_name())
-        .join(format!("{}.wasm", package_name.replace('-', "_")))
 }

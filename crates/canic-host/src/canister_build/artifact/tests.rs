@@ -110,6 +110,7 @@ fn configured_batch_command_selects_every_group_package_once() {
             "build",
             "--locked",
             "--keep-going",
+            "--message-format=json-render-diagnostics",
             "--manifest-path",
             "/workspace/Cargo.toml",
             "--target",

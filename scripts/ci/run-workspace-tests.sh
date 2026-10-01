@@ -320,6 +320,8 @@ require_ordinary_success_before_pocketic() {
 # Keep complete evidence on disk without streaming high-volume diagnostics.
 # Failure excerpts are bounded; the full log survives test-scratch cleanup.
 run_test_command() {
+    local require_execution="$1"
+    shift
     if [[ -z "$TEST_LOG_DIR" ]]; then
         mkdir -p "$ROOT/target/test-runs" || return 1
         TEST_LOG_DIR="$(mktemp -d "$ROOT/target/test-runs/$(date -u +%Y%m%dT%H%M%SZ)-$$.XXXXXX")" || return 1
@@ -345,12 +347,44 @@ run_test_command() {
         echo "test output capture failed: $log" >&2
         [[ "$status" -ne 0 ]] || status=1
     fi
+    # Stable libtest exposes summaries as text. Unrelated workspace harnesses
+    # may select zero; the selected command as a whole must execute a test.
+    if [[ "$status" -eq 0 && "$require_execution" -eq 1 ]] && ! awk '
+        $1 == "test" && $2 == "result:" && ($3 == "ok." || $3 == "FAILED.") &&
+        $4 ~ /^[0-9]+$/ && $5 == "passed;" && $6 ~ /^[0-9]+$/ && $7 == "failed;" {
+            executed += $4 + $6
+        }
+        END { exit !(executed > 0) }
+    ' "$log"; then
+        echo "error: selected test command completed without executing a test: $log" >&2
+        status=1
+    fi
     if [[ "$status" -ne 0 ]]; then
         echo "==> failure diagnostics (last 100 trace lines; full output: $log)" >&2
         # No matching traces is normal for compiler or early startup failures.
         { rg --color never "$trace_pattern" "$log" | tail -n 100; } >&2 || true
+        echo "==> failure summary (last 60 non-trace lines; full output: $log)" >&2
+        { rg --color never -v "$trace_pattern" "$log" | tail -n 60; } >&2 || true
     fi
     return "$status"
+}
+
+# Cargo succeeds when a filter selects nothing. Check the selected libtest
+# inventory, including ignored-only selectors, before reporting a suite as run.
+verify_test_selection() {
+    local listing selected
+    listing="$(cargo test --locked "$@" --list)" || return 1
+    selected="$(awk '/: test$/ { count++ } END { print count + 0 }' <<<"$listing")"
+    if [[ "$selected" -eq 0 ]]; then
+        echo "test selector resolved to zero tests: $*" >&2
+        return 1
+    fi
+    if [[ "$MODE" == targeted-pocketic && "$TARGETED_POCKETIC_TEST" == *::* ]]; then
+        if [[ "$selected" -ne 1 ]] || ! rg -Fqx "$TARGETED_POCKETIC_TEST: test" <<<"$listing"; then
+            echo "exact PocketIC selector must resolve to one test: $TARGETED_POCKETIC_TEST" >&2
+            return 1
+        fi
+    fi
 }
 
 run_test() {
@@ -375,16 +409,15 @@ run_test() {
     if [[ "$PRECOMPILE_ONLY" -eq 1 ]]; then
         execution="compile"
         label="$label compilation"
-        libtest_args=()
     fi
     local summary_execution="$execution"
-    if [[ "$summary_execution" = "parallel" ]]; then
+    if [[ "$summary_execution" = "parallel" || "$summary_execution" = "native-selected" ]]; then
         summary_execution="libtest-parallel"
     fi
     echo "==> $label"
     if [ "$PLAN_ONLY" -eq 1 ]; then
         printf '==> plan: cargo test --locked'
-        if [[ "$execution" = "parallel" ]]; then
+        if [[ "$execution" = "parallel" || "$execution" = "native-selected" || "$execution" = "pocketic-serial" ]]; then
             printf ' --no-fail-fast'
         elif [[ "$execution" = "compile" ]]; then
             printf ' --no-run'
@@ -392,10 +425,10 @@ run_test() {
         printf ' %q' "${cargo_args[@]}"
         if [ "$execution" = "pocketic-serial" ]; then
             printf ' -- --test-threads=1 --nocapture'
-        elif [[ "${#libtest_args[@]}" -gt 0 ]]; then
+        elif [[ "$execution" != compile && "${#libtest_args[@]}" -gt 0 ]]; then
             printf ' --'
         fi
-        if [[ "${#libtest_args[@]}" -gt 0 ]]; then
+        if [[ "$execution" != compile && "${#libtest_args[@]}" -gt 0 ]]; then
             printf ' %q' "${libtest_args[@]}"
         fi
         printf '\n'
@@ -403,36 +436,35 @@ run_test() {
         return
     fi
     local started_at="$SECONDS"
-    if [[ "$MODE" = "targeted-pocketic" && "$TARGETED_POCKETIC_TEST" == *::* ]]; then
-        local listing selected
-        echo "==> verifying exact test identity (listing only)"
-        listing="$(cargo test --locked "${cargo_args[@]}" -- "${libtest_args[@]}" --list)" || {
-            echo "cannot list the selected PocketIC test: $TARGETED_POCKETIC_TEST" >&2
-            return 1
-        }
-        selected="$(awk -v expected="$TARGETED_POCKETIC_TEST: test" \
-            '$0 == expected { count++ } END { print count + 0 }' <<<"$listing")"
-        if [[ "$selected" -ne 1 ]]; then
-            echo "exact PocketIC selector must resolve to one test; found $selected: $TARGETED_POCKETIC_TEST" >&2
-            return 1
-        fi
-    fi
     local status=0
     case "$execution" in
         compile)
-            run_test_command cargo test --locked --no-run "${cargo_args[@]}" || status=$?
+            run_test_command 0 cargo test --locked --no-run "${cargo_args[@]}" || status=$?
+            if [[ "$status" -eq 0 ]]; then
+                verify_test_selection "${cargo_args[@]}" -- "${libtest_args[@]}" || status=$?
+            fi
             ;;
-        parallel)
-            if [[ "${#libtest_args[@]}" -eq 0 ]]; then
-                run_test_command cargo test --locked --no-fail-fast "${cargo_args[@]}" || status=$?
+        parallel | native-selected)
+            if [[ "$execution" == native-selected ]]; then
+                verify_test_selection "${cargo_args[@]}" -- "${libtest_args[@]}" || status=$?
+            fi
+            if [[ "$status" -ne 0 ]]; then
+                :
+            elif [[ "${#libtest_args[@]}" -eq 0 ]]; then
+                run_test_command 1 cargo test --locked --no-fail-fast "${cargo_args[@]}" || status=$?
             else
-                run_test_command cargo test --locked --no-fail-fast "${cargo_args[@]}" -- \
+                run_test_command 1 cargo test --locked --no-fail-fast "${cargo_args[@]}" -- \
                     "${libtest_args[@]}" || status=$?
             fi
             ;;
         pocketic-serial)
-            run_test_command cargo test --locked "${cargo_args[@]}" -- --test-threads=1 --nocapture \
-                "${libtest_args[@]}" || status=$?
+            if [[ "$MODE" == targeted-pocketic ]]; then
+                verify_test_selection "${cargo_args[@]}" -- "${libtest_args[@]}" || status=$?
+            fi
+            if [[ "$status" -eq 0 ]]; then
+                run_test_command 1 cargo test --locked --no-fail-fast "${cargo_args[@]}" -- --test-threads=1 --nocapture \
+                    "${libtest_args[@]}" || status=$?
+            fi
             ;;
         *)
             echo "unknown test execution class: $execution" >&2
@@ -457,12 +489,8 @@ run_test() {
         report_owned_pocketic_server_output
     fi
     append_step_summary "$summary_execution" "$elapsed" "$label" "FAIL ($status)"
-    if [[ "$execution" = "pocketic-serial" || "$execution" = "compile" ]]; then
-        if [[ "$execution" = "compile" ]]; then
-            echo "POCKETIC COMPILE BARRIER FAILED: skipping server startup and serial execution." >&2
-        else
-            echo "POCKETIC TEST BARRIER FAILED: skipping the remaining serial suites." >&2
-        fi
+    if [[ "$execution" = "compile" ]]; then
+        echo "POCKETIC COMPILE BARRIER FAILED: skipping server startup and serial execution." >&2
         finish_test_run
         exit 1
     fi
@@ -534,6 +562,24 @@ run_ordinary_tests() {
     }
     echo "==> combined inventory: $selected targets across ${#selected_packages[@]} packages"
     run_test parallel "workspace ordinary tests" "${cargo_args[@]}"
+
+    # The stateful catalogue is deliberately absent from ordinary discovery.
+    # Select only its native support modules and cache proofs with the feature on.
+    local native_selectors=()
+    local native_selection selector
+    native_selection="$(bash "$ROOT/scripts/ci/list-internal-native-tests.sh")" || return 1
+    mapfile -t native_selectors <<< "$native_selection"
+    for selector in "${native_selectors[@]}"; do
+        if [[ ! "$selector" =~ ^pic::[[:alnum:]_:]+$ ]]; then
+            echo 'invalid native test selector; refusing an unfiltered feature-gated run' >&2
+            return 1
+        fi
+    done
+    run_test native-selected "internal feature-gated native tests" \
+        -p canic-testing-internal --features governed-pocketic-tests --lib -- "${native_selectors[@]}"
+    run_test native-selected "Host local-Fleet native tests" \
+        -p canic-host --features local-fleet --lib local_fleet::tests::
+    run_test parallel "workspace documentation tests" --workspace --doc
 }
 
 clear_pocketic_build_targets() {
@@ -650,7 +696,7 @@ trap 'exit 143' TERM
 if [[ "$MODE" == "native-pocketic" ]]; then
     start_owned_pocketic_server
     status=0
-    run_test_command "$TARGETED_POCKETIC_TEST" \
+    run_test_command 1 "$TARGETED_POCKETIC_TEST" \
         pic::governed_suite::governed_internal_pocketic_suite \
         --exact --ignored --nocapture --test-threads=1 || status=$?
     report_owned_pocketic_server_resources "internal worker"

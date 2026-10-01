@@ -12,6 +12,7 @@ fn apply_accepts_only_retained_authority() {
     for (option, value) in [
         ("--root", "aaaaa-aa"),
         ("--canister", "aaaaa-aa"),
+        ("--funding-credit", "aaaaa-aa=1T"),
         ("--declarations", "source.toml"),
         ("--source", "policy.toml"),
         ("--seed", "seed.toml"),
@@ -23,6 +24,44 @@ fn apply_accepts_only_retained_authority() {
             .try_get_matches_from(["import", "staging", "--apply", &digest, option, value])
             .unwrap_err();
         assert_eq!(failure.kind(), clap::error::ErrorKind::ArgumentConflict);
+    }
+}
+
+#[test]
+fn funding_credit_requires_an_exact_positive_amount() {
+    let credit = parse_funding_credit("aaaaa-aa=1T").unwrap();
+    assert_eq!(credit.canister, Principal::management_canister());
+    assert_eq!(credit.cycles, 1_000_000_000_000);
+    let parsed = command()
+        .try_get_matches_from([
+            "import",
+            "staging",
+            "--canister",
+            "aaaaa-aa",
+            "--declarations",
+            "import.toml",
+            "--maximum-source-debit",
+            "1T",
+            "--maximum-root-debit",
+            "2T",
+            "--maximum-root-paid-calls",
+            "36",
+            "--funding-credit",
+            "aaaaa-aa=1T",
+        ])
+        .unwrap();
+    let reviewed = request(&parsed, "staging", "staging").unwrap();
+    assert_eq!(reviewed.funding_credits.len(), 1);
+    assert_eq!(reviewed.funding_credits[0].canister, credit.canister);
+    assert_eq!(reviewed.funding_credits[0].cycles, credit.cycles);
+    for invalid in [
+        "aaaaa-aa",
+        "invalid=1T",
+        "aaaaa-aa=0T",
+        "aaaaa-aa=1",
+        "aaaaa-aa=1T=1T",
+    ] {
+        assert!(parse_funding_credit(invalid).is_err());
     }
 }
 

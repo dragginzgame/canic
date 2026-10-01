@@ -24,7 +24,7 @@ fn build_provenance_schema_is_stable() {
 }
 
 #[test]
-fn canonical_root_provenance_records_its_build_lockfile() {
+fn generated_infrastructure_provenance_records_its_build_lockfile_and_parent_seed() {
     let root = temp_dir("canic-root-provenance");
     write_sample_workspace(&root, "demo", "app");
     let output = write_sample_artifacts(&root, "root");
@@ -35,17 +35,21 @@ fn canonical_root_provenance_records_its_build_lockfile() {
     fs::write(&manifest, "[package]\nname = 'canic-fleet-root'\n").unwrap();
     let lock = manifest.with_file_name("Cargo.lock");
     fs::write(&lock, "# exact Root graph\n").unwrap();
-    let inputs = inputs::build_input_fingerprints(&request, &manifest).unwrap();
-    let recorded = inputs
-        .iter()
-        .find(|input| input.kind == "cargo_lock")
-        .unwrap();
-    assert_eq!(
-        recorded.sha256,
-        Some(canic_core::cdk::utils::hash::sha256_hex(
-            &fs::read(&lock).unwrap()
-        ))
-    );
+    let seed = manifest.with_file_name("lock-seed.json");
+    fs::write(&seed, "{\"schema_version\":1}").unwrap();
+    for role in ["root", "fleet_coordinator", "wasm_store"] {
+        request.role = role.into();
+        let inputs = inputs::build_input_fingerprints(&request, &manifest).unwrap();
+        for (kind, path) in [("cargo_lock", &lock), ("cargo_lock_seed", &seed)] {
+            let recorded = inputs.iter().find(|input| input.kind == kind).unwrap();
+            assert_eq!(
+                recorded.sha256,
+                Some(canic_core::cdk::utils::hash::sha256_hex(
+                    &fs::read(path).unwrap()
+                ))
+            );
+        }
+    }
     fs::remove_dir_all(root).unwrap();
 }
 

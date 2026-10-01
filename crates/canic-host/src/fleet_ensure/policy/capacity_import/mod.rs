@@ -2,6 +2,7 @@
 //! Observations, evidence verification, record construction and IC effects belong to ops.
 
 pub mod bootstrap;
+pub(in crate::fleet_ensure) mod funding;
 #[cfg(test)]
 pub(crate) mod tests;
 
@@ -58,8 +59,15 @@ pub enum CapacityImportPolicyError {
     DispositionUnresolved { canister: Principal },
     #[error("cycle bounds overflow or contain no effect allowance")]
     InvalidCycleBounds,
-    #[error("canister {canister} lacks the reviewed readiness and debit headroom")]
-    InsufficientCycles { canister: Principal },
+    #[error(
+        "canister {canister} requires {required_cycles} cycles for readiness and remaining debit; available {available_cycles}; shortfall {shortfall_cycles}"
+    )]
+    InsufficientCycles {
+        canister: Principal,
+        required_cycles: u128,
+        available_cycles: u128,
+        shortfall_cycles: u128,
+    },
     #[error("source {canister} cycle change exceeds its original reviewed debit")]
     ConservationUnproven { canister: Principal },
 }
@@ -176,7 +184,7 @@ pub fn validate_plan(plan: &CapacityImportPlanRecord) -> Result<(), CapacityImpo
             .checked_add(source.maximum_debit_cycles)
             .ok_or(CapacityImportPolicyError::InvalidCycleBounds)?;
     }
-    Ok(())
+    funding::validate(plan)
 }
 
 /// Existing Root custody needs no operator ingress or invented handoff receipt.
@@ -369,7 +377,12 @@ pub fn retained_source_debit(
         .filter(|debit| *debit <= reviewed.maximum_debit_cycles)
         .ok_or(CapacityImportPolicyError::ConservationUnproven { canister })?;
     if retained_cycles < reviewed.minimum_ready_cycles {
-        return Err(CapacityImportPolicyError::InsufficientCycles { canister });
+        return Err(CapacityImportPolicyError::InsufficientCycles {
+            canister,
+            required_cycles: reviewed.minimum_ready_cycles,
+            available_cycles: retained_cycles,
+            shortfall_cycles: reviewed.minimum_ready_cycles - retained_cycles,
+        });
     }
     Ok(debit)
 }
@@ -440,7 +453,12 @@ fn require_headroom(
         .checked_add(maximum_debit)
         .ok_or(CapacityImportPolicyError::InvalidCycleBounds)?;
     if cycles < required {
-        return Err(CapacityImportPolicyError::InsufficientCycles { canister });
+        return Err(CapacityImportPolicyError::InsufficientCycles {
+            canister,
+            required_cycles: required,
+            available_cycles: cycles,
+            shortfall_cycles: required - cycles,
+        });
     }
     Ok(())
 }

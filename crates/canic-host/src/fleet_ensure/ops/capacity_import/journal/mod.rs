@@ -51,6 +51,10 @@ pub enum CapacityImportInventoryStage {
 #[derive(Debug, Error)]
 pub enum CapacityImportJournalError {
     #[error(
+        "no original capacity observation is retained for {canister}; keep the original review inputs when declaring additional funding, or review this source before declaring a credit"
+    )]
+    FundingBaselineMissing { canister: Principal },
+    #[error(
         "capacity import requires a completed current Fleet or receipted bootstrap setup with exact installed infrastructure records"
     )]
     InfrastructureRequired,

@@ -744,7 +744,7 @@ placement.minimum_distinct_roots = 2
     }
 
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![
+        crate::pic::cases::registered![
             (
                 "Coordinator joining-root replay",
                 coordinator_commits_joining_roots_and_replays_original_receipts,

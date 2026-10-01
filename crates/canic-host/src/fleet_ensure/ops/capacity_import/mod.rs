@@ -4,6 +4,7 @@
 pub mod admission;
 mod destination;
 mod evidence;
+pub(in crate::fleet_ensure) mod funding;
 pub mod journal;
 pub mod observation;
 pub mod publication;
@@ -67,6 +68,7 @@ pub fn prepare_review(
     transitional_controllers.sort_unstable();
     transitional_controllers.dedup();
     let mut plan = CapacityImportPlanRecord {
+        funding_credits: Vec::new(),
         schema_version: FLEET_ENSURE_SCHEMA_VERSION,
         admission: None,
         authority,
@@ -105,6 +107,25 @@ pub fn with_admission(
     }
     plan.admission = Some(admission);
     admission::validate(&plan)?;
+    plan.plan_sha256 = review_digest(&plan)?;
+    Ok(plan)
+}
+
+/// Seal the separately observed credits into the exact approval digest.
+pub(in crate::fleet_ensure) fn with_funding(
+    mut plan: CapacityImportPlanRecord,
+    credits: Vec<
+        crate::fleet_ensure::model::capacity_import::funding::CapacityImportFundingCreditRecord,
+    >,
+) -> Result<CapacityImportPlanRecord, CapacityImportReviewError> {
+    verify_review(&plan, plan.plan_sha256)?;
+    if !plan.funding_credits.is_empty() {
+        return Err(CapacityImportReviewError::DigestMismatch);
+    }
+    plan.funding_credits = credits;
+    plan.funding_credits
+        .sort_by_key(|credit| credit.before.binding.canister_id);
+    validate_plan(&plan)?;
     plan.plan_sha256 = review_digest(&plan)?;
     Ok(plan)
 }

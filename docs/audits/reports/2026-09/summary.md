@@ -3,6 +3,10 @@
 This index links retained primary reports; it does not reinterpret their
 individual verdicts or establish a month-wide validation result.
 
+- September 30: [deployment reliability audit](2026-09-30/summary.md), covering
+  Make/CI, Fleet deployment, artifact and package contracts, and read-only local
+  downstream consumers.
+
 - September 1: [Wasm baseline](2026-09-01/wasm-footprint-v5.md) and
   [rerun](2026-09-01/wasm-footprint-v5-2.md).
 - September 3: [architecture consolidation](2026-09-03/architecture-consolidation-audit-update.md),

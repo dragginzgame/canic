@@ -304,14 +304,30 @@ No historical application schema, manual journal edit or alternative reset drive
 is involved.
 
 Infrastructure review funds each owner's installation and observation window.
-It does not deposit the whole continuation ceiling on every canister. The shared
-execution ceiling is bounded by controlled native surplus above configured
-floors, excluding reserved cycles. Each further native write checks the actual
+It adds any shared budget shortfall as an exact Store credit in the same approval;
+it does not deposit the whole continuation ceiling on every canister. Fresh
+bootstrap review quotes initialization and Store/Registry registration before
+admitting initialization. Supplied identities use the actual registration
+compiler; Coordinator creation uses the artifact-bound action/retry ceiling until
+its ID exists. Required work is never reduced to fit the current balance. A
+shortfall is calculated including configured floors and excluding reserved cycles
+from spending. If the operator cannot fund the quoted debit, review reports the
+required, available and missing amounts before retaining an executable plan.
+The operator's free Ledger preflight rejects known shortfalls before consuming a
+management-inspection attempt. Fund that account and retry the same survey;
+original source balances and custody are preserved. Paid inspection attempts
+remain finite, and the protected observation rechecks funding before publication.
+Each further native write checks the actual
 target's current headroom. A typed headroom or continuation-budget failure stops
 further writes; retain the original operation and receipts. Inspection attempts,
 lost-response reconciliation and terminal conservation remain bounded. The
 generated observation/update allowances are unchanged; do not lower them or edit
 generated authority to bypass a funding failure.
+
+Already retained approvals keep their original execution ceiling and effect
+records. Repeating their review does not apply fresh admission retroactively.
+If registration exceeds that approval, use the separately approved bootstrap
+registration recovery review; a new estimate alone grants no extra spending.
 
 Build Toko against the same current Canic release as the CLI, using the normal
 `canic build` command. Keep the selected build's artifacts. Generate fresh current
@@ -1314,6 +1330,25 @@ sample remains the original balance baseline on retry. Source balances must reta
 the Ready floor plus their debit allowance; Root must retain its threshold plus
 its separate allowance.
 
+If a retained sample lacks that headroom, fund the exact source or Root first,
+then repeat the unapproved review with `--funding-credit '<CANISTER_ID>=1T'`
+(substitute the exact total added amount). Repeat the option for each funded ID.
+This option records a received credit; it does not send a payment. Keep the
+original declarations, paths, source set and debit limits. Review the new digest
+before applying it. An ordinary non-bootstrap source needs its original successful
+review observation on disk; bootstrap-held operator sources use their original
+bootstrap sample and Root uses its terminal setup sample.
+
+The supplementary `funding_credits` record binds the original sample, its retained
+owner, the declared amount and a fresh bounded observation. The effective balance
+is original native cycles plus that amount; reserved cycles stay non-liquid, and
+all consumption since the original observation still counts against the original
+debit ceiling. Custody must still match. A new observation does not replace the
+bootstrap plan, journal or prior survey. Uncredited reviews omit this field, so
+their existing approval digests remain unchanged. A credit requires a new import
+approval and cannot alter an approved unfinished import. Completed replay remains
+effect-free.
+
 Before handoff, Host and Root require at least `17 × source_count + 1` paid calls
 and a debit ceiling covering every allowed call at Root's largest current import
 quote. The quote is effect-free; it is a conservative allowance, not an expected
@@ -1846,6 +1881,16 @@ funding estimates, and names readiness, capacity and publication/provisioning
 work that still needs live discovery. The successor-action limit is an authority
 ceiling, not an estimate. A terminal Root-reset prerequisite still carries this
 forecast; only full terminal completion clears the remaining-work projection.
+
+Each initialization-dependent import includes a `headroom` assessment. Known
+bootstrap samples report required, available native and missing cycles before
+initialization effects. The forecast assumes the same `0.1T` source debit used
+by clean reinstall; an explicit import can review a different allowance. Held
+sources whose balances are unavailable until the current Root runs report
+`awaiting_current_root_observation`, rather than an invented balance. These
+assessments are advisory and do not grant funding or import authority. They appear
+in bootstrap and clean-reinstall JSON and text reports; final import admission
+still checks the full explicit bounds.
 
 When a freshly observed phase is admitted as an exact bounded successor, its
 observation may satisfy the immediately following protocol funding check. The

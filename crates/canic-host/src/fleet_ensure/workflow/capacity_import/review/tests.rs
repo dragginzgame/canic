@@ -6,6 +6,7 @@ use super::*;
 fn review_requires_current_completed_records_before_icp() {
     let directory = crate::test_support::temp_dir("capacity-import-review-admission");
     let request = CapacityImportReviewRequest {
+        funding_credits: Vec::new(),
         environment: "staging".into(),
         fleet: "fleet".into(),
         canisters: vec![],

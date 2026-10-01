@@ -37,6 +37,44 @@ pub struct CapacityImportSurveyStore<'a> {
 }
 
 impl<'a> CapacityImportSurveyStore<'a> {
+    /// Read a prior successful sample under the same Fleet lock without changing its attempts.
+    pub(in crate::fleet_ensure) fn original_sample(
+        owner: &'a CapacityImportJournalStore,
+        paths: &EnsurePaths,
+        digest: [u8; 32],
+        canisters: &[Principal],
+        canister: Principal,
+    ) -> Result<Option<CapacityImportSampleRecord>, CapacityImportJournalError> {
+        if !owner.owns_paths(paths)
+            || digest == [0; 32]
+            || canisters.len() > MAX_FLEET_CAPACITY_IMPORT_SOURCES + 1
+        {
+            return Err(CapacityImportJournalError::Integrity);
+        }
+        let keys = canisters
+            .iter()
+            .map(Principal::to_text)
+            .collect::<BTreeSet<_>>();
+        if keys.len() != canisters.len() || !keys.contains(&canister.to_text()) {
+            return Err(CapacityImportJournalError::Integrity);
+        }
+        let path = paths
+            .plan
+            .with_file_name("capacity-import-surveys")
+            .join(format!("{}.json", hex_bytes(digest)));
+        let Some(bytes) = read_optional_regular_bytes_bounded(&path, MAXIMUM_BYTES)
+            .map_err(|_| CapacityImportJournalError::Integrity)?
+        else {
+            return Ok(None);
+        };
+        let record: CapacityImportSurveyRecord = serde_json::from_slice(&bytes)?;
+        validate(&record, digest, &keys)?;
+        Ok(record
+            .canisters
+            .get(&canister.to_text())
+            .and_then(|entry| entry.sample.clone()))
+    }
+
     /// Open or begin an exact-input survey without issuing an observation.
     pub fn open(
         owner: &'a CapacityImportJournalStore,

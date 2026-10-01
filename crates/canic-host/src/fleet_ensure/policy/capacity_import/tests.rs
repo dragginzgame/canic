@@ -296,7 +296,10 @@ fn both_source_and_root_require_full_reviewed_headroom() {
     assert_eq!(
         validate_plan(&plan),
         Err(CapacityImportPolicyError::InsufficientCycles {
-            canister: principal(9)
+            canister: principal(9),
+            required_cycles: 1_000,
+            available_cycles: 999,
+            shortfall_cycles: 1,
         })
     );
     plan.sources[0].observed_cycles += 1;

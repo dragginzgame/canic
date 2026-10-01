@@ -31,6 +31,19 @@ independent of App configuration. Cargo graphs are validated before artifact
 finalization. Canonical Coordinator/Store Candid ships in `canic/candid`; Root
 Candid follows its configured capabilities.
 
+Generated locks are derived from the selected workspace's current `Cargo.lock`.
+A change to that lock or the generated manifest atomically refreshes the seed;
+Cargo then resolves the generated package's graph. Unchanged inputs preserve that
+resolved graph. The `lock-seed.json` record identifies the derivation, while cache
+and provenance evidence fingerprint the actual resolved lock. Complete-build reuse
+prepares these inputs before taking its snapshot.
+
+Application and Root builds select the Wasm named in Cargo's compiler-artifact
+messages for the exact package manifest. Custom library names are supported.
+Each declaration batch's Candid is extracted, and each runtime batch's bytes are
+captured, before another workspace can overwrite a shared Cargo output filename.
+An unreported stale file never becomes the selected artifact.
+
 Every final artifact, including a Local build, must fit Canic's supported
 10 MiB code-section and 50,000 defined-function ceilings before the Wasm,
 Candid and gzip outputs are published. Rejection preserves any previous output

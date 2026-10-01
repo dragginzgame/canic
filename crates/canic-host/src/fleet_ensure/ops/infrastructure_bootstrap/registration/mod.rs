@@ -9,7 +9,52 @@ use crate::fleet_ensure::{
     policy::{expected_plan_sha256, successor_phase_burn},
 };
 use canic_core::dto::fleet_registry::FleetRegistry;
-use std::path::Path;
+use std::{collections::BTreeMap, path::Path};
+
+/// Expand the same registration compiler before initialization, using supplied identities.
+/// Coordinator creation uses the artifact-bound finite count until its ID exists.
+pub(in crate::fleet_ensure) fn quote(
+    root: &Path,
+    original: &FleetEnsurePlan,
+    artifacts: &crate::fleet_ensure::model::DesiredFleetArtifacts,
+) -> Result<u128, InfrastructureBootstrapError> {
+    let desired = original
+        .reviewed_desired
+        .as_ref()
+        .ok_or(InfrastructureBootstrapError::Integrity)?
+        .desired();
+    if original
+        .canisters
+        .iter()
+        .any(|target| target.principal.is_none())
+    {
+        return Ok(
+            crate::fleet_ensure::policy::infrastructure_bootstrap::registration_reserve(
+                desired, artifacts,
+            )?,
+        );
+    }
+    let state = FleetEnsureStateRecord {
+        active_registry: None,
+        completed_reinstall_action_sha256: BTreeMap::new(),
+        completed_reinstall_operation_id: None,
+        completed_reinstalls: BTreeMap::new(),
+        fleet: original.fleet.clone(),
+        pending_principals: BTreeMap::new(),
+        principals: BTreeMap::new(),
+        retained_cycles_by_principal: BTreeMap::new(),
+        schema_version: original.schema_version,
+        topology: BTreeMap::new(),
+    };
+    Ok(compile(
+        root,
+        original,
+        &state,
+        original.conservation.observed_controlled_cycles,
+    )?
+    .conservation
+    .maximum_execution_burn_cycles)
+}
 
 /// No remote observations or effects occur while expanding the retained current protocol.
 pub(in crate::fleet_ensure) fn compile(

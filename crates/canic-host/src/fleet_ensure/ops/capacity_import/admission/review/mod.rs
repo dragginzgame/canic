@@ -13,7 +13,8 @@ use crate::{
             capacity_import::{
                 CapacityImportAuthority, CapacityImportPlanRecord, CapacityImportRootBudget,
                 CapacityImportSourceBinding, CapacityImportSourceRecord,
-                admission::CapacityImportAdmissionRecord, survey::CapacityImportSampleRecord,
+                admission::CapacityImportAdmissionRecord,
+                funding::CapacityImportFundingCreditRecord, survey::CapacityImportSampleRecord,
             },
         },
         ops::{
@@ -23,16 +24,18 @@ use crate::{
                     declarations,
                     observer::{inventory, management},
                 },
+                funding,
                 journal::CapacityImportJournalError,
                 prepare_review,
                 transport::CapacityImportTransport,
-                validate_destination_authority, with_admission,
+                validate_destination_authority, with_admission, with_funding,
             },
             reinstall::terminal::inventory::custody,
         },
         policy::capacity_import::{CapacityImportPolicyError, admit_handoffs, select_destination},
         view::capacity_import::{
-            CapacityImportDestinationView, CapacityImportOwnershipView, CapacityImportRootView,
+            CapacityImportDestinationView, CapacityImportFundingBaselineView,
+            CapacityImportFundingSampleView, CapacityImportOwnershipView, CapacityImportRootView,
             CapacityImportSourceView,
         },
     },
@@ -45,7 +48,7 @@ use canic_core::{
     ids::{CanonicalNetworkId, MAX_FLEET_CAPACITY_IMPORT_SOURCES},
 };
 use sha2_host::{Digest, Sha256};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 
 /// Frozen free-query admission, retained until the initial management samples are committed.
 pub(in crate::fleet_ensure) struct ReviewSurvey {
@@ -56,6 +59,8 @@ pub(in crate::fleet_ensure) struct ReviewSurvey {
     context: PoolImportContext,
     inventory: inventory::Inventory,
     request_sha256: [u8; 32],
+    original_request_sha256: [u8; 32],
+    funding_credits: BTreeMap<Principal, u128>,
 }
 
 impl ReviewSurvey {
@@ -107,6 +112,7 @@ impl ReviewSurvey {
             })
             .collect::<Vec<_>>();
         let root = select_destination(&roots, subnet, request.root)?.root;
+        let funding_credits = funding::requested(request, root)?;
         let infrastructure = provenance::inspect(paths, desired, state, &transport.agent).await?;
         if inventory::registry(&transport.agent, registry.authority.binding.coordinator).await?
             != *registry
@@ -144,6 +150,10 @@ impl ReviewSurvey {
             &authority, &context, registry,
         )?;
         let request_sha256 = request_digest(paths, request, &authority, &admission)?;
+        let mut original_request = request.clone();
+        original_request.funding_credits.clear();
+        let original_request_sha256 =
+            request_digest(paths, &original_request, &authority, &admission)?;
         Ok(Self {
             transport,
             authority,
@@ -152,6 +162,8 @@ impl ReviewSurvey {
             context,
             inventory,
             request_sha256,
+            original_request_sha256,
+            funding_credits,
         })
     }
 
@@ -198,6 +210,57 @@ impl ReviewSurvey {
         self.request_sha256
     }
 
+    pub(crate) const fn original_request_sha256(&self) -> [u8; 32] {
+        self.original_request_sha256
+    }
+
+    pub(crate) fn observes_funding(&self, canister: Principal) -> bool {
+        self.funding_credits.contains_key(&canister)
+    }
+
+    /// Preserve original accounting while binding one expressly declared credit to a fresh sample.
+    pub(crate) fn recognize_funding(
+        &self,
+        request: &CapacityImportReviewRequest,
+        baseline: CapacityImportFundingBaselineView,
+        observed: CapacityImportSampleRecord,
+    ) -> Result<CapacityImportFundingSampleView, CapacityImportJournalError> {
+        let canister = observed.binding.canister_id;
+        let amount = *self
+            .funding_credits
+            .get(&canister)
+            .ok_or(CapacityImportJournalError::Integrity)?;
+        let (maximum, minimum) = if canister == self.authority.root {
+            (
+                request.maximum_root_debit_cycles,
+                self.context
+                    .binding
+                    .funding
+                    .root_funding
+                    .request_threshold
+                    .to_u128(),
+            )
+        } else {
+            (
+                request.maximum_source_debit_cycles,
+                self.context
+                    .binding
+                    .limits
+                    .canister_pool
+                    .canister_cycles
+                    .to_u128(),
+            )
+        };
+        funding::recognize(
+            baseline,
+            observed,
+            amount,
+            self.authority.root,
+            maximum,
+            minimum,
+        )
+    }
+
     pub(crate) fn canisters(&self, request: &CapacityImportReviewRequest) -> Vec<Principal> {
         let mut ids = request.canisters.clone();
         ids.push(self.authority.root);
@@ -232,6 +295,7 @@ impl ReviewSurvey {
         self,
         request: &CapacityImportReviewRequest,
         samples: &[CapacityImportSampleRecord],
+        credits: Vec<CapacityImportFundingCreditRecord>,
     ) -> Result<CapacityImportPlanRecord, CapacityImportJournalError> {
         let minimum_ready = self
             .context
@@ -275,7 +339,10 @@ impl ReviewSurvey {
             maximum_paid_calls: request.maximum_root_paid_calls,
         };
         let plan = with_admission(
-            prepare_review(self.authority, sources, root_budget)?,
+            with_funding(
+                prepare_review(self.authority, sources, root_budget)?,
+                credits,
+            )?,
             self.admission,
         )?;
         validate_destination_authority(&plan, &self.context, &self.registry)?;
@@ -414,6 +481,9 @@ fn request_digest(
 ) -> Result<[u8; 32], CapacityImportJournalError> {
     let mut canonical = request.clone();
     canonical.canisters.sort_unstable();
+    canonical
+        .funding_credits
+        .sort_by_key(|credit| credit.canister);
     let mut hash = Sha256::new();
     hash.update(b"canic:capacity-import-initial-survey:v1\0");
     hash.update(serde_json::to_vec(&(&canonical, authority, admission))?);
