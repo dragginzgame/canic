@@ -33,6 +33,16 @@ cat > "$fixture/bin/cargo" <<'SH'
 #!/usr/bin/env bash
 set -euo pipefail
 [[ "$1" != fetch ]] || exit 0
+if [[ "$1" == run ]]; then
+    [[ "$*" == 'run --locked --offline -p canic-testing-internal --example verify_embedded_root' ]]
+    [[ ! -e "$CANIC_TEST_SCRATCH/server.pid" ]]
+    printf 'preflight\tembedded-root\t1\n' >> "$RUNNER_TEST_TRACE"
+    if [[ "$RUNNER_TEST_FAIL_STAGE" == preflight/embedded-root ]]; then
+        echo 'error: embedded fixture differs from current source' >&2
+        exit 1
+    fi
+    exit 0
+fi
 [[ "$1" == test ]]
 stage=ordinary
 fail_fast=1
@@ -114,14 +124,14 @@ chmod +x "$fixture/bin/"*
 
 serial_stages=(internal host runtime blob-storage payload-limits)
 for mode in full pocketic; do
-    stages=()
+    stages=(preflight/embedded-root)
     if [[ "$mode" == full ]]; then
         stages+=(execute/ordinary list/native-internal execute/native-internal list/native-host execute/native-host execute/documentation)
     fi
     for stage in "${serial_stages[@]}"; do stages+=("compile/$stage" "list/$stage"); done
     for stage in "${serial_stages[@]}"; do stages+=("execute/$stage"); done
     for failure in "${stages[@]}" none; do
-        [[ "$failure" != list/* ]] || continue
+        [[ "$failure" != list/* && "$failure" != preflight/* ]] || continue
         scratch="$fixture/$mode/${failure//\//-}"
         mkdir -p "$scratch"
         status=0
@@ -179,6 +189,23 @@ for mode in full pocketic; do
             done
         fi
     done
+done
+
+# Stale producer evidence must stop before any suite or server, in both broad
+# test modes. Narrow modes below still select only their requested behavior.
+for mode in full pocketic; do
+    scratch="$fixture/stale-embedded-$mode"
+    mkdir -p "$scratch"
+    status=0
+    CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+        POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=preflight/embedded-root \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" "$mode" > "$scratch/output.log" 2>&1 || status=$?
+    [[ "$status" -ne 0 && ! -e "$scratch/server.pid" ]]
+    printf 'preflight\tembedded-root\t1\n' > "$scratch/expected.tsv"
+    diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
+    rg -q '^EMBEDDED FIXTURE PREFLIGHT FAILED:' "$scratch/output.log"
+    rg -q '^error: embedded fixture differs from current source$' "$scratch/output.log"
 done
 
 # A missing selector fails admission even when Cargo exits successfully. Native

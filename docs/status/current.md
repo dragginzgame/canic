@@ -2,8 +2,29 @@
 
 ## Active work and release boundary
 
+The latest maintainer release attempt failed only the embedded allocation-peer
+lifecycle case: endpoint framework changes had left its checked-in Wasm stale.
+The test stage took 3,382 seconds; the internal suite took 2,410 seconds because
+independent cases continued after the early fixture failure. Native, documentation,
+Host and runtime/blob/payload suites passed. There is no complete release
+success receipt for this failed run; retained build caches are reusable, but the
+current release owner does not reuse partial test results.
+
+The fixture and structured provenance are now refreshed in unstaged changes.
+Complete and PocketIC-only test runs now verify fixture freshness before starting
+their suites or server. Narrow lanes retain their selection. The runner regression
+passes both stale-fixture refusal and normal suite ordering. The exact previously
+failed lifecycle case passes in 55.98 seconds (144-second invocation including
+compilation and server exit). The read-only verifier and its warning-denied Clippy
+check pass; shell lint, syntax and scoped formatting pass. Evidence:
+`target/review-validation/embedded-root-release-*.log`
+and `embedded-root-preflight-runner.log`. No full gate, version mutation, commit,
+publication or Cargo cleanup ran for this correction. The open `.49` notes include
+it. The complete urgent release batch is ready for the maintainer's release retry;
+these focused results do not constitute a complete validation receipt.
+
 The reported release Clippy failure and false `[CANIC-TEST:E001] ... FAIL failing`
-line are repaired in additional unstaged edits. The reinstall fixture now uses
+line were repaired before that release attempt. The reinstall fixture now uses
 the equivalent inclusive range. Progress uses libtest-aware stderr reporting:
 passing self-tests retain expected failures in capture, while failed native tests
 and uncaptured PocketIC runs still expose diagnostics. The two runner self-tests
@@ -11,11 +32,11 @@ and two rendering tests pass; the captured run contains no failure event, and an
 explicit uncaptured run still emits it. The validation-runner shell proof and
 `canic-testing-internal --all-targets --all-features` warning-denied Clippy pass.
 Evidence: `target/review-validation/progress-capture-*.log`. This closes those
-two reported issues; the separate reinstall journey qualification below remains
-pending. Existing staged work was preserved, with no version or Git action.
+two reported issues. The later maintainer gate also passed the reinstall journey
+described below. No version or Git action was performed by the agent.
 
 The requested generic endpoint framework work for `ic-blob-storage` is complete
-in this repository and uncommitted. Public `on_access_denied = "reject"` keeps
+in this repository. Public `on_access_denied = "reject"` keeps
 plain Candid replies with normal Fleet/custom guards, denial-only metrics and
 synchronous handler dispatch. `decode = LIMITS` selects public `ArgumentLimits`
 for bytes, decoding, skipping, type count and header complexity. Artifact-owned
@@ -34,31 +55,32 @@ responses are retried. Affected-package/target warning-denied Clippy and scoped
 formatting pass. Evidence: `target/review-validation/endpoint-framework-*.log`.
 
 This framework batch and the existing open `.49` changelog are ready for review;
-the separate Fleet regression below still needs its qualification. The earlier
+the later maintainer gate qualified the separate Fleet regression below. The earlier
 in-progress macro compile errors are resolved. The sibling repository was read
 only; downstream adoption, composed-service/Caffeine qualification and paid
 uploads are not qualified or authorized by this work. No version bump, broad
 gate, commit, publication, deployment or Cargo cleanup was performed.
 
-The maintainer-selected gate exposed a fixture ordering defect in
+An earlier maintainer-selected gate exposed a fixture ordering defect in
 `generated_reinstall_recovers_lost_install_and_reaches_working_fleet`: it assumed
 a withdrawal must precede every installation, although targets advance in order.
-The uncommitted correction accepts either injected reply-loss order, requires
+The correction accepts either injected reply-loss order, requires
 both applicable interruptions and checks exact withdrawal counts after recovery.
 Its focused test compiled, but replacement-artifact compilation stopped on unused
 `decode`/`reject_access` fields during concurrent macro/runtime edits, before the
 corrected assertions ran. Formatting and the scoped diff check pass. Evidence:
-`target/review-validation/generated-reinstall-recovery-order.log`. Rerun
-`make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet`
-after that work settles; release readiness remains pending this qualification.
+`target/review-validation/generated-reinstall-recovery-order.log`.
+The later release run qualified this journey in 5m 04s; see
+`target/test-runs/20261001T113447Z-23922.mBMjjH/10.log`. Its earlier qualification
+blocker is closed. The subsequent stale embedded-peer failure is repaired above.
 
 The deployment-reliability and completed-Fleet cleanup implementation, prior
 direct negative/recovery evidence, propagation and cleanup are complete. Package
 versions remain `0.110.48`; both changelog views describe the existing open
-`0.110.49` batch. HEAD is the maintainer-created `70a0bc9a4` checkpoint
-(`0.110.49`). Concurrent macro/runtime work and this fixture correction are
-uncommitted. This diagnosis ran only the focused regression; no broad validation,
-version transaction, Git publication or live deployment was performed by the agent.
+`0.110.49` batch. The failed release tested the maintainer-created `c36a0edf8`
+checkpoint; the embedded-fixture repair above is additional uncommitted work.
+This diagnosis ran only focused checks; no broad validation, version transaction,
+Git publication or live deployment was performed by the agent.
 
 [Deployment reliability audit](../audits/reports/2026-09/2026-09-30/deployment-reliability.md)
 findings own the current delivery work:

@@ -322,6 +322,33 @@ require_ordinary_success_before_pocketic() {
     finish_test_run
 }
 
+# Fixture drift is an admission failure, not a canister scenario failure. Detect
+# it before ordinary suites and workers spend time collecting independent results.
+verify_embedded_root_before_suites() {
+    [[ "$MODE" == full || "$MODE" == pocketic ]] || return 0
+    local label="embedded allocation peer qualification"
+    if [[ "$PLAN_ONLY" -eq 1 ]]; then
+        echo '==> plan: cargo run --locked --offline -p canic-testing-internal --example verify_embedded_root'
+        record_summary "$label" "0s" "preflight" "PLAN"
+        return
+    fi
+    local started_at="$SECONDS" status=0 elapsed
+    echo "==> $label"
+    run_test_command 0 cargo run --locked --offline -p canic-testing-internal \
+        --example verify_embedded_root || status=$?
+    elapsed="$(elapsed_seconds "$started_at")"
+    if [[ "$status" -eq 0 ]]; then
+        record_summary "$label" "$elapsed" "preflight" "PASS"
+        append_step_summary "preflight" "$elapsed" "$label" "PASS"
+        return
+    fi
+    record_summary "$label" "$elapsed" "preflight" "FAIL"
+    append_step_summary "preflight" "$elapsed" "$label" "FAIL ($status)"
+    FAILED_LABELS+=("$label")
+    echo 'EMBEDDED FIXTURE PREFLIGHT FAILED: skipping test suites and PocketIC startup.' >&2
+    finish_test_run
+}
+
 # Keep complete evidence on disk without streaming high-volume diagnostics.
 # Failure excerpts are bounded; the full log survives test-scratch cleanup.
 run_test_command() {
@@ -725,6 +752,8 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     echo "==> prefetching locked dependency graph for offline metadata checks"
     cargo fetch --locked
 fi
+
+verify_embedded_root_before_suites
 
 if [[ "$MODE" == "fast" ]]; then
     run_inventory_tests "fast release-surface integration tests" canic parallel ordinary

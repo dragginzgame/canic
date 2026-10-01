@@ -3,10 +3,10 @@
   "package": "sharding_root_stub",
   "target": "wasm32-unknown-unknown",
   "profile": "fast",
-  "source_input_digest": "f29b48e4c58b5a04f61a728065c1e89662337a882a0539e7823178afb89c2287",
-  "build_fingerprint": "031f2081e591dac0667771c1b054addcfaaad505a747d82619983d9b46ab07cf",
+  "source_input_digest": "169787c0a76a70b2592005702453a4ee9f2629ceb108d7ef6293984eeac7a908",
+  "build_fingerprint": "8b8a4963abfe6b1b5d6f3336097ef4e9eff43c575eb7679f2d56ea92e378244f",
   "lock_sha256": "c57e90ff22576f4873c568d41e11c894b9e6aa1769e481424492e3b37f6a59b4",
-  "artifact_sha256": "f2aaa3bafcd7b4e8c45d8e5e3725283e03d5dd7602758c8ead4346e3c9871d6b",
+  "artifact_sha256": "720895d3abe255e174b9b49c3de0b1d49e75f8ca5dab75d6b03e0f3652dbdc69",
   "cargo": "cargo 1.98.1 (797e8a9bc 2026-08-05)\nrelease: 1.98.1\ncommit-hash: 797e8a9bca276c1c9f9f738d2a20f484fa4eea9d\ncommit-date: 2026-08-05\nhost: x86_64-unknown-linux-gnu\nlibgit2: 1.9.4 (sys:0.21.0 vendored)\nlibcurl: 8.21.0-DEV (sys:0.4.90+curl-8.21.0 vendored ssl:OpenSSL/3.6.3)\nssl: OpenSSL 3.6.3 9 Jun 2026\nos: Ubuntu 24.4.0 (noble) [64-bit]\n",
   "rustc": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8\n"
 }
