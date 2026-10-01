@@ -4,7 +4,6 @@ pub(crate) mod cache;
 mod candid;
 mod candid_cache;
 pub(crate) mod compiled;
-mod compiler_cache;
 mod context;
 mod metrics;
 mod model;

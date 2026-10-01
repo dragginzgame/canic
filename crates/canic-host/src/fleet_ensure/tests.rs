@@ -18,9 +18,10 @@ use crate::{
             },
         },
         ops::{
-            EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
-            action_sha256,
+            EffectObservation, EffectOutcome, EffectRetry, EnsurePaths, EnsurePlatform,
+            EnsureStateError, TerminalFleetInventory, action_sha256,
             operator_mint::{journal as records, prepare_intent},
+            read_journal,
         },
         workflow,
     },
@@ -1267,7 +1268,7 @@ impl EnsurePlatform for MockPlatform {
 }
 
 #[test]
-fn completed_replay_after_operator_spending_requires_fresh_review_without_effects() {
+fn completed_replay_preserves_accounting_while_new_review_observes_later_operator_spending() {
     let mut fixture = fixture();
     let digest = sha256_hex(b"completed replay account activity");
     let planned = workflow::plan(
@@ -1297,14 +1298,12 @@ fn completed_replay_after_operator_spending_requires_fresh_review_without_effect
     let plan = fs::read(&paths.plan).unwrap();
     let mutations = fixture.platform.mutations.clone();
     fixture.platform.operator_cycles -= 100;
-    let changed = apply_fixture_plan(&mut fixture, &digest, &planned.plan).unwrap_err();
-    assert!(
-        matches!(changed, workflow::EnsureWorkflowError::TerminalReplayBalanceChanged {
-        operation_id, plan_sha256, current_operator_cycles, ..
-    } if operation_id == planned.plan.operation_id
-        && plan_sha256 == planned.plan.plan_sha256
-        && current_operator_cycles == fixture.platform.operator_cycles)
-    );
+    let observations = fixture.platform.observation_calls;
+    let replay = apply_fixture_plan(&mut fixture, &digest, &planned.plan).unwrap();
+    assert!(replay.terminal);
+    assert_eq!(replay.effects_applied, 0);
+    assert_eq!(replay.actual_conservation, complete.actual_conservation);
+    assert_eq!(fixture.platform.observation_calls, observations);
     assert_eq!(fs::read(&paths.journal).unwrap(), journal);
     assert_eq!(fs::read(&paths.state).unwrap(), state);
     assert_eq!(fs::read(&paths.plan).unwrap(), plan);
@@ -1319,6 +1318,7 @@ fn completed_replay_after_operator_spending_requires_fresh_review_without_effect
         &mut fixture.platform,
     )
     .unwrap();
+    assert!(fixture.platform.observation_calls > observations);
     assert_ne!(fresh.plan.plan_sha256, planned.plan.plan_sha256);
     assert!(workflow::ordered_actions(&fresh.plan).is_empty());
     assert_eq!(fresh.plan.conservation.maximum_operator_debit_cycles, 0);
@@ -1428,6 +1428,129 @@ fn phase_progress_is_bounded_and_completion_follows_recovered_effects() {
             && event.phase != FleetEnsurePhase::Infrastructure
     }));
     fs::remove_dir_all(fixture.root).expect("remove progress fixture");
+}
+
+#[test]
+fn terminal_receipt_replays_accounting_and_recovers_final_journal_publication_without_reads() {
+    let (mut fixture, completed, source) = completed_receipt_fixture();
+    let paths = EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    let mutations = fixture.platform.mutations.clone();
+    fixture.platform.live.clear();
+    fixture.platform.operator_cycles = 0;
+    fixture.platform.observation_calls = 0;
+    fixture.platform.terminal_inventory_operation_ids.clear();
+    for interrupted_publication in [false, true] {
+        if interrupted_publication {
+            let mut journal = read_journal(&paths).unwrap().unwrap();
+            journal.completion = FleetEnsureCompletion::InProgress;
+            super::ops::write_journal(&paths, &journal).unwrap();
+        }
+        let replay = workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &source,
+            "test-fleet",
+            &completed.plan.plan_sha256,
+            &mut fixture.platform,
+        )
+        .unwrap();
+        assert!(replay.terminal);
+        assert_eq!(replay.effects_applied, 0);
+        assert_eq!(replay.actual_conservation, completed.actual_conservation);
+        assert_eq!(fixture.platform.observation_calls, 0);
+        assert!(fixture.platform.terminal_inventory_operation_ids.is_empty());
+        assert_eq!(fixture.platform.mutations, mutations);
+        assert_eq!(
+            read_journal(&paths).unwrap().unwrap().completion,
+            FleetEnsureCompletion::Converged
+        );
+    }
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+#[test]
+fn terminal_receipt_rejects_missing_accounting_and_changed_local_authority_without_reads() {
+    let (mut fixture, completed, source) = completed_receipt_fixture();
+    let paths = EnsurePaths::under(&fixture.root, "local", "test-fleet");
+    let receipt_path = paths
+        .plan
+        .with_file_name("terminal-receipts")
+        .join(format!("{}.json", completed.plan.plan_sha256));
+    fixture.platform.observation_calls = 0;
+    fixture.platform.terminal_inventory_operation_ids.clear();
+    for path in [&receipt_path, &paths.journal, &paths.state] {
+        let original = fs::read(path).unwrap();
+        let mut changed: serde_json::Value = serde_json::from_slice(&original).unwrap();
+        if path == &receipt_path {
+            fs::remove_file(path).unwrap();
+        } else if path == &paths.journal {
+            changed["initial_operator_cycles"] = serde_json::json!("1");
+            fs::write(path, serde_json::to_vec(&changed).unwrap()).unwrap();
+        } else {
+            changed["retained_cycles_by_principal"] = serde_json::json!({});
+            fs::write(path, serde_json::to_vec(&changed).unwrap()).unwrap();
+        }
+        let rejected = workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &source,
+            "test-fleet",
+            &completed.plan.plan_sha256,
+            &mut fixture.platform,
+        );
+        assert!(matches!(
+            rejected,
+            Err(workflow::EnsureWorkflowError::State(
+                EnsureStateError::InvalidTerminalSource
+            ))
+        ));
+        fs::write(path, original).unwrap();
+    }
+    let mut receipt: super::model::terminal::FleetEnsureTerminalRecord =
+        serde_json::from_slice(&fs::read(&receipt_path).unwrap()).unwrap();
+    receipt.actual.final_controlled_cycles += 1;
+    fs::write(&receipt_path, serde_json::to_vec(&receipt).unwrap()).unwrap();
+    assert!(matches!(
+        workflow::apply(
+            &fixture.root,
+            &fixture.desired,
+            &source,
+            "test-fleet",
+            &completed.plan.plan_sha256,
+            &mut fixture.platform,
+        ),
+        Err(workflow::EnsureWorkflowError::State(
+            EnsureStateError::InvalidTerminalSource
+        ))
+    ));
+    assert_eq!(fixture.platform.observation_calls, 0);
+    assert!(fixture.platform.terminal_inventory_operation_ids.is_empty());
+    fs::remove_dir_all(fixture.root).unwrap();
+}
+
+fn completed_receipt_fixture() -> (Fixture, super::model::FleetEnsureReport, String) {
+    let mut fixture = fixture();
+    let source = "76".repeat(32);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let completed = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &source,
+        "test-fleet",
+        &planned.plan.plan_sha256,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    assert!(completed.terminal);
+    (fixture, completed, source)
 }
 
 fn assert_durable_progress_counts(
@@ -1896,7 +2019,7 @@ fn terminal_create_publication_rejects_a_conflicting_retained_balance() {
     .expect_err("conflicting retained Create balance must fail closed");
     assert!(matches!(
         error,
-        workflow::EnsureWorkflowError::JournalIntegrity
+        workflow::EnsureWorkflowError::State(EnsureStateError::InvalidTerminalSource)
     ));
     assert_eq!(fixture.platform.mutations, mutations);
     let retained_state = crate::fleet_ensure::ops::read_state(&paths, "test-fleet")
@@ -3514,7 +3637,7 @@ fn assert_same_plan_replay(
     )
     .expect("replay the completed review without generating another plan");
     assert!(same_plan.terminal);
-    assert_eq!(platform.observation_calls - observations, 1);
+    assert_eq!(platform.observation_calls, observations);
     assert_eq!(same_plan.effects_applied, 0);
     assert_eq!(platform.mutations, mutations);
     assert_eq!(fs::read(&paths.journal).unwrap(), retained_journal_bytes);

@@ -1504,6 +1504,7 @@ mod tests {
     )]
     fn published_managed_component_group_support_drives_child_lifecycle() {
         let workspace_root = workspace_root();
+        crate::embedded_root::verify(&workspace_root).expect("current embedded allocation peer");
 
         let wasms = build_managed_component_group_canisters_once(&workspace_root);
         let admitted = Fake::principal(15);

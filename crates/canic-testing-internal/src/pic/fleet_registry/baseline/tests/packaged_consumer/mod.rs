@@ -41,13 +41,24 @@ impl Consumer {
     }
 
     fn run(&self, arguments: &[String]) -> Output {
+        println!(
+            "[PACKAGE] running {}",
+            serde_json::to_string(arguments).unwrap()
+        );
+        let started = std::time::Instant::now();
         let output = Command::new(&self.cli)
             .args(arguments)
             .current_dir(&self.root)
             .env("CARGO_TARGET_DIR", &self.target)
             .env("CARGO_NET_OFFLINE", "true")
+            .env_remove("RUSTC_WRAPPER")
             .output()
             .unwrap();
+        println!(
+            "[PACKAGE] completed in {:.2}s ({})",
+            started.elapsed().as_secs_f64(),
+            output.status
+        );
         let diagnostics = self.root.join(".canic/diagnostics/packaged-cli");
         std::fs::create_dir_all(&diagnostics).unwrap();
         std::fs::write(diagnostics.join("stdout"), &output.stdout).unwrap();
@@ -103,8 +114,24 @@ fn installed_package_build_deploy_recover_and_replay() {
     args.extend(strings(&["fleet", "ensure", "packaged", "--json"]));
     std::fs::write(consumer.root.join("fail-before-install"), []).unwrap();
     std::fs::write(consumer.root.join("lose-install-response"), []).unwrap();
-    let replay_args = converge(&consumer, args);
+    let root = infrastructure
+        .iter()
+        .find(|(kind, _)| *kind == DesiredCanisterKind::Root)
+        .unwrap()
+        .1;
+    let replay_args = converge(&consumer, &pic, root, &desired, args);
+    for fault in [
+        "failed-before-install",
+        "lost-install-response",
+        "lost-controller-response",
+    ] {
+        assert!(
+            consumer.root.join(fault).exists(),
+            "injected fault: {fault}"
+        );
+    }
     verify_installed_artifacts(&consumer, &pic, operator, &desired, &infrastructure);
+    verify_workload(&consumer, &pic, root, operator, &desired);
     let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
     let requests: u64 = pic.query_candid(ledger, "request_count", ()).unwrap();
     let mutations = mutation_counts(&consumer.root);
@@ -148,7 +175,8 @@ fn prepare_network(
     let coordinator = create(COORDINATOR_INSTALL_CYCLES, vec![operator]);
     let root = create(ROOT_INSTALL_CYCLES, vec![operator]);
     let mut controllers = vec![root, operator];
-    controllers.sort();
+    // Host creation requests order controller text before encoding Principals.
+    controllers.sort_by_key(Principal::to_text);
     let store = create(ROOT_INSTALL_CYCLES, controllers.clone());
     let config = AppConfigSnapshot::load(config).unwrap();
     let readiness = config
@@ -235,12 +263,18 @@ fn prepare_generation(
         release,
         "--fresh",
         "--management-creation-fee-cycles",
-        "0",
+        "0B",
     ]));
     assert_success(&consumer.run(&args));
 }
 
-fn converge(consumer: &Consumer, mut args: Vec<String>) -> Vec<String> {
+fn converge(
+    consumer: &Consumer,
+    pic: &PocketIc,
+    root: Principal,
+    desired: &DesiredFleet,
+    mut args: Vec<String>,
+) -> Vec<String> {
     let mut faults = BTreeSet::new();
     let mut reviews = BTreeSet::new();
     let mut successor_pauses = BTreeSet::new();
@@ -254,6 +288,7 @@ fn converge(consumer: &Consumer, mut args: Vec<String>) -> Vec<String> {
                 .filter_map(|line| serde_json::from_str::<serde_json::Value>(line).ok())
                 .find(|value| value["event"] == "fleet_ensure_error")
                 .unwrap_or_else(|| panic!("{}", String::from_utf8_lossy(&output.stderr)));
+            println!("[PACKAGE] {error}");
             if error["code"] == "successor_review_required" {
                 assert!(
                     successor_pauses.insert(args.clone()),
@@ -296,6 +331,9 @@ fn converge(consumer: &Consumer, mut args: Vec<String>) -> Vec<String> {
             "apply" => {
                 // The test operator explicitly approves each new disposable-estate review.
                 assert_eq!(next["requires_approval"], true);
+                if reviews.is_empty() {
+                    prepare_root_creation_result(pic, root, desired, &result);
+                }
                 assert!(reviews.insert(automation["plan_sha256"].as_str().unwrap().to_owned()));
                 approved = Some(args.clone());
             }
@@ -307,6 +345,38 @@ fn converge(consumer: &Consumer, mut args: Vec<String>) -> Vec<String> {
             }
             other => panic!("unhandled operator decision: {other}"),
         }
+    }
+}
+
+// The Ledger stub returns precreated canisters. Match the public review's
+// requested net balance, including startup credit, before the first effect.
+fn prepare_root_creation_result(
+    pic: &PocketIc,
+    root: Principal,
+    desired: &DesiredFleet,
+    report: &serde_json::Value,
+) {
+    let root_name = &desired
+        .canisters
+        .iter()
+        .find(|canister| canister.kind == DesiredCanisterKind::Root)
+        .unwrap()
+        .name;
+    let creation = report["plan"]["canisters"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|canister| canister["actions"].as_array().unwrap())
+        .find(|action| action["kind"] == "create" && action["name"] == *root_name)
+        .unwrap();
+    let required: u128 = creation["requested_initial_cycles"]
+        .as_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    let credit = required.checked_sub(pic.cycle_balance(root)).unwrap();
+    if credit > 0 {
+        pic.add_cycles(root, credit);
     }
 }
 
@@ -347,6 +417,54 @@ fn mutation_counts(root: &Path) -> Vec<Vec<u8>> {
     .into_iter()
     .map(|name| std::fs::read(root.join(name)).unwrap_or_default())
     .collect()
+}
+
+fn verify_workload(
+    consumer: &Consumer,
+    pic: &PocketIc,
+    root: Principal,
+    operator: Principal,
+    desired: &DesiredFleet,
+) {
+    let config =
+        AppConfigSnapshot::load(&consumer.root.join("apps/downstream/canic.toml")).unwrap();
+    let union = canic_host::release_set::load_persisted_application_artifact_union(
+        &consumer.root,
+        config.component_topology(),
+        desired.bootstrap.as_ref().unwrap().release_build_id,
+    )
+    .unwrap();
+    let artifact = union
+        .union
+        .entries
+        .iter()
+        .find(|entry| entry.role.as_str() == "app")
+        .unwrap();
+    let pool = root_pool_status_as(pic, root, operator);
+    assert_eq!((pool.workload, pool.ready), (1, 1));
+    let workload = pool
+        .entries
+        .iter()
+        .find(|entry| {
+            matches!(
+                entry.status,
+                canic_core::dto::pool::CanisterPoolAssetStatus::Workload { .. }
+            )
+        })
+        .unwrap();
+    let status = pic
+        .canister_status(workload.canister_id, Some(root))
+        .unwrap();
+    // Store installs the compressed application artifact; management reports
+    // that installed representation's hash, as current inventory does.
+    assert_eq!(
+        hex_bytes(status.module_hash.unwrap()),
+        artifact.wasm_gz_sha256_hex
+    );
+    let reply: Result<u64, Error> = pic
+        .query_candid_as(workload.canister_id, root, "packaged_probe", ())
+        .unwrap();
+    assert_eq!(reply.unwrap(), 7);
 }
 
 fn arguments(action: &serde_json::Value) -> Vec<String> {

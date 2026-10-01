@@ -1,7 +1,6 @@
 //! Persist current reset authority and import declarations from real observations.
 
 pub(in crate::fleet_ensure) mod cancellation;
-pub(in crate::fleet_ensure) mod terminal;
 
 use crate::{
     durable_io::{read_optional_regular_bytes_bounded, write_bytes},

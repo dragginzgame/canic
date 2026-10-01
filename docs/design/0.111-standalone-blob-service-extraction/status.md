@@ -7,8 +7,9 @@ Date: 2026-09-25
 - Roadmap: standalone blob service extraction is the maintainer's accepted
   next major slice, replacing the deferred bounded multi-Fleet estate proposal.
 - Design: [standalone blob service extraction](0.111-design.md).
-- Implementation: not started; follows the accepted `.43` Fleet capacity import
-  batch and human acceptance of the final 0.110 closeout audit covering it.
+- Implementation: not started; follows the complete amended 0.110 scope,
+  including FI1 corrections and FR1 reuse/contraction, and human acceptance of
+  the final 0.110 closeout audit covering it.
 - Canic owners: runtime/facade, host/CLI and testing owners.
 - Managed deployment prerequisite: the operator establishes the Coordinator
   first, then initializes Root/Store, registers and activates the Root before
@@ -38,8 +39,9 @@ Date: 2026-09-25
 
 ## Next Action
 
-Complete [FI1 for 0.110.43](../0.110-fleet-runtime-contraction/0.110-design.md#fi1-reviewed-fleet-capacity-import--planned-011043)
-after `.42`, then obtain human acceptance of the final
+Complete the [current 0.110 plan](../0.110-fleet-runtime-contraction/status.md),
+including FI1 corrections and accepted FR1 after urgent deployment recovery,
+then obtain human acceptance of the final
 [0.110 closeout audit](../../audits/release-lines/0.110-closeout-audit.md)
 covering that scope before beginning implementation. The existing `.42` verdict
 is checkpoint evidence. Then resolve B1's concrete consumer, external owner,

@@ -1131,7 +1131,7 @@ where
         desired
     };
     if let Some(journal) = &retained_journal
-        && let Some(actual) = crate::fleet_ensure::ops::clean_reinstall::terminal::read(
+        && let Some(actual) = crate::fleet_ensure::ops::terminal::read(
             &paths,
             &retained_plan,
             journal,
@@ -1251,32 +1251,6 @@ where
             journal,
             FleetEnsurePhase::Infrastructure,
             FleetEnsureProgressState::PrerequisiteComplete,
-        );
-        return Ok(FleetEnsureReport {
-            funding_review: None,
-            actual_conservation: Some(actual),
-            effects_applied: 0,
-            plan: retained_plan,
-            terminal: true,
-        });
-    }
-    if retained_plan.scope == FleetEnsurePlanScope::Full
-        && let Some(journal) = completed_journal
-    {
-        verify_journal(journal, &retained_plan, requested_fleet, &state)?;
-        let actual = continuation::replay(
-            root,
-            operation_desired,
-            &retained_plan,
-            journal,
-            &state,
-            platform,
-        )?;
-        report_progress(
-            platform,
-            &retained_plan,
-            journal,
-            FleetEnsurePhase::Complete,
         );
         return Ok(FleetEnsureReport {
             funding_review: None,
@@ -2291,7 +2265,7 @@ where
     write_state(&paths, &terminal_state)?;
     journal.completion = FleetEnsureCompletion::Converged;
     journal.stalled_observations = 0;
-    crate::fleet_ensure::ops::clean_reinstall::terminal::retain(
+    crate::fleet_ensure::ops::terminal::retain(
         &paths,
         &retained_plan,
         &journal,

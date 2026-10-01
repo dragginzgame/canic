@@ -7,6 +7,8 @@ role-owned activation persistence, optional observability, passive blob
 contracts, artifact reuse/admission and IcyDB composition corrections are
 implemented. The [current handoff](../../status/current.md) owns the active
 cleanup and CANIC-187/188 correction batch; [release notes](../../changelog/0.110.md) describe shipped behavior.
+The accepted FR1 reuse/contraction batch follows urgent deployment/recovery;
+it is not implemented and does not expand the current `.49` publication gate.
 
 The normative [design](0.110-design.md) and independent
 [size follow-through amendment](2026-09-28-toko-size-follow-through.md) define
@@ -22,7 +24,8 @@ observability and blob-contract work; it did not restart the full B3/B4 matrix.
 | B3 | General record/codec restructuring stopped; the bounded .47 activation amendment is implemented. |
 | B4 | Remaining general pruning deferred and unscheduled; bounded .47 observability and passive blob-contract changes are implemented. |
 | FI1 | Bootstrap and capacity-import implementation/qualification shipped in .43; subsequent reinstall/recovery corrections shipped through .47. |
-| B5 | The .42 checkpoint is qualified; final closeout must cover FI1 and subsequent corrections and receive human acceptance. |
+| FR1 | Accepted 2026-10-01; whole-Fleet release to reusable Coordinator/Root/Store and child capacity, with retirement contraction. Not started; follows urgent deployment/recovery qualification and the Toko unblocked scheduling milestone. |
+| B5 | The .42 checkpoint is qualified; final closeout must cover FI1, subsequent corrections and FR1 and receive human acceptance. |
 | Cleanup | Complete and ready for maintainer review: unused runtime/Host paths, obsolete helpers/tests and status-owned release flows removed, duplicate evidence consolidated, focused checks passed. |
 | Reinstall review corrections | Shipped in .48: typed unavailable funding diagnostics and exact-digest unpaid-review cancellation. Toko confirms live cancellation and infrastructure completion. |
 
@@ -72,6 +75,31 @@ import. The [exact staging repair](issued-import-recovery.md) retains its own
 qualification and live-authority boundary. Toko's newly reported local import
 with an issued uninstall is a different operation and is not covered by that
 repair. No live or downstream mutation is part of this publication preparation.
+
+## FR1 sequence and acceptance — 2026-10-01
+
+The maintainer accepts [FR1](0.110-design.md#fr1-fleet-release-to-reusable-capacity--accepted-2026-10-01)
+as one complete 0.110 batch after the urgent deployment/recovery outcome and
+Toko Miner unblocking, before final closeout and blob extraction. This milestone
+is scheduling context, not a downstream source/state dependency or live-effect
+authority. FR1 does not delay urgent `.49` publication. Package/release decisions
+remain maintainer-owned; no per-slice patch versions are allocated.
+
+Host/CLI own the reviewed physical inventory and single operation, Core/Control
+Plane own quiescence and bounded effects, and Testing owns management/recovery
+proof. Complete whole-Fleet ownership release, Ledger/native/reserved accounting,
+controller handoff, empty retained IDs, same-subnet pool or operator-held capacity,
+fresh bootstrap, interruptions and effect-free replay. Contract exclusive
+retirement commands/records/resumers and duplicate deletion phases only once
+the maintained operation owns their safety obligations. Preserve shared current
+reset/import, funding, recycling, Store adoption, backup/restore and CANIC-188.
+
+Status: accepted, implementation/qualification not started. Supporting
+[usefulness evidence](../../audits/working/0.110-surface-contraction/root-retirement-usefulness.md)
+is descriptive; the design owns the exact contract. FR1 overlaps R8 accounting
+but does not close any original finding without its named proof. Remaining R2–R8
+corrections keep their owners; only FR1's direct safety dependencies join this
+batch. The advisory line estimate is not a release gate or deletion quota.
 
 ## Accepted code-review corrections — 2026-09-30
 

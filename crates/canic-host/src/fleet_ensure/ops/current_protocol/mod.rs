@@ -220,10 +220,6 @@ enum RootStatusResponseFragment {
 /// Typed current-protocol compilation or transport failure.
 #[derive(Debug, ThisError)]
 pub enum CurrentProtocolError {
-    #[error(
-        "authority {name} does not expose the exact maintained seal command and status contract"
-    )]
-    AuthoritySealContract { name: String },
     #[error("fixture Store rejected publication: {0:?}")]
     Fixture(canic_core::dto::fixture_provisioning::FixtureStoreError),
     #[error("current Fleet protocol app config is unavailable: {}", .0.display())]

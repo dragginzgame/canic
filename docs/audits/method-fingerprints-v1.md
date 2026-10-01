@@ -42,7 +42,7 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-RELEASE-INTEGRITY-001` | `1` | `3f6b87b30a3c1f9c80803a8be5d45292e73217d260ea435a956bd05f10d63438` | `docs/audits/recurring/system/release-integrity.md` |
 | `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
 | `CANIC-WASM-001` | `6` | `0c8487a989dadaae03cba0437545a2ea236274607622ff3d74623696c1ebe797` | `docs/audits/recurring/system/wasm-footprint.md` |
-| `CANIC-MODULE-SURFACE-001` | `2.2` | `982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff` | `docs/audits/modular/module-surface-hardening.md` |
+| `CANIC-MODULE-SURFACE-001` | `2.3` | `b4b6e300b70ae8f2899b36b99b287aa2332ab1c8775514a99954f991c472a3f4` | `docs/audits/modular/module-surface-hardening.md` |
 
 The [September 29 correction report](reports/2026-09/2026-09-29/audit-method-correction.md)
 records the DRY and module-hardening revision scope and affected-result limits.
@@ -51,6 +51,7 @@ records the DRY and module-hardening revision scope and affected-result limits.
 
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-MODULE-SURFACE-001` | `2.2` | `982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.3` |
 | `CANIC-MODULE-SURFACE-001` | `2.1` | `e3cb15bba0909fff96075206d6a4780b2a74f31a98c95ebd143023d0e73e9835` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.2` |
 | `CANIC-DUPLICATION-001` | `1` | `c4b2b2828f551a5419de394d442ecb04932900d7b15665177a3c8529ee340262` | `docs/audits/recurring/system/dry-consolidation.md` | `CANIC-DUPLICATION-001/v2` |
 | `CANIC-MODULE-SURFACE-001` | `2.0` | `404a359b4448ea7288055f0444e3178ae972f4eb7e1a0814aa693ce67df59030` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.1` |
@@ -108,7 +109,7 @@ and executable fixture inputs and record the resulting value in each run.
 | `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
 | `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
 | `0eb8e77d81af93338dcc6051255ddfcf71790dfacd67edb5ec4eae64e9ef393d` | `docs/audits/META-AUDIT.md` |
-| `8ecdb1446b595a2acaade58ea6eabc3e1392aa4949cd180646551d39d83cf99b` | `docs/audits/METHODS.md` |
+| `fcebca18cd640920069a622e896ade27a36e9d70f71f0e17ac2f32e9c0b6baa6` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |

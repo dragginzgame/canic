@@ -173,12 +173,6 @@ impl CompleteBuildReuse {
                 tool_paths.push(path);
             }
         }
-        if env::var_os("RUSTC_WRAPPER").is_none()
-            && let Ok(path) = resolve_tool(std::ffi::OsStr::new("sccache"))
-        {
-            require_native_tool(&path)?;
-            tool_paths.push(path);
-        }
         let inputs = input_snapshot(context, &tool_paths)?;
         let diagnostics = diagnostics::InputDiagnostics::capture(context, &tool_paths, &inputs);
         let input_locations = diagnostics::InputLocations::capture(context);

@@ -4,4 +4,5 @@
 //! baseline setup out of the reusable `ic-testkit` surface.
 
 pub mod canister;
+pub mod embedded_root;
 pub mod pic;

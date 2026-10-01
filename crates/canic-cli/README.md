@@ -91,9 +91,9 @@ canic build <app> <role> --provenance artifacts/<role>-provenance.json
 ```
 
 Standalone builds default to the fast profile; select `--profile release` for
-production artifacts. Canic keeps Wasm compilation non-incremental and uses an
-explicit `RUSTC_WRAPPER`; when no wrapper is supplied, it discovers `sccache`
-on `PATH`.
+production artifacts. Canic keeps Wasm compilation non-incremental. Cargo owns
+compiler-wrapper selection through `RUSTC_WRAPPER` or its wrapper configuration;
+configure a compiler cache explicitly when wanted.
 
 Complete builds report one verified cache hit or shared rebuild reason with the
 artifact count. Add `--verbose` for tool/configuration details and the full

@@ -502,14 +502,12 @@ fn json_error(source: FleetCommandError, options: Option<&EnsureOptions>) -> Fle
     let successor = matches!(&source, FleetCommandError::Workflow(error) if matches!(error.as_ref(),
         EnsureWorkflowError::SuccessorReviewRequired { .. } | EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift { .. }));
     let next_action = options.filter(|_| successor).map(|options| {
-        let mut args =
-            automation::ensure_command(options, options.environment.as_deref().unwrap_or("local"));
-        if options.reinstall {
-            args = automation::reinstall_review_command(
-                options,
-                options.environment.as_deref().unwrap_or("local"),
-            );
-        }
+        let environment = options.environment.as_deref().unwrap_or("local");
+        let args = if options.reinstall {
+            automation::reinstall_review_command(options, environment)
+        } else {
+            automation::ensure_command(options, environment)
+        };
         automation::action(automation::ActionKind::Review, args)
     });
     FleetCommandError::JsonReported {

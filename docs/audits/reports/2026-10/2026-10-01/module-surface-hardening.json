@@ -1,0 +1,276 @@
+{
+  "schema": "canic.audit.code_trace_manifest.v1",
+  "audit_id": "CANIC-MODULE-SURFACE-001",
+  "run_result": "partial",
+  "result_validity": "valid",
+  "reviewer": "Codex /root",
+  "review_mode": "single_review",
+  "audit_tier": 2,
+  "patch_mode": "read_only",
+  "method": {
+    "header_version": "2.2",
+    "required_manifest_version": "MSH-2.1",
+    "version_conflict": true,
+    "surface_taxonomy": "ST-1",
+    "authority_taxonomy": "AT-1",
+    "deletion_confidence_model": "DC-1",
+    "compatibility_policy": "pre-1.0-hard-cut",
+    "wasm_signal_rule": "raw-wasm-primary",
+    "hot_path_risk_model": "HP-1",
+    "proof_policy": "read-only-first"
+  },
+  "baseline": {
+    "commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+    "tree": "59c6be1f502c442bee929daf019347310601600e",
+    "committed_product_tree": "6c764ee0bff95865c0a12da62e2c3d252a41dc7c7503b831236fae89aa37f73f",
+    "dirty": true,
+    "concurrent_mutation": true
+  },
+  "scope": {
+    "source_roots": [
+      "crates/canic-host",
+      "crates/canic-cli",
+      "crates/canic-core",
+      "crates/canic-control-plane",
+      "crates/canic-backup",
+      "crates/canic-testing-internal",
+      "crates/canic/tests",
+      "crates/canic-tests"
+    ],
+    "documentation_roots": [
+      "docs/features",
+      "docs/design/0.110-fleet-runtime-contraction",
+      "docs/audits/modular"
+    ],
+    "scripts": "sampled supporting CI/development scripts",
+    "coverage": "tree-wide lexical candidate screen; named semantic samples only",
+    "generated_code": "sampled",
+    "tests": "sampled",
+    "unreviewed": [
+      "live authority and network state",
+      "sibling repositories",
+      "full optimized generated graph",
+      "all test paths and registry semantics",
+      "new concurrent package-consumer changes"
+    ]
+  },
+  "environment": {
+    "cwd": "/home/adam/projects/canic",
+    "declared_rust_toolchain": "1.98.1",
+    "rustc_version": null,
+    "rg_version": "15.2.0",
+    "perl_version": "5.38.2",
+    "compile_target": null,
+    "features": null,
+    "fixture_seed": null
+  },
+  "timing": {
+    "exploratory_started_at": null,
+    "exploratory_start_reason": "Not instrumented; report collection follows the exploratory code trace.",
+    "metadata_collected_at": "2026-10-01T07:51:06Z",
+    "evidence_frozen_at": "2026-10-01 07:54:52 UTC"
+  },
+  "validation": {
+    "cargo_make_compiles": 0,
+    "pocketic_runs": 0,
+    "paid_calls": 0,
+    "product_mutations": 0,
+    "scope": "source/caller/cfg trace only; artifact checks recorded in Markdown",
+    "runtime_measurements": null
+  },
+  "retention_class": "primary dated audit report with compact machine-readable source fingerprints",
+  "redactions_applied": [],
+  "comparability": "non-comparable",
+  "source_sha256": {
+    "Cargo.lock": "c57e90ff22576f4873c568d41e11c894b9e6aa1769e481424492e3b37f6a59b4",
+    "docs/audits/modular/module-surface-hardening.md": "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff",
+    "scripts/ci/audit-product-tree-hash.sh": "ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417",
+    "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs": "45b1b21b92636d321f2595db8368b8a7040ec64f809442de85783cc0031c6d50",
+    "crates/canic-host/src/fleet_ensure/policy/mod.rs": "74a5667f976ed8c0a26874bcc1c2cbc0232693e6e9b9b520c88270ac01725b17",
+    "crates/canic-host/src/fleet_ensure/model/mod.rs": "6ee189b2d322809fdf23481355c7f010dc28ee743b27390fdd36489542a573cf",
+    "docs/design/0.110-fleet-runtime-contraction/0.110-design.md": "9e5d4d72986bbee630e75e9f9117b94c5bd9a6c387fbafa367c85e18f8542508",
+    "crates/canic/tests/workspace_manifest.rs": "a7cb3692a88ea486f3f64c4c83fdc9c329b0c1d825b1e9efa03ab5dd8b1d25ef",
+    "crates/canic/tests/protocol_surface.rs": "85cbc342dc773666766b55b27a32df1f8f5257b22ebfa5d0b44c3b10ac9a0c46",
+    "crates/canic/tests/reference_surface.rs": "0d112e0d666d9b8e0cf9798cacb3bca3d525b6a9cae37f9d8a95b7fdd01c1946",
+    "crates/canic-cli/src/scaffold/tests.rs": "00f5b6b536b055bfa26addb0b00b1dca58fb3fdd4c60b2e631caac5d4c3a2ef0",
+    "crates/canic-host/src/evidence_envelope/mod.rs": "f44892253f8150e7e824ef451c94f3dda611dc3471afbdfd02994202a13ca0eb",
+    "crates/canic-host/src/release_build/mod.rs": "d2f2e86f0308a44a7799dfd04dd98b232ed793000331f2154475f15c258861c7"
+  },
+  "findings": [
+    {
+      "key": "S1",
+      "finding_id": "CANIC-0.110-HOST-SEAL-001",
+      "finding_class": "documentation_drift",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "open",
+      "owner": "Host Fleet seal diagnostics",
+      "intended_owner": "Host Fleet seal diagnostics",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s1--orphaned-seal-errors-and-stale-preparation-descriptions",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW"
+    },
+    {
+      "key": "S2",
+      "finding_id": "CANIC-0.110-DOCS-ACTIVE-001",
+      "finding_class": "documentation_drift",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "open",
+      "owner": "Active 0.110 design",
+      "intended_owner": "Active 0.110 design",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s2--active-design-combines-current-contracts-with-superseded-instructions",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "NARROW NOW"
+    },
+    {
+      "key": "S3",
+      "finding_id": "CANIC-0.110-TESTS-DOCS-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "open",
+      "owner": "Facade workspace feature documentation guard",
+      "intended_owner": "Facade workspace feature documentation guard",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s3--readme-layout-is-a-release-tested-contract",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "NARROW NOW"
+    },
+    {
+      "key": "S4",
+      "finding_id": "CANIC-0.110-TESTS-SCAFFOLD-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "high",
+      "finding_status": "open",
+      "owner": "CLI current scaffold tests",
+      "intended_owner": "CLI current scaffold tests",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s4--scaffold-tests-preserve-removed-surface-names",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW"
+    },
+    {
+      "key": "S5",
+      "finding_id": "CANIC-0.110-TESTS-SOURCE-001",
+      "finding_class": "evidence_gap",
+      "severity": "P2",
+      "confidence": "high",
+      "finding_status": "open",
+      "owner": "Facade generated endpoint/compiler evidence",
+      "intended_owner": "Facade generated endpoint/compiler evidence",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s5--source-spelling-substitutes-for-stronger-endpointmacro-evidence",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "PATCH WITH PROOF"
+    },
+    {
+      "key": "S6",
+      "finding_id": "CANIC-0.110-HOST-SURFACE-001",
+      "finding_class": "evidence_gap",
+      "severity": "P3",
+      "confidence": "medium",
+      "finding_status": "open",
+      "owner": "Host public build/evidence helpers",
+      "intended_owner": "Host public build/evidence helpers",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s6--public-convenience-surfaces-have-no-demonstrated-production-owner",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DEFER WITH TRIGGER"
+    },
+    {
+      "key": "S7",
+      "finding_id": "CANIC-0.110-AUDIT-METHOD-001",
+      "finding_class": "audit_method_defect",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "open",
+      "owner": "Module Surface Hardening method metadata",
+      "intended_owner": "Module Surface Hardening method metadata",
+      "first_observed_at": "2026-10-01",
+      "baseline_commit": "02af7277664c1664a58bfaa5e6fde997474c9802",
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff"
+      ],
+      "detail_reference": "module-surface-hardening.md#s7--audit-method-declares-two-current-versions",
+      "verification_status": "source_trace; no fix qualification",
+      "duplicate_of": null,
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "NARROW NOW"
+    }
+  ]
+}

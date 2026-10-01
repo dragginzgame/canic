@@ -7,23 +7,19 @@
 #[cfg(test)]
 mod tests;
 
-use super::{
-    EnsureWorkflowError, attach_terminal_cycles, completed_inventory_operation,
-    merge_terminal_inventory, ordered_actions, verify_terminal_conservation,
-};
+use super::{EnsureWorkflowError, ordered_actions, verify_terminal_conservation};
 use crate::fleet_ensure::{
     model::{
-        ActualCycleConservation, CanisterDisposition, DesiredFleet, EnsureAction,
-        FleetEnsureCompletion, FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope,
-        FleetEnsureStateRecord, FleetEnsureSuccessorReviewReason, FleetObservation,
-        ReviewedDesiredFleetRecord,
+        CanisterDisposition, DesiredFleet, EnsureAction, FleetEnsureCompletion,
+        FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureStateRecord,
+        FleetEnsureSuccessorReviewReason, FleetObservation, ReviewedDesiredFleetRecord,
     },
     ops::{
         EnsurePaths, EnsurePlatform, action_sha256,
         continuation::{candidate_journal, retain_phase},
         resolve_desired_artifacts, write_journal,
     },
-    policy::{compile_plan, expected_plan_sha256, successor_phase_burn},
+    policy::{expected_plan_sha256, successor_phase_burn},
 };
 use std::{collections::BTreeSet, path::Path};
 
@@ -180,56 +176,6 @@ pub(super) fn verify_canonical<P: EnsurePlatform>(
         }
     }
     Ok(())
-}
-
-pub(super) fn replay<P: EnsurePlatform>(
-    root: &Path,
-    desired: &DesiredFleet,
-    plan: &FleetEnsurePlan,
-    journal: &FleetEnsureJournalRecord,
-    state: &FleetEnsureStateRecord,
-    platform: &mut P,
-) -> Result<ActualCycleConservation, EnsureWorkflowError<P::Error>> {
-    // Inventory already proves the terminal protocol and physical closure. Observe
-    // the merged estate once, after its paid inspections, and use that same fresh
-    // evidence for convergence and conservation. No effect occurs between them.
-    let inventory = platform
-        .terminal_inventory(completed_inventory_operation(plan, state)?, state)
-        .map_err(EnsureWorkflowError::Platform)?;
-    let cycles = inventory.controlled_cycles_by_principal.clone();
-    let mut verified_state = state.clone();
-    merge_terminal_inventory(&mut verified_state, inventory)?;
-    // This is one read-only replanning decision after the inventory's paid reads.
-    // Share configured-owner status with protocol planning, then expire it before
-    // the separate terminal authority checks or any later replay.
-    let (final_observation, current) = platform.with_planning_observations(|platform| {
-        let mut final_observation = platform
-            .observe(&plan.operation_id, &verified_state)
-            .map_err(EnsureWorkflowError::Platform)?;
-        attach_terminal_cycles(&mut final_observation, cycles)?;
-        let protocol = platform
-            .protocol_actions(super::protocol_operation(plan), &verified_state)
-            .map_err(EnsureWorkflowError::Platform)?;
-        let current = compile_plan(
-            desired,
-            &resolve_desired_artifacts(root, desired)?,
-            &protocol,
-            &plan.desired_sha256,
-            &plan.fleet,
-            &final_observation,
-            plan.planned_at_time,
-            &plan.operation_id,
-            None,
-        )?;
-        Ok::<_, EnsureWorkflowError<P::Error>>((final_observation, current))
-    })?;
-    if !ordered_actions(&current).is_empty() {
-        return Err(review(FleetEnsureSuccessorReviewReason::AdditionalEffect));
-    }
-    super::reinstall::verify_terminal_estate(plan, &final_observation)?;
-    super::reinstall::verify_terminal_authority(plan, &verified_state, platform)?;
-    let actual = verify_terminal_conservation(plan, journal, &verified_state, &final_observation)?;
-    Ok(actual)
 }
 
 #[expect(

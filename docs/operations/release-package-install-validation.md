@@ -45,7 +45,7 @@ not add new release behavior.
 | --- | --- | --- | --- |
 | Publishable crate package | `make package` | Can the workspace produce publishable package archives through `cargo package` from a clean worktree? | RC/final release. |
 | Installed CLI smoke | `make test-installed-canic-cli` | Does an installed `canic` binary run the maintained v1 readiness smoke and current retained operator CLI checks without using `target/debug/canic` or repository state? | RC/final release when local Cargo install is available. |
-| Packaged downstream CLI | `make test-packaged-downstream-cli` | Can packaged Canic crates resolve and run current downstream CLI/read-only/operator commands without repository crate paths? | RC/final release when local Cargo cache/toolchain support is available. |
+| Packaged downstream CLI | `make test-packaged-downstream-cli` | Can an installed CLI from extracted packages build a consumer, deploy a small Fleet on PocketIC, recover interrupted calls and replay with zero effects using public JSON? | Explicit package qualification and RC/final release with the pinned PocketIC/toolchain and local Cargo cache. |
 | Packaged downstream Canister, managed-App testing and wasm store | `make test-packaged-downstream-wasm-store` | Can an ordinary typed Canister use packaged `build!`, `start!` and `finish!`, can an isolated host consumer compile the published `canic::testing` managed/standalone facade, and can both `wasm_store` bootstrap paths build outside the repository package graph? | RC/final release when Wasm/Cargo package support is available. |
 | Release workspace build | `cargo build --release --workspace --locked` | Does the release build shape compile with the locked resolver? | Release-commit `main` CI and RC validation. |
 | Fleet ensure qualification | governed `canic-host` PocketIC journey in `make validate` | Can `canic fleet ensure` conserve cycles while converging an inconsistent estate, then repeat with zero mutation effects? | RC/final release. |
@@ -57,8 +57,8 @@ The retained probe details remain documented in:
 - [Packaged downstream CLI](0.56-packaged-downstream-cli.md)
 - [Packaged wasm store](0.56-packaged-wasm-store.md)
 
-Those older docs are retained historical probe inventories. This checklist is
-the current non-versioned package/install validation entry point.
+These documents retain their original filenames; their maintained procedures
+describe the current probes. This checklist owns package/install gate accounting.
 
 ## Artifact Verification Expectations
 
@@ -72,9 +72,10 @@ RC and final release reports should account for these artifact expectations:
   repository crate paths.
 - Installed CLI proof must execute the temporary installed binary, not
   `target/debug/canic`.
-- Installed and packaged CLI proofs should cover the current App/build/Fleet
-  surface, including `canic fleet ensure` help and strict desired-document
-  parsing without invoking a live mutation.
+- Installed CLI smoke covers command availability and input validation. The
+  packaged CLI journey also builds real Wasm, exercises Fleet recovery through
+  public JSON and compares deployed artifact hashes on disposable PocketIC.
+  Neither proof mutates a live IC environment.
 - Packaged Canister proof must compile one typed endpoint through packaged
   `build!`, `start!` and `finish!` at the MSRV with warnings denied, extract
   that endpoint from local Wasm and prove IC Wasm omits the local export.

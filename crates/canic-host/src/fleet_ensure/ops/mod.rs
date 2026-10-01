@@ -29,6 +29,7 @@ pub(super) mod recovery;
 pub(super) mod reinstall;
 pub mod retained_contract;
 pub(super) mod startup_funding;
+pub(super) mod terminal;
 
 use crate::{
     durable_io::{

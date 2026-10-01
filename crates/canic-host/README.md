@@ -15,18 +15,10 @@ canic build <app> <role> --profile release
 ```
 
 Every managed package declares exact App/role metadata. Artifact builds are
-non-incremental for deterministic Wasm. An explicit `RUSTC_WRAPPER` wins;
-otherwise the host discovers `sccache` on `PATH`.
-Before starting Cargo compilation with that implicit cache, Canic probes
-compiler startup directly and through the cache using `rustc -vV` (or the
-environment-selected `RUSTC`, including `RUSTC_WORKSPACE_WRAPPER`). The probes
-inherit the build directory, toolchain environment and command environment.
-A cache probe failure retains the original error and points to
-`RUSTC_WRAPPER= canic build <app> <role> --profile release` for direct
-compilation. An explicitly empty or custom `RUSTC_WRAPPER` bypasses implicit
-cache probing. Canic does not retry a failed build with a different wrapper.
-The probe checks compiler startup, not every later cache operation or
-Cargo configuration override; ordinary Cargo/compiler failures remain intact.
+non-incremental for deterministic Wasm. Cargo owns compiler-wrapper selection:
+configure `RUSTC_WRAPPER` or Cargo's wrapper settings when compiler caching is
+wanted. Canic runs Cargo once with that configuration and retains compiler
+failures. Complete artifact reuse remains independent of compiler caching.
 
 ## Fleet Ensure
 
