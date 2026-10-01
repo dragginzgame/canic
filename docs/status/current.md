@@ -2,6 +2,18 @@
 
 ## Active work and release boundary
 
+The reported release Clippy failure and false `[CANIC-TEST:E001] ... FAIL failing`
+line are repaired in additional unstaged edits. The reinstall fixture now uses
+the equivalent inclusive range. Progress uses libtest-aware stderr reporting:
+passing self-tests retain expected failures in capture, while failed native tests
+and uncaptured PocketIC runs still expose diagnostics. The two runner self-tests
+and two rendering tests pass; the captured run contains no failure event, and an
+explicit uncaptured run still emits it. The validation-runner shell proof and
+`canic-testing-internal --all-targets --all-features` warning-denied Clippy pass.
+Evidence: `target/review-validation/progress-capture-*.log`. This closes those
+two reported issues; the separate reinstall journey qualification below remains
+pending. Existing staged work was preserved, with no version or Git action.
+
 The requested generic endpoint framework work for `ic-blob-storage` is complete
 in this repository and uncommitted. Public `on_access_denied = "reject"` keeps
 plain Candid replies with normal Fleet/custom guards, denial-only metrics and
