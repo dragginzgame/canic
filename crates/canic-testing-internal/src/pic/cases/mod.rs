@@ -30,6 +30,7 @@ pub(super) use registered;
 
 // These native modules are also compiled and executed by ordinary discovery.
 const ORDINARY_NATIVE_MODULES: &[&str] = &[
+    "embedded_root::tests::",
     "pic::artifacts::tests::",
     "pic::journey_policy::tests::",
     "pic::lifecycle::fast_tests::",

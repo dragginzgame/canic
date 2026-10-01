@@ -11,6 +11,7 @@ pub mod funding_observation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub(in crate::fleet_ensure) mod serialization;
+pub mod terminal;
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -1044,7 +1045,7 @@ pub enum FleetEnsurePlanScope {
     Full,
     /// Initialize supplied infrastructure before any Root-local capacity handoff.
     InfrastructureBootstrap,
-    /// Seal current allocation before reviewing the complete physical reset closure.
+    /// Quiesce unfinished activation before reviewing its complete physical reset closure.
     ReinstallPreparation,
     /// Exact reviewed Root reset before current protected interfaces become available.
     RootReinstallPrerequisite,
@@ -1076,7 +1077,7 @@ pub struct FleetReinstallRecord {
     pub operation_id: String,
     pub source_operation_id: String,
     pub authorities: Vec<RootManagementBinding>,
-    /// Empty during preparation; the full plan binds every sealed physical asset.
+    /// Empty during preparation; the full plan binds every observed physical asset.
     pub assets: Vec<FleetReinstallAssetRecord>,
 }
 
@@ -1247,7 +1248,7 @@ pub enum EffectState {
 #[serde(rename_all = "snake_case")]
 pub enum FleetEnsureCompletion {
     Converged,
-    /// Authorities are sealed; the full reset still requires review and execution.
+    /// Unfinished activation is quiescent; its full reset still requires review and execution.
     Prepared,
     InProgress,
     ReplanRequired,

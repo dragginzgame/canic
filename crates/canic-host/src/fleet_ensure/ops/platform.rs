@@ -1316,9 +1316,26 @@ impl IcpEnsurePlatform {
         &self,
         root_name: &str,
         root: &str,
-        _state: &FleetEnsureStateRecord,
+        state: &FleetEnsureStateRecord,
     ) -> Result<Option<EstatePoolInventoryObservation>, IcpEnsurePlatformError> {
-        if self.required_root_status(root_name, root)? != CanisterRuntimeStatus::Running {
+        let live = self.required_root_canister(root_name, root)?;
+        if live.status != CanisterRuntimeStatus::Running {
+            return Ok(None);
+        }
+        let fresh_initialization = self
+            .desired
+            .bootstrap
+            .as_ref()
+            .is_some_and(|bootstrap| bootstrap.fresh_estate)
+            && state.active_registry.is_none();
+        let allocated_by_this_operation = self.desired.canisters.iter().any(|configured| {
+            configured.name == root_name
+                && configured.kind == DesiredCanisterKind::Root
+                && configured.principal.is_none()
+        });
+        if live.module_sha256.is_none() && fresh_initialization && allocated_by_this_operation {
+            // A short Create result can require review before installation. No
+            // protocol exists yet; unavailable inventory must remain None.
             return Ok(None);
         }
         self.root_protocol_candid()?;
@@ -2510,14 +2527,21 @@ impl IcpEnsurePlatform {
         configured_name: &str,
         root: &str,
     ) -> Result<CanisterRuntimeStatus, IcpEnsurePlatformError> {
-        self.status_optional(root)?
+        self.required_root_canister(configured_name, root)
             .map(|live| live.status)
-            .ok_or_else(|| {
-                current_protocol::CurrentProtocolError::Configuration(format!(
-                    "Root-owned canister {configured_name} has no live Root"
-                ))
-                .into()
-            })
+    }
+
+    fn required_root_canister(
+        &self,
+        configured_name: &str,
+        root: &str,
+    ) -> Result<LiveCanister, IcpEnsurePlatformError> {
+        self.status_optional(root)?.ok_or_else(|| {
+            current_protocol::CurrentProtocolError::Configuration(format!(
+                "Root-owned canister {configured_name} has no live Root"
+            ))
+            .into()
+        })
     }
 
     fn retained_root_owned_observation(
@@ -7142,6 +7166,60 @@ printf 'finish\n' >> events
             }
         }
         std::fs::remove_dir_all(&fixture.owners.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn fresh_root_pool_observation_waits_for_wasm_and_preserves_query_failures() {
+        let mut fixture = PoolInspectionFixture::fresh(1);
+        let root = fixture.root_id.to_text();
+        let owners = &mut fixture.owners;
+        owners.platform.desired.canisters[0].principal = None;
+        owners.state.principals.insert("root".into(), root.clone());
+        let path = owners.root.join(format!("{root}.json"));
+        let installed = std::fs::read(&path).unwrap();
+        let mut status: serde_json::Value = serde_json::from_slice(&installed).unwrap();
+        status["module_hash"] = serde_json::Value::Null;
+        std::fs::write(&path, serde_json::to_vec(&status).unwrap()).unwrap();
+        let pool = std::fs::read(owners.root.join("pool.json")).unwrap();
+        std::fs::remove_file(owners.root.join("pool.json")).unwrap();
+        let before = owners.platform.icp.remote_call_count();
+        assert!(
+            owners
+                .platform
+                .observe_estate_pool_inventory("root", &root, &owners.state)
+                .unwrap()
+                .is_none()
+        );
+        assert_eq!(owners.platform.icp.remote_call_count(), before + 1);
+
+        // Supplied identities and non-fresh estates retain protocol failures.
+        for supplied in [false, true] {
+            owners
+                .platform
+                .desired
+                .bootstrap
+                .as_mut()
+                .unwrap()
+                .fresh_estate = supplied;
+            owners.platform.desired.canisters[0].principal = supplied.then(|| root.clone());
+            assert!(matches!(
+                owners
+                    .platform
+                    .observe_estate_pool_inventory("root", &root, &owners.state),
+                Err(IcpEnsurePlatformError::CurrentProtocol(_))
+            ));
+        }
+        owners.platform.desired.canisters[0].principal = None;
+        std::fs::write(&path, installed).unwrap();
+        std::fs::write(owners.root.join("pool.json"), pool).unwrap();
+        let observed = owners
+            .platform
+            .observe_estate_pool_inventory("root", &root, &owners.state)
+            .unwrap()
+            .unwrap();
+        assert_eq!(observed.assets.len(), 1);
+        std::fs::remove_dir_all(&owners.root).unwrap();
     }
 
     #[cfg(unix)]

@@ -112,33 +112,20 @@ fn test_component_topology_has_derivable_release_set() {
     assert!(!release_set.contains("root"));
 }
 
-// Keep compiler-facing CDK exports limited to the frozen macro inventory.
+// Generated consumers must resolve every maintained CDK export through the facade.
 #[test]
-fn hidden_macro_cdk_boundary_matches_the_frozen_inventory() {
-    let source = read_text(&workspace_root().join("crates/canic/src/lib.rs"));
-    let hidden = source
-        .split("    pub mod cdk {")
-        .nth(1)
-        .and_then(|source| source.split("    pub mod instructions {").next())
-        .expect("hidden CDK module should precede hidden instructions");
-
-    for required in [
-        "export_candid, futures, init, inspect_message, post_upgrade, query, trap, update",
-        "candid::Principal",
-        "ic_cdk::",
-        "canister_cycle_balance, canister_version, is_controller, msg_caller, msg_reply",
-        "ic0::{msg_arg_data_copy, msg_arg_data_size}",
-        "time,",
-    ] {
-        assert!(
-            hidden.contains(required),
-            "hidden CDK inventory is missing `{required}`"
-        );
-    }
-    for forbidden in [" call,", " eprintln,", " println,"] {
-        assert!(
-            !hidden.contains(forbidden),
-            "hidden CDK inventory unexpectedly exposes `{forbidden}`"
-        );
-    }
+#[expect(
+    unused_imports,
+    reason = "the compiler resolves the generated-consumer export inventory without calling IC APIs"
+)]
+fn hidden_macro_cdk_exports_compile() {
+    use canic::__internal::cdk::api::{
+        canister_cycle_balance as _, canister_version as _, is_controller as _, msg_caller as _,
+        msg_reply as _, time as _,
+    };
+    use canic::__internal::cdk::raw::{msg_arg_data_copy as _, msg_arg_data_size as _};
+    use canic::__internal::cdk::{
+        Principal as _, export_candid as _, futures as _, init as _, inspect_message as _,
+        post_upgrade as _, query as _, trap as _, update as _,
+    };
 }

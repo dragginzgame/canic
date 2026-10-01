@@ -14,15 +14,11 @@ Detailed patch headings identify unreleased entries; this ledger summarizes chan
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.49` fixes import-budget, bootstrap-registration and seed-publication
-  blockers and consolidates recovery, backup retention, macOS portability,
-  Cargo resolver 3, release-guard corrections, quieter Candid diagnostics and
-  complete test-failure reporting, bootstrap budget admission and reviewed
-  held-capacity funding recovery, with dependency and artifact-build drift fixes.
-  It removes superseded completed-Fleet reset/receipt flows so current clean
-  reinstall owns completed-Fleet replacement, and compacts the status handoff.
-  API removals and current-schema changes are potentially breaking pre-1.0 hard
-  cuts requiring reinstall; fresh backup execution remains unavailable.
+- `0.110.49` repairs deployment and import recovery, consolidates completed-Fleet
+  reset, and improves build reproducibility, backup retention, macOS portability
+  and release/test reliability. API removals and current-schema changes are
+  potentially breaking pre-1.0 hard cuts requiring reinstall; fresh backup
+  execution remains unavailable.
 - `0.110.48` separates release receipts from status documents, removes obsolete
   public APIs (a pre-1.0 hard cut), runtime paths and tests, consolidates tool
   installation, artifact qualification and bounded observations, compacts historical

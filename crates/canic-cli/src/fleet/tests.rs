@@ -334,7 +334,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
         cancel_mint: None,
         cancel_reinstall: None,
         reinstall: false,
-        apply: Some(plan.plan_sha256.clone()),
+        apply: Some(plan.plan_sha256),
         desired: PathBuf::from("missing.toml"),
         environment: Some("local".to_string()),
         fleet: "retained".to_string(),

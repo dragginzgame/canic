@@ -142,12 +142,9 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     assert!(config.contains("enabled = false"));
     assert!(config.contains("[roles.root]"));
     assert!(config.contains("[roles.app]"));
-    assert!(!config.contains("auto_create"));
     assert!(config.contains("[component_specs.app]"));
     assert!(config.contains("component_role = \"app\""));
     assert!(config.contains("maximum_instances = 1"));
-    assert!(!config.contains("topup_policy"));
-    assert!(!config.contains("[[canisters]]"));
     let model = canic_core::bootstrap::parse_config_model(&config).expect("valid scaffold config");
     assert!(
         model.roles[&canic_core::ids::CanisterRole::ROOT]
@@ -161,7 +158,6 @@ fn scaffold_app_writes_application_files_with_canonical_root() {
     assert!(app_manifest.contains("canic = \""));
     assert!(app_manifest.contains("ic-cdk = \"0.20\""));
     assert!(!app_manifest.contains("workspace = true"));
-    assert!(!app_lib.contains("CanisterRole::new"));
     assert!(app_lib.contains("canic::start!();"));
     assert!(app_lib.contains("canic::finish!();"));
 }

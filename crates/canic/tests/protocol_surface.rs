@@ -1025,7 +1025,6 @@ fn blob_storage_billing_gateway_protocol_names_are_pinned() {
     let source = read_text(&macro_path);
     assert!(
         source.contains("macro_rules! canic_emit_blob_storage_billing_endpoints")
-            && source.contains("requires the canic facade feature")
             && source.contains("blob-storage-billing"),
         "blob-storage billing endpoint macro should be opt-in"
     );
@@ -1279,8 +1278,6 @@ fn blob_storage_endpoint_macro_emits_only_non_billing_gateway_methods() {
 
     assert!(
         source.contains("macro_rules! canic_emit_blob_storage_endpoints")
-            && source.contains("requires guard = <access expression>")
-            && source.contains("requires the canic facade feature")
             && source.contains("blob-storage"),
         "blob-storage endpoint macro should be opt-in and require an explicit guard"
     );

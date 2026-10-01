@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-MODULE-SURFACE-001`
-- Method version: `2.2`
+- Method version: `2.3`
 - Disposition: `manual_only`
 - Owner: requested module-level reachability, exposure, deletion pressure, and
   runtime-shape review
@@ -53,6 +53,11 @@ hot-path, and wasm regression gates are backfilled.
 Method `MSH-2.1` updates the package scope for host-generated Fleet artifacts;
 inspect their entrypoint generation under `canic-host` and their shared runtime
 owners. Runtime-shape and deletion criteria are unchanged.
+
+Method `MSH-2.3` reconciles the header, report manifest and catalog identity.
+The previous `2.2` definition still requested `MSH-2.1` report metadata; its
+fingerprint and affected-report limits remain historical evidence. This metadata
+correction does not change the reachability, deletion or runtime-shape criteria.
 
 ## Audit Tier
 
@@ -183,7 +188,7 @@ production dead surface`.
 
 Include this manifest in each report:
 
-* `method_version = MSH-2.1`
+* `method_version = MSH-2.3`
 * `surface_taxonomy = ST-1`
 * `authority_taxonomy = AT-1`
 * `deletion_confidence_model = DC-1`
@@ -442,7 +447,7 @@ Capture:
 
 | Field [M/C] | Value |
 | ---- | ---- |
-| `method_version` | `MSH-2.1` |
+| `method_version` | `MSH-2.3` |
 | `baseline_report` | path or `N/A` |
 | `comparability_status` | `comparable` / `non-comparable` |
 | `code_snapshot` | git short SHA or `N/A` |

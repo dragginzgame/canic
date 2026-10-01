@@ -7,10 +7,7 @@
 #[cfg(test)]
 mod tests;
 
-use crate::{
-    canister_build::compiler_cache::{CompilerCacheError, check_implicit_cache},
-    durable_io::{RegularFileLockError, lock_regular_file_with_parents},
-};
+use crate::durable_io::{RegularFileLockError, lock_regular_file_with_parents};
 use std::{
     env,
     ffi::OsStr,
@@ -27,11 +24,6 @@ pub fn configure_canister_cargo_command(command: &mut Command, workspace_root: &
     command.env("CARGO_INCREMENTAL", "0").env(
         "CARGO_TARGET_DIR",
         canister_build_target_root(workspace_root),
-    );
-    configure_implicit_sccache(
-        command,
-        env::var_os("RUSTC_WRAPPER").as_deref(),
-        env::var_os("PATH").as_deref(),
     );
 }
 
@@ -104,43 +96,12 @@ impl CargoBuildProgress {
     }
 }
 
-/// Check an automatically selected cache before launching the actual build once.
+/// Run Cargo once with its selected compiler configuration and retain its result.
 pub fn output_canister_cargo_command(
     command: &mut Command,
     progress: CargoBuildProgress,
-) -> Result<Output, CompilerCacheError> {
-    let explicit = env::var_os("RUSTC_WRAPPER");
-    let search_path = env::var_os("PATH");
-    // Keep the command's selected path even if the executable disappeared since
-    // discovery. Rediscovery here would lose the actionable launch diagnostic.
-    let implicit = command
-        .get_envs()
-        .find(|(name, _)| *name == "RUSTC_WRAPPER")
-        .and_then(|(_, value)| value)
-        .map(PathBuf::from)
-        .filter(|selected| {
-            explicit.is_none()
-                && search_path.as_deref().is_some_and(|paths| {
-                    env::split_paths(paths)
-                        .any(|directory| directory.join(sccache_executable_name()) == *selected)
-                })
-        });
-    output_with_implicit_cache(command, implicit.as_deref(), progress)
-}
-
-fn output_with_implicit_cache(
-    command: &mut Command,
-    implicit: Option<&Path>,
-    progress: CargoBuildProgress,
-) -> Result<Output, CompilerCacheError> {
+) -> io::Result<Output> {
     crate::build_environment::apply(command);
-    if let Some(wrapper) = implicit
-        && command
-            .get_envs()
-            .any(|(name, value)| name == "RUSTC_WRAPPER" && value == Some(wrapper.as_os_str()))
-    {
-        check_implicit_cache(command, wrapper)?;
-    }
     let declaration = command.get_envs().any(|(key, value)| {
         key == canic_core::role_contract::CANONICAL_CANDID_BUILD_ENV
             && value == Some(OsStr::new("1"))
@@ -160,7 +121,6 @@ fn output_with_implicit_cache(
             );
         },
     )
-    .map_err(CompilerCacheError::CargoLaunch)
 }
 
 /// Declaration passes retain runtime cfg/profile semantics without paying for LTO.
@@ -240,57 +200,4 @@ fn resolve_canister_build_target_root(
             }
         },
     )
-}
-
-fn resolve_implicit_sccache_wrapper(
-    explicit_wrapper: Option<&OsStr>,
-    search_path: Option<&OsStr>,
-) -> Option<PathBuf> {
-    if explicit_wrapper.is_some() {
-        return None;
-    }
-    search_path.and_then(|search_path| {
-        env::split_paths(search_path)
-            .map(|directory| directory.join(sccache_executable_name()))
-            .find(|candidate| is_executable_file(candidate))
-    })
-}
-
-fn configure_implicit_sccache(
-    command: &mut Command,
-    explicit_wrapper: Option<&OsStr>,
-    search_path: Option<&OsStr>,
-) {
-    if let Some(sccache) = resolve_implicit_sccache_wrapper(explicit_wrapper, search_path) {
-        command.env("RUSTC_WRAPPER", sccache);
-    }
-}
-
-#[cfg(windows)]
-const fn sccache_executable_name() -> &'static str {
-    "sccache.exe"
-}
-
-#[cfg(not(windows))]
-const fn sccache_executable_name() -> &'static str {
-    "sccache"
-}
-
-fn is_executable_file(path: &Path) -> bool {
-    let Ok(metadata) = fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        use std::os::unix::fs::PermissionsExt as _;
-
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        true
-    }
 }

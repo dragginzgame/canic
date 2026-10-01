@@ -147,13 +147,13 @@ role = "app"
 crate-type = ["cdylib"]
 
 [dependencies]
-canic = { version = "=$VERSION", default-features = false }
+canic = { version = "=$VERSION", default-features = false, features = [] }
 candid = "0.10"
 serde = "1"
 ic-cdk = "0.20"
 
 [build-dependencies]
-canic = { version = "=$VERSION", default-features = false }
+canic = { version = "=$VERSION", default-features = false, features = [] }
 EOF
     printf 'fn main() { canic::build!("../canic.toml"); }\n' >"$DOWNSTREAM_ROOT/apps/downstream/app/build.rs"
     cat >"$DOWNSTREAM_ROOT/apps/downstream/app/src/lib.rs" <<'EOF'

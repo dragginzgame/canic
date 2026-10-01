@@ -605,13 +605,17 @@ fn build_app(
         &fixture_sources.inputs,
     )
     .map_err(|error| BuildCommandError::Build(Box::new(error)))?;
-    let activity = TerminalActivity::start(format!(
-        "{} configured roles plus infrastructure | {} profile",
-        roles.len(),
-        context.profile.target_dir_name()
-    ));
+    let activity = (!options.json).then(|| {
+        TerminalActivity::start(format!(
+            "{} configured roles plus infrastructure | {} profile",
+            roles.len(),
+            context.profile.target_dir_name()
+        ))
+    });
     let build = builder.build_workspace_app_artifacts(context, roles);
-    activity.finish();
+    if let Some(activity) = activity {
+        activity.finish();
+    }
     let outputs = build?;
     let configured_elapsed = outputs.configured_elapsed;
     let mut infrastructure = vec![

@@ -4,7 +4,7 @@ use crate::fleet_ensure::{
     model::{
         ActualCycleConservation, CycleConservation, EffectState, FleetEnsureCompletion,
         FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsurePlanScope, FleetEnsureStateRecord,
-        clean_reinstall::CleanReinstallTerminalRecord,
+        terminal::FleetEnsureTerminalRecord,
     },
     ops::{EnsurePaths, EnsureStateError, read_current, write_current},
 };
@@ -15,7 +15,7 @@ use std::path::PathBuf;
 fn path(paths: &EnsurePaths, plan: &FleetEnsurePlan) -> PathBuf {
     paths
         .plan
-        .with_file_name("clean-reinstall-receipts")
+        .with_file_name("terminal-receipts")
         .join(format!("{}.json", plan.plan_sha256))
 }
 
@@ -56,26 +56,21 @@ pub(in crate::fleet_ensure) fn retain(
     actual: &ActualCycleConservation,
     conservation: &CycleConservation,
 ) -> Result<(), EnsureStateError> {
-    if plan.scope != FleetEnsurePlanScope::Full
-        || !crate::fleet_ensure::ops::operation_selection::clean_reinstall_current(paths)?
-    {
+    if plan.scope != FleetEnsurePlanScope::Full {
         return Ok(());
     }
-    let Some(selection) = super::read(paths)? else {
-        return Ok(());
-    };
     verify_effects(journal)?;
     verify_accounting(conservation, journal, actual)?;
-    let receipt = CleanReinstallTerminalRecord {
+    let receipt = FleetEnsureTerminalRecord {
         schema_version: 1,
         plan_sha256: plan.plan_sha256.clone(),
         journal_sha256: journal_digest(journal)?,
         state_sha256: digest(state)?,
-        selection_sha256: digest(&selection)?,
+        clean_reinstall_selection_sha256: selection_sha256(paths)?,
         actual: actual.clone(),
     };
     let destination = path(paths, plan);
-    if let Some(existing) = read_current::<CleanReinstallTerminalRecord>(&destination)? {
+    if let Some(existing) = read_current::<FleetEnsureTerminalRecord>(&destination)? {
         if existing != receipt {
             return Err(EnsureStateError::InvalidTerminalSource);
         }
@@ -95,21 +90,34 @@ pub(in crate::fleet_ensure) fn read(
     if plan.scope != FleetEnsurePlanScope::Full {
         return Ok(None);
     }
-    let Some(receipt) = read_current::<CleanReinstallTerminalRecord>(&path(paths, plan))? else {
+    let Some(receipt) = read_current::<FleetEnsureTerminalRecord>(&path(paths, plan))? else {
+        if journal.completion == FleetEnsureCompletion::Converged
+            && journal.plan_sha256 == plan.plan_sha256
+        {
+            return Err(EnsureStateError::InvalidTerminalSource);
+        }
         return Ok(None);
     };
-    let selection = super::read(paths)?.ok_or(EnsureStateError::InvalidTerminalSource)?;
     if receipt.schema_version != 1
         || receipt.plan_sha256 != plan.plan_sha256
         || receipt.journal_sha256 != journal_digest(journal)?
         || receipt.state_sha256 != digest(state)?
-        || receipt.selection_sha256 != digest(&selection)?
+        || receipt.clean_reinstall_selection_sha256 != selection_sha256(paths)?
     {
         return Err(EnsureStateError::InvalidTerminalSource);
     }
     verify_effects(journal)?;
     verify_accounting(conservation, journal, &receipt.actual)?;
     Ok(Some(receipt.actual))
+}
+
+fn selection_sha256(paths: &EnsurePaths) -> Result<Option<[u8; 32]>, EnsureStateError> {
+    if !super::operation_selection::clean_reinstall_current(paths)? {
+        return Ok(None);
+    }
+    let selection =
+        super::clean_reinstall::read(paths)?.ok_or(EnsureStateError::InvalidTerminalSource)?;
+    digest(&selection).map(Some)
 }
 
 fn verify_accounting(

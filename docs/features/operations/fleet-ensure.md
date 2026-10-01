@@ -99,6 +99,13 @@ evidence. Same-digest continuation and terminal replay each create a separate
 receipt. Keep all of them. A terminal execution replay reports zero effects and
 issues no IC calls.
 
+An exact completed approval returns the conservation accounting retained at
+completion. Ordinary Ensure and clean reinstall share this local receipt, which
+binds the plan, final journal and state, plus the reset selection when applicable.
+An interrupted final journal write recovers from that receipt. Missing or altered
+completion evidence rejects locally. Run a new review to observe subsequent
+balance or topology changes; replay is historical completion, not a live health check.
+
 Each line has UTC Unix milliseconds and monotonic elapsed microseconds. Existing
 progress DTOs bind operation, plan and phase; stage and request identifiers link
 start/end pairs and inclusive parents. An observation's `succeeded: null` is a
@@ -1832,12 +1839,9 @@ different source contract or damaged evidence.
 
 Completion selection runs before executable plan decoding. A completed operation
 with consistent completion identities and no unresolved issued effects is history,
-even when its executable payload belongs to an older release. Use
-[clean reinstall of a completed Fleet](#clean-reinstall-of-a-completed-fleet):
-qualify the current build, supply the complete physical inventory and current
-policy, then review current custody. Canic archives the historical files unchanged
-and retires their execution ownership. It does not require old application data,
-old plan fields, historical operator balances or the predecessor CLI.
+even when its executable payload belongs to an older release. Follow
+[clean reinstall of a completed Fleet](#clean-reinstall-of-a-completed-fleet)
+for current-build qualification, physical inventory, custody review and archival.
 
 An unreadable executable payload alone neither proves nor disproves completion.
 If completion metadata is damaged, contradictory or genuinely unfinished, retain
@@ -1855,21 +1859,12 @@ resolve outstanding live payments or discard controlled real cycles.
 ## Deliberate selected-build database wipe
 
 Follow [the current clean-reinstall sequence](#clean-reinstall-of-a-completed-fleet)
-for both changed-build and identical-build resets. Each new completed-estate reset
-gets a distinct operation identity. Infrastructure initialization, Root-owned
-child clearing and workload convergence each require their reviewed digest.
-
-If interrupted, apply that same digest again. The operation retains its qualified
-artifact bytes and current input paths; changing the workspace does not replace
-them. Intent and reconciliation protect payments and installs from repetition.
-An unfinished reset keeps its recovery owner until it finishes.
-
-Full completion retains the selected physical IDs, controlled cycles and terminal
-accounting while discarding application and framework state. Logical workload
-assignments may change within the reviewed Root/subnet inventory. Infrastructure
-or pool clearing completion alone is not Fleet convergence. Ordinary Ensure does
-not request another wipe; a later explicit `--reinstall` does. Do not combine
-`--reinstall` and `--apply`.
+for both changed-build and identical-build resets, including its distinct operation
+identity, reviewed phase digests, artifact retention and same-digest interruption
+recovery. Infrastructure or pool clearing alone is not Fleet convergence.
+Logical workload assignments may change within the reviewed Root/subnet inventory.
+Ordinary Ensure does not request another wipe; a later explicit `--reinstall`
+does. Do not combine `--reinstall` and `--apply`.
 
 ## Retained growth and dependent recovery review
 

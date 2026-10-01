@@ -114,17 +114,6 @@ pub enum EnsurePolicyError {
         shortfall: u128,
     },
 
-    #[error(
-        "authority seal for {name} ({principal}) has insufficient cycle headroom: available {available} cycles, required conservative maximum burn {required}, shortfall {shortfall}; this review transfers no funding and another authority's balance cannot cover the shortfall; no plan or effect was authorized"
-    )]
-    AuthoritySealHeadroom {
-        name: String,
-        principal: String,
-        available: u128,
-        required: u128,
-        shortfall: u128,
-    },
-
     #[error("controlled canister {name} has duplicate name or principal authority")]
     DuplicateAuthority { name: String },
 

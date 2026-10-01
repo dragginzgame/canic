@@ -77,7 +77,7 @@ release-line closeout.
 
 | Candidate | Disposition | Outcome |
 | --- | --- | --- |
-| `module-surface-hardening.md` | `manual_only` | `CANIC-MODULE-SURFACE-001/v2.1`; versioned reviewer protocol for requested module-surface work. |
+| `module-surface-hardening.md` | `manual_only` | `CANIC-MODULE-SURFACE-001/v2.3`; versioned reviewer protocol for requested module-surface work. |
 | `module-cleanup-runner.md` | `retire` | Retired as an independent audit. It remains only as a finding-backed implementation workflow and cannot issue a separate audit verdict. |
 
 ## Operational Candidates
