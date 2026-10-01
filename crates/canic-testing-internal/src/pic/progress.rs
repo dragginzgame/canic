@@ -6,7 +6,7 @@
 
 use std::{
     env,
-    io::{self, IsTerminal, Write},
+    io::{self, IsTerminal},
     time::Duration,
 };
 
@@ -121,10 +121,10 @@ pub(super) fn verbose() -> bool {
 }
 
 fn write_line(line: String) {
-    let stderr = io::stderr();
-    let mut output = stderr.lock();
-    let _ = writeln!(output, "{line}");
-    let _ = output.flush();
+    // Respect libtest capture for passing tests that deliberately exercise
+    // failure reporting. Governed PocketIC runs use --nocapture for live output;
+    // actual failed native tests expose their captured diagnostics automatically.
+    eprintln!("{line}");
 }
 
 fn render_line(

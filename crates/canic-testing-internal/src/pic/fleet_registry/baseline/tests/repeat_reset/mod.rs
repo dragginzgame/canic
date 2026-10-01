@@ -141,7 +141,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
     }
     // Targets advance in order; an already-funded target may install before
     // another target needs its reviewed withdrawal.
-    for _ in 0..1 + usize::from(funding_count > 0) {
+    for _ in 0..=usize::from(funding_count > 0) {
         let install_before = lost_marker.is_file();
         let funding_before = funding_lost.is_file();
         let lost = apply(&infrastructure.plan.plan_sha256);
