@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
 
-product_version_pattern='(?:pub(?:\([^)]*\))?[[:space:]]+)?const[[:space:]]+[A-Z][A-Z0-9_]*(?:SCHEMA|PROTOCOL|MANIFEST|FORMAT|WIRE|CONFIG)[A-Z0-9_]*VERSION[A-Z0-9_]*[[:space:]]*:[^=;]+=[[:space:]]*(?:[2-9][0-9]*|1[0-9]+)[[:space:]]*;|\b(?:schema_version|protocol_version|manifest_version|format_version|wire_version|config_version)[[:space:]]*:[[:space:]]*(?:[2-9][0-9]*|1[0-9]+)\b|b?"canic(?:/|\.)[^"\n]*(?:/|\.)v(?:[2-9][0-9]*)"'
+product_version_pattern='(?:pub(?:\([^)]*\))?[[:space:]]+)?const[[:space:]]+[A-Z0-9_]*(?:SCHEMA|PROTOCOL|MANIFEST|FORMAT|WIRE|CONFIG|JOURNAL|PLAN|STATE|LAYOUT|DATA|SNAPSHOT|RECORD|RESPONSE|POLICY)[A-Z0-9_]*VERSION[A-Z0-9_]*[[:space:]]*:[^=;]+=[[:space:]]*(?:[2-9][0-9]*|1[0-9]+)[[:space:]]*;|\b(?:schema_version|protocol_version|manifest_version|format_version|wire_version|config_version|journal_version|plan_version|state_version|layout_version|data_version|snapshot_version|record_version|response_version|policy_version)[[:space:]]*:[[:space:]]*(?:[2-9][0-9]*|1[0-9]+)\b|b?"canic(?:[:/]|\.)[^"\n]*(?:[:/]|\.)v(?:[2-9][0-9]*|1[0-9]+)"|\b(?:enum|struct|type)[[:space:]]+[A-Za-z_][A-Za-z0-9_]*V(?:[2-9][0-9]*|1[0-9]+)\b'
 migration_surface_pattern='\b(?:enum|struct)[[:space:]]+(?:MigrationPolicy|StateMigrationManifest)\b|\b(?:min_supported_version|migration_policy)[[:space:]]*:|\bmigrations[[:space:]]*:[[:space:]]*Vec[[:space:]]*<[[:space:]]*StateMigrationManifest[[:space:]]*>|\bfn[[:space:]]+(?:read|load|decode|parse)_[A-Za-z0-9_]*(?:legacy|migration)[A-Za-z0-9_]*|\bfn[[:space:]]+[A-Za-z0-9_]*(?:legacy|migration)[A-Za-z0-9_]*(?:read|load|decode|parse)[A-Za-z0-9_]*|\b(?:struct|enum|type)[[:space:]]+[A-Za-z0-9_]*(?:Legacy|Migration)[A-Za-z0-9_]*(?:Reader|Loader|Decoder)\b'
 
 scan_forbidden() {
@@ -18,8 +18,13 @@ scan_forbidden() {
 }
 
 fixture_root="docs/audits/fixtures/pre-1-0-hard-cut"
-expected_fixture_matches="$fixture_root/forbidden-migration-reader.txt
-$fixture_root/forbidden-product-version.txt"
+expected_fixture_matches="$fixture_root/forbidden-colon-wire-version.txt
+$fixture_root/forbidden-journal-version.txt
+$fixture_root/forbidden-migration-reader.txt
+$fixture_root/forbidden-product-type.txt
+$fixture_root/forbidden-product-version.txt
+$fixture_root/forbidden-product-wire-version.txt
+$fixture_root/forbidden-unprefixed-schema-version.txt"
 actual_fixture_matches="$(scan_forbidden "$fixture_root" '*.txt')"
 
 if [[ "$actual_fixture_matches" != "$expected_fixture_matches" ]]; then
@@ -46,6 +51,7 @@ fi
 matches="$({
     scan_forbidden crates '*.rs'
     scan_forbidden canisters '*.rs'
+    scan_forbidden apps '*.rs'
 } | sort -u)"
 
 if [[ -n "$matches" ]]; then

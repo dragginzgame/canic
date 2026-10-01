@@ -350,6 +350,7 @@ impl MockPlatform {
             | EnsureAction::Start { principal, .. }
             | EnsureAction::Stop { principal, .. }
             | EnsureAction::Uninstall { principal, .. }
+            | EnsureAction::DeleteSnapshot { principal, .. }
             | EnsureAction::Transfer { principal, .. } => principal,
         };
         principal.strip_prefix("created:").map_or_else(
@@ -529,7 +530,7 @@ impl MockPlatform {
             EnsureAction::Start { .. } => principal
                 .and_then(|value| self.live.get(value))
                 .is_some_and(|live| live.status == CanisterRuntimeStatus::Running),
-            EnsureAction::Uninstall { .. } => {
+            EnsureAction::Uninstall { .. } | EnsureAction::DeleteSnapshot { .. } => {
                 panic!("bootstrap uninstall uses the production PocketIC adapter")
             }
             EnsureAction::Stop { .. } => principal
@@ -754,7 +755,7 @@ impl MockPlatform {
                     .status = CanisterRuntimeStatus::Running;
                 empty_outcome()
             }
-            EnsureAction::Uninstall { .. } => {
+            EnsureAction::Uninstall { .. } | EnsureAction::DeleteSnapshot { .. } => {
                 panic!("bootstrap uninstall uses the production PocketIC adapter")
             }
             EnsureAction::Stop { .. } => {
@@ -4819,6 +4820,46 @@ fn protocol_response_is_only_issuance_and_terminal_status_gates_later_actions() 
 }
 
 #[test]
+fn executable_plan_requires_its_reviewed_input_before_any_effect() {
+    let mut fixture = fixture();
+    let desired_sha256 = "33".repeat(32);
+    let planned = workflow::plan(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        1_800_000_000_000_000_000,
+        &mut fixture.platform,
+    )
+    .unwrap();
+    let mut incomplete = planned.plan;
+    incomplete.reviewed_desired = None;
+    incomplete.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&incomplete);
+    let paths = crate::fleet_ensure::ops::EnsurePaths::under(
+        &fixture.root,
+        &incomplete.environment,
+        &incomplete.fleet,
+    );
+    crate::fleet_ensure::ops::write_plan(&paths, &incomplete).unwrap();
+    let before = fs::read(&paths.plan).unwrap();
+    let error = workflow::apply(
+        &fixture.root,
+        &fixture.desired,
+        &desired_sha256,
+        "test-fleet",
+        &incomplete.plan_sha256,
+        &mut fixture.platform,
+    )
+    .unwrap_err();
+    assert!(matches!(
+        error,
+        workflow::EnsureWorkflowError::PlanIntegrity
+    ));
+    assert!(fixture.platform.mutations.is_empty());
+    assert_eq!(fs::read(&paths.plan).unwrap(), before);
+}
+
+#[test]
 fn in_progress_operation_resumes_reviewed_desired_before_newer_input() {
     let mut fixture = fixture();
     fixture.desired.protocol = Some(DesiredFleetProtocol {
@@ -5350,26 +5391,12 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
     };
     plan.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&plan);
 
-    fs::create_dir_all(paths.plan.parent().expect("plan state directory"))
-        .expect("create inline-plan directory");
-    fs::write(
-        &paths.plan,
-        crate::fleet_ensure::json::to_vec(&plan).expect("encode former inline plan"),
-    )
-    .expect("retain former inline plan");
-    let inline_size = fs::metadata(&paths.plan)
-        .expect("inspect former inline plan")
+    let in_memory_size = crate::fleet_ensure::json::to_vec(&plan)
+        .expect("encode in-memory plan")
         .len();
-    let inline = crate::fleet_ensure::ops::read_plan(&paths)
-        .expect("read former inline current plan")
-        .expect("former inline current plan");
-    assert_eq!(inline, plan);
-    assert!(
-        crate::fleet_ensure::ops::compact_inline_plan(&paths, &inline)
-            .expect("compact former inline current plan")
-    );
+    crate::fleet_ensure::ops::write_plan(&paths, &plan).expect("retain current plan");
     let encoded = fs::read(&paths.plan).expect("read hash-only current plan");
-    assert!(encoded.len() as u64 * 2 < inline_size);
+    assert!(encoded.len() * 2 < in_memory_size);
     let encoded: serde_json::Value =
         serde_json::from_slice(&encoded).expect("decode hash-only current plan");
     assert!(json_field_values(&encoded, "bytes").is_empty());
@@ -5394,11 +5421,6 @@ fn current_plan_retains_store_chunks_by_hash_instead_of_inline_bytes() {
         crate::fleet_ensure::policy::expected_plan_sha256(&reopened),
         plan.plan_sha256
     );
-    assert!(
-        !crate::fleet_ensure::ops::compact_inline_plan(&paths, &reopened)
-            .expect("leave canonical current plan unchanged")
-    );
-
     let partial_paths = crate::fleet_ensure::ops::EnsurePaths::under(
         &root,
         "staging",
@@ -5494,17 +5516,9 @@ fn retained_current_plan_and_issued_journal_round_trip_from_an_isolated_copy() {
             .map(|effect| effect.action_sha256.clone())
             .collect::<Vec<_>>()
     );
-    assert!(
-        crate::fleet_ensure::ops::compact_inline_plan(&paths, &plan)
-            .expect("compact isolated retained plan before resumed effects")
-    );
-    let compacted_retained = fs::read(&paths.plan).expect("read compacted retained plan");
-    assert!(compacted_retained.len() < original_plan.len() / 10);
     assert_eq!(
-        crate::fleet_ensure::ops::read_plan(&paths)
-            .expect("reopen compacted retained plan")
-            .expect("compacted retained plan"),
-        plan
+        fs::read(&paths.plan).expect("reread isolated retained plan"),
+        original_plan
     );
     assert_eq!(
         fs::read(&paths.journal).expect("reread isolated retained journal"),
@@ -5905,6 +5919,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::Start { principal, .. }
                 | EnsureAction::Stop { principal, .. }
                 | EnsureAction::Uninstall { principal, .. }
+                | EnsureAction::DeleteSnapshot { principal, .. }
                 | EnsureAction::Transfer { principal, .. } => Self::principal(state, principal),
                 EnsureAction::Create { .. } | EnsureAction::Fund { .. } => None,
             };
@@ -5931,7 +5946,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 EnsureAction::Delete { .. } => {
                     principal.is_none_or(|value| self.live(value).is_none())
                 }
-                EnsureAction::Uninstall { .. } => {
+                EnsureAction::Uninstall { .. } | EnsureAction::DeleteSnapshot { .. } => {
                     panic!("bootstrap uninstall uses the production PocketIC adapter")
                 }
                 EnsureAction::Stop { .. } => principal
@@ -5973,6 +5988,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 | EnsureAction::Start { principal, .. }
                 | EnsureAction::Stop { principal, .. }
                 | EnsureAction::Uninstall { principal, .. }
+                | EnsureAction::DeleteSnapshot { principal, .. }
                 | EnsureAction::Transfer { principal, .. } => Self::principal(state, principal),
             };
             Ok(principal.and_then(|value| self.live(value).map(|live| live.cycles)))
@@ -6151,6 +6167,7 @@ fn governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects(
                 EnsureAction::Delete { .. }
                 | EnsureAction::Stop { .. }
                 | EnsureAction::Uninstall { .. }
+                | EnsureAction::DeleteSnapshot { .. }
                 | EnsureAction::Transfer { .. } => Err(std::io::Error::other(
                     "governed current-state journey does not retire canisters",
                 )),

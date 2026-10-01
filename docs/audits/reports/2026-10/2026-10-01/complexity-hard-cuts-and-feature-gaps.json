@@ -1,0 +1,1090 @@
+{
+  "schema": "canic.audit.code_trace_manifest.v1",
+  "audit_id": "CANIC-MODULE-SURFACE-001",
+  "audit_method_version": "MSH-2.3",
+  "method": {
+    "header_version": "2.3",
+    "required_manifest_version": "MSH-2.3",
+    "version_conflict": false,
+    "surface_taxonomy": "ST-1",
+    "authority_taxonomy": "AT-1",
+    "deletion_confidence_model": "DC-1",
+    "compatibility_policy": "pre-1.0-hard-cut",
+    "wasm_signal_rule": "raw-wasm-primary",
+    "hot_path_risk_model": "HP-1",
+    "proof_policy": "read-only-first"
+  },
+  "audit_method_fingerprint": "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a",
+  "fingerprint_definition": "SHA256 of UTF-8 compact sorted-key JSON mapping decision-bearing paths to their SHA256 values; component hashes below.",
+  "decision_input_sha256": {
+    "docs/audits/modular/module-surface-hardening.md": "b4b6e300b70ae8f2899b36b99b287aa2332ab1c8775514a99954f991c472a3f4",
+    "docs/audits/modular/module-cleanup-runner.md": "606d18cb0728ef7c8e9ba3f0b46c4ea80b79200f9705cc3f8c821c8abd7dfd56",
+    "docs/audits/AUDIT-HOWTO.md": "759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422",
+    "docs/audits/recurring/system/complexity-accretion.md": "4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a",
+    "docs/audits/scripts/measure-complexity-v3.sh": "f08e975e3b68e483d736a62b376e2ec83c9038d0901c688c2a2f1d69d0f55aaa",
+    "scripts/ci/audit-product-tree-hash.sh": "ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417",
+    "scripts/ci/check-pre-1-0-hard-cut.sh": "634491aeb2fdc0883e4a9b4fc489127b7f7882cc4ced3aaadd07bff1fb9cf4a6",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-migration-reader.txt": "0a0d3f3c0269220c07dd303829e72fc395b955c4316a8130685db12762e3783c",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-type.txt": "bfc8f3627bca27afe17e554a944654407c602d236f82479f011b8dc6e791b264",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-version.txt": "bfd620c82593918de9f5cf4c2eabf0dc5c8718ae33f1c99343fba328805e18f5",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-wire-version.txt": "59069a22ceba80b46c2ba1d809861bcf0eee76efcc51459aa8d816b13864ab0b",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-unprefixed-schema-version.txt": "1c6ed7a5d2584c93af5336c9a1f28e92e11f0e4b49bdd64c3f218dea0058992a",
+    "docs/audits/fixtures/pre-1-0-hard-cut/permitted-non-product-versions.txt": "a20e38a7c520cbdac2cf206ca3064d1329d6ce9df4385f9bea83d542055c76ef"
+  },
+  "run_result": "partial",
+  "result_validity": "valid",
+  "audit_tier": 2,
+  "reviewer": "Codex /root",
+  "review_mode": "single_review",
+  "trace_mode": "code_trace",
+  "release_anchor": "v0.110.49",
+  "source_commit_full": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+  "source_tree_hash": "898964f51a920b55641a3da3b146f778b48c51c3",
+  "product_tree_hash": "d8bfd1c6a2936f50f69972ce8abc8a195e9ab75fadec4e1bd6aeef0c3258b1bd",
+  "clean_worktree": false,
+  "cargo_lock_hash": "b9c765a2c97d2c3587c4254e38484d4aa547cf9b1e5bdf353c5246ba9888d463",
+  "worktree_cargo_lock_hash": "3b11568c5b981b9d94f64610de3f4aca51b6eb30d1c129b85d1c33428868581b",
+  "baseline_commit_full": "8d37c74c9a4457b9e2bd47ee883f98fd2889d63b",
+  "baseline_tree_hash": "c66b4b95b9697c3475bb7f767f30c7fe45307df5",
+  "rust_toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8",
+  "target_triple": "x86_64-unknown-linux-gnu",
+  "feature_set": "Package defaults for native focused tests; all-features for package/target-scoped Clippy. No all-workspace gate.",
+  "external_tool_versions": {
+    "git": "2.43.0",
+    "ripgrep": "15.2.0"
+  },
+  "fixture_or_seed": "Three current-policy detector fixtures; native unit/integration tests. No random/performance fixture.",
+  "environment_class": "Local Linux; offline locked Cargo; source trace on immutable Git snapshots; no live operations or sibling mutations.",
+  "started_at": null,
+  "start_reason": "Exploratory start not instrumented; first retained signal-file timestamp is recorded without inventing a run start.",
+  "first_retained_evidence_at": "2026-10-01T13:41:16.034408+00:00",
+  "completed_at": "2026-10-01T14:04:41.664625+00:00",
+  "audit_script_hashes": {
+    "docs/audits/scripts/measure-complexity-v3.sh": "f08e975e3b68e483d736a62b376e2ec83c9038d0901c688c2a2f1d69d0f55aaa",
+    "scripts/ci/audit-product-tree-hash.sh": "ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417",
+    "scripts/ci/check-pre-1-0-hard-cut.sh": "634491aeb2fdc0883e4a9b4fc489127b7f7882cc4ced3aaadd07bff1fb9cf4a6"
+  },
+  "scope": {
+    "screening": "Tracked Rust under crates/, canisters/, apps/ plus named contracts, scripts and active guides.",
+    "manual": "Named candidates, consumers and authority owners in report; not every function or semantic test pair.",
+    "excluded": [
+      "Concurrent FR1 work",
+      "IcyDB qualification",
+      "siblings",
+      "live paid operations and accounts",
+      "incident artifacts",
+      "optimized Wasm",
+      "full entropy score"
+    ]
+  },
+  "comparability": {
+    "whole_source_and_core_mechanical": "Comparable immutable .48/.49 snapshots with identical census/script definitions.",
+    "prior_MSH_reports": "non-comparable: different scope and metadata coverage"
+  },
+  "source_inventory": {
+    "source_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+    "baseline_commit": "8d37c74c9a4457b9e2bd47ee883f98fd2889d63b",
+    "count_definition": "Rust files tracked at each named commit in crates/, canisters/, apps/. Lines include blanks/comments/tests. Logical lines exclude blank and //-prefixed lines; block comments and inline tests remain. Lexical #[test] count is not the registered or executed test count.",
+    "current": {
+      "summary": [
+        {
+          "root": "apps/demo",
+          "files": 4,
+          "lines": 116,
+          "logical_lines": 93,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "apps/test",
+          "files": 16,
+          "lines": 746,
+          "logical_lines": 577,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "canisters/audit",
+          "files": 16,
+          "lines": 783,
+          "logical_lines": 619,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "canisters/sandbox",
+          "files": 2,
+          "lines": 43,
+          "logical_lines": 18,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "canisters/test",
+          "files": 25,
+          "lines": 4746,
+          "logical_lines": 4158,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 3
+        },
+        {
+          "root": "crates/canic",
+          "files": 56,
+          "lines": 13927,
+          "logical_lines": 12306,
+          "path_classified_test_files": 23,
+          "lexical_test_attributes": 145
+        },
+        {
+          "root": "crates/canic-backup",
+          "files": 131,
+          "lines": 32349,
+          "logical_lines": 27629,
+          "path_classified_test_files": 41,
+          "lexical_test_attributes": 307
+        },
+        {
+          "root": "crates/canic-cli",
+          "files": 229,
+          "lines": 52243,
+          "logical_lines": 46170,
+          "path_classified_test_files": 73,
+          "lexical_test_attributes": 574
+        },
+        {
+          "root": "crates/canic-control-plane",
+          "files": 179,
+          "lines": 104825,
+          "logical_lines": 96767,
+          "path_classified_test_files": 13,
+          "lexical_test_attributes": 312
+        },
+        {
+          "root": "crates/canic-core",
+          "files": 664,
+          "lines": 163769,
+          "logical_lines": 136110,
+          "path_classified_test_files": 58,
+          "lexical_test_attributes": 1462
+        },
+        {
+          "root": "crates/canic-host",
+          "files": 527,
+          "lines": 159452,
+          "logical_lines": 145970,
+          "path_classified_test_files": 158,
+          "lexical_test_attributes": 1070
+        },
+        {
+          "root": "crates/canic-macros",
+          "files": 12,
+          "lines": 3039,
+          "logical_lines": 2562,
+          "path_classified_test_files": 4,
+          "lexical_test_attributes": 50
+        },
+        {
+          "root": "crates/canic-testing-internal",
+          "files": 61,
+          "lines": 35290,
+          "logical_lines": 33277,
+          "path_classified_test_files": 30,
+          "lexical_test_attributes": 112
+        },
+        {
+          "root": "crates/canic-tests",
+          "files": 28,
+          "lines": 14325,
+          "logical_lines": 13020,
+          "path_classified_test_files": 23,
+          "lexical_test_attributes": 92
+        }
+      ],
+      "largest_files": [
+        {
+          "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs",
+          "lines": 17813,
+          "logical_lines": 17172,
+          "path_classified_test": false,
+          "lexical_test_attributes": 47
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/platform.rs",
+          "lines": 10030,
+          "logical_lines": 9588,
+          "path_classified_test": false,
+          "lexical_test_attributes": 60
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/tests.rs",
+          "lines": 7535,
+          "logical_lines": 7247,
+          "path_classified_test": true,
+          "lexical_test_attributes": 67
+        },
+        {
+          "path": "crates/canic-control-plane/src/workflow/fleet_coordinator/tests.rs",
+          "lines": 7093,
+          "logical_lines": 6751,
+          "path_classified_test": true,
+          "lexical_test_attributes": 42
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/component_registry/mod.rs",
+          "lines": 6523,
+          "logical_lines": 6168,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-control-plane/src/workflow/component_registry/mod.rs",
+          "lines": 6259,
+          "logical_lines": 5881,
+          "path_classified_test": false,
+          "lexical_test_attributes": 10
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/component_registry/tests/mod.rs",
+          "lines": 5887,
+          "logical_lines": 5698,
+          "path_classified_test": true,
+          "lexical_test_attributes": 21
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/workflow/mod.rs",
+          "lines": 5954,
+          "logical_lines": 5695,
+          "path_classified_test": false,
+          "lexical_test_attributes": 18
+        },
+        {
+          "path": "crates/canic-control-plane/src/storage/stable/component_registry/mod.rs",
+          "lines": 6049,
+          "logical_lines": 5431,
+          "path_classified_test": false,
+          "lexical_test_attributes": 1
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/generate/tests.rs",
+          "lines": 5387,
+          "logical_lines": 5210,
+          "path_classified_test": true,
+          "lexical_test_attributes": 21
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+          "lines": 3718,
+          "logical_lines": 3532,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/component_provisioning/mod.rs",
+          "lines": 3478,
+          "logical_lines": 3311,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/mod.rs",
+          "lines": 3038,
+          "logical_lines": 2907,
+          "path_classified_test": false,
+          "lexical_test_attributes": 16
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/fleet_coordinator/mod.rs",
+          "lines": 2897,
+          "logical_lines": 2769,
+          "path_classified_test": false,
+          "lexical_test_attributes": 4
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs",
+          "lines": 2783,
+          "logical_lines": 2630,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/canister_pool/mod.rs",
+          "lines": 2664,
+          "logical_lines": 2500,
+          "path_classified_test": false,
+          "lexical_test_attributes": 20
+        },
+        {
+          "path": "crates/canic-core/src/ops/storage/fleet_activation/mod.rs",
+          "lines": 2588,
+          "logical_lines": 2424,
+          "path_classified_test": false,
+          "lexical_test_attributes": 16
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/generate/mod.rs",
+          "lines": 2539,
+          "logical_lines": 2401,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/tests.rs",
+          "lines": 2364,
+          "logical_lines": 2265,
+          "path_classified_test": true,
+          "lexical_test_attributes": 24
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/fleet_admission/mod.rs",
+          "lines": 2246,
+          "logical_lines": 2148,
+          "path_classified_test": false,
+          "lexical_test_attributes": 10
+        },
+        {
+          "path": "crates/canic-core/src/dto/component_registry.rs",
+          "lines": 2908,
+          "logical_lines": 2132,
+          "path_classified_test": false,
+          "lexical_test_attributes": 18
+        },
+        {
+          "path": "crates/canic-backup/src/restore/runner/tests.rs",
+          "lines": 2300,
+          "logical_lines": 2115,
+          "path_classified_test": true,
+          "lexical_test_attributes": 22
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/fleet_coordinator/component_provisioning_validation/mod.rs",
+          "lines": 2022,
+          "logical_lines": 1962,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-core/src/ops/storage/intent/mod.rs",
+          "lines": 2214,
+          "logical_lines": 1938,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic/tests/protocol_surface.rs",
+          "lines": 1964,
+          "logical_lines": 1828,
+          "path_classified_test": true,
+          "lexical_test_attributes": 53
+        }
+      ]
+    },
+    "baseline": {
+      "summary": [
+        {
+          "root": "apps/demo",
+          "files": 4,
+          "lines": 116,
+          "logical_lines": 93,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "apps/test",
+          "files": 16,
+          "lines": 746,
+          "logical_lines": 577,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "canisters/audit",
+          "files": 16,
+          "lines": 783,
+          "logical_lines": 619,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "canisters/sandbox",
+          "files": 2,
+          "lines": 43,
+          "logical_lines": 18,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 0
+        },
+        {
+          "root": "canisters/test",
+          "files": 25,
+          "lines": 4531,
+          "logical_lines": 3971,
+          "path_classified_test_files": 0,
+          "lexical_test_attributes": 3
+        },
+        {
+          "root": "crates/canic",
+          "files": 54,
+          "lines": 14612,
+          "logical_lines": 13034,
+          "path_classified_test_files": 22,
+          "lexical_test_attributes": 161
+        },
+        {
+          "root": "crates/canic-backup",
+          "files": 128,
+          "lines": 31974,
+          "logical_lines": 27283,
+          "path_classified_test_files": 40,
+          "lexical_test_attributes": 304
+        },
+        {
+          "root": "crates/canic-cli",
+          "files": 229,
+          "lines": 51738,
+          "logical_lines": 45696,
+          "path_classified_test_files": 72,
+          "lexical_test_attributes": 559
+        },
+        {
+          "root": "crates/canic-control-plane",
+          "files": 177,
+          "lines": 104351,
+          "logical_lines": 96344,
+          "path_classified_test_files": 13,
+          "lexical_test_attributes": 308
+        },
+        {
+          "root": "crates/canic-core",
+          "files": 661,
+          "lines": 162474,
+          "logical_lines": 134824,
+          "path_classified_test_files": 57,
+          "lexical_test_attributes": 1442
+        },
+        {
+          "root": "crates/canic-host",
+          "files": 566,
+          "lines": 170885,
+          "logical_lines": 156582,
+          "path_classified_test_files": 168,
+          "lexical_test_attributes": 1162
+        },
+        {
+          "root": "crates/canic-macros",
+          "files": 9,
+          "lines": 2662,
+          "logical_lines": 2220,
+          "path_classified_test_files": 3,
+          "lexical_test_attributes": 46
+        },
+        {
+          "root": "crates/canic-testing-internal",
+          "files": 54,
+          "lines": 33289,
+          "logical_lines": 31390,
+          "path_classified_test_files": 27,
+          "lexical_test_attributes": 109
+        },
+        {
+          "root": "crates/canic-tests",
+          "files": 28,
+          "lines": 13988,
+          "logical_lines": 12695,
+          "path_classified_test_files": 23,
+          "lexical_test_attributes": 89
+        }
+      ],
+      "largest_files": [
+        {
+          "path": "crates/canic-testing-internal/src/pic/fleet_registry/baseline.rs",
+          "lines": 17500,
+          "logical_lines": 16872,
+          "path_classified_test": false,
+          "lexical_test_attributes": 47
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/platform.rs",
+          "lines": 10181,
+          "logical_lines": 9737,
+          "path_classified_test": false,
+          "lexical_test_attributes": 59
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/tests.rs",
+          "lines": 8580,
+          "logical_lines": 8265,
+          "path_classified_test": true,
+          "lexical_test_attributes": 80
+        },
+        {
+          "path": "crates/canic-control-plane/src/workflow/fleet_coordinator/tests.rs",
+          "lines": 7065,
+          "logical_lines": 6723,
+          "path_classified_test": true,
+          "lexical_test_attributes": 42
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/component_registry/mod.rs",
+          "lines": 6496,
+          "logical_lines": 6143,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-control-plane/src/workflow/component_registry/mod.rs",
+          "lines": 6219,
+          "logical_lines": 5846,
+          "path_classified_test": false,
+          "lexical_test_attributes": 10
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/workflow/mod.rs",
+          "lines": 5989,
+          "logical_lines": 5733,
+          "path_classified_test": false,
+          "lexical_test_attributes": 18
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/component_registry/tests/mod.rs",
+          "lines": 5841,
+          "logical_lines": 5652,
+          "path_classified_test": true,
+          "lexical_test_attributes": 21
+        },
+        {
+          "path": "crates/canic-control-plane/src/storage/stable/component_registry/mod.rs",
+          "lines": 6048,
+          "logical_lines": 5430,
+          "path_classified_test": false,
+          "lexical_test_attributes": 1
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/generate/tests.rs",
+          "lines": 5385,
+          "logical_lines": 5208,
+          "path_classified_test": true,
+          "lexical_test_attributes": 21
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+          "lines": 3748,
+          "logical_lines": 3561,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/component_provisioning/mod.rs",
+          "lines": 3478,
+          "logical_lines": 3311,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/current_inventory/mod.rs",
+          "lines": 3038,
+          "logical_lines": 2907,
+          "path_classified_test": false,
+          "lexical_test_attributes": 16
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/fleet_coordinator/mod.rs",
+          "lines": 2897,
+          "logical_lines": 2769,
+          "path_classified_test": false,
+          "lexical_test_attributes": 4
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/mod.rs",
+          "lines": 2787,
+          "logical_lines": 2634,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-core/src/ops/storage/fleet_activation/mod.rs",
+          "lines": 2588,
+          "logical_lines": 2424,
+          "path_classified_test": false,
+          "lexical_test_attributes": 16
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/generate/mod.rs",
+          "lines": 2563,
+          "logical_lines": 2424,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/canister_pool/mod.rs",
+          "lines": 2478,
+          "logical_lines": 2322,
+          "path_classified_test": false,
+          "lexical_test_attributes": 17
+        },
+        {
+          "path": "crates/canic-host/src/fleet_ensure/ops/current_protocol/tests.rs",
+          "lines": 2364,
+          "logical_lines": 2265,
+          "path_classified_test": true,
+          "lexical_test_attributes": 24
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/fleet_admission/mod.rs",
+          "lines": 2246,
+          "logical_lines": 2148,
+          "path_classified_test": false,
+          "lexical_test_attributes": 10
+        },
+        {
+          "path": "crates/canic-core/src/dto/component_registry.rs",
+          "lines": 2907,
+          "logical_lines": 2131,
+          "path_classified_test": false,
+          "lexical_test_attributes": 18
+        },
+        {
+          "path": "crates/canic-backup/src/restore/runner/tests.rs",
+          "lines": 2188,
+          "logical_lines": 2008,
+          "path_classified_test": true,
+          "lexical_test_attributes": 21
+        },
+        {
+          "path": "crates/canic-control-plane/src/ops/fleet_coordinator/component_provisioning_validation/mod.rs",
+          "lines": 2022,
+          "logical_lines": 1962,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic-core/src/ops/storage/intent/mod.rs",
+          "lines": 2128,
+          "logical_lines": 1862,
+          "path_classified_test": false,
+          "lexical_test_attributes": 0
+        },
+        {
+          "path": "crates/canic/tests/protocol_surface.rs",
+          "lines": 1967,
+          "logical_lines": 1831,
+          "path_classified_test": true,
+          "lexical_test_attributes": 53
+        }
+      ]
+    },
+    "exact_duplicate_test_candidates": []
+  },
+  "core_v3_stdout": {
+    "baseline": "identity\tvalue\nmethod\tCANIC-COMPLEXITY-001/v3\nsource_commit\t8d37c74c9a4457b9e2bd47ee883f98fd2889d63b\nmetric\tvalue\ntotal_files\t650\ntotal_logical_loc\t132020\nfiles_at_least_600_loc\t46\nnon_test_files\t596\nnon_test_logical_loc\t110570\nnon_test_files_at_least_600_loc\t33\nsubsystem\tfiles\tlogical_loc\naccess\t13\t1878\napi\t48\t3650\nbootstrap\t3\t1852\ncdk\t9\t1012\nconfig\t25\t7513\ndiagnostics\t2\t237\ndispatch\t2\t134\ndomain\t43\t7385\ndto\t49\t7376\nformat\t1\t87\nids\t17\t2009\ninfra\t16\t1528\ningress\t3\t154\nlifecycle\t7\t631\nmemory\t6\t675\nmodel\t28\t4228\nops\t163\t39962\nreplay-policy\t6\t962\nrole-contract\t7\t2239\nroot\t9\t2371\nstorage\t25\t5957\ntest-support\t54\t21450\nview\t8\t168\nworkflow\t106\t18562\nlarge_file\tclass\tlogical_loc\tmatch\tif\telse_if\tbranch_density\ncrates/canic-core/src/access/expr/mod.rs\tproduction\t610\t9\t8\t0\t2.79\ncrates/canic-core/src/api/runtime/mod.rs\tproduction\t1019\t7\t13\t2\t2.16\ncrates/canic-core/src/bootstrap/render.rs\tproduction\t1476\t12\t5\t0\t1.15\ncrates/canic-core/src/config/component_group/mod.rs\tproduction\t748\t9\t28\t0\t4.95\ncrates/canic-core/src/config/component_group/tests.rs\ttest\t618\t0\t10\t0\t1.62\ncrates/canic-core/src/config/component_group_deployment/mod.rs\tproduction\t774\t1\t24\t0\t3.23\ncrates/canic-core/src/config/component_group_deployment/tests.rs\ttest\t1063\t0\t7\t0\t0.66\ncrates/canic-core/src/config/schema/tests.rs\ttest\t981\t0\t4\t1\t0.51\ncrates/canic-core/src/config/topology/mod.rs\tproduction\t1128\t12\t32\t0\t3.90\ncrates/canic-core/src/config/topology/tests.rs\ttest\t646\t0\t2\t0\t0.31\ncrates/canic-core/src/domain/policy/pure/auth/application_authorization.rs\tproduction\t636\t1\t27\t4\t5.03\ncrates/canic-core/src/domain/policy/pure/component_child_allocation.rs\tproduction\t702\t2\t10\t0\t1.71\ncrates/canic-core/src/dto/component_registry.rs\tproduction\t2131\t0\t0\t0\t0.00\ncrates/canic-core/src/dto/fleet_subnet_root.rs\tproduction\t711\t0\t0\t0\t0.00\ncrates/canic-core/src/model/fleet_funding_policy/mod.rs\tproduction\t703\t3\t57\t0\t8.53\ncrates/canic-core/src/ops/auth/delegated/canonical.rs\tproduction\t950\t9\t9\t0\t1.89\ncrates/canic-core/src/ops/auth/delegated/chain_key.rs\tproduction\t904\t1\t41\t0\t4.65\ncrates/canic-core/src/ops/auth/delegated/verify.rs\tproduction\t681\t1\t21\t0\t3.23\ncrates/canic-core/src/ops/auth/delegation/chain_key_batch/tests.rs\ttest\t1150\t2\t1\t0\t0.26\ncrates/canic-core/src/ops/component_provisioning_plan/mod.rs\tproduction\t987\t3\t44\t0\t4.76\ncrates/canic-core/src/ops/component_provisioning_plan/tests.rs\ttest\t914\t0\t4\t0\t0.44\ncrates/canic-core/src/ops/fleet_admission_policy/mod.rs\tproduction\t753\t9\t5\t0\t1.86\ncrates/canic-core/src/ops/fleet_funding_policy/mod.rs\tproduction\t840\t2\t3\t0\t0.60\ncrates/canic-core/src/ops/fleet_registry/mod.rs\tproduction\t812\t10\t19\t0\t3.57\ncrates/canic-core/src/ops/fleet_registry/tests.rs\ttest\t981\t0\t0\t0\t0.00\ncrates/canic-core/src/ops/fleet_service_binding/mod.rs\tproduction\t784\t3\t37\t0\t5.10\ncrates/canic-core/src/ops/fleet_service_binding/tests.rs\ttest\t778\t1\t0\t0\t0.13\ncrates/canic-core/src/ops/replay/receipt.rs\tproduction\t1080\t19\t19\t0\t3.52\ncrates/canic-core/src/ops/runtime/metrics/tests.rs\ttest\t851\t3\t1\t0\t0.47\ncrates/canic-core/src/ops/runtime/public_metrics/mod.rs\tproduction\t847\t2\t16\t2\t2.36\ncrates/canic-core/src/ops/storage/auth/application_sessions.rs\tproduction\t1364\t3\t33\t0\t2.64\ncrates/canic-core/src/ops/storage/fleet_activation/mod.rs\tproduction\t2424\t26\t52\t0\t3.22\ncrates/canic-core/src/ops/storage/icp_refill.rs\tproduction\t1573\t10\t32\t0\t2.67\ncrates/canic-core/src/ops/storage/intent/mod.rs\tproduction\t1862\t19\t77\t0\t5.16\ncrates/canic-core/src/ops/storage/intent/tests.rs\ttest\t1420\t3\t0\t0\t0.21\ncrates/canic-core/src/role_contract/catalog.rs\tproduction\t726\t1\t7\t0\t1.10\ncrates/canic-core/src/role_contract/tests.rs\ttest\t996\t3\t4\t0\t0.70\ncrates/canic-core/src/state_contract.rs\tproduction\t1035\t1\t0\t0\t0.10\ncrates/canic-core/src/storage/stable/intent.rs\tproduction\t1139\t0\t2\t0\t0.18\ncrates/canic-core/src/storage/stable/replay.rs\tproduction\t660\t0\t6\t0\t0.91\ncrates/canic-core/src/workflow/component_runtime.rs\tproduction\t908\t10\t32\t0\t4.63\ncrates/canic-core/src/workflow/ic/icp_refill/tests.rs\ttest\t1136\t0\t4\t0\t0.35\ncrates/canic-core/src/workflow/rpc/request/handler/tests.rs\ttest\t1618\t16\t1\t0\t1.05\ncrates/canic-core/src/workflow/runtime/cycles/mod.rs\tproduction\t1090\t25\t30\t0\t5.05\ncrates/canic-core/src/workflow/runtime/fleet_activation.rs\tproduction\t797\t7\t20\t0\t3.39\ncrates/canic-core/src/workflow/runtime/intent.rs\tproduction\t855\t6\t16\t0\t2.57\nreference_symbol\tall_files\tnon_test_files\nRequest\t10\t8\nResponse\t11\t10\nRequestFamily\t0\t0\nCapabilityProof\t5\t4\nCapabilityService\t5\t4\nBuiltinPredicate\t2\t2\nRootCapability\t13\t10\nRootCapabilityMetricKey\t6\t5\nRootCapabilityMetricEventType\t1\t1\nRootCapabilityMetricProofMode\t4\t2\nVerifyDelegatedTokenError\t5\t4\nChainKeyRootProofError\t5\t4\nInternalErrorClass\t0\t0\nInfraError\t0\t0\nInternalError\t190\t183\nIcOps\t75\t71\nInternalErrorOrigin\t0\t0\nConfigOps\t24\t24\nSubnetRegistryOps\t0\t0\nAuthStateOps\t0\t0\nDelegatedTokenConfig\t15\t13\nRootCapabilityMetricOutcome\t8\t7\nStateAllocationKey\t7\t6\nCapabilityMention\t11\t9\n",
+    "current": "identity\tvalue\nmethod\tCANIC-COMPLEXITY-001/v3\nsource_commit\t75c7f0998fd4531f8a6b81d91b53b71daffca332\nmetric\tvalue\ntotal_files\t653\ntotal_logical_loc\t133316\nfiles_at_least_600_loc\t47\nnon_test_files\t598\nnon_test_logical_loc\t111215\nnon_test_files_at_least_600_loc\t33\nsubsystem\tfiles\tlogical_loc\naccess\t13\t1937\napi\t48\t3651\nbootstrap\t3\t1852\ncdk\t9\t1008\nconfig\t25\t7461\ndiagnostics\t2\t237\ndispatch\t2\t134\ndomain\t44\t7396\ndto\t49\t7384\nformat\t1\t87\nids\t17\t1998\ninfra\t17\t1574\ningress\t3\t154\nlifecycle\t7\t631\nmemory\t6\t675\nmodel\t28\t4235\nops\t163\t40159\nreplay-policy\t6\t962\nrole-contract\t7\t2239\nroot\t9\t2373\nstorage\t25\t6037\ntest-support\t55\t22101\nview\t8\t168\nworkflow\t106\t18863\nlarge_file\tclass\tlogical_loc\tmatch\tif\telse_if\tbranch_density\ncrates/canic-core/src/access/expr/mod.rs\tproduction\t633\t9\t8\t0\t2.69\ncrates/canic-core/src/api/runtime/mod.rs\tproduction\t1020\t7\t13\t2\t2.16\ncrates/canic-core/src/bootstrap/render.rs\tproduction\t1476\t12\t5\t0\t1.15\ncrates/canic-core/src/config/component_group/mod.rs\tproduction\t748\t9\t28\t0\t4.95\ncrates/canic-core/src/config/component_group/tests.rs\ttest\t618\t0\t10\t0\t1.62\ncrates/canic-core/src/config/component_group_deployment/mod.rs\tproduction\t774\t1\t24\t0\t3.23\ncrates/canic-core/src/config/component_group_deployment/tests.rs\ttest\t1063\t0\t7\t0\t0.66\ncrates/canic-core/src/config/schema/tests.rs\ttest\t981\t0\t4\t1\t0.51\ncrates/canic-core/src/config/topology/mod.rs\tproduction\t1118\t11\t32\t0\t3.85\ncrates/canic-core/src/config/topology/tests.rs\ttest\t609\t0\t2\t0\t0.33\ncrates/canic-core/src/domain/policy/pure/auth/application_authorization.rs\tproduction\t636\t1\t27\t4\t5.03\ncrates/canic-core/src/domain/policy/pure/component_child_allocation.rs\tproduction\t702\t2\t10\t0\t1.71\ncrates/canic-core/src/dto/component_registry.rs\tproduction\t2132\t0\t0\t0\t0.00\ncrates/canic-core/src/dto/fleet_subnet_root.rs\tproduction\t711\t0\t0\t0\t0.00\ncrates/canic-core/src/model/fleet_funding_policy/mod.rs\tproduction\t703\t3\t57\t0\t8.53\ncrates/canic-core/src/ops/auth/delegated/canonical.rs\tproduction\t950\t9\t9\t0\t1.89\ncrates/canic-core/src/ops/auth/delegated/chain_key.rs\tproduction\t904\t1\t41\t0\t4.65\ncrates/canic-core/src/ops/auth/delegated/verify.rs\tproduction\t681\t1\t21\t0\t3.23\ncrates/canic-core/src/ops/auth/delegation/chain_key_batch/tests.rs\ttest\t1240\t2\t1\t0\t0.24\ncrates/canic-core/src/ops/component_provisioning_plan/mod.rs\tproduction\t987\t3\t44\t0\t4.76\ncrates/canic-core/src/ops/component_provisioning_plan/tests.rs\ttest\t914\t0\t4\t0\t0.44\ncrates/canic-core/src/ops/fleet_admission_policy/mod.rs\tproduction\t753\t9\t5\t0\t1.86\ncrates/canic-core/src/ops/fleet_funding_policy/mod.rs\tproduction\t840\t2\t3\t0\t0.60\ncrates/canic-core/src/ops/fleet_registry/mod.rs\tproduction\t812\t10\t19\t0\t3.57\ncrates/canic-core/src/ops/fleet_registry/tests.rs\ttest\t981\t0\t0\t0\t0.00\ncrates/canic-core/src/ops/fleet_service_binding/mod.rs\tproduction\t784\t3\t37\t0\t5.10\ncrates/canic-core/src/ops/fleet_service_binding/tests.rs\ttest\t778\t1\t0\t0\t0.13\ncrates/canic-core/src/ops/replay/receipt.rs\tproduction\t1080\t19\t19\t0\t3.52\ncrates/canic-core/src/ops/runtime/metrics/tests.rs\ttest\t848\t3\t1\t0\t0.47\ncrates/canic-core/src/ops/runtime/public_metrics/mod.rs\tproduction\t856\t2\t16\t2\t2.34\ncrates/canic-core/src/ops/storage/auth/application_sessions.rs\tproduction\t1364\t3\t33\t0\t2.64\ncrates/canic-core/src/ops/storage/fleet_activation/mod.rs\tproduction\t2424\t26\t52\t0\t3.22\ncrates/canic-core/src/ops/storage/icp_refill.rs\tproduction\t1573\t10\t32\t0\t2.67\ncrates/canic-core/src/ops/storage/intent/mod.rs\tproduction\t1938\t19\t82\t0\t5.21\ncrates/canic-core/src/ops/storage/intent/tests.rs\ttest\t1426\t3\t0\t0\t0.21\ncrates/canic-core/src/role_contract/catalog.rs\tproduction\t726\t1\t7\t0\t1.10\ncrates/canic-core/src/role_contract/tests.rs\ttest\t996\t3\t4\t0\t0.70\ncrates/canic-core/src/state_contract.rs\tproduction\t1036\t1\t0\t0\t0.10\ncrates/canic-core/src/storage/stable/intent.rs\tproduction\t1165\t0\t2\t0\t0.17\ncrates/canic-core/src/storage/stable/replay.rs\tproduction\t660\t0\t6\t0\t0.91\ncrates/canic-core/src/workflow/component_runtime.rs\tproduction\t905\t10\t32\t0\t4.64\ncrates/canic-core/src/workflow/ic/icp_refill/tests.rs\ttest\t1136\t0\t4\t0\t0.35\ncrates/canic-core/src/workflow/placement/index/tests.rs\ttest\t699\t1\t2\t0\t0.43\ncrates/canic-core/src/workflow/rpc/request/handler/tests.rs\ttest\t1640\t16\t1\t0\t1.04\ncrates/canic-core/src/workflow/runtime/cycles/mod.rs\tproduction\t1102\t25\t31\t0\t5.08\ncrates/canic-core/src/workflow/runtime/fleet_activation.rs\tproduction\t797\t7\t20\t0\t3.39\ncrates/canic-core/src/workflow/runtime/intent.rs\tproduction\t855\t6\t16\t0\t2.57\nreference_symbol\tall_files\tnon_test_files\nRequest\t10\t8\nResponse\t11\t10\nRequestFamily\t0\t0\nCapabilityProof\t5\t4\nCapabilityService\t5\t4\nBuiltinPredicate\t2\t2\nRootCapability\t13\t10\nRootCapabilityMetricKey\t6\t5\nRootCapabilityMetricEventType\t1\t1\nRootCapabilityMetricProofMode\t4\t2\nVerifyDelegatedTokenError\t5\t4\nChainKeyRootProofError\t5\t4\nInternalErrorClass\t0\t0\nInfraError\t0\t0\nInternalError\t192\t185\nIcOps\t75\t71\nInternalErrorOrigin\t0\t0\nConfigOps\t24\t24\nSubnetRegistryOps\t0\t0\nAuthStateOps\t0\t0\nDelegatedTokenConfig\t15\t13\nRootCapabilityMetricOutcome\t8\t7\nStateAllocationKey\t7\t6\nCapabilityMention\t11\t9\n"
+  },
+  "guard_regression": [
+    {
+      "fixture": "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-type.txt",
+      "baseline_match_exit": 1,
+      "current_match_exit": 0
+    },
+    {
+      "fixture": "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-wire-version.txt",
+      "baseline_match_exit": 1,
+      "current_match_exit": 0
+    },
+    {
+      "fixture": "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-unprefixed-schema-version.txt",
+      "baseline_match_exit": 1,
+      "current_match_exit": 0
+    }
+  ],
+  "published_named_source_sha256": {
+    "crates/canic/tests/protocol_surface.rs": "50a33c529413d12d30cc32f6bb02be9b0e803a6b5452d4889d198bd180cbdf7f",
+    "crates/canic/tests/reference_surface.rs": "fc90d1e07cf299d01b35f54164336643f87638cac269aa8866de902c221f963d",
+    "crates/canic-core/src/dto/auth/tests.rs": "0e07c0bdbbee31f39c6082bc3c2985968e582c6b51e832adce4791a4a84a38ea",
+    "crates/canic-core/src/workflow/ic/icp_refill/tests.rs": "037fc8dfa093183a5237aa366d09ea4fd7b622a8e01adfaff77756fd137d3dfd",
+    "crates/canic-cli/src/backup/manifest/tests.rs": "3ef5fb298aca732df419c9adc8f771a4a8a7cfc36116e5082a6ab08c37c2ae82",
+    "scripts/ci/check-pre-1-0-hard-cut.sh": "250a64f4588a5cc1bd6417eddba4a15f4abb297641da74fcc8fd27331af6e67c",
+    "crates/canic/tests/managed_endpoint_gate.rs": "5331564848df01ae2aca6b5e13de93914280718f7142a8054cb51a2fdb30fd65",
+    "crates/canic-host/src/fleet_ensure/model/mod.rs": "ad62ac2adae09bc423bc36798671538fa8128de9014e9a0b1e05caede0bf824b",
+    "crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs": "ed5bd04e4305d8aebb696c3ccc664a871cca23cd634a1efa269c74115ef28ae6",
+    "crates/canic-host/src/fleet_ensure/model/infrastructure_bootstrap/mod.rs": "9a318685d257831c2450d0b886db64ebd3c9aaedcc50186a0b5a0bd1b9907cbf",
+    "crates/canic-host/src/fleet_ensure/ops/mod.rs": "38c93695ee2de55a22b4079d1c601fb6926af1c3e50c66c7e92663c546afae8e",
+    "crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs": "0f52662af8dcc53a242245f3c090dd6ed045e3e322fb374a13f1c06dd80821a8",
+    "crates/canic-host/src/fleet_ensure/ops/capacity_import/mod.rs": "ae9d878756266078adbd54d7032c51848825df649d1400c579d8b407d318969d",
+    "crates/canic-host/src/fleet_ensure/workflow/mod.rs": "6ca30f86dfcf2e530105c9f5837daeb74237b04dea86a1d0eccea88458ea3ad0",
+    "crates/canic-cli/src/backup/create/executor/mod.rs": "ea01cb63e620a1e8b0abd5ab0a70ae232dc093a0927222e5447247ac0095f980",
+    "crates/canic-backup/src/restore/plan/mod.rs": "a9134cbbb6ec08e5144c5dc17201587326ae80e6f29bbd1cc1f727cd61380904",
+    "crates/canic-backup/src/restore/runner/execute.rs": "51103684afb781d8c227e5cc635a2328bd75545c0e44f619682034704a21b079",
+    "crates/canic-control-plane/src/ops/fleet_coordinator/root_lifecycle.rs": "45176f01d248feef4601c99e3c5a48766aae2f8739edb2fd8a1e8fe1a1e2c841",
+    "crates/canic-control-plane/src/ops/component_registry/mod.rs": "700e719615b56d2e2e5eb1ea5bdfc8599f2c2acaa42daca806d2eee9dd107bcd",
+    "crates/canic-control-plane/src/storage/stable/component_registry/mod.rs": "a04c71bd1bfe6184625f87e7032d0b9eceaaa0379a4c31498f2584ca16b548de",
+    "crates/canic-control-plane/src/workflow/component_registry/mod.rs": "390f52cabc5840838c98959e2aaa0d428c461f04845bbb29b628ef2715d137d8",
+    "crates/canic-core/src/workflow/runtime/async_job/mod.rs": "9dd71397d332a8aa1491f72eed6c53f415e2db9ac4018551b23210839ffb2f5f",
+    "crates/canic-core/src/workflow/runtime/timer/mod.rs": "a6c9d032891a8edef10f6466f87556580cafa2bed5175f28041b44ef4feb4312",
+    "docs/design/0.110-fleet-runtime-contraction/0.110-design.md": "3b70ae1c5e07dd56b11d8202137c03f213ae9ce9bf14885768d3d06b6541ec30",
+    "docs/design/0.110-fleet-runtime-contraction/status.md": "924af1260654e70bf03b72c1b63b65f4d55b8b560a6feba45bdbe7d320e81b3e"
+  },
+  "uncommitted_cleanup_source_sha256": {
+    "crates/canic/tests/protocol_surface.rs": "25860924e16dda4b6aefc24d4a83fbcaf529e7918334c8d4fd0b05a4ce817929",
+    "crates/canic/tests/reference_surface.rs": "ee45b7e986b39439e30ae5852cf2591aa61fa30c60c8745db2dae63ab15207bd",
+    "crates/canic-core/src/dto/auth/tests.rs": "c6d37fda2670d4bca158fceb39f37379a9f767f394ffba3ace1cbf177f26c032",
+    "crates/canic-core/src/workflow/ic/icp_refill/tests.rs": "40ca32a4114b959d809bc325e911ec8bd1d4e426bc85bc20d01a96b2148472bd",
+    "crates/canic-cli/src/backup/manifest/tests.rs": "d9e1ce823e2fcff0daa11fdc149c1059f9e556b5560bbc1c020edab15d40e997",
+    "scripts/ci/check-pre-1-0-hard-cut.sh": "634491aeb2fdc0883e4a9b4fc489127b7f7882cc4ced3aaadd07bff1fb9cf4a6"
+  },
+  "cleanup": {
+    "net_rust_lines_removed": 107,
+    "predecessor_test_structs_removed": 1,
+    "standalone_tests_removed": 3,
+    "runtime_code_changed": false
+  },
+  "validation": [
+    {
+      "command": "cargo test --offline --locked -p canic --test protocol_surface --test reference_surface",
+      "exit_code": 0,
+      "tests_passed": 49,
+      "log": "target/review-validation/complexity-audit-facade-test.log",
+      "log_sha256": "7a2ab79bc83bcc4da1ce6576bd864c53e9ac09e6b75309e83a938daad7889e0d"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-core --lib dto::auth::tests",
+      "exit_code": 0,
+      "tests_passed": 2,
+      "log": "target/review-validation/complexity-audit-auth-test.log",
+      "log_sha256": "6fff9a416eaa7aa4dd2494cd0a81197d1de911fe4cb70a25587ff0e928ec6be9"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-core --lib workflow::ic::icp_refill::tests",
+      "exit_code": 0,
+      "tests_passed": 47,
+      "log": "target/review-validation/complexity-audit-refill-test.log",
+      "log_sha256": "6f01e75e4b2f41a0051f555caf37a783f478f79909a420950a7bc597841a38d6"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-cli --lib backup::manifest::tests",
+      "exit_code": 0,
+      "tests_passed": 4,
+      "log": "target/review-validation/complexity-audit-cli-test.log",
+      "log_sha256": "3657f7f40af721133f809d62bd5cda3de3e8a1f0d88d710c54d84c51432e8cab"
+    },
+    {
+      "command": "cargo clippy --offline --locked -p canic --test protocol_surface --test reference_surface --all-features -- -D warnings",
+      "exit_code": 0,
+      "tests_passed": null,
+      "log": "target/review-validation/complexity-audit-facade-clippy.log",
+      "log_sha256": "486687bf967a931296fae1e5f61a300e51b9fe3a15def1410405ff09aa795c33"
+    },
+    {
+      "command": "cargo clippy --offline --locked -p canic-core -p canic-cli --lib --tests --all-features --keep-going -- -D warnings",
+      "exit_code": 0,
+      "tests_passed": null,
+      "log": "target/review-validation/complexity-audit-core-cli-clippy.log",
+      "log_sha256": "547a1f2b368b2b322b9e67651e30c400d31439c01593bdc3e98f177187165258"
+    },
+    {
+      "command": "bash scripts/ci/check-pre-1-0-hard-cut.sh --self-test",
+      "exit_code": 0
+    },
+    {
+      "command": "bash scripts/ci/check-pre-1-0-hard-cut.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "shellcheck scripts/ci/check-pre-1-0-hard-cut.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "bash -n scripts/ci/check-pre-1-0-hard-cut.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "rustfmt --edition 2024 --check crates/canic/tests/protocol_surface.rs crates/canic/tests/reference_surface.rs crates/canic-core/src/dto/auth/tests.rs crates/canic-core/src/workflow/ic/icp_refill/tests.rs crates/canic-cli/src/backup/manifest/tests.rs",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "native_tests_passed": 102,
+  "validation_limits": "Tests/lint run in the evolving authorized worktree with user dependency and concurrent Host changes; these qualify only the named cleanup, not frozen-baseline execution or FR1.",
+  "findings": [
+    {
+      "finding_id": "CANIC-0.110-AUTH-STALE-TEST-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Core DTO tests",
+      "current_location": "crates/canic-core/src/dto/auth/tests.rs",
+      "intended_owner": "Core DTO tests",
+      "affected_surfaces": [
+        "crates/canic-core/src/dto/auth/tests.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "`PresenterlessDelegatedTokenClaims` exists only to encode and reject a predecessor token",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Test-only or guard correction",
+      "verification_status": "targeted_checks_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Fixed: delete the struct and predecessor rejection; retain current claims/request identity assertions",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW / CORRECT GUARD"
+    },
+    {
+      "finding_id": "CANIC-0.110-REFILL-STALE-TEST-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Core refill tests",
+      "current_location": "crates/canic-core/src/workflow/ic/icp_refill/tests.rs",
+      "intended_owner": "Core refill tests",
+      "affected_surfaces": [
+        "crates/canic-core/src/workflow/ic/icp_refill/tests.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "`retry_rejects_pre_hard_cut_nonself_operation` explicitly exercises the removed nonself refill route",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Test-only or guard correction",
+      "verification_status": "targeted_checks_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Fixed: delete the test; current retry field matching and production self-target checks remain",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW / CORRECT GUARD"
+    },
+    {
+      "finding_id": "CANIC-0.110-FACADE-STALE-TEST-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Facade protocol tests",
+      "current_location": "crates/canic/tests/protocol_surface.rs",
+      "intended_owner": "Facade protocol tests",
+      "affected_surfaces": [
+        "crates/canic/tests/protocol_surface.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "Removed facade path, old cycles record, AutomaticTopup types, old FleetKey/Store authority-directory forms",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Test-only or guard correction",
+      "verification_status": "targeted_checks_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Fixed: remove historical absence assertions; retain current Candid types and exact service inventory",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW / CORRECT GUARD"
+    },
+    {
+      "finding_id": "CANIC-0.110-FACADE-REDUNDANT-TEST-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Facade tests",
+      "current_location": "crates/canic/tests/protocol_surface.rs",
+      "intended_owner": "Facade tests",
+      "affected_surfaces": [
+        "crates/canic/tests/protocol_surface.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "Store memory absence checked repeatedly despite exact method inventory; filtered set rechecks its excluded value; string literal tests its own words",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Test-only or guard correction",
+      "verification_status": "targeted_checks_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Fixed: remove redundant checks and the separate memory-absence test",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW / CORRECT GUARD"
+    },
+    {
+      "finding_id": "CANIC-0.110-CLI-STALE-TEST-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "CLI manifest tests",
+      "current_location": "crates/canic-cli/src/backup/manifest/tests.rs",
+      "intended_owner": "CLI manifest tests",
+      "affected_surfaces": [
+        "crates/canic-cli/src/backup/manifest/tests.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "Help test freezes explanatory phrases and absence of removed `fleet backup` wording",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Test-only or guard correction",
+      "verification_status": "targeted_checks_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Fixed: delete the test; command parsing and manifest validation tests remain",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW / CORRECT GUARD"
+    },
+    {
+      "finding_id": "CANIC-0.110-HARD-CUT-DETECTOR-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "CI policy guard",
+      "current_location": "scripts/ci/check-pre-1-0-hard-cut.sh",
+      "intended_owner": "CI policy guard",
+      "affected_surfaces": [
+        "scripts/ci/check-pre-1-0-hard-cut.sh"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "The published pattern misses `ExampleContractV2`, unprefixed `SCHEMA_VERSION = 2`, and a `canic/example/v10` domain",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Test-only or guard correction",
+      "verification_status": "targeted_checks_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Fixed: recognize versioned type declarations, zero-prefix schema constants and multi-digit wire generations; each new fixture independently changes from unmatched to matched",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DELETE NOW / CORRECT GUARD"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-INLINE-PLAN-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "deferred",
+      "owner": "Host plan content",
+      "current_location": "crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs",
+      "intended_owner": "Host plan content",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "`load_chunk_bytes` accepts inline bytes; `contains_inline_bytes`, `compact_inline_plan` and apply-time rewriting support the former durable representation",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Exact durable review/journal recovery authority; concurrent Host work excluded.",
+      "verification_status": "code_trace_only; unfinished_paid_records_not_inventoried",
+      "duplicate_of": null,
+      "recommended_slice": "Deferred: confirmed stale-format lane, with unfinished-operation recovery obligation to classify before removal",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DEFER: CLASSIFY UNFINISHED AUTHORITY; SEPARATE HOST BATCH"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-IMPORT-SHAPE-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "deferred",
+      "owner": "Host import model",
+      "current_location": "crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs",
+      "intended_owner": "Host import model",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "`funding_credits` defaults and disappears when empty specifically to preserve an existing uncredited review digest",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Exact durable review/journal recovery authority; concurrent Host work excluded.",
+      "verification_status": "code_trace_only; unfinished_paid_records_not_inventoried",
+      "duplicate_of": null,
+      "recommended_slice": "Deferred: compatibility-shaped hash authority; changing serialization changes the approved Root reservation hash",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DEFER: CLASSIFY UNFINISHED AUTHORITY; SEPARATE HOST BATCH"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-REGISTRATION-SHAPE-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "deferred",
+      "owner": "Host bootstrap/journal model",
+      "current_location": "crates/canic-host/src/fleet_ensure/model/mod.rs",
+      "intended_owner": "Host bootstrap/journal model",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/model/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "9b203f902812a6a002efef3edc5f548280ba908d10369937e55528a24efc596a"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "evidence": "`bootstrap_registration_recovery` and `registration_recovery_sha256` use omission defaults instead of explicit nullable current fields",
+      "typed_cause_or_invariant": "Pre-1.0 current-contract hard cuts; maintain genuinely unfinished paid-effect authority.",
+      "risk": "Exact durable review/journal recovery authority; concurrent Host work excluded.",
+      "verification_status": "code_trace_only; unfinished_paid_records_not_inventoried",
+      "duplicate_of": null,
+      "recommended_slice": "Deferred: current document-shape inconsistency; identify unfinished issued journals before a strict-field hard cut",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "DEFER: CLASSIFY UNFINISHED AUTHORITY; SEPARATE HOST BATCH"
+    }
+  ],
+  "follow_up_owner": "Host durable-record owner for three compatibility cuts; existing FR1/R2-R8 trackers for product outcomes; owner-by-owner MSH review for unreviewed reachability/redundancy."
+}

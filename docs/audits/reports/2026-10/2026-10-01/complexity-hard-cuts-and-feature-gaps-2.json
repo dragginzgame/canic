@@ -1,0 +1,650 @@
+{
+  "schema": "canic.audit.code_trace_manifest.v1",
+  "audit_id": "CANIC-MODULE-SURFACE-001",
+  "audit_method_version": "MSH-2.3",
+  "audit_method_fingerprint": "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018",
+  "fingerprint_definition": "SHA256 of UTF-8 compact sorted-key JSON of the decision_input_sha256 map.",
+  "decision_input_sha256": {
+    "docs/audits/modular/module-surface-hardening.md": "b4b6e300b70ae8f2899b36b99b287aa2332ab1c8775514a99954f991c472a3f4",
+    "docs/audits/modular/module-cleanup-runner.md": "606d18cb0728ef7c8e9ba3f0b46c4ea80b79200f9705cc3f8c821c8abd7dfd56",
+    "docs/audits/AUDIT-HOWTO.md": "759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422",
+    "scripts/ci/check-pre-1-0-hard-cut.sh": "7f605af3eca1c98f808386a55f5b63469cf33cb74d2cf7631dbd5d93a308f8c1",
+    "scripts/ci/audit-product-tree-hash.sh": "ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417",
+    "docs/audits/reports/2026-10/2026-10-01/complexity-hard-cuts-and-feature-gaps.md": "85f2867ce7cccd90ce92a3a1b824bcc6d67fb3aa51c0fa95043537b66953f2c4",
+    "docs/audits/reports/2026-10/2026-10-01/complexity-hard-cuts-and-feature-gaps.json": "b7c8fbf0b22f02080ed7158ee4e9a2bdec7f81e889fb898c8878fe366f1002b5",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-colon-wire-version.txt": "6d2c6e96410763ed64cc72f3be4a246e78b3c2a0c53fb2da2820e1a804399ee2",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-journal-version.txt": "2ce61909e6ba466fb678328ecc04faec23ca50e3da51ed0cb4be7cfefc9dc2f9",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-migration-reader.txt": "0a0d3f3c0269220c07dd303829e72fc395b955c4316a8130685db12762e3783c",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-type.txt": "bfc8f3627bca27afe17e554a944654407c602d236f82479f011b8dc6e791b264",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-version.txt": "bfd620c82593918de9f5cf4c2eabf0dc5c8718ae33f1c99343fba328805e18f5",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-product-wire-version.txt": "59069a22ceba80b46c2ba1d809861bcf0eee76efcc51459aa8d816b13864ab0b",
+    "docs/audits/fixtures/pre-1-0-hard-cut/forbidden-unprefixed-schema-version.txt": "1c6ed7a5d2584c93af5336c9a1f28e92e11f0e4b49bdd64c3f218dea0058992a",
+    "docs/audits/fixtures/pre-1-0-hard-cut/permitted-non-product-versions.txt": "a20e38a7c520cbdac2cf206ca3064d1329d6ce9df4385f9bea83d542055c76ef"
+  },
+  "method": {
+    "header_version": "2.3",
+    "required_manifest_version": "MSH-2.3",
+    "version_conflict": false,
+    "surface_taxonomy": "ST-1",
+    "authority_taxonomy": "AT-1",
+    "deletion_confidence_model": "DC-1",
+    "compatibility_policy": "pre-1.0-hard-cut",
+    "wasm_signal_rule": "raw-wasm-primary",
+    "hot_path_risk_model": "HP-1",
+    "proof_policy": "read-only-first"
+  },
+  "run_result": "pass",
+  "result_validity": "valid",
+  "result_scope": "Named finding-backed follow-up and repeated lexical screening; exhaustive reachability/redundancy and full entropy score excluded.",
+  "audit_tier": 2,
+  "reviewer": "Codex /root",
+  "review_mode": "single_review",
+  "trace_mode": "code_trace",
+  "release_anchor": "v0.110.49",
+  "source_commit_full": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+  "source_tree_hash": "898964f51a920b55641a3da3b146f778b48c51c3",
+  "product_tree_hash": "d8bfd1c6a2936f50f69972ce8abc8a195e9ab75fadec4e1bd6aeef0c3258b1bd",
+  "clean_worktree": false,
+  "cargo_lock_hash": "b9c765a2c97d2c3587c4254e38484d4aa547cf9b1e5bdf353c5246ba9888d463",
+  "worktree_cargo_lock_hash": "3b11568c5b981b9d94f64610de3f4aca51b6eb30d1c129b85d1c33428868581b",
+  "causal_baseline": "Source anchor plus tracked pre-cut worktree diff; affected-file hashes bind that exact state.",
+  "prior_report": "complexity-hard-cuts-and-feature-gaps.md",
+  "rust_toolchain": "rustc 1.98.1 (48a229cea 2026-09-01)\nbinary: rustc\ncommit-hash: 48a229ceaefd4985c50990b14116b6d856af0985\ncommit-date: 2026-09-01\nhost: x86_64-unknown-linux-gnu\nrelease: 1.98.1\nLLVM version: 22.1.8",
+  "target_triple": "x86_64-unknown-linux-gnu",
+  "feature_set": "Package defaults for focused native Host/CLI tests; all-features for package-scoped library/test Clippy.",
+  "external_tool_versions": {
+    "git": "2.43.0",
+    "ripgrep": "15.2.0"
+  },
+  "fixture_or_seed": "Current native owner fixtures; new current-policy colon-wire and journal-version fixture identities in decision hashes; no randomized/performance seed.",
+  "environment_class": "Local Linux workspace; locked offline Cargo; no live or external repository mutations.",
+  "started_at": null,
+  "start_reason": "Run start not instrumented; first retained pre-cut evidence timestamp recorded instead.",
+  "first_retained_evidence_at": "2026-10-01T14:32:16.558082+00:00",
+  "completed_at": "2026-10-01T14:48:14.960468+00:00",
+  "audit_script_hashes": {
+    "scripts/ci/check-pre-1-0-hard-cut.sh": "7f605af3eca1c98f808386a55f5b63469cf33cb74d2cf7631dbd5d93a308f8c1",
+    "scripts/ci/audit-product-tree-hash.sh": "ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417"
+  },
+  "source_delta": [
+    {
+      "path": "crates/canic-host/src/fleet_ensure/dto/capacity_import/mod.rs",
+      "before_sha256": "c1380e3b694a597b6cfba59185c1bc4b5af0f1b79e1abcaa897eaab1ca043bf2",
+      "after_sha256": "6005d131c7a053b9660525d97a96ec8aba6229b4666db196100dd3d4cdc2c32a",
+      "before_lines": 30,
+      "after_lines": 29,
+      "additions": 0,
+      "deletions": 1
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs",
+      "before_sha256": "ed5bd04e4305d8aebb696c3ccc664a871cca23cd634a1efa269c74115ef28ae6",
+      "after_sha256": "6a158b1071aacebf3542af0c621bb3906884e135249f94360e7188f01e59722f",
+      "before_lines": 163,
+      "after_lines": 162,
+      "additions": 1,
+      "deletions": 2
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/model/infrastructure_bootstrap/mod.rs",
+      "before_sha256": "9a318685d257831c2450d0b886db64ebd3c9aaedcc50186a0b5a0bd1b9907cbf",
+      "after_sha256": "0a420e201ba32ff37732956d777d594093adfacfd89a12c8b2069c932fe368b2",
+      "before_lines": 162,
+      "after_lines": 162,
+      "additions": 1,
+      "deletions": 1
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/model/mod.rs",
+      "before_sha256": "b955c2a1825e008b2d64331f544dd8827332a018ebd0297a3db1a20f6951aa66",
+      "after_sha256": "03d1e2676671aeb9e5cb98f0587cf2e8c79b66c0b510e7f213af9abd453869a8",
+      "before_lines": 1817,
+      "after_lines": 1818,
+      "additions": 3,
+      "deletions": 2
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/capacity_import/tests.rs",
+      "before_sha256": "641935ffed0b421a3a20a290626d7ca506a98d0f2ade915fcf3ca9971326f4b0",
+      "after_sha256": "22d8191b52da976e71215850d7cc67b0189f1aa09015965a7529bfc6893b5f78",
+      "before_lines": 139,
+      "after_lines": 143,
+      "additions": 10,
+      "deletions": 6
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/infrastructure_bootstrap/tests.rs",
+      "before_sha256": "a41c16a35ce7f51f4500cc9f18121565d92ffa98fc0e1497fe80037aa5d10217",
+      "after_sha256": "b85c049eacad8cd90fed0c649018525ca23554aff1a982c838ce5b9d62169c94",
+      "before_lines": 1087,
+      "after_lines": 1129,
+      "additions": 42,
+      "deletions": 0
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/mod.rs",
+      "before_sha256": "c1b71238282bd12e19db6d9add6b77f68ac2147b505947dcf20fbe56d65f5865",
+      "after_sha256": "5d4e2e24d6aad8d936b99275d1116c328157b29e05606d83868185cc1c2df545",
+      "before_lines": 1049,
+      "after_lines": 1030,
+      "additions": 0,
+      "deletions": 19
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs",
+      "before_sha256": "0f52662af8dcc53a242245f3c090dd6ed045e3e322fb374a13f1c06dd80821a8",
+      "after_sha256": "49637a4f307b8dd0953d30b8e3c01d63401eac70aa906e2142651979a4394a54",
+      "before_lines": 410,
+      "after_lines": 393,
+      "additions": 7,
+      "deletions": 24
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/plan_content/tests.rs",
+      "before_sha256": "499b197deed87956b46bd9513f6abfff3ca5d2a708a801fd0b41cddfb7fa8cb5",
+      "after_sha256": "a0d2afbcedaa1a3e788d778fbb44373d060273c565402be21edd54f9f3c01d0b",
+      "before_lines": 216,
+      "after_lines": 219,
+      "additions": 4,
+      "deletions": 1
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/tests.rs",
+      "before_sha256": "1bbefbf5ca3a6506d35373dc4b357081adda5073343b88a66746063abcf3a655",
+      "after_sha256": "2ce9ea782da3cc0ae01cd7748901b63a353ce4b377c193345595a0febbee37c0",
+      "before_lines": 7539,
+      "after_lines": 7552,
+      "additions": 46,
+      "deletions": 33
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/workflow/mod.rs",
+      "before_sha256": "4513953d88451bfb2d491102d829e2add2ce155b685ed6de5a406a2166063562",
+      "after_sha256": "570e0fd632a2331b925694296c57043fbb607dc5cd2fa0699598e641adc3b44f",
+      "before_lines": 5955,
+      "after_lines": 5937,
+      "additions": 21,
+      "deletions": 39
+    },
+    {
+      "path": "crates/canic-host/src/state_manifest/mod.rs",
+      "before_sha256": "0f6e995d37fe150e3f547128e104eaeb29f7d18856003408cea9fd009f8132ec",
+      "after_sha256": "63249cfc662f49c76d8391e70ea2818edb5863cbdb093b720bf619039a60dd65",
+      "before_lines": 769,
+      "after_lines": 768,
+      "additions": 1,
+      "deletions": 2
+    }
+  ],
+  "source_delta_artifact": {
+    "path": "target/review-validation/complexity-finish-source.diff",
+    "sha256": "05db9fcb2fcaacd83b3910551d401ed5b13e211836cb2e81ab6e2bf2c6dcba6f"
+  },
+  "preserved_pre_existing_tracked_paths": [
+    {
+      "path": "Cargo.lock",
+      "sha256": "3b11568c5b981b9d94f64610de3f4aca51b6eb30d1c129b85d1c33428868581b"
+    },
+    {
+      "path": "Cargo.toml",
+      "sha256": "c1ffe6a2c7d0d99a63a8a8889eea692e955ceba99b8c4575dfca3df0c6a3740b"
+    },
+    {
+      "path": "crates/canic-cli/src/backup/manifest/tests.rs",
+      "sha256": "d9e1ce823e2fcff0daa11fdc149c1059f9e556b5560bbc1c020edab15d40e997"
+    },
+    {
+      "path": "crates/canic-cli/src/fleet/mod.rs",
+      "sha256": "c63e4b11900e4af3b132ca5a46e3ac4996f8259d4580374faec81f1dc2a9c5a5"
+    },
+    {
+      "path": "crates/canic-cli/src/fleet/progress/render/mod.rs",
+      "sha256": "07e47d507883d975fcc3dd0c8267a6eb4b2f56f519b41e64c78f473268ea1301"
+    },
+    {
+      "path": "crates/canic-core/src/dto/auth/tests.rs",
+      "sha256": "c6d37fda2670d4bca158fceb39f37379a9f767f394ffba3ace1cbf177f26c032"
+    },
+    {
+      "path": "crates/canic-core/src/workflow/ic/icp_refill/tests.rs",
+      "sha256": "40ca32a4114b959d809bc325e911ec8bd1d4e426bc85bc20d01a96b2148472bd"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/dto/progress/mod.rs",
+      "sha256": "43abeba301f7634dac04295744f7c2ce597a533e65ea3d50610a567065a0b62e"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/platform.rs",
+      "state": "same pre-existing deletion"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/progress/mod.rs",
+      "sha256": "3e6efcd35a1737b6fe217d08f6dc344580db1a7e9a1e9813aa843d1cb1a60af3"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/ops/recovery/mod.rs",
+      "sha256": "60bb541868961c6b6af11ec09f345aade2e9d939c53be730896fffa639b4f494"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/policy/mod.rs",
+      "sha256": "17e2f09ff642aa2569d4fd870e15ed0a335e2d22df30c72284739fb0c705171d"
+    },
+    {
+      "path": "crates/canic-host/src/fleet_ensure/view/mod.rs",
+      "sha256": "a2a78f3c18425fcb9a91bfd869e81e01c6ed029b7085b7b02073a8af18d952bc"
+    },
+    {
+      "path": "crates/canic-host/src/icp/management.rs",
+      "sha256": "4a85939b3b0832de021f249bb39e6c0fd17de340a57faeb0f99de28d4fa32ee3"
+    },
+    {
+      "path": "crates/canic-host/src/icp/query/tests.rs",
+      "sha256": "407612bb2a875946267d008c3a7fed6bfaacfb422cb4ad6fe2d7f6f341b69eb9"
+    },
+    {
+      "path": "crates/canic-host/src/test_support.rs",
+      "sha256": "fec2c0bc3a4c234f6dd8814d084bee9b886a87345289c2284b2e185ba6d62fd8"
+    },
+    {
+      "path": "crates/canic/tests/protocol_surface.rs",
+      "sha256": "25860924e16dda4b6aefc24d4a83fbcaf529e7918334c8d4fd0b05a4ce817929"
+    },
+    {
+      "path": "crates/canic/tests/reference_surface.rs",
+      "sha256": "ee45b7e986b39439e30ae5852cf2591aa61fa30c60c8745db2dae63ab15207bd"
+    },
+    {
+      "path": "scripts/ci/run-workspace-tests.sh",
+      "sha256": "7bd3840118de59d3b659fb73ecb3b04c3630c9e6a0e4a9c82570daeb338978a1"
+    }
+  ],
+  "concurrency": "Maintainer stopped other implementation. Two design documents subsequently acquired accepted downstream feedback; preserved without edits. No unrelated tracked source/dependency/runner mutation detected.",
+  "cleanup": {
+    "net_production_module_lines_removed": 55,
+    "net_test_lines_added": 61,
+    "follow_up_net_rust_lines_removed": -6,
+    "cumulative_net_rust_lines_removed": 101,
+    "current_behavior_test_added": 1,
+    "standalone_tests_removed_this_follow_up": 0
+  },
+  "validation": [
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib fleet_ensure::ops::capacity_import::",
+      "exit_code": 0,
+      "tests_passed": 53,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-import.log",
+      "log_sha256": "7fb19edf64ff05c021fd15b7d26fcef4b3894973b0cf4d58cb438502905eac0e"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib fleet_ensure::ops::plan_content::",
+      "exit_code": 0,
+      "tests_passed": 5,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-content.log",
+      "log_sha256": "cd23add16bf2afe5b0bbb391e34f00c818a32b3cbf28f7d3bd2b862019058ebf"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib fleet_ensure::generate::tests::",
+      "exit_code": 0,
+      "tests_passed": 21,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-generate.log",
+      "log_sha256": "a41e15e89e0f686e0ece7736317fcd252cb76bb9ab0febf663b1e76c8281cb9e"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib executable_plan_requires_its_reviewed_input_before_any_effect",
+      "exit_code": 0,
+      "tests_passed": 1,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-input.log",
+      "log_sha256": "9320e57351ac45fd7ab1af13cab21870b478193a3bd3c9db3aa80ee85f510e44"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib fleet_ensure::workflow::tests::",
+      "exit_code": 0,
+      "tests_passed": 18,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-workflow.log",
+      "log_sha256": "f1eb681feeb07b15fb2752f4ba20a4d336a0fcf90cc54f02da4d2d990899665a"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib fleet_ensure::workflow::funding_tests::",
+      "exit_code": 0,
+      "tests_passed": 27,
+      "tests_ignored": 2,
+      "log": "target/review-validation/complexity-finish-funding.log",
+      "log_sha256": "e28946088e5c2c597ae361ffa3ddfc34d6299a2d23dd5a5e6db00a7aff6f4e90"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib fleet_ensure::workflow::continuation::tests::",
+      "exit_code": 0,
+      "tests_passed": 11,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-continuation.log",
+      "log_sha256": "f349b1be1b009a33b14039dffcfbab7ea64b142cfbf9cbf184990526c40d3cee"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib in_progress_operation_resumes_reviewed_desired_before_newer_input",
+      "exit_code": 0,
+      "tests_passed": 1,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-input-replay.log",
+      "log_sha256": "fed08767d4fcac5bbc08cb16296e472bc51d959aa294a7f54b3bb0a4fff01a9d"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib current_plan_retains_store_chunks_by_hash",
+      "exit_code": 0,
+      "tests_passed": 1,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-content-plan.log",
+      "log_sha256": "8cb255f0b275359272c5fae8cc87420128e2631be2b95a33fcba952c89138f50"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib store_chunks_",
+      "exit_code": 0,
+      "tests_passed": 6,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-chunk-replay.log",
+      "log_sha256": "1bb6d8e6f596d71962b505e332bb99193aa49f0a1cb64c480d56ef5c7361b145"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-host --lib state_manifest::",
+      "exit_code": 0,
+      "tests_passed": 21,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-scope.log",
+      "log_sha256": "12fe2e7874ec080a7ebd4fed8e31efa304325795047777d889d7d04a0944e539"
+    },
+    {
+      "command": "cargo test --offline --locked -p canic-cli --lib fleet::",
+      "exit_code": 0,
+      "tests_passed": 76,
+      "tests_ignored": 0,
+      "log": "target/review-validation/complexity-finish-cli.log",
+      "log_sha256": "a6f0b9fbd36a5e6129c985c52277ee177f83a093920bc221f1f35fca59d313a5"
+    },
+    {
+      "command": "cargo clippy --offline --locked -p canic-host --lib --tests --all-features --keep-going -- -D warnings",
+      "exit_code": 0,
+      "log": "target/review-validation/complexity-finish-clippy.log",
+      "log_sha256": "685215bf979bc672aadf6ac02d853b2aa242a24017137967960a73a064e6d477"
+    },
+    {
+      "command": "cargo clippy --offline --locked -p canic-cli --lib --tests --all-features --keep-going -- -D warnings",
+      "exit_code": 0,
+      "log": "target/review-validation/complexity-finish-cli-clippy.log",
+      "log_sha256": "664ea75a94c4dafa03a59f6e8dc9b2104e8b9d3522b0a16956f2380f5a139a2a"
+    },
+    {
+      "command": "bash scripts/ci/check-pre-1-0-hard-cut.sh --self-test",
+      "exit_code": 0
+    },
+    {
+      "command": "bash scripts/ci/check-pre-1-0-hard-cut.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "shellcheck scripts/ci/check-pre-1-0-hard-cut.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "bash -n scripts/ci/check-pre-1-0-hard-cut.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "bash scripts/ci/check-audit-method-catalog.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "bash scripts/ci/check-current-document-semantics.sh",
+      "exit_code": 0
+    },
+    {
+      "command": "rustfmt --edition 2024 --check crates/canic-host/src/fleet_ensure/dto/capacity_import/mod.rs crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs crates/canic-host/src/fleet_ensure/model/infrastructure_bootstrap/mod.rs crates/canic-host/src/fleet_ensure/model/mod.rs crates/canic-host/src/fleet_ensure/ops/capacity_import/tests.rs crates/canic-host/src/fleet_ensure/ops/infrastructure_bootstrap/tests.rs crates/canic-host/src/fleet_ensure/ops/mod.rs crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs crates/canic-host/src/fleet_ensure/ops/plan_content/tests.rs crates/canic-host/src/fleet_ensure/tests.rs crates/canic-host/src/fleet_ensure/workflow/mod.rs crates/canic-host/src/state_manifest/mod.rs",
+      "exit_code": 0
+    },
+    {
+      "command": "git diff --check",
+      "exit_code": 0
+    }
+  ],
+  "native_tests_passed": 241,
+  "native_tests_ignored": 2,
+  "cumulative_native_test_passes": 343,
+  "validation_limits": "No full workspace gate, new PocketIC run, FR1 end-to-end qualification, IcyDB or live incident verdict. Tests executed on authorized dirty source; canister platform effects/layouts unchanged by this follow-up.",
+  "document_guard_advisories": [
+    "Existing 0.110 compact-directory boundary exception",
+    "Existing issued-import-recovery.md exception"
+  ],
+  "initial_clippy_correction": "One needless borrow in the new inspection-shape test; corrected before final successful lint.",
+  "comparability": "Scoped causal source delta compared against this follow-up's immediate pre-cut state; cumulative delta against first cleanup. Prior immutable .48/.49 whole-source/core census retained without claiming a dirty-tree trend.",
+  "findings": [
+    {
+      "finding_id": "CANIC-0.110-HOST-INLINE-PLAN-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Host Fleet durable authority",
+      "current_location": "crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs",
+      "intended_owner": "Host Fleet durable authority",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/ops/plan_content/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": "complexity-hard-cuts-and-feature-gaps.md",
+      "evidence": "Deleted inline chunk loading, `contains_inline_bytes`, `compact_inline_plan` and its apply-time call. Both Wasm and fixture publication hydrate only from exact SHA-256/size references. A durable request containing unreferenced bytes fails authority validation. In-memory chunk bytes and current write-before-publication retention remain. Tests create current plans directly and prove reopen, partial publication, prepared authority, missing/corrupt content and lost-response replay",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-IMPORT-SHAPE-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Host Fleet durable authority",
+      "current_location": "crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs",
+      "intended_owner": "Host Fleet durable authority",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/model/capacity_import/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": "complexity-hard-cuts-and-feature-gaps.md",
+      "evidence": "Removed empty-credit omission/defaulting from durable reviews and omission from review request projection. Uncredited reviews explicitly serialize `funding_credits: []`; credited reviews retain their original survey evidence. The maintained digest covers the explicit field. Current review, reservation, handoff, origin, publication and restart tests pass",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-REGISTRATION-SHAPE-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Host Fleet durable authority",
+      "current_location": "crates/canic-host/src/fleet_ensure/model/mod.rs",
+      "intended_owner": "Host Fleet durable authority",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/model/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": "complexity-hard-cuts-and-feature-gaps.md",
+      "evidence": "Journal `bootstrap_registration_recovery` and inspection `registration_recovery_sha256` serialize explicit `null` and use the current required-option decoder. Current-field omission tests, null round-trip, registration extension, spent allowances, journal reopen and terminal receipt publication pass",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-REVIEWED-INPUT-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Host Fleet durable authority",
+      "current_location": "crates/canic-host/src/fleet_ensure/workflow/mod.rs",
+      "intended_owner": "Host Fleet durable authority",
+      "affected_surfaces": [
+        "crates/canic-host/src/fleet_ensure/workflow/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": null,
+      "evidence": "Removed working-input fallback and its `RetainedDesiredUnavailable` error. Executable plans require retained reviewed input before effect driving. Missing input fails with typed `PlanIntegrity`; the new public-workflow proof verifies zero mutations and unchanged retained bytes. Exact in-progress input/replay still wins over newer working input. Nullable data remains useful only for normalized comparison projections",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-SCOPE-TEST-001",
+      "finding_class": "governance_conflict",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Host Fleet durable authority",
+      "current_location": "crates/canic-host/src/state_manifest/mod.rs",
+      "intended_owner": "Host Fleet durable authority",
+      "affected_surfaces": [
+        "crates/canic-host/src/state_manifest/mod.rs"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": null,
+      "evidence": "Removed the redundant `scope != project` assertion and renamed its test around the current workspace scope. The current positive serialized scope assertion remains",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    },
+    {
+      "finding_id": "CANIC-0.110-HOST-COMPAT-GUIDE-001",
+      "finding_class": "documentation_drift",
+      "severity": "P3",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "Host Fleet durable authority",
+      "current_location": "docs/features/operations/fleet-ensure.md",
+      "intended_owner": "Host Fleet durable authority",
+      "affected_surfaces": [
+        "docs/features/operations/fleet-ensure.md"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": null,
+      "evidence": "Removed inline compaction, omitted-credit digest preservation and pre-retention recovery instructions from the active Fleet guide. Current content references, explicit record fields and reviewed-input recovery are documented. Human command renderings remain current display output; structured `next_action` owns process execution",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    },
+    {
+      "finding_id": "CANIC-0.110-HARD-CUT-DETECTOR-001",
+      "finding_class": "governance_conflict",
+      "severity": "P2",
+      "confidence": "confirmed",
+      "finding_status": "fixed",
+      "owner": "CI pre-1.0 policy guard",
+      "current_location": "scripts/ci/check-pre-1-0-hard-cut.sh",
+      "intended_owner": "CI pre-1.0 policy guard",
+      "affected_surfaces": [
+        "scripts/ci/check-pre-1-0-hard-cut.sh"
+      ],
+      "source_audit_ids": [
+        "CANIC-MODULE-SURFACE-001"
+      ],
+      "source_method_fingerprints": [
+        "28f103fd7763dc50371c227abcd03033e0c9f715f7fff39c82590e3b48e3d018"
+      ],
+      "baseline_commit": "75c7f0998fd4531f8a6b81d91b53b71daffca332",
+      "first_observed_at": "2026-10-01",
+      "prior_report": "complexity-hard-cuts-and-feature-gaps.md",
+      "evidence": "Extended the earlier correction to colon-separated wire domains, journal/plan/state/layout/data/snapshot/record/response/policy versions and application examples. Two additional current-policy fixtures reject a colon `v2` domain and a journal generation above one. Existing upstream/audit exceptions still pass",
+      "typed_cause_or_invariant": "Current v1 contracts use exact explicit authority; no predecessor decoding or working-input fallback.",
+      "risk": "New durable review/journal hashes change. Issued hashes, paid evidence and the frozen incident bundle are not rewritten.",
+      "verification_status": "targeted_native_checks_and_warning_denied_clippy_pass",
+      "duplicate_of": null,
+      "recommended_slice": "Completed in this scoped Host hard-cut cleanup.",
+      "fix_commit": null,
+      "validation_commit": null,
+      "waiver": null,
+      "disposition": "HARD CUT COMPLETE FOR NAMED SURFACE"
+    }
+  ],
+  "feature_gap_disposition": "Earlier twelve rows remain; FR1 admission/snapshot-deletion primitive exists in dirty worktree but whole feature is incomplete. Fresh backup preflight still unimplemented.",
+  "follow_up_owner": "Existing FR1 and R2-R8 outcome owners; generated-behavior test hardening and exhaustive semantic review are separate scopes."
+}

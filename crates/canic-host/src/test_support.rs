@@ -93,3 +93,22 @@ pub fn icp_cli_version() -> &'static str {
     .find_map(|line| line.strip_prefix("export CANIC_ICP_CLI_VERSION="))
     .expect("repository ICP CLI pin")
 }
+
+/// Public deterministic signer fixture; never a credential for an external network.
+#[cfg(unix)]
+pub fn synthetic_identity_pem(seed: u8) -> String {
+    let mut der = vec![
+        0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04,
+        0x20,
+    ];
+    der.extend([seed; 32]);
+    let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
+    let mut body = String::new();
+    for chunk in der.as_chunks::<3>().0 {
+        let value = (u32::from(chunk[0]) << 16) | (u32::from(chunk[1]) << 8) | u32::from(chunk[2]);
+        for shift in [18, 12, 6, 0] {
+            body.push(char::from(alphabet[((value >> shift) & 63) as usize]));
+        }
+    }
+    format!("-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n")
+}

@@ -635,6 +635,33 @@ fn qualify_inspection_budget(root: &Path, plan: &FleetEnsurePlan) {
         inspection::reserve(&paths, &changed, inspection::InspectionPhase::Review),
         Err(InfrastructureBootstrapError::Integrity)
     ));
+    let retained = paths
+        .plan
+        .with_file_name("infrastructure-bootstrap-inspections")
+        .join(format!(
+            "{}.json",
+            canic_core::cdk::utils::hash::hex_bytes(
+                plan.infrastructure_bootstrap
+                    .as_ref()
+                    .unwrap()
+                    .source_sha256
+            )
+        ));
+    let projection: serde_json::Value =
+        serde_json::from_slice(&std::fs::read(retained).unwrap()).unwrap();
+    assert_eq!(
+        projection["registration_recovery_sha256"],
+        serde_json::Value::Null
+    );
+    for field in projection.as_object().unwrap().keys() {
+        let mut incomplete = projection.clone();
+        incomplete.as_object_mut().unwrap().remove(field);
+        let error = serde_json::from_value::<
+            crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapInspectionRecord,
+        >(incomplete)
+        .unwrap_err();
+        assert_eq!(error.classify(), serde_json::error::Category::Data);
+    }
 }
 
 fn qualify_review_retry(
@@ -926,6 +953,21 @@ fn qualify_terminal_publication(
         initial_operator_cycles: source.operator_cycles,
         stalled_observations: 1,
     };
+    let projection = serde_json::to_value(&journal).unwrap();
+    assert_eq!(
+        projection["bootstrap_registration_recovery"],
+        serde_json::Value::Null
+    );
+    assert_eq!(
+        serde_json::from_value::<FleetEnsureJournalRecord>(projection.clone()).unwrap(),
+        journal
+    );
+    for field in projection.as_object().unwrap().keys() {
+        let mut incomplete = projection.clone();
+        incomplete.as_object_mut().unwrap().remove(field);
+        let error = serde_json::from_value::<FleetEnsureJournalRecord>(incomplete).unwrap_err();
+        assert_eq!(error.classify(), serde_json::error::Category::Data);
+    }
     let actual = ActualCycleConservation {
         estate_funding_cycles: 0,
         exact_estate_creation_fee_cycles: 0,

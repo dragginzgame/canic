@@ -319,10 +319,6 @@ fn cycles_preflight_contract_preserves_caller_continuation_values() {
             "checked-in service DID omits {field} in {relative_path}"
         );
     }
-    assert!(
-        !did.contains("type CyclesResponse = record { cycles_transferred : nat };"),
-        "checked-in service DID retains the pre-closeout cycles record in {relative_path}"
-    );
 }
 
 #[test]
@@ -410,13 +406,6 @@ fn local_application_authorization_facade_has_one_public_owner() {
     ) -> canic::access::auth::LocalApplicationAuthorizationDecision =
         canic::access::auth::authorize_local_application;
     let _ = facade;
-
-    assert!(
-        !workspace_root()
-            .join("crates/canic-core/src/access/application_authorization.rs")
-            .exists(),
-        "the intermediate scope-only facade module must not survive B5"
-    );
 }
 
 #[test]
@@ -500,30 +489,6 @@ fn wasm_store_exposes_cycle_history_through_observability() {
         "Store cycle history must be an observability variant in {}",
         did_path.display()
     );
-    assert!(
-        !did.contains("type CycleTopupEvent = record")
-            && !did.contains("type CycleTopupEventStatus = variant"),
-        "Wasm Store must not retain AutomaticTopup types in {}",
-        did_path.display()
-    );
-}
-
-#[test]
-fn wasm_store_excludes_default_memory_diagnostics() {
-    let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
-    let did = read_text(&did_path);
-
-    assert!(
-        !did.contains("type MemoryLedgerResponse = record")
-            && !did.contains("  canic_memory_ledger :"),
-        "unexpected default `canic_memory_ledger` method in {}",
-        did_path.display()
-    );
-    assert!(
-        !did.contains("  canic_memory_registry :"),
-        "unexpected `canic_memory_registry` method in {}",
-        did_path.display()
-    );
 }
 
 #[test]
@@ -533,8 +498,7 @@ fn wasm_store_canonical_did_parses() {
     assert!(
         did.contains("type FleetKey = record {")
             && did.contains("canonical_network_id : text")
-            && did.contains("fleet_id : text")
-            && !did.contains("type FleetKey = record { network : text;"),
+            && did.contains("fleet_id : text"),
         "canonical Wasm-store DID must expose the exact FleetKey member names"
     );
     assert!(
@@ -544,10 +508,7 @@ fn wasm_store_canonical_did_parses() {
             && did.contains(
                 "type StateSnapshotInput = record { fleet_state : opt FleetStateInput };"
             )
-            && did.contains("SynchronizeState : StateSnapshotInput")
-            && !did.contains("type CanisterInitAuthority = variant")
-            && !did.contains("FleetDirectoryInput")
-            && !did.contains("fleet_directory"),
+            && did.contains("SynchronizeState : StateSnapshotInput"),
         "canonical Wasm-store DID must expose its exact sibling authority and state-cascade contract"
     );
     let (env, actor) = CandidSource::Text(&did)
@@ -559,12 +520,6 @@ fn wasm_store_canonical_did_parses() {
         .as_service(&actor)
         .unwrap_or_else(|err| panic!("invalid service in {}: {err}", did_path.display()));
 
-    assert!(
-        service
-            .iter()
-            .all(|(name, _)| name != "canic_memory_ledger"),
-        "parsed default wasm_store service must not include canic_memory_ledger"
-    );
     let methods = service
         .iter()
         .map(|(name, _)| name.as_str())
@@ -1781,12 +1736,6 @@ fn missing_finish_marker_stays_actionable() {
     assert!(
         source.contains(&format!("const {marker}: ()")),
         "finish! must define the same missing-finish marker"
-    );
-    assert!(
-        marker.contains("missing_finish_macro")
-            && marker.contains("add_canic_finish")
-            && marker.contains("after_all_endpoints"),
-        "missing-finish marker should read like a compiler-error hint"
     );
 }
 

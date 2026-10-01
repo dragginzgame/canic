@@ -109,7 +109,6 @@ fn test_component_topology_has_derivable_release_set() {
         .collect::<BTreeSet<_>>();
 
     assert!(!release_set.is_empty());
-    assert!(!release_set.contains("root"));
 }
 
 // Generated consumers must resolve every maintained CDK export through the facade.

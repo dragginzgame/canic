@@ -251,7 +251,7 @@ esac
         .with_identity(Some("test-signer"));
     let transport = icp.query_transport().unwrap();
     for seed in [1, 2] {
-        let pem = synthetic_identity_pem(seed);
+        let pem = crate::test_support::synthetic_identity_pem(seed);
         let signer = BasicIdentity::from_pem(&pem).unwrap().sender().unwrap();
         fs::write(root.join("identity.pem"), pem).unwrap();
         fs::write(root.join("principal"), signer.to_text()).unwrap();
@@ -287,26 +287,6 @@ esac
         assert_eq!(calls.lines().filter(|line| *line == kind).count(), 4);
     }
     fs::remove_dir_all(root).unwrap();
-}
-
-#[cfg(unix)]
-fn synthetic_identity_pem(seed: u8) -> String {
-    // Public deterministic fixture seed in an RFC 8410 PKCS#8 container. Build
-    // the PEM locally so no stored credential or external key tool is required.
-    let mut der = vec![
-        0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04, 0x22, 0x04,
-        0x20,
-    ];
-    der.extend([seed; 32]);
-    let alphabet = b"ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/";
-    let mut body = String::new();
-    for chunk in der.as_chunks::<3>().0 {
-        let value = (u32::from(chunk[0]) << 16) | (u32::from(chunk[1]) << 8) | u32::from(chunk[2]);
-        for shift in [18, 12, 6, 0] {
-            body.push(char::from(alphabet[((value >> shift) & 63) as usize]));
-        }
-    }
-    format!("-----BEGIN PRIVATE KEY-----\n{body}\n-----END PRIVATE KEY-----\n")
 }
 
 fn read_request(connection: &mut TcpStream) -> (String, Vec<u8>) {

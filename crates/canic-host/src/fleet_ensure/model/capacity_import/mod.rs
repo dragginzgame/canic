@@ -81,8 +81,7 @@ pub struct CapacityImportSourceRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportPlanRecord {
-    /// Explicit supplementary credits; empty keeps an existing uncredited review's digest intact.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    /// Explicit supplementary credits, including an empty array for an uncredited review.
     pub funding_credits: Vec<funding::CapacityImportFundingCreditRecord>,
     pub schema_version: u16,
     #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]

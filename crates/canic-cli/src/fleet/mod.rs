@@ -1248,6 +1248,7 @@ const fn action_label(action: &EnsureAction) -> &'static str {
         EnsureAction::Start { .. } => "start",
         EnsureAction::Stop { .. } => "stop",
         EnsureAction::Uninstall { .. } => "uninstall",
+        EnsureAction::DeleteSnapshot { .. } => "delete_snapshot",
         EnsureAction::Transfer { .. } => "transfer",
     }
 }

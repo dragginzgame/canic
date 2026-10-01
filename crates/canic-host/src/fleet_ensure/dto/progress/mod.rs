@@ -115,6 +115,7 @@ pub enum FleetEnsureActionKind {
     BootstrapStore,
     Create,
     Delete,
+    DeleteSnapshot,
     Fund,
     FundEstate,
     Install,

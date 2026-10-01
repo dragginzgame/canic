@@ -293,6 +293,7 @@ const fn action_label(kind: FleetEnsureActionKind) -> &'static str {
         FleetEnsureActionKind::BootstrapStore => "Prepare artifact Store",
         FleetEnsureActionKind::Create => "Create canister",
         FleetEnsureActionKind::Delete => "Delete canister",
+        FleetEnsureActionKind::DeleteSnapshot => "Clear reviewed snapshot",
         FleetEnsureActionKind::Fund => "Fund canister",
         FleetEnsureActionKind::FundEstate => "Fund Root estate",
         FleetEnsureActionKind::Install => "Install canister",

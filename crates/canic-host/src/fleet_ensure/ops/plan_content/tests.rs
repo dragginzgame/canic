@@ -135,7 +135,10 @@ fn fixture_content_round_trips_without_inline_payloads_and_rejects_substitution(
     let original = fixture_projection(&paths);
     let mut compact = original.clone();
     remove_inline_bytes(&mut compact).unwrap();
-    assert!(!contains_inline_bytes(&compact).unwrap());
+    assert_eq!(
+        compact["protocol_actions"][1]["action"]["request"]["bytes_size"],
+        original["protocol_actions"][1]["action"]["source_bytes"]
+    );
     let mut hydrated = compact.clone();
     hydrate(&paths, &mut hydrated).unwrap();
     assert_eq!(hydrated, original);

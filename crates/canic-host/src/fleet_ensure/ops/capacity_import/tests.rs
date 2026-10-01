@@ -12,15 +12,19 @@ fn review_encoding_preserves_large_cycle_amounts_and_exact_approval() {
     let plan = prepare_review(initial.authority, sources, root_budget()).unwrap();
     verify_review(&plan, plan.plan_sha256).unwrap();
     let encoded = serde_json::to_vec(&plan).unwrap();
-    // Absence is the intentional uncredited discriminator; existing approvals keep their digest.
-    assert!(
-        serde_json::to_value(&plan)
-            .unwrap()
-            .get("funding_credits")
-            .is_none()
+    assert_eq!(
+        serde_json::to_value(&plan).unwrap()["funding_credits"],
+        serde_json::json!([])
     );
     let restored: CapacityImportPlanRecord = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(restored, plan);
+    let projection = serde_json::to_value(&plan).unwrap();
+    for field in projection.as_object().unwrap().keys() {
+        let mut incomplete = projection.clone();
+        incomplete.as_object_mut().unwrap().remove(field);
+        let error = serde_json::from_value::<CapacityImportPlanRecord>(incomplete).unwrap_err();
+        assert_eq!(error.classify(), serde_json::error::Category::Data);
+    }
     verify_review(&restored, plan.plan_sha256).unwrap();
     assert!(matches!(
         verify_review(&restored, [0; 32]),

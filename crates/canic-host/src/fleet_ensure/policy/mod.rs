@@ -12,6 +12,7 @@ pub(in crate::fleet_ensure) mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub(super) mod recovery;
 pub(super) mod reinstall;
+pub mod release;
 pub(in crate::fleet_ensure) mod root_reinstall;
 pub(super) mod startup_funding;
 #[cfg(test)]
@@ -3262,6 +3263,8 @@ fn maximum_observation_count(
             let count = match action {
                 EnsureAction::Create { .. } => 1,
                 EnsureAction::Delete { .. } => 4,
+                // Preparation, before/after status + inventory, and submission custody recheck.
+                EnsureAction::DeleteSnapshot { .. } => 7,
                 EnsureAction::Fund { .. }
                 | EnsureAction::FundEstate { .. }
                 | EnsureAction::Transfer { .. } => 2,

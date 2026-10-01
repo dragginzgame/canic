@@ -34,10 +34,10 @@ use crate::fleet_ensure::{
     },
     ops::{
         EffectRetry, EnsurePaths, EnsurePlatform, EnsureStateError, action_sha256,
-        compact_inline_plan, continuation::verify_release_transition,
-        effect_preparation::prepare_effect, lock_operation, read_root_start_authority, read_state,
-        reserve_fixture_publication_attempt, resolve_desired_artifacts,
-        retain_configured_principal_bindings, write_journal, write_plan, write_state,
+        continuation::verify_release_transition, effect_preparation::prepare_effect,
+        lock_operation, read_root_start_authority, read_state, reserve_fixture_publication_attempt,
+        resolve_desired_artifacts, retain_configured_principal_bindings, write_journal, write_plan,
+        write_state,
     },
     policy::{
         EnsurePolicyError, RootStartPlanInput, compile_plan, compile_root_start_prerequisite_plan,
@@ -215,11 +215,6 @@ where
 
     #[error("reviewed Fleet plan digest changed before its first effect")]
     DriftedBeforeApply,
-
-    #[error(
-        "in-progress Fleet plan requires exact desired input {expected}; supplied input is {actual}"
-    )]
-    RetainedDesiredUnavailable { actual: String, expected: String },
 
     #[error(
         "replan-required Fleet operation owns completed reinstall evidence for desired input {expected}; refusing alternate desired input {actual}"
@@ -527,21 +522,15 @@ where
         let operation_desired = retained
             .reviewed_desired
             .as_deref()
-            .map_or(desired, |reviewed| reviewed.desired());
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?
+            .desired();
         verify_release_transition(root, operation_desired, retained.scope)?;
         if journal.estate_funding_required.is_some()
             || funding::native_review_applicable(&retained, &journal)
         {
-            if let Some(reviewed) = retained.reviewed_desired.as_deref() {
-                platform
-                    .bind_reviewed_desired(reviewed.desired())
-                    .map_err(EnsureWorkflowError::Platform)?;
-            } else if retained.desired_sha256 != desired_sha256 {
-                return Err(EnsureWorkflowError::RetainedDesiredUnavailable {
-                    actual: desired_sha256.to_string(),
-                    expected: retained.desired_sha256.clone(),
-                });
-            }
+            platform
+                .bind_reviewed_desired(operation_desired)
+                .map_err(EnsureWorkflowError::Platform)?;
         }
         let funding_review = funding::prepare(
             &paths,
@@ -1109,21 +1098,16 @@ where
         return Err(EnsureWorkflowError::DriftedBeforeApply);
     }
     let operation_desired = if in_progress || retained_plan.reinstall.is_some() {
-        if let Some(reviewed) = retained_plan.reviewed_desired.as_deref() {
-            let reviewed = reviewed.desired();
-            validate_path_identity(reviewed, requested_fleet)?;
-            if reviewed.environment != retained_plan.environment {
-                return Err(EnsureWorkflowError::PlanIntegrity);
-            }
-            reviewed
-        } else if retained_plan.desired_sha256 == desired_sha256 {
-            desired
-        } else {
-            return Err(EnsureWorkflowError::RetainedDesiredUnavailable {
-                actual: desired_sha256.to_string(),
-                expected: retained_plan.desired_sha256.clone(),
-            });
+        let reviewed = retained_plan
+            .reviewed_desired
+            .as_deref()
+            .ok_or(EnsureWorkflowError::PlanIntegrity)?
+            .desired();
+        validate_path_identity(reviewed, requested_fleet)?;
+        if reviewed.environment != retained_plan.environment {
+            return Err(EnsureWorkflowError::PlanIntegrity);
         }
+        reviewed
     } else {
         if retained_plan.desired_sha256 != desired_sha256 {
             return Err(EnsureWorkflowError::DriftedBeforeApply);
@@ -1181,9 +1165,6 @@ where
         crate::fleet_ensure::ops::infrastructure_bootstrap::verify_plan(root, &retained_plan)?;
     }
     verify_release_transition(root, operation_desired, retained_plan.scope)?;
-    if in_progress {
-        compact_inline_plan(&paths, &retained_plan)?;
-    }
     if !retained_journal.as_ref().is_some_and(|journal| {
         journal.completion == FleetEnsureCompletion::Converged
             && journal.plan_sha256 == retained_plan.plan_sha256
@@ -4099,7 +4080,8 @@ fn verified_plan<E>(plan: FleetEnsurePlan) -> Result<FleetEnsurePlan, EnsureWork
 where
     E: std::error::Error + 'static,
 {
-    if expected_plan_sha256(&plan) != plan.plan_sha256
+    if plan.reviewed_desired.is_none()
+        || expected_plan_sha256(&plan) != plan.plan_sha256
         || (plan.scope == FleetEnsurePlanScope::InfrastructureBootstrap)
             != plan.infrastructure_bootstrap.is_some()
     {
@@ -4836,7 +4818,8 @@ pub(super) const fn action_order(action: &EnsureAction) -> u8 {
         EnsureAction::Install {
             canic_init: Some(crate::fleet_ensure::model::DesiredCanisterInit::Store { .. }),
             ..
-        } => 4,
+        }
+        | EnsureAction::DeleteSnapshot { .. } => 4,
         EnsureAction::Uninstall { .. } | EnsureAction::Install { .. } => 5,
         EnsureAction::Start { .. } => 6,
         EnsureAction::FleetProtocol { .. } | EnsureAction::Protocol { .. } => 7,

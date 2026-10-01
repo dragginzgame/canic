@@ -10,6 +10,7 @@ pub mod completed_operation;
 pub mod funding_observation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
+pub mod release;
 pub(in crate::fleet_ensure) mod serialization;
 pub mod terminal;
 
@@ -483,6 +484,16 @@ pub enum EnsureAction {
         name: String,
         principal: String,
     },
+    /// Remove one reviewed snapshot under stopped, exclusive operator custody.
+    DeleteSnapshot {
+        name: String,
+        principal: String,
+        snapshot_id: String,
+        /// Exact inventory before this deletion, in canonical hexadecimal order.
+        expected_snapshots: Vec<String>,
+        #[serde(deserialize_with = "serialization::required_option")]
+        expected_module_sha256: Option<String>,
+    },
     Fund {
         /// Exact Root and lifecycle for protected inspection of a pool funding target.
         #[serde(deserialize_with = "serialization::required_option")]
@@ -608,6 +619,7 @@ impl EnsureAction {
         match self {
             Self::Create { name, .. }
             | Self::Delete { name, .. }
+            | Self::DeleteSnapshot { name, .. }
             | Self::FleetProtocol { name, .. }
             | Self::Fund { name, .. }
             | Self::FundEstate { name, .. }
@@ -1027,6 +1039,7 @@ pub struct FleetEnsurePlan {
     pub root_start_authority: Option<Box<RetainedRootStartAuthorityRecord>>,
     /// Exact installed Root authority approved for replacement by this plan.
     pub root_reinstall_bindings: Vec<RootManagementBinding>,
+    /// Required for execution; normalization may clear it when comparing action projections.
     #[serde(deserialize_with = "serialization::required_option")]
     pub reviewed_desired: Option<Box<ReviewedDesiredFleetRecord>>,
     pub schema_version: u16,
@@ -1414,8 +1427,8 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
-    /// An explicit extension of this operation's registration authority; absent until requested.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// An explicit extension of this operation's registration authority; null until requested.
+    #[serde(deserialize_with = "serialization::required_option")]
     pub bootstrap_registration_recovery: Option<
         infrastructure_bootstrap::registration_recovery::BootstrapRegistrationRecoveryRecord,
     >,
