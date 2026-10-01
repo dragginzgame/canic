@@ -538,12 +538,14 @@ ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordin
     fail "the ordinary workspace test plan cannot be resolved"
 rg -F -- '--workspace --lib --bins' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary library tests must share the workspace compile graph"
-if rg -- '^==> plan:.*(--exclude|governed-pocketic-tests|--ignored)' <<<"$ordinary_test_plan" >/dev/null; then
+if rg -- '^==> plan:.*(--exclude|--ignored)' <<<"$ordinary_test_plan" >/dev/null; then
     fail "the ordinary workspace plan excludes library coverage or enables stateful tests"
 fi
-ordinary_cargo_invocations="$(rg -c '^==> plan: cargo test ' <<<"$ordinary_test_plan")"
-[[ "$ordinary_cargo_invocations" -eq 1 ]] ||
+ordinary_workspace_invocations="$(rg -c '^==> plan:.*--workspace --lib --bins' <<<"$ordinary_test_plan")"
+[[ "$ordinary_workspace_invocations" -eq 1 ]] ||
     fail "ordinary unit/binary and integration tests must share one Cargo invocation"
+rg -F -- '--workspace --doc' <<<"$ordinary_test_plan" >/dev/null ||
+    fail "ordinary validation omits public documentation contracts"
 ordinary_selected_targets="$(sed -n 's/^==> plan: cargo test //p' <<<"$ordinary_test_plan" |
     awk '{ for (i = 1; i < NF; i++) if ($i == "--test") print $(i + 1) }' | LC_ALL=C sort)"
 ordinary_expected_targets="$(awk -F '\t' 'NR > 1 && $3 != "integration" && $4 == "parallel" && $5 == "ordinary" { print $2 }' \

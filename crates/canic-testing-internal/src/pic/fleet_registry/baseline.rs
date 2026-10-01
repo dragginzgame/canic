@@ -17563,7 +17563,7 @@ cycles = "80T"
         reason = "the governed inventory is one explicit ordered list of every serial case"
     )]
     pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![
+        crate::pic::cases::registered![
             (
                 "Fleet deployment restore",
                 restored_root_preserves_its_inventory_but_cannot_allocate,
@@ -17635,14 +17635,6 @@ cycles = "80T"
             (
                 "protected current memory allocations",
                 protected_memory_allocations_preserve_stable_state_and_root_authority,
-            ),
-            (
-                "reinstall fixture release-cache identity",
-                reinstall_fixture_release_cache_binds_distinct_repeatable_identities,
-            ),
-            (
-                "fixture artifact cache isolates journey edits",
-                release_artifacts::tests::journey_edits_reuse_artifacts_but_build_helper_edits_invalidate,
             ),
             (
                 "synthetic growth catalog agreement",
@@ -17773,7 +17765,7 @@ cycles = "80T"
 
     #[cfg(test)]
     pub fn governed_recovery_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![(
+        crate::pic::cases::registered![(
             "source-bound activation reset recovers and replays",
             activation_reset::source_bound_activation_reset_recovers_and_replays,
         )]
@@ -17781,7 +17773,7 @@ cycles = "80T"
 
     #[cfg(test)]
     pub fn governed_fleet_journey_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![
+        crate::pic::cases::registered![
             (
                 "generated reinstall recovers and converges",
                 generated_reinstall_recovers_lost_install_and_reaches_working_fleet,

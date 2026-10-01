@@ -34,6 +34,33 @@ pub struct ContinuationImport {
     pub canister: String,
     pub principal: Option<String>,
     pub state: ContinuationImportState,
+    pub headroom: Option<ImportHeadroom>,
+}
+
+/// Advance import estimate from retained observations; final import owns exact debit approval.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+pub struct ImportHeadroom {
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub minimum_ready_cycles: u128,
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub maximum_source_debit_cycles: u128,
+    pub assessment: ImportHeadroomAssessment,
+}
+
+/// Unknown balances remain explicit until the current Root can observe its held sources.
+#[derive(Clone, Debug, Eq, PartialEq, Serialize)]
+#[serde(tag = "state", rename_all = "snake_case")]
+pub enum ImportHeadroomAssessment {
+    AwaitingCurrentRootObservation,
+    InvalidBounds,
+    Observed {
+        #[serde(with = "crate::fleet_ensure::model::u128_text")]
+        required_cycles: u128,
+        #[serde(with = "crate::fleet_ensure::model::u128_text")]
+        available_cycles: u128,
+        #[serde(with = "crate::fleet_ensure::model::u128_text")]
+        shortfall_cycles: u128,
+    },
 }
 
 /// Distinguish an already reviewed import from an initialization-dependent candidate.

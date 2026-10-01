@@ -178,6 +178,7 @@ pub(in crate::fleet_ensure) fn import_request(
         )
         .ok_or(EnsureStateError::InvalidTerminalSource)?;
     Ok(CapacityImportReviewRequest {
+        funding_credits: Vec::new(),
         environment: desired.environment.clone(),
         fleet: desired.fleet.clone(),
         root: Some(root),
@@ -189,7 +190,8 @@ pub(in crate::fleet_ensure) fn import_request(
         policy: record.policy.clone(),
         seed: record.seed.clone(),
         // These conservative ceilings are visible in the review before destructive import calls.
-        maximum_source_debit_cycles: 100_000_000_000,
+        maximum_source_debit_cycles:
+            crate::fleet_ensure::model::capacity_import::DEFAULT_IMPORT_SOURCE_DEBIT_CYCLES,
         maximum_root_debit_cycles,
         maximum_root_paid_calls,
     })

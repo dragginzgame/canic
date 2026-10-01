@@ -30,6 +30,19 @@ pub(super) fn build_input_fingerprints(
             None,
         )?);
     }
+    let seed = package_manifest.with_file_name("lock-seed.json");
+    if seed.is_file() {
+        inputs.push(file_input_fingerprint(
+            "cargo_lock_seed",
+            &seed,
+            &request.workspace_root,
+            Some(PayloadSchemaRefV1::internal(
+                "canic.generated_lock_seed",
+                "1",
+            )),
+            None,
+        )?);
+    }
     inputs.push(InputFingerprintV1 {
         kind: "build_network".to_string(),
         path: None,
@@ -51,7 +64,10 @@ pub(super) fn build_cargo_lock_path(
     request: &BuildProvenanceRequest,
     package_manifest: &Path,
 ) -> PathBuf {
-    if request.role == "root" {
+    if matches!(
+        request.role.as_str(),
+        "root" | "fleet_coordinator" | "wasm_store"
+    ) {
         package_manifest.with_file_name("Cargo.lock")
     } else {
         request.workspace_root.join("Cargo.lock")

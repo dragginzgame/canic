@@ -2,6 +2,7 @@
 //! These records carry no permission to create replacement canisters.
 
 pub mod admission;
+pub mod funding;
 pub mod operation;
 pub mod retirement;
 pub mod survey;
@@ -9,6 +10,9 @@ pub mod survey;
 use candid::Principal;
 use canic_core::ids::{FleetBinding, SubnetId};
 use serde::{Deserialize, Serialize};
+
+/// Source debit used by clean reinstall and its advance headroom forecast.
+pub const DEFAULT_IMPORT_SOURCE_DEBIT_CYCLES: u128 = 100_000_000_000;
 
 /// Exact supplied capacity retained in reviewed Root initialization before any handoff.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -77,6 +81,9 @@ pub struct CapacityImportSourceRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportPlanRecord {
+    /// Explicit supplementary credits; empty keeps an existing uncredited review's digest intact.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub funding_credits: Vec<funding::CapacityImportFundingCreditRecord>,
     pub schema_version: u16,
     #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
     pub admission: Option<admission::CapacityImportAdmissionRecord>,

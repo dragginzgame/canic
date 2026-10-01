@@ -4,6 +4,7 @@
 //! infrastructure artifacts. Runtime behavior and artifact finalization remain
 //! with their existing owners.
 
+mod lock;
 #[cfg(test)]
 mod tests;
 
@@ -111,11 +112,18 @@ pub fn materialize(
     if let Some(script) = spec.build_script {
         write_if_changed(&directory.join("build.rs"), script.as_bytes())?;
     }
-    let lock = directory.join("Cargo.lock");
-    if !lock.is_file() && workspace.join("Cargo.lock").is_file() {
-        fs::copy(workspace.join("Cargo.lock"), lock)?;
-    }
+    lock::refresh_seed(directory, &workspace.join("Cargo.lock"), source.as_bytes())?;
     Ok(())
+}
+
+/// Maintained infrastructure packages for the selected configuration only.
+pub fn generated_manifests(config: &Path) -> [PathBuf; 3] {
+    [
+        "canic-fleet-coordinator",
+        "canic-fleet-root",
+        "canic-fleet-wasm-store",
+    ]
+    .map(|package| manifest_path(config, package))
 }
 
 fn write_if_changed(path: &Path, bytes: &[u8]) -> Result<(), Box<dyn std::error::Error>> {

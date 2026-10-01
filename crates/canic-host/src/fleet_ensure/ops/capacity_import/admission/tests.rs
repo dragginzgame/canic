@@ -173,6 +173,7 @@ fn whole_import_budget_rejects_underfunded_reservations_before_handoff() {
     use canic_core::control_plane_support::policy::pool_import;
     let quote = 50_000_000_000;
     let mut request = CapacityImportReviewRequest {
+        funding_credits: Vec::new(),
         environment: "test".into(),
         fleet: "test".into(),
         root: Some(principal(1)),

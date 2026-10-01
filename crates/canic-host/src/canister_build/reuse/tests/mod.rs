@@ -16,6 +16,91 @@ component_role = "app"
 maximum_instances = 1
 "#;
 
+#[test]
+fn generated_lock_and_derivation_changes_invalidate_complete_build_inputs() {
+    let (root, context) = infrastructure_build_fixture();
+    let mut files = BTreeMap::new();
+    append_generated_inputs(&context, &mut files).unwrap();
+    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+        let directory = manifest.parent().unwrap();
+        fs::create_dir_all(directory).unwrap();
+        for name in ["Cargo.lock", "lock-seed.json"] {
+            let path = directory.join(name);
+            assert_eq!(files[path.to_str().unwrap()], "absent");
+            fs::write(&path, "first").unwrap();
+            let mut first = BTreeMap::new();
+            append_generated_inputs(&context, &mut first).unwrap();
+            fs::write(&path, "changed").unwrap();
+            let mut changed = BTreeMap::new();
+            append_generated_inputs(&context, &mut changed).unwrap();
+            assert_ne!(
+                first[&path.to_string_lossy().into_owned()],
+                changed[&path.to_string_lossy().into_owned()]
+            );
+        }
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
+fn generated_packages_are_resolved_before_complete_build_inputs_are_frozen() {
+    let root = temp_dir("reuse-generated-preflight");
+    fs::create_dir_all(root.join("src")).unwrap();
+    fs::write(root.join("src/lib.rs"), "").unwrap();
+    let canic = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+        .join("../canic/Cargo.toml")
+        .canonicalize()
+        .unwrap();
+    let document = serde_json::json!({
+        "package": {"name": "consumer", "version": "0.1.0", "edition": "2024"},
+        "workspace": {"resolver": "3"},
+        "dependencies": {"canic": {"path": canic.parent().unwrap(), "default-features": false}},
+    });
+    let mut manifest = toml::to_string(&toml::Value::try_from(document).unwrap()).unwrap();
+    manifest.push_str(
+        &crate::fleet_package::dependency_patch_table(&canic, env!("CARGO_PKG_VERSION")).unwrap(),
+    );
+    fs::write(root.join("Cargo.toml"), manifest).unwrap();
+    cargo_metadata_catalog_for_manifest(
+        &root.join("Cargo.toml"),
+        false,
+        true,
+        &CargoFeatureSelection::default(),
+    )
+    .unwrap();
+    fs::write(root.join("canic.toml"), "[app]\nname='consumer'\n[roles.root]\nkind='root'\n[auth.delegated_tokens]\nenabled=false\n").unwrap();
+    let context = WorkspaceBuildContext {
+        role: "root".into(),
+        profile: crate::canister_build::CanisterBuildProfile::Fast,
+        environment: "local".into(),
+        build_network: canic_core::ids::BuildNetwork::Local,
+        workspace_root: root.clone(),
+        icp_root: root.clone(),
+        config_path: root.join("canic.toml"),
+        local_replica: None,
+        refresh_canonical_infrastructure_did: false,
+        release_build_id: None,
+    };
+    prepare_generated_inputs(&context).unwrap();
+    let mut before = BTreeMap::new();
+    append_generated_inputs(&context, &mut before).unwrap();
+    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+        assert_ne!(
+            before[manifest.with_file_name("Cargo.lock").to_str().unwrap()],
+            "absent"
+        );
+        assert_ne!(
+            before[manifest.with_file_name("lock-seed.json").to_str().unwrap()],
+            "absent"
+        );
+    }
+    prepare_generated_inputs(&context).unwrap();
+    let mut after = BTreeMap::new();
+    append_generated_inputs(&context, &mut after).unwrap();
+    assert_eq!(before, after);
+    fs::remove_dir_all(root).unwrap();
+}
+
 // Re-exec only this case with private Cargo output paths. Make exports
 // a shared target; these fixtures must not discover or replace each other's .d
 // records. A child environment avoids mutating the parallel libtest process.

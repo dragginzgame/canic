@@ -47,6 +47,7 @@ use canic_host::{
         model::{EnsureAction, InstallMode},
         plan, plan_reinstall, report_json_value, retained_in_progress_plan,
         retained_reinstall_apply_plan,
+        view::continuation::ImportHeadroomAssessment,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
 };
@@ -1057,6 +1058,23 @@ fn append_continuation_forecast(lines: &mut Vec<String>, report: &FleetEnsureRep
             import.principal.as_deref().unwrap_or("not allocated"),
             import.state
         ));
+        if let Some(headroom) = &import.headroom {
+            let assessment = match headroom.assessment {
+                ImportHeadroomAssessment::AwaitingCurrentRootObservation => {
+                    "balance unavailable until current Root observation".into()
+                }
+                ImportHeadroomAssessment::InvalidBounds => "cycle bounds overflow".into(),
+                ImportHeadroomAssessment::Observed {
+                    required_cycles,
+                    available_cycles,
+                    shortfall_cycles,
+                } => format!(
+                    "required {required_cycles}; observed native {available_cycles}; shortfall {shortfall_cycles}"
+                ),
+            };
+            lines.push(format!("forecast_import_headroom: {}; {assessment}; assumes source debit {}; final import requires its own review",
+                import.canister, headroom.maximum_source_debit_cycles));
+        }
     }
     for funding in &forecast.dependent_funding {
         lines.push(format!("forecast_dependent_funding: Root {}; {}; {} cycles plus {} fee; separate review required",

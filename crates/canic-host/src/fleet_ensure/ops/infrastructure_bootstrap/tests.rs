@@ -17,6 +17,8 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
     reseal(&mut desired, &mut source);
     let plan = prepare(root, &desired, &source, "supplied-infrastructure", 43).unwrap();
     verify_plan(root, &plan).unwrap();
+    qualify_registration_quote(root, &desired, &plan);
+    qualify_import_forecast(&plan);
     assert_eq!(plan.scope, FleetEnsurePlanScope::InfrastructureBootstrap);
     assert!(plan.protocol_actions.is_empty());
     assert_eq!(plan.canisters[0].name, "coordinator");
@@ -69,6 +71,7 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
     assert_eq!(restored, plan);
     verify_plan(root, &restored).unwrap();
 
+    qualify_underfunded_review(root, &desired, &source);
     qualify_review_retry(root, &desired, &source, &plan);
 
     crate::fleet_ensure::workflow::readiness::tests::qualify_unpaid_infrastructure_review(
@@ -111,6 +114,164 @@ pub(in crate::fleet_ensure::ops) fn qualify_initialization(root: &Path, desired:
         Err(InfrastructureBootstrapError::Policy(
             EnsurePolicyError::InfrastructureBootstrap(_)
         ))
+    ));
+}
+
+fn qualify_import_forecast(plan: &FleetEnsurePlan) {
+    use crate::fleet_ensure::{
+        model::FleetEnsureReport, policy::continuation_forecast,
+        view::continuation::ImportHeadroomAssessment,
+    };
+    let report = FleetEnsureReport {
+        plan: plan.clone(),
+        terminal: false,
+        effects_applied: 0,
+        funding_review: None,
+        actual_conservation: None,
+    };
+    let forecast = continuation_forecast::forecast(&report);
+    let source = plan.infrastructure_bootstrap.as_ref().unwrap();
+    assert!(!forecast.imports.is_empty());
+    for import in forecast.imports {
+        let available = source.sources[&import.canister].sample.cycles;
+        let headroom = import.headroom.unwrap();
+        assert_eq!(
+            headroom.assessment,
+            ImportHeadroomAssessment::Observed {
+                required_cycles: headroom.minimum_ready_cycles
+                    + headroom.maximum_source_debit_cycles,
+                available_cycles: available,
+                shortfall_cycles: (headroom.minimum_ready_cycles
+                    + headroom.maximum_source_debit_cycles)
+                    .saturating_sub(available),
+            }
+        );
+    }
+}
+
+fn qualify_registration_quote(root: &Path, desired: &DesiredFleet, plan: &FleetEnsurePlan) {
+    let artifacts = resolve_desired_artifacts(root, desired).unwrap();
+    assert!(
+        infrastructure_bootstrap::registration_reserve(desired, &artifacts).unwrap()
+            >= registration::quote(root, plan, &artifacts).unwrap()
+    );
+}
+
+fn qualify_underfunded_review(
+    root: &Path,
+    desired: &DesiredFleet,
+    source: &InfrastructureBootstrapRecord,
+) {
+    let mut desired = desired.clone();
+    let mut source = source.clone();
+    source.operator_cycles = 0;
+    for target in &mut desired.canisters {
+        if target.kind != DesiredCanisterKind::Pool {
+            target.minimum_cycles = source.sources[&target.name].sample.cycles.to_string();
+            target.initial_cycles = target.minimum_cycles.clone();
+        }
+    }
+    reseal(&mut desired, &mut source);
+    let quote = prepare(root, &desired, &source, "underfunded", 43).unwrap();
+    let paths =
+        crate::fleet_ensure::ops::EnsurePaths::under(root, &desired.environment, &desired.fleet);
+    let mut platform = crate::fleet_ensure::tests::MockPlatform::new(desired.clone(), []);
+    let mut observed = InfrastructureBootstrapObservation {
+        held_sources: BTreeMap::new(),
+        canisters: source
+            .sources
+            .iter()
+            .map(|(name, source)| (name.clone(), Some(source.sample.clone())))
+            .collect(),
+        coordinator_registry: None,
+        operator_cycles: 0,
+        ledger_fee_cycles: source.ledger_fee_cycles,
+    };
+    platform.operator_funding = Some(crate::fleet_ensure::view::OperatorFundingObservation {
+        cycles_ledger: desired.cycles_ledger.clone(),
+        ledger_fee_cycles: source.ledger_fee_cycles,
+        operator_cycles: 0,
+    });
+    for _ in
+        0..=crate::fleet_ensure::model::infrastructure_bootstrap::BOOTSTRAP_PHASE_INSPECTION_ROUNDS
+    {
+        let result = crate::fleet_ensure::workflow::infrastructure_bootstrap::plan(
+            root,
+            &desired,
+            &source,
+            "underfunded",
+            43,
+            &mut platform,
+        );
+        assert!(
+            matches!(result, Err(crate::fleet_ensure::workflow::EnsureWorkflowError::InfrastructureBootstrap(
+        InfrastructureBootstrapError::Policy(EnsurePolicyError::InfrastructureBootstrap(
+            infrastructure_bootstrap::InfrastructureBootstrapError::OperatorBudget { required, available, shortfall }
+        ))
+    )) if required > available && shortfall == required - available)
+        );
+    }
+    assert!(platform.bootstrap_observations.is_empty());
+    assert!(!paths.plan.exists());
+    assert!(!paths.journal.exists());
+    assert_eq!(
+        inspection::planned_at_time(&paths, source.source_sha256).unwrap(),
+        None
+    );
+    // Funding the operator requires no source rebase and changes no reviewed
+    // canister floor. The same survey can now review the complete required credit.
+    observed.operator_cycles = u128::MAX;
+    platform.operator_funding.as_mut().unwrap().operator_cycles = u128::MAX;
+    platform
+        .bootstrap_observations
+        .push_back(Ok(Some(observed)));
+    let funded = crate::fleet_ensure::workflow::infrastructure_bootstrap::plan(
+        root,
+        &desired,
+        &source,
+        "underfunded",
+        60,
+        &mut platform,
+    )
+    .unwrap();
+    assert!(
+        funded.conservation.maximum_new_funding_cycles
+            > quote.conservation.maximum_new_funding_cycles
+    );
+    assert_eq!(
+        funded.conservation.maximum_execution_burn_cycles,
+        quote.conservation.maximum_execution_burn_cycles
+    );
+    infrastructure_bootstrap::admit_review(&funded).unwrap();
+    verify_plan(root, &funded).unwrap();
+    assert!(!paths.journal.exists());
+    std::fs::remove_file(&paths.plan).unwrap();
+    std::fs::remove_dir_all(
+        paths
+            .plan
+            .with_file_name("infrastructure-bootstrap-inspections"),
+    )
+    .unwrap();
+
+    qualify_retained_budget(root, quote);
+}
+
+fn qualify_retained_budget(root: &Path, quote: FleetEnsurePlan) {
+    // A retained approval can be smaller than today's work estimate. Preserve its
+    // exact numerical authority so the same-operation recovery owner can extend it.
+    let mut retained = quote;
+    retained.conservation.maximum_execution_burn_cycles = 1;
+    retained.conservation.expected_post_operation_cycles =
+        retained.conservation.observed_controlled_cycles
+            + retained.conservation.maximum_new_funding_cycles
+            - 1;
+    retained.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&retained);
+    verify_plan(root, &retained).unwrap();
+    retained.conservation.expected_post_operation_cycles += 1;
+    retained.plan_sha256 = crate::fleet_ensure::policy::expected_plan_sha256(&retained);
+    assert!(matches!(
+        verify_plan(root, &retained),
+        Err(InfrastructureBootstrapError::Integrity)
     ));
 }
 

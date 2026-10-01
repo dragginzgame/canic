@@ -7,6 +7,19 @@ use candid::Principal;
 use canic_core::ids::SubnetId;
 use std::collections::BTreeSet;
 
+/// Original successful observation and its retained owner, before an additional credit.
+pub(in crate::fleet_ensure) struct CapacityImportFundingBaselineView {
+    pub sample: crate::fleet_ensure::model::capacity_import::survey::CapacityImportSampleRecord,
+    pub origin: crate::fleet_ensure::model::capacity_import::funding::CapacityImportFundingOrigin,
+}
+
+/// Approved accounting baseline and the separate evidence used to add one exact credit.
+pub(in crate::fleet_ensure) struct CapacityImportFundingSampleView {
+    pub sample: crate::fleet_ensure::model::capacity_import::survey::CapacityImportSampleRecord,
+    pub credit:
+        crate::fleet_ensure::model::capacity_import::funding::CapacityImportFundingCreditRecord,
+}
+
 /// Complete destination inventory and current admission fences.
 #[derive(Clone, Debug, Eq, PartialEq)]
 pub struct CapacityImportDestinationView {

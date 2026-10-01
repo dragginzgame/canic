@@ -23,7 +23,7 @@ use canic_core::cdk::{
 };
 use canic_host::{
     fleet_ensure::{
-        dto::capacity_import::CapacityImportReviewRequest,
+        dto::capacity_import::{CapacityImportFundingCreditRequest, CapacityImportReviewRequest},
         model::capacity_import::CapacityImportJournalRecord,
         ops::capacity_import::{
             admission::survey::MAXIMUM_ATTEMPTS, journal::CapacityImportJournalError, publication,
@@ -46,6 +46,9 @@ pub(super) fn command() -> Command {
         .arg(value_arg("canister").long("canister").value_name("PRINCIPAL").action(ArgAction::Append)
             .value_parser(clap::value_parser!(Principal)).required_unless_present("apply").conflicts_with("apply")
             .help("Exact supplied canister; repeat for every source"))
+        .arg(value_arg("funding-credit").long("funding-credit").value_name("CANISTER=CYCLES").action(ArgAction::Append)
+            .value_parser(parse_funding_credit).conflicts_with("apply")
+            .help("Review an already received credit against original observations; repeat per source or Root"))
         .arg(value_arg("root").long("root").value_name("PRINCIPAL")
             .value_parser(clap::value_parser!(Principal)).conflicts_with("apply")
             .help("Select a destination Root explicitly; otherwise require a unique Root on the source subnet"))
@@ -87,7 +90,7 @@ pub(super) fn command() -> Command {
                 .help(help),
         );
     }
-    command.after_help("Examples:\n  canic --environment staging fleet import staging --canister <id> --declarations deployments/import.toml --maximum-source-debit 1T --maximum-root-debit 2T --maximum-root-paid-calls 36\n  canic --environment staging fleet import staging --apply <review-sha256>\n\nReview retains bounded status observations. Apply hands sources to Root, clears code/state, publishes both policy/seed input paths and releases capacity. Use mutable operator copies for frozen release inputs. No replacement IDs or funding transfers are created. This requires initialized current infrastructure.")
+    command.after_help("Examples:\n  canic --environment staging fleet import staging --canister <id> --declarations deployments/import.toml --maximum-source-debit 1T --maximum-root-debit 2T --maximum-root-paid-calls 36\n  canic --environment staging fleet import staging --apply <review-sha256>\n\nReview retains bounded status observations. After adding funds, repeat an unapproved review with --funding-credit <id>=1T for the exact received amount. Apply hands sources to Root, clears code/state, publishes both policy/seed input paths and releases capacity. Use mutable operator copies for frozen release inputs. No replacement IDs or funding transfers are created. This requires initialized current infrastructure.")
 }
 
 pub(super) fn run(args: Vec<OsString>) -> Result<(), FleetCommandError> {
@@ -171,6 +174,12 @@ fn request(
             })
     };
     Ok(CapacityImportReviewRequest {
+        funding_credits: matches
+            .get_many::<CapacityImportFundingCreditRequest>("funding-credit")
+            .into_iter()
+            .flatten()
+            .cloned()
+            .collect(),
         environment: environment.into(),
         fleet: fleet.into(),
         canisters: matches
@@ -199,6 +208,21 @@ fn request(
                 )
             })?,
     })
+}
+
+fn parse_funding_credit(value: &str) -> Result<CapacityImportFundingCreditRequest, String> {
+    let (canister, cycles) = value
+        .split_once('=')
+        .ok_or("funding credit requires CANISTER=CYCLES, e.g. <id>=1T")?;
+    let canister = Principal::from_text(canister)
+        .map_err(|_| "funding credit requires a valid canister Principal")?;
+    let cycles = Cycles::from_human_config_str(cycles)
+        .map_err(|_| "funding credit requires an exact amount such as 1T")?
+        .to_u128();
+    if cycles == 0 {
+        return Err("funding credit must be positive".into());
+    }
+    Ok(CapacityImportFundingCreditRequest { canister, cycles })
 }
 
 fn failure(error: CapacityImportJournalError) -> FleetCommandError {
@@ -234,6 +258,10 @@ fn render(record: &CapacityImportJournalRecord, command: &str) -> String {
             "Initial status attempts: at most {MAXIMUM_ATTEMPTS} per canister; successful balances retained across restart"
         ),
     ];
+    for credit in &plan.funding_credits {
+        lines.push(format!("Additional funding for {}: {} cycles; original native {}; observed native {}; original debit allowance retained",
+            credit.before.binding.canister_id, credit.credited_cycles, credit.before.cycles, credit.observed.cycles));
+    }
     for source in &plan.sources {
         lines.push(format!("{}: CLEAR CODE/STATE; module={}; version={}; {} native + {} reserved cycles; maximum debit {}; Ready floor {}",
             source.binding.canister_id, source.binding.module_sha256.map_or_else(|| "empty".into(), hex_bytes),

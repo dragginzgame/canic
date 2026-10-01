@@ -45,6 +45,29 @@ fn successful_sample_cannot_be_rebased_or_reassigned_after_restart() {
     ));
     survey.reserve(principal(9)).unwrap();
     survey.retain(sample.clone()).unwrap();
+    let retained = std::fs::read(&survey.path).unwrap();
+    assert_eq!(
+        CapacityImportSurveyStore::original_sample(
+            &owner,
+            &paths,
+            [2; 32],
+            &[principal(9)],
+            principal(9)
+        )
+        .unwrap(),
+        Some(sample.clone())
+    );
+    assert!(matches!(
+        CapacityImportSurveyStore::original_sample(
+            &owner,
+            &paths,
+            [2; 32],
+            &[principal(9), principal(10)],
+            principal(9)
+        ),
+        Err(CapacityImportJournalError::Integrity)
+    ));
+    assert_eq!(std::fs::read(&survey.path).unwrap(), retained);
     drop(survey);
     let mut survey =
         CapacityImportSurveyStore::open(&owner, &paths, [2; 32], &[principal(9)]).unwrap();

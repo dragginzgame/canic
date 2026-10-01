@@ -13,6 +13,7 @@ SCRATCHES=()
 
 # Each worker is a distinct session: cancellation reaches its test, server and
 # CLI descendants without signalling the caller or another validation process.
+# shellcheck disable=SC2329 # Invoked by the EXIT trap.
 finish() {
     local status=$? pid scratch
     trap - EXIT INT TERM
@@ -37,19 +38,20 @@ for selection in "$@"; do
     scratch="$(mktemp -d "$ROOT/.tmp/test-runtime.XXXXXX")"
     SCRATCHES+=("$scratch")
     setsid env CANIC_TEST_SCRATCH="$scratch" TMPDIR="$scratch" \
-        CANIC_GOVERNED_CASE_FILE="$selection" CANIC_POCKETIC_WORKER="$worker" \
-        bash "$ROOT/scripts/ci/run-workspace-tests.sh" native-pocketic "$BINARY" &
+        CANIC_POCKETIC_WORKER="$worker" \
+        bash "$ROOT/scripts/ci/run-pocketic-worker.sh" "$BINARY" "$selection" &
     PIDS+=("$!")
 done
-remaining=("${PIDS[@]}")
-while [[ "${#remaining[@]}" -gt 0 ]]; do
-    completed=''
-    status=0
-    wait -n -p completed "${remaining[@]}" || status=$?
-    [[ "$status" -eq 0 ]] || exit "$status"
-    next=()
-    for pid in "${remaining[@]}"; do
-        [[ "$pid" == "$completed" ]] || next+=("$pid")
-    done
-    remaining=("${next[@]}")
+status=0
+for pid in "${PIDS[@]}"; do
+    wait "$pid" || status=1
 done
+if [[ "$status" -ne 0 ]]; then
+    echo '==> retained worker failures' >&2
+    for scratch in "${SCRATCHES[@]}"; do
+        for report in "$scratch"/attempt-*/outcomes.failure.txt; do
+            [[ ! -f "$report" ]] || { cat "$report" >&2; echo >&2; }
+        done
+    done
+fi
+exit "$status"

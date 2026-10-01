@@ -176,10 +176,12 @@ fn verify_imports(
                 .values()
                 .find(|entry| entry.sample.binding.canister_id == imported.binding.canister_id)
                 .ok_or_else(invalid)?;
-            if imported.binding != original.sample.binding
-                || imported.observed_cycles != original.sample.cycles
-                || imported.observed_reserved_cycles != original.sample.reserved_cycles
-            {
+            if !crate::fleet_ensure::ops::capacity_import::funding::bootstrap_source_matches(
+                plan,
+                &matching[0].plan,
+                &original.sample,
+                imported,
+            ) {
                 return Err(invalid());
             }
         }

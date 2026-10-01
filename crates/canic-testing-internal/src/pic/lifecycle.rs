@@ -823,7 +823,7 @@ fn workspace_root() -> PathBuf {
 // -----------------------------------------------------------------------------
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
-pub(super) use tests::{governed_pocketic_cases, governed_runtime_cases, governed_support_cases};
+pub(super) use tests::{governed_runtime_cases, governed_support_cases};
 
 #[cfg(test)]
 mod fast_tests {
@@ -924,6 +924,41 @@ mod tests {
         icydb_request_session: ProbeEvidence,
     }
 
+    #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
+    enum ProbeDatabaseStartup {
+        Failed,
+        Ready,
+        Recovering,
+    }
+
+    #[derive(candid::CandidType, Debug, candid::Deserialize)]
+    struct ComposedDatabaseStatus {
+        database_startup: ProbeDatabaseStartup,
+        database_access: ProbeEvidence,
+    }
+
+    fn wait_for_composed_database(pic: &PocketIc, canister: Principal) {
+        for completed_steps in 0..=8 {
+            let status: ComposedDatabaseStatus =
+                pic.query_candid_or_panic(canister, "lifecycle_composition_snapshot", ());
+            match status.database_startup {
+                ProbeDatabaseStartup::Ready => {
+                    assert_eq!(status.database_access, ProbeEvidence::Observed);
+                    return;
+                }
+                ProbeDatabaseStartup::Failed => panic!("IcyDB startup failed: {status:?}"),
+                ProbeDatabaseStartup::Recovering => {}
+            }
+            assert!(
+                completed_steps < 8,
+                "IcyDB startup did not settle: {status:?}"
+            );
+            pic.advance_time(Duration::from_secs(1));
+            pic.tick();
+            pic.tick();
+        }
+    }
+
     #[test]
     fn managed_projection_fences_then_opens_and_restores() {
         let fixture = install_lifecycle_boundary_fixture();
@@ -1002,10 +1037,7 @@ mod tests {
             .update_candid_as(canister, admitted, "composed_framework_admission_probe", ());
         assert!(prepared_call.is_err());
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
-        for _ in 0..3 {
-            fixture.pic.advance_time(Duration::from_secs(1));
-            fixture.pic.tick();
-        }
+        wait_for_composed_database(&fixture.pic, canister);
 
         let public_caller: Result<Principal, Error> = fixture.pic.query_candid_as_or_panic(
             canister,
@@ -1402,10 +1434,7 @@ mod tests {
         fixture
             .configure_and_wait_until_active(30)
             .expect("activate through published managed-App support");
-        for _ in 0..3 {
-            fixture.pic().advance_time(Duration::from_secs(1));
-            fixture.pic().tick();
-        }
+        wait_for_composed_database(fixture.pic(), fixture.app());
         assert_eq!(
             fixture
                 .admission_status()
@@ -1420,7 +1449,14 @@ mod tests {
                 "composed_framework_admission_probe",
                 (),
             );
-        assert!(admitted_result.is_ok());
+        assert_eq!(
+            admitted_result.expect("admitted composed-framework caller"),
+            ComposedFrameworkAdmissionReceipt {
+                caller: admitted,
+                workflow_runs: 1,
+                icydb_request_session: ProbeEvidence::Observed,
+            }
+        );
 
         fixture
             .upgrade_same_release(Duration::from_mins(5))
@@ -1815,14 +1851,12 @@ mod tests {
         result.expect("public workflow-run observation")
     }
 
-    pub fn governed_pocketic_cases() -> Vec<crate::pic::GovernedTestCase> {
-        let mut cases = governed_runtime_cases();
-        cases.extend(governed_support_cases());
-        cases
-    }
-
     pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![
+        crate::pic::cases::registered![
+            (
+                "managed projection restoration",
+                managed_projection_fences_then_opens_and_restores,
+            ),
             (
                 "composed-framework direct ingress",
                 composed_framework_guard_matches_canic_endpoint_on_direct_ingress,
@@ -1837,7 +1871,7 @@ mod tests {
     // These independently created estates can run on the journey worker without
     // repeating runtime ingress/transition qualification or sharing replica state.
     pub fn governed_support_cases() -> Vec<crate::pic::GovernedTestCase> {
-        vec![
+        crate::pic::cases::registered![
             (
                 "published managed-App support",
                 published_managed_app_support_drives_composed_lifecycle,

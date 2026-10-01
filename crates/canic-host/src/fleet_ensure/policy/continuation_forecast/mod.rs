@@ -3,14 +3,18 @@
 //! Responsibility: project known continuation work from one immutable review.
 //! Boundary: no live reads, quote completion, persistent changes or effect admission.
 
+#[cfg(test)]
+mod tests;
+
 use crate::fleet_ensure::{
     model::{
         CanisterDisposition, CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan,
         FleetEnsurePlanScope, FleetEnsureReport,
+        capacity_import::DEFAULT_IMPORT_SOURCE_DEBIT_CYCLES,
     },
     view::continuation::{
         ContinuationAuthority, ContinuationDiscovery, ContinuationForecast, ContinuationImport,
-        ContinuationImportState, DependentPoolFunding,
+        ContinuationImportState, DependentPoolFunding, ImportHeadroom, ImportHeadroomAssessment,
     },
 };
 
@@ -60,6 +64,7 @@ pub fn forecast(report: &FleetEnsureReport) -> ContinuationForecast {
                 canister: name.clone(),
                 principal: Some(request.canister_id.to_text()),
                 state: ContinuationImportState::ReviewedReconciliation,
+                headroom: None,
             });
         }
     }
@@ -110,7 +115,7 @@ fn append_initialization_imports(
                             | CanisterDisposition::Reinstall
                     )
             });
-            if !initializes {
+            if !initializes && plan.scope != FleetEnsurePlanScope::InfrastructureBootstrap {
                 continue;
             }
             awaiting_initialization = true;
@@ -132,9 +137,34 @@ fn append_initialization_imports(
                     canister: name.clone(),
                     principal,
                     state: ContinuationImportState::PostInitializationObservation,
+                    headroom: Some(import_headroom(
+                        root.limits.canister_pool.canister_cycles.to_u128(),
+                        plan.infrastructure_bootstrap
+                            .as_ref()
+                            .and_then(|source| source.sources.get(name))
+                            .map(|source| source.sample.cycles),
+                    )),
                 });
             }
         }
     }
     awaiting_initialization
+}
+
+const fn import_headroom(minimum: u128, available: Option<u128>) -> ImportHeadroom {
+    let required = minimum.checked_add(DEFAULT_IMPORT_SOURCE_DEBIT_CYCLES);
+    let assessment = match (required, available) {
+        (None, _) => ImportHeadroomAssessment::InvalidBounds,
+        (Some(_), None) => ImportHeadroomAssessment::AwaitingCurrentRootObservation,
+        (Some(required), Some(available)) => ImportHeadroomAssessment::Observed {
+            required_cycles: required,
+            available_cycles: available,
+            shortfall_cycles: required.saturating_sub(available),
+        },
+    };
+    ImportHeadroom {
+        minimum_ready_cycles: minimum,
+        maximum_source_debit_cycles: DEFAULT_IMPORT_SOURCE_DEBIT_CYCLES,
+        assessment,
+    }
 }

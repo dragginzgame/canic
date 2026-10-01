@@ -1,5 +1,195 @@
 # Current handoff — 2026-09-30
 
+## Deployment artifact drift — qualified; eight audit findings addressed
+
+The accepted deployment-reliability work now addresses findings 1–8. The latest
+build changes close `CANIC-110-HOST-BUILD-002` and `003` alongside the testing,
+bootstrap-admission and held-source funding fixes below.
+
+Generated infrastructure packages atomically reseed their lock from the selected
+parent resolution when the parent lock or generated manifest changes. A compact
+derivation record commits after the complete seed; interrupted publication retries
+safely. Unchanged inputs preserve Cargo's resolved graph. Complete-build reuse
+prepares all three generated packages before snapshotting and fingerprints their
+locks, derivation records and sources. Provenance uses the actual generated lock.
+
+Application and Root builds select the current Cargo invocation's exact cdylib
+Wasm by package manifest. They support custom library names and reject absent or
+ambiguous output evidence even when stale files exist. Each batch's Candid is
+extracted before another workspace compiles, and runtime bytes are captured before
+shared output names can be overwritten. Final role/Candid/artifact checks remain.
+
+Targeted qualification passes five generated-package tests, generated-lock cache
+invalidation and provenance checks, stable input preparation, nine artifact tests
+and 41 cache tests (one existing manual case ignored). The new real-Cargo collision
+test uses two independent workspaces with identical package/library names and
+proves both captured artifacts survive the shared-path overwrite. Complete-build
+preflight is stable across repeats. The exact bootstrap/import/convergence/replay
+PocketIC journey passes with the new producer in 90.60s. Host/CLI/Testing
+all-target/all-feature warning-denied Clippy, changelog, document and layering
+checks pass. Logs: `target/review-validation/generated-lock-*` and `artifact-drift-*`.
+
+Remaining accepted work: packaged-consumer evidence, embedded-fixture freshness
+and structured CLI automation (findings 9, 10, 17), then release/host guard cleanup
+(11–16, 18). These are not claimed fixed. The complete deployment-reliability
+release batch remains open and is not yet push-ready. Open `.49` notes are updated;
+package versions remain `.48`. Changes remain uncommitted. No broad gate, version
+transaction, Git publication or live deployment ran. Toko Miner stayed read-only;
+retained operations and release artifacts remain intact.
+
+## Held-capacity funding recovery — qualified; artifact drift next
+
+The deployment-reliability work now addresses findings 1–6, including
+`CANIC-110-HOST-IMPORT-001`. Bootstrap and clean-reinstall reports assess each
+held import's known native headroom before initialization, using clean reinstall's
+shared `0.1T` source debit assumption. Unknown balances explicitly await current
+Root observation. This is advisory; final import still owns its actual bounds.
+
+`fleet import --funding-credit CANISTER=CYCLES` reviews an already received
+credit before approving an import. It retains the original bootstrap/survey
+observation, exact owner and fresh balance/custody evidence. Earlier consumption
+still counts against the original debit ceiling; reserved cycles remain
+non-liquid. Bootstrap convergence accepts only the sealed supplementary credit.
+The original bootstrap plan, journal and surveys are not rewritten. Issued imports
+retain their original approval; completed replay remains effect-free. The absent
+credit field intentionally preserves existing uncredited approval digests.
+
+The focused PocketIC journey passes in 90.54s: original insufficient balance,
+top-up without recognition still rejected, explicit credit review, import,
+convergence and effect-free replay. It checks original bootstrap plan/journal
+bytes remain intact. Native qualification passes 82 import tests, the headroom
+projection and generated-estate journey. CLI parsing, forecast and recursive help
+checks pass, as do Host/CLI/Testing all-target/all-feature warning-denied Clippy,
+changelog, document and layering checks. Logs: `target/review-validation/import-funding-*`.
+The first sandboxed native attempt could not bind an existing loopback fixture;
+the complete focused group passed with local networking enabled.
+
+Next accepted batch: generated dependency locks, exact artifact selection,
+packaged consumer evidence, embedded fixture freshness and downstream automation
+outputs (findings 7–10 and 17). Release/host cleanup follows. The complete
+deployment-reliability batch remains open and is not yet push-ready. Open `.49`
+notes describe the changes; package versions remain `.48`. No broad gate, version
+transaction, commit, push, publication or live deployment ran. Toko Miner remains
+read-only; retained operations and release artifacts remain intact.
+
+## Deployment bootstrap admission — qualified; held-source funding next
+
+The accepted deployment-reliability work now addresses
+`CANIC-110-HOST-BOOTSTRAP-001` alongside the first four testing findings.
+Fresh bootstrap quotes initialization and registration before admitting effects.
+Supplied identities use the actual Store/Registry compiler; explicit Coordinator
+creation uses the artifact-bound action/retry ceiling and protocol observation
+counts. The budget is never silently clamped to available funds. Any shared
+shortfall becomes an exact Store credit in the ordinary reviewed funding plan.
+An insufficient operator balance reports required, available and missing cycles.
+Free Ledger preflight rejects that shortfall before spending management-inspection
+attempts; the protected observation rechecks funding before retaining the plan.
+
+Retained approvals keep their numeric ceiling and exact funded amounts, with
+effect identity, source custody and conservation arithmetic recompiled and checked.
+Current estimates do not retrospectively expand their authority. The existing
+registration recovery supplement still owns any further approval and spending.
+No persisted schema or package version changed.
+
+The focused generated-estate native test passes, covering full funding quotes,
+repeated insufficient-funding checks without consuming inspection attempts,
+same-survey recovery after operator funding, quote bounds and retained-budget
+integrity. The fresh PocketIC case deliberately needs the new Store credit and
+passes initialization, lost replies, import, convergence and effect-free replay
+in 89.48s. The retained small-ceiling incident fixture passes the existing recovery
+and replay journey in 120.70s. Both changed packages pass all-target/all-feature
+warning-denied Clippy. Logs are `target/review-validation/bootstrap-admission-*`.
+Document and layering checks pass; two existing document-layout warnings remain
+advisory. Open `.49` notes and the operations guide are updated; versions remain
+`.48`. No broad suite, version transaction, commit, push or live deployment ran.
+
+The next accepted work is `CANIC-110-HOST-IMPORT-001`: held-source funding
+headroom and explicit same-operation recognition of additional source funding.
+It is not yet implemented. Artifact/consumer fidelity and release/host cleanup
+remain afterward. The complete deployment-reliability release batch remains open
+and is not yet push-ready. Toko Miner stays read-only; retained operations and
+release artifacts remain intact.
+
+## Deployment validation feedback — first audit repair batch qualified
+
+The maintainer accepted the deployment-reliability audit's sequenced remedies.
+The first batch addresses `CANIC-110-TESTING-001` through `004`: complete failure
+feedback, feature-gated coverage, empty selections and missing doctests.
+
+Independent workers and later PocketIC suites now finish after a failed case.
+A case panic ends its process; only an exact completed-prefix report permits
+the unexecuted suffix to start in a fresh process, server and scratch. Failed
+cases are not retried, and any failure keeps the overall result failed. Missing,
+malformed or inconsistent reports stop that worker. The source-bound recovery
+prerequisite still blocks its dependent groups, with an explicit skipped message.
+Original assertions and exact Rust-path rerun commands survive to the final
+worker summary and retained logs.
+
+The compiled libtest inventory is reconciled against callable journey identities,
+native selectors and exact opt-in exclusions. The ordinary lane now runs gated
+native runner/cache tests, Host local-Fleet native tests and workspace doctests.
+Pure cache proofs moved out of the PocketIC catalogue. The missing managed
+projection restoration is registered, and short lifecycle contracts run first
+within their worker. Discovery must be nonempty; successful commands must also
+report an executed test, allowing unrelated workspace harnesses to select zero.
+
+Targeted qualification passes 13 gated native tests, three Host local-Fleet tests,
+four facade doctests (three compile-fail contracts), the ordinary-feature native
+lifecycle test and the newly registered PocketIC restoration (4.37s). The existing
+two-worker funding/recovery proof passes in 111.22s, with both workers completing
+and owned scratch removed. Shell regressions cover multiple failures, exact
+membership, fresh suffix continuation without repeating cases, malformed reports,
+interruption, empty selections and zero executed tests. Testing-package
+all-target/all-feature warning-denied Clippy, scoped formatting, targeted
+ShellCheck and the focused release test-plan contracts pass. The final compiled
+inventory check passes. Empty, blank and failed selector producers reject before
+native execution. Document semantics pass with the two existing advisory layout
+warnings. Detailed logs are under `target/review-validation/deployment-*`.
+
+The complete deployment-reliability release batch remains open and is not yet
+push-ready. Next is fresh-bootstrap budget admission and held-pool funding
+headroom, followed by artifact/downstream fidelity and release/host cleanup.
+The first batch does not close the audit's other findings or the outstanding
+native macOS qualification. Root and detailed changelogs extend the open `.49`
+entry; package versions remain `.48`. No full gate, version transaction, commit,
+push, publication or live deployment ran. Toko Miner stayed read-only; release
+artifacts and retained operations remain intact.
+
+## Deployment reliability audit and composed readiness
+
+The maintainer requested an end-to-end audit of Canic's own validation/deployment
+fixtures and downstream deployment through Canic. The
+[deployment reliability audit](../audits/reports/2026-09/2026-09-30/deployment-reliability.md)
+traces Make/CI/publication, artifact builds, bootstrap/import/convergence/reset,
+test selection and the maintainer-selected Toko Miner consumer. It records confirmed source
+findings, overlap with the original review and sequenced remedies. Downstream
+checkouts were read-only. No broad validation or live deployment ran.
+
+The latest failed governed case was `composed-framework direct ingress`:
+Canic admission was ready, but IcyDB startup was still recovering after the
+fixture's fixed three ticks. Both composed-ingress and published managed-App
+fixtures now wait for typed database readiness with a finite bound. The managed-App
+case also requires observed database access in its returned receipt. Production
+startup and admission rules are unchanged.
+
+Both exact PocketIC cases pass (4.23s and 9.35s); testing-package all-target,
+all-feature warning-denied Clippy and the focused changelog test pass. Scoped
+formatting, whitespace, audit source hashes/local links and document semantics
+pass; the two existing document-layout warnings remain advisory. Logs are under
+`target/review-validation/`: `composed-ingress-readiness-pocketic-final.log`,
+`managed-app-readiness-pocketic.log`, `composed-readiness-clippy.log` and
+`deployment-audit-changelog.log`.
+Package versions remain `.48`; this fix extends the open `.49` notes.
+
+Earlier statements that each individual fixture repair established readiness
+for the whole expanded batch were too broad. The latest repair is qualified;
+the requested deployment-reliability batch remains open, with runner coverage
+and complete failure feedback first. The audit also finds fresh-bootstrap
+budget admission and artifact/lockfile drift requiring their own fixes. The
+original incident repair remains available in source; its publication and the
+other developer's retained live operation remain outstanding. No new successful
+release receipt, version transaction, commit, push or publication is claimed.
+
 ## Low-reserve child fixture contention — qualified
 
 The next maintainer validation reached

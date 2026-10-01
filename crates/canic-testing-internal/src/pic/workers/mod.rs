@@ -7,6 +7,7 @@ use super::GovernedTestCase;
 use std::{collections::BTreeSet, path::PathBuf, process::Command};
 
 pub(super) const CASE_FILE_ENV: &str = "CANIC_GOVERNED_CASE_FILE";
+pub(super) const REPORT_FILE_ENV: &str = "CANIC_GOVERNED_REPORT_FILE";
 
 #[derive(Debug, Eq, PartialEq)]
 pub(super) enum SelectionError {
@@ -27,7 +28,7 @@ pub(super) fn select(
         }
         let case = cases
             .iter()
-            .find(|(registered, _)| *registered == name)
+            .find(|registered| registered.name == name)
             .ok_or(SelectionError::Unknown)?;
         selected.push(*case);
     }
@@ -44,9 +45,10 @@ pub(super) fn run(groups: [Vec<GovernedTestCase>; 2]) {
     for (index, cases) in groups.into_iter().enumerate() {
         assert!(!cases.is_empty());
         let mut selection = String::new();
-        for (name, _) in cases {
+        for case in cases {
+            let name = case.name;
             assert!(names.insert(name), "case cannot belong to both workers");
-            assert!(!name.contains('\n'));
+            assert!(!name.contains(['\n', '\r', '\t']));
             selection.push_str(name);
             selection.push('\n');
         }
@@ -75,10 +77,11 @@ mod tests {
     #[test]
     fn selection_preserves_exact_order_and_rejects_invalid_membership() {
         fn noop() {}
-        let cases: Vec<GovernedTestCase> = vec![("first", noop), ("second", noop)];
+        let cases: Vec<GovernedTestCase> =
+            crate::pic::cases::registered![("first", noop), ("second", noop)];
         let selected = select(&cases, "second\nfirst\n").unwrap();
         assert_eq!(
-            selected.iter().map(|(name, _)| *name).collect::<Vec<_>>(),
+            selected.iter().map(|case| case.name).collect::<Vec<_>>(),
             ["second", "first"]
         );
         for (input, error) in [

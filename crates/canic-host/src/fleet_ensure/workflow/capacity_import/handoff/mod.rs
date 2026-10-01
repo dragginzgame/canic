@@ -9,6 +9,7 @@ use crate::{
         ops::{
             EnsurePaths,
             capacity_import::{
+                funding,
                 journal::{self, CapacityImportJournalError, CapacityImportJournalStore},
                 observation::{CapacityImportObserver, PreparedCapacityImportObservation},
                 publication, reservation_evidence,
@@ -44,6 +45,7 @@ pub async fn apply(
     if operation.review.review_sha256 != review_sha256 {
         return Err(CapacityImportJournalError::PublicationConflict);
     }
+    funding::verify_origins(store, paths, &record.plan)?;
     if record.approved && record.reservation.is_some() && journal::all_custody_ready(&record) {
         return complete(store, paths, review_sha256, icp).await;
     }

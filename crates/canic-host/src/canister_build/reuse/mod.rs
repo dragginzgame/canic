@@ -148,6 +148,7 @@ impl CompleteBuildReuse {
     ) -> Result<Self, BuildReuseError> {
         let lock =
             lock::BuildLock::acquire(context, &mut progress).map_err(BuildReuseError::Lock)?;
+        prepare_generated_inputs(context)?;
         diagnostics::InputDiagnostics::prepare(&context.icp_root);
         let mut tool_paths = vec![
             env::current_exe()?,
@@ -353,6 +354,7 @@ fn input_snapshot(
     .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
     let mut roots = BTreeSet::new();
     let mut files = BTreeMap::new();
+    append_generated_inputs(context, &mut files)?;
     for package in metadata.packages {
         if package.name == "canic" {
             // Generated infrastructure enables family sources absent from the App's graph.
@@ -427,6 +429,45 @@ fn input_snapshot(
         identity: input_identity(context)?,
         files,
     })
+}
+
+fn prepare_generated_inputs(context: &WorkspaceBuildContext) -> Result<(), BuildReuseError> {
+    crate::canister_build::prepare_workspace_infrastructure_packages(context)
+        .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+    let config = crate::release_set::AppConfigSnapshot::load(&context.config_path)
+        .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
+    let validation = crate::role_contract::validate_declared_role_package(
+        &context.config_path,
+        config.model(),
+        &canic_core::ids::CanisterRole::ROOT,
+        crate::role_contract::PackageValidationMode::Build,
+        &CargoFeatureSelection::default(),
+    );
+    match validation {
+        crate::role_contract::RolePackageValidation::Supported(_) => Ok(()),
+        crate::role_contract::RolePackageValidation::Unsupported(finding) => Err(
+            BuildReuseError::Evidence(crate::role_contract::finding_detail(&finding)),
+        ),
+    }
+}
+
+fn append_generated_inputs(
+    context: &WorkspaceBuildContext,
+    files: &mut BTreeMap<String, String>,
+) -> Result<(), BuildReuseError> {
+    for manifest in crate::fleet_package::generated_manifests(&context.config_path) {
+        let root = manifest.parent().expect("generated package directory");
+        for name in [
+            "Cargo.toml",
+            "Cargo.lock",
+            "lock-seed.json",
+            "src/lib.rs",
+            "build.rs",
+        ] {
+            add_optional(&root.join(name), files)?;
+        }
+    }
+    Ok(())
 }
 
 fn append_fixture_inputs(

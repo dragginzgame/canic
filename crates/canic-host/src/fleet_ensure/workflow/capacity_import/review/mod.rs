@@ -17,6 +17,7 @@ use crate::{
                     observer::CapacityImportLiveObserver, review::ReviewSurvey,
                     survey::CapacityImportSurveyStore,
                 },
+                funding,
                 journal::{self, CapacityImportJournalError, CapacityImportJournalStore},
                 publication,
             },
@@ -102,26 +103,30 @@ async fn plan_async(
     let mut persistence =
         CapacityImportSurveyStore::open(&store, &paths, survey.request_sha256(), &canisters)?;
     let mut samples = Vec::with_capacity(canisters.len());
-    for canister in canisters {
-        let original = bootstrap
-            .and_then(|source| {
-                source
-                    .sources
-                    .values()
-                    .find(|source| source.sample.binding.canister_id == canister)
-            })
-            .filter(|_| canister != survey.root())
-            .map(|source| &source.sample);
-        let prior_root = bootstrap_terminal.as_ref().and_then(|receipt| {
-            receipt
-                .canisters
-                .values()
-                .find(|sample| sample.binding.canister_id == canister)
-        });
-        let sample = if let Some(sample) = original
-            .or(prior_root)
-            .or_else(|| persistence.sample(canister))
-        {
+    let mut credits = Vec::new();
+    for &canister in &canisters {
+        let mut baseline = funding::bootstrap_baseline(
+            &completed,
+            bootstrap_terminal.as_ref(),
+            canister,
+            survey.root(),
+        );
+        let credited = survey.observes_funding(canister);
+        if credited && baseline.is_none() {
+            baseline = Some(funding::survey_baseline(
+                &store,
+                &paths,
+                survey.original_request_sha256(),
+                &canisters,
+                canister,
+            )?);
+        }
+        let original = if credited {
+            None
+        } else {
+            baseline.as_ref().map(|baseline| &baseline.sample)
+        };
+        let sample = if let Some(sample) = original.or_else(|| persistence.sample(canister)) {
             sample.clone()
         } else {
             let prepared = survey.prepare_sample(canister).await?;
@@ -130,9 +135,20 @@ async fn plan_async(
             persistence.retain(sample.clone())?;
             sample
         };
-        samples.push(sample);
+        if credited {
+            let funded = survey.recognize_funding(
+                request,
+                baseline.ok_or(CapacityImportJournalError::Integrity)?,
+                sample,
+            )?;
+            samples.push(funded.sample);
+            credits.push(funded.credit);
+        } else {
+            samples.push(sample);
+        }
     }
-    let plan = survey.finish(request, &samples).await?;
+    let plan = survey.finish(request, &samples, credits).await?;
+    funding::verify_origins(&store, &paths, &plan)?;
     let reviewed = journal::reviewed(plan)?;
     let review = if bootstrap.is_some() {
         publication::bind_initial(&paths, &reviewed, &request.policy, &request.seed)?

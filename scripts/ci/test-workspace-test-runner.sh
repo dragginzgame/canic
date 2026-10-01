@@ -6,6 +6,7 @@ fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-workspace-runner-test.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/bin"
 cp "$ROOT/scripts/ci/run-workspace-tests.sh" \
+    "$ROOT/scripts/ci/list-internal-native-tests.sh" \
     "$ROOT/scripts/ci/workspace-test-inventory.tsv" "$fixture/scripts/ci/"
 cp "$ROOT/tool-versions.env" "$fixture/"
 
@@ -49,18 +50,33 @@ for argument in "$@"; do
     esac
     [[ "$previous" != --test ]] || target="$argument"
     previous="$argument"
-    [[ "$argument" == --no-run ]] || graph_args+=("$argument")
+    [[ "$argument" == --no-run || "$argument" == --no-fail-fast ]] || graph_args+=("$argument")
 done
+case " $* " in
+    *' pic::workers::tests:: '*) stage=native-internal ;;
+    *' --features local-fleet '*) stage=native-host ;;
+    *' --doc '*) stage=documentation ;;
+esac
+[[ " $* " != *' --list '* ]] || phase=list
 if [[ -n "$target" && " $* " == *' -p canic-tests '* ]]; then
     stage="$(awk -F '\t' -v target="$target" '$2 == target { print $5 }' scripts/ci/workspace-test-inventory.tsv)"
 fi
-if [[ "$phase" == compile || "$stage" == ordinary ]]; then
+if [[ "$phase" == compile || "$stage" == ordinary || "$stage" == native-* || "$stage" == documentation ]]; then
     [[ ! -e "$CANIC_TEST_SCRATCH/server.pid" ]]
-else
+elif [[ "$phase" == execute ]]; then
     [[ -e "$CANIC_TEST_SCRATCH/server.pid" ]]
 fi
 printf '%s\n' "${graph_args[@]}" > "$CANIC_TEST_SCRATCH/$phase-$stage.args"
 printf '%s\t%s\t%s\n' "$phase" "$stage" "$fail_fast" >> "$RUNNER_TEST_TRACE"
+if [[ "$phase" == list ]]; then
+    [[ "$stage" != "${RUNNER_TEST_EMPTY_STAGE:-}" ]] || exit 0
+    if [[ "$stage" == internal || "$stage" == host ]]; then
+        [[ " $* " == *' --ignored '* ]]
+    fi
+    echo "${RUNNER_TEST_LIST_IDENTITY:-fixture::selected}: test"
+    [[ "${RUNNER_TEST_DUPLICATE:-0}" == 0 ]] || echo "${RUNNER_TEST_LIST_IDENTITY}: test"
+    exit 0
+fi
 # Successful tests can contain rejected requests; only the command outcome
 # decides whether these diagnostics belong in the console.
 printf '[CANIC-REQUEST] %s/%s succeeded=false\n' "$phase" "$stage"
@@ -70,7 +86,9 @@ printf '[CANIC-CACHE] %s/%s\n' "$phase" "$stage" >&2
 printf '[FLEET-MEASURE] %s/%s stdout\n' "$phase" "$stage"
 printf '[FLEET-MEASURE] %s/%s stderr\n' "$phase" "$stage" >&2
 printf 'fixture progress %s/%s\n' "$phase" "$stage"
-if [[ "$phase/$stage" == "$RUNNER_TEST_FAIL_STAGE" ]]; then
+fails=0
+case " $RUNNER_TEST_FAIL_STAGE " in *" $phase/$stage "*) fails=1 ;; esac
+if [[ "$fails" -eq 1 ]]; then
     for ((index=0; index<120; index++)); do
         if ((index % 3 == 0)); then
             printf '[CANIC-REQUEST] failure-context-%s\n' "$index" >&2
@@ -81,18 +99,29 @@ if [[ "$phase/$stage" == "$RUNNER_TEST_FAIL_STAGE" ]]; then
         fi
     done
     echo 'error: fixture test failed' >&2
+    echo "assertion failed: $stage fixture invariant" >&2
 fi
-[[ "$phase/$stage" != "$RUNNER_TEST_FAIL_STAGE" ]] || exit 101
+[[ "$fails" -eq 0 ]] || exit 101
+if [[ "$phase" == execute ]]; then
+    # Full workspace Host selection also contains unrelated empty harnesses.
+    echo 'test result: ok. 0 passed; 0 failed; 0 ignored; 0 measured; 12 filtered out; finished in 0.00s'
+    if [[ "$stage" != "${RUNNER_TEST_ZERO_STAGE:-}" ]]; then
+        echo 'test result: ok. 1 passed; 0 failed; 0 ignored; 0 measured; 0 filtered out; finished in 0.01s'
+    fi
+fi
 SH
 chmod +x "$fixture/bin/"*
 
 serial_stages=(internal host runtime blob-storage payload-limits)
 for mode in full pocketic; do
     stages=()
-    [[ "$mode" != full ]] || stages+=(execute/ordinary)
-    for stage in "${serial_stages[@]}"; do stages+=("compile/$stage"); done
+    if [[ "$mode" == full ]]; then
+        stages+=(execute/ordinary list/native-internal execute/native-internal list/native-host execute/native-host execute/documentation)
+    fi
+    for stage in "${serial_stages[@]}"; do stages+=("compile/$stage" "list/$stage"); done
     for stage in "${serial_stages[@]}"; do stages+=("execute/$stage"); done
     for failure in "${stages[@]}" none; do
+        [[ "$failure" != list/* ]] || continue
         scratch="$fixture/$mode/${failure//\//-}"
         mkdir -p "$scratch"
         status=0
@@ -108,9 +137,11 @@ for mode in full pocketic; do
         fi
         for selected in "${stages[@]}"; do
             fail_fast=1
-            [[ "$selected" != execute/ordinary ]] || fail_fast=0
+            [[ "$selected" != execute/* ]] || fail_fast=0
             printf '%s\t%s\t%s\n' "${selected%/*}" "${selected#*/}" "$fail_fast"
-            [[ "$selected" != "$failure" ]] || break
+            if [[ "$selected" == "$failure" && "$failure" == compile/* ]]; then break; fi
+            if [[ "$selected" == execute/documentation &&
+                ("$failure" == execute/ordinary || "$failure" == execute/native-* || "$failure" == execute/documentation) ]]; then break; fi
         done > "$scratch/expected.tsv"
         diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
         logs="$fixture/target/test-runs"
@@ -133,7 +164,7 @@ for mode in full pocketic; do
             rg -q '^\[CANIC-REQUEST\] failure-context-0$' "$logs"
         fi
         rm -rf "$logs"
-        if [[ "$failure" == execute/ordinary || "$failure" == compile/* ]]; then
+        if [[ "$failure" == execute/ordinary || "$failure" == execute/native-* || "$failure" == execute/documentation || "$failure" == compile/* ]]; then
             [[ ! -e "$scratch/server.pid" ]]
         else
             read -r server_pid < "$scratch/server.pid"
@@ -150,6 +181,69 @@ for mode in full pocketic; do
     done
 done
 
+# A missing selector fails admission even when Cargo exits successfully. Native
+# groups still finish their independent checks; serial selectors stop before a server.
+for stage in native-internal native-host "${serial_stages[@]}"; do
+    scratch="$fixture/empty-$stage"
+    mkdir -p "$scratch"
+    status=0
+    CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+        POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
+        RUNNER_TEST_EMPTY_STAGE="$stage" \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" full > "$scratch/output.log" 2>&1 || status=$?
+    [[ "$status" -ne 0 && ! -e "$scratch/server.pid" ]]
+    rg -q 'test selector resolved to zero tests' "$scratch/output.log"
+    if awk -F '\t' -v stage="$stage" '$1 == "execute" && $2 == stage { found=1 } END { exit !found }' "$scratch/trace.tsv"; then exit 1; fi
+done
+
+for stage in native-internal internal host; do
+    scratch="$fixture/zero-executed-$stage"
+    mkdir -p "$scratch"
+    status=0
+    CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+        POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
+        RUNNER_TEST_ZERO_STAGE="$stage" \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" full > "$scratch/output.log" 2>&1 || status=$?
+    [[ "$status" -ne 0 ]]
+    rg -q 'selected test command completed without executing a test' "$scratch/output.log"
+done
+
+exact='pic::governed_suite::governed_internal_pocketic_suite'
+for scenario in correct wrong duplicate; do
+    scratch="$fixture/exact-$scenario"
+    mkdir -p "$scratch"
+    identity="$exact" duplicate=0 status=0
+    [[ "$scenario" != wrong ]] || identity=wrong::case
+    [[ "$scenario" != duplicate ]] || duplicate=1
+    CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+        POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
+        RUNNER_TEST_LIST_IDENTITY="$identity" RUNNER_TEST_DUPLICATE="$duplicate" \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" targeted-pocketic "$exact" > "$scratch/output.log" 2>&1 || status=$?
+    if [[ "$scenario" == correct ]]; then
+        [[ "$status" -eq 0 ]]
+    else
+        [[ "$status" -ne 0 ]]
+        rg -q 'exact PocketIC selector must resolve to one test' "$scratch/output.log"
+    fi
+done
+
+scratch="$fixture/multiple-failures"
+mkdir -p "$scratch"
+status=0
+CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+    POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+    RUNNER_TEST_TRACE="$scratch/trace.tsv" \
+    RUNNER_TEST_FAIL_STAGE='execute/internal execute/host execute/runtime' \
+    bash "$fixture/scripts/ci/run-workspace-tests.sh" full > "$scratch/output.log" 2>&1 || status=$?
+[[ "$status" -ne 0 ]]
+for stage in internal host runtime; do
+    rg -q "assertion failed: $stage fixture invariant" "$scratch/output.log"
+done
+rg -q $'^execute\tpayload-limits\t0$' "$scratch/trace.tsv"
+
 # Narrow modes must not inherit the complete serial compilation barrier.
 for mode in ordinary fast targeted-pocketic; do
     scratch="$fixture/$mode"
@@ -160,7 +254,7 @@ for mode in ordinary fast targeted-pocketic; do
         bash "$fixture/scripts/ci/run-workspace-tests.sh" "$mode" pic_ingress_payload_limits \
         > "$scratch/output.log" 2>&1
     if [[ "$mode" == targeted-pocketic ]]; then
-        printf 'execute\tpayload-limits\t1\n' > "$scratch/expected.tsv"
+        printf 'list\tpayload-limits\t1\nexecute\tpayload-limits\t0\n' > "$scratch/expected.tsv"
         read -r server_pid < "$scratch/server.pid"
         if kill -0 "$server_pid" 2>/dev/null; then
             echo "targeted runner left its fixture server running" >&2
@@ -168,6 +262,9 @@ for mode in ordinary fast targeted-pocketic; do
         fi
     else
         printf 'execute\tordinary\t0\n' > "$scratch/expected.tsv"
+        if [[ "$mode" == ordinary ]]; then
+            printf 'list\tnative-internal\t1\nexecute\tnative-internal\t0\nlist\tnative-host\t1\nexecute\tnative-host\t0\nexecute\tdocumentation\t0\n' >> "$scratch/expected.tsv"
+        fi
         [[ ! -e "$scratch/server.pid" ]]
     fi
     diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
@@ -210,3 +307,23 @@ for scenario in healthy reset malformed unavailable; do
     esac
 done
 echo 'compiler cache observation tests passed'
+
+# An empty filter means "all tests" to libtest. Never admit stateful tests through
+# an empty, partial or failed native-selector producer.
+for scenario in empty blank failed; do
+    scratch="$fixture/native-selector-$scenario"
+    mkdir -p "$scratch"
+    case "$scenario" in
+        empty) printf '#!/usr/bin/env bash\nexit 0\n' > "$fixture/scripts/ci/list-internal-native-tests.sh" ;;
+        blank) printf '#!/usr/bin/env bash\nprintf "pic::workers::tests::\\n\\npic::governed_suite::\\n"\n' > "$fixture/scripts/ci/list-internal-native-tests.sh" ;;
+        failed) printf '#!/usr/bin/env bash\necho "pic::workers::tests::"\nexit 1\n' > "$fixture/scripts/ci/list-internal-native-tests.sh" ;;
+    esac
+    status=0
+    CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+        POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" ordinary > "$scratch/output.log" 2>&1 || status=$?
+    [[ "$status" -ne 0 ]]
+    if rg -q 'native-internal' "$scratch/trace.tsv"; then exit 1; fi
+done
+echo 'empty and failed native selector producers reject before execution'

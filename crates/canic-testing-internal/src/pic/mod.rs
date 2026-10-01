@@ -21,11 +21,13 @@ use canic_core::{
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 use std::sync::{Mutex, MutexGuard, PoisonError};
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
-use std::{collections::BTreeSet, panic::AssertUnwindSafe, time::Instant};
+use std::{collections::BTreeSet, io::Write, panic::AssertUnwindSafe, path::Path, time::Instant};
 
 mod artifacts;
 mod audit;
 mod canic;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod cases;
 mod delegation;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod fleet_coordinator;
@@ -46,7 +48,7 @@ mod timing;
 mod workers;
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
-type GovernedTestCase = (&'static str, fn());
+use cases::GovernedTestCase;
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 const TARGET_GOVERNED_CASE_ENV: &str = "CANIC_TARGET_GOVERNED_CASE";
@@ -152,7 +154,7 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
         let target = target
             .to_str()
             .expect("targeted governed case name must be UTF-8");
-        cases.retain(|(name, _test)| *name == target);
+        cases.retain(|case| case.name == target);
         assert_eq!(
             cases.len(),
             1,
@@ -164,27 +166,58 @@ fn run_governed_test_cases(mut cases: Vec<GovernedTestCase>) {
 
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 fn run_selected_governed_test_cases(cases: Vec<GovernedTestCase>) {
+    execute_governed_test_cases(cases, None);
+}
+
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+fn execute_governed_test_cases(cases: Vec<GovernedTestCase>, report_path: Option<&Path>) {
+    let mut report = report_path.map(|path| {
+        std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(path)
+            .expect("create exclusive worker outcome report")
+    });
     let mut failure = None;
     let mut timings = Vec::new();
-    for (name, test) in cases {
+    for GovernedTestCase {
+        name,
+        test,
+        rust_path,
+    } in cases
+    {
         let started_at = Instant::now();
         progress::event("SUITE", progress::ProgressStatus::Run, name);
-        let failed = std::panic::catch_unwind(AssertUnwindSafe(|| {
+        let result = std::panic::catch_unwind(AssertUnwindSafe(|| {
             let span = timing::Span::start(name);
             test();
             span.finish();
-        }))
-        .is_err();
+        }));
         let elapsed = started_at.elapsed().as_secs_f64();
         timings.push((name, elapsed));
-        if failed {
+        if let Some(report) = &mut report {
+            assert!(!name.contains(['\n', '\r', '\t']));
+            let outcome = if result.is_ok() { "PASS" } else { "FAIL" };
+            writeln!(report, "{outcome}\t{name}").expect("record completed governed case");
+            report.flush().expect("flush completed governed case");
+        }
+        if let Err(payload) = result {
             progress::timed(
                 "SUITE",
                 progress::ProgressStatus::Fail,
                 name,
                 started_at.elapsed(),
             );
-            failure = Some(name);
+            let diagnostic = payload
+                .downcast_ref::<String>()
+                .cloned()
+                .or_else(|| {
+                    payload
+                        .downcast_ref::<&str>()
+                        .map(|text| (*text).to_owned())
+                })
+                .unwrap_or_else(|| "non-string panic payload".to_owned());
+            failure = Some((name, rust_path, diagnostic));
             break;
         }
         progress::timed(
@@ -210,8 +243,15 @@ fn run_selected_governed_test_cases(cases: Vec<GovernedTestCase>) {
         );
     }
 
-    if let Some(name) = failure {
-        panic!("governed internal test failed: {name}");
+    if let Some((name, rust_path, diagnostic)) = failure {
+        let message = format!(
+            "governed internal test failed: {name}\n{diagnostic}\nRerun: make test-pocketic-case CASE={rust_path}"
+        );
+        if let Some(path) = report_path {
+            std::fs::write(path.with_extension("failure.txt"), &message)
+                .expect("retain worker failure details for final summary");
+        }
+        panic!("{message}");
     }
 }
 
@@ -233,19 +273,29 @@ mod governed_suite {
         if let Some(path) = std::env::var_os(workers::CASE_FILE_ENV) {
             let names = std::fs::read_to_string(path).expect("worker case selection");
             let selected = workers::select(&cases, &names).expect("exact registered worker cases");
-            run_selected_governed_test_cases(selected);
+            let report =
+                std::env::var_os(workers::REPORT_FILE_ENV).expect("worker outcome report path");
+            execute_governed_test_cases(selected, Some(Path::new(&report)));
         } else if std::env::var_os(TARGET_GOVERNED_CASE_ENV).is_some() {
             run_governed_test_cases(cases);
         } else {
-            run_selected_governed_test_cases(fleet_registry::governed_recovery_cases());
+            let recovery = std::panic::catch_unwind(|| {
+                run_selected_governed_test_cases(fleet_registry::governed_recovery_cases());
+            });
+            if let Err(failure) = recovery {
+                eprintln!(
+                    "SKIPPED: both internal worker groups depend on the failed source-bound recovery prerequisite"
+                );
+                std::panic::resume_unwind(failure);
+            }
             workers::run(worker_groups());
         }
     }
 
     fn worker_groups() -> [Vec<GovernedTestCase>; 2] {
-        let mut regular = fleet_registry::governed_pocketic_cases();
+        let mut regular = lifecycle::governed_runtime_cases();
+        regular.extend(fleet_registry::governed_pocketic_cases());
         regular.extend(fleet_coordinator::governed_pocketic_cases());
-        regular.extend(lifecycle::governed_runtime_cases());
         // The retained timing baseline leaves this worker about 350s shorter.
         // Move the two independent support estates (~200s) without adding workers.
         let mut journeys = lifecycle::governed_support_cases();
@@ -261,10 +311,10 @@ mod governed_suite {
             assert!(!group.is_empty());
             let positions = group
                 .iter()
-                .map(|(name, _)| {
+                .map(|case| {
                     cases
                         .iter()
-                        .position(|(registered, _)| registered == name)
+                        .position(|registered| registered.name == case.name)
                         .unwrap()
                 })
                 .collect::<Vec<_>>();
@@ -275,11 +325,11 @@ mod governed_suite {
         assert_eq!(
             partition
                 .iter()
-                .map(|(name, _)| *name)
+                .map(|case| case.name)
                 .collect::<std::collections::BTreeSet<_>>(),
             cases
                 .iter()
-                .map(|(name, _)| *name)
+                .map(|case| case.name)
                 .collect::<std::collections::BTreeSet<_>>()
         );
     }
@@ -304,9 +354,10 @@ mod governed_suite {
 
     fn ordered_governed_pocketic_cases() -> Vec<GovernedTestCase> {
         let mut cases = fleet_registry::governed_recovery_cases();
+        cases.extend(lifecycle::governed_runtime_cases());
         cases.extend(fleet_registry::governed_pocketic_cases());
         cases.extend(fleet_coordinator::governed_pocketic_cases());
-        cases.extend(lifecycle::governed_pocketic_cases());
+        cases.extend(lifecycle::governed_support_cases());
         // Retain the recovery prefix and each worker's internal order; the
         // registry partition below owns concurrent execution, not case membership.
         cases.extend(fleet_registry::governed_fleet_journey_cases());
@@ -324,15 +375,14 @@ mod governed_suite {
         let journeys = fleet_registry::governed_fleet_journey_cases();
         assert!(!recovery.is_empty());
         assert!(!journeys.is_empty());
-        let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
-        let recovery_names = recovery.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        let names = cases.iter().map(|case| case.name).collect::<Vec<_>>();
+        let recovery_names = recovery.iter().map(|case| case.name).collect::<Vec<_>>();
         assert!(recovery_names.contains(&"source-bound activation reset recovers and replays"));
         assert!(names.starts_with(&recovery_names));
-        assert!(
-            names[recovery.len()..]
-                .starts_with(&["Fleet deployment restore", "autonomous Root removal"])
-        );
-        let journey_names = journeys.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        let runtime = lifecycle::governed_runtime_cases();
+        let runtime_names = runtime.iter().map(|case| case.name).collect::<Vec<_>>();
+        assert!(names[recovery.len()..].starts_with(&runtime_names));
+        let journey_names = journeys.iter().map(|case| case.name).collect::<Vec<_>>();
         assert!(names.ends_with(&journey_names));
         for required in [
             "generated reinstall recovers and converges",
@@ -348,45 +398,78 @@ mod governed_suite {
         }
         assert!(names.len() > journey_names.len());
         assert_unique_governed_case_names(&cases);
+        cases::assert_discovered_inventory(&cases);
     }
 
     #[test]
-    fn governed_runner_stops_after_failure() {
+    fn governed_runner_records_failure_and_stops_its_process() {
         static EXECUTED: AtomicUsize = AtomicUsize::new(0);
+        let directory = report_directory();
+        let report = directory.join("outcomes.tsv");
         let result = std::panic::catch_unwind(|| {
-            run_selected_governed_test_cases(vec![
-                ("first", || {
-                    EXECUTED.fetch_add(1, Ordering::SeqCst);
-                }),
-                ("failing", || {
-                    EXECUTED.fetch_add(1, Ordering::SeqCst);
-                    panic!("injected case failure");
-                }),
-                ("must not run", || {
-                    EXECUTED.fetch_add(1, Ordering::SeqCst);
-                }),
-            ]);
+            execute_governed_test_cases(
+                cases::registered![
+                    ("first", || {
+                        EXECUTED.fetch_add(1, Ordering::SeqCst);
+                    }),
+                    ("failing", || {
+                        EXECUTED.fetch_add(1, Ordering::SeqCst);
+                        panic!("injected case failure");
+                    }),
+                    ("must not run", || {
+                        EXECUTED.fetch_add(1, Ordering::SeqCst);
+                    }),
+                ],
+                Some(&report),
+            );
         });
-        assert!(result.is_err());
+        let diagnostic = result.unwrap_err().downcast::<String>().unwrap();
+        assert!(diagnostic.contains("injected case failure"));
         assert_eq!(EXECUTED.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            std::fs::read_to_string(&report).unwrap(),
+            "PASS\tfirst\nFAIL\tfailing\n"
+        );
+        std::fs::remove_dir_all(directory).unwrap();
     }
 
     #[test]
     fn governed_runner_runs_every_successful_case_in_order() {
         static EXECUTED: AtomicUsize = AtomicUsize::new(0);
-        run_selected_governed_test_cases(vec![
-            ("first", || {
-                assert_eq!(EXECUTED.fetch_add(1, Ordering::SeqCst), 0);
-            }),
-            ("second", || {
-                assert_eq!(EXECUTED.fetch_add(1, Ordering::SeqCst), 1);
-            }),
-        ]);
+        let directory = report_directory();
+        let report = directory.join("outcomes.tsv");
+        execute_governed_test_cases(
+            cases::registered![
+                ("first", || {
+                    assert_eq!(EXECUTED.fetch_add(1, Ordering::SeqCst), 0);
+                }),
+                ("second", || {
+                    assert_eq!(EXECUTED.fetch_add(1, Ordering::SeqCst), 1);
+                }),
+            ],
+            Some(&report),
+        );
         assert_eq!(EXECUTED.load(Ordering::SeqCst), 2);
+        assert_eq!(
+            std::fs::read_to_string(&report).unwrap(),
+            "PASS\tfirst\nPASS\tsecond\n"
+        );
+        std::fs::remove_dir_all(directory).unwrap();
+    }
+
+    fn report_directory() -> std::path::PathBuf {
+        let nonce = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_nanos();
+        let directory =
+            std::env::temp_dir().join(format!("governed-report-{}-{nonce}", std::process::id()));
+        std::fs::create_dir(&directory).unwrap();
+        directory
     }
 
     fn assert_unique_governed_case_names(cases: &[GovernedTestCase]) {
-        let names = cases.iter().map(|(name, _)| *name).collect::<Vec<_>>();
+        let names = cases.iter().map(|case| case.name).collect::<Vec<_>>();
         assert!(
             !names.is_empty(),
             "governed test inventory must not be empty"

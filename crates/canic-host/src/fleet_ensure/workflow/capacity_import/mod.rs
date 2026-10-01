@@ -14,6 +14,7 @@ use crate::{
         ops::{
             EnsurePaths,
             capacity_import::{
+                funding,
                 journal::{CapacityImportJournalError, CapacityImportJournalStore},
                 publication,
                 transport::CapacityImportTransport,
@@ -50,6 +51,7 @@ pub async fn complete(
     if publication::completed(&journal) {
         return Ok(journal);
     }
+    funding::verify_origins(store, paths, &journal.plan)?;
     if !journal.approved
         || journal.reservation.is_none()
         || !crate::fleet_ensure::ops::capacity_import::journal::all_custody_ready(&journal)

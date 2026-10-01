@@ -261,12 +261,21 @@ fn render(
     json: bool,
     next: &str,
 ) -> Result<(), FleetCommandError> {
+    let report = FleetEnsureReport {
+        plan,
+        terminal: completed,
+        effects_applied: 0,
+        funding_review: None,
+        actual_conservation: None,
+    };
+    let plan = &report.plan;
     if json {
         println!(
             "{}",
             serde_json::to_string_pretty(&serde_json::json!({
                 "schema_version": 1, "stage": "infrastructure_bootstrap", "completed": completed,
                 "plan": plan, "apply_command": next,
+                "continuation_forecast": canic_host::fleet_ensure::policy::continuation_forecast::forecast(&report),
             }))?
         );
     } else {
@@ -295,16 +304,7 @@ fn render(
                 println!("effect: {}", serde_json::to_string(action)?);
             }
         }
-        super::render_report(
-            &FleetEnsureReport {
-                plan,
-                terminal: completed,
-                effects_applied: 0,
-                funding_review: None,
-                actual_conservation: None,
-            },
-            false,
-        )?;
+        super::render_report(&report, false)?;
         println!("apply: {next}");
         if completed {
             println!(

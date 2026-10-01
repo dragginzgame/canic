@@ -81,13 +81,23 @@ pub fn plan<P: EnsurePlatform>(
     let _lock = ops::lock_operation(&paths)?;
     let time =
         bootstrap::inspection::planned_at_time(&paths, source.source_sha256)?.unwrap_or(time);
-    let planned = bootstrap::prepare(root, desired, source, desired_sha256, time)?;
     if let Some(retained) = ops::read_plan(&paths)? {
-        if retained == planned {
+        if retained.infrastructure_bootstrap.as_deref() == Some(source)
+            && retained
+                .reviewed_desired
+                .as_ref()
+                .is_some_and(|reviewed| reviewed.desired() == desired)
+            && retained.desired_sha256 == desired_sha256
+            && retained.planned_at_time == time
+        {
+            bootstrap::verify_plan(root, &retained)?;
             return Ok(retained);
         }
         return Err(InfrastructureBootstrapError::Integrity.into());
     }
+    let planned = bootstrap::prepare_review(root, desired, source, desired_sha256, time)?;
+    crate::fleet_ensure::policy::infrastructure_bootstrap::admit_review(&planned)
+        .map_err(InfrastructureBootstrapError::from)?;
     let state = ops::read_state(&paths, &desired.fleet)?;
     if ops::read_journal(&paths)?.is_some()
         || !state.principals.is_empty()
@@ -100,6 +110,15 @@ pub fn plan<P: EnsurePlatform>(
     platform
         .bind_reviewed_desired(desired)
         .map_err(EnsureWorkflowError::Platform)?;
+    if let Some(observed) = platform
+        .observe_operator_funding()
+        .map_err(EnsureWorkflowError::Platform)?
+    {
+        crate::fleet_ensure::policy::infrastructure_bootstrap::admit_operator_observation(
+            &planned, &observed,
+        )
+        .map_err(InfrastructureBootstrapError::from)?;
+    }
     bootstrap::inspection::reserve(
         &paths,
         &planned,
@@ -110,6 +129,11 @@ pub fn plan<P: EnsurePlatform>(
         .map_err(EnsureWorkflowError::Platform)?
         .ok_or(EnsureWorkflowError::PlanIntegrity)?;
     bootstrap::verify_initial(&planned, &observed)?;
+    crate::fleet_ensure::policy::infrastructure_bootstrap::admit_operator_funding(
+        &planned,
+        observed.operator_cycles,
+    )
+    .map_err(InfrastructureBootstrapError::from)?;
     ops::write_plan(&paths, &planned)?;
     Ok(planned)
 }

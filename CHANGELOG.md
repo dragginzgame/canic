@@ -16,7 +16,9 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.49` fixes import-budget, bootstrap-registration and seed-publication
   blockers and consolidates recovery, backup retention, macOS portability,
-  Cargo resolver 3, release-guard corrections and quieter Candid diagnostics.
+  Cargo resolver 3, release-guard corrections, quieter Candid diagnostics and
+  complete test-failure reporting, bootstrap budget admission and reviewed
+  held-capacity funding recovery, with dependency and artifact-build drift fixes.
   API removals and current-schema changes are potentially breaking pre-1.0 hard
   cuts requiring reinstall; fresh backup execution remains unavailable.
 - `0.110.48` separates release receipts from status documents, removes obsolete

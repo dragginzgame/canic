@@ -90,13 +90,11 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
         );
     }
     assert!(samples["root"].binding.module_sha256.is_none());
-    if recovery {
-        // An ordinary valid plan funds initialization but has too little shared
-        // surplus for registration. Never edit the resulting immutable plan.
-        for target in &mut desired.canisters {
-            if ["coordinator", "root", "store"].contains(&target.name.as_str()) {
-                target.minimum_cycles = samples[&target.name].cycles.to_string();
-            }
+    // Current review includes the missing budget credit. The recovery case
+    // separately seeds a retained approval issued without that complete quote.
+    for target in &mut desired.canisters {
+        if ["coordinator", "root", "store"].contains(&target.name.as_str()) {
+            target.minimum_cycles = samples[&target.name].cycles.to_string();
         }
     }
     let declarations = CapacityImportDeclarations {
@@ -169,7 +167,10 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
         input.local_replica.clone(),
         true,
     );
-    let reviewed = infrastructure_bootstrap::review(
+    let reviewed = if recovery {
+        seed_retained_budget_fixture(&input, &desired, &source)
+    } else {
+        infrastructure_bootstrap::review(
         &canic_host::fleet_ensure::dto::infrastructure_bootstrap::InfrastructureBootstrapReviewRequest {
             workspace: input.adapter_root, desired: &desired,
             coordinator: BootstrapCoordinatorSelection::Initialize,
@@ -177,7 +178,8 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
             seed: Path::new("bootstrap-estate.toml"),
             planned_at_time: 1_800_000_000_000_000_001,
         }, &mut platform, &icp,
-    ).unwrap();
+    ).unwrap()
+    };
     desired = reviewed
         .reviewed_desired
         .as_ref()
@@ -186,6 +188,24 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
         .clone();
     let source = reviewed.infrastructure_bootstrap.as_ref().unwrap().as_ref();
     let digest = reviewed.desired_sha256.clone();
+    if !recovery {
+        let initialization = canic_host::fleet_ensure::ops::infrastructure_bootstrap::prepare(
+            input.adapter_root,
+            &desired,
+            source,
+            &digest,
+            reviewed.planned_at_time,
+        )
+        .unwrap();
+        assert!(
+            reviewed.conservation.maximum_new_funding_cycles
+                > initialization.conservation.maximum_new_funding_cycles
+        );
+        assert_eq!(
+            reviewed.conservation.maximum_execution_burn_cycles,
+            initialization.conservation.maximum_execution_burn_cycles
+        );
+    }
     std::fs::write(input.adapter_root.join("lose-install-response"), b"1").unwrap();
     // The existing wrapper also loses one controller response; pre-mark that separate fault.
     std::fs::write(input.adapter_root.join("lost-controller-response"), b"1").unwrap();
@@ -470,7 +490,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
         .unwrap(),
         published
     );
-    assert_initial_import(&input, &desired, source, &icp);
+    assert_initial_import(&input, &desired, source, &icp, !recovery);
     assert_workload_convergence(&input, &desired, &reviewed.operation_id);
     assert_eq!(
         infrastructure_bootstrap::apply(
@@ -483,6 +503,96 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, recovery: bool) {
         .unwrap(),
         published
     );
+}
+
+/// Seed an already reviewed small ceiling before issuance, then leave its bytes immutable.
+/// Production fresh review must never produce this retained-incident fixture.
+fn seed_retained_budget_fixture(
+    input: &ReinstallJourney<'_>,
+    desired: &DesiredFleet,
+    source: &canic_host::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+) -> canic_host::fleet_ensure::model::FleetEnsurePlan {
+    use canic_host::fleet_ensure::{
+        model::infrastructure_bootstrap::InfrastructureBootstrapSeedRecord,
+        ops::{infrastructure_bootstrap as bootstrap_ops, write_plan},
+        policy::expected_plan_sha256,
+    };
+    let paths = EnsurePaths::under(input.adapter_root, &desired.environment, &desired.fleet);
+    assert!(!paths.plan.exists());
+    assert!(!paths.journal.exists());
+    for entry in source.sources.values() {
+        let status = input
+            .pic
+            .canister_status(entry.sample.binding.canister_id, Some(source.operator))
+            .unwrap();
+        assert_eq!(status.version, entry.sample.binding.canister_version);
+        assert_eq!(
+            status.module_hash,
+            entry.sample.binding.module_sha256.map(|hash| hash.to_vec())
+        );
+    }
+    let original =
+        std::fs::read_to_string(input.adapter_root.join("bootstrap-estate.toml")).unwrap();
+    let mut source = source.clone();
+    source.estate_seed = Some(InfrastructureBootstrapSeedRecord {
+        relative_path: "bootstrap-estate.toml".into(),
+        before_sha256: wasm_hash(original.as_bytes()).try_into().unwrap(),
+        original,
+    });
+    let source = bootstrap_ops::seal_sources(source).unwrap();
+    let mut desired = desired.clone();
+    for root in &mut desired.bootstrap.as_mut().unwrap().roots {
+        let mut sources = root
+            .canister_pool_imports
+            .iter()
+            .map(|name| source.sources[name].sample.binding.canister_id)
+            .collect::<Vec<_>>();
+        sources.sort_unstable();
+        root.capacity_import_bootstrap = Some(
+            canic_host::fleet_ensure::model::capacity_import::CapacityImportBootstrapRecord {
+                review_sha256: source.source_sha256,
+                operator: source.operator,
+                sources,
+            },
+        );
+    }
+    let digest = canic_core::cdk::utils::hash::sha256_hex(
+        toml::to_string_pretty(&desired).unwrap().as_bytes(),
+    );
+    let mut plan = bootstrap_ops::prepare(
+        input.adapter_root,
+        &desired,
+        &source,
+        &digest,
+        1_800_000_000_000_000_001,
+    )
+    .unwrap();
+    let available =
+        plan.conservation.observed_controlled_cycles + plan.conservation.maximum_new_funding_cycles;
+    let floors = plan
+        .canisters
+        .iter()
+        .map(|target| {
+            let configured = desired
+                .canisters
+                .iter()
+                .find(|entry| entry.name == target.name)
+                .unwrap();
+            configured
+                .minimum_cycles
+                .parse::<canic_core::cdk::types::Cycles>()
+                .unwrap()
+                .to_u128()
+                + source.sources[&target.name].sample.reserved_cycles
+        })
+        .sum::<u128>();
+    let spendable = available.checked_sub(floors).unwrap();
+    assert!(plan.conservation.maximum_execution_burn_cycles > spendable);
+    plan.conservation.maximum_execution_burn_cycles = spendable;
+    plan.conservation.expected_post_operation_cycles = floors;
+    plan.plan_sha256 = expected_plan_sha256(&plan);
+    write_plan(&paths, &plan).unwrap();
+    plan
 }
 
 fn assert_workload_convergence(
@@ -560,6 +670,7 @@ fn assert_initial_import(
     desired: &DesiredFleet,
     source: &canic_host::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
     icp: &canic_host::icp::IcpCli,
+    recognize_funding: bool,
 ) {
     use canic_host::fleet_ensure::{
         dto::capacity_import::CapacityImportReviewRequest, workflow::capacity_import::review,
@@ -574,7 +685,8 @@ fn assert_initial_import(
         input.root,
         Principal::from_text(&desired.operator).unwrap(),
     );
-    let request = CapacityImportReviewRequest {
+    let mut request = CapacityImportReviewRequest {
+        funding_credits: Vec::new(),
         environment: desired.environment.clone(),
         fleet: desired.fleet.clone(),
         canisters: input.pools.to_vec(),
@@ -591,6 +703,21 @@ fn assert_initial_import(
             .unwrap(),
         maximum_root_paid_calls,
     };
+    if recognize_funding {
+        add_reviewed_import_funding(
+            input,
+            desired,
+            source,
+            icp,
+            &mut request,
+            context
+                .binding
+                .limits
+                .canister_pool
+                .canister_cycles
+                .to_u128(),
+        );
+    }
     let planned = review::plan(input.adapter_root, &request, icp).unwrap();
     assert_eq!(planned.operation.as_ref().unwrap().review.publication_kind,
         canic_host::fleet_ensure::model::capacity_import::operation::CapacityImportPublicationKind::InitializeEstate);
@@ -600,7 +727,12 @@ fn assert_initial_import(
             .values()
             .find(|source| source.sample.binding.canister_id == reviewed.binding.canister_id)
             .unwrap();
-        assert_eq!(reviewed.observed_cycles, original.sample.cycles);
+        let credited = request
+            .funding_credits
+            .iter()
+            .find(|credit| credit.canister == reviewed.binding.canister_id)
+            .map_or(0, |credit| credit.cycles);
+        assert_eq!(reviewed.observed_cycles, original.sample.cycles + credited);
         assert_eq!(
             reviewed.observed_reserved_cycles,
             original.sample.reserved_cycles
@@ -636,6 +768,83 @@ fn assert_initial_import(
         .unwrap(),
         completed
     );
+}
+
+fn add_reviewed_import_funding(
+    input: &ReinstallJourney<'_>,
+    desired: &DesiredFleet,
+    source: &canic_host::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapRecord,
+    icp: &canic_host::icp::IcpCli,
+    request: &mut canic_host::fleet_ensure::dto::capacity_import::CapacityImportReviewRequest,
+    minimum: u128,
+) {
+    use canic_host::fleet_ensure::{
+        dto::capacity_import::CapacityImportFundingCreditRequest,
+        ops::capacity_import::{CapacityImportReviewError, journal::CapacityImportJournalError},
+        policy::capacity_import::CapacityImportPolicyError,
+        workflow::capacity_import::review,
+    };
+    let paths = EnsurePaths::under(input.adapter_root, &desired.environment, &desired.fleet);
+    let original_plan = std::fs::read(&paths.plan).unwrap();
+    let original_journal = std::fs::read(&paths.journal).unwrap();
+    request.maximum_source_debit_cycles = input
+        .pools
+        .iter()
+        .map(|id| {
+            source
+                .sources
+                .values()
+                .find(|source| source.sample.binding.canister_id == *id)
+                .unwrap()
+                .sample
+                .cycles
+        })
+        .max()
+        .unwrap();
+    let failure = review::plan(input.adapter_root, request, icp).unwrap_err();
+    assert!(
+        matches!(failure, CapacityImportJournalError::Review(CapacityImportReviewError::Policy(
+        CapacityImportPolicyError::InsufficientCycles { required_cycles, available_cycles, shortfall_cycles, .. }
+    )) if required_cycles > available_cycles && shortfall_cycles == required_cycles - available_cycles),
+        "{failure:?}"
+    );
+    let mut credits = Vec::new();
+    for id in input.pools {
+        let original = &source
+            .sources
+            .values()
+            .find(|source| source.sample.binding.canister_id == *id)
+            .unwrap()
+            .sample;
+        let cycles =
+            minimum + request.maximum_source_debit_cycles - original.cycles + 100_000_000_000;
+        input.pic.add_cycles(*id, cycles);
+        credits.push(CapacityImportFundingCreditRequest {
+            canister: *id,
+            cycles,
+        });
+    }
+    assert!(matches!(
+        review::plan(input.adapter_root, request, icp),
+        Err(CapacityImportJournalError::Review(
+            CapacityImportReviewError::Policy(CapacityImportPolicyError::InsufficientCycles { .. })
+        ))
+    ));
+    request.funding_credits = credits;
+    let funded = review::plan(input.adapter_root, request, icp).unwrap();
+    assert_eq!(funded.plan.funding_credits.len(), input.pools.len());
+    for credit in &funded.plan.funding_credits {
+        let original = &source
+            .sources
+            .values()
+            .find(|source| source.sample.binding.canister_id == credit.before.binding.canister_id)
+            .unwrap()
+            .sample;
+        assert_eq!(&credit.before, original);
+        assert_eq!(credit.observed.binding, original.binding);
+    }
+    assert_eq!(std::fs::read(&paths.plan).unwrap(), original_plan);
+    assert_eq!(std::fs::read(&paths.journal).unwrap(), original_journal);
 }
 
 fn write_import_inputs(
