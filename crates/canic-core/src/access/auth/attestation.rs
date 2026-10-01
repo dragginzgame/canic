@@ -20,11 +20,18 @@ const ROLE_ATTESTATION_MAX_TYPE_LEN: usize = 16 * 1024;
 
 pub(super) async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessError> {
     let attestation = role_attestation_from_args()?;
+    verify_attestation(&attestation, caller).await
+}
+
+pub(super) async fn verify_attestation(
+    attestation: &SignedRoleAttestation,
+    caller: Principal,
+) -> Result<(), AccessError> {
     if attestation.payload.subject != caller {
         return Err(AccessError::RoleAttestationSubjectMismatch);
     }
 
-    RuntimeAuthWorkflow::verify_local_subnet_role_attestation(&attestation, 0)
+    RuntimeAuthWorkflow::verify_local_subnet_role_attestation(attestation, 0)
         .await
         .map_err(AccessError::Internal)
 }

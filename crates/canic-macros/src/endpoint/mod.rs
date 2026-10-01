@@ -72,7 +72,6 @@ pub(super) fn expand_entry(
 ) -> TokenStream {
     let func = parse_macro_input!(item as ItemFn);
     let sig = func.sig.clone();
-    let is_async = sig.asyncness.is_some();
 
     // ---------------------------------------------------------------------
     // Parse phase (syntax only)
@@ -87,7 +86,7 @@ pub(super) fn expand_entry(
     // Validate phase (structural invariants only)
     // ---------------------------------------------------------------------
 
-    let validated = match validate::validate(kind, parsed, &sig, is_async) {
+    let validated = match validate::validate(kind, parsed, &sig) {
         Ok(v) => v,
         Err(e) => return e.to_compile_error().into(),
     };

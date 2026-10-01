@@ -4,7 +4,7 @@ use syn::{
     Expr, Ident, LitStr, Meta, MetaNameValue, Path, Token, parse::Parser, punctuated::Punctuated,
 };
 
-const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must be expressed via requires(...), public, payload(...), internal, composite, or name = \"...\"";
+const ENDPOINT_ATTR_HELP: &str = "endpoint attributes must use requires(...), public, internal, composite, name = \"...\", payload(...), decode = LIMITS, or on_access_denied = \"reject\"";
 
 //
 // ============================================================================
@@ -102,6 +102,8 @@ pub(super) struct ParsedArgs {
     pub forwarded: Vec<TokenStream2>,
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
+    pub decode: Option<TokenStream2>,
+    pub reject_access: bool,
     pub requires: Vec<AccessExprAst>,
     pub internal: bool,
     pub public: bool,
@@ -126,9 +128,33 @@ pub(super) fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
     let mut query_mode = QueryMode::Plain;
     let mut export_name = None;
     let mut payload_max_bytes = None;
+    let mut decode = None;
+    let mut reject_access = false;
 
     for meta in metas {
         match meta {
+            Meta::NameValue(nv) if nv.path.is_ident("decode") => {
+                if decode.is_some() {
+                    return Err(syn::Error::new_spanned(nv, "decode must appear only once"));
+                }
+                let value = nv.value;
+                decode = Some(quote!(#value));
+            }
+            Meta::NameValue(nv) if nv.path.is_ident("on_access_denied") => {
+                if reject_access {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "on_access_denied must appear only once",
+                    ));
+                }
+                if parse_string_literal(&nv, "on_access_denied")?.value() != "reject" {
+                    return Err(syn::Error::new_spanned(
+                        nv,
+                        "on_access_denied supports only \"reject\"; omit it for Result errors",
+                    ));
+                }
+                reject_access = true;
+            }
             Meta::List(list) if list.path.is_ident("requires") => {
                 requires.push(parse_requires(&list)?);
             }
@@ -234,17 +260,18 @@ pub(super) fn parse_args(attr: TokenStream2) -> syn::Result<ParsedArgs> {
         && !public
         && forwarded.is_empty()
         && payload_max_bytes.is_none()
+        && decode.is_none()
+        && !reject_access
     {
-        return Err(syn::Error::new_spanned(
-            attr,
-            "expected requires(...), public, internal, composite, name = \"...\", or payload(...)",
-        ));
+        return Err(syn::Error::new_spanned(attr, ENDPOINT_ATTR_HELP));
     }
 
     Ok(ParsedArgs {
         forwarded,
         export_name,
         payload_max_bytes,
+        decode,
+        reject_access,
         requires,
         internal,
         public,
@@ -299,6 +326,8 @@ const fn empty() -> ParsedArgs {
         forwarded: Vec::new(),
         export_name: None,
         payload_max_bytes: None,
+        decode: None,
+        reject_access: false,
         requires: Vec::new(),
         internal: false,
         public: false,

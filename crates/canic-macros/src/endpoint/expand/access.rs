@@ -27,15 +27,15 @@
 //
 // 3. Error handling
 //    --------------
-//    Access failures for gated endpoints must return a Result error; trapping
-//    is forbidden outside lifecycle adapters. Infallible endpoints that can
-//    deny access are rejected at compile time.
+//    Access failures normally return a Result error. Explicit
+//    on_access_denied = "reject" sends an IC rejection without trapping or
+//    wrapping the successful Candid reply. Both use the same denial evaluator.
 //
 // 4. Macro constraints
 //    ------------------
 //    - requires(...) accepts only expression calls (all/any/not/custom + built-ins).
 //    - `self` receivers are forbidden.
-//    - Fallibility detection assumes a direct `Result<_, _>` return type.
+//    - Default fallibility detection assumes a direct `Result<_, _>` return type.
 //
 // Any change to this file should be reviewed against ALL of the above
 // invariants. Violating them will silently corrupt access metrics or
@@ -172,7 +172,14 @@ pub(super) fn build_access_plan(
     }
 
     let fleet_admission = exprs.iter().any(expr_has_fleet_admission);
-    let exprs: Vec<_> = exprs.iter().map(expr_from_ast).collect();
+    let decoded = args
+        .decode
+        .as_ref()
+        .and_then(|_| super::first_typed_arg_ident(sig));
+    let exprs: Vec<_> = exprs
+        .iter()
+        .map(|expr| expr_from_ast(expr, decoded.as_ref()))
+        .collect();
 
     Ok(AccessPlan::Expr {
         expr: quote! {
@@ -195,26 +202,26 @@ fn expr_has_fleet_admission(expr: &AccessExprAst) -> bool {
     }
 }
 
-fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {
+fn expr_from_ast(expr: &AccessExprAst, decoded: Option<&syn::Ident>) -> TokenStream2 {
     match expr {
         AccessExprAst::All(exprs) => {
-            let items = exprs.iter().map(expr_from_ast);
+            let items = exprs.iter().map(|expr| expr_from_ast(expr, decoded));
             quote!(::canic::__internal::core::access::expr::AccessExpr::All(
                 vec![#(#items),*]
             ))
         }
         AccessExprAst::Any(exprs) => {
-            let items = exprs.iter().map(expr_from_ast);
+            let items = exprs.iter().map(|expr| expr_from_ast(expr, decoded));
             quote!(::canic::__internal::core::access::expr::AccessExpr::Any(
                 vec![#(#items),*]
             ))
         }
         AccessExprAst::Not(expr) => {
-            let inner = expr_from_ast(expr);
+            let inner = expr_from_ast(expr, decoded);
             quote!(::canic::__internal::core::access::expr::AccessExpr::Not(Box::new(#inner)))
         }
         AccessExprAst::Pred(pred) => match pred {
-            AccessPredicateAst::Builtin(builtin) => expr_from_builtin(builtin),
+            AccessPredicateAst::Builtin(builtin) => expr_from_builtin(builtin, decoded),
             AccessPredicateAst::Custom(expr) => {
                 quote!(::canic::__internal::core::access::expr::custom(#expr))
             }
@@ -222,7 +229,25 @@ fn expr_from_ast(expr: &AccessExprAst) -> TokenStream2 {
     }
 }
 
-fn expr_from_builtin(pred: &BuiltinPredicate) -> TokenStream2 {
+fn expr_from_builtin(pred: &BuiltinPredicate, decoded: Option<&syn::Ident>) -> TokenStream2 {
+    if let Some(argument) = decoded {
+        match pred {
+            BuiltinPredicate::Authenticated { required_scope } => {
+                let scope = match required_scope {
+                    Some(AuthScopeArg::Literal(scope)) => {
+                        quote!(Some(::canic::application_scope!(#scope).as_str()))
+                    }
+                    Some(AuthScopeArg::Expr(scope)) => quote!(Some(#scope)),
+                    None => quote!(None),
+                };
+                return quote!(::canic::__internal::core::access::expr::auth::authenticated_argument(&#argument, #scope));
+            }
+            BuiltinPredicate::AttestedLocalSubnet => {
+                return quote!(::canic::__internal::core::access::expr::auth::attested_local_subnet_argument(&#argument));
+            }
+            _ => {}
+        }
+    }
     match pred {
         BuiltinPredicate::FleetAllowsUpdates => {
             quote!(::canic::__internal::core::access::expr::fleet::allows_updates())

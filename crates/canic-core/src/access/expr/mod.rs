@@ -94,6 +94,11 @@ pub enum BuiltinPredicate {
         required_scope: Option<&'static str>,
     },
     AttestedLocalSubnet,
+    AuthenticatedArgument {
+        token: Arc<crate::dto::auth::DelegatedToken>,
+        required_scope: Option<&'static str>,
+    },
+    AttestedLocalSubnetArgument(Arc<crate::dto::auth::SignedRoleAttestation>),
     ServiceAuthority {
         service: &'static str,
     },
@@ -284,6 +289,28 @@ pub mod env {
 
 pub mod auth {
     use super::{AccessExpr, BuiltinPredicate, builtin};
+    use crate::dto::auth::{DelegatedToken, SignedRoleAttestation};
+    use std::sync::Arc;
+
+    /// Verify the proof already decoded under the endpoint's argument policy.
+    #[must_use]
+    pub fn authenticated_argument(
+        token: &DelegatedToken,
+        required_scope: Option<&'static str>,
+    ) -> AccessExpr {
+        builtin(BuiltinPredicate::AuthenticatedArgument {
+            token: Arc::new(token.clone()),
+            required_scope,
+        })
+    }
+
+    /// Verify an already decoded role attestation without reading the message again.
+    #[must_use]
+    pub fn attested_local_subnet_argument(attestation: &SignedRoleAttestation) -> AccessExpr {
+        builtin(BuiltinPredicate::AttestedLocalSubnetArgument(Arc::new(
+            attestation.clone(),
+        )))
+    }
 
     #[must_use]
     pub const fn attested_local_subnet() -> AccessExpr {

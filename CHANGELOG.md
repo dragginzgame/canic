@@ -16,7 +16,9 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.49` repairs deployment and import recovery, consolidates completed-Fleet
   reset, and improves build reproducibility, backup retention, macOS portability
-  and release/test reliability. API removals and current-schema changes are
+  and release/test reliability. Adds explicit access rejection with plain Candid
+  replies and configurable endpoint/lifecycle argument bounds. API removals and
+  current-schema changes are
   potentially breaking pre-1.0 hard cuts requiring reinstall; fresh backup
   execution remains unavailable.
 - `0.110.48` separates release receipts from status documents, removes obsolete

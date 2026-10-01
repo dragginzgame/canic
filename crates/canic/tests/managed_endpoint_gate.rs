@@ -99,12 +99,9 @@ fn prepared_managed_init_defers_application_work_while_standalone_local_starts_i
         })
         .expect("managed non-root lifecycle macro");
     let managed_init = managed
-        .split("#[$crate::__internal::cdk::init]")
+        .split("fn init(")
         .nth(1)
-        .and_then(|rest| {
-            rest.split("#[$crate::__internal::cdk::post_upgrade]")
-                .next()
-        })
+        .and_then(|rest| rest.split("fn post_upgrade(").next())
         .expect("managed non-root init body");
 
     assert!(
@@ -124,12 +121,9 @@ fn prepared_managed_init_defers_application_work_while_standalone_local_starts_i
         .and_then(|rest| rest.split("macro_rules! start_fleet_root").next())
         .expect("standalone-local lifecycle macro");
     let local_init = local
-        .split("#[$crate::__internal::cdk::init]")
+        .split("fn init(")
         .nth(1)
-        .and_then(|rest| {
-            rest.split("#[$crate::__internal::cdk::post_upgrade]")
-                .next()
-        })
+        .and_then(|rest| rest.split("fn post_upgrade(").next())
         .expect("standalone-local init body");
 
     assert!(

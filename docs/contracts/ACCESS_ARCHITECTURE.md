@@ -6,7 +6,7 @@ endpoint boundaries.
 ## Policy Families
 
 Access checks are grouped into three policy families:
-- `app`: app mode gates (update/query availability).
+- `fleet`: Fleet mode gates (update/query availability).
 - `auth`: caller/topology/registry checks and delegated-token verification.
 - `env`: environment/build/network predicates.
 
@@ -16,10 +16,11 @@ Implementation root:
 ## DSL Namespaces vs Policy Families
 
 The macro DSL namespaces are:
-- `app::*`
+- `fleet::*`
 - `caller::*`
 - `env::*`
 - `auth::*`
+- `deployment::*`
 
 `caller::*` belongs to the auth family. It is a readability namespace, not a
 separate policy family.
@@ -63,6 +64,22 @@ env -u ICP_NETWORK icp canister call <shard> public_assign_project \
 - `AccessError` is internal to access evaluation.
 - Endpoint boundaries map access denials to public `canic::Error`
   (`Unauthorized` path).
+- By default, guarded endpoints return `Result<T, E>` with `E: From<canic::Error>`.
+  An endpoint may explicitly select `on_access_denied = "reject"` to send an IC
+  rejection on access refusal while preserving its declared success Candid type.
+  This uses `msg_reject`, not a trap: update denial metrics remain committed.
+  It changes only access refusal; a handler's declared `Result` remains a Result
+  on the wire. Argument decoding and preflight failures retain their own behavior.
+- Both modes use the same short-circuit evaluator and default Fleet guards.
+  `public` keeps the Fleet guard; application endpoints must not select `internal`
+  to obtain a plain reply. Refusal prevents handler execution.
+- A synchronous handler is supported with either mode. Predicates may await
+  before dispatch; once a synchronous handler starts, the wrapper introduces no
+  await between its durable effects and reply. Custom predicates should remain
+  free of application effects.
+
+See [endpoint argument and reply controls](../features/runtime/update-payload-limits.md#bounded-decoding-and-plain-replies)
+for the public API.
 
 ## Endpoint Types
 
@@ -89,6 +106,11 @@ env -u ICP_NETWORK icp canister call <shard> public_assign_project \
 Cryptographic and structural verification is delegated to
 `ops::auth::AuthOps::verify_token`.
 
+When the endpoint selects `decode = LIMITS`, delegated-token and role-attestation
+predicates consume its already bounded, decoded first argument. They do not read
+or decode the message again. Caller, audience, authority, scope and cryptographic
+checks are unchanged. Other custom predicates may also use decoded arguments.
+
 ## Audience Binding
 
 Audience answers which Canic boundary may accept the token:
@@ -113,6 +135,8 @@ Environment import enforces root immutability after first initialization.
 - access denials emit one access-denial metric
 - successful access emits no denial metric
 - endpoint lifecycle metrics are emitted by macro wrappers, not predicates
+- rejection-mode update denials commit the same single access metric; ordinary
+  query execution does not persist metric writes
 
 Implementation:
 - `crates/canic-core/src/access/metrics.rs`

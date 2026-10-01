@@ -2,6 +2,25 @@ use super::*;
 use quote::quote;
 
 #[test]
+fn decoder_and_rejection_options_are_explicit_and_unique() {
+    let args = parse_args(quote!(public, decode = LIMITS, on_access_denied = "reject")).unwrap();
+    assert!(args.decode.is_some());
+    assert!(args.reject_access);
+    for options in [
+        quote!(public, decode = A, decode = B),
+        quote!(
+            public,
+            on_access_denied = "reject",
+            on_access_denied = "reject"
+        ),
+        quote!(public, on_access_denied = "trap"),
+        quote!(public, on_access_denied = true),
+    ] {
+        assert!(parse_args(options).is_err());
+    }
+}
+
+#[test]
 fn name_only_is_forwarded_without_requires() {
     let parsed = parse_args(quote!(name = "icrc10_supported_standards"))
         .expect("name-only args should parse");

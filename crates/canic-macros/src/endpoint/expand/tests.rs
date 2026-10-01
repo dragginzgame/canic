@@ -6,10 +6,37 @@ fn make_args(requires: Vec<AccessExprAst>) -> ValidatedArgs {
         forwarded: Vec::new(),
         export_name: None,
         payload_max_bytes: None,
+        decode: None,
+        reject_access: false,
         requires,
         internal: false,
         query_mode: QueryMode::Plain,
     }
+}
+
+#[test]
+fn bounded_guards_consume_decoded_proofs_and_keep_the_fleet_guard() {
+    let mut args = make_args(vec![AccessExprAst::Pred(AccessPredicateAst::Builtin(
+        BuiltinPredicate::Authenticated {
+            required_scope: None,
+        },
+    ))]);
+    args.decode = Some(quote!(LIMITS));
+    args.reject_access = true;
+    let function: ItemFn = syn::parse_quote!(
+        fn read(token: DelegatedToken) -> u64 {
+            1
+        }
+    );
+    let expansion = expand(EndpointKind::Query, args, function).to_string();
+    let compact = expansion.split_whitespace().collect::<String>();
+    assert!(compact.contains("authenticated_argument(&token,None)"));
+    assert!(compact.contains("fleet::is_queryable()"));
+    assert!(compact.contains("in_query_executor_context"));
+    assert!(compact.contains("msg_reject"));
+    assert!(compact.contains("candid_method(query,rename=\"read\")"));
+    assert!(compact.contains("__canic_impl_read(token)"));
+    assert!(!compact.contains("__canic_impl_read(token).await"));
 }
 
 #[test]

@@ -123,48 +123,65 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>, previous_operation: &s
             &icp,
         )
     };
-    if infrastructure
-        .plan
-        .conservation
-        .maximum_operator_debit_cycles
-        > 0
-    {
+    let funding_count = planned_actions(&infrastructure.plan)
+        .into_iter()
+        .filter(|action| matches!(action, EnsureAction::Fund { .. }))
+        .count();
+    let withdrawals: u64 = input
+        .pic
+        .query_candid(ledger, "withdrawal_count", ())
+        .unwrap();
+    let funding_lost = root.join("lost-funding-response");
+    if funding_count > 0 {
         operator_shortfall::assert_fresh_reinstall_rejection(&input, &infrastructure.plan);
-        let withdrawals: u64 = input
-            .pic
-            .query_candid(ledger, "withdrawal_count", ())
-            .unwrap();
-        let funding_lost = root.join("lost-funding-response");
         if funding_lost.exists() {
             std::fs::remove_file(&funding_lost).unwrap();
         }
         std::fs::write(root.join("lose-funding-response"), []).unwrap();
-        let lost_funding = apply(&infrastructure.plan.plan_sha256);
-        assert!(
-            matches!(lost_funding, Err(EnsureWorkflowError::Platform(_))),
-            "lost funding reply: {lost_funding:?}"
-        );
-        assert!(funding_lost.is_file());
-        assert_eq!(
-            input
-                .pic
-                .query_candid::<u64, _>(ledger, "withdrawal_count", ())
-                .unwrap(),
-            withdrawals + 1
-        );
     }
-    let lost = apply(&infrastructure.plan.plan_sha256);
-    assert!(
-        matches!(lost, Err(EnsureWorkflowError::Platform(_))),
-        "lost install: {lost:?}"
-    );
+    // Targets advance in order; an already-funded target may install before
+    // another target needs its reviewed withdrawal.
+    for _ in 0..1 + usize::from(funding_count > 0) {
+        let install_before = lost_marker.is_file();
+        let funding_before = funding_lost.is_file();
+        let lost = apply(&infrastructure.plan.plan_sha256);
+        assert!(
+            matches!(lost, Err(EnsureWorkflowError::Platform(_))),
+            "lost infrastructure reply: {lost:?}"
+        );
+        let install_interrupted = !install_before && lost_marker.is_file();
+        let funding_interrupted = !funding_before && funding_lost.is_file();
+        assert_ne!(
+            install_interrupted, funding_interrupted,
+            "one injected reply lost"
+        );
+        if funding_interrupted {
+            assert_eq!(
+                input
+                    .pic
+                    .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+                    .unwrap(),
+                withdrawals + 1
+            );
+        }
+    }
     assert!(lost_marker.is_file());
+    if funding_count > 0 {
+        assert!(funding_lost.is_file());
+    }
     let CleanReinstallReport::Infrastructure(initialized) =
         apply(&infrastructure.plan.plan_sha256).expect("resume the same infrastructure effects")
     else {
         panic!("infrastructure result")
     };
     assert!(initialized.terminal);
+    assert_eq!(
+        input
+            .pic
+            .query_candid::<u64, _>(ledger, "withdrawal_count", ())
+            .unwrap(),
+        withdrawals + u64::try_from(funding_count).unwrap()
+    );
     let mut debit = infrastructure
         .plan
         .conservation

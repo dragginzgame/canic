@@ -12,7 +12,6 @@ use syn::{FnArg, LitStr, Signature, Type};
 /// Arguments validated for macro expansion.
 ///
 /// This phase enforces only *structural* invariants:
-/// - async requirements
 /// - fallible return requirements
 /// - authenticated predicate argument shape
 /// - internal-only predicate usage
@@ -26,6 +25,8 @@ pub(super) struct ValidatedArgs {
     pub forwarded: Vec<TokenStream2>,
     pub export_name: Option<LitStr>,
     pub payload_max_bytes: Option<TokenStream2>,
+    pub decode: Option<TokenStream2>,
+    pub reject_access: bool,
     pub requires: Vec<AccessExprAst>,
     pub internal: bool,
     pub query_mode: QueryMode,
@@ -35,14 +36,13 @@ pub(super) fn validate(
     kind: EndpointKind,
     parsed: ParsedArgs,
     sig: &Signature,
-    asyncness: bool,
 ) -> syn::Result<ValidatedArgs> {
     let requires_access = !parsed.requires.is_empty();
 
-    if parsed.payload_max_bytes.is_some() && matches!(kind, EndpointKind::Query) {
+    if parsed.payload_max_bytes.is_some() && parsed.decode.is_some() {
         return Err(syn::Error::new_spanned(
             &sig.ident,
-            "payload(...) is supported only on canic_update endpoints",
+            "decode and payload(...) cannot be combined; ArgumentLimits owns max_bytes",
         ));
     }
 
@@ -53,17 +53,10 @@ pub(super) fn validate(
         ));
     }
 
-    if requires_access && !asyncness {
-        return Err(syn::Error::new_spanned(
-            &sig.ident,
-            "this endpoint requires `async fn` due to access predicates",
-        ));
-    }
-
-    if requires_access && !returns_fallible(sig) {
+    if requires_access && !returns_fallible(sig) && !parsed.reject_access {
         return Err(syn::Error::new_spanned(
             &sig.output,
-            "this endpoint must return `Result<_, E>` where `E: From<canic::Error>`",
+            "this endpoint must return `Result<_, E>` where `E: From<canic::Error>` or select on_access_denied = \"reject\"",
         ));
     }
 
@@ -107,6 +100,8 @@ pub(super) fn validate(
         forwarded: parsed.forwarded,
         export_name: parsed.export_name,
         payload_max_bytes: parsed.payload_max_bytes,
+        decode: parsed.decode,
+        reject_access: parsed.reject_access,
         requires: parsed.requires,
         internal: parsed.internal,
         query_mode: parsed.query_mode,

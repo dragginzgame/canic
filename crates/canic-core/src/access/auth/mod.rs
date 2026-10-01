@@ -205,6 +205,21 @@ pub async fn is_attested_local_subnet(caller: Principal) -> Result<(), AccessErr
     attestation::is_attested_local_subnet(caller).await
 }
 
+pub(crate) fn verify_decoded_token(
+    token: &crate::dto::auth::DelegatedToken,
+    caller: Principal,
+    required_scope: Option<&str>,
+) -> Result<Principal, AccessError> {
+    token::verify_token(token, caller, IcOps::now_nanos(), required_scope)
+}
+
+pub(crate) async fn verify_decoded_attestation(
+    attestation: &crate::dto::auth::SignedRoleAttestation,
+    caller: Principal,
+) -> Result<(), AccessError> {
+    attestation::verify_attestation(attestation, caller).await
+}
+
 const fn dependency_unavailable(error: crate::InternalError) -> AccessError {
     AccessError::Internal(error)
 }

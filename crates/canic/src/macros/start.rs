@@ -38,6 +38,7 @@ macro_rules! __canic_typecheck_lifecycle_participant_pair {
 macro_rules! __canic_start_nonroot_lifecycle_core {
     (
         $canister_role:expr
+        $(, argument_limits = $argument_limits:expr)?
         $(, lifecycle_participant(
             init = $lifecycle_init:path,
             post_upgrade = $lifecycle_post_upgrade:path,
@@ -90,7 +91,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"))
         }
 
-        #[$crate::__internal::cdk::init]
+        #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(payload: ::canic::dto::abi::v1::CanisterInitPayload, args: Option<Vec<u8>>) {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -116,7 +117,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             $(($lifecycle_init)();)?
         }
 
-        #[$crate::__internal::cdk::post_upgrade]
+        #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -174,7 +175,7 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
 #[doc(hidden)]
 #[macro_export]
 macro_rules! __canic_start_wasm_store_lifecycle_core {
-    ($(, $init:block)?) => {
+    ($(argument_limits = $argument_limits:expr)? $(, $init:block)?) => {
         ::std::thread_local! {
             static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
                 ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
@@ -214,7 +215,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
             include!(env!("CANIC_ROLE_RUNTIME_AUTHORITY_PATH"))
         }
 
-        #[$crate::__internal::cdk::init]
+        #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs) {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -226,7 +227,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
             );
         }
 
-        #[$crate::__internal::cdk::post_upgrade]
+        #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -263,6 +264,7 @@ macro_rules! __canic_start_wasm_store_lifecycle_core {
 macro_rules! __canic_start_local_lifecycle_core {
     (
         $canister_role:expr
+        $(, argument_limits = $argument_limits:expr)?
         $(, lifecycle_participant(
             init = $lifecycle_init:path,
             post_upgrade = $lifecycle_post_upgrade:path,
@@ -303,7 +305,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             }
         }
 
-        #[$crate::__internal::cdk::init]
+        #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: Option<Vec<u8>>) {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -346,7 +348,7 @@ macro_rules! __canic_start_local_lifecycle_core {
             );
         }
 
-        #[$crate::__internal::cdk::post_upgrade]
+        #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -390,7 +392,7 @@ macro_rules! __canic_start_local_lifecycle_core {
 /// capability authority are emitted by the canonical host build.
 #[macro_export]
 macro_rules! start_fleet_root {
-    () => {
+    ($(argument_limits = $argument_limits:expr)? $(,)?) => {
         $crate::__canic_require_finish!();
         $crate::__canic_release_build_binding!();
         #[doc(hidden)]
@@ -407,7 +409,7 @@ macro_rules! start_fleet_root {
             (runtime_authority, config_model, config_source, config_path)
         }
 
-        #[$crate::__internal::cdk::init]
+        #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: ::canic::dto::fleet_subnet_root::FleetSubnetRootInitArgs) {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -424,7 +426,7 @@ macro_rules! start_fleet_root {
 
         }
 
-        #[$crate::__internal::cdk::post_upgrade]
+        #[$crate::__internal::__canic_lifecycle(post_upgrade $(, decode = $argument_limits)?)]
         fn post_upgrade() {
             #[cfg(any(canic_capability_observability_metrics, canic_capability_observability_history))]
             $crate::__internal::core::api::public_status::PublicStatusApi::enable_sampling();
@@ -585,6 +587,11 @@ macro_rules! finish {
 ///
 /// Its sole responsibility is to bridge IC lifecycle hooks to runtime code.
 ///
+/// Put `argument_limits = LIMITS,` first to select a constant
+/// [`crate::endpoint::ArgumentLimits`] for both initial argument envelopes.
+/// Byte admission precedes copying; bounded decoding precedes restoration and
+/// participants. Nested application blobs still need their own bounds.
+///
 /// A lifecycle participant is an all-or-nothing pair of safe synchronous
 /// `fn() -> ()` paths. Partial declarations do not compile:
 ///
@@ -606,6 +613,7 @@ macro_rules! finish {
 #[macro_export]
 macro_rules! start {
     (
+        $(argument_limits = $argument_limits:expr,)?
         $(lifecycle_participant(
             init = $lifecycle_init:path,
             post_upgrade = $lifecycle_post_upgrade:path $(,)?
@@ -623,6 +631,7 @@ macro_rules! start {
         #[cfg(not(canic_is_root))]
         $crate::__canic_start_nonroot_lifecycle_core!(
             $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+            $(, argument_limits = $argument_limits)?
             $(, lifecycle_participant(
                 init = $lifecycle_init,
                 post_upgrade = $lifecycle_post_upgrade,
@@ -656,9 +665,11 @@ macro_rules! start {
 /// Do not use this macro for production canisters, root-managed child
 /// canisters, release-set members, or test fixtures that need real topology
 /// metadata. Those should use [`start!`] and receive explicit lifecycle args.
+/// Accepts the same `argument_limits` and participant options as [`start!`].
 #[macro_export]
 macro_rules! start_local {
     (
+        $(argument_limits = $argument_limits:expr,)?
         $(lifecycle_participant(
             init = $lifecycle_init:path,
             post_upgrade = $lifecycle_post_upgrade:path $(,)?
@@ -671,6 +682,7 @@ macro_rules! start_local {
         compile_error!("canic::start_local!() cannot be used for root canisters; use canic::start!()");
         $crate::__canic_start_local_lifecycle_core!(
             $crate::__internal::core::ids::CanisterRole::from(env!("CANIC_CANISTER_ROLE"))
+            $(, argument_limits = $argument_limits)?
             $(, lifecycle_participant(
                 init = $lifecycle_init,
                 post_upgrade = $lifecycle_post_upgrade,
@@ -695,7 +707,7 @@ macro_rules! start_local {
 /// so fleet metrics can treat the store like every other managed canister.
 #[macro_export]
 macro_rules! start_wasm_store {
-    ($(init = $init:block)? $(,)?) => {
+    ($(argument_limits = $argument_limits:expr,)? $(init = $init:block)? $(,)?) => {
         $crate::__canic_require_finish!();
         $crate::__canic_release_build_binding!();
         #[expect(clippy::unused_async)]
@@ -707,7 +719,7 @@ macro_rules! start_wasm_store {
         #[expect(clippy::unused_async)]
         async fn canic_upgrade() {}
 
-        $crate::__canic_start_wasm_store_lifecycle_core!($(, $init)?);
+        $crate::__canic_start_wasm_store_lifecycle_core!($(argument_limits = $argument_limits)? $(, $init)?);
         $crate::__canic_start_ingress_payload_inspect!(wasm_store);
         $crate::canic_bundle_wasm_store_runtime_endpoints!();
         $crate::canic_emit_icrc_standards_endpoints!();
@@ -722,11 +734,11 @@ macro_rules! start_wasm_store {
 /// Coordinator-owned Fleet Registry state.
 #[macro_export]
 macro_rules! start_fleet_coordinator {
-    () => {
+    ($(argument_limits = $argument_limits:expr)? $(,)?) => {
         $crate::__canic_require_finish!();
         $crate::__canic_release_build_binding!();
 
-        #[$crate::__internal::cdk::init]
+        #[$crate::__internal::__canic_lifecycle(init $(, decode = $argument_limits)?)]
         fn init(args: ::canic::dto::fleet_coordinator::FleetCoordinatorInitArgs) {
             #[cfg(any(
                 canic_capability_observability_metrics,
