@@ -27,6 +27,7 @@ use crate::{
             EffectObservation, EffectOutcome, EffectRetry, EnsurePlatform, TerminalFleetInventory,
             canic_init, current_protocol, protocol, root_owned_lifecycle,
         },
+        policy::release::snapshots::{self, SnapshotRemovalError},
     },
     icp::{
         IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError, IcpDiagnostic,
@@ -618,6 +619,10 @@ enum RejectionCode {
 
 #[derive(Debug, ThisError)]
 pub enum IcpEnsurePlatformError {
+    #[error(transparent)]
+    SnapshotRemoval(#[from] SnapshotRemovalError),
+    #[error("snapshot management failed: {0}")]
+    SnapshotManagement(#[source] Box<IcpManagementCallError>),
     #[error("bootstrap uninstall failed: {0}")]
     BootstrapUninstall(#[source] Box<IcpManagementCallError>),
     #[error(transparent)]
@@ -926,6 +931,40 @@ fn protocol_observation_delay(
 }
 
 impl IcpEnsurePlatform {
+    fn observe_snapshot_removal(
+        &self,
+        action: &EnsureAction,
+    ) -> Result<(bool, Option<u128>), IcpEnsurePlatformError> {
+        let EnsureAction::DeleteSnapshot {
+            principal,
+            expected_snapshots,
+            ..
+        } = action
+        else {
+            return Err(SnapshotRemovalError::Inventory.into());
+        };
+        let live = self.status_optional(principal)?;
+        // Validate custody before the additional paid snapshot read.
+        snapshots::reconcile(
+            action,
+            &self.desired.operator,
+            live.as_ref(),
+            expected_snapshots,
+        )?;
+        let id = parse_principal("snapshot removal", principal)?;
+        let mut snapshots = self
+            .icp
+            .management_snapshot_ids(id)
+            .map_err(|error| IcpEnsurePlatformError::SnapshotManagement(Box::new(error)))?
+            .into_iter()
+            .map(hex_bytes)
+            .collect::<Vec<_>>();
+        snapshots.sort();
+        let applied =
+            snapshots::reconcile(action, &self.desired.operator, live.as_ref(), &snapshots)?;
+        Ok((applied, live.map(|live| live.cycles)))
+    }
+
     #[must_use]
     pub fn new(desired: DesiredFleet, icp_executable: &str, root: &Path) -> Self {
         let icp = IcpCli::new(icp_executable, Some(desired.environment.clone()))
@@ -4247,6 +4286,13 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 let live = platform.status_optional(Self::action_principal(state, principal)?)?;
                 (live.is_none(), format!("delete:{live:?}"))
             }
+            EnsureAction::DeleteSnapshot { snapshot_id, .. } => {
+                // A lost reply leaves the durable record at Intent. Reconcile the
+                // exact after-state without attributing the deletion to a receipt.
+                let (applied, cycles) = platform.observe_snapshot_removal(action)?;
+                post_cycles = cycles;
+                (applied, format!("delete_snapshot:{snapshot_id}:{applied}"))
+            }
             EnsureAction::Fund {
                 amount,
                 expected_post_cycles,
@@ -4693,6 +4739,25 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     ledger,
                     Self::action_principal(state, principal)?,
                 ),
+                EnsureAction::DeleteSnapshot {
+                    principal,
+                    snapshot_id,
+                    ..
+                } => {
+                    let (applied, _) = platform.observe_snapshot_removal(action)?;
+                    if !applied {
+                        let id = parse_principal("snapshot removal", principal)?;
+                        let snapshot = canic_core::cdk::utils::hash::decode_hex(snapshot_id)
+                            .map_err(|_| SnapshotRemovalError::Inventory)?;
+                        platform
+                            .icp
+                            .delete_canister_snapshot(id, snapshot)
+                            .map_err(|error| {
+                                IcpEnsurePlatformError::SnapshotManagement(Box::new(error))
+                            })?;
+                    }
+                    Ok(empty_outcome())
+                }
                 EnsureAction::FundEstate {
                     amount,
                     created_at_time,
@@ -4864,6 +4929,9 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 name, principal, ..
             }
             | EnsureAction::Uninstall { name, principal }
+            | EnsureAction::DeleteSnapshot {
+                name, principal, ..
+            }
             | EnsureAction::Transfer {
                 name, principal, ..
             } => (name, Self::action_principal(state, principal)?),
@@ -5481,6 +5549,9 @@ fn render_ledger_transfer_error(error: CyclesLedgerTransferError) -> String {
 
 #[cfg(test)]
 mod tests {
+    #[cfg(unix)]
+    mod snapshots;
+
     use super::*;
     use canic_core::dto::pool::CanisterPoolAssetStatus;
     #[cfg(unix)]

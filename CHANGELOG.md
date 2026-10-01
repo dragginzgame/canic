@@ -10,6 +10,16 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch headings identify unreleased entries; this ledger summarizes changes.
 
+- Hard-cut current Host records to explicit `v1` fields and content references;
+  require retained reviewed input for execution and remove obsolete compatibility
+  assertions. Strengthen the pre-1.0 generation guard. Current review/journal
+  hashes change; issued authority is not rewritten.
+- Begin whole-Fleet release-to-capacity admission for Coordinator, Roots, Wasm
+  Stores and children, binding complete custody, cycle bounds and account recovery.
+  Add exact snapshot deletion to the existing Host effect executor, including
+  stopped sole-operator custody checks and lost-response reconciliation.
+  Whole-Fleet execution and end-to-end qualification remain in this unfinished batch.
+
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)

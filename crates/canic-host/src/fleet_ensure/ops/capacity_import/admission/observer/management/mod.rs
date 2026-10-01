@@ -85,6 +85,11 @@ pub(in crate::fleet_ensure) struct PreparedManagementObservation {
 }
 
 impl PreparedManagementObservation {
+    /// Expose the free certificate sample before a caller reserves the paid observation.
+    pub(in crate::fleet_ensure) const fn custody(&self) -> &CertifiedCanisterCustodyView {
+        &self.before
+    }
+
     /// Cross the single paid status boundary and verify custody again afterward.
     pub(in crate::fleet_ensure) async fn observe(
         self,

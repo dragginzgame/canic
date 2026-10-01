@@ -539,6 +539,8 @@ is_governed_canic_host_pocketic_test() {
     [[ "$TARGETED_POCKETIC_TEST" = \
         'canister_build::release_binding::tests::governed_pocketic_release_binding_retains_runtime_identity' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::tests::governed_pocketic_fresh_estate_recovers_creation_and_replays_without_effects' ||
+        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::ops::platform::tests::snapshots::governed_pocketic_snapshot_removal_recovers_lost_reply' ||
+        "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::ops::release::observation::tests::governed_pocketic_release_physical_observation_binds_custody' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::operator_mint_tests::governed_pocketic_operator_mint_recovers_receipts' ||
         "$TARGETED_POCKETIC_TEST" = 'fleet_ensure::workflow::funding_tests::real_mint_funding::governed_pocketic_mint_credit_resumes_original_native_withdrawal'
         ]]

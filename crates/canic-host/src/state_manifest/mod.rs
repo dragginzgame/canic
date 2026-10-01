@@ -345,12 +345,11 @@ mod tests {
     }
 
     #[test]
-    fn workspace_audit_hard_cuts_the_project_scope() {
+    fn state_audit_serializes_workspace_scope() {
         let report = build_state_audit_report(None);
         let value = serde_json::to_value(report).expect("serialize state-audit report");
 
         assert_eq!(value["scope"], "workspace");
-        assert_ne!(value["scope"], "project");
     }
 
     #[test]

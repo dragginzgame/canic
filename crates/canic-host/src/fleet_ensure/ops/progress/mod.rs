@@ -38,6 +38,7 @@ const fn action_kind(action: &EnsureAction) -> FleetEnsureActionKind {
     match action {
         EnsureAction::Create { .. } => FleetEnsureActionKind::Create,
         EnsureAction::Delete { .. } => FleetEnsureActionKind::Delete,
+        EnsureAction::DeleteSnapshot { .. } => FleetEnsureActionKind::DeleteSnapshot,
         EnsureAction::Fund { .. } => FleetEnsureActionKind::Fund,
         EnsureAction::FundEstate { .. } => FleetEnsureActionKind::FundEstate,
         EnsureAction::Install { .. } => FleetEnsureActionKind::Install,

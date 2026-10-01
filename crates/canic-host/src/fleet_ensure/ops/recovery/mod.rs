@@ -32,6 +32,7 @@ fn action_review(action: &EnsureAction) -> FleetReviewAction {
     let (kind, principal) = match action {
         EnsureAction::Create { .. } => ("create", None),
         EnsureAction::Delete { principal, .. } => ("delete", Some(principal)),
+        EnsureAction::DeleteSnapshot { principal, .. } => ("delete_snapshot", Some(principal)),
         EnsureAction::Fund { principal, .. } => ("fund", Some(principal)),
         EnsureAction::FundEstate { principal, .. } => ("fund_estate", Some(principal)),
         EnsureAction::Install { principal, .. } => ("install", Some(principal)),

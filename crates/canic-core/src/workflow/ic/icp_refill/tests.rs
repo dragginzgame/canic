@@ -451,19 +451,6 @@ fn retry_request_must_match_stored_operation_identity() {
 }
 
 #[test]
-fn retry_rejects_pre_hard_cut_nonself_operation() {
-    let record = sample_record(IcpRefillStatus::Requested);
-    let request = request_for(&record);
-
-    IcpRefillStoreOps::validate_retry_request_matches_operation(
-        &request,
-        record.source_canister,
-        &operation_from_record(&record),
-    )
-    .expect_err("nonself refill operation must not be adopted");
-}
-
-#[test]
 fn refill_replay_operation_id_uses_request_bytes_exactly() {
     let request = request_with_operation(77);
 

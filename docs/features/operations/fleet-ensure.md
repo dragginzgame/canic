@@ -81,7 +81,7 @@ on stderr, `code: "successor_review_required"` and a `next_action` for review.
 Other failures report `code: "operation_failed"` and no automatic continuation.
 Wrappers should follow these decisions and explicit approvals, and preserve
 unhandled failures. They should not infer completion from private journals or
-use a fixed number of repeated commands. Older human `next_command` and
+use a fixed number of repeated commands. Human `next_command` and
 `apply_command` renderings are for display, not process execution.
 
 Clean reinstall selects its local owner and current input before opening the
@@ -1375,8 +1375,8 @@ owner, the declared amount and a fresh bounded observation. The effective balanc
 is original native cycles plus that amount; reserved cycles stay non-liquid, and
 all consumption since the original observation still counts against the original
 debit ceiling. Custody must still match. A new observation does not replace the
-bootstrap plan, journal or prior survey. Uncredited reviews omit this field, so
-their existing approval digests remain unchanged. A credit requires a new import
+bootstrap plan, journal or prior survey. Uncredited reviews include an empty
+`funding_credits` array in their exact current-contract digest. A credit requires a new import
 approval and cannot alter an approved unfinished import. Completed replay remains
 effect-free.
 
@@ -1636,20 +1636,12 @@ the successor plan reuses that canister instead of issuing another creation.
 An interrupted invocation retains one intent per action under
 `.canic/fleet-ensure/<environment>/<fleet>/` and reconciles retained actions before
 opening another batch. The stall budget counts only consecutive non-progress.
-If a verified current-schema in-progress plan still uses the former inline
-Store-chunk projection, apply first publishes those exact bytes to the
-content-addressed object store and atomically rewrites `plan.json` to hashes
-and bounded sizes. This local compaction preserves the plan digest, operation
-identity and journal bytes and completes before any platform observation or
-remote effect.
-
-A schema-`v1` plan created before reviewed-input retention normally requires
-its exact original desired document. The bounded no-debit terminal case is
-recoverable without inventing that input: all canisters must be reused under
-the same exact names and Principals, every earlier action must already be
-applied, and the final issued action must be typed Component provisioning.
-Canic may only observe that action, never reissue it, and must validate the
-protected terminal inventory and conservation equation before closure.
+Durable Store publication requests contain exact `bytes_sha256` and `bytes_size`
+fields. The content-addressed object store retains the bytes before plan
+publication; reopening verifies their hash, size and prepared authority.
+Current import reviews always contain `funding_credits`, including an empty
+array, and registration recovery fields serialize as explicit `null` until
+requested. These fields bind current review and journal hashes.
 
 When a partial current-control-plane reset makes a Root's protected pool status
 return `STATE_CONFLICT` or `STATE_UNAVAILABLE`, planning does not invent an

@@ -146,7 +146,7 @@ pub struct InfrastructureBootstrapTerminalRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct InfrastructureBootstrapInspectionRecord {
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
     pub registration_recovery_sha256: Option<String>,
     pub schema_version: u16,
     pub source_sha256: [u8; 32],

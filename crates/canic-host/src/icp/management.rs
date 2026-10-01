@@ -25,6 +25,11 @@ use super::{
 const MANAGEMENT_CANISTER_STATUS: &str = "canister_status";
 const MANAGEMENT_INGRESS_EXPIRY: Duration = Duration::from_mins(4);
 
+#[derive(CandidType, Deserialize)]
+struct ManagementSnapshot {
+    id: Vec<u8>,
+}
+
 #[derive(Debug, Deserialize)]
 struct IcpNetworkStatus {
     api_url: String,
@@ -72,6 +77,74 @@ pub enum IcpManagementCallError {
 }
 
 impl IcpCli {
+    /// List exact snapshot IDs through the selected authenticated management boundary.
+    pub(crate) fn management_snapshot_ids(
+        &self,
+        canister_id: Principal,
+    ) -> Result<Vec<Vec<u8>>, IcpManagementCallError> {
+        #[derive(CandidType)]
+        struct Request {
+            canister_id: Principal,
+        }
+        let (snapshots,): (Vec<ManagementSnapshot>,) = self.snapshot_update(
+            canister_id,
+            "list_canister_snapshots",
+            &Request { canister_id },
+        )?;
+        Ok(snapshots.into_iter().map(|snapshot| snapshot.id).collect())
+    }
+
+    /// Delete exactly one snapshot after the caller has retained its reviewed intent.
+    pub(crate) fn delete_canister_snapshot(
+        &self,
+        canister_id: Principal,
+        snapshot_id: Vec<u8>,
+    ) -> Result<(), IcpManagementCallError> {
+        #[derive(CandidType)]
+        struct Request {
+            canister_id: Principal,
+            snapshot_id: Vec<u8>,
+        }
+        self.snapshot_update(
+            canister_id,
+            "delete_canister_snapshot",
+            &Request {
+                canister_id,
+                snapshot_id,
+            },
+        )
+    }
+
+    fn snapshot_update<I, O>(
+        &self,
+        canister_id: Principal,
+        method: &str,
+        input: &I,
+    ) -> Result<O, IcpManagementCallError>
+    where
+        I: CandidType,
+        O: for<'de> candid::utils::ArgumentDecoder<'de>,
+    {
+        self.measure_request(
+            crate::icp::IcpRequestKind::Update,
+            Some(&canister_id.to_text()),
+            Some(method),
+            || {
+                let argument =
+                    candid::encode_one(input).map_err(IcpManagementCallError::CandidEncode)?;
+                let agent = self.authenticated_agent()?;
+                self.record_remote_call();
+                let response = call_management_update(
+                    &LiveAgentUpdateBoundary { agent: &agent },
+                    canister_id,
+                    method,
+                    argument,
+                )?;
+                candid::decode_args(&response).map_err(IcpManagementCallError::CandidResponse)
+            },
+        )
+    }
+
     /// Whether this command context is bound directly to one local replica.
     #[must_use]
     pub(crate) fn uses_direct_local_replica(&self) -> bool {

@@ -11,6 +11,7 @@ pub mod continuation;
 pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod readiness;
+pub mod release;
 pub mod startup_funding;
 
 /// Live operator account and fee at the configured Cycles Ledger.

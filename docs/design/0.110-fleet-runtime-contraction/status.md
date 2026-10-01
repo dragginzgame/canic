@@ -7,8 +7,9 @@ role-owned activation persistence, optional observability, passive blob
 contracts, artifact reuse/admission and IcyDB composition corrections are
 implemented. The [current handoff](../../status/current.md) owns the active
 cleanup and CANIC-187/188 correction batch; [release notes](../../changelog/0.110.md) describe shipped behavior.
-The accepted FR1 reuse/contraction batch follows urgent deployment/recovery;
-it is not implemented and does not expand the current `.49` publication gate.
+After reporting the `.49` push, the maintainer selected FR1 next. Its Host
+review-admission slice passes ten native tests and Host library/test lint; runtime execution and retirement contraction
+remain unimplemented. The completed release is not reopened for this work.
 
 The normative [design](0.110-design.md) and independent
 [size follow-through amendment](2026-09-28-toko-size-follow-through.md) define
@@ -24,7 +25,7 @@ observability and blob-contract work; it did not restart the full B3/B4 matrix.
 | B3 | General record/codec restructuring stopped; the bounded .47 activation amendment is implemented. |
 | B4 | Remaining general pruning deferred and unscheduled; bounded .47 observability and passive blob-contract changes are implemented. |
 | FI1 | Bootstrap and capacity-import implementation/qualification shipped in .43; subsequent reinstall/recovery corrections shipped through .47. |
-| FR1 | Accepted 2026-10-01; whole-Fleet release to reusable Coordinator/Root/Store and child capacity, with retirement contraction. Not started; follows urgent deployment/recovery qualification and the Toko unblocked scheduling milestone. |
+| FR1 | Active: review admission/custody boundaries plus the shared executor's exact snapshot-deletion primitive, qualified against PocketIC with lost-response recovery. Live collection, quiescence, complete execution/recovery, CLI, whole-Fleet qualification and retirement contraction remain. |
 | B5 | The .42 checkpoint is qualified; final closeout must cover FI1, subsequent corrections and FR1 and receive human acceptance. |
 | Cleanup | Complete and ready for maintainer review: unused runtime/Host paths, obsolete helpers/tests and status-owned release flows removed, duplicate evidence consolidated, focused checks passed. |
 | Reinstall review corrections | Shipped in .48: typed unavailable funding diagnostics and exact-digest unpaid-review cancellation. Toko confirms live cancellation and infrastructure completion. |
@@ -79,10 +80,11 @@ repair. No live or downstream mutation is part of this publication preparation.
 ## FR1 sequence and acceptance — 2026-10-01
 
 The maintainer accepts [FR1](0.110-design.md#fr1-fleet-release-to-reusable-capacity--accepted-2026-10-01)
-as one complete 0.110 batch after the urgent deployment/recovery outcome and
-Toko Miner unblocking, before final closeout and blob extraction. This milestone
-is scheduling context, not a downstream source/state dependency or live-effect
-authority. FR1 does not delay urgent `.49` publication. Package/release decisions
+as one complete 0.110 batch before final closeout and blob extraction. After
+reporting the urgent `.49` push, the maintainer selected FR1 next. Toko subsequently
+reported its separate eight-source import recovered; evidence review and preventive
+R2 follow-up are tracked below. No downstream source/state dependency or live-effect
+authority is introduced. Package/release decisions
 remain maintainer-owned; no per-slice patch versions are allocated.
 
 Host/CLI own the reviewed physical inventory and single operation, Core/Control
@@ -94,12 +96,49 @@ retirement commands/records/resumers and duplicate deletion phases only once
 the maintained operation owns their safety obligations. Preserve shared current
 reset/import, funding, recycling, Store adoption, backup/restore and CANIC-188.
 
-Status: accepted, implementation/qualification not started. Supporting
+Status: active; Host review admission is the first implementation slice. Its
+typed review binds complete ownership, snapshot identity, budgets, account recovery
+and same-subnet independent destinations. It exposes no execution command. Runtime
+observation provenance, journal integration and end-to-end management evidence are
+still required; no retirement path is removed by this slice. Ten native tests,
+Host library/test warning-denied Clippy and scoped formatting pass; evidence is
+in `target/review-validation/fleet-release-admission-*.log`. Supporting
 [usefulness evidence](../../audits/working/0.110-surface-contraction/root-retirement-usefulness.md)
-is descriptive; the design owns the exact contract. FR1 overlaps R8 accounting
-but does not close any original finding without its named proof. Remaining R2–R8
+is descriptive; the design owns the exact contract. The shared executor now also
+supports exact snapshot deletion under stopped sole-operator custody, with
+before/after inventory reconciliation. The focused production-adapter PocketIC
+case passes wrong custody/inventory refusal, retained-intent lost-response recovery
+and replay without another deletion (`fleet-release-snapshots-pocketic.log`). This
+does not qualify whole-Fleet execution or replace release quiescence. FR1 overlaps R8 accounting
+but does not close any original finding without its named proof. Latest focused
+qualification also passes fourteen native tests, Host/CLI all-feature library/test
+Clippy, formatting and runner/shell checks (`fleet-release-snapshots-*.log`).
+Remaining R2–R8
 corrections keep their owners; only FR1's direct safety dependencies join this
 batch. The advisory line estimate is not a release gate or deletion quota.
+
+## Toko staging follow-up — accepted future work 2026-10-01
+
+The maintainer requests all recovery-report feedback and import-call reduction
+work retained in the [design follow-up](0.110-design.md#toko-staging-import-follow-up--accepted-future-work-2026-10-01).
+Toko reports successful eight-source recovery, backend convergence and original
+Root restoration. Its repair source and live evidence are unavailable here;
+this distinct operation does not close CANIC-188 or the remaining R2 queue.
+FR1 remains current; these follow-ups join the existing 0.110 owner sequence
+before final closeout, without a new patch allocation or live/downstream authority.
+
+| Outcome / owner | Required completion evidence | Status |
+| --- | --- | --- |
+| Import efficiency and bounded authority / R2, Core, Control Plane, Host, CLI | Reject the eight-source 72-call envelope before effects; qualify workflow-derived call/debit budgets; reduce repeated subnet/status observations only with validity and drift proof; preserve exact history, consumed/unknown allowances, interruption recovery, conservation and effect-free replay; measure call/debit/time changes. | Pending; current 137 minimum/272 recommended arithmetic and admission guards exist, optimization unqualified |
+| Controller membership comparison / R2, Host | Port both reported sorting fixes; reordered lists accepted, changed/duplicate members rejected, sealed review and authority hashes preserved. | Pending; both comparisons remain order-sensitive here |
+| Live observation diagnostics / CLI, Host | Diagnose readiness/version/cycles errors; retain per-canister observation/endpoint causes; targeted success/failure and installed-client proof, current help/output/docs. | Pending; role/ID mapping is reported working |
+| Incident evidence and artifact identity / incident owner | Reproducible source/client/raw/gzip manifest, exact supplemental approval, quiescence/reconciliation, snapshot-proof limits, terminal receipts, original-Root restoration and no-paid-effect replay evidence; select approved representation before install. | Pending evidence review; execution reported complete, retained bundle not supplied here |
+| Application and dependency provenance / downstream Toko owner | Login, project creation, collections, uploads and tokens against the deployed release; record local Cargo-patch source identity and recovery-client retention; distinguish reserved allowance, observed debit and funding. | Outstanding downstream acceptance; no sibling mutation authorized |
+
+These items are future implementation/qualification and evidence work, not claims
+that this checkout contains the Toko repair or that a smaller call count is proven.
+Use native owner checks and focused PocketIC proofs for Canic behavior; downstream
+application acceptance remains separate from Canic release gates.
 
 ## Accepted code-review corrections — 2026-09-30
 

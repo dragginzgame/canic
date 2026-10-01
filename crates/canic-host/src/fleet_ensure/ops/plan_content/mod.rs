@@ -66,15 +66,6 @@ pub(super) fn remove_inline_bytes(projection: &mut Value) -> Result<(), EnsureSt
     Ok(())
 }
 
-pub(super) fn contains_inline_bytes(projection: &Value) -> Result<bool, EnsureStateError> {
-    for action in protocol_actions(projection)? {
-        if is_publication(action)? && request(action)?.contains_key("bytes") {
-            return Ok(true);
-        }
-    }
-    Ok(false)
-}
-
 pub(super) fn hydrate(paths: &EnsurePaths, projection: &mut Value) -> Result<(), EnsureStateError> {
     fixture::hydrate(paths, projection)?;
     let authorities = projected_chunk_authorities(projection)?;
@@ -117,21 +108,13 @@ fn load_chunk_bytes(
     paths: &EnsurePaths,
     request: &Map<String, Value>,
 ) -> Result<(Vec<u8>, Vec<u8>, u64), EnsureStateError> {
-    if let Some(inline) = request.get("bytes") {
-        if request.contains_key("bytes_sha256") || request.contains_key("bytes_size") {
-            return authority_error("published chunk mixes inline and referenced content");
-        }
-        let bytes = serde_json::from_value::<Vec<u8>>(inline.clone())
-            .map_err(|_| authority("published inline chunk bytes are invalid"))?;
-        let expected = wasm_hash(&bytes);
-        let expected_size = bytes.len() as u64;
-        Ok((bytes, expected, expected_size))
-    } else {
-        let expected = decode_chunk_hash(request)?;
-        let expected_size = unsigned_field(request, "bytes_size")?;
-        let bytes = read_object(paths, &expected, expected_size)?;
-        Ok((bytes, expected, expected_size))
+    if request.contains_key("bytes") {
+        return authority_error("published chunk projection contains unreferenced bytes");
     }
+    let expected = decode_chunk_hash(request)?;
+    let expected_size = unsigned_field(request, "bytes_size")?;
+    let bytes = read_object(paths, &expected, expected_size)?;
+    Ok((bytes, expected, expected_size))
 }
 
 fn typed_chunk_authorities(

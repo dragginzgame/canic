@@ -8,7 +8,6 @@ use std::path::PathBuf;
 #[derive(Clone, Debug, Serialize)]
 pub struct CapacityImportReviewRequest {
     /// Additional credits to observe before approval; the empty request retains its survey identity.
-    #[serde(skip_serializing_if = "Vec::is_empty")]
     pub funding_credits: Vec<CapacityImportFundingCreditRequest>,
     pub environment: String,
     pub fleet: String,

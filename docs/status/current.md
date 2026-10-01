@@ -2,7 +2,110 @@
 
 ## Active work and release boundary
 
-The latest maintainer release attempt failed only the embedded allocation-peer
+The maintainer reports `.49` pushed and selected the Root/Coordinator/Wasm Store
+FR1 slice next. The first Host library slice now seals an effect-free `v1` review
+and validates complete ownership, quiescence/pending-effect evidence, explicit
+destructive disposition, snapshot IDs, exact controllers, budgets and native/
+reserved-cycle conservation. Known Root/Coordinator Ledger accounts must remain
+explicitly recoverable. Independent destination pools require matching network,
+operator and subnet, distinct surviving infrastructure and aggregate capacity.
+Before-reset checks require every source stopped under operator custody without
+changing reviewed code/snapshots; held-capacity checks require empty code and
+snapshots with retained balances. Review integrity is checked at both boundaries.
+
+Ten focused Host tests pass (`target/review-validation/fleet-release-admission-native.log`).
+Warning-denied Host library/test Clippy, scoped formatting and diff hygiene also
+pass (`target/review-validation/fleet-release-admission-clippy.log`). The two
+redundant test clones found by the first lint pass are corrected. Existing dependency and test-cleanup
+edits from another session were preserved. Shared-target validation owners were
+allowed to finish before editing or continuing checks. No deployment, versioning,
+Git action, broad gate or Cargo cleanup was performed for this work.
+
+FR1 remains an unfinished batch: no release CLI or whole-Fleet executor is exposed,
+no retirement code is removed, and these supplied observation views are not live
+authority proofs. Next wire authenticated collection/quiescence, qualified
+account recovery/settlement and existing-journal handoff/reset execution; then
+prove interruptions, fresh bootstrap and replay in PocketIC before contraction.
+The root Unreleased notes hold this incomplete batch; no patch number is assigned.
+Toko now reports its separate eight-source import recovered, backend Ensure
+converged and the original Root restored. Its Root `5lnwm-ziaaa-aaaae-agtqa-cai`
+is outside the pinned CANIC-188 repair; the downstream bundle is not available
+here and no independent live verification was performed. The maintainer retained
+all report feedback and call-reduction work in the
+[0.110 future-work tracker](../design/0.110-fleet-runtime-contraction/status.md#toko-staging-follow-up--accepted-future-work-2026-10-01):
+bounded workflow-derived budgets, fewer repeated subnet/status calls with validity
+proof, controller-order fixes, observation diagnostics, reproducible incident/raw/
+gzip evidence, quiescence and effect-free replay, plus downstream application
+acceptance and dependency provenance. FR1 remains current; no patch or external
+effect is authorized by this planning update.
+
+The next execution primitive is now implemented in the existing Host executor:
+`DeleteSnapshot` binds exact target, module and snapshot inventory, requires
+stopped sole-operator custody, and reconciles only the exact before/after sets.
+It carries normal journal identity, debit observation and CLI progress reporting;
+it introduces no second journal or whole-Fleet command. The production-adapter
+PocketIC case passes unsafe-custody/inventory refusal, exact deletion, a discarded
+response with disk intent still at `Intent`, and replay without a second deletion.
+The source ID, subnet, code and controllers remain intact, with bounded observed
+native debit. Test execution took 3.01 seconds; compilation dominated the 84-second
+invocation. The initial fixture omitted the NNS trust anchor and failed before
+deletion; that setup is corrected. Evidence:
+`target/review-validation/fleet-release-snapshots-pocketic.log`.
+
+Final focused validation also passes fourteen native tests (ten admission,
+three snapshot policies and the shared signer-helper regression), Host/CLI
+library/test all-feature Clippy with warnings denied, scoped formatting, runner
+regressions, shell syntax/lint and diff hygiene. Logs are
+`target/review-validation/fleet-release-snapshots-{native,clippy,runner}.log`.
+No full gate or release action ran. The first lint pass's duplicate match arm,
+redundant test clone and long journey annotation are resolved.
+
+`ops/platform.rs` moved to `ops/platform/mod.rs` to host the focused PocketIC
+module using normal Rust directory discovery. Historical audit paths still name
+their pinned source revision. The existing authority snapshot fence is not a
+drop-in release fence: it blocks normal handoffs and permits resumable retained
+work. Explicit release quiescence and reconciliation remain necessary. The whole
+FR1 batch is not push-ready; its root Unreleased entry stays open.
+
+## Separate complexity audit
+
+The maintainer requested repository-wide complexity/obsolete-surface screening,
+kept it separate from FR1, then stopped the other implementation and requested
+completion. The [published-baseline report](../audits/reports/2026-10/2026-10-01/complexity-hard-cuts-and-feature-gaps.md)
+retains the immutable `.49`/`.48` census and first cleanup's 102 focused tests.
+The [follow-up report and manifest](../audits/reports/2026-10/2026-10-01/complexity-hard-cuts-and-feature-gaps-2.md)
+close all three deferred Host families: inline durable-plan loading/compaction,
+omitted empty import credits and omitted bootstrap recovery fields. Executable
+plans also require retained reviewed input; their working-input fallback and
+its error are removed. Active guides describe explicit current fields. The
+generation guard now covers colon wire domains and journal/plan/state families.
+
+All 241 follow-up native tests pass (165 Host, 76 Fleet CLI), plus warning-denied
+Host/CLI library/test Clippy, scoped formatting, guard fixtures, audit catalog,
+document semantics and diff hygiene. Two existing document-layout advisories
+remain for the exact incident-design exception; two native-selected funding
+cases remain ignored. Logs and isolated source diff:
+`target/review-validation/complexity-finish-*`. Across both slices, 343 native
+tests pass and 101 net Rust lines are removed; the follow-up removes 55 production
+module lines while adding current authority/shape evidence. One predecessor-only
+test struct and three standalone tests were removed by the first slice.
+
+The named cleanup is complete and ready for review. No maintained Canic-owned
+generation above `v1` or additional obsolete decoder was found in the repeated
+screen and named traces. Exhaustive per-function reachability, semantic test
+deduplication and full entropy scoring remain outside the audit's evidence.
+The twelve feature/qualification limits remain: fresh backup preflight is
+unimplemented, and FR1 is unfinished despite its admission/snapshot primitive.
+The stopped task's source, dependency and runner edits are preserved; its later
+design-feedback additions were also left intact. No retained paid-operation
+files, reservations or frozen CANIC-188 bytes were rewritten. Current hashes
+change through a hard cut; no migration or old-format reader is added. Release
+target remains unassigned under root Unreleased, and the combined FR1 batch is
+not push-ready. No version, Git, live effect or broad gate ran.
+
+## Prior release qualification
+
+An earlier maintainer release attempt failed only the embedded allocation-peer
 lifecycle case: endpoint framework changes had left its checked-in Wasm stale.
 The test stage took 3,382 seconds; the internal suite took 2,410 seconds because
 independent cases continued after the early fixture failure. Native, documentation,
@@ -198,11 +301,13 @@ Blob extraction remains separate accepted future work, not this cleanup's scope.
 ## Accepted follow-up and history
 
 [FR1 Fleet release to reusable capacity](../design/0.110-fleet-runtime-contraction/0.110-design.md#fr1-fleet-release-to-reusable-capacity--accepted-2026-10-01)
-is accepted after urgent deployment/recovery qualification and Toko Miner
-unblocking, before final 0.110 closeout/blob extraction. It covers retained
+is active at the maintainer's post-push request, before final 0.110 closeout/blob
+extraction. It covers retained
 Coordinator/Root/Store and child IDs, conservation, one existing Host journal,
-controller/reset recovery and retirement contraction. Not started; it does not
-delay urgent `.49` publication or authorize live/downstream effects.
+controller/reset recovery and retirement contraction. Host admission is qualified
+as described above; execution and contraction remain. It authorizes no live or
+downstream effects. Toko reports its distinct exhausted import recovered; its
+evidence review and preventive follow-ups are tracked above.
 
 The [0.110 tracker](../design/0.110-fleet-runtime-contraction/status.md#accepted-code-review-corrections--2026-09-30)
 owns remaining R2–R8 work. Open outcomes include exhausted/older-unknown imports,
