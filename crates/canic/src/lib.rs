@@ -21,6 +21,7 @@ pub mod api;
 mod build_support;
 pub mod diagnostics;
 pub mod dto;
+pub mod endpoint;
 pub mod fleet_admission;
 pub mod ids;
 mod instructions;
@@ -32,6 +33,7 @@ pub mod testing;
 
 #[doc(hidden)]
 pub mod __internal {
+    pub use canic_macros::__canic_lifecycle;
     // NOTE:
     // This module exists ONLY for macro expansion.
     // Do NOT re-export canic_core publicly.
@@ -53,8 +55,8 @@ pub mod __internal {
 
         pub mod api {
             pub use ic_cdk::api::{
-                canister_cycle_balance, canister_version, is_controller, msg_caller, msg_reply,
-                time,
+                canister_cycle_balance, canister_version, is_controller, msg_caller, msg_reject,
+                msg_reply, time,
             };
         }
 

@@ -1,4 +1,4 @@
-# Application update payload limits
+# Endpoint argument and reply controls
 
 Managed application updates inherit a **16 KiB (16,384 byte) encoded argument
 limit** unless their Canic endpoint declares another limit. The bound includes
@@ -28,13 +28,16 @@ message limits.
 | Application endpoint declaration | External update ingress | Inter-canister update |
 | --- | --- | --- |
 | `#[canic_update(..., payload(max_bytes = N))]` | `N` encoded argument bytes | The generated raw adapter also enforces `N` before decoding |
-| `#[canic_update(...)]` without `payload` | Managed inspector default: 16 KiB | No explicit Canic raw payload adapter from this declaration |
+| `#[canic_update(..., decode = LIMITS)]` | `LIMITS.max_bytes` encoded bytes | The same byte limit and Candid budgets apply before dispatch |
+| `#[canic_update(...)]` without `payload` or `decode` | Managed inspector default: 16 KiB | No explicit Canic raw payload bound from this declaration |
 | Bare `#[ic_cdk::update]` in a Canic-managed application | Managed inspector default: 16 KiB | Canic's ingress inspector is not on this call path |
 
 This table describes ordinary application updates under Canic's generated
 inspector. Framework protocol methods may have their own role/selector checks.
-Queries are outside this update-limit setting. Inspection does not replace
-endpoint authentication, authorization or argument validation.
+Queries do not inherit the update inspector default. They may select
+`payload(max_bytes = N)` for a raw byte bound or `decode = LIMITS` for all decoder
+bounds. Inspection does not replace endpoint authentication, authorization or
+argument validation.
 
 The optional `name = "wire_method"` attribute binds an explicit payload limit
 to the exported method name, even when the Rust function has another name.
@@ -102,3 +105,91 @@ target demonstrate default, explicit, bare-CDK, exported-name and inter-canister
 behavior, and compare compiled metadata against exact and first-excess boundaries.
 They exercise the owned inspector and generated adapter; no bypass or default
 increase is needed.
+
+## Bounded decoding and plain replies
+
+Select all five dimensions with a constant `canic::endpoint::ArgumentLimits`:
+
+```rust
+use canic::endpoint::ArgumentLimits;
+
+const REQUEST_LIMITS: ArgumentLimits = ArgumentLimits {
+    max_bytes: 32 * 1024,
+    decoding_quota: 100_000,
+    skipping_quota: 10_000,
+    max_type_len: 128,
+    max_header_len: 4096,
+};
+
+#[derive(candid::CandidType)]
+struct Receipt {
+    accepted_bytes: u64,
+}
+
+#[canic::canic_update(
+    requires(caller::is_controller()),
+    on_access_denied = "reject",
+    decode = REQUEST_LIMITS
+)]
+fn accept(bytes: Vec<u8>) -> Receipt {
+    // Commit application intent synchronously here.
+    Receipt { accepted_bytes: bytes.len() as u64 }
+}
+
+#[canic::canic_query(public, decode = REQUEST_LIMITS)]
+fn size(bytes: Vec<u8>) -> Result<u64, canic::Error> {
+    Ok(bytes.len() as u64)
+}
+```
+
+These numbers are examples; the artifact owner must measure valid inputs and
+select its own budgets. `decoding_quota` and `skipping_quota` are Candid work
+units, not IC instruction or cycle budgets. `max_type_len` bounds type-table
+entries and `max_header_len` bounds header bytes and declared header complexity.
+Both quotas also cover Candid's handling of extra fields and arguments.
+
+The raw byte check happens before allocating/copying the application argument
+buffer. A single configured Candid decode checks the entire envelope, including
+unused arguments. Invalid, incompatible or over-budget input traps before
+preflight, access evaluation and handler dispatch. Managed update inspection
+also receives `LIMITS.max_bytes`; inter-canister updates enforce it at the raw
+entrypoint independently of inspection. Queries and composite queries use the
+same configured decoder. `decode` and `payload(...)` cannot be combined.
+
+`on_access_denied = "reject"` preserves the handler's declared Candid result and
+uses IC rejection for access refusal. Normal Fleet guards, custom checks,
+preflight, dispatch instrumentation and Candid exports remain in place. Predicates
+can await before dispatch. A synchronous handler commits and replies without
+an intervening await. Successful access emits no denial metric; a denied update
+emits exactly one and does not execute the handler. Existing Result endpoints
+retain their default behavior when this option is omitted.
+
+## Initial lifecycle envelope
+
+The owning artifact may put `argument_limits` first in its lifecycle declaration:
+
+```rust,ignore
+canic::start!(
+    argument_limits = REQUEST_LIMITS,
+    lifecycle_participant(
+        init = crate::lifecycle::after_init,
+        post_upgrade = crate::lifecycle::after_post_upgrade,
+    ),
+);
+```
+
+`start_local!`, `start_fleet_root!`, `start_wasm_store!` and
+`start_fleet_coordinator!` also accept this option. It bounds each lifecycle
+entrypoint the selected macro owns. Choose limits for the complete framework
+envelope and application arguments. Decoding succeeds before restoration,
+participants or deferred hooks run. Invalid input fails installation/upgrade
+without running participants. A no-argument post-upgrade still validates and
+boundedly skips supplied arguments; an empty raw argument buffer represents
+the empty Candid envelope.
+
+The option bounds the outer envelope. An application-owned blob nested in that
+envelope still needs its own semantic validation and decoding limits. The public
+`REQUEST_LIMITS.decode::<(MyArgs,)>(&bytes)` helper can bound such a decode and
+returns `ArgumentDecodeError::TooLarge { actual, maximum }` or `InvalidCandid`.
+It does not replace selecting the initial lifecycle bound. Omitting the option
+retains the existing lifecycle decoder.

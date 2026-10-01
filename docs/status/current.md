@@ -2,14 +2,51 @@
 
 ## Active work and release boundary
 
-The deployment-reliability and completed-Fleet cleanup batch is **ready for
-maintainer review and the selected release gate**. Its implementation, direct
-negative/recovery evidence, propagation and cleanup are complete. Package versions
-remain `0.110.48`; both changelog views describe the existing open `0.110.49` batch.
-HEAD is the maintainer-created `02af72776` checkpoint (`checking line count`),
-including the cleanup and prior deployment corrections. Remaining changes are
-uncommitted. No broad validation, version transaction, Git publication or live
-deployment was performed; the normal release gate remains maintainer-selected.
+The requested generic endpoint framework work for `ic-blob-storage` is complete
+in this repository and uncommitted. Public `on_access_denied = "reject"` keeps
+plain Candid replies with normal Fleet/custom guards, denial-only metrics and
+synchronous handler dispatch. `decode = LIMITS` selects public `ArgumentLimits`
+for bytes, decoding, skipping, type count and header complexity. Artifact-owned
+`argument_limits = LIMITS` bounds initial lifecycle envelopes before restoration
+and participants. Bounded proof predicates reuse decoded arguments. Adoption
+examples and semantics are in [endpoint controls](../features/runtime/update-payload-limits.md).
+
+Focused evidence passes 50 macro tests, 28 Core access tests, 2 decoder tests,
+13 facade/invariant tests, 7 public API doctests (6 compile-fail), and all 6
+`pic_ingress_payload_limits` PocketIC cases. Wasm proofs cover exact reply bytes
+and declarations, denial metrics/short-circuiting, malformed and over-budget
+query/inter-canister arguments, and init/post-upgrade refusal before participants.
+A deliberately trapped participant proves the lifecycle log witness survives
+failed installation; reinstall clears prior logs. Only typed install-rate-limit
+responses are retried. Affected-package/target warning-denied Clippy and scoped
+formatting pass. Evidence: `target/review-validation/endpoint-framework-*.log`.
+
+This framework batch and the existing open `.49` changelog are ready for review;
+the separate Fleet regression below still needs its qualification. The earlier
+in-progress macro compile errors are resolved. The sibling repository was read
+only; downstream adoption, composed-service/Caffeine qualification and paid
+uploads are not qualified or authorized by this work. No version bump, broad
+gate, commit, publication, deployment or Cargo cleanup was performed.
+
+The maintainer-selected gate exposed a fixture ordering defect in
+`generated_reinstall_recovers_lost_install_and_reaches_working_fleet`: it assumed
+a withdrawal must precede every installation, although targets advance in order.
+The uncommitted correction accepts either injected reply-loss order, requires
+both applicable interruptions and checks exact withdrawal counts after recovery.
+Its focused test compiled, but replacement-artifact compilation stopped on unused
+`decode`/`reject_access` fields during concurrent macro/runtime edits, before the
+corrected assertions ran. Formatting and the scoped diff check pass. Evidence:
+`target/review-validation/generated-reinstall-recovery-order.log`. Rerun
+`make test-pocketic-case CASE=pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet`
+after that work settles; release readiness remains pending this qualification.
+
+The deployment-reliability and completed-Fleet cleanup implementation, prior
+direct negative/recovery evidence, propagation and cleanup are complete. Package
+versions remain `0.110.48`; both changelog views describe the existing open
+`0.110.49` batch. HEAD is the maintainer-created `70a0bc9a4` checkpoint
+(`0.110.49`). Concurrent macro/runtime work and this fixture correction are
+uncommitted. This diagnosis ran only the focused regression; no broad validation,
+version transaction, Git publication or live deployment was performed by the agent.
 
 [Deployment reliability audit](../audits/reports/2026-09/2026-09-30/deployment-reliability.md)
 findings own the current delivery work:

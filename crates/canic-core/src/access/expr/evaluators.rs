@@ -27,8 +27,11 @@ pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
         }
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildIcOnly) => "build_ic_only",
         BuiltinPredicate::Environment(EnvironmentPredicate::BuildLocalOnly) => "build_local_only",
-        BuiltinPredicate::Authenticated { .. } => "authenticated",
-        BuiltinPredicate::AttestedLocalSubnet => "attested_local_subnet",
+        BuiltinPredicate::Authenticated { .. } | BuiltinPredicate::AuthenticatedArgument { .. } => {
+            "authenticated"
+        }
+        BuiltinPredicate::AttestedLocalSubnet
+        | BuiltinPredicate::AttestedLocalSubnetArgument(_) => "attested_local_subnet",
         BuiltinPredicate::ServiceAuthority { .. } => "deployment_service_authority",
     }
 }
@@ -39,6 +42,8 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
         BuiltinPredicate::Caller(_)
         | BuiltinPredicate::Authenticated { .. }
         | BuiltinPredicate::AttestedLocalSubnet
+        | BuiltinPredicate::AuthenticatedArgument { .. }
+        | BuiltinPredicate::AttestedLocalSubnetArgument(_)
         | BuiltinPredicate::ServiceAuthority { .. } => AccessMetricKind::Auth,
         BuiltinPredicate::Environment(EnvironmentPredicate::SelfIsFleetSubnetRoot) => {
             AccessMetricKind::Env
@@ -102,6 +107,18 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
         }
         BuiltinPredicate::AttestedLocalSubnet => {
             access::auth::is_attested_local_subnet(ctx.caller).await
+        }
+        BuiltinPredicate::AuthenticatedArgument {
+            token,
+            required_scope,
+        } => {
+            let issuer = access::auth::verify_decoded_token(token, ctx.caller, *required_scope)
+                .map_err(BuiltinFailure::Denied)?;
+            DelegatedAuthMetrics::record_authority(issuer);
+            Ok(())
+        }
+        BuiltinPredicate::AttestedLocalSubnetArgument(attestation) => {
+            access::auth::verify_decoded_attestation(attestation, ctx.caller).await
         }
         BuiltinPredicate::ServiceAuthority { service } => {
             access::deployment::require_service_authority(service)

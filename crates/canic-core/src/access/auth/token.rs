@@ -31,13 +31,13 @@ pub(super) fn delegated_token_verified(
 
     let now_ns = IcOps::now_nanos();
 
-    verify_token(token, authenticated_subject, now_ns, required_scope)
+    verify_token(&token, authenticated_subject, now_ns, required_scope)
 }
 
 // Verify a delegated token; endpoint-local binding and scope checks still run
 // after any positive cryptographic verification cache hit.
-fn verify_token(
-    token: DelegatedToken,
+pub(super) fn verify_token(
+    token: &DelegatedToken,
     caller: Principal,
     now_ns: u64,
     required_scope: Option<&str>,
@@ -47,7 +47,7 @@ fn verify_token(
         .map(|scope| vec![scope.to_string()])
         .unwrap_or_default();
     let verified = AuthOps::verify_token(VerifyDelegatedTokenRuntimeInput {
-        token: &token,
+        token,
         caller,
         max_cert_ttl_ns: max_ttl_ns,
         max_token_ttl_ns: max_ttl_ns,
