@@ -32,6 +32,38 @@ struct PendingSource {
     dropped: AtomicBool,
 }
 
+#[test]
+fn history_cache_progress_preserves_diagnostics_without_snapshot_authority() {
+    use ic_query::subnet_catalog::{
+        RegistryHistoryCacheDisposition, SubnetCatalogProgress, SubnetCatalogProgressPhase,
+    };
+
+    let progress = crate::subnet_catalog::ops::registry_progress(SubnetCatalogProgress {
+        endpoint: MAINNET_CATALOG_ENDPOINTS[0].to_string(),
+        query_call_count: 3,
+        phase: SubnetCatalogProgressPhase::HistoryCache {
+            path: "history.json".into(),
+            disposition: RegistryHistoryCacheDisposition::Rejected,
+            through_version: 42,
+            reason: Some("checksum mismatch".into()),
+        },
+    });
+    assert_eq!(
+        serde_json::to_value(progress).unwrap(),
+        serde_json::json!({
+            "endpoint": MAINNET_CATALOG_ENDPOINTS[0],
+            "query_calls": 3,
+            "stage": {
+                "phase": "history_cache",
+                "path": "history.json",
+                "disposition": "rejected",
+                "through_version": 42,
+                "reason": "checksum mismatch"
+            }
+        })
+    );
+}
+
 struct PendingGuard<'a>(&'a AtomicBool);
 
 impl Drop for PendingGuard<'_> {

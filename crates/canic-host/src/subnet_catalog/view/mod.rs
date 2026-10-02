@@ -101,6 +101,12 @@ pub enum RegistryCollectionStage {
         through_version: u64,
         reused: bool,
     },
+    HistoryCache {
+        path: PathBuf,
+        disposition: String,
+        through_version: u64,
+        reason: Option<String>,
+    },
     Record {
         registry_version: u64,
         key: String,

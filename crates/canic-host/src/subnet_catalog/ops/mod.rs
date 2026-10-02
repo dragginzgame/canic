@@ -8,7 +8,8 @@ use crate::subnet_catalog::{
     view::{RegistryCollectionProgress, RegistryCollectionStage, SubnetCatalogObservation},
 };
 use ic_query::subnet_catalog::{
-    CatalogLoadOutcome, SubnetCatalogProgress, SubnetCatalogProgressPhase, catalog_stale_status,
+    CatalogLoadOutcome, RegistryHistoryCacheDisposition, SubnetCatalogProgress,
+    SubnetCatalogProgressPhase, catalog_stale_status,
 };
 
 /// Preserve stable snapshot facts separately from transient cache acquisition facts.
@@ -49,6 +50,24 @@ pub(super) fn registry_progress(event: SubnetCatalogProgress) -> RegistryCollect
             registry_version,
             through_version,
             reused,
+        },
+        SubnetCatalogProgressPhase::HistoryCache {
+            path,
+            disposition,
+            through_version,
+            reason,
+        } => RegistryCollectionStage::HistoryCache {
+            path,
+            disposition: match disposition {
+                RegistryHistoryCacheDisposition::Missing => "missing",
+                RegistryHistoryCacheDisposition::Reused => "reused",
+                RegistryHistoryCacheDisposition::Rejected => "rejected",
+                RegistryHistoryCacheDisposition::Published => "published",
+                RegistryHistoryCacheDisposition::Skipped => "skipped",
+            }
+            .to_string(),
+            through_version,
+            reason,
         },
         SubnetCatalogProgressPhase::Record {
             registry_version,

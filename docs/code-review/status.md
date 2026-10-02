@@ -4,9 +4,9 @@ Last updated: **2026-10-02**. Scope: Canic implementation and qualification;
 Toko Miner is downstream feedback and read-only context.
 
 The current corrective batch targets the **0.110.50 draft**; workspace packages
-remain **0.110.49**. Recent deployment fixes and ic-memory 0.15.2 adoption are
-locally qualified. The subsequently selected upstream patches have the narrower
-review evidence recorded below; selection alone is not combined qualification.
+remain **0.110.49**. Recent deployment fixes are locally qualified. The current dependency graph
+now also passes the embedded verifier and one public managed-component lifecycle
+journey; evidence below remains scoped to the checks actually run.
 This page tracks progress; it is not release authority or evidence of publication.
 
 ## Review coverage
@@ -40,7 +40,7 @@ Toko. Evidence paths below are local retained logs under
 | Deployment and release guard cleanup | **Implemented and qualified.** Incidental files and surplus cycles no longer cause false refusals; release checks validate authority and behavior rather than source spelling. | 17 selected Rust regressions, focused Clippy, release-integrity fixtures, ShellCheck and document/inventory checks pass. `deployment-guards-*`. Custody, unexplained deficits and uncertain paid effects remain protected. |
 | Gitleaks removal | **Complete at maintainer request.** Remove the scanner, installer, pins, exclusions, local/CI gate and mandatory audit scan requirement. | Targeted shell/workflow lint, authority/catalog/document checks and print-only validation dispatch pass. Remaining release-tool fixtures pass with the unrelated commit-creating tag fixture excluded. `gitleaks-removal-*`. |
 | Rust 1.99 and ordinary-test fallout | **Implemented and qualified.** Toolchain pins, lint cleanup, optional IcyDB selection, isolated runner inputs and stale native fixtures are corrected. | Full Canic-owned Clippy was explicitly run for the toolchain update; subsequent corrections have targeted evidence. `rust199-*`, `ordinary-fallout-*`. IcyDB drift remains an optional local-consumer limitation, not a Canic release blocker. |
-| ic-memory adoption | **0.15.2 qualified; 0.15.3 now selected.** The later patch fixes prebootstrap diagnostic construction. | 0.15.2: 35 memory, 70 receipt, four ABI/identity tests, Core Clippy and the public managed-component lifecycle PocketIC case pass (201.44s). `ic-memory-0152-*`. A fresh 0.15.3 public-API probe passes for the diagnostic fix; this is not a new whole-graph lifecycle qualification. |
+| ic-memory adoption | **0.15.3 selected and lifecycle-qualified.** Default diagnostics preserve configured bootstrap; the embedded peer and provenance are refreshed. | Earlier 35 memory, 70 receipt, four ABI/identity tests and Core Clippy qualify 0.15.2. The 0.15.3 public-API probe, final embedded verifier and current-graph managed-component PocketIC journey pass (166.24s). `ic-memory-0152-*`, `upstream-feedback-recheck-memory.*`, `lock-reconcile-*`. |
 | Deployment reliability audit, findings 1–18 | **Implementation follow-through recorded in the handoff.** Includes complete failure reporting, test selection, bootstrap budgets, held-source funding, build reuse, packaging and automation. | Findings 9/10 have installed-package and embedded-fixture journeys; finding 17 has command-array/phase evidence, extended by CANIC-192. Native macOS execution, formal audit closeout and downstream live acceptance are separate qualifications. Do not count these 18 again as original-review closures. |
 
 ## Upstream feedback recheck — 2026-10-02
@@ -52,14 +52,15 @@ files or dependencies were changed by this recheck.
 | Dependency selected | Feedback disposition | Remaining boundary |
 | --- | --- | --- |
 | ic-memory 0.15.3 | **Fixed.** Default export, commit-recovery and both doctor helpers no longer construct the runtime before bootstrap. | Fresh public-API probe confirms typed `NotBootstrapped` followed by successful configured 16-page bootstrap for all four helpers and a control. `upstream-feedback-recheck-memory.{rs,log}`. |
-| ic-query 0.44.1 | **Open in the released version.** Dry-run export can alias and overwrite the managed cache despite reporting no cache write. Upstream has an uncommitted fix with recorded tests for path, symlink and hardlink aliases. | Await a released fix. Canic's current loader does not select an export output path, so this is not an observed deployment blocker. Cross-process acquisition checkpoint reuse remains a performance opportunity; no new Canic latency benchmark was run. |
-| ic-testkit 0.10.3 | **Classifier fix verified through the selected registry package.** Generic channel-closure and quoted refusal text no longer count as dead PocketIC transport; maintained request shapes and wrapped transport errors still qualify. | Locked package build and three fresh public-API regressions pass: `testkit-0103-{build,probe}.log`. 0.10.3 adds an experimental PocketIC teardown patch and synthetic probe, with no production teardown change. The hang and original Busy/tick cause remain unresolved. |
+| ic-query 0.44.2 | **Upstream export-alias fix now selected.** Manifest and lockfile agree after correcting the stale 0.44.1 entry. Host and CLI preserve the new history-cache progress event. | Both dependency gates pass; 10 Host and three CLI catalog tests, affected-package Clippy and the managed-component lifecycle case pass. Canic does not yet opt its caller-owned source into cross-process history caching. |
+| ic-testkit 0.10.4 | **Classifier fix retained.** Generic channel-closure and quoted refusal text no longer count as dead PocketIC transport. | Prior 0.10.3 build and three public-API regressions pass: `testkit-0103-{build,probe}.log`. 0.10.4 removes the experimental teardown patch; production PocketIC remains unchanged. The hang and original Busy/tick cause remain unresolved. |
 | ic-timers 0.8.1 | **No new runtime defect found.** Release changes are tooling, lint annotations and documentation; registration/deadline behavior is unchanged. | Retained four-case timer evidence remains relevant. Upstream handoff still calls 0.8.1 unpublished despite its release commit and Canic registry selection: documentation drift only. |
 
-This recheck does not claim complete Canic qualification of the newly selected
-memory/query/testkit combination. The previous lifecycle evidence is explicitly
-for memory 0.15.2 with timers 0.8.1. Query's local upstream tests are upstream
-evidence, not tests run here or evidence that its fix has shipped.
+The latest dependency combination passes the exact public managed-component
+lifecycle journey, embedded verifier, scoped Host/CLI tests and Clippy, and both
+dependency gates. Evidence is in `target/review-validation/lock-reconcile-*`;
+this is targeted qualification, not a full workspace run. Query's own upstream
+tests remain separate evidence, and Canic disk-history adoption remains open.
 
 ## Remaining accepted work
 
@@ -82,8 +83,8 @@ must be explicitly requested and accepted before starting 0.111.
 
 ## Next checkpoints and maintenance
 
-1. Record combined corrective-batch qualification for the latest selected
-   dependencies in the handoff; keep previous exact-version evidence distinct.
+1. Keep the recorded current-graph qualification distinct from earlier version
+   evidence when dependencies or runtime sources change again.
 2. Keep the 0.110.50 draft aligned with the completed batch. Publication and live
    deployment remain separate maintainer-selected actions; none is implied here.
 3. Continue the accepted remaining sequence, including parked FR1 and CS1, using

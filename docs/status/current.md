@@ -3,6 +3,36 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## Dependency lock and embedded-fixture qualification — 2026-10-02
+
+The reported crypto-closure and dependency-risk failures shared one cause:
+the manifest requested ic-query 0.44.2 while the lockfile retained 0.44.1.
+Reconcile only that package with `cargo update -p ic-query --precise 0.44.2`;
+preserve the maintainer's testkit 0.10.4 and optional IcyDB selections. Both
+reported gates now pass: 12 canonical Wasm roles have valid crypto closure and
+the dependency audit reports zero vulnerabilities with two reviewed warnings.
+
+Compiling the new query version exposed its added `HistoryCache` progress
+variant. Host now preserves its path, disposition, watermark and optional reason
+as the `history_cache` JSON phase; CLI progress renders those diagnostics.
+Canic's caller-owned source still does not opt into disk history reuse. The
+root and detailed 0.110.50 notes reflect query 0.44.2 and testkit 0.10.4.
+
+Qualification passes 10 Host catalog tests, three CLI catalog tests and
+warning-denied Host/CLI library/binary Clippy. The embedded peer refreshed in
+the prior turn verifies successfully against the final graph. The exact public
+managed-component lifecycle PocketIC case passes in 166.24 seconds; the governed
+runner exits successfully after 309 seconds including build and cleanup. This
+qualifies that journey with memory 0.15.3, query 0.44.2, testkit 0.10.4 and timers
+0.8.1. Formatting, document semantics and whitespace checks pass.
+
+Evidence: `target/review-validation/lock-reconcile-*` and
+`target/test-runs/20261002T101700Z-4862.niWBgk/1.log`. The earlier offline-cache
+and missing-variant failures are superseded by these final passes. The CLI binary
+selector contained no tests; the subsequent library selector ran all three
+catalog tests. The corrective dependency/fixture work is complete for review;
+no broad validation, version transaction, commit, push or deployment ran here.
+
 ## Gitleaks flow removed — 2026-10-02
 
 At the maintainer's explicit request, remove the Gitleaks target from local and

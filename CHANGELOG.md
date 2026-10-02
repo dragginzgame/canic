@@ -17,7 +17,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   exhausted Host attempts (CANIC-190). Removes incidental balance, controller
   ordering and release refusals while preserving custody and spending bounds.
   Adopts Rust 1.99.0, ic-memory 0.15.3 and the testkit transport-classification
-  fix; isolates optional IcyDB composition from default validation and removes
+  fix, plus ic-query 0.44.2 cache protection and progress diagnostics;
+  isolates optional IcyDB composition from default validation and removes
   the Gitleaks flow. Host record changes require pre-1.0 clean reinstall.
 
 - `0.110.49` repairs deployment and import recovery, consolidates completed-Fleet
