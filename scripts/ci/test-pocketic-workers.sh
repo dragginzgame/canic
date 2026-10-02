@@ -12,7 +12,7 @@ finish() {
 }
 trap finish EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/.tmp" "$fixture/bin"
-for name in run-pocketic-workers run-pocketic-worker run-workspace-tests cleanup-release-artifacts stop-owned-pocketic-servers; do
+for name in run-pocketic-workers run-pocketic-worker run-workspace-tests workspace-scope cleanup-release-artifacts stop-owned-pocketic-servers; do
     cp "$ROOT/scripts/ci/$name.sh" "$fixture/scripts/ci/"
 done
 cp "$ROOT/tool-versions.env" "$fixture/"

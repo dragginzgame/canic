@@ -35,6 +35,12 @@ Qualification passed:
 - Scope-helper failure-propagation tests, governed runner regressions including
   explicit external selection, ShellCheck, release-integrity contract,
   scoped Rust formatting, document semantics and 0.110.50 draft preflight.
+- Follow-up: the maintainer's release gate exposed a missing `workspace-scope.sh`
+  copy in the isolated PocketIC worker fixture. Added that dependency, checked
+  the other fixture-copy paths, and passed the complete targeted
+  `make validation-runner-gate`, including worker interruption/cleanup and native
+  ICP selection. ShellCheck and Bash syntax checks also pass. Evidence:
+  `target/review-validation/rust199-validation-runner-gate.log`.
 
 Evidence is retained under `target/review-validation/rust199-*`; complete
 lifecycle output is in `target/test-runs/20261002T061230Z-63634.D7uBxi/1.log`.
