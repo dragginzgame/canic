@@ -7154,7 +7154,13 @@ exec icp "$@"
         fixture: &ActiveComponentRegistryFixture,
         operator: Principal,
     ) {
-        use canic_host::fleet_ensure::{ops, policy};
+        use canic_host::fleet_ensure::{
+            model::{
+                DesiredCanisterKind, FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureStateRecord,
+                FleetEnsureTopologyRecord,
+            },
+            ops, policy,
+        };
         let CoordinatorRegistryResponse::Registry(registry) = coordinator_status(
             fixture.pic(),
             fixture.coordinator,
@@ -7167,12 +7173,18 @@ exec icp "$@"
         for (name, kind, principal, role, wasm) in [
             (
                 "coordinator",
-                "coordinator",
+                DesiredCanisterKind::Coordinator,
                 fixture.coordinator,
                 "fleet_coordinator",
                 build_test_coordinator_wasm(),
             ),
-            ("root", "root", fixture.root, "root", build_test_root_wasm()),
+            (
+                "root",
+                DesiredCanisterKind::Root,
+                fixture.root,
+                "root",
+                build_test_root_wasm(),
+            ),
         ] {
             let status = fixture.pic().canister_status(principal, None).unwrap();
             let controllers = status
@@ -7192,11 +7204,13 @@ exec icp "$@"
             principals.insert(name.to_string(), principal.to_text());
             topology.insert(
                 name.to_string(),
-                serde_json::json!({
-                    "kind": kind, "module_hash": hex_bytes(status.module_hash.unwrap()),
-                    "parent": parent, "role": role,
-                    "protocol_binding": operator_cli_protocol(directory, role, &wasm)
-                }),
+                FleetEnsureTopologyRecord {
+                    kind,
+                    module_hash: Some(hex_bytes(status.module_hash.unwrap())),
+                    parent: parent.map(str::to_owned),
+                    role: Some(role.to_owned()),
+                    protocol_binding: Some(operator_cli_protocol(directory, role, &wasm)),
+                },
             );
         }
         let desired = serde_json::json!({
@@ -7209,24 +7223,50 @@ exec icp "$@"
         });
         let mut plan = operator_cli_terminal_plan(desired);
         plan.plan_sha256 = policy::expected_plan_sha256(&plan);
-        let journal = serde_json::from_value(serde_json::json!({
-            "funding_observations": {}, "funding_reviews": [], "successor_phases": [], "completion": "converged",
-            "estate_funding_required": null, "effects": [], "fleet": "fixture",
-            "initial_controlled_cycles": "0", "initial_estate_funding_cycles_by_root": {},
-            "initial_operator_cycles": "0", "operation_id": plan.operation_id,
-            "plan_sha256": plan.plan_sha256, "schema_version": 1, "stalled_observations": 0
-        }))
-        .unwrap();
-        let state = serde_json::from_value(serde_json::json!({
-            "active_registry": registry, "completed_reinstall_action_sha256": {},
-            "completed_reinstall_operation_id": null, "completed_reinstalls": {}, "fleet": "fixture",
-            "pending_principals": {}, "principals": principals, "retained_cycles_by_principal": {},
-            "schema_version": 1, "topology": topology
-        })).unwrap();
+        let journal = operator_cli_terminal_journal(&plan);
+        let state = FleetEnsureStateRecord {
+            active_registry: Some(registry),
+            completed_reinstall_action_sha256: BTreeMap::new(),
+            completed_reinstall_operation_id: None,
+            completed_reinstalls: BTreeMap::new(),
+            fleet: plan.fleet.clone(),
+            pending_principals: BTreeMap::new(),
+            principals,
+            retained_cycles_by_principal: BTreeMap::new(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            topology,
+        };
         let paths = ops::EnsurePaths::under(directory, "ic", "fixture");
         ops::write_plan(&paths, &plan).unwrap();
         ops::write_journal(&paths, &journal).unwrap();
         ops::write_state(&paths, &state).unwrap();
+    }
+
+    // Keep durable fixture records typed so schema drift fails before PocketIC runs.
+    #[cfg(test)]
+    fn operator_cli_terminal_journal(
+        plan: &FleetEnsurePlan,
+    ) -> canic_host::fleet_ensure::model::FleetEnsureJournalRecord {
+        use canic_host::fleet_ensure::model::{
+            FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion, FleetEnsureJournalRecord,
+        };
+        FleetEnsureJournalRecord {
+            bootstrap_registration_recovery: None,
+            funding_observations: BTreeMap::new(),
+            funding_reviews: Vec::new(),
+            successor_phases: Vec::new(),
+            completion: FleetEnsureCompletion::Converged,
+            estate_funding_required: None,
+            effects: Vec::new(),
+            fleet: plan.fleet.clone(),
+            initial_controlled_cycles: 0,
+            initial_estate_funding_cycles_by_root: BTreeMap::new(),
+            initial_operator_cycles: 0,
+            operation_id: plan.operation_id.clone(),
+            plan_sha256: plan.plan_sha256.clone(),
+            schema_version: FLEET_ENSURE_SCHEMA_VERSION,
+            stalled_observations: 0,
+        }
     }
 
     // Build current authority with typed fields so schema changes fail at compilation.

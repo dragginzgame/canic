@@ -3,6 +3,31 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## Operator Component CLI fixture correction — 2026-10-02
+
+The maintainer's 2697.49-second governed suite failed in the operator Component
+public CLI case: its JSON-built terminal journal omitted the required
+`bootstrap_registration_recovery` field. The case failed during fixture setup,
+not during a live deployment. After the maintainer stopped validation, replace
+the journal, state and topology construction with current Rust record types.
+Added fields now cause compilation failures instead of late deserialization
+panics; production record validation remains unchanged.
+
+The exact public CLI PocketIC case passes on final source in 23.18 seconds
+(39-second runner including compilation, then successful cleanup). It exercises
+real ICP calls, interruption recovery, completion, export and terminal replay.
+Internal library/test Clippy with the governed feature and warnings denied,
+scoped formatting, release-notes preflight and document checks pass. Evidence:
+`target/review-validation/operator-cli-fixture-{pocketic,clippy}-final.log` and
+`target/test-runs/20261002T112658Z-14899.b3FayL/1.log`.
+
+This reported release blocker is fixed; the bounded 0.110.50 corrective batch
+and its notes are ready for maintainer review and the selected release flow.
+No complete-suite pass is claimed: the prior run failed and was stopped, and
+only this exact case was rerun. No broad gate, version change, commit, push,
+deployment or artifact cleanup ran here. Remaining review work stays sequenced
+separately below.
+
 ## Dependency lock and embedded-fixture qualification — 2026-10-02
 
 The reported crypto-closure and dependency-risk failures shared one cause:

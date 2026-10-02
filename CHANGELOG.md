@@ -19,7 +19,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Adopts Rust 1.99.0, ic-memory 0.15.3 and the testkit transport-classification
   fix, plus ic-query 0.44.2 cache protection and progress diagnostics;
   isolates optional IcyDB composition from default validation and removes
-  the Gitleaks flow. Host record changes require pre-1.0 clean reinstall.
+  the Gitleaks flow. Typed deployment fixtures catch record drift during
+  compilation. Host record changes require pre-1.0 clean reinstall.
 
 - `0.110.49` repairs deployment and import recovery, consolidates completed-Fleet
   reset, and improves build reproducibility, backup retention, macOS portability
