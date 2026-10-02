@@ -406,9 +406,7 @@ pub(in crate::fleet_ensure) fn assert_activation_reset_reviews(
     changed = source.clone();
     changed.initial_controlled_cycles += source.maximum_execution_burn_cycles + 1;
     assert!(compile(&changed, &assets, &observation).is_err());
-    changed = source.clone();
-    changed.initial_controlled_cycles -= 1;
-    assert!(compile(&changed, &assets, &observation).is_err());
+    assert_preparation_native_credits(&source, &assets, &observation, &prepared, &compile);
     changed = source.clone();
     changed
         .initial_estate_funding_cycles_by_root
@@ -566,4 +564,106 @@ pub(in crate::fleet_ensure) fn assert_activation_reset_reviews(
             .expect("remaining infrastructure reset admission");
     assert!(!targets.contains(&root_name));
     assert_eq!(targets.len(), 2);
+}
+
+fn assert_preparation_native_credits(
+    source: &FleetActivationSourceRecord,
+    assets: &[FleetReinstallAssetRecord],
+    observation: &FleetObservation,
+    prepared: &FleetEnsurePlan,
+    compile: &impl Fn(
+        &FleetActivationSourceRecord,
+        &[FleetReinstallAssetRecord],
+        &FleetObservation,
+    ) -> Result<FleetEnsurePlan, EnsurePolicyError>,
+) {
+    let original = serde_json::to_vec(source).unwrap();
+    let reopened: FleetActivationSourceRecord = serde_json::from_slice(&original).unwrap();
+    for name in observation.canisters.keys() {
+        for credit in [1, source.maximum_execution_burn_cycles + 1] {
+            let mut credited = observation.clone();
+            credited
+                .canisters
+                .get_mut(name)
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .cycles += credit;
+            let plan = compile(&reopened, assets, &credited).unwrap();
+            let bytes = serde_json::to_vec(&plan).unwrap();
+            let plan: FleetEnsurePlan = serde_json::from_slice(&bytes).unwrap();
+            let retained = &plan
+                .reinstall
+                .as_ref()
+                .unwrap()
+                .activation_reset
+                .as_ref()
+                .unwrap()
+                .source;
+            assert_eq!(serde_json::to_vec(retained).unwrap(), original);
+            let mut expected = prepared.conservation.clone();
+            expected.observed_controlled_cycles += credit;
+            expected.retained_in_reused_canisters_cycles += credit;
+            expected.expected_post_operation_cycles += credit;
+            assert_eq!(plan.conservation, expected);
+            assert_eq!(
+                serde_json::to_vec(&plan.canisters).unwrap(),
+                serde_json::to_vec(&prepared.canisters).unwrap()
+            );
+            let mut wrong_source = reopened.clone();
+            wrong_source.infrastructure[0].module_sha256 = "ff".repeat(32);
+            assert!(matches!(
+                compile(&wrong_source, assets, &credited),
+                Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+            ));
+            credited
+                .estate_funding_domains
+                .values_mut()
+                .next()
+                .unwrap()
+                .balance_cycles = Some(1);
+            assert!(matches!(
+                compile(&reopened, assets, &credited),
+                Err(EnsurePolicyError::RootManagementAuthorityMismatch { .. })
+            ));
+        }
+        for debit in [
+            source.maximum_execution_burn_cycles,
+            source.maximum_execution_burn_cycles + 1,
+        ] {
+            let mut depleted = observation.clone();
+            depleted
+                .canisters
+                .get_mut(name)
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .cycles -= debit;
+            let result = compile(&reopened, assets, &depleted);
+            if debit == source.maximum_execution_burn_cycles {
+                result.unwrap();
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(EnsurePolicyError::RootManagementAuthorityMismatch {
+                        field: "bounded source protocol debit",
+                        ..
+                    })
+                ));
+            }
+        }
+        let mut overflow = observation.clone();
+        overflow
+            .canisters
+            .get_mut(name)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .cycles = u128::MAX;
+        assert!(matches!(
+            compile(&reopened, assets, &overflow),
+            Err(EnsurePolicyError::ArithmeticOverflow { .. })
+        ));
+    }
+    assert_eq!(serde_json::to_vec(source).unwrap(), original);
 }

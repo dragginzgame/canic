@@ -56,7 +56,7 @@ fn additional_credit_preserves_prior_debit_and_native_floor() {
 }
 
 #[test]
-fn credit_rejects_custody_changes_unrecognized_increases_and_fictional_baselines() {
+fn credit_rejects_custody_changes_and_fictional_baselines() {
     let original = funded();
     let mut changed = original.clone();
     changed.funding_credits[0].observed.binding.controllers = vec![principal(99)];
@@ -66,10 +66,7 @@ fn credit_rejects_custody_changes_unrecognized_increases_and_fictional_baselines
     ));
     let mut changed = original.clone();
     changed.funding_credits[0].observed.cycles = 1_101;
-    assert!(matches!(
-        validate_plan(&changed),
-        Err(CapacityImportPolicyError::ConservationUnproven { .. })
-    ));
+    validate_plan(&changed).unwrap();
     let mut changed = original.clone();
     changed.sources[0].observed_cycles -= 1;
     assert!(matches!(

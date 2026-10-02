@@ -535,6 +535,8 @@ impl EnsurePaths {
 
 #[derive(Debug, ThisError)]
 pub enum EnsureStateError {
+    #[error("reset requires reconciliation of the uncertain paid effect at {} ({effect}); preserve its request and receipt evidence before replacing this installation", path.display())]
+    ResetUncertainEffect { path: PathBuf, effect: String },
     #[error("reset review digest or cancellation evidence differs; preserve retained authority")]
     ResetReviewConflict,
 
@@ -581,7 +583,7 @@ pub enum EnsureStateError {
     #[error("Fleet ensure continuation authority is invalid: {reason}")]
     ContinuationAuthority { reason: String },
     #[error(
-        "Fleet ensure document is invalid at {}: {source}; operation completion cannot be established from this document; preserve the Fleet directory, referenced objects, artifacts and paid-effect receipts; do not add missing fields or delete the plan/journal; only an explicitly disposable local simulator may be replaced through its owning session's reset procedure, then a fresh environment and Fleet plan; unresolved real effects require recovery under their exact authority; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan",
+        "Fleet ensure document is invalid at {}: {source}; preserve the Fleet directory, artifacts and paid-effect receipts; use current-build fleet ensure --reinstall with explicit physical inventory for replacement; genuinely uncertain paid effects require reconciliation, but predecessor application completion is not required; do not insert missing fields or delete journals; see docs/features/operations/fleet-ensure.md#unreadable-retained-plan",
         path.display()
     )]
     Decode {

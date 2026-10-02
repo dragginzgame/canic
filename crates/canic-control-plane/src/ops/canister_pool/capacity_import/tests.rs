@@ -287,8 +287,6 @@ fn capacity_import_root_rejects_changed_evidence_without_advancing_intent() {
     changed = observed(1);
     changed.cycles = 799;
     assert!(CanisterPoolImportOps::issue_controllers(identity(), &changed, budget(), 2).is_err());
-    changed.cycles = 1_001;
-    assert!(CanisterPoolImportOps::issue_controllers(identity(), &changed, budget(), 2).is_err());
     assert_eq!(CanisterPoolStore::state(), before);
 }
 
@@ -299,10 +297,9 @@ fn capacity_import_root_paid_attempts_survive_replay_without_budget_rebase() {
     let before = CanisterPoolStore::state();
     CanisterPoolImportOps::reserve(reservation(), &config(), 2).unwrap();
     assert_eq!(CanisterPoolStore::state(), before);
-    assert!(CanisterPoolImportOps::reserve_paid_call(identity(), 351, 9_900).is_err());
-    assert!(CanisterPoolImportOps::reserve_paid_call(identity(), 1, 10_001).is_err());
+    assert!(CanisterPoolImportOps::reserve_paid_call(identity(), 301, 9_900).is_err());
     assert_eq!(CanisterPoolStore::state(), before);
-    CanisterPoolImportOps::reserve_paid_call(identity(), 350, 9_900).unwrap();
+    CanisterPoolImportOps::reserve_paid_call(identity(), 300, 9_900).unwrap();
     assert!(CanisterPoolImportOps::reserve_paid_call(identity(), 1, 9_899).is_err());
 }
 
@@ -552,7 +549,6 @@ fn capacity_import_root_requires_its_terminal_cycle_receipt_before_releasing_cap
     assert!(CanisterPoolImportOps::release(identity(), [5; 32]).is_err());
     let before = CanisterPoolStore::state();
     assert!(CanisterPoolImportOps::settle(identity(), 9_000, 900).is_err());
-    assert!(CanisterPoolImportOps::settle(identity(), 10_001, 1_000).is_err());
     assert_eq!(CanisterPoolStore::state(), before);
     let completed = CanisterPoolImportOps::settle(identity(), 9_980, 990).unwrap();
     let receipt = completed.root_receipt.as_ref().unwrap();
@@ -665,7 +661,7 @@ fn lost_and_stale_callbacks_keep_their_conservative_reservation() {
         CanisterPoolImportOps::status(identity())
             .unwrap()
             .reserved_debit_cycles,
-        660
+        670
     );
     assert!(CanisterPoolImportOps::complete_paid_call(identity(), lost, 9_920).is_err());
     assert!(CanisterPoolImportOps::complete_paid_call(identity(), completed, 9_920).is_err());
@@ -707,4 +703,96 @@ fn complete_mainnet_sized_import_keeps_reserve_separate_from_observed_debit() {
         pool_import::minimum_calls(request.sources.len()).unwrap()
     );
     assert!(status.paid_calls < calls);
+}
+
+#[test]
+fn capacity_import_root_credits_preserve_debit_and_uncertain_call_authority() {
+    start();
+    let first = CanisterPoolImportOps::reserve_paid_call(identity(), 600, 9_950).unwrap();
+    CanisterPoolImportOps::complete_paid_call(identity(), first, 9_940).unwrap();
+    let lost = CanisterPoolImportOps::reserve_paid_call(identity(), 300, 11_000).unwrap();
+    let encoded = CanisterPoolStore::state().to_bytes().into_owned();
+    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(encoded)));
+    let successful = CanisterPoolImportOps::reserve_paid_call(identity(), 100, 12_000).unwrap();
+    CanisterPoolImportOps::complete_paid_call(identity(), successful, 13_000).unwrap();
+    let retained = CanisterPoolImportOps::status(identity()).unwrap();
+    assert_eq!(retained.reservation, reservation());
+    assert_eq!(retained.paid_calls, 3);
+    assert_eq!(retained.reserved_debit_cycles, 360);
+    assert_eq!(retained.last_root_cycles, 13_000);
+    assert!(CanisterPoolImportOps::complete_paid_call(identity(), lost, 14_000).is_err());
+    assert!(CanisterPoolImportOps::reserve_paid_call(identity(), 641, 14_000).is_err());
+    assert_eq!(CanisterPoolImportOps::status(identity()).unwrap(), retained);
+    let next = CanisterPoolImportOps::reserve_paid_call(identity(), 100, 12_990).unwrap();
+    CanisterPoolImportOps::complete_paid_call(identity(), next, 12_985).unwrap();
+    assert_eq!(
+        CanisterPoolImportOps::status(identity())
+            .unwrap()
+            .reserved_debit_cycles,
+        375
+    );
+}
+
+#[test]
+fn capacity_import_source_credits_keep_custody_receipts_and_effect_free_replay() {
+    start();
+    let original = reservation();
+    let mut current = observed(1);
+    current.cycles = 2_000;
+    CanisterPoolImportOps::issue_controllers(identity(), &current, budget(), 2).unwrap();
+    current = observed(2);
+    current.cycles = 3_000;
+    CanisterPoolImportOps::observe_controllers(
+        identity(),
+        &current,
+        &history(&current, PoolImportHistoryKind::Controllers),
+    )
+    .unwrap();
+    current.cycles = 4_000;
+    CanisterPoolImportOps::issue_uninstall(identity(), &current, budget()).unwrap();
+    let bytes = CanisterPoolStore::state().to_bytes().into_owned();
+    CanisterPoolStore::set_state(CanisterPoolStateRecord::from_bytes(Cow::Owned(bytes)));
+    current = observed(3);
+    current.cycles = 5_000;
+    let receipt = CanisterPoolImportOps::observe_cleared(
+        identity(),
+        &current,
+        &history(&current, PoolImportHistoryKind::Uninstall),
+        3,
+    )
+    .unwrap();
+    assert_eq!(receipt.observed_debit_cycles, 0);
+    assert_eq!(receipt.retained_cycles, 5_000);
+    assert_eq!(
+        CanisterPoolImportOps::status(identity())
+            .unwrap()
+            .reservation,
+        original
+    );
+    let settled = CanisterPoolImportOps::settle(identity(), 12_000, 1_000).unwrap();
+    assert_eq!(
+        settled.root_receipt.as_ref().unwrap().observed_debit_cycles,
+        0
+    );
+    CanisterPoolImportOps::release(identity(), [5; 32]).unwrap();
+    let terminal = CanisterPoolStore::state();
+    current.cycles += 1_000;
+    assert_eq!(
+        CanisterPoolImportOps::observe_cleared(
+            identity(),
+            &current,
+            &history(&current, PoolImportHistoryKind::Uninstall),
+            4
+        )
+        .unwrap(),
+        receipt
+    );
+    assert_eq!(
+        CanisterPoolImportOps::settle(identity(), 15_000, 1_000)
+            .unwrap()
+            .root_receipt,
+        settled.root_receipt
+    );
+    CanisterPoolImportOps::release(identity(), [5; 32]).unwrap();
+    assert_eq!(CanisterPoolStore::state(), terminal);
 }

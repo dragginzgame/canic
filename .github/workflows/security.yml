@@ -1,7 +1,7 @@
 name: Scheduled dependency security
 
 env:
-  CANIC_INTERNAL_TOOLCHAIN: 1.98.1
+  CANIC_INTERNAL_TOOLCHAIN: 1.99.0
 
 permissions:
   contents: read

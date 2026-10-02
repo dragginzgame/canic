@@ -108,10 +108,7 @@ pub(in crate::fleet_ensure) fn ready_for_review(
     paths: &EnsurePaths,
 ) -> Result<bool, EnsureStateError> {
     require_no_pending(paths)?;
-    Ok(operation_selection::read(&paths.plan)?.is_none()
-        && operation_selection::read(&paths.journal)?.is_none()
-        && completed(paths)?.is_some()
-        && cleared(paths)?)
+    Ok(cleared(paths)? && completed(paths)?.is_some())
 }
 
 fn cleared(paths: &EnsurePaths) -> Result<bool, EnsureStateError> {
@@ -186,7 +183,9 @@ fn finish(
             .join(format!("{}.json", record.archive_sha256)),
     )?
     .ok_or(EnsureStateError::ResetReviewConflict)?;
-    if archive.operation_id != record.operation_id || archive.plan_sha256 != record.plan_sha256 {
+    if archive.operation_id.as_ref() != Some(&record.operation_id)
+        || archive.plan_sha256.as_ref() != Some(&record.plan_sha256)
+    {
         return Err(EnsureStateError::ResetReviewConflict);
     }
     retirement::remove_archived(

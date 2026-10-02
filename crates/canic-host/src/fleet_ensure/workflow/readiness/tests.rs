@@ -61,7 +61,11 @@ pub(in crate::fleet_ensure) fn qualify_unpaid_infrastructure_review(
         &IcpCli::new("must-not-run", None),
     )
     .unwrap();
-    assert!(forecast.is_none());
+    assert!(
+        forecast
+            .as_ref()
+            .is_some_and(|forecast| !forecast.targets.is_empty())
+    );
     let mut report = report(
         &request,
         "network".into(),
@@ -72,14 +76,11 @@ pub(in crate::fleet_ensure) fn qualify_unpaid_infrastructure_review(
     assert!(report.generation_inputs_checked);
     // An unavailable quote must not prevent building inputs needed for a new review.
     assert!(report.blockers.is_empty());
-    assert_eq!(
-        report.funding.clean_reinstall_infrastructure_unavailable,
-        Some(
-            InfrastructureFundingUnavailable::RetainedInfrastructureReview {
-                operation_id: plan.operation_id.clone(),
-                plan_sha256: plan.plan_sha256.clone(),
-            }
-        )
+    assert!(
+        report
+            .funding
+            .clean_reinstall_infrastructure_unavailable
+            .is_none()
     );
     assert!(report.estimated_required_cycles.is_none());
     assert!(report.estimated_shortfall_cycles.is_none());

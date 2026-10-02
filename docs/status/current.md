@@ -1,6 +1,272 @@
-# Current handoff — 2026-10-01
+# Current handoff — 2026-10-02
 
-## Active work and release boundary
+## Rust 1.99 qualified — 2026-10-02
+
+The maintainer-requested Rust 1.99 update and full Canic-owned Clippy check are
+complete. Repository, CI/security, developer installer and README pins select
+1.99.0; the published MSRV remains 1.91.0. Package versions remain 0.110.49 and
+the existing 0.110.50 draft includes this work. No commit, version transaction,
+publication, deployment, cargo clean or full test suite ran.
+
+Removed redundant `must_use` annotations on the two Host diagnostic iterator
+accessors and unnecessary closure borrows in Backup and Host import-journal
+lookup. Workspace policy allows the new `assert_is_empty` style lint: existing
+emptiness predicates remain valid assertions without typed empty-array casts.
+
+Default build/check/test graphs now exclude optional IcyDB fixture packages.
+The cross-crate integration package gates its IcyDB dependency and target behind
+`external-composition`; the existing explicit PocketIC selector enables it.
+Full Clippy checks all targets/features in other maintained packages and all
+default targets in that integration package. A locked dependency-tree check
+confirmed IcyDB is absent from the default integration graph. AGENTS explicitly
+requires expected upstream/API/type drift to remain a separately reported,
+nonblocking local-consumer limitation. This work does not qualify IcyDB or
+synchronize its upstream versions.
+
+Qualification passed:
+
+- Full `make clippy` with Rust 1.99 and warnings denied; final passes took
+  7.83 seconds and 2.46 seconds with the warmed cache.
+- Focused `external_composition_qualification_is_explicit` regression; its new
+  assertion was corrected to accept an omitted Cargo `default` feature.
+- Embedded allocation peer refresh, including Wasm bytes and structured Rust
+  1.99 provenance, followed by the single public managed-component lifecycle
+  PocketIC proof: 1 passed in 214.38 seconds, 383-second runner invocation.
+- Scope-helper failure-propagation tests, governed runner regressions including
+  explicit external selection, ShellCheck, release-integrity contract,
+  scoped Rust formatting, document semantics and 0.110.50 draft preflight.
+
+Evidence is retained under `target/review-validation/rust199-*`; complete
+lifecycle output is in `target/test-runs/20261002T061230Z-63634.D7uBxi/1.log`.
+No owned validation process remains running. The corrective batch is ready for
+maintainer review and the selected release flow, with the earlier corrective
+qualification below and these Rust 1.99 checks. No additional broad gate was
+pre-run. Preserve the separated FR1 work described below.
+
+## Corrective release separation — 2026-10-01
+
+The maintainer selected a bounded corrective release instead of waiting for FR1.
+The active tree retains CANIC-191, native-credit/controller-order corrections,
+ic-memory 0.15.0, current Host hard cuts and the frozen-repair tooling removal.
+The root and detailed changelogs now open the `0.110.50` draft; package versions
+remain `0.110.49`. No version transaction, Git publication or live reset ran.
+
+Newer FR1 reservations, registered-inventory collection and Core release fences
+are set aside in `.canic/local-work/fr1-separated-20261001T200203Z/`.
+Its `README.txt` explains restoration. `resume-fr1.patch` contains only the
+separated source changes; disposable-copy application with zero fuzz reproduced
+all 42 original file hashes. `before/` also preserves all 122 original changed,
+new or deleted paths, including documentation. This ignored local bundle is
+outside build/test cleanup and is not included in Git publication; retain it
+until FR1 is restored or backed up. Earlier committed admission, snapshot-deletion
+and physical-observation helpers remain, with no whole-Fleet release command.
+
+The FR1 checkpoints below describe preserved development evidence, not features
+included in this corrective release. FR1/CS1 and conditional CANIC-190 work remain
+follow-ups and do not block this corrective release.
+
+The separated corrective tree is ready for maintainer review/commit and the
+chosen release flow. All 208 selected native tests pass (one existing manual
+inspection remains ignored), along with Core/Host/CLI/Testing library/test
+all-feature Clippy with warnings denied, scoped formatting, document semantics
+and the `0.110.50` release-draft preflight. The public-CLI CANIC-191 PocketIC
+journey passes in 509.76 seconds (590-second invocation); roughly four minutes
+rebuilt its changed canister artifacts. The refreshed embedded Component Group
+peer passes its lifecycle journey in 121.83 seconds (184-second invocation).
+
+The separation check found an embedded peer built from the removed fence code;
+its Wasm and structured provenance were refreshed. Two test-only lint fixes in
+the preserved FR1 edits were retained in the corrective tree. The restoration
+patch was regenerated and again reproduced all original source hashes with zero
+fuzz. No unresolved separation failure remains. Existing builds are retained;
+only invocation-owned scratch was cleared by the test runner.
+
+Evidence: `target/review-validation/release-split-{native,format,clippy,embedded-refresh,pocketic,lifecycle,docs}.log`.
+Complete PocketIC logs:
+`target/test-runs/20261001T201943Z-55381.eT7IL5/1.log` and
+`target/test-runs/20261001T202814Z-17421.LKP0m7/1.log`.
+The earlier embedded verification refusal and first Clippy findings remain in
+`release-split-embedded.log` and `release-split-clippy-first.log`. No broad gate,
+package version change, staging, commit, push, deployment or sibling edit ran.
+Full release validation remains owned by the maintainer-selected release flow;
+its not having run during coding is not an implementation blocker.
+
+## Toko feedback and corrective priority — 2026-10-01
+
+CANIC-191 / [RD1](../design/0.110-fleet-runtime-contraction/0.110-design.md#rd1-remove-repair-before-reset-admission--prioritized-2026-10-01)
+has a locally qualified admission correction through the existing clean-reinstall owner. Generation and
+readiness now select explicit physical inventory without requiring predecessor
+completion. Explicit reset qualifies current artifacts and certified physical
+custody before archiving opaque predecessor bytes and binding the new selection
+under the same Fleet lock. An unfinished Root import alone no longer blocks reset;
+old executable plans and application state are not reset authority. Current retries
+retain their spent allowances, including unpaid successors of completed phases.
+Unresolved Host paid-effect envelopes still refuse with a typed, located error;
+this does not require completing an old application or restoring its binary.
+
+Focused checks pass: 21 operation-selection/archive/retirement tests, 28 generation
+checks, seven readiness tests, three cancellation tests and 76 Fleet CLI tests.
+Host/CLI/Testing library/test all-feature warning-denied Clippy, final fixture lint,
+scoped formatting and document semantics pass. The final public CLI PocketIC
+journey passes in 249.78 seconds (268-second governed invocation). Its three-source
+estate covers interrupted infrastructure, Coordinator activation before Root mirror
+activation, mixed cleared/stopped/untouched import sources, malformed predecessor
+documents, changed-controller refusal, lost-response reset recovery, bounded debit,
+cycle conservation and effect-free offline replay. Exact same-selection retry retains
+allowances; a damaged matching current record does not force application repair.
+
+Evidence: `target/review-validation/canic191-{native,generation,readiness-cancellation,cli,clippy,fixture-clippy,pocketic,docs}.log`
+and `target/test-runs/20261001T185224Z-34716.H7C65V/1.log`. The corrected fixture uses
+the dynamically expanded bootstrap activation phase, not a presumed action in the
+later workload review. The stopped disposable run's own scratch was removed; shared
+build artifacts and real operation evidence remain intact.
+
+The reported CANIC-191 admission blocker is corrected and qualified in Canic; this
+is not live Toko acceptance. The public explicit-reset CLI no longer selects the
+source-bound activation preparation/adoption route. Retained in-flight provisioning
+reconciliation is not replaced by this slice: genuinely uncertain Host calls and
+unreadable paid-effect envelopes still require cycle-safe reconciliation, and the
+older preparation machinery must remain until those obligations are covered. Its
+remaining contraction is not a requirement to finish an exhausted Root import.
+The correction is included in the `0.110.50` draft. Newer incomplete FR1 work
+has been preserved outside the corrective source tree as described above.
+
+Toko's current .18 handoff reports its 24-source .48 installation blocked. The
+separately reported eight-source recovery is a different operation and does not
+establish recovery of Toko. No live reset, sibling mutation, broad validation,
+version or Git publication ran. RD1 takes priority over FR1/CS1; their unrelated
+remaining work is not a prerequisite for delivering this deployment correction.
+
+CANIC-190's conditional attempt-exhaustion gap is also confirmed in the named
+Host survey/submission owners: two attempts can remain spent without a usable
+resolution. It is not an observed additional Toko failure. Bounded reviewed
+continuation or a concrete cycle-safe reset follows RD1 unless needed by that path;
+do not silently refresh counters. Maintained native-credit corrections below
+already cover the reported positive-balance refusals locally, not in published .49.
+Toko reports its JSON next-action adapter locally implemented with passing offline
+contracts; its older audit's missing-adapter finding is superseded. Those downstream
+tests were not rerun here; live acceptance remains downstream-owned.
+
+The controller-order false refusals in import admission/destination now compare
+sorted temporary copies. Retained Registry bytes, review and authority hashes stay
+unchanged; duplicate and changed membership remain invalid. All eleven owning
+native tests and Host library/test all-feature Clippy with warnings denied pass
+against the concurrently updated `ic-memory` dependency. Scoped formatting, diff
+hygiene and document semantics pass. Evidence:
+`target/review-validation/toko-controller-order-{native,clippy}.log` and
+`toko-feedback-docs.log`. The transient manifest/lock mismatch and missing cached
+crate during the concurrent update were resolved by its owner and normal locked
+dependency download; no dependency source or lock edits were made for this fix.
+AGENTS.md now explicitly rejects historical completion and incidental
+representation drift as independent safety requirements. No sibling mutation,
+live reset, broad validation, version or Git publication is authorized/performed.
+The controller comparison and CANIC-191 admission corrections are qualified; FR1
+remains unfinished and is set aside. The correction is included in the `0.110.50`
+draft and does not depend on FR1 completion.
+
+## ic-memory 0.15.0 adoption
+
+Canic resolves published ic-memory 0.15.0 and hard-cuts direct runtime growth to
+typed failures. Receipt-capacity reservation retains `RuntimeGrowError` in its
+ops error and rejects before inserting a receipt. Anonymous allocation metrics
+use numeric summaries, preserving gauge names, independent conservation checks,
+cache failure timestamps and the 34,848-byte metadata-read bound. Committed ID
+and authority helpers replace manual resolution in the IcyDB admission fixture;
+early default-runtime access is qualified without choosing bucket configuration.
+No compatibility shim, product schema generation or Canic version bump is added.
+
+Thirty-five focused memory tests, seventy receipt tests and Core library/test
+all-feature warning-denied Clippy pass. The embedded allocation peer and its
+provenance are refreshed, and its exact Component Group lifecycle PocketIC proof
+passes in 214.44 seconds, including fixture Wasm acquisition. The governed runner
+completes successfully in 372 seconds including native compilation and cleanup.
+Evidence:
+`target/review-validation/ic-memory-015-{native,receipts,clippy,embedded-refresh,embedded-pocketic,wasm-dependency}.log`.
+The selected peer/managed-role Wasm graph contains only ic-memory 0.15.0.
+
+The maintainer clarified that IcyDB is exclusively an optional local test
+consumer with an independent upstream dependency schedule. AGENTS.md and CI
+governance now prohibit synchronizing its dependencies with Canic, chasing or
+waiting for matching releases, or treating upstream skew as a Canic upgrade,
+push or publication blocker. IcyDB 0.262.2's composition against the new runtime
+is unqualified; no matching-release follow-up is required for this Canic batch.
+The earlier alignment-blocker verdict is withdrawn. Canic's ic-memory adoption
+is qualified by the focused evidence above and included in the `0.110.50`
+corrective draft. FR1 remains a separate unfinished batch. No broad gate, Git
+publication, Canic version transaction or deployment ran.
+
+## Hard cut and reinstall policy — 2026-10-01
+
+The maintainer withdrew the CANIC-188 frozen `.48` repair exception and requires
+hard cut plus reinstall for every pre-1.0 release transition, including malformed
+or incomplete installations. Discard predecessor application/framework state.
+Select qualified current-build artifacts, explicit physical inventory and current
+controllers for reset authority. Reconcile unfinished paid effects only to
+prevent duplicate spending and establish cycle-safe disposition; do not repair
+old state, restore an old Root or maintain an old CLI to continue it. Current
+same-release interruption recovery, retry, idempotency and conservation remain.
+
+AGENTS.md, active 0.110 design/status, operator guidance and the corrective draft now
+carry this decision. Dedicated incident preparation/build/qualification helpers,
+frozen patches/fixtures and the Host qualifier example are removed. The
+[withdrawn decision and tooling record](../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-issued-import-recovery.md)
+and existing incident bundles remain historical evidence only. Their `.48`
+terminal-surplus limitation is no longer active work or a readiness condition.
+The remaining Host examples compile with all features after removal of the
+qualifier; Cargo metadata lists only maintained example targets. Current document
+semantics pass without advisories, relative file links resolve in all ten changed
+policy/history documents, and scoped diff hygiene passes. Both retained incident
+bundle checksum inventories remain unchanged and pass. Evidence:
+`target/review-validation/reinstall-only-policy-*`. This policy/tooling cut is
+complete and included in the `0.110.50` draft; FR1 remains unfinished. No live reset, deployment, sibling edit,
+version or Git publication ran.
+
+## Maintained native-credit corrections
+
+Current import admission, handoff/lost-response recovery, Root callbacks, reset
+and net-debit receipts accept native credits while preserving spent debit,
+consumed calls and uncertain reserves. Custody, floors and original caps remain
+binding. The maintained PocketIC import journey passes real Root/source credits,
+settlement and effect-free replay. Native evidence passes 27 Control Plane and
+83 Host import tests; affected library/test and qualifier lint passed before the
+now-withdrawn frozen repair tooling was retired. Evidence remains in
+`target/review-validation/canic188-credit-*`.
+
+The three Host follow-ups also pass: infrastructure bootstrap, unfinished
+activation preparation and Fleet-release custody/held-capacity checks admit
+increases and bound only net debit. Reviewed source records, debit/funding
+ceilings, native floors, custody/content bindings and exact Ledger accounts stay
+binding. A new activation preparation records its current balance while retaining
+its original source. All thirteen focused native tests pass, including the
+bootstrap/activation generator journey and twelve release policy tests. Host
+library/test all-feature Clippy with warnings denied, scoped formatting and diff
+hygiene pass. Evidence is `target/review-validation/balance-credit-followup-*`.
+These current-code fixes remain maintained after withdrawal of the incident
+repair and are included in the `0.110.50` corrective draft. FR1 is set aside
+and does not block these completed corrections.
+
+## Preserved FR1 development checkpoints (excluded from corrective release)
+
+Core now distinguishes irreversible Fleet-release sealing from resumable snapshot
+sealing. The current `v1` fence retains exact operation, review digest and recipient;
+exact replay preserves its timestamp, changed bindings refuse, and snapshot
+prepare/resume cannot replace or reopen it. The internal synchronous workflow hook
+checks role-owned settlement, suspends producers and commits in one message.
+It exposes no endpoint and admits no existing command through a release seal.
+Actual role paid-obligation checks, bounded handoffs and operator wiring remain
+unimplemented; this is not yet proof of whole-Fleet quiescence.
+
+Seventeen focused Core/facade tests pass, including existing snapshot behavior,
+typed release refusals, native retained-state reopening, maximum-width record
+encoding and canonical Candid equality. Core/facade library/test all-feature
+Clippy with warnings denied, scoped formatting and diff hygiene also pass.
+Evidence: `target/review-validation/fleet-release-fence-{native,clippy}.log`.
+Native store reopening
+does not prove IC snapshot restoration. The first compile found an unused future
+handoff helper; it was removed rather than suppressing dead-code checks. Root
+Unreleased records the potentially breaking current record/status change and
+reinstall-only boundary. FR1 remains unfinished and not push-ready; no release
+command, broad gate, version or Git action ran.
 
 The maintainer reports `.49` pushed and selected the Root/Coordinator/Wasm Store
 FR1 slice next. The first Host library slice now seals an effect-free `v1` review
@@ -22,21 +288,21 @@ allowed to finish before editing or continuing checks. No deployment, versioning
 Git action, broad gate or Cargo cleanup was performed for this work.
 
 FR1 remains an unfinished batch: no release CLI or whole-Fleet executor is exposed,
-no retirement code is removed, and these supplied observation views are not live
-authority proofs. Next wire authenticated collection/quiescence, qualified
+no retirement code is removed, and complete role/account observations still need
+authenticated collection. Next wire complete inventory/quiescence, qualified
 account recovery/settlement and existing-journal handoff/reset execution; then
 prove interruptions, fresh bootstrap and replay in PocketIC before contraction.
 The root Unreleased notes hold this incomplete batch; no patch number is assigned.
 Toko now reports its separate eight-source import recovered, backend Ensure
 converged and the original Root restored. Its Root `5lnwm-ziaaa-aaaae-agtqa-cai`
-is outside the pinned CANIC-188 repair; the downstream bundle is not available
+is distinct from the historical CANIC-188 incident; the downstream bundle is not available
 here and no independent live verification was performed. The maintainer retained
 all report feedback and call-reduction work in the
 [0.110 future-work tracker](../design/0.110-fleet-runtime-contraction/status.md#toko-staging-follow-up--accepted-future-work-2026-10-01):
 bounded workflow-derived budgets, fewer repeated subnet/status calls with validity
 proof, controller-order fixes, observation diagnostics, reproducible incident/raw/
 gzip evidence, quiescence and effect-free replay, plus downstream application
-acceptance and dependency provenance. FR1 remains current; no patch or external
+acceptance and dependency provenance. RD1 now precedes FR1; no patch or external
 effect is authorized by this planning update.
 
 The next execution primitive is now implemented in the existing Host executor:
@@ -66,6 +332,91 @@ their pinned source revision. The existing authority snapshot fence is not a
 drop-in release fence: it blocks normal handoffs and permits resumable retained
 work. Explicit release quiescence and reconciliation remain necessary. The whole
 FR1 batch is not push-ready; its root Unreleased entry stays open.
+
+Authenticated physical observation after operator handoff is now implemented.
+It reuses certified import status reads and shares bounded snapshot decoding with
+the deletion adapter. Free preparation binds the signer, network and certified
+custody; consuming it performs at most four management reads without automatic
+retry. Changed code/version, controllers, subnet, running state or snapshot
+inventory refuses the sample. Current balances are returned for conservation
+checks. This is neither role quiescence nor account recovery. The following
+reservation slice connects its read allowance to the existing operation journal.
+
+The new PocketIC observer case passes actual stopped-canister/snapshot sampling,
+wrong signer/network/subnet refusal and changed-custody refusal after preparation
+(1.47 seconds). The shared deletion/lost-reply regression also passes (2.97
+seconds); recompilation dominated its 169-second invocation. Logs are
+`target/review-validation/fleet-release-observation-pocketic.log` and
+`fleet-release-observation-snapshot-regression.log`. All seventeen focused native
+tests and Host library/test all-feature Clippy with warnings denied pass
+(`fleet-release-observation-{native,clippy}.log`), alongside runner regressions,
+scoped formatting, shell syntax/lint and diff hygiene. The lint check found a
+single-case loop in concurrent import-test edits; it is now the same direct
+assertion, with import behavior unchanged by this correction. Only targeted checks ran; shared-target
+ownership was checked before each compile. Another session advanced HEAD and
+continued import-budget edits; those changes remain preserved.
+Use `ICP_ENVIRONMENT=local CARGO_INCREMENTAL=0` with direct Cargo checks to
+match local Make runs. Core watches the environment selector, so switching
+between unset and explicit `local` also invalidates otherwise reusable artifacts.
+
+The release observer now requires an opaque, non-cloneable reservation borrowing
+the ordinary Fleet journal lock. The review freezes each source's per-call quote;
+the existing journal retains its review, separate executable-plan identity and
+monotonic reserved-call counters. Four calls and their worst-case debit must fit
+before persistence can issue the token. Lost results remain charged, uncertain
+persistence forces reopening, and ordinary Ensure/import rejects takeover of an
+unfinished release. This attaches to an existing matching operation envelope;
+operation creation, full quiescence/account collection and execution are still
+pending. Current journal/review fields change through a hard cut with no fallback.
+Source edits waited for the other session's governed import journey to finish
+successfully. Later checks were also serialized with the other validation owners.
+
+Final reservation qualification passes 31 native tests (29 Host, two CLI), the
+exact reserved-observation PocketIC case and Host/CLI/Testing library/test
+all-feature Clippy with warnings denied. Logs:
+`target/review-validation/fleet-release-reservation-{native,pocketic,clippy}.log`.
+The PocketIC test takes 1.59 seconds; its isolated Host test binary rebuild dominates
+the 92-second invocation. Combining Host and CLI test packages selects a different
+Host feature graph; prefer separate native selectors when reusing the isolated
+PocketIC binary. The initial test-only redundant clone is corrected. Scoped
+formatting and diff hygiene pass; the unrelated incident repair patch retains its
+own owner's changes, including blank patch-context whitespace diagnostics.
+No broad gate, Git action, release mutation, deployment or Cargo cleanup ran.
+FR1 remains unfinished and not push-ready: complete live role inventory/quiescence,
+account recovery, operation creation, whole-Fleet execution/reuse proof and
+retirement contraction still need implementation and qualification. CS1 follows FR1.
+
+The registered-ownership collector now reuses bounded Registry/pool pagination,
+checks the exact reviewed ownership closure, and verifies signer/network plus
+certified owner custody around the queries. Every selected child receives a final
+custody check; redundant preliminary child reads are avoided. Shared reply decoding
+bounds bytes, work, type count and header complexity. Pending registered assets
+remain visible, and the returned inventory cannot claim quiescence. Unfinished
+creation/import may own IDs outside the registered pool; reconcile those effects
+before treating the census as complete destructive authority.
+
+Twenty-three focused native tests pass against the concurrent release-credit
+correction. The PocketIC wire fixture passes actual signed queries/certificates,
+pending-reset membership, omitted-member/Registry/signer/custody refusal and
+malformed replies (1.69 seconds). This qualifies the collector, not runtime role
+quiescence or whole-Fleet release. Runner regressions and scoped shell checks also
+pass, alongside final Host library/test all-feature Clippy with warnings denied
+and scoped formatting/diff checks. Evidence:
+`target/review-validation/fleet-release-inventory-*`. Another
+session's separate activation assertion correction now passes its thirteen-test
+rerun; those edits are preserved. FR1's account recovery, quiescence/handoff,
+operation creation, execution/reuse proof and retirement contraction remain.
+
+## Accepted simplification follow-up
+
+The maintainer accepts all seven candidates from the later read-only audit into
+the [0.110 CS1 tracker](../design/0.110-fleet-runtime-contraction/status.md#pre-blob-simplification--accepted-2026-10-01).
+RD1 now takes priority; CS1 follows FR1 and coordinates with remaining owner
+corrections. Shared Fleet transitions, chain-key decoding, nonroot retries,
+bootstrap survey loops, role overviews, Backup staging and CI installers must
+all complete with focused qualification, propagation and cleanup before final
+B5/human 0.110 closeout and 0.111 blob-storage removal/extraction. All are pending;
+this planning update implements no source cut and assigns no patch version.
 
 ## Separate complexity audit
 
@@ -100,8 +451,8 @@ The stopped task's source, dependency and runner edits are preserved; its later
 design-feedback additions were also left intact. No retained paid-operation
 files, reservations or frozen CANIC-188 bytes were rewritten. Current hashes
 change through a hard cut; no migration or old-format reader is added. Release
-target remains unassigned under root Unreleased, and the combined FR1 batch is
-not push-ready. No version, Git, live effect or broad gate ran.
+scope is now the `0.110.50` corrective draft; newer FR1 work is set aside.
+No version, Git, live effect or broad gate ran.
 
 ## Prior release qualification
 
@@ -276,15 +627,13 @@ Log: `target/review-validation/canic188-post-cleanup-pocketic.log`. All 17 retai
 incident-bundle checksum checks pass. No additional runtime correction, live call,
 sibling mutation or broad gate was needed or performed for this verification.
 
-The exact CANIC-188 issued `.48` import has its own
-[repair decision](../design/0.110-fleet-runtime-contraction/issued-import-recovery.md)
-and [incident instructions](../../scripts/dev/canic188/README.md). Its qualified
-candidate and original Root are retained under
-`.canic/incident-repairs/canic188/ed3084b6908a04b28effa21e00ec425aaf382d1423849fcbb4f3b12414d61f48/`.
-Publishing current packages does not resume that operation. Preserve its original
-journal, status, artifacts, ceilings and restoration sequence. Live repair,
-convergence, replay and frontend acceptance remain outstanding. A separate local
-`.48` import with an issued uninstall is outside that exact repair.
+The CANIC-188 frozen-state repair was withdrawn on 2026-10-01. Its
+[historical decision](../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-issued-import-recovery.md)
+and retained `.canic/incident-repairs/canic188/` bundles are evidence only. Preserve
+existing journal/status/artifact evidence without maintaining the old executable
+owner or its continuation route. Current-build hard cut plus reinstall governs
+replacement; observed controlled cycles and unfinished paid effects still need
+cycle-safe disposition. Live repair/restoration is no longer planned work.
 
 No live deployment, incident execution, sibling mutation, version transaction,
 commit or Git publication is authorized by this cleanup. Toko Miner and other

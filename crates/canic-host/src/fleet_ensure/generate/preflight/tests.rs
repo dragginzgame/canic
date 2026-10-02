@@ -46,7 +46,7 @@ fn completed_fresh_seed_rejects_before_build_or_network_and_explicit_inventory_p
     let original_seed = fs::read(&seed).unwrap();
     assert!(matches!(
         validate_generation_inputs(&request, operator, ledger),
-        Err(FleetGenerateError::CompletedFleetRequiresExplicitInventory)
+        Err(FleetGenerateError::ResetRequiresExplicitInventory)
     ));
     let readiness = FleetReadinessRequest {
         workspace: &root,
@@ -66,7 +66,7 @@ fn completed_fresh_seed_rejects_before_build_or_network_and_explicit_inventory_p
     };
     assert!(
         matches!(inspect(&readiness), Err(FleetReadinessError::GenerationInputs(error))
-        if matches!(*error, FleetGenerateError::CompletedFleetRequiresExplicitInventory))
+        if matches!(*error, FleetGenerateError::ResetRequiresExplicitInventory))
     );
     assert_eq!(fs::read(&seed).unwrap(), original_seed);
     assert_eq!(fs::read(&paths.plan).unwrap(), original_plan);
@@ -105,7 +105,55 @@ fn completed_fresh_seed_rejects_before_build_or_network_and_explicit_inventory_p
     ));
     assert_eq!(fs::read(&paths.plan).unwrap(), original_plan);
     assert_eq!(fs::read(&paths.journal).unwrap(), original_journal);
+
+    assert_unreadable_predecessor(&request, &paths, &mut inventory, &readiness);
     fs::remove_dir_all(root).unwrap();
+}
+
+fn assert_unreadable_predecessor(
+    request: &FleetGenerationInputsRequest<'_>,
+    paths: &EnsurePaths,
+    inventory: &mut EstateSeed,
+    readiness: &FleetReadinessRequest<'_>,
+) {
+    let operator = readiness.operator;
+    let ledger = readiness.cycles_ledger;
+    inventory.roots[0].pool_imports = vec![Principal::from_slice(&[33]).to_text()];
+    fs::write(request.seed, toml::to_string(&inventory).unwrap()).unwrap();
+    fs::write(
+        &paths.plan,
+        b"unfinished predecessor plan, not current JSON",
+    )
+    .unwrap();
+    fs::write(&paths.state, b"obsolete application schema").unwrap();
+    fs::write(&paths.journal, b"malformed predecessor journal").unwrap();
+    fs::write(
+        paths.plan.with_file_name("capacity-import.json"),
+        b"retained import",
+    )
+    .unwrap();
+    validate_generation_inputs(request, operator, ledger).unwrap();
+    assert_reset_funding_projection(request, inventory, operator, ledger);
+    assert!(load(request, None).unwrap().clean_reinstall);
+    assert!(
+        crate::fleet_ensure::workflow::clean_reinstall::selected(
+            request.root,
+            "local",
+            "fleet",
+            true,
+            false
+        )
+        .unwrap()
+    );
+    assert_eq!(
+        fs::read(&paths.plan).unwrap(),
+        b"unfinished predecessor plan, not current JSON"
+    );
+    // Readiness proceeds to current network selection, not predecessor decoding.
+    assert!(matches!(
+        inspect(readiness),
+        Err(FleetReadinessError::Network(_))
+    ));
 }
 
 fn write_completion(paths: &EnsurePaths) {

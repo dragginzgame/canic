@@ -169,7 +169,17 @@ by normal release/PocketIC runs. Run the IcyDB composition qualification with
 `make test-pocketic-case CASE=icydb_lifecycle_composition` when its published
 dependencies share Canic's memory runtime. This includes the IcyDB-backed
 provisioning journeys within that target. It is a test consumer, not a deployed
-Canic dependency; its separate dependency schedule does not block Canic releases.
+Canic dependency. Its independent upstream dependency schedule never requires
+alignment with Canic or blocks Canic upgrades, push readiness or publication.
+Do not chase or wait for matching IcyDB releases, or change dependency versions
+solely to align this optional local test consumer. Record unavailable composition
+qualification separately and continue Canic-owned validation.
+Default workspace build, check, Clippy and test commands exclude the optional
+IcyDB schema/probe packages. The integration package's `external-composition`
+feature gates its IcyDB dependency and test target; the explicit composition
+command enables it. Clippy checks all targets/features in other maintained
+packages and all default targets in this integration package. Full Canic-owned
+validation does not require the optional consumer to compile.
 The production Wasm dependency graph still requires exactly one memory runtime.
 Complete and PocketIC-only runs first verify the checked-in embedded allocation
 peer against its current producer inputs, before test suites or server startup.

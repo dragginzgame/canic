@@ -422,7 +422,7 @@ fn validate_retained_capacity(
         let after = actual.cycles.checked_add(actual.reserved_cycles);
         let debit = before
             .zip(after)
-            .and_then(|(before, after)| before.checked_sub(after));
+            .map(|(before, after)| before.saturating_sub(after));
         if actual.cycles < source.minimum_retained_cycles
             || debit.is_none_or(|debit| debit > source.maximum_debit_cycles)
         {

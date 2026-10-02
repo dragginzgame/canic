@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses published ic-memory 0.14.3 and a single MemoryManager per canister.
+Canic uses published ic-memory 0.15.0 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
@@ -18,6 +18,12 @@ Lifecycle owners restore the state they need synchronously before invoking a
 configured lifecycle participant or scheduling deferred work. A lazy store
 still checks bootstrap readiness and its exact committed stable key and ID.
 Application storage must follow the same bootstrap-before-access ordering.
+Early default-runtime opens return typed `RuntimeOpenError::NotBootstrapped`
+without constructing a manager or selecting its bucket size. Committed ID
+resolution and authority verification also observe only an existing runtime.
+Consumers can use `memory_id` / `default_memory_manager_memory_id` to resolve
+committed keys and `verify_authority` / `verify_default_memory_manager_authority`
+to check their fixed or logical requirements without replaying host admission.
 
 ## Capacity and selection
 
@@ -44,6 +50,15 @@ application expected to outgrow 32 GiB, including its database, indexes,
 framework allocations and headroom. The environment variable must accompany
 the actual artifact build, rather than only a later install command.
 
+Direct `RuntimeMemory::grow` calls return `Result<u64, RuntimeGrowError>`.
+Backing refusal, arithmetic overflow, bucket exhaustion and reentrant growth
+remain typed; ordinary refusal preserves virtual extents and manager metadata
+for retry. Only the upstream `Memory` trait adapter maps failures to its required
+`-1` sentinel. Canic's application-receipt capacity reservation retains the typed
+growth source in its ops error and refuses admission before inserting a receipt.
+Ledger growth failure returns `RuntimeBootstrapError::LedgerGrowth` without
+publishing committed allocation authority; the same attempt can retry.
+
 Cargo tracks the variable through the core build script; Canic's complete-build
 reuse fingerprint also includes the build environment. The selected size is
 compiled into each artifact and supplied to ic-memory before stable stores open.
@@ -59,10 +74,13 @@ Canic does not change their schemas, IDs or ownership.
 
 Consumers composed into the same canister must use the same ic-memory package
 identity. IcyDB is a test-only dependency of this repository and does not enter
-deployed Canic roles. The published 0.258.0 test consumer now shares ic-memory 0.14.3
-with Canic. Its composed integration is qualified explicitly using
-`make test-pocketic-case CASE=icydb_lifecycle_composition`. Canic's production
-Wasm dependency guard continues to require a single memory runtime.
+deployed Canic roles. Its upstream dependencies evolve independently; Canic
+never synchronizes dependency versions with this optional local consumer or
+waits for matching releases. Dependency skew can leave its composition fixture
+unqualified without blocking Canic upgrades or publication. Run the explicit
+`make test-pocketic-case CASE=icydb_lifecycle_composition` qualification when the
+selected fixture can compose. Canic's production Wasm dependency guard continues
+to require a single memory runtime in the selected deployed graph.
 
 Application role validation also rejects multiple reachable `ic-memory` package
 identities with `role_contract_multiple_memory_runtimes` before compiling the
@@ -84,7 +102,7 @@ Canic's reinstall-only policy; there is no automatic migration.
 
 ## Composed consumer admission
 
-IcyDB 0.258.0 uses permanent logical namespace/store keys and explicit host
+IcyDB uses permanent logical namespace/store keys and explicit host
 grants. Register one composed admission callback for the entire artifact:
 
 ```rust

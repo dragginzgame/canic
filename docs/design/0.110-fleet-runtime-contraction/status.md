@@ -2,6 +2,17 @@
 
 ## Maintained scope
 
+The latest maintainer direction prioritizes
+[RD1 current-build reset admission](0.110-design.md#rd1-remove-repair-before-reset-admission--prioritized-2026-10-01)
+for Toko's CANIC-191 before completing FR1 or CS1. Hard cuts must work for
+unfinished/malformed installations; old operation completion is not a reset
+prerequisite. This is corrective implementation authority, not a live reset or
+publication instruction. The newer FR1 work is preserved outside the corrective source tree in
+`.canic/local-work/fr1-separated-20261001T200203Z/`; see the current handoff for
+restoration and separation-specific qualification. The `0.110.50` changelog draft
+owns the bounded corrective release. Earlier committed helpers remain. CANIC-190's conditional
+attempt-exhaustion resolution follows unless RD1 needs it directly.
+
 The .48 package set is published. CANIC-185 target-local bootstrap funding,
 role-owned activation persistence, optional observability, passive blob
 contracts, artifact reuse/admission and IcyDB composition corrections are
@@ -16,6 +27,13 @@ The normative [design](0.110-design.md) and independent
 accepted scope. The amendment reopened only the bounded .47 activation,
 observability and blob-contract work; it did not restart the full B3/B4 matrix.
 
+The separated corrective tree is ready for maintainer review/commit and the
+selected release flow: 208 focused native tests, affected-package warning-denied
+lint, document/release-draft checks and both CANIC-191 and refreshed embedded-peer
+PocketIC journeys pass. The current handoff records exact evidence and FR1
+restoration instructions. No broad gate or publication ran; FR1/CS1 remain
+separate unfinished batches.
+
 ## Batch dispositions
 
 | Batch | Disposition |
@@ -25,12 +43,14 @@ observability and blob-contract work; it did not restart the full B3/B4 matrix.
 | B3 | General record/codec restructuring stopped; the bounded .47 activation amendment is implemented. |
 | B4 | Remaining general pruning deferred and unscheduled; bounded .47 observability and passive blob-contract changes are implemented. |
 | FI1 | Bootstrap and capacity-import implementation/qualification shipped in .43; subsequent reinstall/recovery corrections shipped through .47. |
-| FR1 | Active: review admission/custody boundaries plus the shared executor's exact snapshot-deletion primitive, qualified against PocketIC with lost-response recovery. Live collection, quiescence, complete execution/recovery, CLI, whole-Fleet qualification and retirement contraction remain. |
-| B5 | The .42 checkpoint is qualified; final closeout must cover FI1, subsequent corrections and FR1 and receive human acceptance. |
+| RD1 | CANIC-191 admission correction is locally qualified: current artifacts, explicit physical custody and existing archive/reset owners replace predecessor-completion gates. 135 focused native tests, targeted lint and the partial-bootstrap/activation/import public-CLI PocketIC proof pass (249.78s). In-flight provisioning reconciliation remains; remove its preparation machinery only when those uncertain-effect obligations are covered. No live Toko recovery. Newer FR1 changes are set aside for a separate batch. |
+| FR1 | Deferred from the corrective release: newer reservation, inventory and release-fence work is preserved in the local bundle named above. Earlier committed admission/snapshot/observation helpers remain; focused checkpoint evidence is retained. Complete paid-obligation/account collection, role quiescence wiring, execution/recovery, CLI, whole-Fleet qualification and retirement contraction remain. |
+| CS1 | Accepted and pending after FR1: all seven audited simplifications, including direct qualification, propagation and cleanup, must complete before B5/human closeout and 0.111 blob removal/extraction. |
+| B5 | The .42 checkpoint is qualified; final closeout must cover FI1, subsequent corrections, FR1 and CS1 and receive human acceptance. |
 | Cleanup | Complete and ready for maintainer review: unused runtime/Host paths, obsolete helpers/tests and status-owned release flows removed, duplicate evidence consolidated, focused checks passed. |
 | Reinstall review corrections | Shipped in .48: typed unavailable funding diagnostics and exact-digest unpaid-review cancellation. Toko confirms live cancellation and infrastructure completion. |
 
-| CANIC-187/188 | Implemented and locally qualified in the open .49 batch: whole-operation import budgets, successful-call settlement, seed-byte preservation and an exact issued-import repair. Live repair and downstream convergence remain outstanding; see the [repair decision](issued-import-recovery.md). |
+| CANIC-187/188 | Maintained import budget, settlement, seed-byte and native-credit corrections are implemented and locally qualified. The maintainer withdrew the frozen `.48` repair exception on 2026-10-01; hard cut plus reinstall applies to malformed/unfinished installations. Historical repair evidence is [archived](../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-issued-import-recovery.md). |
 
 ## Current completed-Fleet cleanup — 2026-10-01
 
@@ -71,11 +91,11 @@ Package versions remain `.48` and `.49` release notes remain open until the gove
 version transaction. No broad gate or Git publication has run; native macOS evidence
 remains for CI.
 
-Publishing the corrected packages does not recover an already issued `.48`
-import. The [exact staging repair](issued-import-recovery.md) retains its own
-qualification and live-authority boundary. Toko's newly reported local import
-with an issued uninstall is a different operation and is not covered by that
-repair. No live or downstream mutation is part of this publication preparation.
+The issued `.48` repair route was subsequently withdrawn by the maintainer on
+2026-10-01. Corrected current packages are selected for hard cut plus reinstall;
+predecessor state and clients are not repaired to continue an old installation.
+Cycle-safe disposition of physical canisters and paid effects remains required.
+No live or downstream mutation is part of this publication preparation.
 
 ## FR1 sequence and acceptance — 2026-10-01
 
@@ -113,9 +133,87 @@ does not qualify whole-Fleet execution or replace release quiescence. FR1 overla
 but does not close any original finding without its named proof. Latest focused
 qualification also passes fourteen native tests, Host/CLI all-feature library/test
 Clippy, formatting and runner/shell checks (`fleet-release-snapshots-*.log`).
+The authenticated physical reader after operator handoff also passes its focused
+PocketIC proof (`fleet-release-observation-pocketic.log`). It binds signer/network
+and certified custody, bounds each stable sample to four management reads and
+shares the bounded snapshot decoder with deletion. Wrong authority and changed
+custody refuse. Complete role/account collection remains required before
+whole-Fleet execution; the reader alone grants no reset
+authority. The deletion lost-reply regression passes against the shared reader
+(`fleet-release-observation-snapshot-regression.log`). Seventeen focused native
+tests, warning-denied Host library/test all-feature Clippy, runner regressions,
+scoped formatting and shell checks also pass (`fleet-release-observation-*.log`).
+The following reservation, inventory and fence checkpoints describe the preserved
+FR1 bundle, not the corrective release tree.
+
+In that bundle, durable read reservations live inside the existing Fleet journal. The sealed
+review freezes the per-call quote; a non-cloneable token binds operation, canister
+and subnet and borrows the journal lock through the reads. Reservations survive
+lost results, consume finite call/debit allowance, reject mismatched retained
+authority and prevent ordinary Ensure/import takeover while release is unfinished.
+The executable plan retains its own identity. Operation creation, complete
+quiescence/account recovery and the effect compiler remain pending; this adds no
+operator command or second journal. Final focused reservation validation passes
+31 native Host/CLI tests, the reserved-observation PocketIC proof, warning-denied
+Host/CLI/Testing library/test all-feature Clippy and scoped formatting/diff checks
+(`target/review-validation/fleet-release-reservation-*.log`). FR1 remains unfinished.
+The registered-ownership collector now shares import's complete pagination and
+bounded query decoder. It binds signer/network, exact Registry/Root placement,
+Store/child membership and certified custody, without duplicate preliminary child
+reads. Its result deliberately carries no quiescence assertion: unfinished
+creation/import may retain physical IDs outside the registered pool and must be
+reconciled before destructive inventory is complete. Twenty-three focused native
+tests and the signed-query/certificate PocketIC wire fixture pass
+(`fleet-release-inventory-{native,pocketic}.log`). This qualifies collection, not
+real Fleet role release or account recovery. The current quiescence/handoff owners
+still require integration; no retirement path has been removed. Final Host
+library/test all-feature Clippy with warnings denied, runner regressions, scoped
+formatting/diff checks and shell lint pass (`fleet-release-inventory-*.log`).
+
+The Core fence now retains a distinct release purpose with exact operation,
+review digest and recipient bindings. Its synchronous internal workflow hook
+checks role-owned settlement before suspending producers and committing the seal;
+exact replay skips those callbacks. Snapshot recovery cannot reopen it, and all
+existing ordinary/recovery commands remain fenced while release-sealed. Seventeen
+focused Core/facade tests pass, covering typed refusals, native retained-record
+roundtrip/replay, maximum-width encoding and exact canonical Candid status
+(`fleet-release-fence-native.log`). This does not qualify live role settlement,
+IC restoration or release handoff. No release endpoint is exposed; the actual
+paid-obligation census, role integration and bounded command paths remain next.
+The changed current `v1` record/status follows reinstall-only release transitions.
+Core/facade library/test all-feature warning-denied Clippy, scoped formatting
+and diff hygiene also pass (`fleet-release-fence-clippy.log`).
+
 Remaining R2–R8
 corrections keep their owners; only FR1's direct safety dependencies join this
 batch. The advisory line estimate is not a release gate or deletion quota.
+
+## Pre-blob simplification — accepted 2026-10-01
+
+The maintainer accepts all seven read-only audit candidates into
+[CS1](0.110-design.md#cs1-pre-blob-code-simplification--accepted-2026-10-01).
+RD1 now takes priority. CS1 follows FR1, coordinating with remaining R2–R8 owner
+corrections, and must complete before final B5/human 0.110 closeout and 0.111
+blob-storage removal/extraction. The audit traced `34751fc09`; implementation
+rechecks current source and retains final qualification. These are planned
+simplifications, not implemented cuts or a new patch allocation.
+
+| Slice | Outcome / owner | Included evidence | Focused validation | Status |
+| --- | --- | --- | --- | --- |
+| CS1-1 | Shared Fleet transitions / Host, CLI, Testing | Exact replan publication, counters, scope-specific receipt validation and offline completion replay | Owning native transition tests, interruption/recovery PocketIC journey and affected-package lint | Pending |
+| CS1-2 | Shared chain-key decoding / Core auth/config | Required/invalid input, exact key material, purpose-specific checks and feature selection | Owning native parsing/auth tests and affected-target lint | Pending |
+| CS1-3 | Shared nonroot retries / Core lifecycle/workflow | Service ordering, phase/metric identity, scheduling admission, bounded retries and distinct init exhaustion | Native retry/state tests, focused lifecycle/recovery PocketIC proof and affected-target lint | Pending |
+| CS1-4 | Shared bootstrap survey loop / Host | Retained samples, exact IDs, reservation before observation, interruption and finite allowances | Owning survey tests, focused observation/recovery proof and affected-target lint | Pending |
+| CS1-5 | Shared role overview assembly / facade, Core, Host | Exact role/capability metadata, profile digest, Candid and cfg-pruned generated consumers | Owning native/generated consumer checks, focused endpoint proof and affected-target lint | Pending |
+| CS1-6 | Shared Backup staging / Backup | Create-only versus replacement publication, write/sync failures, cleanup and preserved barriers | Owning persistence/crash tests and affected-target lint | Pending |
+| CS1-7 | Shared CI installers / tooling, CI | Exact platform/member selection, checksum/version rejection, cleanup and executable identity | Focused installer fixtures, shell syntax and ShellCheck | Pending |
+
+Delivery order: CS1-5, CS1-4, CS1-6, CS1-7, CS1-2, CS1-3, CS1-1. Complete
+consumer/docs/changelog propagation with each owning outcome; retain affected
+artifact evidence before runtime savings claims. All seven must close. General
+B3/B4 pruning stays stopped/deferred; retirement contraction stays with FR1,
+fixture-data removal needs its own scope decision, and fresh backup enablement
+is outside CS1. Preserve unfinished paid recovery and the human minor gate.
 
 ## Toko staging follow-up — accepted future work 2026-10-01
 
@@ -123,17 +221,20 @@ The maintainer requests all recovery-report feedback and import-call reduction
 work retained in the [design follow-up](0.110-design.md#toko-staging-import-follow-up--accepted-future-work-2026-10-01).
 Toko reports successful eight-source recovery, backend convergence and original
 Root restoration. Its repair source and live evidence are unavailable here;
-this distinct operation does not close CANIC-188 or the remaining R2 queue.
-FR1 remains current; these follow-ups join the existing 0.110 owner sequence
+this historical report does not close the remaining R2 queue. The withdrawn
+CANIC-188 repair is archived; subsequent replacement is reinstall-only.
+RD1 now takes priority over FR1; these follow-ups join the existing 0.110 owner sequence
 before final closeout, without a new patch allocation or live/downstream authority.
 
 | Outcome / owner | Required completion evidence | Status |
 | --- | --- | --- |
 | Import efficiency and bounded authority / R2, Core, Control Plane, Host, CLI | Reject the eight-source 72-call envelope before effects; qualify workflow-derived call/debit budgets; reduce repeated subnet/status observations only with validity and drift proof; preserve exact history, consumed/unknown allowances, interruption recovery, conservation and effect-free replay; measure call/debit/time changes. | Pending; current 137 minimum/272 recommended arithmetic and admission guards exist, optimization unqualified |
-| Controller membership comparison / R2, Host | Port both reported sorting fixes; reordered lists accepted, changed/duplicate members rejected, sealed review and authority hashes preserved. | Pending; both comparisons remain order-sensitive here |
+| Controller membership comparison / R2, Host | Reordered lists accepted, changed/duplicate members rejected, sealed review and authority hashes preserved. | Both comparisons corrected; eleven owning native tests, Host library/test all-feature warning-denied Clippy and scoped formatting/diff checks pass (`toko-controller-order-*` logs); not yet published |
 | Live observation diagnostics / CLI, Host | Diagnose readiness/version/cycles errors; retain per-canister observation/endpoint causes; targeted success/failure and installed-client proof, current help/output/docs. | Pending; role/ID mapping is reported working |
-| Incident evidence and artifact identity / incident owner | Reproducible source/client/raw/gzip manifest, exact supplemental approval, quiescence/reconciliation, snapshot-proof limits, terminal receipts, original-Root restoration and no-paid-effect replay evidence; select approved representation before install. | Pending evidence review; execution reported complete, retained bundle not supplied here |
+| Historical incident evidence and current artifact identity / downstream, Host | Retain reported source/client/raw/gzip manifests, ceilings and receipt/snapshot limits as historical evidence; qualify current reinstall artifact identity, cycle-safe disposition and uncertain-effect reconciliation. | Historical bundle not supplied here; old-state repair withdrawn, current replacement is reinstall-only |
 | Application and dependency provenance / downstream Toko owner | Login, project creation, collections, uploads and tokens against the deployed release; record local Cargo-patch source identity and recovery-client retention; distinguish reserved allowance, observed debit and funding. | Outstanding downstream acceptance; no sibling mutation authorized |
+| Unfinished-installation reset / RD1, Host, CLI | Current qualified artifacts and physical inventory before predecessor decoding; partial bootstrap/activation/import and malformed-state reset, changed-controller refusal, uncertain-effect reconciliation, conservation and replay. | CANIC-191 admission corrected and locally qualified; live Toko adoption remains downstream-owned; uncertain provisioning contraction remains |
+| Exhausted attempts / R2, Host, CLI | Concrete bounded continuation or cycle-safe reset after spent survey/submission/inspection allowances; no counter reset, duplicate paid effect or repair-first requirement. | CANIC-190 confirmed as a conditional gap by source trace; not an observed additional Toko failure |
 
 These items are future implementation/qualification and evidence work, not claims
 that this checkout contains the Toko repair or that a smaller call count is proven.

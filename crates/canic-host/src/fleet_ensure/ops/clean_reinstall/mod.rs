@@ -56,6 +56,16 @@ pub(in crate::fleet_ensure) fn bind(
     seed: &Path,
 ) -> Result<CleanReinstallRecord, EnsureStateError> {
     let _lock = super::lock_fleet_file(paths)?;
+    bind_locked(paths, desired, policy, seed)
+}
+
+/// Publish selection under the caller's Fleet lock, including immediately after archival.
+pub(in crate::fleet_ensure::ops) fn bind_locked(
+    paths: &EnsurePaths,
+    desired: &DesiredFleet,
+    policy: &Path,
+    seed: &Path,
+) -> Result<CleanReinstallRecord, EnsureStateError> {
     let record = CleanReinstallRecord {
         schema_version: 1,
         desired: ReviewedDesiredFleetRecord::capture(desired),

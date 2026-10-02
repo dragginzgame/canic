@@ -73,7 +73,7 @@ impl CapacityImportJournalStore {
                     && operation.released_status_candid_hex.is_some()
             })
         };
-        if let Some(current) = self.read()?.filter(&matches) {
+        if let Some(current) = self.read()?.filter(matches) {
             return Ok(Some(current));
         }
         let path = self

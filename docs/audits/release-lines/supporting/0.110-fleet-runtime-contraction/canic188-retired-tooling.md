@@ -1,7 +1,12 @@
-# CANIC-188 incident repair
+# CANIC-188 incident repair — retired tooling record
+
+Retired on 2026-10-01 when the maintainer withdrew the repair exception. The
+helpers and qualification example described below have been removed. Commands
+and live sequences below record historical qualification only; current policy
+requires hard cut plus reinstall. Retained incident bundles remain evidence.
 
 This is the maintainer-authorized, operation-specific repair described in the
-[recovery decision](../../../docs/design/0.110-fleet-runtime-contraction/issued-import-recovery.md).
+[recovery decision](canic188-issued-import-recovery.md).
 The helpers prepare and qualify artifacts locally. They do not deploy, call the
 live IC, or write to Toko Miner.
 
@@ -23,9 +28,11 @@ bash scripts/dev/canic188/qualify.sh <read-only-toko-workspace> <prepared-direct
 ```
 
 Preparation checks the inputs before copying them into a fresh directory below
-Canic's `target/`. The repair patch changes successful-call accounting and adds
-one synchronous, exact-status-bound post-upgrade adjustment. It changes no
-persisted type, public method, source receipt, reservation limit or source progress.
+Canic's `target/`. The repair patch admits native credits during import,
+settles successful-call allowances and adds one synchronous, exact-status-bound
+post-upgrade adjustment. Earlier observed debit and uncertain reserves survive
+credits; inter-call declines remain charged. It changes no
+persisted type, public method, retained receipt, reservation limit or source progress.
 The original `.48` dependency graph and configuration remain selected.
 
 The separate fixture patch seeds the public incident record for PocketIC. Its
@@ -40,17 +47,30 @@ example. The example accepts only an owned loopback server URL. It verifies the
 maintained Candid endpoint inventory and checks original reservation/progress,
 consumed call count and the observed Root debit ceiling through both replacements.
 Native tests separately bind the exact record and 242-call remaining path.
+Qualification covers the reported balance of 400,787,627,907,411 cycles and a
+larger credit that remains above the original initial balance after installation.
+Each case retains a structured `qualification-<balance>.json` record.
 
 ## Retained qualified candidate
 
-The clean preparation/build/qualification sequence passed on September 29. Its
+The revised preparation/build/qualification sequence passed on October 1. Its
 repair Wasm SHA-256 is
-`ed3084b6908a04b28effa21e00ec425aaf382d1423849fcbb4f3b12414d61f48`.
+`48c76028a926df90cc2392024c78f1f6f8dbced74187705ed113c098268b7c38`.
 The exact candidate, original Root, status, source hashes, patch and logs are retained
 under Canic's `.canic/incident-repairs/canic188/<repair-sha256>/`, outside `target/`.
 `bundle.sha256` verifies those retained files; `qualification.json` records the
 checks and their limits. The live bundle excludes fixture Wasm. It has not been
 deployed; fresh live preconditions below still apply.
+
+The September 29 candidate `ed3084b6908a04b28effa21e00ec425aaf382d1423849fcbb4f3b12414d61f48`
+remains retained unchanged as historical evidence. Its positive-balance rejection
+is corrected by the October 1 candidate; it is not the selected repair.
+
+Restoration qualifies state preservation. The immutable original `.48` Root and
+CLI still reject a net terminal surplus; the reported balance remains below the
+original starting balance. This candidate does not qualify arbitrary terminal
+credits in those original owners. The maintained import accepts such surplus;
+see the [qualification limits](canic188-issued-import-recovery.md#qualification-and-execution-boundary).
 
 ## Live execution boundary
 

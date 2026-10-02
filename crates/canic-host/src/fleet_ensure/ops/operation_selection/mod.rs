@@ -16,6 +16,47 @@ use crate::fleet_ensure::{
 use serde_json::Value;
 use std::path::Path;
 
+/// Detect retained authority without parsing an obsolete or incomplete execution schema.
+pub(in crate::fleet_ensure) fn has_retained_files(
+    paths: &EnsurePaths,
+) -> Result<bool, EnsureStateError> {
+    let directory = paths
+        .plan
+        .parent()
+        .ok_or(EnsureStateError::InvalidTerminalSource)?;
+    let entries = match std::fs::read_dir(directory) {
+        Ok(entries) => entries,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(false),
+        Err(source) => {
+            return Err(EnsureStateError::Io {
+                path: directory.into(),
+                source,
+            });
+        }
+    };
+    for entry in entries {
+        let entry = entry.map_err(|source| EnsureStateError::Io {
+            path: directory.into(),
+            source,
+        })?;
+        // A stopped-Root observation is an effect-free generation hint. Its
+        // executable Start, if reviewed, has its own plan/journal below this directory.
+        if entry.path() != paths.lock && entry.path() != paths.root_start_authority {
+            return Ok(true);
+        }
+    }
+    Ok(false)
+}
+
+/// Retirement history still requires explicit physical inventory after an interrupted local cut.
+pub(in crate::fleet_ensure) fn has_retirement_history(
+    paths: &EnsurePaths,
+) -> Result<bool, EnsureStateError> {
+    let path = retirement::history(paths)?.join("retirements");
+    path.try_exists()
+        .map_err(|source| EnsureStateError::Io { path, source })
+}
+
 /// Read only the completion envelope; unfinished work retains its current recovery owner.
 pub(in crate::fleet_ensure) fn completed(
     paths: &EnsurePaths,

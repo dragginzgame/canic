@@ -9,8 +9,7 @@ use canic::memory::{
 use ic_memory::{
     BootstrapAdmission, MemoryManagerAuthorityRecord, MemoryManagerConfig, MemoryManagerIdRange,
     MemoryManagerRangeMode, MemoryRequest, MemoryRuntime, PolicyIdentity, RuntimeBootstrapError,
-    RuntimeOpenError, SchemaMetadata, SealedDeclarationSnapshot, StableKey,
-    StaticMemoryRangeDeclaration,
+    RuntimeOpenError, SchemaMetadata, SealedDeclarationSnapshot, StaticMemoryRangeDeclaration,
     ic_stable_structures::{Memory, VectorMemory},
 };
 use icydb::db::{MemoryBootstrapAdmissionError, prepare_memory_bootstrap};
@@ -73,13 +72,7 @@ fn runtime(backing: &VectorMemory) -> MemoryRuntime<VectorMemory> {
 }
 
 fn id(runtime: &MemoryRuntime<VectorMemory>, key: &str) -> u8 {
-    runtime
-        .committed_allocations()
-        .unwrap()
-        .slot_for(&StableKey::parse(key).unwrap())
-        .unwrap()
-        .memory_manager_id()
-        .unwrap()
+    runtime.memory_id(key).unwrap()
 }
 
 #[test]
@@ -96,6 +89,12 @@ fn composed_admission_is_once_per_cold_bootstrap_and_identity_bound() {
     let mut runtime = runtime(&VectorMemory::default());
     runtime.bootstrap(&declarations, &policy).unwrap();
     runtime.bootstrap(&declarations, &policy).unwrap();
+    runtime
+        .verify_authority(&declarations, "icydb.first")
+        .unwrap();
+    runtime
+        .verify_authority(&declarations, "icydb.second")
+        .unwrap();
     assert_eq!(CALLS.load(Ordering::SeqCst), 1);
     assert!((100..=115).contains(&id(&runtime, "icydb.first.store.rows.data.v1")));
     assert!((120..=135).contains(&id(&runtime, "icydb.second.store.rows.data.v1")));
@@ -150,7 +149,7 @@ fn omitted_store_selects_only_original_journal_and_preserves_bytes() {
             .bootstrap(&snapshot(&[("first", 100, &["old"])]), &policy())
             .unwrap();
         let journal = initial.open_memory_by_key(journal_key).unwrap();
-        assert_eq!(journal.grow(1), 0);
+        assert_eq!(journal.grow(1), Ok(0));
         journal.write(0, b"pending journal");
         id(&initial, journal_key)
     };

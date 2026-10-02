@@ -50,6 +50,10 @@ esac
 
 cd "$ROOT"
 
+# shellcheck source=scripts/ci/workspace-scope.sh
+source "$ROOT/scripts/ci/workspace-scope.sh"
+mapfile -t WORKSPACE_ARGS < <(canic_workspace_args)
+
 case "$PLAN_ONLY" in
     0 | 1) ;;
     *)
@@ -577,7 +581,7 @@ run_inventory_tests() {
 run_ordinary_tests() {
     # Keep unit/binary and explicitly inventoried integration targets on one
     # workspace graph. A second package-scoped pass changes feature unification.
-    local cargo_args=(--workspace --lib --bins)
+    local cargo_args=("${WORKSPACE_ARGS[@]}" --lib --bins)
     local -A selected_packages=()
     local row_package row_target release_lane row_execution row_suite
     local selected=0
@@ -612,7 +616,7 @@ run_ordinary_tests() {
         -p canic-testing-internal --features governed-pocketic-tests --lib -- "${native_selectors[@]}"
     run_test native-selected "Host local-Fleet native tests" \
         -p canic-host --features local-fleet --lib local_fleet::tests::
-    run_test parallel "workspace documentation tests" --workspace --doc
+    run_test parallel "workspace documentation tests" "${WORKSPACE_ARGS[@]}" --doc
 }
 
 clear_pocketic_build_targets() {
@@ -705,7 +709,7 @@ run_pocketic_suites() {
     # that feature unification for host proofs; other harnesses select no tests.
     local host_proof_targets=(-p canic-host --lib)
     if [[ "$MODE" == "full" ]]; then
-        host_proof_targets=(--workspace --lib --bins)
+        host_proof_targets=("${WORKSPACE_ARGS[@]}" --lib --bins)
     fi
     run_serial_pocketic_test \
         "canic-host governed PocketIC proofs" \
@@ -788,11 +792,15 @@ start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
     targeted_integration_count=0
-    while IFS=$'\t' read -r row_package row_target _ row_execution _; do
+    targeted_integration_args=()
+    while IFS=$'\t' read -r row_package row_target row_lane row_execution _; do
         if [[ "$row_package" == "canic-tests" &&
             "$row_target" == "$TARGETED_POCKETIC_TEST" &&
             "$row_execution" == "pocketic-serial" ]]; then
             targeted_integration_count=$((targeted_integration_count + 1))
+            if [[ "$row_lane" == integration ]]; then
+                targeted_integration_args+=(--features external-composition)
+            fi
         fi
     done < <(tail -n +2 "$INVENTORY")
 
@@ -803,6 +811,7 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
         run_serial_pocketic_test \
             "targeted canic-tests PocketIC integration proof" \
             -p canic-tests \
+            "${targeted_integration_args[@]}" \
             --test "$TARGETED_POCKETIC_TEST"
     elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_internal_pocketic_suite" ]]; then
         run_serial_pocketic_test \

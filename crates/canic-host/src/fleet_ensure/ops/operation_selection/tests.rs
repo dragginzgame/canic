@@ -233,7 +233,10 @@ fn completed_reset_selection_does_not_capture_a_later_ordinary_review() {
     write_current(&paths.plan, &later).unwrap();
     for reinstall in [false, true] {
         for applying in [false, true] {
-            assert!(!selected(&paths.workspace, "local", "fleet", reinstall, applying).unwrap());
+            assert_eq!(
+                selected(&paths.workspace, "local", "fleet", reinstall, applying).unwrap(),
+                reinstall
+            );
         }
     }
     assert!(

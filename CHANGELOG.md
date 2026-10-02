@@ -8,21 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-Detailed patch headings identify unreleased entries; this ledger summarizes changes.
-
-- Hard-cut current Host records to explicit `v1` fields and content references;
-  require retained reviewed input for execution and remove obsolete compatibility
-  assertions. Strengthen the pre-1.0 generation guard. Current review/journal
-  hashes change; issued authority is not rewritten.
-- Begin whole-Fleet release-to-capacity admission for Coordinator, Roots, Wasm
-  Stores and children, binding complete custody, cycle bounds and account recovery.
-  Add exact snapshot deletion to the existing Host effect executor, including
-  stopped sole-operator custody checks and lost-response reconciliation.
-  Whole-Fleet execution and end-to-end qualification remain in this unfinished batch.
-
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- `0.110.50` (Unreleased) fixes reset of unfinished installations, native-credit
+  and controller-order refusals, adopts ic-memory 0.15.0 and Rust 1.99.0, and
+  isolates optional IcyDB composition from default validation. Potentially
+  breaking Host record changes follow the pre-1.0 reinstall-only policy.
 
 - `0.110.49` repairs deployment and import recovery, consolidates completed-Fleet
   reset, and improves build reproducibility, backup retention, macOS portability

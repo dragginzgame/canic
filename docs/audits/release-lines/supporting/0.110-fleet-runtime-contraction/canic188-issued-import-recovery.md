@@ -1,4 +1,10 @@
-# CANIC-188 issued-import recovery decision
+# CANIC-188 issued-import recovery decision — historical
+
+Superseded on 2026-10-01: the maintainer withdrew the frozen `.48` repair
+exception and requires hard cut plus reinstall. This record and retained bundles
+are historical evidence only. They do not authorize repair, upgrade, restoration
+of an old Root or continuation through an old CLI. Active policy is
+[AGENTS.md](../../../../../AGENTS.md). The following records the withdrawn route.
 
 ## Current implementation boundary
 
@@ -30,8 +36,9 @@ The one-off repair is implemented against the published .48 source for this exac
    or unknown destructive effect blocks replacement until reconciled.
 3. Build only the minimal repair against the frozen source/state layout. Its
    operation-specific repair must reject changed status, identities, controllers,
-   phases, balances, source count or schema. The repair must not import an older
-   application schema, replay payments or reset source progress.
+   phases, source count, balance floors/debit authority or schema. Native credits
+   must not be treated as changed custody or restore consumed allowance. The repair
+   must not import an older application schema, replay payments or reset source progress.
 4. Reconcile previously completed call allowances only with quiescence and exact
    retained evidence; preserve genuine uncertainty and the original debit/call
    ceilings. Resume the existing import with successful-call allowance settlement.
@@ -49,14 +56,18 @@ Settle and publication**. The original .48 CLI can then finish the unchanged
 approved import. This avoids changing the original review, manifest, journal,
 Root authority, call limit, debit limit or source progress.
 
-The [incident tools](../../../scripts/dev/canic188/README.md) retain a minimal
+The [incident tools](canic188-retired-tooling.md) retain a minimal
 patch against checksum-verified published .48 sources. No repair branch is added
 to the maintained runtime. The patch settles successful call allowances and adds
 one synchronous post-upgrade adjustment, admitted only by the exact frozen public
 status hash and Root identity. It preserves the stable record layout. Any changed
-record rejects atomically; a second application also rejects. Balances must remain
-below the last observation, above the original floor and within the original 4T
-observed-debit ceiling.
+record rejects atomically; a second application also rejects. Native balances may
+increase without changing authority. The one-time quiescent adjustment retains
+the deficit already observed at the frozen last balance plus any subsequent
+observed decline; a credit never restores consumed debit allowance. The original
+floor and 4T debit ceiling remain binding. Successful callbacks settle only their
+exact allowance, and inter-call declines accumulate across credits while unknown
+calls retain their complete allowance.
 
 The status is bound to Root `2ydug-eaaaa-aaaab-qhfca-cai`, sequence 0 and plan
 `7c02f983ab1bc9ed1206e7755ab6557c1ddf885b2bd8f01333eafc82554c8a0b`.
@@ -68,6 +79,29 @@ A changed-cost or changed-custody failure still fails closed; these are not new
 spending permissions.
 
 ## Qualification and execution boundary
+
+The October 1 revision also admits the reported +36.140577202B interval and a
+larger credit that remains above the original starting balance after real repair
+installation. Both local cases preserve the frozen reservation/progress/call count,
+reject reapplication and restore the original Root. Measured native balances and
+the preserved debit watermark are retained as structured qualification records.
+The revised candidate SHA-256 is
+`48c76028a926df90cc2392024c78f1f6f8dbced74187705ed113c098268b7c38`.
+Its durable Canic bundle is `.canic/incident-repairs/canic188/<candidate-sha256>/`;
+the September 29 bundle remains immutable historical evidence. A fresh preparation
+with the shipping patch reproduces the qualified frozen Control Plane sources.
+
+Restoration proves state preservation, not new behavior in the immutable .48
+Root or CLI. Those original owners still require terminal receipts to satisfy
+their original before-minus-after equation; they cannot finalize a net terminal
+surplus. The reported balance is below the original starting balance and does not
+hit that separate terminal condition. Do not claim unrestricted terminal-credit
+recovery for the frozen owner or rewrite its receipts/review to manufacture it.
+The maintained import and Host owners accept net surplus independently.
+Their focused tests cover credit admission, persisted handoff/lost-response
+recovery, unknown call reserves, exact net-debit receipts and refusal of excessive
+debit. The maintained PocketIC import/reset/replay journey also passes with real
+Root and source credits before each destructive phase and after completion.
 
 The frozen-record native test passes, including unchanged reservation/progress,
 changed-record rejection, replay rejection and remaining-call arithmetic. The
@@ -90,7 +124,8 @@ Live execution and Toko repository writes remain unauthorized and unperformed.
 Before live use, retain the exact candidate bytes and repair evidence, refresh the
 protected status and module/controllers, and observe Root stopped. An issued or
 unknown destructive effect, changed status hash, changed authority or insufficient
-cycle margin blocks installation. Never retry an uncertain install blindly: inspect
+cycle margin blocks installation. A positive native balance interval alone does
+not block admission. Never retry an uncertain install blindly: inspect
 its module and retained status first. Normal publication resumes only after the
 original Root artifact is observed again. Keep the repair bundle until original
 CLI completion and effect-free replay are retained.

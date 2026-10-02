@@ -136,7 +136,12 @@ fn capacity_import_renewal_requires_exact_certified_rejection_and_original_sourc
     ));
     changed = source.clone();
     changed.cycles += 1;
-    assert!(renew(&failed, &changed, new_request.clone()).is_err());
+    let credited = renew(&failed, &changed, new_request.clone()).unwrap();
+    assert_eq!(credited.plan, failed.plan);
+    assert_eq!(
+        credited.handoffs[0].retirements,
+        failed.handoffs[0].retirements
+    );
     changed = source.clone();
     changed.cycles -= 201;
     assert!(matches!(

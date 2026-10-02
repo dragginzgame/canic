@@ -201,8 +201,8 @@ pub enum FleetGenerateError {
     #[error("existing Fleet identity seed conflicts with requested fresh-estate authority: {0}")]
     FreshSeedConflict(String),
 
-    #[error("completed Fleet generation requires an explicit physical inventory: supply current policy and a non-fresh seed naming the Coordinator, every Root/Store and every child as pool imports; run fleet readiness with --source and --seed before building. For ordinary same-build startup, reuse the retained current desired document with fleet ensure without --reinstall")]
-    CompletedFleetRequiresExplicitInventory,
+    #[error("replacement Fleet generation requires an explicit physical inventory: supply current policy and a non-fresh seed naming the Coordinator, every Root/Store and every child as pool imports; run fleet readiness with --source and --seed before building. For ordinary same-build startup, reuse the retained current desired document with fleet ensure without --reinstall")]
+    ResetRequiresExplicitInventory,
 
     #[error("Fleet identity seed and policy topology differ: {0}")]
     SeedTopology(String),

@@ -1,7 +1,8 @@
-//! Remove completed local execution authority only after preserving its exact historical bytes.
+//! Retire local execution authority only after preserving its exact historical bytes.
 //!
 //! The Fleet lock inode remains in place. The external intent survives every removal boundary.
 
+mod reset;
 #[cfg(test)]
 mod tests;
 
@@ -21,6 +22,8 @@ use std::{
     fs,
     path::{Component, Path, PathBuf},
 };
+
+pub(in crate::fleet_ensure) use reset::ResetRetirement;
 
 const MAX_BYTES: usize = 32 * 1024 * 1024;
 

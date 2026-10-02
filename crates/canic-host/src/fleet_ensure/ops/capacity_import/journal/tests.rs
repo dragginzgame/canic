@@ -189,11 +189,17 @@ fn capacity_import_never_rebases_cycle_allowance_on_restart() {
             CapacityImportPolicyError::ConservationUnproven { .. }
         ))
     ));
-    source.cycles = 901;
-    assert!(matches!(
-        observe_handoff(&restart(&issued), &source),
-        Err(CapacityImportJournalError::Unresolved)
-    ));
+    source.cycles = 1_501;
+    let credited = restart(&observe_handoff(&restart(&issued), &source).unwrap());
+    assert_eq!(credited.plan, issued.plan);
+    assert_eq!(
+        credited.handoffs[0].effect.as_ref().unwrap().pre_cycles,
+        Some(900)
+    );
+    assert_eq!(
+        credited.handoffs[0].effect.as_ref().unwrap().post_cycles,
+        Some(1_501)
+    );
 }
 
 #[test]

@@ -94,9 +94,9 @@ pub(in crate::fleet_ensure) fn validate_observation(
     }
     let initial = source_total(credited_cycles(credit)?, before.reserved_cycles)?;
     let current = source_total(observed.cycles, observed.reserved_cycles)?;
-    let debit = initial
-        .checked_sub(current)
-        .filter(|debit| *debit <= maximum_debit)
-        .ok_or(CapacityImportPolicyError::ConservationUnproven { canister })?;
+    let debit = initial.saturating_sub(current);
+    if debit > maximum_debit {
+        return Err(CapacityImportPolicyError::ConservationUnproven { canister });
+    }
     require_headroom(canister, observed.cycles, minimum, maximum_debit - debit)
 }

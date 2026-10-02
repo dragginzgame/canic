@@ -312,10 +312,7 @@ fn both_source_and_root_require_full_reviewed_headroom() {
         Err(CapacityImportPolicyError::InvalidCycleBounds)
     );
     root.controlled_cycles = 1_001;
-    assert_eq!(
-        admit_handoffs(&plan, &root, &sources(&plan)),
-        Err(CapacityImportPolicyError::InvalidCycleBounds)
-    );
+    admit_handoffs(&plan, &root, &sources(&plan)).unwrap();
     plan.sources[0].maximum_debit_cycles = u128::MAX;
     assert_eq!(
         validate_plan(&plan),
@@ -324,18 +321,17 @@ fn both_source_and_root_require_full_reviewed_headroom() {
 }
 
 #[test]
-fn retries_keep_original_cycle_baseline_and_reject_unreviewed_credits() {
+fn retries_keep_original_cycle_baseline_with_native_credits() {
     let plan = plan();
     let source = &plan.sources[0];
     assert_eq!(retained_source_debit(source, 800, 100), Ok(200));
-    for retained in [799, 1_001] {
-        assert_eq!(
-            retained_source_debit(source, retained, 100),
-            Err(CapacityImportPolicyError::ConservationUnproven {
-                canister: principal(9)
-            })
-        );
-    }
+    assert_eq!(retained_source_debit(source, 1_001, 100), Ok(0));
+    assert_eq!(
+        retained_source_debit(source, 799, 100),
+        Err(CapacityImportPolicyError::ConservationUnproven {
+            canister: principal(9)
+        })
+    );
     let encoded = serde_json::to_vec(&plan).unwrap();
     let resumed: CapacityImportPlanRecord = serde_json::from_slice(&encoded).unwrap();
     assert_eq!(
@@ -406,10 +402,7 @@ fn capacity_import_accounts_reserved_cycles_without_spending_the_liquid_floor() 
     let source = &plan.sources[0];
     assert_eq!(retained_source_debit(source, 950, 150), Ok(0));
     assert_eq!(retained_source_debit(source, 950, 0), Ok(150));
-    assert!(matches!(
-        retained_source_debit(source, 1_000, 101),
-        Err(CapacityImportPolicyError::ConservationUnproven { .. })
-    ));
+    assert_eq!(retained_source_debit(source, 1_000, 101), Ok(0));
     assert!(matches!(
         retained_source_debit(source, 799, 301),
         Err(CapacityImportPolicyError::InsufficientCycles { .. })

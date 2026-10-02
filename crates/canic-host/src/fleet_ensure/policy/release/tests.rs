@@ -398,3 +398,98 @@ fn snapshot_id_drift_and_forged_terminal_baselines_reject() {
         Err(FleetReleaseError::Authority)
     );
 }
+
+#[test]
+fn native_credits_preserve_reviewed_authority_at_both_capacity_boundaries() {
+    let (review, observed) = fixture();
+    let review = prepare_review(review, &observed).unwrap();
+    let original = serde_json::to_vec(&review).unwrap();
+    let reopened: FleetReleaseReviewRecord = serde_json::from_slice(&original).unwrap();
+    for index in 0..observed.sources.len() {
+        for credit in [1, review.sources[index].maximum_debit_cycles + 1] {
+            for reserved_credit in [false, true] {
+                let mut credited = observed.clone();
+                for source in &mut credited.sources {
+                    source.binding.controllers = vec![review.authority.operator];
+                }
+                let source = &mut credited.sources[index];
+                if reserved_credit {
+                    source.reserved_cycles += credit;
+                } else {
+                    source.cycles += credit;
+                }
+                verify_reset_custody(&reopened, &credited).unwrap();
+                for source in &mut credited.sources {
+                    source.binding.module_sha256 = None;
+                    source.binding.snapshots_size_bytes = 0;
+                    source.snapshots.clear();
+                }
+                verify_held_capacity(&reopened, &credited).unwrap();
+                credited.sources[index]
+                    .binding
+                    .controllers
+                    .push(Principal::anonymous());
+                assert_eq!(
+                    verify_held_capacity(&reopened, &credited),
+                    Err(FleetReleaseError::Custody {
+                        canister: review.sources[index].binding.canister_id
+                    })
+                );
+            }
+        }
+    }
+    assert_eq!(serde_json::to_vec(&reopened).unwrap(), original);
+}
+
+#[test]
+fn capacity_credits_do_not_bypass_native_floors_debit_caps_or_checked_totals() {
+    let (review, mut observed) = fixture();
+    let review = prepare_review(review, &observed).unwrap();
+    for source in &mut observed.sources {
+        source.binding.controllers = vec![review.authority.operator];
+    }
+    for empty in [false, true] {
+        let mut baseline = observed.clone();
+        if empty {
+            for source in &mut baseline.sources {
+                source.binding.module_sha256 = None;
+                source.binding.snapshots_size_bytes = 0;
+                source.snapshots.clear();
+            }
+        }
+        let verify = if empty {
+            verify_held_capacity
+        } else {
+            verify_reset_custody
+        };
+        for (index, source) in review.sources.iter().enumerate() {
+            let mut depleted = baseline.clone();
+            depleted.sources[index].reserved_cycles -= source.maximum_debit_cycles;
+            verify(&review, &depleted).unwrap();
+            depleted.sources[index].reserved_cycles -= 1;
+            assert_eq!(
+                verify(&review, &depleted),
+                Err(FleetReleaseError::Conservation {
+                    canister: source.binding.canister_id
+                })
+            );
+            let mut below_floor = baseline.clone();
+            below_floor.sources[index].cycles = source.minimum_retained_cycles - 1;
+            below_floor.sources[index].reserved_cycles += source.observed_cycles;
+            assert_eq!(
+                verify(&review, &below_floor),
+                Err(FleetReleaseError::Conservation {
+                    canister: source.binding.canister_id
+                })
+            );
+            let mut overflow = baseline.clone();
+            overflow.sources[index].cycles = u128::MAX;
+            assert_eq!(
+                verify(&review, &overflow),
+                Err(FleetReleaseError::Conservation {
+                    canister: source.binding.canister_id
+                })
+            );
+        }
+    }
+}

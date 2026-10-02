@@ -588,18 +588,84 @@ fn qualify_initial_observation(plan: &FleetEnsurePlan, source: &InfrastructureBo
     } else {
         verify_initial(plan, &drifted).unwrap();
     }
-    let mut drifted = observed;
-    drifted
-        .canisters
-        .get_mut("root-0")
+    qualify_native_balance_observations(plan, &observed);
+}
+
+fn qualify_native_balance_observations(
+    plan: &FleetEnsurePlan,
+    observed: &InfrastructureBootstrapObservation,
+) {
+    let original = serde_json::to_vec(plan).unwrap();
+    let reopened: FleetEnsurePlan = serde_json::from_slice(&original).unwrap();
+    let allowance = reopened
+        .reviewed_desired
+        .as_ref()
         .unwrap()
-        .as_mut()
+        .desired()
+        .maximum_observation_burn_cycles
+        .parse::<Cycles>()
         .unwrap()
-        .reserved_cycles += 1;
-    assert!(matches!(
-        verify_initial(plan, &drifted),
-        Err(InfrastructureBootstrapError::Integrity)
-    ));
+        .to_u128();
+    for name in observed.canisters.keys() {
+        for credit in [1, allowance + 1] {
+            let mut credited = observed.clone();
+            credited
+                .canisters
+                .get_mut(name)
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .cycles += credit;
+            verify_initial(&reopened, &credited).unwrap();
+            let sample = credited.canisters.get_mut(name).unwrap().as_mut().unwrap();
+            sample.binding.controllers.push(Principal::anonymous());
+            assert!(matches!(
+                verify_initial(&reopened, &credited),
+                Err(InfrastructureBootstrapError::Integrity)
+            ));
+        }
+        let mut reserved = observed.clone();
+        reserved
+            .canisters
+            .get_mut(name)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .reserved_cycles += 1;
+        verify_initial(&reopened, &reserved).unwrap();
+        for debit in [allowance, allowance + 1] {
+            let mut depleted = observed.clone();
+            depleted
+                .canisters
+                .get_mut(name)
+                .unwrap()
+                .as_mut()
+                .unwrap()
+                .cycles -= debit;
+            let result = verify_initial(&reopened, &depleted);
+            if debit == allowance {
+                result.unwrap();
+            } else {
+                assert!(matches!(
+                    result,
+                    Err(InfrastructureBootstrapError::Integrity)
+                ));
+            }
+        }
+        let mut overflow = observed.clone();
+        overflow
+            .canisters
+            .get_mut(name)
+            .unwrap()
+            .as_mut()
+            .unwrap()
+            .cycles = u128::MAX;
+        assert!(matches!(
+            verify_initial(&reopened, &overflow),
+            Err(InfrastructureBootstrapError::Integrity)
+        ));
+    }
+    assert_eq!(serde_json::to_vec(&reopened).unwrap(), original);
 }
 
 fn qualify_inspection_budget(root: &Path, plan: &FleetEnsurePlan) {

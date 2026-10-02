@@ -128,7 +128,9 @@ pub fn renew(
             .before_reserved_cycles
             .ok_or(CapacityImportJournalError::Integrity)?,
     )?;
-    if source_total(observed.cycles, observed.reserved_cycles)? > original {
+    if original.saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?)
+        > journal.plan.sources[index].maximum_debit_cycles
+    {
         return Err(CapacityImportJournalError::Unresolved);
     }
     validate_request(&journal.plan, handoff.canister_id, &request)?;

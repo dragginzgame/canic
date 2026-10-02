@@ -147,8 +147,8 @@ fn inspect_supplied_completed_operation_without_source_mutation() {
         .join("operations")
         .join(format!("{digest}.json"));
     let record: OperationArchiveRecord = read_current(&manifest).unwrap().unwrap();
-    assert_eq!(record.operation_id, completed.operation_id);
-    assert_eq!(record.plan_sha256, completed.plan_sha256);
+    assert_eq!(record.operation_id.as_ref(), Some(&completed.operation_id));
+    assert_eq!(record.plan_sha256.as_ref(), Some(&completed.plan_sha256));
     assert_eq!(
         before,
         [&paths.plan, &paths.journal, &paths.state].map(|p| fs::read(p).unwrap())

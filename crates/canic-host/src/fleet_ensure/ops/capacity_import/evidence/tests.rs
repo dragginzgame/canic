@@ -153,3 +153,39 @@ fn capacity_import_root_evidence_accepts_partial_progress_without_claiming_compl
         Err(CapacityImportReviewError::ReservationMismatch)
     ));
 }
+
+#[test]
+fn capacity_import_root_evidence_accepts_net_surplus_without_rebasing_authority() {
+    let plan = plan();
+    let baseline = serde_json::to_vec(&plan).unwrap();
+    let mut retained = settled(&plan);
+    retained.last_root_cycles = plan.root_budget.observed_cycles + 100;
+    let root = retained.root_receipt.as_mut().unwrap();
+    root.retained_cycles = retained.last_root_cycles;
+    root.retained_reserved_cycles = plan.root_budget.observed_reserved_cycles;
+    root.observed_debit_cycles = 0;
+    for (source, progress) in plan.sources.iter().zip(&mut retained.progress) {
+        let PoolImportSourceProgress::Ready(receipt) = progress else {
+            unreachable!()
+        };
+        receipt.retained_cycles = source.observed_cycles + 100;
+        receipt.retained_reserved_cycles = source.observed_reserved_cycles;
+        receipt.observed_debit_cycles = 0;
+    }
+    validate_root_status(&plan, &retained).unwrap();
+    let mut partial = retained.clone();
+    partial.root_receipt = None;
+    partial.progress[0] = PoolImportSourceProgress::UninstallIssued;
+    partial.phase = PoolImportPhase::Reserved;
+    validate_root_status(&plan, &partial).unwrap();
+    retained
+        .root_receipt
+        .as_mut()
+        .unwrap()
+        .observed_debit_cycles = 1;
+    assert!(matches!(
+        validate_root_status(&plan, &retained),
+        Err(CapacityImportReviewError::RootEvidenceMismatch)
+    ));
+    assert_eq!(serde_json::to_vec(&plan).unwrap(), baseline);
+}
