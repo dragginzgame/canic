@@ -49,6 +49,21 @@ pub(super) fn render_progress(progress: &CatalogAcquisitionProgress) -> String {
                 through_version,
                 reused,
             } => format!("history {through_version}/{registry_version}; reused={reused}"),
+            RegistryCollectionStage::HistoryCache {
+                path,
+                disposition,
+                through_version,
+                reason,
+            } => {
+                let mut detail = format!(
+                    "history cache {disposition}; through={through_version}; path={}",
+                    path.display()
+                );
+                if let Some(reason) = reason {
+                    write!(detail, "; reason={reason}").unwrap();
+                }
+                detail
+            }
             RegistryCollectionStage::Record { key, completed, .. } => {
                 format!("record {key}; completed={completed}")
             }
@@ -155,6 +170,16 @@ mod tests {
             active_endpoints: vec!["https://one.example".into(), "https://two.example".into()],
             registry: vec![
                 RegistryCollectionProgress {
+                    endpoint: "https://cache.example".into(),
+                    query_calls: 0,
+                    stage: RegistryCollectionStage::HistoryCache {
+                        path: "registry-history.json".into(),
+                        disposition: "rejected".into(),
+                        through_version: 0,
+                        reason: Some("checksum mismatch".into()),
+                    },
+                },
+                RegistryCollectionProgress {
                     endpoint: "https://one.example".into(),
                     query_calls: 20,
                     stage: RegistryCollectionStage::History {
@@ -181,6 +206,7 @@ mod tests {
         assert!(text.contains("active=https://one.example, https://two.example"));
         assert!(text.contains("history 80/99; reused=true; queries=20"));
         assert!(text.contains("retry get_changes_since; attempt=2; backoff=250ms; queries=3"));
+        assert!(text.contains("history cache rejected; through=0; path=registry-history.json; reason=checksum mismatch; queries=0"));
     }
 
     #[test]
