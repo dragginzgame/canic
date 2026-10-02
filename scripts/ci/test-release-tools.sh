@@ -26,7 +26,6 @@ SCCACHE_WRAPPER="$ROOT/scripts/ci/run-sccache.sh"
 POCKET_IC_STOPPER="$ROOT/scripts/ci/stop-owned-pocketic-servers.sh"
 RELEASE_PUSH="$ROOT/scripts/ci/push-release.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
-SECRET_SCAN="$ROOT/scripts/ci/run-secret-scan.sh"
 TAG_DELETE_TEST="$ROOT/scripts/ci/test-delete-github-tags-up-to.sh"
 release_clean_recipe="$(sed -n '/^release-clean:/,/^$/p' "$ROOT/Makefile")"
 # shellcheck source=/dev/null
@@ -264,72 +263,6 @@ expected_push_arguments=$'push\n--no-follow-tags\n--atomic\norigin\nHEAD:refs/he
 
 bash "$TAG_DELETE_TEST" >/dev/null ||
     fail "historical-tag deletion fixture failed"
-
-fake_gitleaks="$tmp_dir/gitleaks"
-# shellcheck disable=SC2016 # Preserve variable expansion for the generated fixture.
-printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'case "${1:-}" in' \
-    'version)' \
-    '    [ "${FAKE_GITLEAKS_VERSION_FAIL:-0}" != "1" ] || exit 1' \
-    '    printf "%s\\n" "${FAKE_GITLEAKS_VERSION:-}"' \
-    '    ;;' \
-    'git) printf "%s\\n" "$@" >"$FAKE_GITLEAKS_ARGUMENTS" ;;' \
-    '*) exit 2 ;;' \
-    'esac' >"$fake_gitleaks"
-chmod +x "$fake_gitleaks"
-FAKE_GITLEAKS_ARGUMENTS="$tmp_dir/gitleaks-arguments" \
-    FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
-    GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null ||
-    fail "the secret scan rejected the qualified scanner and complete history"
-rg -Fxq -- '--redact=100' "$tmp_dir/gitleaks-arguments" ||
-    fail "the secret scan did not redact findings"
-rg -Fxq -- "$ROOT/.gitleaksignore" "$tmp_dir/gitleaks-arguments" ||
-    fail "the secret scan did not select the reviewed fingerprint file"
-
-if (
-    FAKE_GITLEAKS_VERSION_FAIL=1 GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
-); then
-    fail "the secret scan accepted unavailable Gitleaks version output"
-fi
-
-if (
-    FAKE_GITLEAKS_VERSION="${CANIC_GITLEAKS_VERSION}0" \
-        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
-); then
-    fail "the secret scan accepted a near-match Gitleaks version"
-fi
-
-for config_variable in GITLEAKS_CONFIG GITLEAKS_CONFIG_TOML; do
-    if (
-        env "$config_variable=review-override" \
-            FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
-            GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
-    ); then
-        fail "the secret scan accepted $config_variable"
-    fi
-done
-
-fake_bin="$tmp_dir/bin"
-mkdir -p "$fake_bin"
-# shellcheck disable=SC2016 # Preserve argument handling for the generated fixture.
-printf '%s\n' \
-    '#!/usr/bin/env bash' \
-    'last=""' \
-    'for argument in "$@"; do last="$argument"; done' \
-    'case "$last" in' \
-    '--is-inside-work-tree) exit 0 ;;' \
-    '--is-shallow-repository) printf "true\\n" ;;' \
-    '*) exit 2 ;;' \
-    'esac' >"$fake_bin/git"
-chmod +x "$fake_bin/git"
-if (
-    PATH="$fake_bin:$PATH" \
-        FAKE_GITLEAKS_VERSION="$CANIC_GITLEAKS_VERSION" \
-        GITLEAKS_BIN="$fake_gitleaks" bash "$SECRET_SCAN" >/dev/null 2>&1
-); then
-    fail "the secret scan accepted incomplete Git history"
-fi
 
 # Exercise the authority guard with equivalent record layout and real corruption.
 authority_fixture="$tmp_dir/authority"

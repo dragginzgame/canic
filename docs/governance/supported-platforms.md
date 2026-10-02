@@ -61,7 +61,7 @@ reported as unavailable on hosts without `/proc`.
 
 ## Install-Capable But Not Release-Supported
 
-The checksum-bound actionlint, Binaryen, ShellCheck, Gitleaks, ICP CLI, and
+The checksum-bound actionlint, Binaryen, ShellCheck, ICP CLI, and
 `ic-wasm` installers may contain branches outside the declared host/target
 matrix. Those branches alone do not establish support. Their macOS branches
 serve the supported macOS hosts and must be included in macOS qualification.

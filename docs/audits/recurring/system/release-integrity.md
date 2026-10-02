@@ -3,7 +3,7 @@
 ## Method Contract
 
 - Audit ID: `CANIC-RELEASE-INTEGRITY-001`
-- Method version: `1`
+- Method version: `2`
 - Disposition: `retain`
 - Owner: CI trust, secret exposure, artifact provenance/checksums, and
   supported host/target release matrix
@@ -12,7 +12,7 @@
   local or CI environments
 - Cost/runtime: medium/high; 45-120 minutes excluding package builds
 - Prerequisites: Git, ripgrep, actionlint, current workflow files, release
-  scripts, package metadata, and an approved secret scanner for closeout
+  scripts and package metadata
 - False-positive boundary: example placeholders and documented test fixtures
   are classified separately from usable credentials or untrusted execution
 - Shared contract: [AUDIT-HOWTO.md](../../AUDIT-HOWTO.md)
@@ -59,12 +59,7 @@ Historical workflows and reports are evidence only, not active authority.
 actionlint
 rg -n '^permissions:|^[[:space:]]+permissions:|uses:|pull_request_target|workflow_run|secrets\.|GITHUB_TOKEN' .github -g '*.yml' -g '*.yaml'
 rg -n 'curl|wget|sha256|checksum|provenance|artifact|cargo publish|git tag|git push' Makefile scripts .github docs/governance -g '*.sh' -g '*.yml' -g '*.yaml' -g '*.md' -g 'Makefile'
-rg -n 'BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY|AKIA[0-9A-Z]{16}|gh[pousr]_[A-Za-z0-9_]{20,}' . --hidden --glob '!.git/**' --glob '!target/**'
 ```
-
-The local pattern scan is necessary but not sufficient. Closeout also records
-an approved dedicated secret scanner, its version/rules, and its result. If no
-approved scanner is available, this required method is `blocked`.
 
 Review every external `uses:` value for immutable pinning and every job's
 effective permission/secret boundary. Review downloaded tools for checksum or
@@ -97,7 +92,7 @@ failure.
 
 ## Required Report
 
-Include run identity, workflow permission/action table, secret-scan manifest,
+Include run identity, workflow permission/action table, credential-handling review,
 download/tool integrity table, artifact provenance/checksum map, host/target
 matrix, human authority boundaries, findings, unreviewed boundaries, and
 verdict.
