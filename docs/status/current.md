@@ -3,6 +3,40 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## Service-authority denial wording — 2026-10-02
+
+At the maintainer's request, replace the ambiguous Fleet-service Authority denial
+with `access denied: this canister is not the active authority for Fleet service
+'<service-id>'`. The typed denial retains the validated required service ID;
+the active deployment predicate and `AUTHORITY_UNAVAILABLE` diagnostic identity
+remain unchanged. Caller admission has its separate denial. Downstream diagnosis
+of the reported target/service binding remains with the maintainer.
+
+All 28 Core access tests and Core all-feature library Clippy with warnings denied
+pass. Refresh and confirmation of embedded peer provenance also pass for the
+changed Core source. Evidence: `target/review-validation/service-authority-message-{native,clippy,fixture}.log`.
+The existing .51 changelog draft includes the message and typed-error change.
+No deployment, broad suite, version change or Git publication ran. The message
+fix is complete; the complete FR1 batch remains unfinished.
+
+## Opt-in inventory registration and .51 notes — 2026-10-02
+
+The maintainer's validation found that the manual embedded-peer reproduction test
+was omitted from the explicit ignored-test inventory. Register its exact compiled
+identity in `pic::cases::EXPLICIT_SELECTIONS`; keep discovery, unique ownership,
+recovery ordering and worker partition checks intact. The four native
+`pic::governed_suite` checks pass (0.01s, after 16.87s compilation); the two
+explicit PocketIC runners remain ignored. Evidence:
+`target/review-validation/ci-embedded-inventory-registration.log`.
+No PocketIC journey or broad gate was repeated for this registration correction.
+
+At the maintainer's request, consolidate completed .51 work into one root summary
+and the existing detailed draft: fresh-shard auth and issuer setup, pool-import
+diagnostics, smaller `fast` artifacts, macOS Binaryen/CI prerequisites, and embedded
+fixture qualification plus registration. Incomplete FR1 remains in root
+`Unreleased`; it still prevents declaring the complete accepted batch ready.
+No version change, commit, push or publication ran.
+
 ## Fresh-shard authentication AF1 — complete for open .51, 2026-10-02
 
 Restore automatic missing-proof fetching during delegated-token preparation.

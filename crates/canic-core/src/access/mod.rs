@@ -14,6 +14,7 @@ pub mod metrics;
 
 use crate::InternalError;
 use crate::diagnostics::{RegisteredDiagnosticCode, codes};
+use crate::ids::FleetServiceId;
 use thiserror::Error as ThisError;
 
 ///
@@ -94,8 +95,10 @@ pub enum AccessError {
     #[error("access denied: the Fleet-service access guard is invalid")]
     ServiceGuardInvalid,
 
-    #[error("access denied: the Fleet-service Authority is required")]
-    ServiceAuthorityRequired,
+    #[error(
+        "access denied: this canister is not the active authority for Fleet service '{service}'"
+    )]
+    ServiceAuthorityRequired { service: FleetServiceId },
 
     #[error("access denied: delegated token TTL configuration overflows nanoseconds")]
     DelegatedTokenMaxTtlOverflow,
@@ -116,7 +119,7 @@ impl AccessError {
             | Self::RootOrActiveComponentRequired
             | Self::RootRequired
             | Self::SelfRequired
-            | Self::ServiceAuthorityRequired => {
+            | Self::ServiceAuthorityRequired { .. } => {
                 AccessDiagnosticCodes::public(codes::AUTHORITY_UNAVAILABLE)
             }
             Self::BuildNetworkMismatch => AccessDiagnosticCodes::public(codes::PLATFORM_CONFLICT),
@@ -258,7 +261,9 @@ mod tests {
             (AccessError::RootRequired, codes::AUTHORITY_UNAVAILABLE),
             (AccessError::SelfRequired, codes::AUTHORITY_UNAVAILABLE),
             (
-                AccessError::ServiceAuthorityRequired,
+                AccessError::ServiceAuthorityRequired {
+                    service: "database".parse().unwrap(),
+                },
                 codes::AUTHORITY_UNAVAILABLE,
             ),
             (

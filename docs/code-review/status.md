@@ -27,6 +27,13 @@ or add issue counts and test counts to the closure total.
 
 ## Recent delivery status
 
+The service-authority denial now identifies the receiving canister's missing
+active authority and the required Fleet service ID, instead of suggesting a caller
+admission problem. Its guard and diagnostic code are unchanged. All 28 Core
+access tests, Core library Clippy and the embedded fixture refresh pass;
+`service-authority-message-*` logs retain the evidence. The .51 notes include
+this correction; it does not diagnose or repair Toko's reported deployment binding.
+
 “Qualified” means the recorded targeted checks passed for their tested source
 and dependency state. It does not mean published, live-deployed, or accepted by
 Toko. Evidence paths below are local retained logs under
@@ -48,6 +55,14 @@ Toko. Evidence paths below are local retained logs under
 | Deployment reliability audit, findings 1–18 | **Implementation follow-through recorded in the handoff.** Includes complete failure reporting, test selection, bootstrap budgets, held-source funding, build reuse, packaging and automation. | Findings 9/10 have installed-package and embedded-fixture journeys; finding 17 has command-array/phase evidence, extended by CANIC-192. Native macOS execution, formal audit closeout and downstream live acceptance are separate qualifications. Do not count these 18 again as original-review closures. |
 
 ## Published .50 CI follow-up — 2026-10-02
+
+A later native inventory failure identified the embedded-peer reproduction test
+as an unclassified ignored test. Its exact identity is now registered; all four
+native runner/inventory checks pass, preserving recovery ordering and unique
+ownership. Evidence: `target/review-validation/ci-embedded-inventory-registration.log`.
+Completed CI/build/auth/diagnostic changes are consolidated in the existing .51
+changelog draft; incomplete FR1 stays in root `Unreleased`. No broad suite or
+additional PocketIC journey was run for the registration correction.
 
 The maintainer-requested size tuning is implemented: `fast` uses ThinLTO and eight
 code-generation units across workspace and generated infrastructure profiles.
