@@ -1,6 +1,10 @@
 # Reviewed false positives from historical code and audit evidence. Entries are
 # exact Gitleaks fingerprints so a new occurrence, path, line, rule, or commit
 # remains visible to the scanner.
+# Testkit probe handoff: generic-api-key matched ordinary diagnostic prose
+# beginning "public-API probe tests pass: application/quoted text". The exact
+# historical line contains no credential; do not exclude the document or rule.
+657cc654482a8737e8c431aaabc9bd2037646ae8:docs/status/current.md:generic-api-key:14
 # Saved code-review HTML: three generic-api-key matches are audit finding IDs
 # in finding_ids/dups arrays, not credentials. The matched values are
 # cp-root-admission-funding-5 (twice) and cp-fleet-coordinator-4.
