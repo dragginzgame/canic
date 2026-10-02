@@ -2,13 +2,58 @@
 
 use super::*;
 use crate::{
-    fleet_ensure::model::capacity_import::survey::CapacityImportSampleRecord,
+    fleet_ensure::{
+        model::capacity_import::survey::CapacityImportSampleRecord,
+        ops::{
+            EnsurePaths,
+            release::{
+                prepare_review,
+                reservation::{ReleaseObservationJournal, tests::seed},
+            },
+        },
+        policy::release::tests::fixture,
+    },
     test_support::start_pocket_ic,
 };
 use canic_core::ids::{AppId, CanonicalNetworkId, FleetBinding, FleetId, FleetKey};
 use ic_agent::identity::BasicIdentity;
 use ic_testkit::pocket_ic::{CanisterSettings, PocketIcBuilder};
-use std::time::SystemTime;
+use std::{path::PathBuf, time::SystemTime};
+
+fn reservation_journal(
+    authority: &FleetReleaseAuthority,
+    binding: &CapacityImportSourceBinding,
+) -> (PathBuf, ReleaseObservationJournal) {
+    let (mut review, mut observed) = fixture();
+    let old_operator = review.authority.operator;
+    let old_coordinator = review.authority.coordinator;
+    review.authority = authority.clone();
+    observed.authority = authority.clone();
+    for source in &mut review.sources {
+        if source.binding.canister_id == old_coordinator {
+            source.binding = binding.clone();
+        } else if source.binding.controllers == [old_operator] {
+            source.binding.controllers = vec![authority.operator];
+        }
+    }
+    for (sample, source) in observed.sources.iter_mut().zip(&review.sources) {
+        sample.binding = source.binding.clone();
+    }
+    observed.owners[0].owner = authority.coordinator;
+    for account in &mut review.accounts {
+        account.ledger = authority.cycles_ledger;
+        if account.owner == old_coordinator {
+            account.owner = authority.coordinator;
+        }
+    }
+    observed.accounts = review.accounts.clone();
+    let review = prepare_review(review, &observed).unwrap();
+    let directory = crate::test_support::temp_dir("release-observation-reserved");
+    let paths = EnsurePaths::under(&directory, "local", "release");
+    seed(&paths, &review);
+    let journal = ReleaseObservationJournal::attach(&paths, &review, &observed).unwrap();
+    (directory, journal)
+}
 
 fn authority(agent: &Agent) -> FleetReleaseAuthority {
     FleetReleaseAuthority {
@@ -116,13 +161,14 @@ fn governed_pocketic_release_physical_observation_binds_custody() {
     let agent = Agent::builder()
         .with_url(url)
         .with_identity(identity)
-        .with_max_response_body_size(RESPONSE_BYTES)
+        .with_max_response_body_size(SNAPSHOT_RESPONSE_BYTES)
         .build()
         .unwrap();
     agent.set_root_key(pic.root_key().unwrap());
-    let authority = authority(&agent);
+    let mut authority = authority(&agent);
     let operator = authority.operator;
     let canister = pic.create_canister_with_settings(Some(operator), None);
+    authority.coordinator = canister;
     pic.install_canister(
         canister,
         b"\0asm\x01\0\0\0".to_vec(),
@@ -135,16 +181,17 @@ fn governed_pocketic_release_physical_observation_binds_custody() {
         .unwrap();
     let subnet = SubnetId::from_principal(pic.get_subnet(canister).unwrap());
     let binding = source(canister, subnet, operator);
+    let (directory, mut journal) = reservation_journal(&authority, &binding);
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
         .unwrap();
-    let observe = || {
+    let mut observe = || {
         runtime.block_on(async {
             prepare_with_agent(agent.clone(), &authority, &binding)
                 .await
                 .unwrap()
-                .observe()
+                .observe(journal.reserve(canister).unwrap())
                 .await
         })
     };
@@ -173,6 +220,12 @@ fn governed_pocketic_release_physical_observation_binds_custody() {
         ));
     }
     let mut wrong_subnet = binding.clone();
+    let mut wrong_network = authority.clone();
+    wrong_network.fleet.fleet.canonical_network_id = CanonicalNetworkId::ic_mainnet();
+    assert!(matches!(
+        runtime.block_on(prepare_with_agent(agent.clone(), &wrong_network, &binding)),
+        Err(ReleaseObservationError::Authority)
+    ));
     wrong_subnet.subnet = SubnetId::from_principal(Principal::from_slice(&[9]));
     assert!(matches!(
         runtime.block_on(prepare_with_agent(agent.clone(), &authority, &wrong_subnet)),
@@ -201,7 +254,7 @@ fn governed_pocketic_release_physical_observation_binds_custody() {
     )
     .unwrap();
     assert!(matches!(
-        runtime.block_on(prepared.observe()),
+        runtime.block_on(prepared.observe(journal.reserve(canister).unwrap())),
         Err(ReleaseObservationError::Management { .. })
     ));
     assert!(matches!(
@@ -210,4 +263,6 @@ fn governed_pocketic_release_physical_observation_binds_custody() {
             FleetReleaseError::Custody { .. }
         ))
     ));
+    drop(journal);
+    std::fs::remove_dir_all(directory).unwrap();
 }

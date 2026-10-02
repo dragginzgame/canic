@@ -1038,6 +1038,7 @@ fn qualify_terminal_publication(
         })
         .collect();
     let mut journal = FleetEnsureJournalRecord {
+        release: None,
         bootstrap_registration_recovery: None,
         schema_version: 1,
         operation_id: plan.operation_id.clone(),

@@ -2,6 +2,7 @@
 //!
 //! Evidence lives outside the producer dependency graph. Verification never edits source.
 
+mod source;
 #[cfg(test)]
 mod tests;
 
@@ -27,9 +28,11 @@ struct FixtureEvidence {
     package: String,
     target: String,
     profile: String,
+    fixture_version: String,
     source_input_digest: String,
     build_fingerprint: String,
     lock_sha256: String,
+    producer_lock_sha256: String,
     artifact_sha256: String,
     cargo: String,
     rustc: String,
@@ -39,7 +42,8 @@ struct FixtureEvidence {
 /// Normal qualification never updates the checked-in artifact or evidence.
 pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
     let workspace = workspace.canonicalize()?;
-    let spec = build_spec(&workspace);
+    let source = source::FixtureSource::prepare(&workspace)?;
+    let spec = build_spec(&workspace, &source.root)?;
     let inputs = resolve_cargo_build_inputs(&spec)?;
     let evidence: FixtureEvidence = serde_json::from_slice(&fs::read(workspace.join(EVIDENCE))?)?;
     let embedded = fs::read(workspace.join(ARTIFACT))?;
@@ -60,9 +64,11 @@ pub fn verify(workspace: &Path) -> Result<(), Box<dyn Error>> {
 /// Call only after other repository validation has finished.
 pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
     let workspace = workspace.canonicalize()?;
-    let spec = build_spec(&workspace);
+    let source = source::FixtureSource::prepare(&workspace)?;
+    let spec = build_spec(&workspace, &source.root)?;
     let (bytes, _) = build(&workspace, &spec)?;
     canic_host::durable_io::write_bytes(&workspace.join(ARTIFACT), &bytes)?;
+    fs::write(source.root.join(ARTIFACT), &bytes)?;
     // The facade contains the host-only embedded bytes. Qualify again after
     // publication so evidence binds the final tree, with no self-hash in it.
     let (confirmed, evidence) = build(&workspace, &spec)?;
@@ -80,16 +86,22 @@ pub fn refresh(workspace: &Path) -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn build_spec(workspace: &Path) -> WasmBuildSpec {
-    WasmBuildSpec::new(
-        workspace,
+fn build_spec(workspace: &Path, source: &Path) -> io::Result<WasmBuildSpec> {
+    Ok(WasmBuildSpec::new(
+        source,
         &workspace.join("target/embedded-root/cache"),
         &[PACKAGE],
         PROFILE,
     )
     .with_shared_incremental_target(workspace.join("target/embedded-root/cargo"))
+    .with_additional_inputs(["crates/canic-testing-internal/src/embedded_root"])
     .with_cargo_profile_args(["--profile", PROFILE, "--locked", "--offline"])
-    .with_extra_env([("CARGO_INCREMENTAL", "0")])
+    .with_extra_env([
+        ("CARGO_INCREMENTAL", "0".to_owned()),
+        ("ICP_ENVIRONMENT", "local".to_owned()),
+        ("CANIC_MEMORY_BUCKET_PAGES", "16".to_owned()),
+        ("CARGO_ENCODED_RUSTFLAGS", source::rustflags(source)?),
+    ]))
 }
 
 fn build(
@@ -111,9 +123,11 @@ fn build(
         package: PACKAGE.into(),
         target: TARGET.into(),
         profile: PROFILE.into(),
+        fixture_version: source::FIXTURE_VERSION.into(),
         source_input_digest: record.input_digest().to_hex(),
         build_fingerprint: record.fingerprint().to_hex(),
         lock_sha256: sha256_hex(&fs::read(workspace.join("Cargo.lock"))?),
+        producer_lock_sha256: sha256_hex(&fs::read(spec.workspace_root().join("Cargo.lock"))?),
         artifact_sha256: sha256_hex(&bytes),
         cargo: tool_identity("cargo", &["--version", "--verbose"])?,
         rustc: tool_identity("rustc", &["-vV"])?,
@@ -135,11 +149,13 @@ fn recorded_match(evidence: &FixtureEvidence, inputs: &str, bytes: &[u8]) -> io:
     let producer_matches = evidence.schema_version == 1
         && evidence.package == PACKAGE
         && evidence.target == TARGET
-        && evidence.profile == PROFILE;
+        && evidence.profile == PROFILE
+        && evidence.fixture_version == source::FIXTURE_VERSION;
     let valid_digests = [
         &evidence.source_input_digest,
         &evidence.build_fingerprint,
         &evidence.lock_sha256,
+        &evidence.producer_lock_sha256,
     ]
     .iter()
     .all(|digest| digest.len() == 64 && digest.bytes().all(|byte| byte.is_ascii_hexdigit()));

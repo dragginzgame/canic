@@ -11,7 +11,7 @@ mod active;
 mod chain_key_batch;
 mod chain_key_registry;
 mod errors;
-mod root_issuer_policy;
+mod issuer_configuration;
 mod root_issuer_renewal;
 
 pub use chain_key_batch::ChainKeyRootDelegationBatchInstallPlan;
@@ -36,14 +36,11 @@ use crate::{
     config::schema::DelegatedTokenConfig,
     dto::auth::{
         ActiveDelegationProof, ActiveDelegationProofStatusResponse, DelegationProof,
-        RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+        RootDelegationProofBatchProof, RootIssuerConfigureRequest, RootIssuerConfigureResponse,
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     },
     ids::BuildNetwork,
-    model::auth::{
-        ChainKeyRootDelegationInstallFailure, RootIssuerPolicy, RootIssuerRenewalTemplate,
-    },
+    model::auth::{ChainKeyRootDelegationInstallFailure, RootIssuerPolicy},
     ops::{config::ConfigOps, ic::IcOps, storage::auth::RootDelegationStateOps},
 };
 
@@ -71,31 +68,21 @@ impl AuthOps {
         active::active_delegation_proof_status(now_ns)
     }
 
-    pub(crate) fn root_issuer_policy_from_request(
-        request: RootIssuerPolicyUpsertRequest,
-    ) -> RootIssuerPolicy {
-        root_issuer_policy::root_issuer_policy_from_request(request)
+    pub(crate) fn root_issuer_configuration_from_request(
+        request: RootIssuerConfigureRequest,
+    ) -> Result<issuer_configuration::RootIssuerConfiguration, InternalError> {
+        issuer_configuration::root_issuer_configuration_from_request(request)
     }
 
-    pub(crate) fn commit_root_issuer_policy(policy: RootIssuerPolicy) -> RootIssuerPolicyResponse {
-        root_issuer_policy::commit_root_issuer_policy(policy)
+    pub(crate) fn commit_root_issuer_configuration(
+        configuration: issuer_configuration::RootIssuerConfiguration,
+        now_ns: u64,
+    ) -> RootIssuerConfigureResponse {
+        issuer_configuration::commit_root_issuer_configuration(configuration, now_ns)
     }
 
     pub(crate) fn root_issuer_policy(issuer_pid: Principal) -> Option<RootIssuerPolicy> {
         RootDelegationStateOps::root_issuer_policy(issuer_pid)
-    }
-
-    pub(crate) fn root_issuer_renewal_template_from_request(
-        request: RootIssuerRenewalTemplateUpsertRequest,
-    ) -> RootIssuerRenewalTemplate {
-        root_issuer_renewal::root_issuer_renewal_template_from_request(request)
-    }
-
-    pub(crate) fn commit_root_issuer_renewal_template(
-        template: RootIssuerRenewalTemplate,
-        now_ns: u64,
-    ) -> RootIssuerRenewalTemplateResponse {
-        root_issuer_renewal::commit_root_issuer_renewal_template(template, now_ns)
     }
 
     pub(crate) fn root_issuer_renewal_status(

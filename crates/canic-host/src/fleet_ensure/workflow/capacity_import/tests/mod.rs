@@ -9,14 +9,17 @@ use crate::fleet_ensure::{
     ops::capacity_import::{
         journal, prepare_review,
         transport::tests::{
-            awaiting_handoff_status, completion, request, root_context, with_agent,
+            awaiting_handoff_status, completion, request, root_context, with_agent_and_icp,
         },
     },
     policy::capacity_import::tests::{destination, plan, sources},
 };
 use ic_agent::{Agent, Identity, identity::BasicIdentity};
 use sha2_host::{Digest, Sha256};
-use std::path::{Path, PathBuf};
+use std::{
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+};
 
 #[test]
 fn failed_authority_queries_preserve_root_submission_allowances_across_reopen() {
@@ -53,7 +56,11 @@ fn failed_authority_queries_preserve_root_submission_allowances_across_reopen() 
         .with_verify_query_signatures(false)
         .build()
         .unwrap();
-    let transport = with_agent(agent);
+    let events = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&events);
+    let icp = IcpCli::new("unused", None)
+        .with_timing_handler(move |event| sink.lock().unwrap().push(event));
+    let transport = with_agent_and_icp(agent, icp);
     let (directory, paths, store) = approved_journal(plan);
     let original = store.read().unwrap().unwrap();
     drop(store);
@@ -78,6 +85,31 @@ fn failed_authority_queries_preserve_root_submission_allowances_across_reopen() 
         assert_eq!(record, original);
         assert_eq!(store.read().unwrap().unwrap(), original);
     }
+    let events = events.lock().unwrap();
+    let starts = events
+        .iter()
+        .filter(|event| event.succeeded.is_none())
+        .collect::<Vec<_>>();
+    assert_eq!(
+        starts.len(),
+        9,
+        "each of three attempts observes Root status, context and Coordinator"
+    );
+    for start in starts {
+        assert_eq!(start.kind, crate::icp::IcpRequestKind::AgentQuery);
+        assert!(start.subject.is_none() && start.parent_request_id.is_none());
+        let end = events
+            .iter()
+            .find(|event| event.request_id == start.request_id && event.succeeded.is_some())
+            .unwrap();
+        assert_eq!(end.target, start.target);
+        assert_eq!(end.method, start.method);
+        assert_eq!(
+            end.succeeded,
+            Some(start.target.as_deref() != Some(coordinator.to_text().as_str()))
+        );
+    }
+    drop(events);
     server.finish();
     std::fs::remove_dir_all(directory).unwrap();
 }

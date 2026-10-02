@@ -9,10 +9,9 @@ use crate::{
     cdk::types::Principal,
     dto::{
         auth::{
-            RootChainKeyPublicKeyRequest, RootDelegationProofBatchProof, RootIssuerPolicyResponse,
-            RootIssuerPolicyUpsertRequest, RootIssuerRenewalStatusRequest,
-            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
-            RootIssuerRenewalTemplateUpsertRequest,
+            RootChainKeyPublicKeyRequest, RootDelegationProofBatchProof,
+            RootIssuerConfigureRequest, RootIssuerConfigureResponse,
+            RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
         },
         error::Error,
     },
@@ -31,21 +30,15 @@ impl AuthApi {
             .map_err(Error::from)
     }
 
-    /// Upsert root issuer policy from the local root controller path.
-    pub fn upsert_root_issuer_policy_root(
-        request: RootIssuerPolicyUpsertRequest,
-    ) -> Result<RootIssuerPolicyResponse, Error> {
+    /// Configure issuer authority and automatic renewal together.
+    ///
+    /// Fresh issuers fetch their proof during token preparation. Identical setup
+    /// retries preserve the registry epoch and existing proof authority.
+    pub fn configure_issuer_root(
+        request: RootIssuerConfigureRequest,
+    ) -> Result<RootIssuerConfigureResponse, Error> {
         EnvOps::require_root().map_err(Error::from)?;
-        RuntimeAuthWorkflow::upsert_root_issuer_policy(request).map_err(Self::map_auth_error)
-    }
-
-    /// Upsert root-managed renewal template from the local root controller path.
-    pub fn upsert_root_issuer_renewal_template_root(
-        request: RootIssuerRenewalTemplateUpsertRequest,
-    ) -> Result<RootIssuerRenewalTemplateResponse, Error> {
-        EnvOps::require_root().map_err(Error::from)?;
-        RuntimeAuthWorkflow::upsert_root_issuer_renewal_template(request)
-            .map_err(Self::map_auth_error)
+        RuntimeAuthWorkflow::configure_root_issuer(request).map_err(Self::map_auth_error)
     }
 
     /// Report root-managed renewal template/state for one issuer.

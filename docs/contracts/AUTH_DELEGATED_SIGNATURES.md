@@ -301,10 +301,24 @@ quota. An exact committed replay remains available at capacity and returns the
 original response. A fresh request over either limit fails closed with typed
 `ResourceExhausted`.
 
-`canic_root_command::UpsertIssuerPolicy` is a root controller update that registers
-or updates the issuer policy used by batch prepare. It records the issuer
-principal, enabled state, allowed audiences, allowed grants, maximum
-certificate TTL, and refresh-after ratio.
+`canic_root_command::ConfigureIssuer` is a root controller update that configures
+issuer authority and renewal together. `RootIssuerConfigureRequest` contains the
+issuer principal, enabled state, one Fleet audience, grants, certificate TTL and
+refresh-after ratio. Canic validates the complete configuration before writing
+policy and template. Identical retries preserve the registry epoch and existing
+renewal state; changed authority advances the epoch once.
+Admission canonicalizes role/scope ordering and rejects malformed, duplicate or
+over-capacity grants before either record is written.
+
+`PrepareDelegatedToken` automatically fetches a missing issuer proof through
+the caller-bound `GetOrCreateDelegationProof` Root command. Stale or expired proofs
+use the same repair path. It verifies and installs the proof, revalidates replay
+ownership, and retries preparation once. An unrelated `SECURITY_UNAVAILABLE`
+failure does not trigger repair. Root configuration remains required; public
+token requests cannot establish issuer authority.
+Missing Root configuration returns `CONFIGURATION_INCOMPLETE`, and disabled
+configuration returns `SECURITY_INACTIVE`, before paid signing work. Pending
+signing retains its bounded retry-after behavior.
 
 Root-managed renewal stores enabled issuer renewal templates, a delegated-auth
 registry epoch/hash, proof epoch state, and signed chain-key root delegation

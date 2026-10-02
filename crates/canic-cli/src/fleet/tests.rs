@@ -313,6 +313,7 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            release: None,
             bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),

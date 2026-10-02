@@ -1,13 +1,16 @@
 //! Protected Root operations bound to an approved import and completed host handoff.
 
-use crate::fleet_ensure::{
-    model::capacity_import::{CapacityImportJournalRecord, CapacityImportPlanRecord},
-    ops::capacity_import::{
-        journal::{self, CapacityImportJournalError},
-        root_reservation,
-        transport::{CALL_TIMEOUT, CapacityImportTransport, verify_agent},
-        validate_destination_authority, validate_root_status,
+use crate::{
+    fleet_ensure::{
+        model::capacity_import::{CapacityImportJournalRecord, CapacityImportPlanRecord},
+        ops::capacity_import::{
+            journal::{self, CapacityImportJournalError},
+            root_reservation,
+            transport::{CALL_TIMEOUT, CapacityImportTransport, verify_agent},
+            validate_destination_authority, validate_root_status,
+        },
     },
+    icp::IcpRequestKind,
 };
 use candid::{CandidType, Principal};
 use canic_core::{
@@ -58,13 +61,14 @@ pub struct PreparedRootCommand {
     transport: CapacityImportTransport,
     plan: CapacityImportPlanRecord,
     argument: Vec<u8>,
+    subject: Option<Principal>,
 }
 
 impl PreparedRootCommand {
     /// Submit without repeating preflight after the durable submission boundary.
     pub async fn submit(self) -> Result<PoolImportStatus, CapacityImportJournalError> {
         self.transport
-            .submit_root_command(&self.plan, self.argument)
+            .submit_root_command(&self.plan, self.argument, self.subject)
             .await
     }
 }
@@ -81,20 +85,38 @@ impl CapacityImportTransport {
         let coordinator = plan.authority.coordinator;
         let argument = candid::encode_one(CoordinatorRequest::Registry)
             .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
-        let bytes = tokio::time::timeout(
-            CALL_TIMEOUT,
-            self.agent
-                .query(&coordinator, protocol::CANIC_COORDINATOR_REGISTRY)
-                .with_arg(argument)
-                .call(),
-        )
-        .await
-        .map_err(|_| CapacityImportJournalError::CoordinatorUnavailable { coordinator })?
-        .map_err(|_| CapacityImportJournalError::CoordinatorUnavailable { coordinator })?;
-        let response: Result<CoordinatorResponse, Error> = candid::decode_one(&bytes)
-            .map_err(|_| CapacityImportJournalError::CoordinatorUnavailable { coordinator })?;
-        let CoordinatorResponse::Registry(registry) =
-            response.map_err(CapacityImportJournalError::CoordinatorRejected)?;
+        let registry = self
+            .icp
+            .measure_async_request(
+                IcpRequestKind::AgentQuery,
+                coordinator,
+                protocol::CANIC_COORDINATOR_REGISTRY,
+                None,
+                async {
+                    let bytes = tokio::time::timeout(
+                        CALL_TIMEOUT,
+                        self.agent
+                            .query(&coordinator, protocol::CANIC_COORDINATOR_REGISTRY)
+                            .with_arg(argument)
+                            .call(),
+                    )
+                    .await
+                    .map_err(|_| CapacityImportJournalError::CoordinatorUnavailable {
+                        coordinator,
+                    })?
+                    .map_err(|_| {
+                        CapacityImportJournalError::CoordinatorUnavailable { coordinator }
+                    })?;
+                    let response: Result<CoordinatorResponse, Error> = candid::decode_one(&bytes)
+                        .map_err(|_| {
+                        CapacityImportJournalError::CoordinatorUnavailable { coordinator }
+                    })?;
+                    let CoordinatorResponse::Registry(registry) =
+                        response.map_err(CapacityImportJournalError::CoordinatorRejected)?;
+                    Ok::<_, CapacityImportJournalError>(registry)
+                },
+            )
+            .await?;
         validate_destination_authority(plan, &context, &registry)?;
         crate::fleet_ensure::ops::capacity_import::admission::observer::verify_infrastructure(
             &self.agent,
@@ -111,16 +133,26 @@ impl CapacityImportTransport {
         &self,
         root: Principal,
     ) -> Result<PoolImportContext, CapacityImportJournalError> {
-        let StatusResponse::PoolImportContext(context) = self
-            .root_query(root, StatusRequest::PoolImportContext)
-            .await?
-        else {
-            return Err(CapacityImportJournalError::RootResponseInvalid);
-        };
-        if context.binding.fleet_subnet_root != root {
-            return Err(CapacityImportJournalError::ReaderMismatch);
-        }
-        Ok(*context)
+        self.icp
+            .measure_async_request(
+                IcpRequestKind::AgentQuery,
+                root,
+                protocol::CANIC_ROOT_STATUS,
+                None,
+                async {
+                    let StatusResponse::PoolImportContext(context) = self
+                        .root_query(root, StatusRequest::PoolImportContext)
+                        .await?
+                    else {
+                        return Err(CapacityImportJournalError::RootResponseInvalid);
+                    };
+                    if context.binding.fleet_subnet_root != root {
+                        return Err(CapacityImportJournalError::ReaderMismatch);
+                    }
+                    Ok(*context)
+                },
+            )
+            .await
     }
 
     /// Recover current progress using the reviewed signer, network and exact Root.
@@ -129,17 +161,27 @@ impl CapacityImportTransport {
         plan: &CapacityImportPlanRecord,
     ) -> Result<PoolImportStatus, CapacityImportJournalError> {
         verify_agent(&self.agent, plan)?;
-        let StatusResponse::PoolImport(status) = self
-            .root_query(
+        self.icp
+            .measure_async_request(
+                IcpRequestKind::AgentQuery,
                 plan.authority.root,
-                StatusRequest::PoolImport(identity(plan)),
+                protocol::CANIC_ROOT_STATUS,
+                None,
+                async {
+                    let StatusResponse::PoolImport(status) = self
+                        .root_query(
+                            plan.authority.root,
+                            StatusRequest::PoolImport(identity(plan)),
+                        )
+                        .await?
+                    else {
+                        return Err(CapacityImportJournalError::RootResponseInvalid);
+                    };
+                    validate_root_status(plan, &status)?;
+                    Ok(*status)
+                },
             )
-            .await?
-        else {
-            return Err(CapacityImportJournalError::RootResponseInvalid);
-        };
-        validate_root_status(plan, &status)?;
-        Ok(*status)
+            .await
     }
 
     /// Establish the exact allocation fence only after durable host approval.
@@ -224,14 +266,17 @@ impl CapacityImportTransport {
     ) -> Result<PreparedRootCommand, CapacityImportJournalError> {
         verify_agent(&self.agent, plan)?;
         self.verify_destination(plan).await?;
+        let subject = match &command {
+            PoolImportCommand::Advance { canister_id, .. } => Some(*canister_id),
+            _ => None,
+        };
         let argument = candid::encode_one(Command::ImportPoolCapacity(command))
             .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
         Ok(PreparedRootCommand {
-            transport: Self {
-                agent: self.agent.clone(),
-            },
+            transport: self.clone(),
             plan: plan.clone(),
             argument,
+            subject,
         })
     }
 
@@ -239,22 +284,37 @@ impl CapacityImportTransport {
         &self,
         plan: &CapacityImportPlanRecord,
         argument: Vec<u8>,
+        subject: Option<Principal>,
     ) -> Result<PoolImportStatus, CapacityImportJournalError> {
-        let bytes = tokio::time::timeout(
-            CALL_TIMEOUT,
-            self.agent
-                .update(&plan.authority.root, protocol::CANIC_ROOT_COMMAND)
-                .with_arg(argument)
-                .call_and_wait(),
-        )
-        .await
-        .map_err(|_| CapacityImportJournalError::Unresolved)?
-        .map_err(|_| CapacityImportJournalError::Unresolved)?;
-        let response: Result<Response, Error> = candid::decode_one(&bytes)
-            .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
-        let Response::ImportPoolCapacity(status) = match response {
-            Ok(response) => response,
-            Err(error) => {
+        let result = self
+            .icp
+            .measure_async_request(
+                IcpRequestKind::AgentUpdate,
+                plan.authority.root,
+                protocol::CANIC_ROOT_COMMAND,
+                subject,
+                async {
+                    let bytes = tokio::time::timeout(
+                        CALL_TIMEOUT,
+                        self.agent
+                            .update(&plan.authority.root, protocol::CANIC_ROOT_COMMAND)
+                            .with_arg(argument)
+                            .call_and_wait(),
+                    )
+                    .await
+                    .map_err(|_| CapacityImportJournalError::Unresolved)?
+                    .map_err(|_| CapacityImportJournalError::Unresolved)?;
+                    let response: Result<Response, Error> = candid::decode_one(&bytes)
+                        .map_err(|_| CapacityImportJournalError::RootResponseInvalid)?;
+                    let Response::ImportPoolCapacity(status) =
+                        response.map_err(CapacityImportJournalError::RootRejected)?;
+                    validate_root_status(plan, &status)?;
+                    Ok(status)
+                },
+            )
+            .await;
+        match result {
+            Err(CapacityImportJournalError::RootRejected(error)) => {
                 if error.code() == canic_core::diagnostics::codes::CAPACITY_LIMIT.raw_code()
                     && let Ok(status) = self.root_status(plan).await
                 {
@@ -270,11 +330,10 @@ impl CapacityImportTransport {
                         maximum_paid_calls: status.reservation.maximum_paid_calls,
                     });
                 }
-                return Err(CapacityImportJournalError::RootRejected(error));
+                Err(CapacityImportJournalError::RootRejected(error))
             }
-        };
-        validate_root_status(plan, &status)?;
-        Ok(status)
+            result => result,
+        }
     }
 
     async fn root_query(

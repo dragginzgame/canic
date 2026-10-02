@@ -8,7 +8,11 @@ use ic_agent::agent::{Envelope, ReplyResponse};
 use std::borrow::Cow;
 
 pub fn with_agent(agent: Agent) -> CapacityImportTransport {
-    CapacityImportTransport { agent }
+    with_agent_and_icp(agent, IcpCli::new("unused", None))
+}
+
+pub fn with_agent_and_icp(agent: Agent, icp: IcpCli) -> CapacityImportTransport {
+    CapacityImportTransport { agent, icp }
 }
 
 pub fn root_context() -> canic_core::dto::pool_import::PoolImportContext {
@@ -134,7 +138,7 @@ fn capacity_import_handoff_signs_only_with_the_reviewed_network_and_operator() {
         }
     }
     let plan = prepare_review(authority, sources, initial.root_budget).unwrap();
-    let transport = CapacityImportTransport { agent };
+    let transport = with_agent(agent);
     let id = plan.sources[0].binding.canister_id;
     let signed = transport.prepare(&plan, id).unwrap();
     validate_request(&plan, id, &signed).unwrap();

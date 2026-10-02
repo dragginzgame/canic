@@ -5,7 +5,7 @@ mod expiry;
 mod rejection;
 
 use super::*;
-use canic_core::control_plane_support::policy::pool_import;
+use canic_core::{control_plane_support::policy::pool_import, protocol};
 use canic_host::{
     fleet_ensure::{
         model::capacity_import::{
@@ -25,8 +25,9 @@ use canic_host::{
             CapacityImportDestinationView, CapacityImportOwnershipView, CapacityImportSourceView,
         },
     },
-    icp::IcpCli,
+    icp::{IcpCli, IcpRequestKind, IcpRequestTiming},
 };
+use std::sync::{Arc, Mutex};
 
 #[test]
 #[expect(
@@ -54,13 +55,15 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
     .unwrap();
     let stopped_source = pic.canister_status(source, Some(operator)).unwrap();
     let url = pic.make_live(None);
-    let icp = IcpCli::new(wrapper.to_str().unwrap(), Some("local".into())).with_local_replica(
-        Some(LocalReplicaTarget {
+    let timings = Arc::new(Mutex::new(Vec::new()));
+    let sink = Arc::clone(&timings);
+    let icp = IcpCli::new(wrapper.to_str().unwrap(), Some("local".into()))
+        .with_local_replica(Some(LocalReplicaTarget {
             environment: "local".into(),
             root_key: hex_bytes(pic.root_key().unwrap()),
             url: url.to_string(),
-        }),
-    );
+        }))
+        .with_timing_handler(move |event| sink.lock().unwrap().push(event));
     let runtime = tokio::runtime::Builder::new_current_thread()
         .enable_all()
         .build()
@@ -234,7 +237,10 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
         settled
     );
     let before = pic.canister_status(source, Some(root)).unwrap().version;
-    let unavailable = IcpCli::new("/nonexistent/capacity-import-icp", Some("local".into()));
+    let replay_start = timings.lock().unwrap().len();
+    let sink = Arc::clone(&timings);
+    let unavailable = IcpCli::new("/nonexistent/capacity-import-icp", Some("local".into()))
+        .with_timing_handler(move |event| sink.lock().unwrap().push(event));
     assert_eq!(
         runtime
             .block_on(
@@ -247,6 +253,11 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
             )
             .unwrap(),
         completed
+    );
+    assert_eq!(
+        timings.lock().unwrap().len(),
+        replay_start,
+        "terminal replay performs no transport work"
     );
     assert_eq!(
         pic.canister_status(source, Some(root)).unwrap().version,
@@ -272,7 +283,60 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
     rejection::uncertified_rejection_keeps_original_request(
         &pic, &paths, &store, &icp, &runtime, &transport,
     );
+    assert_import_timings(&timings.lock().unwrap(), root, source);
     pic.stop_live();
+}
+
+fn assert_import_timings(events: &[IcpRequestTiming], root: Principal, source: Principal) {
+    let direct = events
+        .iter()
+        .filter(|event| match event.kind {
+            IcpRequestKind::AgentQuery => matches!(
+                event.method.as_deref(),
+                Some(protocol::CANIC_ROOT_STATUS | protocol::CANIC_COORDINATOR_REGISTRY)
+            ),
+            IcpRequestKind::AgentUpdate | IcpRequestKind::AgentRequestStatus => true,
+            _ => false,
+        })
+        .collect::<Vec<_>>();
+    assert!(!direct.is_empty());
+    for start in direct.iter().filter(|event| event.succeeded.is_none()) {
+        let end = direct
+            .iter()
+            .find(|event| event.request_id == start.request_id && event.succeeded.is_some())
+            .unwrap();
+        assert_eq!(end.kind, start.kind);
+        assert_eq!(end.target, start.target);
+        assert_eq!(end.subject, start.subject);
+        assert_eq!(end.method, start.method);
+        assert!(start.parent_request_id.is_none() && end.parent_request_id.is_none());
+    }
+    assert!(direct.iter().any(|event| event.kind == IcpRequestKind::AgentQuery && event.succeeded == Some(false)));
+    assert!(
+        direct
+            .iter()
+            .any(|event| event.kind == IcpRequestKind::AgentUpdate
+                && event.target.as_deref() == Some(root.to_text().as_str())
+                && event.subject == Some(source)
+                && event.succeeded == Some(true))
+    );
+    assert!(
+        direct
+            .iter()
+            .any(|event| event.kind == IcpRequestKind::AgentUpdate
+                && event.target.as_deref()
+                    == Some(Principal::management_canister().to_text().as_str())
+                && event.method.as_deref() == Some("update_settings")
+                && event.subject == Some(source)
+                && event.succeeded == Some(true))
+    );
+    assert!(
+        direct
+            .iter()
+            .any(|event| event.kind == IcpRequestKind::AgentRequestStatus
+                && event.subject == Some(source)
+                && event.succeeded == Some(true))
+    );
 }
 
 fn fresh_handoff(

@@ -69,10 +69,13 @@ use verification::{
     require_current_canister_delegated_token_verifier, verify_from_positive_cache,
     verify_with_embedded_proofs,
 };
+
 use verifier_config::{
     configured_chain_key_root_verifier, configured_ic_root_public_key_raw,
     configured_root_canister_id,
 };
+
+pub use error::DelegatedTokenIssuerPrepareError;
 
 const DEFAULT_DELEGATED_AUTH_MAX_TTL_SECS: u64 = 24 * 60 * 60;
 const NS_PER_SEC: u64 = 1_000_000_000;
@@ -107,21 +110,26 @@ impl AuthOps {
         input: PrepareDelegatedTokenIssuerProofInput,
         operation_id: [u8; 32],
         prepared_by: Principal,
-    ) -> Result<PreparedDelegatedTokenIssuerProof, InternalError> {
+    ) -> Result<PreparedDelegatedTokenIssuerProof, DelegatedTokenIssuerPrepareError> {
         let local = IcOps::canister_self();
         let now_ns = IcOps::now_nanos();
         retention::prune_and_admit(prepared_by, now_ns)?;
         let active_proof = Self::active_delegation_proof(now_ns)?;
         let Some(active_proof) = active_proof else {
             let status = Self::active_delegation_proof_status(now_ns)?.status;
-            return Err(active_delegation_proof_unavailable_error(status));
+            return Err(match status {
+                ActiveDelegationProofStatus::Missing => {
+                    DelegatedTokenIssuerPrepareError::MissingProof
+                }
+                _ => active_delegation_proof_unavailable_error(status).into(),
+            });
         };
 
         if active_proof.proof.cert.issuer_pid != local {
-            return Err(AuthScopeError::IssuerPidMismatch {
+            return Err(InternalError::from(AuthScopeError::IssuerPidMismatch {
                 expected: local,
                 found: active_proof.proof.cert.issuer_pid,
-            }
+            })
             .into());
         }
 

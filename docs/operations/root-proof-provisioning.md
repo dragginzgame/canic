@@ -117,11 +117,39 @@ Reinstalling canonical Root does not add application-specific methods.
 
 ## Supported Flow
 
-Root-owned renewal is the active delegated-auth liveness path for issuers with
-enabled renewal templates:
+Configure each issuer once through `canic_root_command::ConfigureIssuer` or the
+Root-local `AuthApi::configure_issuer_root` facade. One `RootIssuerConfigureRequest`
+supplies `issuer_pid`, `enabled`, `aud`, `grants`, `cert_ttl_ns`, and
+`refresh_after_ratio_bps`. Canic derives and validates the issuer policy and
+renewal template together before either is persisted. Identical retries preserve
+the delegated-auth registry epoch, renewal state, and usable signed batches.
+Grant targets and scopes are sorted at admission, so equivalent input ordering
+has the same authority. Duplicate, malformed, empty-scope and over-capacity grants
+are rejected before configuration is persisted.
+The application endpoint remains responsible for authorizing configuration.
+
+Inside an authorized application Root workflow, setup is one call:
+
+```rust
+AuthApi::configure_issuer_root(RootIssuerConfigureRequest {
+    issuer_pid,
+    enabled: true,
+    aud: DelegationAudience::Fleet(fleet),
+    grants,
+    cert_ttl_ns: 60_000_000_000,
+    refresh_after_ratio_bps: 8_000,
+})?;
+```
+
+Select the application's grants and certificate lifetime explicitly. Repeat the
+same setup safely whenever the application ensures a shard exists. Deployment
+completion alone does not establish authentication readiness; check the issuer's
+`ActiveDelegationProof` status for `Valid` and verify a token through its receiver.
+
+Root-owned renewal is the active delegated-auth liveness path for enabled issuers:
 
 ```text
-controller             -> root canic_root_command UpsertIssuerRenewalTemplate update
+controller             -> root canic_root_command ConfigureIssuer update
 root timer             -> root prepares due issuer entries in a chain-key batch
 root                   -> management canister sign_with_ecdsa
 root                   -> issuer canic_command InstallDelegationProof update
@@ -131,9 +159,10 @@ caller/session         -> issuer canic_command PrepareDelegatedToken update
 caller/session         -> issuer canic_auth_status DelegatedToken query
 ```
 
-Issuer delegated-token preparation also has a root lazy-repair path. When an
-issuer in `chain_key_batch` mode has no usable active proof, it may request the
-internal root update:
+Issuer delegated-token preparation automatically fetches a missing proof and
+repairs stale or expired material. Fresh shards therefore need no separate
+application provisioning call before their first login. The issuer requests
+the caller-bound Root update:
 
 ```text
 issuer                 -> root canic_root_command GetOrCreateDelegationProof update
@@ -145,6 +174,15 @@ issuer                 -> verify and store the returned proof locally
 Lazy repair must reuse a valid existing chain-key batch when possible and must
 honor signing retry-after state after management-canister failures. It must not
 fall back to per-login signing or to the old bridge-backed proof shape.
+Each preparation makes at most one repair attempt, revalidates replay ownership
+after the awaited call, and prepares the token once more. Unrelated
+`SECURITY_UNAVAILABLE` failures do not trigger proof fetching. Missing or disabled
+Root configuration still refuses issuance; login requests cannot create grants.
+Missing configuration returns `CONFIGURATION_INCOMPLETE`; disabled issuer
+renewal returns `SECURITY_INACTIVE`. Both refuse before paid signing work.
+When a shared signing attempt is already in progress, preparation may return
+`SECURITY_UNAVAILABLE`. Retry the same request after that batch progresses; its
+status distinguishes this case from incomplete issuer setup.
 
 An application root may also make a newly installed or reinstalled issuer
 ready before login through the public Rust facade:
@@ -234,6 +272,10 @@ Important status outcomes:
 | `issuer_unregistered` | Issuer is absent from the root subnet registry; restore topology before proof renewal. |
 | `unavailable` | CLI could not observe issuer-local status from installed metadata or transport. |
 
+For `missing`, configure the issuer through `ConfigureIssuer` with the intended
+Fleet audience and grants. For `disabled`, review and enable that same issuer
+configuration when issuance is intended. A missing issuer-local proof with
+enabled Root configuration is fetched automatically on token preparation.
 For `batch_pending`, allow the root timer or lazy repair path to finish before
 forcing additional work. For `batch_failed`, inspect `latest_batch.failure` and
 allow the recorded retry to run. For `proof_unavailable`, use the application

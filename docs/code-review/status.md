@@ -3,10 +3,11 @@
 Last updated: **2026-10-02**. Scope: Canic implementation and qualification;
 Toko Miner is downstream feedback and read-only context.
 
-The current corrective batch targets the **0.110.50 draft**; workspace packages
-remain **0.110.49**. Recent deployment fixes are locally qualified. The current dependency graph
-now also passes the embedded verifier and one public managed-component lifecycle
-journey; evidence below remains scoped to the checks actually run.
+The maintainer reports **0.110.50 published**; main retains its release tag and
+complete validation receipt, and packages are **0.110.50**. The accepted **FR1
+Fleet release-to-capacity batch is resumed and unfinished**, with no next patch
+allocated. Its restored foundations and current embedded peer are requalified;
+evidence below remains scoped to the checks actually run.
 This page tracks progress; it is not release authority or evidence of publication.
 
 ## Review coverage
@@ -33,6 +34,8 @@ Toko. Evidence paths below are local retained logs under
 
 | Work | Current disposition | Evidence / remaining boundary |
 | --- | --- | --- |
+| FR1 restored after .50 | **Restored and requalified foundations; batch unfinished.** Durable read reservations, authenticated ownership inventory and release fencing are integrated with the .50 fixes. Spent read reservations alone do not block explicit reset; uncertain effects still do. | 74 native tests, four exact PocketIC cases, affected-package Clippy and refreshed embedded peer pass. `fr1-resumed-*`. Account settlement, role quiescence, executor/CLI, whole-Fleet proof and retirement contraction remain. No release command is exposed. |
+| FR1 declared Ledger accounts | **Implemented observation boundary; batch unfinished.** Bounded signed queries read exact declared accounts, including zero balances. Default-subaccount normalization prevents false drift and duplicate counting. | 30 selected Host native tests, Host Clippy and exact account PocketIC proof pass (0.72s). `fr1-accounts-*`. Role-owned account discovery, recovery-artifact qualification and paid-effect settlement remain; these results add no original-review closure count. |
 | Operator Component CLI fixture drift | **Fixed and qualified.** Typed journal, state and topology constructors include the required recovery field and catch added record fields at compilation. Production validation is unchanged. | Exact public CLI PocketIC case passes in 23.18s; runner 39s plus successful cleanup. Governed-feature library/test Clippy passes with warnings denied. `operator-cli-fixture-{pocketic,clippy}-final.log`. The prior complete run failed; no new full-suite pass is claimed. |
 | CANIC-192: preserve selected deployment inputs | **Implemented and qualified.** Desired, policy, inventory and identity survive apply, resume, import and successor review. Changed destinations reject before effects; equivalent paths are accepted. | 82 CLI tests, 23 Host tests, affected-package Clippy and public CLI PocketIC reset/recovery/offline replay pass. `canic192-*`; PocketIC 481.48s. The binaries predate the concurrent ic-memory 0.15.2 bump. |
 | CANIC-191 / RD1: reset unfinished installations | **Implemented and qualified.** Current artifacts and physical custody replace predecessor-completion requirements, including malformed application state. | Partial bootstrap/activation/import reset, uncertain-effect fences, conservation and replay are qualified. `canic191-*`, `release-split-*`, and the later CANIC-192 journey. Live Toko adoption remains separate. |
@@ -43,6 +46,40 @@ Toko. Evidence paths below are local retained logs under
 | Rust 1.99 and ordinary-test fallout | **Implemented and qualified.** Toolchain pins, lint cleanup, optional IcyDB selection, isolated runner inputs and stale native fixtures are corrected. | Full Canic-owned Clippy was explicitly run for the toolchain update; subsequent corrections have targeted evidence. `rust199-*`, `ordinary-fallout-*`. IcyDB drift remains an optional local-consumer limitation, not a Canic release blocker. |
 | ic-memory adoption | **0.15.3 selected and lifecycle-qualified.** Default diagnostics preserve configured bootstrap; the embedded peer and provenance are refreshed. | Earlier 35 memory, 70 receipt, four ABI/identity tests and Core Clippy qualify 0.15.2. The 0.15.3 public-API probe, final embedded verifier and current-graph managed-component PocketIC journey pass (166.24s). `ic-memory-0152-*`, `upstream-feedback-recheck-memory.*`, `lock-reconcile-*`. |
 | Deployment reliability audit, findings 1–18 | **Implementation follow-through recorded in the handoff.** Includes complete failure reporting, test selection, bootstrap budgets, held-source funding, build reuse, packaging and automation. | Findings 9/10 have installed-package and embedded-fixture journeys; finding 17 has command-array/phase evidence, extended by CANIC-192. Native macOS execution, formal audit closeout and downstream live acceptance are separate qualifications. Do not count these 18 again as original-review closures. |
+
+## Published .50 CI follow-up — 2026-10-02
+
+The maintainer-requested size tuning is implemented: `fast` uses ThinLTO and eight
+code-generation units across workspace and generated infrastructure profiles.
+The real test Root's code section falls from 9.30 to 8.98 MiB with identical
+Candid; 12 targeted native tests and Host Clippy pass, and the embedded peer is
+refreshed. Existing downstream applications need the updated profile in their
+own workspace manifests. This does not close the portability issue below or add
+an original-review closure. `target/review-validation/fast-profile-*` and
+`fast-root-{before,after}.*` retain the evidence.
+
+Published `.50` [CI run 37004277856](https://github.com/dragginzgame/canic/actions/runs/37004277856)
+exposed two corrected setup defects: missing macOS Binaryen runtime libraries and
+missing `cargo-edit` for ordinary release-guard tests. Installer behavior fixtures,
+the release-candidate fixture and shell/workflow lint pass locally. The third
+failure now has a qualified repair: the embedded allocation peer builds from a
+private source copy using a synthetic test-only version and remapped paths,
+preserving exact external locked dependencies. Three focused tests include real
+byte reproduction across source directories and a private release-version
+transaction, plus refusal of broken source. Internal Testing Clippy and the exact
+public managed-component PocketIC lifecycle pass (229.76s; 382s runner).
+Evidence: `target/review-validation/ci-embedded-*`; the current handoff records
+the artifact hash and exact qualification scope. Actual GitHub and native macOS
+reruns remain unqualified; no additional original-review closure is counted.
+
+Root issuer configuration work (AF1) is now complete. Its refreshed embedded peer
+matches the settled combined source, and the standalone verifier plus both native
+fixture evidence tests pass. The interrupted combined-build check is resolved;
+evidence is in `ci-embedded-{native,verify}-settled.log` under the same directory.
+The earlier lifecycle and byte-reproduction timings describe the preceding peer;
+AF1 owns qualification of the new auth behavior. No expensive journey was repeated.
+The complete FR1 batch remains unfinished, so this CI repair is not a whole-batch
+push-readiness verdict.
 
 ## Upstream feedback recheck — 2026-10-02
 
@@ -73,7 +110,7 @@ tests remain separate evidence, and Canic disk-history adoption remains open.
 | R5 — Backup, CLI, Core | Complete uploads, consistent capture and remaining release/restore authority. Filesystem locking and retention corrections are qualified; fresh live backup remains unavailable. |
 | R6 — background drivers | Driver ownership and trap recovery; typed platform-unavailable retry classification is already qualified. |
 | R7 — convergence | Operation-specific authority across unrelated Fleet changes, mirror acknowledgements, rotation and activation fences. |
-| R8 / FR1 — retirement and release | Complete paid-obligation and account collection, cycle/ICP accounting, quiescence, execution/recovery, CLI, whole-Fleet proof and retirement contraction. Newer FR1 work is parked outside the corrective release tree; preserve its retained bundle. |
+| R8 / FR1 — retirement and release | Complete paid-obligation and account collection, cycle/ICP accounting, quiescence, execution/recovery, CLI, whole-Fleet proof and retirement contraction. Parked foundations are now restored and requalified after .50; preserve their original recovery bundle. |
 | CS1 — simplification | Accepted simplification work follows FR1; its direct evidence, propagation and cleanup remain outstanding. |
 | Qualification and triage | Native macOS results, remaining execution-boundary work, and finding-by-finding disposition of the full original review. R1's bounded quota outcome is already qualified. |
 
@@ -86,9 +123,10 @@ must be explicitly requested and accepted before starting 0.111.
 
 1. Keep the recorded current-graph qualification distinct from earlier version
    evidence when dependencies or runtime sources change again.
-2. Keep the 0.110.50 draft aligned with the completed batch. Publication and live
-   deployment remain separate maintainer-selected actions; none is implied here.
-3. Continue the accepted remaining sequence, including parked FR1 and CS1, using
+2. Keep incomplete FR1 in root `Unreleased` until its coherent outcome is complete;
+   do not assign one patch per restored helper. Publication and live deployment
+   remain separate maintainer-selected actions.
+3. Continue the accepted remaining sequence, including resumed FR1 and CS1, using
    the detailed tracker rather than treating historical snapshot findings as new bugs.
 4. Reconcile completed work with original finding IDs before changing the 27/401
    count. Record duplicates, partial fixes and superseded findings explicitly.

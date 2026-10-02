@@ -347,6 +347,7 @@ recovery-runbooks-gate:
 
 release-integrity-contract-gate:
 	bash scripts/ci/check-release-integrity-contract.sh
+	bash scripts/ci/test-binaryen-install.sh
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh

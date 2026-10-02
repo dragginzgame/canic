@@ -372,6 +372,51 @@ fn request(succeeded: Option<bool>) -> canic_host::icp::IcpRequestTiming {
 }
 
 #[test]
+fn direct_import_transport_pairs_retain_subject_and_cancelled_status_read() {
+    use canic_host::icp::IcpRequestKind;
+    let (root, mut receipt, path) = fixture();
+    let child = candid::Principal::from_slice(&[2]);
+    let mut update = request(None);
+    update.kind = IcpRequestKind::AgentUpdate;
+    update.subject = Some(child);
+    update.method = Some("canic_root_command".into());
+    receipt.request(&update);
+    update.succeeded = Some(false);
+    receipt.request(&update);
+    assert!(receipt.timing_evidence_complete());
+    let mut status = request(None);
+    status.request_id += 1;
+    status.kind = IcpRequestKind::AgentRequestStatus;
+    status.target = Some(child.to_text());
+    status.subject = Some(child);
+    status.method = Some("read_state".into());
+    receipt.request(&status);
+    receipt.close("interrupted", None);
+    drop(receipt);
+    let events = read(&path);
+    let requests = events
+        .iter()
+        .filter(|event| event["event"] == "icp_request_timing")
+        .map(|event| &event["data"]["request"])
+        .collect::<Vec<_>>();
+    assert!(
+        requests
+            .iter()
+            .all(|request| request["subject"] == child.to_text())
+    );
+    assert_eq!(requests[0]["kind"], "agent_update");
+    assert_eq!(requests[1]["succeeded"], false);
+    assert_eq!(requests[2]["kind"], "agent_request_status");
+    assert_eq!(requests[2]["target"], child.to_text());
+    assert!(requests[2]["succeeded"].is_null());
+    assert_eq!(
+        events.last().unwrap()["data"]["timing_evidence_complete"],
+        false
+    );
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn unfinished_request_without_an_open_observation_marks_timing_evidence_partial() {
     let (root, mut receipt, path) = fixture();
     receipt.request(&request(None));

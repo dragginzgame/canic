@@ -1,6 +1,6 @@
 //! Module: storage::stable::authority_restore
 //!
-//! Responsibility: persist the authority snapshot seal.
+//! Responsibility: persist the authority snapshot or release seal.
 //! Does not own: canister-history observation, endpoint policy, or timer suspension.
 //! Boundary: ops validates complete transitions before this single-record store mutates.
 
@@ -16,7 +16,7 @@ use crate::{
 use std::cell::RefCell;
 
 /// Maximum encoded bytes admitted for the complete authority restore fence.
-pub const MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES: u32 = 256;
+pub const MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES: u32 = 512;
 
 std::thread_local! {
     static AUTHORITY_RESTORE_FENCE: RefCell<
@@ -37,7 +37,7 @@ pub struct AuthorityRestoreResumeReceiptRecord {
     pub resumed_at_ns: u64,
 }
 
-/// Durable open or snapshot-sealed authority state.
+/// Durable open, snapshot-sealed or release-sealed authority state.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub enum AuthorityRestoreFenceStateRecord {
     Open {
@@ -46,6 +46,12 @@ pub enum AuthorityRestoreFenceStateRecord {
     Sealed {
         operation_id: [u8; 32],
         history_total_num_changes: u64,
+        sealed_at_ns: u64,
+    },
+    ReleaseSealed {
+        operation_id: [u8; 32],
+        review_sha256: [u8; 32],
+        recipient: Principal,
         sealed_at_ns: u64,
     },
 }
@@ -130,6 +136,22 @@ impl AuthorityRestoreFenceStore {
 mod tests {
     use super::*;
     use crate::cdk::structures::storable::Storable;
+
+    #[test]
+    fn release_fence_roundtrips_at_maximum_field_widths() {
+        let record = AuthorityRestoreFenceRecord {
+            authority_canister: Principal::from_slice(&[1; 29]),
+            state: AuthorityRestoreFenceStateRecord::ReleaseSealed {
+                operation_id: [255; 32],
+                review_sha256: [255; 32],
+                recipient: Principal::from_slice(&[2; 29]),
+                sealed_at_ns: u64::MAX,
+            },
+        };
+        let bytes = record.to_bytes();
+        assert!(bytes.len() <= MAX_AUTHORITY_RESTORE_FENCE_RECORD_BYTES as usize);
+        assert_eq!(AuthorityRestoreFenceRecord::from_bytes(bytes), record);
+    }
 
     #[test]
     fn authority_restore_fence_roundtrips_with_a_bounded_encoding() {

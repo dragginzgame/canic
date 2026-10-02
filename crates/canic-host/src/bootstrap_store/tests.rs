@@ -67,8 +67,8 @@ fn wasm_store_fast_profile_config_defines_standalone_profile() {
     assert!(args.contains(&"profile.release.opt-level=\"z\"".to_string()));
     assert!(args.contains(&"profile.release.panic=\"abort\"".to_string()));
     assert!(args.contains(&"profile.fast.inherits=\"release\"".to_string()));
-    assert!(args.contains(&"profile.fast.lto=false".to_string()));
-    assert!(args.contains(&"profile.fast.codegen-units=16".to_string()));
+    assert!(args.contains(&"profile.fast.lto=\"thin\"".to_string()));
+    assert!(args.contains(&"profile.fast.codegen-units=8".to_string()));
     assert!(args.contains(&"profile.fast.incremental=false".to_string()));
 }
 

@@ -3,7 +3,7 @@
 //! Passing review checks neither quiesces a producer nor authorizes an IC effect.
 
 #[cfg(test)]
-mod tests;
+pub(in crate::fleet_ensure) mod tests;
 
 pub(in crate::fleet_ensure) mod snapshots;
 
@@ -37,10 +37,60 @@ pub enum FleetReleaseError {
     Capacity { root: Principal },
     #[error("Fleet release source {canister} has insufficient call or debit allowance")]
     Budget { canister: Principal },
+    #[error(
+        "release observation of {canister} needs {requested_calls} calls and {required_debit_cycles} cycles of allowance; {remaining_calls} calls and {remaining_debit_cycles} cycles remain"
+    )]
+    ObservationBudget {
+        canister: Principal,
+        requested_calls: u32,
+        remaining_calls: u32,
+        required_debit_cycles: u128,
+        remaining_debit_cycles: u128,
+    },
     #[error("Fleet release source {canister} violates retained-cycle conservation")]
     Conservation { canister: Principal },
     #[error("Fleet release external account inventory or recovery authority is incomplete")]
     Accounts,
+}
+
+/// Reserve finite paid reads without reclaiming uncertain earlier attempts.
+pub(in crate::fleet_ensure) fn reserve_observation_calls(
+    source: &crate::fleet_ensure::model::release::FleetReleaseSourceRecord,
+    reserved: u32,
+    requested: u32,
+) -> Result<u32, FleetReleaseError> {
+    let invalid = || FleetReleaseError::Budget {
+        canister: source.binding.canister_id,
+    };
+    if source.maximum_call_debit_cycles == 0 {
+        return Err(invalid());
+    }
+    let spent = source
+        .maximum_call_debit_cycles
+        .checked_mul(u128::from(reserved))
+        .ok_or_else(invalid)?;
+    let remaining_calls = source
+        .maximum_paid_calls
+        .checked_sub(reserved)
+        .ok_or_else(invalid)?;
+    let remaining_debit_cycles = source
+        .maximum_debit_cycles
+        .checked_sub(spent)
+        .ok_or_else(invalid)?;
+    let required_debit_cycles = source
+        .maximum_call_debit_cycles
+        .checked_mul(u128::from(requested))
+        .ok_or_else(invalid)?;
+    if requested > remaining_calls || required_debit_cycles > remaining_debit_cycles {
+        return Err(FleetReleaseError::ObservationBudget {
+            canister: source.binding.canister_id,
+            requested_calls: requested,
+            remaining_calls,
+            required_debit_cycles,
+            remaining_debit_cycles,
+        });
+    }
+    reserved.checked_add(requested).ok_or_else(invalid)
 }
 
 /// Require consistent physical samples under stopped independent custody.
@@ -145,6 +195,7 @@ pub fn validate_review(
             .checked_add(source.maximum_debit_cycles);
         let calls_fit = actual.required_paid_calls > 0
             && actual.maximum_call_debit_cycles > 0
+            && source.maximum_call_debit_cycles == actual.maximum_call_debit_cycles
             && source.maximum_paid_calls >= actual.required_paid_calls;
         let cycles_fit = required.is_some_and(|required| required <= source.maximum_debit_cycles)
             && headroom.is_some_and(|required| required <= source.observed_cycles);
@@ -178,10 +229,11 @@ fn source_ids(review: &FleetReleaseReviewRecord) -> Result<BTreeSet<Principal>, 
     Ok(ids)
 }
 
-fn validate_owners(
+/// Exact reviewed ownership closure, independent of producer or paid-effect quiescence.
+pub(in crate::fleet_ensure) fn expected_ownership(
     review: &FleetReleaseReviewRecord,
-    observed: &FleetReleaseObservation,
-) -> Result<(), FleetReleaseError> {
+) -> Result<BTreeMap<Principal, BTreeSet<Principal>>, FleetReleaseError> {
+    source_ids(review)?;
     let mut expected = BTreeMap::<Principal, BTreeSet<Principal>>::new();
     let coordinator = review.authority.coordinator;
     expected.insert(coordinator, BTreeSet::new());
@@ -229,7 +281,18 @@ fn validate_owners(
             .ok_or(FleetReleaseError::Inventory)?
             .insert(source.binding.canister_id);
     }
-    if stores != roots.keys().copied().collect() || expected.len() != observed.owners.len() {
+    if stores != roots.keys().copied().collect() {
+        return Err(FleetReleaseError::Inventory);
+    }
+    Ok(expected)
+}
+
+fn validate_owners(
+    review: &FleetReleaseReviewRecord,
+    observed: &FleetReleaseObservation,
+) -> Result<(), FleetReleaseError> {
+    let expected = expected_ownership(review)?;
+    if expected.len() != observed.owners.len() {
         return Err(FleetReleaseError::Inventory);
     }
     let mut seen = BTreeSet::new();
@@ -252,6 +315,39 @@ fn validate_accounts(
     review: &FleetReleaseReviewRecord,
     observed: &FleetReleaseObservation,
 ) -> Result<(), FleetReleaseError> {
+    validate_account_inventory(review)?;
+    let accounts = review
+        .accounts
+        .iter()
+        .map(|account| (account_key(account), account))
+        .collect::<BTreeMap<_, _>>();
+    let actual = observed
+        .accounts
+        .iter()
+        .map(|account| (account_key(account), account))
+        .collect::<BTreeMap<_, _>>();
+    if actual.len() != observed.accounts.len() || actual.len() != accounts.len() {
+        return Err(FleetReleaseError::Accounts);
+    }
+    for (key, expected) in accounts {
+        let current = actual.get(&key).ok_or(FleetReleaseError::Accounts)?;
+        if current.recovery_artifact_sha256 != expected.recovery_artifact_sha256
+            || current.observed_balance != expected.observed_balance
+        {
+            return Err(FleetReleaseError::Accounts);
+        }
+    }
+    Ok(())
+}
+
+/// Bound declared accounts and require recoverable custody before any Ledger reads.
+/// This cannot discover undeclared application accounts or qualify recovery artifacts.
+pub(in crate::fleet_ensure) fn validate_account_inventory(
+    review: &FleetReleaseReviewRecord,
+) -> Result<(), FleetReleaseError> {
+    if review.accounts.len() > MAX_FLEET_ENSURE_CANISTERS {
+        return Err(FleetReleaseError::Accounts);
+    }
     let mut accounts = BTreeMap::new();
     for account in &review.accounts {
         let controlled = review.sources.iter().any(|source| {
@@ -260,11 +356,7 @@ fn validate_accounts(
         });
         let custody_valid =
             principal(account.ledger) && controlled && account.recovery_artifact_sha256 != [0; 32];
-        if !custody_valid
-            || accounts
-                .insert((account.ledger, account.owner, account.subaccount), account)
-                .is_some()
-        {
+        if !custody_valid || accounts.insert(account_key(account), account).is_some() {
             return Err(FleetReleaseError::Accounts);
         }
     }
@@ -277,20 +369,22 @@ fn validate_accounts(
         ) && !accounts.contains_key(&(
             review.authority.cycles_ledger,
             source.binding.canister_id,
-            None,
+            [0; 32],
         )) {
             return Err(FleetReleaseError::Accounts);
         }
     }
-    let actual = observed
-        .accounts
-        .iter()
-        .map(|account| ((account.ledger, account.owner, account.subaccount), account))
-        .collect::<BTreeMap<_, _>>();
-    if actual.len() != observed.accounts.len() || actual != accounts {
-        return Err(FleetReleaseError::Accounts);
-    }
     Ok(())
+}
+
+fn account_key(
+    account: &crate::fleet_ensure::model::release::FleetReleaseAccountRecord,
+) -> (Principal, Principal, [u8; 32]) {
+    (
+        account.ledger,
+        account.owner,
+        account.subaccount.unwrap_or([0; 32]),
+    )
 }
 
 fn validate_destinations(

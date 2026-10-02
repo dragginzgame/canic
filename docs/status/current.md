@@ -3,6 +3,292 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## Fresh-shard authentication AF1 — complete for open .51, 2026-10-02
+
+Restore automatic missing-proof fetching during delegated-token preparation.
+An explicit internal missing-proof result joins the existing stale/expired repair
+path; unrelated E10 failures do not trigger fetching. Preparation makes one
+Root fetch, revalidates replay ownership after the await, and retries once.
+Caller/issuer, Fleet, grant and proof-verification bindings remain enforced.
+
+Replace split issuer policy/template setup with controller-owned
+`canic_root_command::ConfigureIssuer` and Root-local
+`AuthApi::configure_issuer_root`. One explicit audience, grant set, certificate TTL
+and refresh ratio derive both records. Admit the complete configuration before
+mutation, normalize role/scope ordering, reject malformed/duplicate/over-capacity
+grants, and preserve epoch, renewal state and usable proofs on identical retries.
+Missing Root configuration returns `CONFIGURATION_INCOMPLETE`; disabled renewal
+returns `SECURITY_INACTIVE`, both before paid signing. Existing in-flight signing
+can still return transient E10; the same request can retry against that batch.
+
+Qualification: 49 Core auth-workflow tests, 35 delegation ops tests and two facade
+protocol tests pass. Core/facade runtime Clippy, Core library/test Clippy and the
+three affected integration-target lint checks pass with warnings denied. The
+exact `issuer_proof_bootstrap` PocketIC target passes (233.51s case, 384s runner):
+missing configuration creates no batch, one setup call enables automatic proof
+delivery to a fresh issuer, status reaches `Valid`, the receiver accepts the
+token, identical configuration preserves proof state, and request replay and
+subsequent tokens reuse the proof. The fixture retries transient E10 only after
+observing a typed active Root batch. Its initial run stopped at the first E10;
+the final test qualifies any pending state explicitly and requires recovery.
+
+Affected DTOs, macros, replay identifiers, maintained fixtures, test inventory,
+active auth docs and the existing .51 changelog draft are updated. The embedded
+peer's stale-byte guard correctly refused the combined source; refresh and final
+read-only verification pass with artifact SHA-256
+`446fd160ca174747fb3a87509d1710057858818afb559110685e4dca481e67b9`.
+Evidence: `target/review-validation/issuer-config-{workflow-native,ops-native,runtime-clippy,core-test-clippy,fixture-clippy,embedded-refresh,embedded-verify-final}.log`
+and `issuer-proof-bootstrap-pocketic.log` in that directory. Scoped formatting,
+whitespace, layering, document semantics and inventory checks pass. No broad gate
+or repeat public embedded-peer lifecycle journey ran for this auth batch.
+
+AF1 is complete and ready for maintainer review; its changelog is ready for the
+open .51 publication batch. The complete worktree remains not push-ready because
+FR1 is unfinished. Packages remain .50; no versioning, commits, push, publication
+or deployment ran. No Toko files or staging state were changed. Toko must adopt
+the single configuration call on its shard-ensure path when taking .51, then
+verify a live shard's `Valid` status and sign-in. Deployment completion alone is
+not authentication acceptance.
+
+## Embedded allocation-peer CI repair — 2026-10-02
+
+The third failure from published .50 CI is corrected in source. The embedded
+peer now builds from an invocation-owned copy of current Git-listed files,
+including untracked source additions. Only that copy uses synthetic workspace
+version `0.0.0` and matching local dependency requirements; exact external locked
+packages must stay unchanged. Compiler source-path remapping removes local
+workspace, Cargo-cache and sysroot prefixes. The producer recipe is watched, and
+provenance records original and normalized producer locks. Verification still
+rejects corrupt bytes and qualifies changed inputs through an exact Wasm build;
+ordinary release-version transactions no longer invalidate the fixture afterward.
+No real workspace versions, lockfile, release transaction or production build
+profiles are changed by this repair.
+
+Three focused tests pass, including real byte-for-byte reproduction from different
+source directories after a private Cargo release-version transaction, and refusal
+of a deliberately broken source (77.88s). Internal Testing library/test/example
+Clippy passes with all features and warnings denied (63s). The final refresh
+confirms artifact SHA-256
+`da1bbf14cc448dddcd2d7ecb85e6959ddbd926d74ba541aa2cd33df2691162ff`.
+The exact public managed-component lifecycle PocketIC proof passes (229.76s;
+382s runner including native compilation and cleanup). Two native evidence tests
+also pass using that qualified binary. Evidence is under
+`target/review-validation/ci-embedded-{reproduction,clippy,refresh,pocketic,native-qualified-binary}.log`.
+No actual GitHub rerun, cross-host-architecture reproduction or native macOS run
+is claimed; earlier Binaryen/CI-helper corrections remain uncommitted.
+
+**Combined-tree fixture qualification is resolved by AF1 above.** The earlier
+attempted native rebuild encountered in-progress Root issuer configuration files
+(`ci-embedded-native-final.log`). Those changes are now complete; the peer is
+refreshed and its standalone verifier passes against the settled combined tree.
+After the maintainer confirmed completion, both native fixture evidence tests
+were rebuilt and passed (57.59s compile; the explicit reproduction test remains
+unselected). The read-only standalone verifier also exits successfully using the
+current artifact above. Evidence: `ci-embedded-native-settled.log` and
+`ci-embedded-verify-settled.log` under `target/review-validation/`.
+The earlier lifecycle and byte-reproduction evidence belongs to the preceding
+fixture bytes; those expensive journeys were not repeated. No fixture refresh
+was necessary after AF1's verified refresh, and the staged changes were preserved.
+FR1 remains unfinished, so the complete batch is not push-ready. Changelog/status
+updates are retained; no commits, push, versioning, deployment or broad gate ran.
+
+## Smaller fast-profile Wasm — 2026-10-02
+
+At the maintainer's request, change the maintained Cargo `fast` profile from
+local-only LTO / 16 code-generation units to ThinLTO / 8 units. Release keeps its
+existing fat LTO / single-unit settings. The workspace, generated infrastructure
+manifests and infrastructure command overrides agree; the maintained application
+example is updated. Existing downstream application workspaces must update their
+own `[profile.fast]`, because Cargo does not inherit dependency profiles. No
+sibling repository was edited. Historical ablation inputs remain frozen evidence.
+
+Two real `canic build test root --profile fast` builds on the same source/config
+measure code-section bytes **9,748,043 → 9,415,049** (3.42% smaller), final Wasm
+**10,423,944 → 10,079,226**, and gzip **2,687,229 → 2,621,450**. Code headroom below
+the 10 MiB threshold rises from 0.70 to 1.02 MiB. Candid is byte-identical. This
+is one representative Root, not proof that every oversized consumer fits. Wall
+times are not comparable: the second invocation also rebuilt the native CLI and
+used a different cache state. The initial direct `root_probe` Cargo build was
+refused by the maintained build boundary; both measured builds use the supported
+Canic builder. Evidence: `target/review-validation/fast-root-{before,after}.*` and
+`fast-profile-comparison.json` in that directory.
+
+Twelve selected Host profile tests pass, including the new structured comparison
+between workspace and generated profiles; Host all-feature library/test Clippy,
+scoped formatting and whitespace checks pass. Refresh the embedded peer and
+provenance for the new profile; its confirmed artifact SHA-256 is
+`6bbce41eb79f80f35abb7d089bd7163460fc932bea4f5b56f5edea964caf47a4`.
+Evidence: `target/review-validation/fast-profile-{native,clippy,embedded-refresh}.log`.
+No broad suite or new PocketIC journey ran for this build-profile change. Separate
+timing/progress edits arriving from the other session were preserved.
+
+This size-tuning change is complete and uncommitted. The complete open batch is
+still not release-ready: FR1 remains unfinished and the earlier cross-runner /
+release-boundary embedded-Wasm CI qualification issue remains open. Packages stay
+.50 and root `Unreleased` includes this change; no next version was allocated,
+committed, pushed or deployed.
+
+## Published .50 CI diagnosis — 2026-10-02
+
+[Run 37004277856](https://github.com/dragginzgame/canic/actions/runs/37004277856)
+tested release commit `718531020`, not the uncommitted FR1 changes. Linux checks,
+MSRV, security, preflight and release build passed. Four jobs failed for three
+distinct reasons:
+
+- Both macOS architectures aborted during Binaryen installation (exit 134).
+  The pinned archive's Mach-O executable loads `@rpath/libbinaryen.dylib` using
+  `@loader_path/../lib`, but the installer extracted only `bin/wasm-opt`.
+  Preserve the verified bundle's library in a private versioned install directory
+  and expose its executable by symlink; report captured startup errors.
+- Ordinary tests failed only `release_flow_guard`'s release-candidate fixture:
+  `cargo set-version` was absent. Install/check pinned `cargo-edit` in that CI job.
+  Do not weaken the real Cargo release-surface comparison.
+- PocketIC never started: embedded allocation-peer qualification rebuilt after
+  input drift and rejected different Wasm bytes. The published artifact contains
+  absolute `/home/adam/.cargo` and `.rustup` paths; the .49-to-.50 version transaction
+  also changes the selected Cargo graph without refreshing this artifact.
+  Exact contribution of each difference is not isolated from the retained job log.
+  **Still open:** portable fixture builds and release-boundary qualification.
+  The local FR1 refresh does not establish byte reproducibility on GitHub runners.
+
+The first two corrections are uncommitted. Targeted Binaryen installer fixtures
+pass for simulated arm64/x86_64 Darwin and x86_64 Linux, including repeat install,
+library retention, startup diagnostics and checksum rejection. The existing real
+Cargo/fake-Git release-candidate fixture passes without commits; Bash syntax,
+ShellCheck, workflow actionlint and whitespace checks pass. Actual macOS execution
+and corrected CI remain unqualified here. No broad gate, remote rerun, release,
+commit or deployment ran; FR1 remains incomplete below.
+
+## FR1 declared-account observation — 2026-10-02
+
+Continue the accepted FR1 batch with authenticated `icrc1_balance_of` queries
+for declared Ledger accounts. The Host reader binds the reviewed signer and
+network, requires known Root/Coordinator Cycles Ledger accounts even at zero,
+and checks declared operator-held custody before querying. It bounds account
+count, transport/reply bytes, Candid work/type/header complexity, each query and
+the whole collection. Failure returns no partial inventory; queries transfer no
+funds and do not reserve paid management calls. Live balances replace the input
+balance claims. Missing and explicit all-zero subaccounts normalize to the same
+account and sealed review digest; duplicate representations refuse admission.
+
+Qualification: 30 selected Host native tests pass, including reply/header bounds,
+overflow, custody, mandatory accounts and normalization. The exact signed-query
+PocketIC proof passes in 0.72s (87s runner including Host compilation), covering
+exact owner/subaccount arguments, zero/full-width balances, multiple Ledgers,
+malformed replies, overflow and wrong signer/network. Its first run failed only
+because the fixture omitted the NNS trust anchor; the final run fixes that setup.
+Host all-feature library/test Clippy passes with warnings denied.
+Evidence: `target/review-validation/fr1-accounts-{native,pocketic,clippy}.log`.
+
+This is declared-account observation, not automatic discovery of all accounts or
+proof of recoverability. Recovery hashes remain declarations until artifact
+qualification; balances are time-local and still require the release fence.
+Next collect configured ICP accounts and role-owned paid obligations, then wire
+quiescence and bounded handoff. Do not reuse snapshot resumability as settlement:
+ICP refill `NotifyMaxAttempts` is non-resumable but can retain an unresolved CMC
+effect; conversely unused reservations and completed history are not release
+blockers. Inspect effect evidence at its existing owner rather than adding
+another retry or migration path.
+
+FR1 remains unfinished and not release-ready: account recovery, operation
+creation/execution, CLI, whole-Fleet interruption/reuse proof and retirement
+contraction remain. Packages stay .50 with one incomplete root `Unreleased`
+entry. No broad gate, release, deployment, commits or artifact cleanup ran.
+
+## FR1 resumed after published 0.110.50 — 2026-10-02
+
+The maintainer reports `.50` live; main retains its release commit, tag and
+complete validation receipt. Generic continuation now resumes the already accepted
+FR1 Fleet-release batch. The parked source patch is integrated into this checkout,
+with the operation-selection conflict reconciled against `.50` and the new typed
+operator CLI journal fixture updated. Do not apply the restoration patch again.
+Preserve `.canic/local-work/fr1-separated-20261001T200203Z/` as recovery evidence.
+Blob work remains in its separate worktree; no sibling edits ran here.
+
+Restored foundations include durable non-refundable read reservations under the
+existing Fleet lock, authenticated complete registered-ownership collection and
+release-specific Core fencing that snapshot recovery cannot reopen. These are
+internal boundaries, not a release command or proof of whole-Fleet quiescence.
+Restoration exposed an obsolete blanket reset refusal for any release record.
+Remove it: spent observation allowances alone do not represent uncertain mutation.
+The new regression uses an actual retained reservation, preserves its bytes, permits
+reset admission, and still refuses unresolved `Intent`/`Issued` effect envelopes.
+Applied effects and explicit physical reset authority keep their existing owners.
+
+Qualification passes 74 native tests: 27 release-related Host tests, six shared
+inventory/decoder tests, 16 Core fence tests, one canonical Candid test and 24
+operation-selection/reset tests. All-feature library/test Clippy passes for Core,
+facade, Host, CLI and internal Testing; the later reset correction has a final
+Host lint pass. Scoped formatting, Bash syntax, ShellCheck with maintained
+exclusions and document semantics also pass.
+
+Four exact PocketIC proofs pass: authenticated ownership inventory (0.66s),
+reserved physical/custody observation (1.47s), public managed-component lifecycle
+(178.82s) and operator Component CLI completion/export/recovery/replay (272.20s).
+The embedded peer and provenance are refreshed; lifecycle verifies their current
+source binding. The lifecycle runner completes in 326s, including native compilation
+and roughly a minute between libtest completion and runner progress; the retained
+log does not establish that delay's cause. It exits successfully without intervention.
+The CLI runner completes in 274s, dominated by fresh Root/Coordinator/Store/Component
+artifact builds. Prior testkit teardown concerns remain open, not fixed by these passes.
+Evidence: `target/review-validation/fr1-resumed-*.log`.
+
+FR1 remains unfinished and is **not ready for another release**. Next connect
+role-owned outstanding-effect/account collection, producer quiescence and bounded
+handoff to the existing journal; then complete account recovery, operation creation,
+the executor/CLI, whole-Fleet reuse/recovery proof and retirement contraction.
+Do not turn completed historical state or observation bookkeeping into reset
+prerequisites. Root `Unreleased` tracks this incomplete batch; packages stay `.50`
+and no next patch is allocated. No broad gate, version change, commit, push,
+publication, live deployment or build-artifact cleanup ran here.
+
+Earlier sections retain the preceding qualification checkpoints; this section
+supersedes their `.50` draft and parked-FR1 next-action statements.
+
+## Integrated Toko import diagnostics: CANIC-183 — 2026-10-02
+
+The maintainer requested separate Toko feedback work while the other session
+owns Fleet release/reservation and authority-restoration changes. This bounded
+batch was implemented and qualified in `.canic/local-work/toko-feedback-20261002/`,
+an archive of published .50 at `718531020dd0311b682d2539c3178627549b2486`, using
+independent source, target, server and scratch. At the maintainer's request,
+the patch is now applied to the primary worktree after its active build finished.
+Implementation files do not overlap the other session's edits; shared handoff
+and changelog entries are preserved.
+
+Direct Root/Coordinator queries, signed controller handoff, certified ingress
+reconciliation and Root commands now retain paired timings through the existing
+Fleet receipt. Root advances and handoffs retain the imported child separately
+from the carrying endpoint. Prepared clients and observer clones retain the
+diagnostic context across restart. Capacity-limit diagnostic reads start after
+the failed update ends. Async lifetimes do not retain thread-local parents;
+cancellation and panic release worker counts and leave incomplete evidence.
+Existing typed failures, durable authority, consumed allowances, conservation,
+reconciliation and effect-free terminal replay remain with their current owners.
+
+Isolated-source qualification passes 88 Host import regressions, seven timing tests
+and 15 CLI receipt tests. Host/CLI/internal Testing library and test Clippy passes
+with all features and warnings denied. The exact signed-handoff PocketIC journey
+passes in 306.33 seconds, including fresh fixture Wasms, failed admission,
+Host reopen, certified retirement, reviewed continuation, completion and replay.
+The governed invocation completes in 527 seconds including cold compilation and
+owned scratch cleanup. Scoped formatting and current-document semantics pass.
+
+Final logs are retained beside the source bundle as `validation-{host-import,
+timing,cli-receipt,clippy}-final.log`, `validation-pocketic.log`,
+`validation-format.log` and `validation-docs.log`; the complete PocketIC log is
+under its private `target/test-runs/20261002T125129Z-42415.SyxSdE/1.log`.
+`changes.patch` and `README.txt` retain the review/integration boundary.
+
+This diagnostic batch and its .51 changelog draft are integrated and ready for
+review. Patch integrity and document checks pass; qualification above belongs
+to the isolated source, not the combined worktree. This integration changes no
+package versions or dependencies. Combined primary-tree push readiness belongs
+to the other session; no full gate or combined compile/test result is claimed.
+CANIC-183's complete attribution and CANIC-160's matched full-estate performance
+requirements remain open, alongside downstream operational acceptance. No
+commit, push, version transaction, publication, sibling edit or live effect ran.
+
 ## Operator Component CLI fixture correction — 2026-10-02
 
 The maintainer's 2697.49-second governed suite failed in the operator Component

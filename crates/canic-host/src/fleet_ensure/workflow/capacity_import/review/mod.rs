@@ -180,13 +180,13 @@ async fn apply_async(
         return Err(CapacityImportJournalError::PublicationConflict);
     }
     let mut observer = CapacityImportLiveObserver::from_icp(icp)?;
-    crate::fleet_ensure::workflow::capacity_import::apply(
+    Box::pin(crate::fleet_ensure::workflow::capacity_import::apply(
         &store,
         &paths,
         review_sha256,
         icp,
         &mut observer,
-    )
+    ))
     .await
 }
 

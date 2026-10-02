@@ -1,7 +1,7 @@
 //! Authenticate bounded physical release samples after independent operator custody.
 //!
 //! These reads establish no role quiescence, external-account recovery or reset authority.
-//! Workflow must reserve the complete read allowance durably before consuming preparation.
+//! Consuming preparation requires a durably issued allowance from the existing operation journal.
 
 #[cfg(test)]
 mod tests;
@@ -16,18 +16,13 @@ use crate::{
         policy::release::{FleetReleaseError, validate_physical_sample},
         view::release::FleetReleasePhysicalSourceView,
     },
-    icp::{IcpCli, IcpManagementCallError},
+    icp::{IcpCli, IcpManagementCallError, SNAPSHOT_RESPONSE_BYTES, read_snapshot_ids},
 };
-use candid::{CandidType, Principal};
-use canic_core::ids::SubnetId;
-use ic_agent::{Agent, AgentError};
-use serde::Deserialize;
+use candid::Principal;
+use canic_core::ids::{CanonicalNetworkId, SubnetId};
+use ic_agent::Agent;
 use sha2_host::{Digest, Sha256};
-use std::time::Duration;
 use thiserror::Error;
-
-const RESPONSE_BYTES: usize = 2 * 1024 * 1024;
-const READ_DEADLINE: Duration = Duration::from_secs(45);
 
 /// Exact upper bound: two management status calls and two snapshot inventories, with no retries.
 pub const PHYSICAL_SAMPLE_PAID_CALLS: u32 = 4;
@@ -48,24 +43,17 @@ pub enum ReleaseObservationError {
         source: Box<CapacityImportJournalError>,
     },
     #[error("release snapshot observation of {canister} failed: {source}")]
-    Transport {
+    Snapshot {
         canister: Principal,
         #[source]
-        source: Box<AgentError>,
-    },
-    #[error("release snapshot observation of {canister} exceeded its deadline")]
-    Deadline { canister: Principal },
-    #[error("release snapshot response from {canister} cannot be decoded: {source}")]
-    Decode {
-        canister: Principal,
-        #[source]
-        source: candid::Error,
+        source: Box<IcpManagementCallError>,
     },
 }
 
 /// Opaque free preparation, consumed once after the caller reserves four paid reads.
 pub struct PreparedReleaseSourceObservation {
     agent: Agent,
+    authority: FleetReleaseAuthority,
     canister: Principal,
     operator: Principal,
     subnet: SubnetId,
@@ -80,7 +68,7 @@ pub async fn prepare(
     source: &CapacityImportSourceBinding,
 ) -> Result<PreparedReleaseSourceObservation, ReleaseObservationError> {
     let agent = icp
-        .authenticated_agent_with_response_limit(RESPONSE_BYTES)
+        .authenticated_agent_with_response_limit(SNAPSHOT_RESPONSE_BYTES)
         .map_err(|error| ReleaseObservationError::Authentication(Box::new(error)))?;
     prepare_with_agent(agent, authority, source).await
 }
@@ -90,14 +78,8 @@ async fn prepare_with_agent(
     authority: &FleetReleaseAuthority,
     source: &CapacityImportSourceBinding,
 ) -> Result<PreparedReleaseSourceObservation, ReleaseObservationError> {
+    verify_agent(&agent, authority)?;
     let canister = source.canister_id;
-    let network: [u8; 32] = Sha256::digest(agent.read_root_key()).into();
-    if agent.get_principal().ok() != Some(authority.operator)
-        || network != authority.network_root_key_sha256
-        || [Principal::anonymous(), Principal::management_canister()].contains(&authority.operator)
-    {
-        return Err(ReleaseObservationError::Authority);
-    }
     let first = management::prepare(&agent, canister)
         .await
         .map_err(|source| management_error(canister, source))?;
@@ -107,6 +89,7 @@ async fn prepare_with_agent(
     }
     Ok(PreparedReleaseSourceObservation {
         agent,
+        authority: authority.clone(),
         canister,
         operator: authority.operator,
         subnet: source.subnet,
@@ -114,10 +97,32 @@ async fn prepare_with_agent(
     })
 }
 
+pub(super) fn verify_agent(
+    agent: &Agent,
+    authority: &FleetReleaseAuthority,
+) -> Result<(), ReleaseObservationError> {
+    let network: [u8; 32] = Sha256::digest(agent.read_root_key()).into();
+    if agent.get_principal().ok() != Some(authority.operator)
+        || network != authority.network_root_key_sha256
+        || CanonicalNetworkId::from_der_root_trust_anchor(&agent.read_root_key()).ok()
+            != Some(authority.fleet.fleet.canonical_network_id)
+        || [Principal::anonymous(), Principal::management_canister()].contains(&authority.operator)
+    {
+        return Err(ReleaseObservationError::Authority);
+    }
+    Ok(())
+}
+
 impl PreparedReleaseSourceObservation {
     /// Consume at most four reserved reads. Refusal stops immediately, without an automatic retry.
     /// The result is a time-local physical sample, not a lock against later operator changes.
-    pub async fn observe(self) -> Result<FleetReleasePhysicalSourceView, ReleaseObservationError> {
+    pub async fn observe(
+        self,
+        reservation: super::reservation::ReleaseObservationReservation<'_>,
+    ) -> Result<FleetReleasePhysicalSourceView, ReleaseObservationError> {
+        if !reservation.authorizes(&self.authority, self.canister, self.subnet) {
+            return Err(ReleaseObservationError::Authority);
+        }
         let before = self
             .first
             .observe()
@@ -149,48 +154,16 @@ impl PreparedReleaseSourceObservation {
     }
 }
 
-#[derive(CandidType)]
-struct SnapshotRequest {
-    canister_id: Principal,
-}
-
-#[derive(CandidType, Deserialize)]
-struct Snapshot {
-    id: Vec<u8>,
-}
-
 async fn snapshots(
     agent: &Agent,
     canister: Principal,
 ) -> Result<Vec<Vec<u8>>, ReleaseObservationError> {
-    let argument = candid::encode_one(SnapshotRequest {
-        canister_id: canister,
-    })
-    .map_err(|source| ReleaseObservationError::Decode { canister, source })?;
-    let bytes = tokio::time::timeout(
-        READ_DEADLINE,
-        agent
-            .update(&Principal::management_canister(), "list_canister_snapshots")
-            .with_effective_canister_id(canister)
-            .with_arg(argument)
-            .call_and_wait(),
-    )
-    .await
-    .map_err(|_| ReleaseObservationError::Deadline { canister })?
-    .map_err(|source| ReleaseObservationError::Transport {
-        canister,
-        source: Box::new(source),
+    let mut ids = read_snapshot_ids(agent, canister).await.map_err(|source| {
+        ReleaseObservationError::Snapshot {
+            canister,
+            source: Box::new(source),
+        }
     })?;
-    let mut config = candid::de::DecoderConfig::new();
-    config
-        .set_decoding_quota(RESPONSE_BYTES * 64)
-        .set_skipping_quota(RESPONSE_BYTES * 64);
-    let snapshots: Vec<Snapshot> = candid::utils::decode_one_with_config(&bytes, &config)
-        .map_err(|source| ReleaseObservationError::Decode { canister, source })?;
-    let mut ids = snapshots
-        .into_iter()
-        .map(|snapshot| snapshot.id)
-        .collect::<Vec<_>>();
     ids.sort();
     Ok(ids)
 }

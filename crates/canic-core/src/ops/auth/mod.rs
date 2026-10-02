@@ -30,6 +30,7 @@ pub use delegation::{
 pub use error::{
     AuthExpiryError, AuthOpsError, AuthScopeError, AuthSignatureError, AuthValidationError,
 };
+pub use token::DelegatedTokenIssuerPrepareError;
 pub use types::{
     AuthChainKeyRootVerifierConfig, AuthProofVerifierConfig,
     ChainKeyRootDelegationBatchSigningResult, ChainKeyRootDelegationBatchSweepResult,

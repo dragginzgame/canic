@@ -35,10 +35,9 @@ pub use proof::{
     RootProof,
 };
 pub use renewal::{
-    RootDelegationProofBatchProof, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+    RootDelegationProofBatchProof, RootIssuerConfigureRequest, RootIssuerConfigureResponse,
     RootIssuerPolicyView, RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView,
     RootIssuerRenewalStateView, RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-    RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
     RootIssuerRenewalTemplateView,
 };
 pub use token::{

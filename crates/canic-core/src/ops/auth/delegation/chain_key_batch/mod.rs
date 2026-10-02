@@ -12,7 +12,7 @@ mod signing;
 
 use super::{
     errors::map_prepare_delegation_cert_error,
-    root_issuer_policy::{delegated_role_grant_views, delegation_audience_view},
+    issuer_configuration::{delegated_role_grant_views, delegation_audience_view},
 };
 use crate::{
     InternalError,
@@ -184,11 +184,16 @@ pub struct ChainKeyRootDelegationBatchInstallPlan {
 pub(in crate::ops::auth) fn require_requested_issuer_template(
     required_issuer_pid: Option<Principal>,
 ) -> Result<(), InternalError> {
-    if required_issuer_pid.is_some_and(|issuer| {
-        RootDelegationStateOps::root_issuer_renewal_template(issuer)
-            .is_none_or(|template| !template.enabled)
-    }) {
-        return Err(InternalError::auth_proof_pending());
+    if let Some(issuer) = required_issuer_pid {
+        let template =
+            RootDelegationStateOps::root_issuer_renewal_template(issuer).ok_or_else(|| {
+                InternalError::public(crate::diagnostics::codes::CONFIGURATION_INCOMPLETE)
+            })?;
+        if !template.enabled {
+            return Err(InternalError::public(
+                crate::diagnostics::codes::SECURITY_INACTIVE,
+            ));
+        }
     }
     Ok(())
 }

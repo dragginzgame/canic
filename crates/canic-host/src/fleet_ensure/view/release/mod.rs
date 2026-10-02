@@ -11,6 +11,13 @@ use crate::fleet_ensure::{
     view::capacity_import::CapacityImportDestinationView,
 };
 use candid::Principal;
+use std::collections::{BTreeMap, BTreeSet};
+
+/// Complete queried ownership closure, with no assertion that producers are fenced.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetReleaseInventoryView {
+    pub children: BTreeMap<Principal, BTreeSet<Principal>>,
+}
 
 /// Authenticated physical sample after independent custody, without price or role assertions.
 #[derive(Clone, Debug, Eq, PartialEq)]

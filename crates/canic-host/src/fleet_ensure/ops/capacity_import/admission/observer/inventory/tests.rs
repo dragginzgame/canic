@@ -138,3 +138,38 @@ fn failed_assets_remain_owned_without_blocking_a_quiet_destination() {
         assert!(pages.seen.contains(&principal(5)));
     }
 }
+
+#[test]
+fn inventory_decode_bounds_bytes_types_and_malformed_replies() {
+    let canister = principal(2);
+    let valid = candid::encode_one(Ok::<_, Error>(RootResponse::Pool(Box::new(page())))).unwrap();
+    let decoded: Result<RootResponse, Error> = decode(canister, &valid).unwrap();
+    let RootResponse::Pool(observed) = decoded.unwrap();
+    assert_eq!(*observed, page());
+    for bytes in [&vec![0; RESPONSE_BYTES + 1][..], b"DIDL"] {
+        assert!(matches!(
+            decode::<Result<RootResponse, Error>>(canister, bytes),
+            Err(CapacityImportJournalError::InventoryObservation {
+                stage: CapacityImportInventoryStage::Decode,
+                ..
+            })
+        ));
+    }
+    // Valid empty record types with a valid argument: refusal must come from
+    // the bound, not a malformed/truncated header or incompatible reply type.
+    let mut excess_types = b"DIDL\x81\x20".to_vec();
+    for _ in 0..4097 {
+        excess_types.extend([0x6c, 0]);
+    }
+    excess_types.extend([1, 0]);
+    let mut generous = candid::de::DecoderConfig::new();
+    generous.set_max_type_len(4097);
+    candid::utils::decode_one_with_config::<candid::Reserved>(&excess_types, &generous).unwrap();
+    assert!(matches!(
+        decode::<candid::Reserved>(canister, &excess_types),
+        Err(CapacityImportJournalError::InventoryObservation {
+            stage: CapacityImportInventoryStage::Decode,
+            ..
+        })
+    ));
+}

@@ -7,10 +7,9 @@ use canic::{
             ApplicationSessionCommandResponse, ApplicationSessionRequest, ApplicationSessionStatus,
             ApplicationSessionView, AuthRequestMetadata, DelegatedToken, DelegatedTokenGetRequest,
             DelegatedTokenPrepareRequest, DelegatedTokenPrepareResponse, DelegationAudience,
-            InactiveApplicationSession, RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest,
+            InactiveApplicationSession, RootIssuerConfigureRequest, RootIssuerConfigureResponse,
             RootIssuerRenewalBatchStatus, RootIssuerRenewalStatusRequest,
-            RootIssuerRenewalStatusResponse, RootIssuerRenewalTemplateResponse,
-            RootIssuerRenewalTemplateUpsertRequest,
+            RootIssuerRenewalStatusResponse,
         },
         fleet_admission::{FleetAdmissionProjectionPhase, FleetAdmissionProjectionStatusResponse},
         metrics::{MetricEntry, MetricValue, MetricsKind, QueryPerfSample},
@@ -67,14 +66,12 @@ fn delegated_grant_scopes() -> Vec<String> {
 
 #[derive(CandidType)]
 enum RootCommand {
-    UpsertIssuerPolicy(RootIssuerPolicyUpsertRequest),
-    UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateUpsertRequest),
+    ConfigureIssuer(RootIssuerConfigureRequest),
 }
 
 #[derive(CandidType, Deserialize)]
 enum RootCommandResponse {
-    UpsertIssuerPolicy(RootIssuerPolicyResponse),
-    UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateResponse),
+    ConfigureIssuer(RootIssuerConfigureResponse),
 }
 
 #[derive(CandidType)]
@@ -1537,46 +1534,25 @@ fn configure_issuer(fixture: &canic_testing_internal::pic::ActiveComponentRegist
         fixture.verifier.role.clone(),
         delegated_grant_scopes(),
     )];
-    let policy: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
+    let configured: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
         fixture.root,
         protocol::CANIC_ROOT_COMMAND,
-        (RootCommand::UpsertIssuerPolicy(
-            RootIssuerPolicyUpsertRequest {
-                issuer_pid: fixture.issuer.canister_id,
-                enabled: true,
-                allowed_audiences: vec![audience.clone()],
-                allowed_grants: grants.clone(),
-                max_cert_ttl_ns: 60_000_000_000,
-                refresh_after_ratio_bps: 8_000,
-            },
-        ),),
+        (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
+            issuer_pid: fixture.issuer.canister_id,
+            enabled: true,
+            aud: audience,
+            grants,
+            cert_ttl_ns: 60_000_000_000,
+            refresh_after_ratio_bps: 8_000,
+        }),),
     );
-    let RootCommandResponse::UpsertIssuerPolicy(policy) =
-        policy.expect("root issuer policy must be accepted")
-    else {
-        panic!("unexpected Root command response")
-    };
-    assert_eq!(policy.issuer.issuer_pid, fixture.issuer.canister_id);
-
-    let template: Result<RootCommandResponse, Error> = fixture.pic().update_candid_or_panic(
-        fixture.root,
-        protocol::CANIC_ROOT_COMMAND,
-        (RootCommand::UpsertIssuerRenewalTemplate(
-            RootIssuerRenewalTemplateUpsertRequest {
-                issuer_pid: fixture.issuer.canister_id,
-                enabled: true,
-                aud: audience,
-                grants,
-                cert_ttl_ns: 60_000_000_000,
-            },
-        ),),
+    let RootCommandResponse::ConfigureIssuer(configuration) =
+        configured.expect("root issuer configuration must be accepted");
+    assert_eq!(configuration.issuer.issuer_pid, fixture.issuer.canister_id);
+    assert_eq!(
+        configuration.template.issuer_pid,
+        fixture.issuer.canister_id
     );
-    let RootCommandResponse::UpsertIssuerRenewalTemplate(template) =
-        template.expect("root issuer renewal template must be accepted")
-    else {
-        panic!("unexpected Root command response")
-    };
-    assert_eq!(template.template.issuer_pid, fixture.issuer.canister_id);
 }
 
 fn provision_delegation_proof(

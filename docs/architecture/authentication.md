@@ -308,10 +308,11 @@ root issuer readiness provisioning
 Root issuance steps:
 
 1. Require local canister is root.
-2. Require root-controller authorization for the MVP policy upsert and batch
-   endpoints.
-3. Register each issuer policy through `canic_root_command::UpsertIssuerPolicy`
-   before preparing root proof material.
+2. Require root-controller authorization for issuer configuration.
+3. Configure each issuer through `canic_root_command::ConfigureIssuer` before
+   preparing root proof material. One explicit audience, grant set, certificate
+   TTL and refresh ratio produce both policy and automatic renewal configuration.
+   Identical configuration retries preserve the registry epoch and signed batches.
 4. Validate each issuer against the root issuer registry.
 5. Load `auth.delegated_tokens` config.
 6. Bind each requested issuer canister to
@@ -361,6 +362,12 @@ chain-key root delegation batches. Duplicate timer ticks are idempotent, stale
 registry changes during signing invalidate the pending batch, partial issuer
 install failure is retried, and unknown signing outcomes are retryable without
 treating a reject as proof that no signature exists.
+
+Fresh token preparation fetches a missing issuer proof from Root automatically;
+stale and expired proofs use the same bounded repair path. Preparation retries
+once after proof verification and replay-owner revalidation. Other unavailable
+security material does not trigger a proof fetch, and Root still requires enabled
+issuer configuration with explicit Fleet and grant authority.
 
 The old bridge-backed canister-signature root proof provisioning surfaces are
 not part of the active protocol. Delegated-token liveness comes from root

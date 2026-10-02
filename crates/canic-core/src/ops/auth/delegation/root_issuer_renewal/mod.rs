@@ -8,11 +8,10 @@ mod identity;
 mod tests;
 mod view;
 
-use super::root_issuer_policy::{audience_policy, grant_policies};
 use crate::{
     dto::auth::{
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
+        RootIssuerRenewalTemplateView,
     },
     log::Topic,
     model::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
@@ -21,18 +20,16 @@ use crate::{
     },
 };
 
+use view::{root_issuer_renewal_batch_view, root_issuer_renewal_state_view};
+
 pub(in crate::ops::auth::delegation) use identity::renewal_template_fingerprint;
-use view::{
-    root_issuer_renewal_batch_view, root_issuer_renewal_state_view,
-    root_issuer_renewal_template_view,
-};
+pub(in crate::ops::auth::delegation) use view::root_issuer_renewal_template_view;
 
 pub(super) fn commit_root_issuer_renewal_template(
     template: RootIssuerRenewalTemplate,
     now_ns: u64,
-) -> RootIssuerRenewalTemplateResponse {
+) -> RootIssuerRenewalTemplateView {
     RootDelegationStateOps::upsert_root_issuer_renewal_template(template.clone());
-    RootDelegationStateOps::advance_delegated_auth_registry_epoch();
     if !template.enabled {
         record_disabled_renewal_template(&template, now_ns);
     }
@@ -43,10 +40,7 @@ pub(super) fn commit_root_issuer_renewal_template(
         template.issuer_pid,
         template.enabled
     );
-
-    RootIssuerRenewalTemplateResponse {
-        template: root_issuer_renewal_template_view(&template),
-    }
+    root_issuer_renewal_template_view(&template)
 }
 
 pub(super) fn root_issuer_renewal_status(
@@ -217,16 +211,4 @@ fn root_issuer_renewal_template_deadline_ns(
         .unwrap_or(now_ns)
         .max(state.next_attempt_after_ns)
         .max(now_ns)
-}
-
-pub(super) fn root_issuer_renewal_template_from_request(
-    request: RootIssuerRenewalTemplateUpsertRequest,
-) -> RootIssuerRenewalTemplate {
-    RootIssuerRenewalTemplate {
-        issuer_pid: request.issuer_pid,
-        enabled: request.enabled,
-        audience: audience_policy(&request.aud),
-        grants: grant_policies(&request.grants),
-        cert_ttl_ns: request.cert_ttl_ns,
-    }
 }

@@ -18,7 +18,7 @@ fn id(byte: u8) -> Principal {
     Principal::from_slice(&[byte; 29])
 }
 
-fn fixture() -> (FleetReleaseReviewRecord, FleetReleaseObservation) {
+pub(in crate::fleet_ensure) fn fixture() -> (FleetReleaseReviewRecord, FleetReleaseObservation) {
     let authority = FleetReleaseAuthority {
         fleet: FleetBinding {
             app: AppId::from("release-fixture"),
@@ -60,6 +60,7 @@ fn fixture() -> (FleetReleaseReviewRecord, FleetReleaseObservation) {
             observed_reserved_cycles: 500,
             minimum_retained_cycles: 800,
             maximum_debit_cycles: 200,
+            maximum_call_debit_cycles: 10,
             maximum_paid_calls: 20,
         },
     )
@@ -310,6 +311,31 @@ fn external_accounts_require_exact_inventory_and_recoverable_operator_custody() 
     observations.accounts[0].observed_balance -= 1;
     assert_eq!(
         validate_review(&review, &observations),
+        Err(FleetReleaseError::Accounts)
+    );
+}
+
+#[test]
+fn default_account_representations_share_one_identity_and_review_digest() {
+    let (review, observed) = fixture();
+    let sealed = prepare_review(review.clone(), &observed).unwrap();
+    let mut explicit = review;
+    explicit.accounts[0].subaccount = Some([0; 32]);
+    assert_eq!(prepare_review(explicit.clone(), &observed).unwrap(), sealed);
+    let mut observed_explicit = observed.clone();
+    observed_explicit.accounts[1].subaccount = Some([0; 32]);
+    verify_review(&sealed, &observed_explicit).unwrap();
+
+    explicit.accounts.push(sealed.accounts[0].clone());
+    assert_eq!(
+        validate_review(&explicit, &observed),
+        Err(FleetReleaseError::Accounts)
+    );
+    observed_explicit
+        .accounts
+        .push(observed.accounts[1].clone());
+    assert_eq!(
+        validate_review(&sealed, &observed_explicit),
         Err(FleetReleaseError::Accounts)
     );
 }

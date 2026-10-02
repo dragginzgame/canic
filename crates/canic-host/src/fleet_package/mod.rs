@@ -34,8 +34,8 @@ const RELEASE_PROFILE: &[(&str, &str)] = &[
 ];
 const FAST_PROFILE: &[(&str, &str)] = &[
     ("inherits", "\"release\""),
-    ("lto", "false"),
-    ("codegen-units", "16"),
+    ("lto", "\"thin\""),
+    ("codegen-units", "8"),
     ("incremental", "false"),
 ];
 

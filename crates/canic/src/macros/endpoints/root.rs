@@ -75,11 +75,7 @@ macro_rules! canic_emit_root_command_endpoint {
             ),
             SynchronizeRegistry(::canic::dto::fleet_registry::FleetSubnetRootRegistrySyncRequest),
             #[cfg(canic_capability_root_delegation)]
-            UpsertIssuerPolicy(::canic::dto::auth::RootIssuerPolicyUpsertRequest),
-            #[cfg(canic_capability_root_delegation)]
-            UpsertIssuerRenewalTemplate(
-                ::canic::dto::auth::RootIssuerRenewalTemplateUpsertRequest,
-            ),
+            ConfigureIssuer(::canic::dto::auth::RootIssuerConfigureRequest),
         }
 
         #[derive(
@@ -139,11 +135,7 @@ macro_rules! canic_emit_root_command_endpoint {
                 ::canic::dto::component_provisioning::RootComponentDirectorySynchronizationResponse,
             ),
             #[cfg(canic_capability_root_delegation)]
-            UpsertIssuerPolicy(::canic::dto::auth::RootIssuerPolicyResponse),
-            #[cfg(canic_capability_root_delegation)]
-            UpsertIssuerRenewalTemplate(
-                ::canic::dto::auth::RootIssuerRenewalTemplateResponse,
-            ),
+            ConfigureIssuer(::canic::dto::auth::RootIssuerConfigureResponse),
         }
 
         impl RootCommand {
@@ -250,7 +242,7 @@ macro_rules! canic_emit_root_command_endpoint {
                     | RootCommand::SynchronizeRegistry(_)
             );
             #[cfg(canic_capability_root_delegation)]
-            let controller_command = controller_command || matches!(&command, RootCommand::GetChainKeyPublicKey(_) | RootCommand::UpsertIssuerPolicy(_) | RootCommand::UpsertIssuerRenewalTemplate(_));
+            let controller_command = controller_command || matches!(&command, RootCommand::GetChainKeyPublicKey(_) | RootCommand::ConfigureIssuer(_));
             if controller_command {
                 $crate::__internal::core::access::auth::is_controller(caller)
                     .await
@@ -797,14 +789,9 @@ macro_rules! canic_emit_root_command_endpoint {
                         .map(RootCommandResponse::OperationAccepted)
                 }
                 #[cfg(canic_capability_root_delegation)]
-                RootCommand::UpsertIssuerPolicy(request) => {
-                    $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_policy_root(request)
-                        .map(RootCommandResponse::UpsertIssuerPolicy)
-                }
-                #[cfg(canic_capability_root_delegation)]
-                RootCommand::UpsertIssuerRenewalTemplate(request) => {
-                    $crate::__internal::core::api::auth::AuthApi::upsert_root_issuer_renewal_template_root(request)
-                        .map(RootCommandResponse::UpsertIssuerRenewalTemplate)
+                RootCommand::ConfigureIssuer(request) => {
+                    $crate::__internal::core::api::auth::AuthApi::configure_issuer_root(request)
+                        .map(RootCommandResponse::ConfigureIssuer)
                 }
             }
             })

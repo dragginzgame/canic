@@ -3,12 +3,16 @@
 //! Responsibility: measure selected typed transport boundaries across context clones.
 //! Boundary: no arguments, responses, credentials or retry authority enter diagnostics.
 
+#[cfg(test)]
+mod async_tests;
+
 use crate::icp::IcpCli;
 use candid::Principal;
 use serde::Serialize;
 use std::{
     cell::RefCell,
     fmt,
+    future::Future,
     sync::{
         Arc,
         atomic::{AtomicU64, Ordering},
@@ -50,6 +54,10 @@ pub enum IcpRequestKind {
     Update,
     ManagementStatus,
     AgentQuery,
+    /// Direct signed HTTP submission, including response polling for Root commands.
+    AgentUpdate,
+    /// Certified request-status read for an already-issued ingress.
+    AgentRequestStatus,
 }
 
 /// Paired informational boundary; logical reads and nested transports are not additive counts.
@@ -137,6 +145,42 @@ impl IcpCli {
         self.measure_request_with_subject(kind, target, method, None, run)
     }
 
+    /// Measure a direct async transport without retaining thread-local nesting across awaits.
+    /// Independent futures share request identities and worker counts, never implicit parents.
+    pub(crate) async fn measure_async_request<T, E>(
+        &self,
+        kind: IcpRequestKind,
+        target: Principal,
+        method: &str,
+        subject: Option<Principal>,
+        run: impl Future<Output = Result<T, E>>,
+    ) -> Result<T, E> {
+        let Some(handler) = &self.timing.handler else {
+            return run.await;
+        };
+        let event = IcpRequestTiming {
+            request_id: NEXT_REQUEST.fetch_add(1, Ordering::Relaxed),
+            parent_request_id: None,
+            kind,
+            target: Some(target.to_text()),
+            subject,
+            method: Some(method.to_owned()),
+            elapsed_micros: 0,
+            in_flight: self.timing.active.fetch_add(1, Ordering::SeqCst) + 1,
+            succeeded: None,
+        };
+        let guard = AsyncRequestGuard(&self.timing);
+        let started = Instant::now();
+        handler(event.clone());
+        let result = run.await;
+        let mut event = event;
+        event.elapsed_micros = started.elapsed().as_micros();
+        event.succeeded = Some(result.is_ok());
+        handler(event);
+        drop(guard);
+        result
+    }
+
     fn measure_request_with_subject<T, E>(
         &self,
         kind: IcpRequestKind,
@@ -193,6 +237,15 @@ impl IcpCli {
         handler(event);
         drop(guard);
         result
+    }
+}
+
+/// Cancellation leaves an unmatched diagnostic start while releasing its worker count.
+struct AsyncRequestGuard<'a>(&'a Timing);
+
+impl Drop for AsyncRequestGuard<'_> {
+    fn drop(&mut self) {
+        self.0.active.fetch_sub(1, Ordering::SeqCst);
     }
 }
 

@@ -65,10 +65,15 @@ incremental = false
 
 [profile.fast]
 inherits = "release"
-lto = false
-codegen-units = 16
+lto = "thin"
+codegen-units = 8
 incremental = false
 ```
+
+`fast` uses ThinLTO to reduce Wasm size while retaining more build parallelism
+than `release`. Canic generates this profile for infrastructure packages.
+Existing application workspaces should update their own `[profile.fast]` block;
+Cargo does not inherit profiles from a dependency.
 
 ## ICP Project Config
 

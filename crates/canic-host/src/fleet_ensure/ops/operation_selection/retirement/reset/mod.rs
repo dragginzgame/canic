@@ -159,6 +159,8 @@ fn require_reconciled_effects(paths: &EnsurePaths) -> Result<(), EnsureStateErro
                 }
             }
         }
+        // Release read reservations are spent observation allowances, not uncertain
+        // mutations. Its executable effects share the journal checked above.
     }
     let path = paths.plan.with_file_name("capacity-import.json");
     if let Some(import) = evidence(&path)? {

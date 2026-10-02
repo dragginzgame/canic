@@ -21,7 +21,10 @@ use crate::{
     },
     model::replay::{RecoveryReason, ReplayActor},
     ops::{
-        auth::{AuthOps, PrepareDelegatedTokenIssuerProofInput, PrepareRootRoleAttestationInput},
+        auth::{
+            AuthOps, DelegatedTokenIssuerPrepareError, PrepareDelegatedTokenIssuerProofInput,
+            PrepareRootRoleAttestationInput,
+        },
         ic::{
             IcOps,
             call::{CallOps, CallResult},
@@ -294,7 +297,7 @@ where
         PrepareDelegatedTokenIssuerProofInput,
         [u8; 32],
         Principal,
-    ) -> Result<T, InternalError>,
+    ) -> Result<T, DelegatedTokenIssuerPrepareError>,
     R: FnOnce() -> Fut,
     V: FnOnce() -> Result<(), InternalError>,
     Fut: Future<Output = Result<(), InternalError>>,
@@ -305,17 +308,23 @@ where
             repair().await?;
             validate_replay_owner()?;
             prepare(input, operation_id, prepared_by)
+                .map_err(DelegatedTokenIssuerPrepareError::into_internal_error)
         }
-        Err(err) => Err(err),
+        Err(err) => Err(err.into_internal_error()),
     }
 }
 
-const fn delegated_token_prepare_error_allows_lazy_repair(err: &InternalError) -> bool {
-    matches!(
-        err.public_error().raw_code(),
-        code if code == codes::SECURITY_CONFLICT.raw_code().raw()
-            || code == codes::AUTH_CERT_EXPIRED.raw_code().raw()
-    )
+const fn delegated_token_prepare_error_allows_lazy_repair(
+    err: &DelegatedTokenIssuerPrepareError,
+) -> bool {
+    match err {
+        DelegatedTokenIssuerPrepareError::MissingProof => true,
+        DelegatedTokenIssuerPrepareError::Failed(error) => matches!(
+            error.public_error().raw_code(),
+            code if code == codes::SECURITY_CONFLICT.raw_code().raw()
+                || code == codes::AUTH_CERT_EXPIRED.raw_code().raw()
+        ),
+    }
 }
 
 async fn repair_active_delegation_proof_from_root() -> Result<(), InternalError> {
@@ -409,7 +418,7 @@ mod tests {
                 let call = prepare_calls.get();
                 prepare_calls.set(call + 1);
                 if call == 0 {
-                    Err(InternalError::auth_material_stale())
+                    Err(InternalError::auth_material_stale().into())
                 } else {
                     Ok(42_u8)
                 }
@@ -428,7 +437,81 @@ mod tests {
     }
 
     #[test]
-    fn delegated_token_lazy_repair_revalidates_replay_owner_before_retry() {
+    fn delegated_token_lazy_repair_fetches_missing_proof_and_retries_once() {
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+        let prepared = block_on(prepare_delegated_token_with_lazy_repair_using(
+            token_prepare_input(),
+            [12; 32],
+            p(8),
+            |_, _, _| {
+                prepare_calls.set(prepare_calls.get() + 1);
+                if prepare_calls.get() == 1 {
+                    Err(DelegatedTokenIssuerPrepareError::MissingProof)
+                } else {
+                    Ok(42_u8)
+                }
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Ok(())
+            },
+            || Ok(()),
+        ))
+        .unwrap();
+        assert_eq!(prepared, 42);
+        assert_eq!(prepare_calls.get(), 2);
+        assert_eq!(repair_calls.get(), 1);
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_does_not_loop_when_proof_remains_missing() {
+        let prepare_calls = Cell::new(0);
+        let repair_calls = Cell::new(0);
+        let err = block_on(prepare_delegated_token_with_lazy_repair_using(
+            token_prepare_input(),
+            [13; 32],
+            p(8),
+            |_, _, _| -> Result<u8, DelegatedTokenIssuerPrepareError> {
+                prepare_calls.set(prepare_calls.get() + 1);
+                Err(DelegatedTokenIssuerPrepareError::MissingProof)
+            },
+            || async {
+                repair_calls.set(repair_calls.get() + 1);
+                Ok(())
+            },
+            || Ok(()),
+        ))
+        .unwrap_err();
+        assert_eq!(
+            err.public_error().code(),
+            codes::SECURITY_UNAVAILABLE.raw_code()
+        );
+        assert_eq!(prepare_calls.get(), 2);
+        assert_eq!(repair_calls.get(), 1);
+    }
+
+    #[test]
+    fn delegated_token_lazy_repair_preserves_unrelated_security_unavailable() {
+        let err = block_on(prepare_delegated_token_with_lazy_repair_using(
+            token_prepare_input(),
+            [14; 32],
+            p(8),
+            |_, _, _| -> Result<u8, DelegatedTokenIssuerPrepareError> {
+                Err(InternalError::public(codes::SECURITY_UNAVAILABLE).into())
+            },
+            || async { panic!("unrelated unavailable failures must not fetch a proof") },
+            || panic!("no repair means no replay-owner retry"),
+        ))
+        .unwrap_err();
+        assert_eq!(
+            err.public_error().code(),
+            codes::SECURITY_UNAVAILABLE.raw_code()
+        );
+    }
+
+    #[test]
+    fn delegated_token_missing_proof_repair_revalidates_replay_owner_before_retry() {
         let prepare_calls = Cell::new(0);
         let repair_calls = Cell::new(0);
         let validation_calls = Cell::new(0);
@@ -437,9 +520,9 @@ mod tests {
             token_prepare_input(),
             [11; 32],
             p(8),
-            |_, _, _| -> Result<u8, InternalError> {
+            |_, _, _| -> Result<u8, DelegatedTokenIssuerPrepareError> {
                 prepare_calls.set(prepare_calls.get() + 1);
-                Err(InternalError::auth_material_stale())
+                Err(DelegatedTokenIssuerPrepareError::MissingProof)
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);
@@ -500,9 +583,9 @@ mod tests {
             input,
             [8; 32],
             p(8),
-            |_, _, _| -> Result<u8, InternalError> {
+            |_, _, _| -> Result<u8, DelegatedTokenIssuerPrepareError> {
                 prepare_calls.set(prepare_calls.get() + 1);
-                Err(InternalError::auth_proof_expired())
+                Err(InternalError::auth_proof_expired().into())
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);
@@ -530,11 +613,9 @@ mod tests {
             input,
             [9; 32],
             p(8),
-            |_, _, _| -> Result<u8, InternalError> {
+            |_, _, _| -> Result<u8, DelegatedTokenIssuerPrepareError> {
                 prepare_calls.set(prepare_calls.get() + 1);
-                Err(InternalError::public(
-                    crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-                ))
+                Err(InternalError::public(crate::diagnostics::codes::AUTHORITY_UNAUTHORIZED).into())
             },
             || async {
                 repair_calls.set(repair_calls.get() + 1);

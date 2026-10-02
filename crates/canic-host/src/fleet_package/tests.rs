@@ -2,6 +2,19 @@ use super::*;
 use crate::test_support::temp_dir;
 
 #[test]
+fn generated_profiles_match_the_maintained_workspace_profiles() {
+    let workspace = Path::new(env!("CARGO_MANIFEST_DIR")).join("../..");
+    let manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(workspace.join("Cargo.toml")).unwrap()).unwrap();
+    let mut generated = String::new();
+    render_infrastructure_profiles(&mut generated);
+    let generated: toml::Value = toml::from_str(&generated).unwrap();
+    for profile in ["fast", "release"] {
+        assert_eq!(generated["profile"][profile], manifest["profile"][profile]);
+    }
+}
+
+#[test]
 fn bootstrap_wasm_store_rejects_competing_canic_packages() {
     let mut metadata = cargo_metadata_fixture(vec![package("canic", "canic@1", "0.98.2")]);
     metadata
