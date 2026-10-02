@@ -24,6 +24,7 @@ use super::{
 
 const MANAGEMENT_CANISTER_STATUS: &str = "canister_status";
 const MANAGEMENT_INGRESS_EXPIRY: Duration = Duration::from_mins(4);
+pub const SNAPSHOT_RESPONSE_BYTES: usize = 2 * 1024 * 1024;
 
 #[derive(CandidType, Deserialize)]
 struct ManagementSnapshot {
@@ -40,6 +41,12 @@ struct IcpNetworkStatus {
 /// management-canister call.
 #[derive(Debug, ThisError)]
 pub enum IcpManagementCallError {
+    #[error("management snapshot read for {canister} exceeded its deadline")]
+    SnapshotDeadline { canister: Principal },
+
+    #[error("management snapshot response has {actual} bytes; maximum is {maximum}")]
+    SnapshotResponseTooLarge { actual: usize, maximum: usize },
+
     #[error("failed to encode the management-canister argument: {0}")]
     CandidEncode(#[source] candid::Error),
 
@@ -82,16 +89,21 @@ impl IcpCli {
         &self,
         canister_id: Principal,
     ) -> Result<Vec<Vec<u8>>, IcpManagementCallError> {
-        #[derive(CandidType)]
-        struct Request {
-            canister_id: Principal,
-        }
-        let (snapshots,): (Vec<ManagementSnapshot>,) = self.snapshot_update(
-            canister_id,
-            "list_canister_snapshots",
-            &Request { canister_id },
-        )?;
-        Ok(snapshots.into_iter().map(|snapshot| snapshot.id).collect())
+        self.measure_request(
+            crate::icp::IcpRequestKind::Update,
+            Some(&canister_id.to_text()),
+            Some("list_canister_snapshots"),
+            || {
+                let agent =
+                    self.authenticated_agent_with_response_limit(SNAPSHOT_RESPONSE_BYTES)?;
+                let runtime = tokio::runtime::Builder::new_current_thread()
+                    .enable_all()
+                    .build()
+                    .map_err(IcpManagementCallError::AsyncRuntime)?;
+                self.record_remote_call();
+                runtime.block_on(read_snapshot_ids(&agent, canister_id))
+            },
+        )
     }
 
     /// Delete exactly one snapshot after the caller has retained its reviewed intent.
@@ -299,6 +311,49 @@ impl IcpCli {
     }
 }
 
+/// One bounded snapshot inventory call on an already authenticated, network-bound agent.
+pub async fn read_snapshot_ids(
+    agent: &Agent,
+    canister: Principal,
+) -> Result<Vec<Vec<u8>>, IcpManagementCallError> {
+    #[derive(CandidType)]
+    struct Request {
+        canister_id: Principal,
+    }
+    let argument = candid::encode_one(Request {
+        canister_id: canister,
+    })
+    .map_err(IcpManagementCallError::CandidEncode)?;
+    let bytes = tokio::time::timeout(
+        Duration::from_secs(45),
+        agent
+            .update(&Principal::management_canister(), "list_canister_snapshots")
+            .with_effective_canister_id(canister)
+            .with_arg(argument)
+            .call_and_wait(),
+    )
+    .await
+    .map_err(|_| IcpManagementCallError::SnapshotDeadline { canister })?
+    .map_err(IcpManagementCallError::AgentCall)?;
+    decode_snapshot_ids(&bytes)
+}
+
+fn decode_snapshot_ids(bytes: &[u8]) -> Result<Vec<Vec<u8>>, IcpManagementCallError> {
+    if bytes.len() > SNAPSHOT_RESPONSE_BYTES {
+        return Err(IcpManagementCallError::SnapshotResponseTooLarge {
+            actual: bytes.len(),
+            maximum: SNAPSHOT_RESPONSE_BYTES,
+        });
+    }
+    let mut config = candid::de::DecoderConfig::new();
+    config
+        .set_decoding_quota(SNAPSHOT_RESPONSE_BYTES * 64)
+        .set_skipping_quota(SNAPSHOT_RESPONSE_BYTES * 64);
+    let snapshots: Vec<ManagementSnapshot> = candid::utils::decode_one_with_config(bytes, &config)
+        .map_err(IcpManagementCallError::CandidResponse)?;
+    Ok(snapshots.into_iter().map(|snapshot| snapshot.id).collect())
+}
+
 fn parse_exported_identity(pem: &[u8]) -> Result<Arc<dyn Identity>, IcpManagementCallError> {
     if let Ok(identity) = BasicIdentity::from_pem(pem) {
         return Ok(Arc::new(identity));
@@ -365,6 +420,20 @@ mod tests {
     use super::*;
     use crate::icp::LocalReplicaTarget;
     use std::cell::RefCell;
+
+    #[test]
+    fn snapshot_inventory_decoder_preserves_ids_and_refuses_oversized_or_malformed_replies() {
+        let bytes = candid::encode_one(vec![ManagementSnapshot { id: vec![1, 2, 3] }]).unwrap();
+        assert_eq!(decode_snapshot_ids(&bytes).unwrap(), [vec![1, 2, 3]]);
+        assert!(matches!(
+            decode_snapshot_ids(&vec![0; SNAPSHOT_RESPONSE_BYTES + 1]),
+            Err(IcpManagementCallError::SnapshotResponseTooLarge { .. })
+        ));
+        assert!(matches!(
+            decode_snapshot_ids(b"DIDL"),
+            Err(IcpManagementCallError::CandidResponse(_))
+        ));
+    }
 
     struct RecordingAgentBoundary {
         request: RefCell<Option<ManagementUpdateRequest>>,

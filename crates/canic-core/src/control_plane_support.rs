@@ -224,6 +224,10 @@ pub mod workflow {
     }
 
     pub mod runtime {
+        pub mod authority_restore {
+            pub use crate::workflow::runtime::authority_restore::AuthorityRestoreWorkflow;
+        }
+
         pub mod fleet_activation {
             pub use crate::workflow::runtime::fleet_activation::FleetActivationWorkflow;
         }

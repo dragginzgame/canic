@@ -281,6 +281,7 @@ jobs:
         run: |
           source tool-versions.env
           cargo install cargo-get --version "$CANIC_CARGO_GET_VERSION" --locked
+          cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Install ordinary test Wasm prerequisites
         shell: bash
@@ -291,6 +292,7 @@ jobs:
         shell: bash
         run: |
           cargo get --version
+          cargo set-version --version
           rg --version
           rg --pcre2-version
           rustup target list --toolchain "$CANIC_INTERNAL_TOOLCHAIN" --installed | rg -x wasm32-unknown-unknown

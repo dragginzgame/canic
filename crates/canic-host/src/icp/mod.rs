@@ -28,6 +28,7 @@ pub use diagnostic::{IcpDiagnostic, classify_icp_diagnostic};
 pub use error::IcpCommandError;
 pub use identity::IcpIdentityAccountFormat;
 pub use management::IcpManagementCallError;
+pub(crate) use management::{SNAPSHOT_RESPONSE_BYTES, read_snapshot_ids};
 pub use model::{
     IcpCanisterQueryStats, IcpCanisterStatusReport, IcpCanisterStatusSettings,
     IcpCanisterVisibility, IcpCli, IcpRawOutput, IcpSnapshot, LocalReplicaTarget,

@@ -39,6 +39,7 @@ main() {
     local url="https://github.com/WebAssembly/binaryen/releases/download/version_${CANIC_BINARYEN_VERSION}/${archive}"
     local candidate
     local installed
+    local bundle
     local version_output
 
     TMP_DIR="$(mktemp -d)"
@@ -47,12 +48,22 @@ main() {
     curl --proto '=https' --proto-redir '=https' --tlsv1.2 -fsSL \
         -o "$TMP_DIR/$archive" "$url"
     bash "$SCRIPT_DIR/verify-file-checksum.sh" sha256 "$checksum" "$TMP_DIR/$archive"
-    tar -xzf "$TMP_DIR/$archive" -C "$TMP_DIR" "$package/bin/wasm-opt"
+    # macOS wasm-opt loads @loader_path/../lib/libbinaryen.dylib.
+    # Keep the checksum-verified archive's runtime layout for both qualification
+    # and installation; extracting the executable alone aborts in dyld.
+    tar -xzf "$TMP_DIR/$archive" -C "$TMP_DIR"
 
     candidate="$TMP_DIR/$package/bin/wasm-opt"
     chmod +x "$candidate"
     bash "$SCRIPT_DIR/verify-file-checksum.sh" sha256 "$executable_checksum" "$candidate"
-    version_output="$("$candidate" --version 2>&1)"
+    if version_output="$("$candidate" --version 2>&1)"; then
+        :
+    else
+        local status=$?
+        echo "pinned Binaryen could not start (exit $status):" >&2
+        echo "$version_output" >&2
+        exit "$status"
+    fi
     if [ "$version_output" != "wasm-opt version $CANIC_BINARYEN_VERSION (version_$CANIC_BINARYEN_VERSION)" ]; then
         echo "installed Binaryen does not report the pinned version" >&2
         echo "expected: wasm-opt version $CANIC_BINARYEN_VERSION (version_$CANIC_BINARYEN_VERSION)" >&2
@@ -61,8 +72,19 @@ main() {
     fi
 
     mkdir -p "$INSTALL_DIR"
+    INSTALL_DIR="$(cd "$INSTALL_DIR" && pwd)"
     installed="$INSTALL_DIR/wasm-opt"
-    mv "$candidate" "$installed"
+    case "$archive_platform" in
+        *-macos)
+            bundle="$INSTALL_DIR/.canic-binaryen-$CANIC_BINARYEN_VERSION-$archive_platform"
+            mkdir -p "$bundle/bin" "$bundle/lib"
+            cp "$TMP_DIR/$package/lib/libbinaryen.dylib" "$bundle/lib/"
+            cp "$candidate" "$bundle/bin/wasm-opt"
+            ln -s "$bundle/bin/wasm-opt" "$TMP_DIR/wasm-opt-link"
+            mv -f "$TMP_DIR/wasm-opt-link" "$installed"
+            ;;
+        *) mv "$candidate" "$installed" ;;
+    esac
     if [ -n "${GITHUB_PATH:-}" ]; then
         printf '%s\n' "$INSTALL_DIR" >>"$GITHUB_PATH"
     fi

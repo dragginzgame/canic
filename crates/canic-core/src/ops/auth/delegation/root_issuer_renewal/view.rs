@@ -10,7 +10,7 @@ use crate::{
     },
     model::auth::{RootIssuerRenewalState, RootIssuerRenewalTemplate},
     ops::{
-        auth::delegation::root_issuer_policy::{
+        auth::delegation::issuer_configuration::{
             delegated_role_grant_views, delegation_audience_view,
         },
         storage::auth::{
@@ -20,7 +20,7 @@ use crate::{
     },
 };
 
-pub(super) fn root_issuer_renewal_template_view(
+pub(in crate::ops::auth::delegation) fn root_issuer_renewal_template_view(
     template: &RootIssuerRenewalTemplate,
 ) -> RootIssuerRenewalTemplateView {
     RootIssuerRenewalTemplateView {

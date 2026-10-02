@@ -25,6 +25,9 @@ use std::{collections::BTreeSet, time::Duration};
 const MAXIMUM_ASSETS: usize = 16_384;
 const PAGE_SIZE: u16 = 256;
 
+/// Shared bound for Registry and paginated Root query responses.
+pub(in crate::fleet_ensure::ops) const RESPONSE_BYTES: usize = 2 * 1024 * 1024;
+
 #[derive(CandidType)]
 enum CoordinatorRequest {
     Registry,
@@ -62,8 +65,7 @@ pub(in crate::fleet_ensure::ops) async fn registry(
         argument,
     )
     .await?;
-    let response: Result<CoordinatorResponse, Error> = candid::decode_one(&bytes)
-        .map_err(|_| failed(coordinator, CapacityImportInventoryStage::Decode))?;
+    let response: Result<CoordinatorResponse, Error> = decode(coordinator, &bytes)?;
     let CoordinatorResponse::Registry(registry) =
         response.map_err(CapacityImportJournalError::CoordinatorRejected)?;
     Ok(*registry)
@@ -99,45 +101,8 @@ pub(in crate::fleet_ensure::ops::capacity_import) async fn observe(
         } else {
             PoolScope::OtherRoot
         };
-        let mut inventory = Pages::new(store.principal, scope);
-        loop {
-            let argument = candid::encode_one(RootRequest::Pool(CanisterPoolStatusRequest {
-                start_after: inventory.cursor,
-                limit: PAGE_SIZE,
-            }))
-            .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
-            let bytes = query(
-                agent,
-                root.fleet_subnet_root,
-                protocol::CANIC_ROOT_STATUS,
-                argument,
-            )
-            .await?;
-            let response: Result<RootResponse, Error> =
-                candid::decode_one(&bytes).map_err(|_| {
-                    failed(root.fleet_subnet_root, CapacityImportInventoryStage::Decode)
-                })?;
-            let RootResponse::Pool(page) =
-                response.map_err(CapacityImportJournalError::RootRejected)?;
-            if page.config != root.limits.canister_pool {
-                return Err(failed(
-                    root.fleet_subnet_root,
-                    CapacityImportInventoryStage::Policy,
-                ));
-            }
-            if inventory
-                .push(*page)
-                .map_err(|_| failed(root.fleet_subnet_root, CapacityImportInventoryStage::Page))?
-            {
-                break;
-            }
-        }
-        let summary = inventory.finish().map_err(|_| {
-            failed(
-                root.fleet_subnet_root,
-                CapacityImportInventoryStage::Summary,
-            )
-        })?;
+        let inventory = root_inventory(agent, root, store.principal, scope).await?;
+        let summary = &inventory.summary;
         for id in &inventory.seen {
             if !assets.insert(*id)
                 || (*id != store.principal && assigned.contains(id))
@@ -164,6 +129,51 @@ pub(in crate::fleet_ensure::ops::capacity_import) async fn observe(
     })
 }
 
+/// Complete query inventory; this is not a fence or evidence that paid work has settled.
+pub(in crate::fleet_ensure::ops) struct RootInventory {
+    pub seen: BTreeSet<Principal>,
+    pub summary: CanisterPoolResponse,
+}
+
+/// Enumerate a Root once, bounding each reply and requiring exact page continuity.
+pub(in crate::fleet_ensure::ops) async fn root_inventory(
+    agent: &Agent,
+    root: &canic_core::dto::fleet_registry::FleetSubnetRootEntry,
+    store: Principal,
+    scope: PoolScope,
+) -> Result<RootInventory, CapacityImportJournalError> {
+    let canister = root.fleet_subnet_root;
+    let mut inventory = Pages::new(store, scope);
+    loop {
+        let argument = candid::encode_one(RootRequest::Pool(CanisterPoolStatusRequest {
+            start_after: inventory.cursor,
+            limit: PAGE_SIZE,
+        }))
+        .map_err(|_| CapacityImportJournalError::InventoryInvalid)?;
+        let bytes = query(agent, canister, protocol::CANIC_ROOT_STATUS, argument).await?;
+        let response: Result<RootResponse, Error> = decode(canister, &bytes)?;
+        let RootResponse::Pool(page) =
+            response.map_err(CapacityImportJournalError::RootRejected)?;
+        if page.config != root.limits.canister_pool {
+            return Err(failed(canister, CapacityImportInventoryStage::Policy));
+        }
+        if inventory
+            .push(*page)
+            .map_err(|_| failed(canister, CapacityImportInventoryStage::Page))?
+        {
+            break;
+        }
+    }
+    let summary = inventory
+        .finish()
+        .map_err(|_| failed(canister, CapacityImportInventoryStage::Summary))?
+        .clone();
+    Ok(RootInventory {
+        seen: inventory.seen,
+        summary,
+    })
+}
+
 struct Pages {
     store: Principal,
     scope: PoolScope,
@@ -177,9 +187,26 @@ struct Pages {
 }
 
 #[derive(Clone, Copy, Eq, PartialEq)]
-enum PoolScope {
+pub(in crate::fleet_ensure::ops) enum PoolScope {
     Destination,
     OtherRoot,
+}
+
+fn decode<'a, T: CandidType + Deserialize<'a>>(
+    canister: Principal,
+    bytes: &'a [u8],
+) -> Result<T, CapacityImportJournalError> {
+    let invalid = || failed(canister, CapacityImportInventoryStage::Decode);
+    if bytes.len() > RESPONSE_BYTES {
+        return Err(invalid());
+    }
+    let mut config = candid::de::DecoderConfig::new();
+    config
+        .set_decoding_quota(RESPONSE_BYTES * 64)
+        .set_skipping_quota(RESPONSE_BYTES * 64)
+        .set_max_type_len(4096)
+        .set_max_header_len(64 * 1024);
+    candid::utils::decode_one_with_config(bytes, &config).map_err(|_| invalid())
 }
 
 impl Pages {

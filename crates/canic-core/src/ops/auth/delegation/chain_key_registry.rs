@@ -5,7 +5,7 @@
 //! Boundary: deterministic root registry view consumed by chain-key batch preparation.
 
 use super::{
-    root_issuer_policy::{delegated_role_grant_views, delegation_audience_view},
+    issuer_configuration::{delegated_role_grant_views, delegation_audience_view},
     root_issuer_renewal::renewal_template_fingerprint,
 };
 use crate::{

@@ -1146,14 +1146,20 @@ fn chain_key_lazy_repair_rejects_unknown_or_disabled_issuer_before_paid_work() {
     RootDelegationStateOps::upsert_root_issuer_renewal_template(disabled);
     let epoch = RootDelegationStateOps::delegated_auth_proof_epoch();
     let mut signer = DynamicMockSigner { sign_calls: 0 };
-    for issuer in [p(56), disabled_issuer, p(56), disabled_issuer] {
+    for (issuer, expected) in [
+        (p(56), crate::diagnostics::codes::CONFIGURATION_INCOMPLETE),
+        (
+            disabled_issuer,
+            crate::diagnostics::codes::SECURITY_INACTIVE,
+        ),
+    ] {
         let error = block_on(prepare_sign_and_find_test_issuer_proof(
             input(&signing_policy),
             issuer,
             &mut signer,
         ))
         .expect_err("issuer must be admitted before preparing any signing work");
-        assert_eq!(error.code(), InternalError::auth_proof_pending().code());
+        assert_eq!(error.public_error().code(), expected.raw_code());
     }
     assert_eq!(signer.sign_calls, 0);
     assert_eq!(RootDelegationStateOps::delegated_auth_proof_epoch(), epoch);

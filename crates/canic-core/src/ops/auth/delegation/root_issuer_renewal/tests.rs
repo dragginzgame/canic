@@ -33,20 +33,21 @@ fn policy(issuer_pid: Principal) -> RootIssuerPolicy {
         allowed_audiences: vec![crate::test::support::fleet_key(1)],
         allowed_grants: vec![RootDelegatedRoleGrantPolicy {
             target: CanisterRole::owned("project_instance".to_string()),
-            scopes: vec!["canic.issue".to_string()],
+            scopes: vec!["verify".to_string()],
         }],
         max_cert_ttl_ns: 120_000_000_000,
         refresh_after_ratio_bps: 8_000,
     }
 }
 
-fn upsert_request(issuer_pid: Principal) -> RootIssuerRenewalTemplateUpsertRequest {
-    RootIssuerRenewalTemplateUpsertRequest {
+fn upsert_request(issuer_pid: Principal) -> crate::dto::auth::RootIssuerConfigureRequest {
+    crate::dto::auth::RootIssuerConfigureRequest {
         issuer_pid,
         enabled: true,
         aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-        grants: vec![grant("canic.issue")],
+        grants: vec![grant("verify")],
         cert_ttl_ns: 60_000_000_000,
+        refresh_after_ratio_bps: 8_000,
     }
 }
 
@@ -95,7 +96,7 @@ fn renewal_batch(
                 expires_at_ns: 200,
                 max_token_ttl_ns: 60,
                 aud: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-                grants: vec![grant("canic.issue")],
+                grants: vec![grant("verify")],
             },
             chain_key_delegation_cert: ChainKeyDelegationCertV1 {
                 root_canister_id: root_pid,
@@ -106,7 +107,7 @@ fn renewal_batch(
                 issuer_proof_binding,
                 max_token_ttl_ns: 60,
                 audience: DelegationAudience::Fleet(crate::test::support::fleet_key(1)),
-                grants: vec![grant("canic.issue")],
+                grants: vec![grant("verify")],
                 not_before_ns: 10,
                 expires_at_ns: 200,
                 registry_epoch: 1,
@@ -129,15 +130,15 @@ fn renewal_batch(
 #[test]
 fn commit_root_issuer_renewal_template_persists_projected_template() {
     let issuer_pid = p(81);
-    let template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
+    let template = template_from_request(upsert_request(issuer_pid));
 
     let response = commit_root_issuer_renewal_template(template, 10);
 
-    assert_eq!(response.template.issuer_pid, issuer_pid);
-    assert_eq!(response.template.grants, vec![grant("canic.issue")]);
+    assert_eq!(response.issuer_pid, issuer_pid);
+    assert_eq!(response.grants, vec![grant("verify")]);
     assert_eq!(
         root_issuer_renewal_status(RootIssuerRenewalStatusRequest { issuer_pid }).template,
-        Some(response.template)
+        Some(response)
     );
 }
 
@@ -148,13 +149,13 @@ fn disabled_root_issuer_renewal_template_can_be_staged_without_policy() {
     request.enabled = false;
     request.grants.clear();
 
-    let template = root_issuer_renewal_template_from_request(request);
+    let template = template_from_request(request);
     let response = commit_root_issuer_renewal_template(template, 10);
 
-    assert!(!response.template.enabled);
+    assert!(!response.enabled);
     assert_eq!(
         root_issuer_renewal_status(RootIssuerRenewalStatusRequest { issuer_pid }).template,
-        Some(response.template)
+        Some(response)
     );
 }
 
@@ -162,7 +163,7 @@ fn disabled_root_issuer_renewal_template_can_be_staged_without_policy() {
 fn disabling_root_issuer_renewal_template_records_disabled_state() {
     let issuer_pid = p(84);
     RootDelegationStateOps::upsert_root_issuer_policy(policy(issuer_pid));
-    let active_template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
+    let active_template = template_from_request(upsert_request(issuer_pid));
     RootDelegationStateOps::upsert_root_issuer_renewal_template(active_template.clone());
     let active_fingerprint = renewal_template_fingerprint(&active_template);
     RootDelegationStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
@@ -177,10 +178,10 @@ fn disabling_root_issuer_renewal_template_records_disabled_state() {
     let mut request = upsert_request(issuer_pid);
     request.enabled = false;
 
-    let template = root_issuer_renewal_template_from_request(request);
+    let template = template_from_request(request);
     let response = commit_root_issuer_renewal_template(template, 90);
 
-    assert!(!response.template.enabled);
+    assert!(!response.enabled);
     let state = RootDelegationStateOps::root_issuer_renewal_state(issuer_pid)
         .expect("issuer renewal state should remain observable");
     assert_eq!(state.next_attempt_after_ns, 90);
@@ -258,7 +259,7 @@ fn root_issuer_renewal_status_projects_latest_chain_key_batch() {
 
 #[test]
 fn renewal_template_deadline_uses_durable_refresh_and_retry_state() {
-    let template = root_issuer_renewal_template_from_request(upsert_request(p(90)));
+    let template = template_from_request(upsert_request(p(90)));
     let fingerprint = renewal_template_fingerprint(&template);
     let state = RootIssuerRenewalState {
         issuer_pid: template.issuer_pid,
@@ -287,7 +288,7 @@ fn renewal_template_deadline_uses_durable_refresh_and_retry_state() {
 #[test]
 fn active_proof_authority_requires_exact_installed_registry_identity() {
     let issuer_pid = p(91);
-    let template = root_issuer_renewal_template_from_request(upsert_request(issuer_pid));
+    let template = template_from_request(upsert_request(issuer_pid));
     let fingerprint = renewal_template_fingerprint(&template);
     RootDelegationStateOps::upsert_root_issuer_renewal_template(template);
     RootDelegationStateOps::upsert_root_issuer_renewal_state(RootIssuerRenewalState {
@@ -312,4 +313,12 @@ fn active_proof_authority_requires_exact_installed_registry_identity() {
     assert!(!active_root_issuer_proof_matches_registry(
         issuer_pid, [12; 32], 100, 1, [99; 32]
     ));
+}
+
+fn template_from_request(
+    request: crate::dto::auth::RootIssuerConfigureRequest,
+) -> RootIssuerRenewalTemplate {
+    crate::ops::auth::AuthOps::root_issuer_configuration_from_request(request)
+        .unwrap()
+        .template
 }

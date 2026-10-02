@@ -1428,6 +1428,9 @@ pub struct FleetEnsureTopologyRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct FleetEnsureJournalRecord {
+    /// Whole-Fleet release shares this journal and the ordinary exclusive operation lock.
+    #[serde(deserialize_with = "serialization::required_option")]
+    pub release: Option<release::FleetReleaseExecutionRecord>,
     /// An explicit extension of this operation's registration authority; null until requested.
     #[serde(deserialize_with = "serialization::required_option")]
     pub bootstrap_registration_recovery: Option<

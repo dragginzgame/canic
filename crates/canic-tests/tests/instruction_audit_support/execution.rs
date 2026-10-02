@@ -3,15 +3,13 @@ use super::*;
 #[derive(CandidType)]
 enum RootCommand {
     RespondCapability(RootCapabilityEnvelopeV1),
-    UpsertIssuerPolicy(RootIssuerPolicyUpsertRequest),
-    UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateUpsertRequest),
+    ConfigureIssuer(RootIssuerConfigureRequest),
 }
 
 #[derive(CandidType, Deserialize)]
 enum RootCommandResponse {
     RespondCapability(RootCapabilityResponseV1),
-    UpsertIssuerPolicy(RootIssuerPolicyResponse),
-    UpsertIssuerRenewalTemplate(RootIssuerRenewalTemplateResponse),
+    ConfigureIssuer(RootIssuerConfigureResponse),
 }
 
 #[derive(CandidType)]
@@ -107,13 +105,7 @@ fn prepare_registry_auth_scenario(
     scenario: &AuditScenario,
 ) -> PreparedScenario {
     let subject = Principal::from_slice(&[scenario.key.as_bytes()[0]; 29]);
-    upsert_delegation_issuer(
-        setup.pic(),
-        setup.root,
-        setup.issuer.canister_id,
-        &setup.verifier.role,
-    );
-    upsert_delegation_renewal_template(
+    configure_delegation_issuer(
         setup.pic(),
         setup.root,
         setup.issuer.canister_id,
@@ -421,7 +413,7 @@ fn execute_verifier_auth_scenario(
         .expect("issuer_verify_token application failed");
 }
 
-fn upsert_delegation_issuer(
+fn configure_delegation_issuer(
     pic: &PocketIc,
     root: Principal,
     issuer_pid: Principal,
@@ -431,59 +423,25 @@ fn upsert_delegation_issuer(
         .update_candid(
             root,
             protocol::CANIC_ROOT_COMMAND,
-            (RootCommand::UpsertIssuerPolicy(
-                RootIssuerPolicyUpsertRequest {
-                    issuer_pid,
-                    enabled: true,
-                    allowed_audiences: vec![DelegationAudience::Fleet(test_fleet())],
-                    allowed_grants: vec![role_grant(
-                        verifier_role.clone(),
-                        vec![cap::VERIFY.to_string()],
-                    )],
-                    max_cert_ttl_ns: 60_000_000_000,
-                    refresh_after_ratio_bps: 8_000,
-                },
-            ),),
+            (RootCommand::ConfigureIssuer(RootIssuerConfigureRequest {
+                issuer_pid,
+                enabled: true,
+                aud: DelegationAudience::Fleet(test_fleet()),
+                grants: vec![role_grant(
+                    verifier_role.clone(),
+                    vec![cap::VERIFY.to_string()],
+                )],
+                cert_ttl_ns: 60_000_000_000,
+                refresh_after_ratio_bps: 8_000,
+            }),),
         )
         .expect("root issuer registration transport failed");
-    let RootCommandResponse::UpsertIssuerPolicy(registered) =
+    let RootCommandResponse::ConfigureIssuer(registered) =
         registered.expect("root issuer registration application failed")
     else {
         panic!("unexpected Root command response");
     };
     assert_eq!(registered.issuer.issuer_pid, issuer_pid);
-}
-
-fn upsert_delegation_renewal_template(
-    pic: &PocketIc,
-    root: Principal,
-    issuer_pid: Principal,
-    verifier_role: &canic::ids::CanisterRole,
-) {
-    let response: Result<RootCommandResponse, Error> = pic
-        .update_candid(
-            root,
-            protocol::CANIC_ROOT_COMMAND,
-            (RootCommand::UpsertIssuerRenewalTemplate(
-                RootIssuerRenewalTemplateUpsertRequest {
-                    issuer_pid,
-                    enabled: true,
-                    aud: DelegationAudience::Fleet(test_fleet()),
-                    grants: vec![role_grant(
-                        verifier_role.clone(),
-                        vec![cap::VERIFY.to_string()],
-                    )],
-                    cert_ttl_ns: 60_000_000_000,
-                },
-            ),),
-        )
-        .expect("root issuer renewal template transport failed");
-    let RootCommandResponse::UpsertIssuerRenewalTemplate(response) =
-        response.expect("root issuer renewal template application failed")
-    else {
-        panic!("unexpected Root command response");
-    };
-    assert_eq!(response.template.issuer_pid, issuer_pid);
 }
 
 // Execute the fresh root cycles request scenario through the root dispatcher.

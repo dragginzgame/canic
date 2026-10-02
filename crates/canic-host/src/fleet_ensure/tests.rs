@@ -1661,6 +1661,7 @@ fn pool_maintenance_attempt_bound_survives_lost_response_and_restart() {
     crate::fleet_ensure::ops::write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            release: None,
             bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
@@ -2657,6 +2658,7 @@ fn retryable_provisioning_failure_replays_only_the_exact_retained_issued_command
     crate::fleet_ensure::ops::write_journal(
         &paths,
         &FleetEnsureJournalRecord {
+            release: None,
             bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
@@ -2988,6 +2990,7 @@ fn active_registry_is_retired_only_after_every_infrastructure_reinstall_is_appli
     plan.canisters = planned;
     plan.protocol_actions.clear();
     let mut journal = FleetEnsureJournalRecord {
+        release: None,
         bootstrap_registration_recovery: None,
         funding_observations: BTreeMap::new(),
         funding_reviews: Vec::new(),

@@ -210,6 +210,54 @@ fn desired() -> DesiredFleet {
 }
 
 #[test]
+fn release_read_reservations_allow_reset_but_unresolved_effects_do_not() {
+    use crate::fleet_ensure::{
+        ops::release::{
+            prepare_review,
+            reservation::{ReleaseObservationJournal, tests::seed},
+        },
+        policy::release::tests::fixture,
+    };
+
+    let paths = retained();
+    let (review, observed) = fixture();
+    let review = prepare_review(review, &observed).unwrap();
+    seed(&paths, &review);
+    let mut owner = ReleaseObservationJournal::attach(&paths, &review, &observed).unwrap();
+    // Losing a read response retains its allowance without an uncertain transfer.
+    let _ = owner
+        .reserve(review.sources[0].binding.canister_id)
+        .unwrap();
+    drop(owner);
+    let bytes = fs::read(&paths.journal).unwrap();
+    let mut journal = operation_selection::read(&paths.journal).unwrap().unwrap();
+    assert!(
+        journal["release"]["reserved_paid_calls"]
+            .as_object()
+            .unwrap()
+            .values()
+            .any(|calls| calls.as_u64() == Some(4))
+    );
+    require_reconciled_effects(&paths).unwrap();
+    assert_eq!(fs::read(&paths.journal).unwrap(), bytes);
+
+    for state in ["intent", "issued"] {
+        journal["effects"] = json!([{"state": state}]);
+        write_current(&paths.journal, &journal).unwrap();
+        let bytes = fs::read(&paths.journal).unwrap();
+        assert!(matches!(
+            require_reconciled_effects(&paths),
+            Err(EnsureStateError::ResetUncertainEffect { .. })
+        ));
+        assert_eq!(fs::read(&paths.journal).unwrap(), bytes);
+    }
+    journal["effects"] = json!([{"state": "applied"}]);
+    write_current(&paths.journal, &journal).unwrap();
+    require_reconciled_effects(&paths).unwrap();
+    fs::remove_dir_all(paths.workspace).unwrap();
+}
+
+#[test]
 fn uncertain_paid_effects_remain_reconcilable_and_unchanged() {
     for journal in [
         json!({"effects": [{"state": "issued"}]}),

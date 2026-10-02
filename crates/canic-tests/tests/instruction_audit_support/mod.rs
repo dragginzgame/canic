@@ -4,9 +4,8 @@ use canic::{
     dto::{
         auth::{
             AuthRequestMetadata, DelegatedToken, DelegatedTokenPrepareRequest,
-            DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerPolicyResponse,
-            RootIssuerPolicyUpsertRequest, RootIssuerRenewalTemplateResponse,
-            RootIssuerRenewalTemplateUpsertRequest,
+            DelegatedTokenPrepareResponse, DelegationAudience, RootIssuerConfigureRequest,
+            RootIssuerConfigureResponse,
         },
         capability::{
             CAPABILITY_VERSION_V1, CapabilityProof, CapabilityRequestMetadata, CapabilityService,

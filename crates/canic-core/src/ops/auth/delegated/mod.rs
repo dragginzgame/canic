@@ -5,7 +5,7 @@
 //! Boundary: private auth-ops support for delegated-token and delegation-proof flows.
 
 pub(super) mod active_proof;
-mod audience;
+pub(super) mod audience;
 pub(super) mod cache;
 pub(super) mod canonical;
 pub(super) mod cert_rules;

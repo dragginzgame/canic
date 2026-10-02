@@ -2,7 +2,10 @@
 //!
 //! Sealing grants no effect authority. Physical observations separately consume caller-reserved reads.
 
+pub mod accounts;
+pub mod inventory;
 pub mod observation;
+pub mod reservation;
 
 use crate::fleet_ensure::{
     model::release::FleetReleaseReviewRecord,
@@ -17,6 +20,11 @@ pub fn prepare_review(
     observed: &FleetReleaseObservation,
 ) -> Result<FleetReleaseReviewRecord, FleetReleaseError> {
     validate_review(&review, observed)?;
+    for account in &mut review.accounts {
+        account.subaccount = account
+            .subaccount
+            .filter(|subaccount| *subaccount != [0; 32]);
+    }
     review.review_sha256 = [0; 32];
     review.review_sha256 = digest(&review)?;
     Ok(review)
@@ -49,7 +57,7 @@ pub fn verify_held_capacity(
     crate::fleet_ensure::policy::release::validate_held_capacity(review, observed)
 }
 
-fn verify_digest(review: &FleetReleaseReviewRecord) -> Result<(), FleetReleaseError> {
+pub(super) fn verify_digest(review: &FleetReleaseReviewRecord) -> Result<(), FleetReleaseError> {
     let mut unsigned = review.clone();
     unsigned.review_sha256 = [0; 32];
     if review.review_sha256 != digest(&unsigned)? {

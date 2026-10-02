@@ -19,16 +19,16 @@ pub struct RootDelegationProofBatchProof {
 }
 
 //
-// RootIssuerPolicyUpsertRequest
+// RootIssuerConfigureRequest
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootIssuerPolicyUpsertRequest {
+pub struct RootIssuerConfigureRequest {
     pub issuer_pid: Principal,
     pub enabled: bool,
-    pub allowed_audiences: Vec<DelegationAudience>,
-    pub allowed_grants: Vec<DelegatedRoleGrant>,
-    pub max_cert_ttl_ns: u64,
+    pub aud: DelegationAudience,
+    pub grants: Vec<DelegatedRoleGrant>,
+    pub cert_ttl_ns: u64,
     pub refresh_after_ratio_bps: u16,
 }
 
@@ -47,25 +47,13 @@ pub struct RootIssuerPolicyView {
 }
 
 //
-// RootIssuerPolicyResponse
+// RootIssuerConfigureResponse
 //
 
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootIssuerPolicyResponse {
+pub struct RootIssuerConfigureResponse {
     pub issuer: RootIssuerPolicyView,
-}
-
-//
-// RootIssuerRenewalTemplateUpsertRequest
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootIssuerRenewalTemplateUpsertRequest {
-    pub issuer_pid: Principal,
-    pub enabled: bool,
-    pub aud: DelegationAudience,
-    pub grants: Vec<DelegatedRoleGrant>,
-    pub cert_ttl_ns: u64,
+    pub template: RootIssuerRenewalTemplateView,
 }
 
 //
@@ -79,15 +67,6 @@ pub struct RootIssuerRenewalTemplateView {
     pub aud: DelegationAudience,
     pub grants: Vec<DelegatedRoleGrant>,
     pub cert_ttl_ns: u64,
-}
-
-//
-// RootIssuerRenewalTemplateResponse
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RootIssuerRenewalTemplateResponse {
-    pub template: RootIssuerRenewalTemplateView,
 }
 
 //

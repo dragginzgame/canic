@@ -25,10 +25,9 @@ use canic::{
         ChainKeyDelegationCertV1, ChainKeyKeyId, ChainKeyRootSignatureV1, DelegatedRoleGrant,
         DelegationAudience, DelegationCert, DelegationProof, IcChainKeyBatchSignatureProofV1,
         IssuerProofAlgorithm, IssuerProofBinding, RootDelegationProofBatchProof,
-        RootIssuerPolicyResponse, RootIssuerPolicyUpsertRequest, RootIssuerPolicyView,
+        RootIssuerConfigureRequest, RootIssuerConfigureResponse, RootIssuerPolicyView,
         RootIssuerRenewalBatchStatus, RootIssuerRenewalBatchView, RootIssuerRenewalStateView,
         RootIssuerRenewalStatusRequest, RootIssuerRenewalStatusResponse,
-        RootIssuerRenewalTemplateResponse, RootIssuerRenewalTemplateUpsertRequest,
         RootIssuerRenewalTemplateView, RootProof,
     },
     dto::blob_storage::{BlobStorageLocalCounters, CreateCertificateResult},
@@ -264,6 +263,34 @@ fn public_error_contract_is_the_compact_nat16_hard_cut() {
             "checked-in service DID lacks the compact Error shape in {relative_path}"
         );
     }
+}
+
+#[test]
+fn authority_restore_release_status_matches_canonical_candid() {
+    use canic::dto::authority_restore::{
+        AuthorityRestoreFencePhase, AuthorityRestoreFenceStatusResponse,
+    };
+
+    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
+    let (mut env, _) = CandidSource::Text(&did).load().unwrap();
+    let canonical = env
+        .find_type("AuthorityRestoreFenceStatusResponse")
+        .unwrap()
+        .clone();
+    let mut rust = TypeContainer::new();
+    let response = rust.add::<AuthorityRestoreFenceStatusResponse>();
+    let response = env.merge_type(rust.env, response);
+    candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &response).unwrap();
+    assert_candid_roundtrip(AuthorityRestoreFenceStatusResponse {
+        authority_canister: Principal::from_slice(&[1]),
+        phase: AuthorityRestoreFencePhase::ReleaseSealed {
+            review_sha256: [2; 32],
+            recipient: Principal::from_slice(&[3]),
+        },
+        operation_id: Some([4; 32]),
+        history_total_num_changes: None,
+        changed_at_ns: Some(5),
+    });
 }
 
 #[test]
@@ -1316,8 +1343,7 @@ fn root_delegation_commands_are_variant_owned() {
     for variant in [
         "GetOrCreateDelegationProof",
         "GetChainKeyPublicKey",
-        "UpsertIssuerPolicy",
-        "UpsertIssuerRenewalTemplate",
+        "ConfigureIssuer",
     ] {
         assert!(
             source.contains(variant),
@@ -1326,8 +1352,7 @@ fn root_delegation_commands_are_variant_owned() {
     }
     assert!(source.contains("IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest)"));
     assert!(source.contains("AuthApi::get_or_create_chain_key_delegation_proof_root"));
-    assert!(source.contains("AuthApi::upsert_root_issuer_policy_root"));
-    assert!(source.contains("AuthApi::upsert_root_issuer_renewal_template_root"));
+    assert!(source.contains("AuthApi::configure_issuer_root"));
     assert!(source.contains("AuthApi::root_issuer_renewal_status_root"));
     assert!(source.contains("ActiveComponentMemberPredicate"));
 }
@@ -1347,19 +1372,19 @@ fn assert_root_provisioning_facade_is_public() {
 }
 #[test]
 fn root_delegation_proof_dtos_roundtrip_through_candid() {
-    assert_root_issuer_policy_dtos_roundtrip();
+    assert_root_issuer_configure_dtos_roundtrip();
     assert_root_issuer_renewal_dtos_roundtrip();
     assert_root_delegation_proof_dtos_roundtrip();
     assert_active_delegation_proof_status_roundtrip();
 }
 
-fn assert_root_issuer_policy_dtos_roundtrip() {
+fn assert_root_issuer_configure_dtos_roundtrip() {
     let issuer_pid = Principal::from_slice(&[17; 29]);
     let grant = test_delegated_role_grant();
     let audience = DelegationAudience::Fleet(test_fleet());
     let issuer_policy_request =
-        root_issuer_policy_upsert_request(issuer_pid, audience.clone(), grant.clone());
-    let issuer_policy_response = root_issuer_policy_response(issuer_pid, audience, grant);
+        root_issuer_configure_request(issuer_pid, audience.clone(), grant.clone());
+    let issuer_policy_response = root_issuer_configure_response(issuer_pid, audience, grant);
 
     assert_candid_roundtrip(issuer_policy_request);
     assert_candid_roundtrip(issuer_policy_response);
@@ -1387,16 +1412,6 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
         grants: vec![test_delegated_role_grant()],
         cert_ttl_ns: 60,
     };
-    let renewal_template_request = RootIssuerRenewalTemplateUpsertRequest {
-        issuer_pid,
-        enabled: renewal_template.enabled,
-        aud: renewal_template.aud.clone(),
-        grants: renewal_template.grants.clone(),
-        cert_ttl_ns: renewal_template.cert_ttl_ns,
-    };
-    let renewal_template_response = RootIssuerRenewalTemplateResponse {
-        template: renewal_template.clone(),
-    };
     let renewal_status_request = RootIssuerRenewalStatusRequest { issuer_pid };
     let renewal_status_response = RootIssuerRenewalStatusResponse {
         template: Some(renewal_template),
@@ -1412,8 +1427,6 @@ fn assert_root_issuer_renewal_dtos_roundtrip() {
         latest_batch: Some(renewal_batch),
     };
 
-    assert_candid_roundtrip(renewal_template_request);
-    assert_candid_roundtrip(renewal_template_response);
     assert_candid_roundtrip(renewal_status_request);
     assert_candid_roundtrip(renewal_status_response);
 }
@@ -1459,34 +1472,41 @@ fn test_delegated_role_grant() -> DelegatedRoleGrant {
     }
 }
 
-fn root_issuer_policy_upsert_request(
+fn root_issuer_configure_request(
     issuer_pid: Principal,
     audience: DelegationAudience,
     grant: DelegatedRoleGrant,
-) -> RootIssuerPolicyUpsertRequest {
-    RootIssuerPolicyUpsertRequest {
+) -> RootIssuerConfigureRequest {
+    RootIssuerConfigureRequest {
         issuer_pid,
         enabled: true,
-        allowed_audiences: vec![audience],
-        allowed_grants: vec![grant],
-        max_cert_ttl_ns: 60,
+        aud: audience,
+        grants: vec![grant],
+        cert_ttl_ns: 60,
         refresh_after_ratio_bps: 8_000,
     }
 }
 
-fn root_issuer_policy_response(
+fn root_issuer_configure_response(
     issuer_pid: Principal,
     audience: DelegationAudience,
     grant: DelegatedRoleGrant,
-) -> RootIssuerPolicyResponse {
-    RootIssuerPolicyResponse {
+) -> RootIssuerConfigureResponse {
+    RootIssuerConfigureResponse {
         issuer: RootIssuerPolicyView {
             issuer_pid,
             enabled: true,
-            allowed_audiences: vec![audience],
-            allowed_grants: vec![grant],
+            allowed_audiences: vec![audience.clone()],
+            allowed_grants: vec![grant.clone()],
             max_cert_ttl_ns: 60,
             refresh_after_ratio_bps: 8_000,
+        },
+        template: RootIssuerRenewalTemplateView {
+            issuer_pid,
+            enabled: true,
+            aud: audience,
+            grants: vec![grant],
+            cert_ttl_ns: 60,
         },
     }
 }

@@ -80,9 +80,7 @@ impl CapacityImportLiveObserver {
         .await?;
         Ok(PreparedImportContext {
             observer: Self {
-                transport: CapacityImportTransport {
-                    agent: self.transport.agent.clone(),
-                },
+                transport: self.transport.clone(),
             },
             plan: plan.clone(),
             registry,

@@ -7251,6 +7251,7 @@ exec icp "$@"
             FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureCompletion, FleetEnsureJournalRecord,
         };
         FleetEnsureJournalRecord {
+            release: None,
             bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),
@@ -10350,6 +10351,7 @@ exec '{}' "$@"
         plan.plan_sha256 = canic_host::fleet_ensure::policy::expected_plan_sha256(plan);
         canic_host::fleet_ensure::ops::write_plan(&paths, plan).unwrap();
         let mut journal = canic_host::fleet_ensure::model::FleetEnsureJournalRecord {
+            release: None,
             bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),

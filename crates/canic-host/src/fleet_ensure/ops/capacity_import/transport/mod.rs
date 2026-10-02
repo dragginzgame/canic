@@ -23,7 +23,7 @@ use crate::{
             verify_review,
         },
     },
-    icp::IcpCli,
+    icp::{IcpCli, IcpRequestKind},
 };
 use candid::{CandidType, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
@@ -76,14 +76,17 @@ impl CompletedHandoff {
 }
 
 /// Selected authenticated Agent for one operator's reviewed capacity import.
+#[derive(Clone)]
 pub struct CapacityImportTransport {
     pub(in crate::fleet_ensure::ops::capacity_import) agent: Agent,
+    pub(in crate::fleet_ensure::ops::capacity_import) icp: IcpCli,
 }
 
 /// A signed handoff whose read-only authority preflight has succeeded.
 /// Submission still requires the matching durable Issued journal record.
 pub struct PreparedHandoffSubmission {
     agent: Agent,
+    icp: IcpCli,
     canister_id: Principal,
     request_id: [u8; 32],
     plan_sha256: [u8; 32],
@@ -100,14 +103,24 @@ impl PreparedHandoffSubmission {
         if journal.plan.plan_sha256 != self.plan_sha256 || request.request_id != self.request_id {
             return Err(CapacityImportJournalError::RequestInvalid);
         }
-        tokio::time::timeout(
-            CALL_TIMEOUT,
-            self.agent.update_signed(self.canister_id, self.bytes),
-        )
-        .await
-        .map_err(|_| CapacityImportJournalError::Unresolved)?
-        .map_err(|_| CapacityImportJournalError::Unresolved)?;
-        Ok(())
+        self.icp
+            .measure_async_request(
+                IcpRequestKind::AgentUpdate,
+                Principal::management_canister(),
+                "update_settings",
+                Some(self.canister_id),
+                async {
+                    tokio::time::timeout(
+                        CALL_TIMEOUT,
+                        self.agent.update_signed(self.canister_id, self.bytes),
+                    )
+                    .await
+                    .map_err(|_| CapacityImportJournalError::Unresolved)?
+                    .map_err(|_| CapacityImportJournalError::Unresolved)?;
+                    Ok(())
+                },
+            )
+            .await
     }
 }
 
@@ -115,6 +128,7 @@ impl CapacityImportTransport {
     /// Resolve the selected ICP signer and network; this performs no handoff.
     pub fn from_icp(icp: &IcpCli) -> Result<Self, CapacityImportJournalError> {
         Ok(Self {
+            icp: icp.clone(),
             agent: icp
                 .authenticated_agent_with_response_limit(MAXIMUM_RESPONSE_BYTES)
                 .map_err(|_| CapacityImportJournalError::ReaderMismatch)?,
@@ -175,6 +189,7 @@ impl CapacityImportTransport {
         require_active_reservation(&journal.plan, &context)?;
         Ok(PreparedHandoffSubmission {
             agent: self.agent.clone(),
+            icp: self.icp.clone(),
             canister_id,
             request_id: request.request_id,
             plan_sha256: journal.plan.plan_sha256,
@@ -191,15 +206,27 @@ impl CapacityImportTransport {
     ) -> Result<HandoffOutcome, CapacityImportJournalError> {
         let request = issued_request(journal, canister_id)?;
         verify_agent(&self.agent, &journal.plan)?;
-        let (status, certificate) = tokio::time::timeout(
-            CALL_TIMEOUT,
-            self.agent
-                .request_status_raw(&ic_agent::RequestId::new(&request.request_id), canister_id),
-        )
-        .await
-        .map_err(|_| CapacityImportJournalError::Unresolved)?
-        .map_err(|_| CapacityImportJournalError::Unresolved)?;
-        retirement::outcome(&journal.plan, canister_id, request, status, &certificate)
+        self.icp
+            .measure_async_request(
+                IcpRequestKind::AgentRequestStatus,
+                canister_id,
+                "read_state",
+                Some(canister_id),
+                async {
+                    let (status, certificate) = tokio::time::timeout(
+                        CALL_TIMEOUT,
+                        self.agent.request_status_raw(
+                            &ic_agent::RequestId::new(&request.request_id),
+                            canister_id,
+                        ),
+                    )
+                    .await
+                    .map_err(|_| CapacityImportJournalError::Unresolved)?
+                    .map_err(|_| CapacityImportJournalError::Unresolved)?;
+                    retirement::outcome(&journal.plan, canister_id, request, status, &certificate)
+                },
+            )
+            .await
     }
 }
 

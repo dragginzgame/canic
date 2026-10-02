@@ -7,6 +7,7 @@ use crate::fleet_ensure::model::capacity_import::CapacityImportSourceBinding;
 use candid::Principal;
 use canic_core::ids::FleetBinding;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 
 /// Exact current-build authority for one whole-Fleet disposal review.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -55,6 +56,9 @@ pub struct FleetReleaseSourceRecord {
     pub minimum_retained_cycles: u128,
     #[serde(with = "crate::fleet_ensure::model::u128_text")]
     pub maximum_debit_cycles: u128,
+    /// Reviewed worst-case charge for one paid management call.
+    #[serde(with = "crate::fleet_ensure::model::u128_text")]
+    pub maximum_call_debit_cycles: u128,
     pub maximum_paid_calls: u32,
 }
 
@@ -81,4 +85,15 @@ pub struct FleetReleaseReviewRecord {
     pub sources: Vec<FleetReleaseSourceRecord>,
     pub accounts: Vec<FleetReleaseAccountRecord>,
     pub review_sha256: [u8; 32],
+}
+
+/// Release authority and spent read allowances inside the ordinary Fleet journal.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct FleetReleaseExecutionRecord {
+    /// Executable operation identity remains separate from the release review digest.
+    pub plan_sha256: String,
+    pub review: FleetReleaseReviewRecord,
+    /// Includes failed requests and uncertain replies; successful reads never refund it.
+    pub reserved_paid_calls: BTreeMap<String, u32>,
 }

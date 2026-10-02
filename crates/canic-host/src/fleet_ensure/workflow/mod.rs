@@ -1298,6 +1298,7 @@ where
                 platform,
             )?;
             let journal = FleetEnsureJournalRecord {
+                release: None,
                 bootstrap_registration_recovery: None,
                 funding_observations: BTreeMap::new(),
                 funding_reviews: Vec::new(),
@@ -4979,6 +4980,7 @@ mod tests {
             topology: BTreeMap::new(),
         };
         let journal = FleetEnsureJournalRecord {
+            release: None,
             bootstrap_registration_recovery: None,
             funding_observations: BTreeMap::new(),
             funding_reviews: Vec::new(),

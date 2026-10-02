@@ -6,6 +6,33 @@
 
 use super::*;
 
+///
+/// DelegatedTokenIssuerPrepareError
+///
+/// Preserves missing issuer material separately from other public E10 failures.
+///
+pub enum DelegatedTokenIssuerPrepareError {
+    MissingProof,
+    Failed(InternalError),
+}
+
+impl From<InternalError> for DelegatedTokenIssuerPrepareError {
+    fn from(error: InternalError) -> Self {
+        Self::Failed(error)
+    }
+}
+
+impl DelegatedTokenIssuerPrepareError {
+    pub(crate) fn into_internal_error(self) -> InternalError {
+        match self {
+            Self::MissingProof => {
+                active_delegation_proof_unavailable_error(ActiveDelegationProofStatus::Missing)
+            }
+            Self::Failed(error) => error,
+        }
+    }
+}
+
 pub(super) const fn active_delegation_proof_unavailable_error(
     status: ActiveDelegationProofStatus,
 ) -> InternalError {

@@ -1,6 +1,6 @@
 //! Module: workflow::runtime::authority_restore
 //!
-//! Responsibility: coordinate authority snapshot sealing with IC history and timer suspension.
+//! Responsibility: coordinate authority snapshot/release sealing and timer suspension.
 //! Does not own: controller authentication, stable record encoding, or external snapshot effects.
 //! Boundary: authority endpoints delegate here before host stop/capture/start operations.
 
@@ -13,7 +13,9 @@ use crate::{
             require_update_allowed as require_policy_update_allowed,
         },
     },
-    dto::authority_restore::{AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest},
+    dto::authority_restore::{
+        AuthorityReleaseRequest, AuthorityRestoreFenceStatusResponse, AuthoritySnapshotRequest,
+    },
     ids::{EndpointCall, EndpointCallKind},
     ops::{
         ic::{IcOps, mgmt::MgmtOps},
@@ -21,10 +23,11 @@ use crate::{
         storage::authority_restore::AuthorityRestoreFenceOps,
     },
     protocol::{CANIC_COORDINATOR_COMMAND, CANIC_ROOT_COMMAND},
+    view::authority_restore::AuthorityMutationFence,
     workflow::runtime::timer::{TimerAuthorityWorkflow, TimerError},
 };
 
-/// Runtime coordinator for Fleet authority snapshot sealing and live resume.
+/// Runtime coordinator for Fleet authority release sealing and snapshot recovery.
 pub struct AuthorityRestoreWorkflow;
 
 impl AuthorityRestoreWorkflow {
@@ -39,6 +42,42 @@ impl AuthorityRestoreWorkflow {
     pub fn status() -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
         require_authority_runtime()?;
         AuthorityRestoreFenceOps::status()
+    }
+
+    /// Seal a Root in one message after its Control Plane owner proves all paid
+    /// obligations settled without mutation. Producer suspension and the commit
+    /// share one message; any suspension failure traps to roll both back.
+    /// This internal hook exposes no release endpoint.
+    ///
+    /// # Panics
+    /// Traps on suspension or commit failure so the message rolls back atomically.
+    pub fn prepare_root_release(
+        request: AuthorityReleaseRequest,
+        require_settled: impl FnOnce() -> Result<(), InternalError>,
+        suspend_role: impl FnOnce() -> Result<(), TimerError>,
+    ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+        require_root_authority_runtime()?;
+        prepare_release_with(request, require_settled, || {
+            suspend_role()?;
+            TimerAuthorityWorkflow::suspend_root()
+        })
+    }
+
+    /// Coordinator counterpart; the caller owns Registry/funding/provisioning
+    /// quiescence, while Core owns the durable fence and native timer suspension.
+    ///
+    /// # Panics
+    /// Traps on suspension or commit failure so the message rolls back atomically.
+    pub fn prepare_coordinator_release(
+        request: AuthorityReleaseRequest,
+        require_settled: impl FnOnce() -> Result<(), InternalError>,
+    ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+        require_coordinator_authority_runtime()?;
+        prepare_release_with(
+            request,
+            require_settled,
+            TimerAuthorityWorkflow::suspend_coordinator,
+        )
     }
 
     /// Seal Root mutation after suspending its exact native timer owners.
@@ -93,8 +132,8 @@ impl AuthorityRestoreWorkflow {
         let Some(command_endpoint) = authority_command_endpoint()? else {
             return Ok(());
         };
-        let is_sealed = AuthorityRestoreFenceOps::is_sealed_for(IcOps::canister_self())?;
-        require_policy_update_allowed(is_sealed, call.endpoint.name, command_endpoint)
+        let fence = AuthorityRestoreFenceOps::mutation_fence_for(IcOps::canister_self())?;
+        require_policy_update_allowed(fence, call.endpoint.name, command_endpoint)
             .map_err(PolicyError::from)
             .map_err(InternalError::from)
     }
@@ -104,22 +143,45 @@ impl AuthorityRestoreWorkflow {
         if !is_authority_runtime()? {
             return Ok(());
         }
-        let is_sealed = AuthorityRestoreFenceOps::is_sealed_for(IcOps::canister_self())?;
-        require_policy_command_variant_allowed(is_sealed, recovery_command)
+        let fence = AuthorityRestoreFenceOps::mutation_fence_for(IcOps::canister_self())?;
+        require_policy_command_variant_allowed(fence, recovery_command)
             .map_err(PolicyError::from)
             .map_err(InternalError::from)
     }
 }
 
+fn prepare_release_with(
+    request: AuthorityReleaseRequest,
+    require_settled: impl FnOnce() -> Result<(), InternalError>,
+    suspend: impl FnOnce() -> Result<(), TimerError>,
+) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
+    let authority = IcOps::canister_self();
+    AuthorityRestoreFenceOps::validate_release(request, authority)?;
+    // A terminal seal is replayed without calling producers or observing IC history.
+    if AuthorityRestoreFenceOps::mutation_fence_for(authority)? == AuthorityMutationFence::Release {
+        return AuthorityRestoreFenceOps::status();
+    }
+    require_settled()?;
+    suspend().unwrap_or_else(|error| {
+        trap_timer_transition("suspend timers before sealing Fleet release", error)
+    });
+    Ok(
+        AuthorityRestoreFenceOps::seal_release(request, authority, IcOps::now_nanos())
+            .unwrap_or_else(|error| {
+                trap_authority_transition("commit release after producer suspension", error)
+            }),
+    )
+}
+
 fn trap_timer_transition(context: &str, error: TimerError) -> ! {
     ic_cdk::trap(format!(
-        "authority snapshot failed closed while attempting to {context}: {error}"
+        "authority transition failed closed while attempting to {context}: {error}"
     ))
 }
 
 fn trap_authority_transition(context: &str, error: InternalError) -> ! {
     ic_cdk::trap(format!(
-        "authority snapshot failed closed while attempting to {context}: {error}"
+        "authority transition failed closed while attempting to {context}: {error}"
     ))
 }
 
@@ -128,6 +190,7 @@ async fn prepare_snapshot_with(
     suspend: impl FnOnce() -> Result<(), TimerError>,
 ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
     let authority = IcOps::canister_self();
+    AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
     let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
     AuthorityRestoreFenceOps::validate_prepare(request, authority)?;
     suspend().unwrap_or_else(|error| {
@@ -152,6 +215,9 @@ async fn resume_snapshot_with(
     reconcile_context: &str,
 ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
     let authority = IcOps::canister_self();
+    if AuthorityRestoreFenceOps::mutation_fence_for(authority)? == AuthorityMutationFence::Release {
+        return Err(InternalError::conflict());
+    }
     let history_total_num_changes = MgmtOps::canister_history_total_changes(authority).await?;
     AuthorityRestoreFenceOps::validate_resume(request, authority, history_total_num_changes)?;
     resume();

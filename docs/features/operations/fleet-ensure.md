@@ -124,6 +124,22 @@ with its children, or concurrent request durations as critical-path wall time.
 Request times include local startup/IPC and remote response/confirmation; pure
 CPU, internal IC calls and remote-wait components remain unavailable.
 
+Pool import retains direct HTTP boundaries in the same `icp_request_timing`
+events: `agent_query` covers Root status/context and Coordinator registry,
+`agent_update` covers signed controller handoff and Root commands, and
+`agent_request_status` covers certified ingress reconciliation through
+`read_state`. Root advances and signed handoffs retain the imported canister
+as `subject`, distinct from the carrying endpoint. An update's duration includes
+Agent response polling; it is not one raw HTTP request or an IC call count.
+Capacity-limit diagnostic reads have separate spans after the failed update.
+
+Async spans have independent request IDs and no implicit thread-local parents.
+Their `in_flight` counts describe overlapping diagnostic lifetimes. Cancellation
+leaves an unmatched start and marks the receipt's timing evidence incomplete.
+Successful reconciliation means the existing owner obtained a validated outcome;
+it does not grant another attempt or establish full-Fleet completion. Pairing
+completeness does not establish coverage of every infrastructure/inventory read.
+
 Protected read timings distinguish the transport endpoint (`request.target`,
 usually the Root) from the inspected child (`request.subject`, a Principal or
 `null` when unavailable). An inclusive `canister_inspection` request encloses the

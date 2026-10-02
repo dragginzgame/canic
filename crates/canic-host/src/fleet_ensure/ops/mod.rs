@@ -538,6 +538,8 @@ impl EnsurePaths {
 pub enum EnsureStateError {
     #[error("reset requires reconciliation of the uncertain paid effect at {} ({effect}); preserve its request and receipt evidence before replacing this installation", path.display())]
     ResetUncertainEffect { path: PathBuf, effect: String },
+    #[error("unfinished Fleet release at {} retains this operation; resume it before Ensure or import", path.display())]
+    ReleaseInProgress { path: PathBuf },
     #[error("reset review digest or cancellation evidence differs; preserve retained authority")]
     ResetReviewConflict,
     #[error("reset publication path {} differs from retained {}; keep the selected policy and inventory paths", selected.display(), retained.display())]
@@ -646,6 +648,7 @@ pub enum EnsureStateError {
 
 pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
     let lock = lock_fleet_file(paths)?;
+    release::reservation::require_no_active_release(paths)?;
     capacity_import::journal::require_no_approved_import(paths)?;
     reinstall::adoption::recover(paths)?;
     Ok(lock)
@@ -654,6 +657,7 @@ pub fn lock_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
 /// The capacity owner resumes its retained journal while holding the ordinary Fleet lock.
 fn lock_capacity_import_operation(paths: &EnsurePaths) -> Result<File, EnsureStateError> {
     let lock = lock_fleet_file(paths)?;
+    release::reservation::require_no_active_release(paths)?;
     Ok(lock)
 }
 

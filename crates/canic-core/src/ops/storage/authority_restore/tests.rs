@@ -168,3 +168,150 @@ fn missing_or_mismatched_authority_fails_closed() {
         crate::diagnostics::codes::STATE_CONFLICT.raw_code()
     );
 }
+
+fn release_request() -> AuthorityReleaseRequest {
+    AuthorityReleaseRequest {
+        operation_id: [7; 32],
+        review_sha256: [8; 32],
+        recipient: principal(9),
+    }
+}
+
+#[test]
+fn release_seal_reopens_exactly_and_cannot_become_a_snapshot() {
+    reset();
+    let authority = principal(1);
+    let request = release_request();
+    AuthorityRestoreFenceOps::initialize(authority).unwrap();
+    AuthorityRestoreFenceOps::validate_release(request, authority).unwrap();
+    assert_eq!(
+        AuthorityRestoreFenceOps::mutation_fence_for(authority).unwrap(),
+        AuthorityMutationFence::Open
+    );
+    let sealed = AuthorityRestoreFenceOps::seal_release(request, authority, 11).unwrap();
+    assert_eq!(
+        sealed.phase,
+        AuthorityRestoreFencePhase::ReleaseSealed {
+            review_sha256: request.review_sha256,
+            recipient: request.recipient
+        }
+    );
+    assert_eq!(sealed.operation_id, Some(request.operation_id));
+    assert_eq!(sealed.history_total_num_changes, None);
+    let retained = AuthorityRestoreFenceStore::export();
+    reset();
+    AuthorityRestoreFenceStore::import(retained.clone());
+    assert_eq!(
+        AuthorityRestoreFenceOps::seal_release(request, authority, 99).unwrap(),
+        sealed
+    );
+    AuthorityRestoreFenceOps::validate_release(request, authority).unwrap();
+    assert!(AuthorityRestoreFenceOps::is_sealed_for(authority).unwrap());
+    let snapshot = AuthoritySnapshotRequest {
+        operation_id: request.operation_id,
+    };
+    for error in [
+        AuthorityRestoreFenceOps::validate_prepare(snapshot, authority).unwrap_err(),
+        AuthorityRestoreFenceOps::prepare(snapshot, authority, 1, 99).unwrap_err(),
+        AuthorityRestoreFenceOps::validate_resume(snapshot, authority, 1).unwrap_err(),
+        AuthorityRestoreFenceOps::resume(snapshot, authority, 1, 99).unwrap_err(),
+    ] {
+        assert_eq!(error.code(), crate::diagnostics::codes::STATE_CONFLICT);
+    }
+    assert_eq!(AuthorityRestoreFenceStore::export(), retained);
+}
+
+#[test]
+fn release_seal_never_rebinds_identity_or_overwrites_snapshot_authority() {
+    reset();
+    let authority = principal(1);
+    let request = release_request();
+    AuthorityRestoreFenceOps::initialize(authority).unwrap();
+    AuthorityRestoreFenceOps::seal_release(request, authority, 11).unwrap();
+    let retained = AuthorityRestoreFenceStore::export();
+    for change in [
+        |request: &mut AuthorityReleaseRequest| request.operation_id = [10; 32],
+        |request: &mut AuthorityReleaseRequest| request.review_sha256 = [10; 32],
+        |request: &mut AuthorityReleaseRequest| request.recipient = principal(10),
+    ] {
+        let mut changed = request;
+        change(&mut changed);
+        for error in [
+            AuthorityRestoreFenceOps::validate_release(changed, authority).unwrap_err(),
+            AuthorityRestoreFenceOps::seal_release(changed, authority, 19).unwrap_err(),
+        ] {
+            assert_eq!(error.code(), crate::diagnostics::codes::STATE_CONFLICT);
+        }
+        assert_eq!(AuthorityRestoreFenceStore::export(), retained);
+    }
+    assert_eq!(
+        AuthorityRestoreFenceOps::validate_release(request, principal(2))
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::STATE_CONFLICT
+    );
+    reset();
+    AuthorityRestoreFenceOps::initialize(authority).unwrap();
+    AuthorityRestoreFenceOps::prepare(
+        AuthoritySnapshotRequest {
+            operation_id: request.operation_id,
+        },
+        authority,
+        1,
+        11,
+    )
+    .unwrap();
+    let snapshot = AuthorityRestoreFenceStore::export();
+    assert_eq!(
+        AuthorityRestoreFenceOps::seal_release(request, authority, 19)
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::STATE_CONFLICT
+    );
+    assert_eq!(AuthorityRestoreFenceStore::export(), snapshot);
+}
+
+#[test]
+fn invalid_release_bindings_leave_the_open_fence_unchanged() {
+    reset();
+    let authority = principal(1);
+    AuthorityRestoreFenceOps::initialize(authority).unwrap();
+    let retained = AuthorityRestoreFenceStore::export();
+    for recipient in [
+        authority,
+        Principal::anonymous(),
+        Principal::management_canister(),
+    ] {
+        let request = AuthorityReleaseRequest {
+            recipient,
+            ..release_request()
+        };
+        assert_eq!(
+            AuthorityRestoreFenceOps::seal_release(request, authority, 11)
+                .unwrap_err()
+                .code(),
+            crate::diagnostics::codes::REQUEST_INVALID
+        );
+    }
+    let empty_review = AuthorityReleaseRequest {
+        review_sha256: [0; 32],
+        ..release_request()
+    };
+    assert_eq!(
+        AuthorityRestoreFenceOps::seal_release(empty_review, authority, 11)
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::REQUEST_INVALID
+    );
+    let empty_operation = AuthorityReleaseRequest {
+        operation_id: [0; 32],
+        ..release_request()
+    };
+    assert_eq!(
+        AuthorityRestoreFenceOps::seal_release(empty_operation, authority, 11)
+            .unwrap_err()
+            .code(),
+        crate::diagnostics::codes::AUTHORITY_UNAVAILABLE
+    );
+    assert_eq!(AuthorityRestoreFenceStore::export(), retained);
+}

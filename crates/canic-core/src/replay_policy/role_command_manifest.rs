@@ -228,15 +228,8 @@ pub const ROOT_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         None,
     ),
     snapshot_convergent(
-        "UpsertIssuerPolicy",
-        "auth.upsert_root_issuer_policy.v1",
-        CostClass::None,
-        None,
-        None,
-    ),
-    snapshot_convergent(
-        "UpsertIssuerRenewalTemplate",
-        "auth.upsert_root_issuer_renewal_template.v1",
+        "ConfigureIssuer",
+        "auth.configure_root_issuer.v1",
         CostClass::None,
         None,
         None,
