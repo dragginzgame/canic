@@ -22,7 +22,7 @@ lint, build, or test targets. `make validate` is the explicit composition
 boundary for the complete local workflow.
 
 `make validate` has four sequential barriers. The first runs every independent
-formatting, repository-invariant, dependency, secret and shell check, then
+formatting, repository-invariant, dependency and shell check, then
 reports their complete failure set. Workspace checking and Clippy start only
 when that barrier passes. The control-plane feature matrix starts only after
 compile and warning-denied Clippy pass; the complete test graph starts only

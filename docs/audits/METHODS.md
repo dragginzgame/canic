@@ -55,7 +55,7 @@ retained-method owner below.
 | `wasm-footprint.md` | `revise` | `CANIC-WASM-001/v6` | measured/trend | Canonical optimized release/debug Wasm metrics, two-clean-build determinism, and structural retained-size evidence; run after Wasm-affecting changes or explicit size review. |
 | `workflow-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns workflow responsibility, records, conversions, effects, and typed error placement. |
 | `build-integrity.md` | `retain` | `CANIC-BUILD-INTEGRITY-001/v2` | invariant/measured | Build scripts, macros, generated code, unsafe inventory, and reproducibility; run before closeout and after build-pipeline changes. |
-| `release-integrity.md` | `retain` | `CANIC-RELEASE-INTEGRITY-001/v1` | invariant/manual | CI permissions, action pinning, secret scanning, artifact provenance/checksums, host/target matrix; run before closeout and after CI/release changes. |
+| `release-integrity.md` | `retain` | `CANIC-RELEASE-INTEGRITY-001/v2` | invariant/manual | CI permissions, action pinning, credential handling, artifact provenance/checksums, host/target matrix; run before closeout and after CI/release changes. |
 
 ## Authentication Invariant Methods
 
@@ -110,7 +110,7 @@ alias or wrapper remains.
 | Unsafe code inventory and justification | `CANIC-BUILD-INTEGRITY-001` |
 | Reproducible/explained Wasm builds | `CANIC-BUILD-INTEGRITY-001` with `CANIC-WASM-001` measurements |
 | CI permissions and action pinning | `CANIC-RELEASE-INTEGRITY-001` |
-| Secret scanning | `CANIC-RELEASE-INTEGRITY-001` |
+| Credential handling and log redaction | `CANIC-RELEASE-INTEGRITY-001` |
 | Release artifact provenance/checksums | `CANIC-RELEASE-INTEGRITY-001` |
 | Supported host/target matrix | `CANIC-RELEASE-INTEGRITY-001` |
 

@@ -148,14 +148,11 @@ jobs:
           source tool-versions.env
           cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
-          GITLEAKS_BIN="$(bash scripts/ci/install-gitleaks.sh)"
-          echo "GITLEAKS_BIN=$GITLEAKS_BIN" >> "$GITHUB_ENV"
       - name: Check security tools
         shell: bash
         run: |
           cargo audit --version
           rg --version
-          "$GITLEAKS_BIN" version
       - name: Run security validation with complete feedback
         shell: bash
         run: make ci-security

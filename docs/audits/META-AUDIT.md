@@ -113,7 +113,7 @@ The retained method catalog must assign an owner or an explicit exclusion for:
 - `build.rs`, procedural macros, and generated-code trust;
 - unsafe code inventory and justification;
 - CI permissions and third-party action pinning;
-- secret scanning;
+- credential handling and log redaction;
 - release artifact provenance and checksums;
 - reproducible or explained non-reproducible Wasm; and
 - supported host and target environments.

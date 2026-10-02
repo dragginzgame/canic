@@ -11,7 +11,7 @@
         lint-workflows recovery-runbooks-gate release-integrity-contract-gate \
         release-validation-matrix-gate validation-runner-gate \
         wasm-capability-size-report-gate wasm-crypto-closure-gate \
-        dependency-risk-gate gitleaks-scan shellcheck \
+        dependency-risk-gate shellcheck \
         install install-dev install-hooks update-dev \
         ensure-clean test-unit test-unit-fast test-ordinary test-pocketic test-pocketic-case workspace-test-inventory-gate \
         test-auth test-auth-chain-key test-cli test-runtime-fast \
@@ -21,10 +21,8 @@ CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
-GITLEAKS_INSTALL_DIR ?= $(HOME)/.local/bin
 ACTIONLINT_BIN ?= $(ACTIONLINT_INSTALL_DIR)/actionlint
 SHELLCHECK_BIN ?= $(SHELLCHECK_INSTALL_DIR)/shellcheck
-GITLEAKS_BIN ?= $(GITLEAKS_INSTALL_DIR)/gitleaks
 
 ICP_ENVIRONMENT ?= local
 export ICP_ENVIRONMENT
@@ -66,7 +64,7 @@ help:
 	@echo ""
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
-	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Binaryen/Canic toolchain"
+	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain"
 	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
 	@echo "  update-dev       Pin the latest stable ICP CLI, report Binaryen updates, and synchronize development tools"
 	@echo ""
@@ -110,7 +108,6 @@ help:
 	@echo "  fmt-check        Check formatting"
 	@echo "  clean            Clean Cargo artifacts; each test invocation cleans its own scratch"
 	@echo "  clean-wasm       Clean only transient Canic/PocketIC Wasm build caches"
-	@echo "  gitleaks-scan     Scan complete repository history with pinned Gitleaks"
 	@echo "  shellcheck        Lint repository shell automation with pinned ShellCheck"
 	@echo "  dependency-risk-gate  Reject vulnerability or transitive advisory drift"
 	@echo ""
@@ -130,9 +127,9 @@ help:
 install:
 	cargo install --locked --path crates/canic-cli
 
-# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/Gitleaks/ICP CLI/Binaryen/Canic toolchain.
+# Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain.
 install-dev:
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh
 
 # Configure the one repository-owned hook without installing the full toolchain.
 install-hooks:
@@ -142,7 +139,7 @@ install-hooks:
 update-dev:
 	bash scripts/dev/update-icp-cli-pin.sh
 	bash scripts/dev/check-binaryen-update.sh
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" GITLEAKS_INSTALL_DIR="$(GITLEAKS_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
 	cargo install --quiet \
 		"cargo-audit@$(CANIC_CARGO_AUDIT_VERSION)" \
 		"cargo-bloat@$(CANIC_CARGO_BLOAT_VERSION)" \
@@ -163,7 +160,6 @@ update-dev:
 	icp --version
 	ic-wasm --version
 	wasm-opt --version
-	"$(GITLEAKS_INSTALL_DIR)/gitleaks" version
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 #
@@ -279,7 +275,6 @@ validate:
 		fmt-check \
 		check-invariants \
 		dependency-risk-gate \
-		gitleaks-scan \
 		shellcheck
 	+@$(VALIDATION_RUNNER) \
 		check \
@@ -328,7 +323,6 @@ ci-checks:
 
 ci-security:
 	+@$(VALIDATION_RUNNER) \
-		gitleaks-scan \
 		dependency-risk-gate \
 		dependency-risk-inventory-test
 
@@ -380,9 +374,6 @@ wasm-crypto-closure-gate:
 
 dependency-risk-gate:
 	bash scripts/ci/check-dependency-risk-inventory.sh
-
-gitleaks-scan:
-	GITLEAKS_BIN="$(GITLEAKS_BIN)" bash scripts/ci/run-secret-scan.sh
 
 shellcheck:
 	"$(SHELLCHECK_BIN)" --exclude=SC2001,SC2016 \

@@ -3,6 +3,25 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## Gitleaks flow removed — 2026-10-02
+
+At the maintainer's explicit request, remove the Gitleaks target from local and
+CI validation, developer installation/update paths, CI tool setup, version and
+checksum pins, dedicated release-tool fixtures, installer, scanner script and
+fingerprint exclusion file. Active setup, platform, validation and CS1 installer
+documentation now matches the maintained tools. Release-integrity audit revision
+2 removes mandatory scanner evidence while retaining credential-handling review;
+the catalog preserves the historical revision and existing scan reports.
+
+Targeted shell syntax, ShellCheck, actionlint, release-integrity authority,
+audit-method catalog, validation-matrix, document semantics and whitespace checks
+pass. Make dispatch with a print-only runner confirms local/CI validation retains
+the remaining gates. Release-tool fixtures pass in an isolated copy, excluding
+the unrelated tag-deletion fixture because it creates Git commits. Evidence:
+`target/review-validation/gitleaks-removal-{validation-dispatch,release-tools}.log`.
+The removal is complete and included in the open 0.110.50 notes. No Rust build,
+broad validation, version transaction, commit, push or deployment ran.
+
 ## Testkit follow-up — 2026-10-02
 
 Canic's manifest permits ic-testkit 0.10.2 and its lockfile now selects registry

@@ -34,7 +34,7 @@ cargo test --locked -p canic --test changelog_governance -- --nocapture  # when 
 git diff --check
 ```
 
-Do not add the full dependency inventory, full-history secret scan,
+Do not add the full dependency inventory,
 workspace-wide tests, Clippy, broad PocketIC, package, or deployment gates to
 an ordinary documentation slice unless that slice changes the corresponding
 invariant or the maintainer explicitly requests them.
@@ -96,7 +96,7 @@ command inventory here. The maintained outcome categories are:
 
 - MSRV workspace checking for pull requests and `main`;
 - pinned preflight, ShellCheck, formatting, lint, default-example, layering,
-  feature, dependency, secret, audit, release-contract, and current-document
+  feature, dependency, audit, release-contract, and current-document
   checks for pull requests and `main`;
 - separately reported ordinary and governed PocketIC test lanes for pull
   requests and `main`: source-bound activation recovery runs before two isolated
@@ -106,7 +106,7 @@ command inventory here. The maintained outcome categories are:
 - the locked release workspace build for a `Release ...` commit on `main`.
 
 CI also validates workflow syntax, installs ICP/Wasm helpers only in the lane
-that exercises them, and runs the pinned full-history secret scanner with fully redacted findings. The
+that exercises them. The
 release-integrity guard checks security and release outcomes without freezing
 job counts or step adjacency. Audit definitions must not claim a guard runs in
 CI unless the current workflow contains it.
