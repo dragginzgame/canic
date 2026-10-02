@@ -297,7 +297,6 @@ check-invariants:
 		dependency-risk-inventory-test \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
-		audit-method-catalog-gate \
 		recovery-runbooks-gate \
 		validation-runner-gate \
 		wasm-capability-size-report-gate \
@@ -314,7 +313,6 @@ ci-preflight:
 		blob-storage-protocol-evidence-gate \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
-		audit-method-catalog-gate \
 		recovery-runbooks-gate \
 		validation-runner-gate \
 		workspace-test-inventory-gate \
@@ -346,7 +344,6 @@ dependency-risk-inventory-test:
 
 layering-gate:
 	bash scripts/ci/run-layering-guards.sh
-	bash scripts/ci/check-pre-1-0-hard-cut.sh
 
 lint-workflows:
 	"$(ACTIONLINT_BIN)"
@@ -356,6 +353,10 @@ recovery-runbooks-gate:
 
 release-integrity-contract-gate:
 	bash scripts/ci/check-release-integrity-contract.sh
+	bash scripts/ci/test-release-tools.sh
+	bash scripts/ci/test-commit-release.sh
+	bash scripts/ci/test-release-recipes.sh
+	bash scripts/ci/test-release-validation-lane.sh
 	bash scripts/ci/check-publish-manifest-boundary.sh
 	bash scripts/ci/test-publish-manifest-boundary.sh
 	bash scripts/ci/test-publish-workspace.sh

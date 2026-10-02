@@ -7,6 +7,37 @@ use serde_json::json;
 use std::fs;
 
 #[test]
+fn retained_selection_ignores_metadata_but_preserves_owned_incomplete_evidence() {
+    let root = temp_dir("operation-evidence-selection");
+    let paths = EnsurePaths::under(&root, "local", "fleet");
+    fs::create_dir_all(paths.plan.parent().unwrap()).unwrap();
+    fs::write(&paths.lock, b"").unwrap();
+    fs::write(&paths.root_start_authority, b"generation hint").unwrap();
+    for name in [
+        ".DS_Store",
+        "notes.txt",
+        "journal.json.bak",
+        ".plan.json.tmp",
+    ] {
+        fs::write(paths.plan.with_file_name(name), b"metadata").unwrap();
+    }
+    let inspections = paths
+        .plan
+        .with_file_name("infrastructure-bootstrap-inspections");
+    fs::create_dir(&inspections).unwrap();
+    assert!(!has_retained_files(&paths).unwrap());
+    fs::write(inspections.join("issued.json"), b"unreadable paid evidence").unwrap();
+    assert!(has_retained_files(&paths).unwrap());
+    fs::remove_dir_all(&inspections).unwrap();
+    for path in [&paths.plan, &paths.journal, &paths.state] {
+        fs::write(path, b"incomplete operation").unwrap();
+        assert!(has_retained_files(&paths).unwrap());
+        fs::remove_file(path).unwrap();
+    }
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[test]
 fn infrastructure_forecast_distinguishes_unpaid_review_and_checks_its_identity() {
     let paths = retained();
     fs::remove_file(&paths.journal).unwrap();
@@ -240,7 +271,7 @@ fn completed_reset_selection_does_not_capture_a_later_ordinary_review() {
         }
     }
     assert!(
-        crate::fleet_ensure::workflow::clean_reinstall::retained_desired(
+        crate::fleet_ensure::workflow::clean_reinstall::retained_selection(
             &paths.workspace,
             "local",
             "fleet",

@@ -9,6 +9,7 @@ mod store;
 mod tests;
 
 pub use store::CapacityImportJournalStore;
+pub(in crate::fleet_ensure) use store::require_completion_fits;
 pub(in crate::fleet_ensure::ops) use store::require_no_approved_import;
 
 use crate::fleet_ensure::{
@@ -129,7 +130,7 @@ pub enum CapacityImportJournalError {
     Unresolved,
 
     #[error(
-        "capacity import exhausted its reviewed {step} attempts; preserve the original journal"
+        "capacity import exhausted its reviewed {step} attempts; preserve the original journal and review continuation with canic --environment <environment> fleet recover-attempts <fleet>"
     )]
     BudgetExhausted { step: String },
     #[error("capacity import inventory inputs or publication evidence changed")]
@@ -376,7 +377,11 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
     }
     for (index, handoff) in journal.handoffs.iter().enumerate() {
         let source = &journal.plan.sources[index];
-        retirement::validate(&journal.plan, handoff)?;
+        retirement::validate(
+            &journal.plan,
+            handoff,
+            retirement::maximum_requests(journal, handoff.canister_id)?,
+        )?;
         if handoff.canister_id != source.binding.canister_id {
             return Err(CapacityImportJournalError::Integrity);
         }

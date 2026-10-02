@@ -4,6 +4,7 @@
 //! Does not own: transport parsing, policy decisions, persistence, or IC effects.
 //! Boundary: workflow persists these records before and after every effect.
 
+pub mod attempt_recovery;
 pub mod capacity_import;
 pub mod clean_reinstall;
 pub mod completed_operation;

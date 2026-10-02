@@ -60,7 +60,7 @@ pub fn retain(
     if pending(handoff) {
         return Ok(journal.clone());
     }
-    if handoff.retirements.len() >= MAXIMUM_REQUESTS {
+    if handoff.retirements.len() >= maximum_requests(journal, handoff.canister_id)? {
         return Err(exhausted());
     }
     let mut result = journal.clone();
@@ -109,7 +109,7 @@ pub fn renew(
     if !pending(handoff) {
         return Err(CapacityImportJournalError::Unresolved);
     }
-    if handoff.retirements.len() >= MAXIMUM_REQUESTS {
+    if handoff.retirements.len() >= maximum_requests(journal, handoff.canister_id)? {
         return Err(exhausted());
     }
     let effect = handoff
@@ -177,8 +177,9 @@ pub fn refresh_unissued(
 pub(super) fn validate(
     plan: &CapacityImportPlanRecord,
     handoff: &CapacityImportHandoffRecord,
+    maximum: usize,
 ) -> Result<(), CapacityImportJournalError> {
-    if handoff.retirements.len() > MAXIMUM_REQUESTS {
+    if handoff.retirements.len() > maximum {
         return Err(CapacityImportJournalError::Integrity);
     }
     let mut seen = BTreeSet::new();
@@ -214,7 +215,7 @@ pub(super) fn validate(
                     }))
         });
         if seen.contains(&request.request_id) != current_retired
-            || (!current_retired && handoff.retirements.len() == MAXIMUM_REQUESTS)
+            || (!current_retired && handoff.retirements.len() == maximum)
             || (current_retired && !state_valid)
         {
             return Err(CapacityImportJournalError::Integrity);
@@ -273,4 +274,20 @@ fn exhausted() -> CapacityImportJournalError {
     CapacityImportJournalError::BudgetExhausted {
         step: "distinct controller handoff requests".into(),
     }
+}
+
+pub(in crate::fleet_ensure) fn maximum_requests(
+    journal: &CapacityImportJournalRecord,
+    canister: Principal,
+) -> Result<usize, CapacityImportJournalError> {
+    let Some(operation) = &journal.operation else {
+        return Ok(MAXIMUM_REQUESTS);
+    };
+    let maximum = crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+        &operation.attempt_recoveries,
+        operation.review.review_sha256,
+        &format!("handoff_envelopes:{canister}"),
+        u32::try_from(MAXIMUM_REQUESTS).map_err(|_| CapacityImportJournalError::Integrity)?,
+    )?;
+    usize::try_from(maximum).map_err(|_| CapacityImportJournalError::Integrity)
 }

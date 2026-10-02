@@ -39,8 +39,8 @@ use std::{
 
 const MAX_DOCUMENT_BYTES: usize = 1024 * 1024;
 pub(super) const MAX_STATUS_HEX_BYTES: usize = 512 * 1024;
-const MAX_SUBMISSIONS: u32 = 2;
-const MAX_INSPECTIONS: u32 = 4;
+pub(in crate::fleet_ensure) const MAX_SUBMISSIONS: u32 = 2;
+pub(in crate::fleet_ensure) const MAX_INSPECTIONS: u32 = 4;
 
 pub(in crate::fleet_ensure::ops::capacity_import) const ROOT_SUBMISSION_STEPS: &[&str] =
     &["reserve", "settle", "release"];
@@ -122,6 +122,7 @@ fn bind_kind(
     review.review_sha256 = review_digest(&review)?;
     let mut result = journal.clone();
     result.operation = Some(CapacityImportOperationRecord {
+        attempt_recoveries: Vec::new(),
         review,
         submissions: BTreeMap::new(),
         inspections: BTreeMap::new(),
@@ -154,10 +155,34 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
         return Ok(());
     };
     validate_review(journal, &operation.review)?;
+    for grant in &operation.attempt_recoveries {
+        let spent = if let Some(step) = grant.resource.strip_prefix("submission:") {
+            operation.submissions.get(step).copied()
+        } else if let Some(id) = grant.resource.strip_prefix("inspection:") {
+            operation.inspections.get(id).copied()
+        } else if let Some(id) = grant.resource.strip_prefix("handoff_envelopes:") {
+            journal
+                .handoffs
+                .iter()
+                .find(|handoff| handoff.canister_id.to_text() == id)
+                .and_then(|handoff| u32::try_from(handoff.retirements.len()).ok())
+        } else {
+            None
+        };
+        if spent.is_none_or(|spent| spent < grant.spent_attempts) {
+            return Err(conflict());
+        }
+    }
+    crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+        &operation.attempt_recoveries,
+        operation.review.review_sha256,
+        "",
+        1,
+    )?;
     for (step, attempts) in &operation.submissions {
         if !journal.approved
             || !valid_step(journal, step)
-            || !(1..=MAX_SUBMISSIONS).contains(attempts)
+            || !(1..=submission_maximum(operation, step)?).contains(attempts)
         {
             return Err(conflict());
         }
@@ -169,7 +194,7 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
             .iter()
             .any(|source| source.binding.canister_id.to_text() == *id);
         let root = journal.plan.authority.root.to_text() == *id;
-        if !(source || root) || !(1..=MAX_INSPECTIONS).contains(attempts) {
+        if !(source || root) || !(1..=inspection_maximum(operation, id)?).contains(attempts) {
             return Err(conflict());
         }
     }
@@ -261,7 +286,8 @@ pub fn reserve_submission(
     }
     let mut result = journal.clone();
     let operation = result.operation.as_mut().ok_or_else(conflict)?;
-    consume(&mut operation.submissions, step, MAX_SUBMISSIONS)?;
+    let maximum = submission_maximum(operation, step)?;
+    consume(&mut operation.submissions, step, maximum)?;
     Ok(result)
 }
 
@@ -282,11 +308,8 @@ pub fn reserve_inspection(
     }
     let mut result = journal.clone();
     let operation = result.operation.as_mut().ok_or_else(conflict)?;
-    consume(
-        &mut operation.inspections,
-        &canister.to_text(),
-        MAX_INSPECTIONS,
-    )?;
+    let maximum = inspection_maximum(operation, &canister.to_text())?;
+    consume(&mut operation.inspections, &canister.to_text(), maximum)?;
     Ok(result)
 }
 
@@ -303,6 +326,30 @@ fn consume(
     }
     *count += 1;
     Ok(())
+}
+
+pub(in crate::fleet_ensure) fn submission_maximum(
+    operation: &CapacityImportOperationRecord,
+    step: &str,
+) -> Result<u32, CapacityImportJournalError> {
+    crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+        &operation.attempt_recoveries,
+        operation.review.review_sha256,
+        &format!("submission:{step}"),
+        MAX_SUBMISSIONS,
+    )
+}
+
+pub(in crate::fleet_ensure) fn inspection_maximum(
+    operation: &CapacityImportOperationRecord,
+    canister: &str,
+) -> Result<u32, CapacityImportJournalError> {
+    crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+        &operation.attempt_recoveries,
+        operation.review.review_sha256,
+        &format!("inspection:{canister}"),
+        MAX_INSPECTIONS,
+    )
 }
 
 fn valid_step(journal: &CapacityImportJournalRecord, step: &str) -> bool {
@@ -449,6 +496,7 @@ pub(super) fn monotonic(
         (None, None) => true,
         (Some(old), Some(new)) => {
             old.review == new.review
+                && new.attempt_recoveries.starts_with(&old.attempt_recoveries)
                 && old
                     .submissions
                     .iter()

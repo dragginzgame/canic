@@ -48,6 +48,31 @@ pub(in crate::fleet_ensure) fn read(
     Ok(record)
 }
 
+/// Reject a changed publication destination before another reset phase is reviewed.
+pub(in crate::fleet_ensure) fn validate_inputs(
+    record: &CleanReinstallRecord,
+    policy: &Path,
+    seed: &Path,
+) -> Result<(), EnsureStateError> {
+    validate_publication_path(&record.policy, policy)?;
+    validate_publication_path(&record.seed, seed)?;
+    Ok(())
+}
+
+/// Preserve the selected destination while accepting equivalent existing path spellings.
+pub fn validate_publication_path(retained: &Path, selected: &Path) -> Result<(), EnsureStateError> {
+    if retained == selected
+        || matches!((retained.canonicalize(), selected.canonicalize()),
+            (Ok(retained), Ok(selected)) if retained == selected)
+    {
+        return Ok(());
+    }
+    Err(EnsureStateError::ResetInputConflict {
+        retained: retained.into(),
+        selected: selected.into(),
+    })
+}
+
 /// Freeze operator paths alongside the selected build.
 pub(in crate::fleet_ensure) fn bind(
     paths: &EnsurePaths,

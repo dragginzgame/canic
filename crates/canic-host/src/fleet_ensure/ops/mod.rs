@@ -4,6 +4,7 @@
 //! Does not own: plan decisions or multi-step orchestration.
 //! Boundary: workflow persists an intent here before invoking one platform effect.
 
+pub mod attempt_recovery;
 mod bounded_observations;
 mod canic_init;
 pub mod capacity_import;
@@ -539,6 +540,11 @@ pub enum EnsureStateError {
     ResetUncertainEffect { path: PathBuf, effect: String },
     #[error("reset review digest or cancellation evidence differs; preserve retained authority")]
     ResetReviewConflict,
+    #[error("reset publication path {} differs from retained {}; keep the selected policy and inventory paths", selected.display(), retained.display())]
+    ResetInputConflict {
+        retained: PathBuf,
+        selected: PathBuf,
+    },
 
     #[error(
         "reset review cancellation {plan_sha256} is incomplete; resume fleet ensure --cancel-reinstall with that exact digest"

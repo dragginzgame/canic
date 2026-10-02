@@ -4,6 +4,7 @@
 //! Does not own: policy decisions, IC transport, or storage mechanics.
 //! Boundary: persists exact intent before each ops effect and reconciles it before any retry.
 
+pub mod attempt_recovery;
 #[cfg(test)]
 mod balance_observation;
 pub mod capacity_import;
@@ -2822,16 +2823,12 @@ where
             .balance_cycles
             .ok_or(EnsureWorkflowError::PlanIntegrity)?;
         let reviewed_available = reviewed.available_cycles.unwrap_or_default();
-        let maximum_reviewed_balance = reviewed_available
-            .checked_add(reviewed.maximum_funding_cycles)
-            .ok_or(EnsureWorkflowError::PlanIntegrity)?;
-        if available_cycles < reviewed_available || available_cycles > maximum_reviewed_balance {
+        // A surplus stays controlled and grants no additional spending authority.
+        // An unexplained Ledger debit still requires exact reconciliation.
+        if available_cycles < reviewed_available {
             return Err(EnsureWorkflowError::DriftedBeforeApply);
         }
         if reviewed.required_creation_count == 0 {
-            if available_cycles != reviewed_available {
-                return Err(EnsureWorkflowError::DriftedBeforeApply);
-            }
             continue;
         }
         if available_cycles < reviewed.maximum_creation_debit_cycles {
@@ -3942,7 +3939,9 @@ where
                         domain.root
                     ))
                 })?;
-            if terminal_balance != expected_terminal_balance {
+            // Surplus Ledger cycles join the terminal net-credit observation;
+            // authenticated funding and exact creation costs remain unchanged.
+            if terminal_balance < expected_terminal_balance {
                 return Err(EnsureWorkflowError::Conservation(format!(
                     "Root {} funding-account balance {terminal_balance} differs from reviewed terminal balance {expected_terminal_balance}",
                     domain.root
@@ -5343,7 +5342,7 @@ mod tests {
             Err(EnsureWorkflowError::PlanIntegrity)
         ));
 
-        for changed_balance in [39, 101] {
+        for changed_balance in [0, 39] {
             assert!(matches!(
                 estate_funding_requirement::<std::io::Error>(
                     &plan,
@@ -5353,6 +5352,42 @@ mod tests {
                 Err(EnsureWorkflowError::DriftedBeforeApply)
             ));
         }
+    }
+
+    #[test]
+    fn estate_funding_surplus_preserves_reviewed_creation_limits() {
+        let plan = estate_funding_plan();
+        let original = plan.clone();
+        let (state, _) = retained_evidence();
+        assert!(
+            estate_funding_requirement::<std::io::Error>(
+                &plan,
+                &state,
+                &estate_funding_observation(Some(150)),
+            )
+            .unwrap()
+            .is_none()
+        );
+        assert_eq!(plan, original);
+        let mut extra_creation = terminal_estate_creation_observation();
+        let pool = extra_creation
+            .estate_funding_domains
+            .get_mut("root")
+            .unwrap()
+            .pool
+            .as_mut()
+            .unwrap();
+        let mut extra = pool.assets[0].clone();
+        extra.principal = "unreviewed-third-creation".into();
+        pool.assets.push(extra);
+        assert!(matches!(
+            exact_estate_creation_costs::<std::io::Error>(
+                &state,
+                &extra_creation,
+                &plan.conservation.estate_funding_domains[0]
+            ),
+            Err(EnsureWorkflowError::JournalIntegrity)
+        ));
     }
 
     #[test]
@@ -5410,6 +5445,35 @@ mod tests {
             .expect("non-creation protocol preserves the Root Ledger balance"),
             (0, 0),
         );
+        journal.initial_controlled_cycles = 40;
+        journal.initial_operator_cycles = 0;
+        let original = plan.clone();
+        for balance in [40, 41, 150] {
+            let observed = estate_funding_observation(Some(balance));
+            assert!(
+                estate_funding_requirement::<std::io::Error>(&plan, &state, &observed)
+                    .unwrap()
+                    .is_none()
+            );
+            let actual =
+                verify_terminal_conservation::<std::io::Error>(&plan, &journal, &state, &observed)
+                    .unwrap();
+            assert_eq!(actual.final_controlled_cycles, balance);
+            assert_eq!(actual.observed_net_cycle_credit_cycles, balance - 40);
+            assert_eq!(actual.estate_funding_cycles, 0);
+            assert_eq!(actual.operator_debit_cycles, 0);
+            assert_eq!(actual.exact_estate_creation_fee_cycles, 0);
+        }
+        assert_eq!(plan, original);
+        assert!(matches!(
+            reconcile_estate_funding::<std::io::Error>(
+                &plan,
+                &journal,
+                &state,
+                &estate_funding_observation(Some(39))
+            ),
+            Err(EnsureWorkflowError::Conservation(_))
+        ));
     }
 
     #[test]

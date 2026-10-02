@@ -1,5 +1,8 @@
 //! Select clean reset before any predecessor desired or execution contract is decoded.
 
+#[cfg(test)]
+mod tests;
+
 use super::{
     EnsureOptions, FleetCommandError, automation, now_nanoseconds, progress, quote_review_argument,
     render_report, resolve_from_root,
@@ -49,20 +52,32 @@ pub(super) fn run_if_selected(
     )? {
         return Ok(false);
     }
-    let desired = match workflow::retained_desired(
+    let mut selected = options.clone();
+    let desired = match workflow::retained_selection(
         workspace,
         environment,
         &options.fleet,
         options.reinstall,
     )? {
-        Some(desired) => desired,
+        Some(record) => {
+            retain_inputs(workspace, &mut selected, &record.policy, &record.seed)?;
+            record.desired.desired().clone()
+        }
         None => load_desired_fleet(&resolve_from_root(workspace, &options.desired))?.desired,
     };
     if desired.environment != environment || desired.fleet != options.fleet {
         return Err(FleetCommandError::Usage("clean reinstall desired authority does not match the explicitly selected Fleet/environment".into()));
     }
-    let report = execute(workspace, options, environment, &desired)?;
-    render(report, options, environment)?;
+    selected.reinstall = true;
+    let result = execute(workspace, &selected, environment, &desired)
+        .and_then(|report| render(report, &selected, environment));
+    result.map_err(|error| {
+        if selected.json {
+            super::json_error(error, Some(&selected))
+        } else {
+            error
+        }
+    })?;
     Ok(true)
 }
 
@@ -189,16 +204,6 @@ fn render(
     options: &EnsureOptions,
     environment: &str,
 ) -> Result<(), FleetCommandError> {
-    let mut command = format!(
-        "canic --environment {} --icp {} fleet ensure {}",
-        quote_review_argument(environment),
-        quote_review_argument(&options.icp),
-        quote_review_argument(&options.fleet)
-    );
-    if let Some(identity) = &options.identity {
-        command.push_str(" --identity ");
-        command.push_str(&quote_review_argument(identity));
-    }
     let (digest, complete, fleet_complete) = match &report {
         CleanReinstallReport::Infrastructure(report) => {
             (report.plan.plan_sha256.clone(), report.terminal, false)
@@ -221,11 +226,17 @@ fn render(
             false,
         ),
     };
-    let next = if complete {
-        format!("{command} --reinstall")
+    let arguments = if complete {
+        automation::reinstall_review_command(options, environment)
     } else {
-        format!("{command} --apply {digest}")
+        let mut arguments = automation::ensure_command(options, environment);
+        arguments.extend(["--apply".into(), digest.clone()]);
+        arguments
     };
+    let next = std::iter::once("canic".to_owned())
+        .chain(arguments.iter().map(|arg| quote_review_argument(arg)))
+        .collect::<Vec<_>>()
+        .join(" ");
     match report {
         CleanReinstallReport::Infrastructure(report) | CleanReinstallReport::Fleet(report) => {
             if options.json {
@@ -263,6 +274,35 @@ fn render(
     }
     if !options.json && !fleet_complete {
         println!("Next: {next}");
+    }
+    Ok(())
+}
+
+// Explicit paths must match retained authority; omitted paths inherit it on resume.
+fn retain_inputs(
+    workspace: &Path,
+    options: &mut EnsureOptions,
+    policy: &Path,
+    seed: &Path,
+) -> Result<(), FleetCommandError> {
+    for (path, explicit, retained) in [
+        (
+            &mut options.source,
+            options.explicit_inputs.source_explicit,
+            policy,
+        ),
+        (
+            &mut options.seed,
+            options.explicit_inputs.seed_explicit,
+            seed,
+        ),
+    ] {
+        if explicit {
+            workflow::validate_publication_path(retained, &resolve_from_root(workspace, path))?;
+        }
+        if !explicit {
+            *path = retained.into();
+        }
     }
     Ok(())
 }

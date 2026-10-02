@@ -41,6 +41,8 @@ fn receipt_backed_authority_and_consumer_inventory_is_explicit() {
     assert_eq!(
         source_paths_using(&root, "ReceiptBackedIntentStore"),
         BTreeSet::from([
+            // The memory regression verifies reservation refusal preserves storage.
+            "crates/canic-core/src/ops/runtime/memory/tests.rs".to_string(),
             "crates/canic-core/src/ops/storage/intent/mod.rs".to_string(),
             "crates/canic-core/src/ops/storage/intent/tests.rs".to_string(),
             "crates/canic-core/src/storage/stable/intent.rs".to_string(),

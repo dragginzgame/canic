@@ -1,6 +1,7 @@
 //! Exercise reviewed Root custody, destructive reset and retained completion on PocketIC.
 
 mod bootstrap;
+mod efficiency;
 pub(super) mod reset;
 mod transport;
 
@@ -13,6 +14,7 @@ use canic_core::control_plane_support::error::InternalError;
 use ic_testkit::pocket_ic::common::rest::BlobCompression;
 
 pub(super) use bootstrap::supplied_capacity_fences_bootstrap_until_publication;
+pub(super) use efficiency::mainnet_import_counts_calls_and_refreshes_placement;
 pub(super) use transport::host_import_transport_recovers_signed_handoff_and_root_progress;
 
 #[derive(CandidType)]
@@ -163,14 +165,10 @@ fn retained_capacity_journey(root_owned: bool) {
     }
     let mut steps = Vec::new();
     if root_owned {
-        steps.extend([
-            PoolImportSourceProgress::StopIssued,
-            PoolImportSourceProgress::Stopped,
-        ]);
+        steps.push(PoolImportSourceProgress::StopIssued);
     }
     steps.extend([
         PoolImportSourceProgress::ControllersIssued,
-        PoolImportSourceProgress::ControllersConfirmed,
         PoolImportSourceProgress::UninstallIssued,
     ]);
     for expected in steps {
@@ -249,6 +247,8 @@ fn retained_capacity_journey(root_owned: bool) {
         Some(InternalError::conflict().into())
     );
     let settled = command(pic, root, operator, PoolImportCommand::Settle(identity)).unwrap();
+    // Local builds omit subnet lookups; every retained call is still accounted.
+    assert_eq!(settled.paid_calls, if root_owned { 10 } else { 8 });
     let root_receipt = settled.root_receipt.as_ref().unwrap();
     let root_before = reservation.observed_root_cycles + reservation.observed_root_reserved_cycles;
     let root_after = root_receipt.retained_cycles + root_receipt.retained_reserved_cycles;
@@ -353,6 +353,16 @@ fn install_capacity_root(
     coordinator: Principal,
     hold: Option<canic::dto::pool_import::PoolImportBootstrap>,
 ) -> BootstrappedRootFixture {
+    install_capacity_root_with_wasm(pic, coordinator, hold, build_test_root_wasm(), None)
+}
+
+fn install_capacity_root_with_wasm(
+    pic: &PocketIc,
+    coordinator: Principal,
+    hold: Option<canic::dto::pool_import::PoolImportBootstrap>,
+    root_wasm: Vec<u8>,
+    maximum_size: Option<u32>,
+) -> BootstrappedRootFixture {
     let root_id = pic.create_canister();
     pic.add_cycles(root_id, ROOT_INSTALL_CYCLES);
     let subnet = pic.get_subnet(root_id).unwrap();
@@ -367,7 +377,6 @@ fn install_capacity_root(
             id
         })
         .collect();
-    let root_wasm = build_test_root_wasm();
     let mut store_fixture = build_root_store_fixture();
     let store_wasm = store_fixture
         .wasm
@@ -385,7 +394,7 @@ fn install_capacity_root(
         installation_controller,
         store_fixture,
         &BootstrappedRootPlacement {
-            canister_pool_maximum_size: None,
+            canister_pool_maximum_size: maximum_size,
             canister_pool_minimum_size: None,
             canister_pool_cycles: None,
             coordinator_subnet: pic.get_subnet(coordinator),

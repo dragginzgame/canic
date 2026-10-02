@@ -1,1 +1,0 @@
-const SCHEMA_VERSION: u16 = 2;

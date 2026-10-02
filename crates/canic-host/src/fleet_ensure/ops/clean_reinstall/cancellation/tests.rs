@@ -18,6 +18,7 @@ fn unpaid() -> EnsurePaths {
     write_current(
         &inspection(&paths),
         &InfrastructureBootstrapInspectionRecord {
+            attempt_recoveries: Vec::new(),
             registration_recovery_sha256: None,
             schema_version: 1,
             source_sha256: [0xe5; 32],

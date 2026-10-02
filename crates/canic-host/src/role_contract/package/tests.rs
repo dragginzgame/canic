@@ -1139,7 +1139,7 @@ fn icydb_dependency_graph_is_confined_to_test_consumers() {
     });
     let expected_icydb_edges = [
         ("canic-icydb-lifecycle-schema", "normal", "icydb"),
-        ("canic-tests", "dev", "icydb"),
+        ("canic-tests", "normal", "icydb"),
         ("canic_icydb_lifecycle_probe", "build", "icydb"),
         ("canic_icydb_lifecycle_probe", "normal", "icydb"),
     ]
@@ -1154,16 +1154,35 @@ fn icydb_dependency_graph_is_confined_to_test_consumers() {
     .collect();
     assert_eq!(
         icydb_edges, expected_icydb_edges,
-        "IcyDB-family dependencies must remain inside the fixture or the harness dev dependencies"
+        "IcyDB-family dependencies must remain inside unpublished test consumers"
     );
+    let harness = metadata
+        .packages
+        .iter()
+        .find(|package| package.name == "canic-tests")
+        .expect("integration harness package");
+    let dependency = harness
+        .dependencies
+        .iter()
+        .find(|dependency| dependency.name == "icydb")
+        .expect("optional IcyDB dependency");
+    assert!(dependency.optional);
+    assert_eq!(
+        harness.features.get("external-composition"),
+        Some(&vec!["dep:icydb".to_string()])
+    );
+    assert!(harness.features.get("default").is_none_or(|features| {
+        !features
+            .iter()
+            .any(|feature| feature == "external-composition")
+    }));
     assert_eq!(
         workspace_reverse_consumers_of_icydb(&metadata, &workspace),
         BTreeSet::from([
             "canic-icydb-lifecycle-schema".to_string(),
-            "canic-tests".to_string(),
             "canic_icydb_lifecycle_probe".to_string(),
         ]),
-        "no production workspace package may reach IcyDB transitively"
+        "the default graph must not pull IcyDB into the integration harness or production packages"
     );
 
     let fixture_edges = workspace_dependency_edges(&metadata, &workspace, |dependency| {

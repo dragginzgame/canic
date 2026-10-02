@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses published ic-memory 0.15.0 and a single MemoryManager per canister.
+Canic uses published ic-memory 0.15.2 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a

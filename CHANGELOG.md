@@ -12,10 +12,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.50` (Unreleased) fixes reset of unfinished installations, native-credit
-  and controller-order refusals, adopts ic-memory 0.15.0 and Rust 1.99.0, and
-  isolates optional IcyDB composition from default validation. Potentially
+- `0.110.50` (Unreleased) fixes reset and input continuity for unfinished installations, native-credit
+  and controller-order refusals, adopts ic-memory 0.15.2 and Rust 1.99.0, and
+  isolates optional IcyDB composition from default validation. Aligns native
+  validation with current fixtures and source ownership. Reduces Root import calls
+  and adds reviewed bounded continuation for exhausted Host attempts (CANIC-190). Potentially
   breaking Host record changes follow the pre-1.0 reinstall-only policy.
+  Removes incidental deployment and release refusals while preserving custody,
+  receipt integrity and spending bounds.
 
 - `0.110.49` repairs deployment and import recovery, consolidates completed-Fleet
   reset, and improves build reproducibility, backup retention, macOS portability

@@ -68,6 +68,15 @@ If a documentation fact must drive automation, represent it as a dedicated
 machine-readable field. Documentation gates remain lightweight and must not
 turn wording cleanup into a failed compile/test release cycle.
 
+Release preflight checks authority records and exact tool pins. Native tests
+parse CI YAML and maintained Rust production syntax; executable owner tests
+check release sequencing, source-bound validation, checksums, redaction and
+cleanup. Equivalent shell implementations, YAML layouts, comments and negative
+test inputs do not require synchronized source-text guards. Audit-method
+fingerprints remain available through the explicit `make audit-method-catalog-gate`
+lane, outside deployment and release validation, so editorial audit changes do
+not block shipping.
+
 Ordinary parallel Rust suites retain libtest's default output capture. Passing
 tests therefore do not print expected panic hooks or fixture chatter as live
 validation errors; Cargo emits captured output for a failed test. Long-running

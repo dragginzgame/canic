@@ -1,1 +1,0 @@
-const JOURNAL_VERSION: u16 = 2;

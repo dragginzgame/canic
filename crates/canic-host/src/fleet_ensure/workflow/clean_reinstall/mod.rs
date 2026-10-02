@@ -29,6 +29,7 @@ use candid::Principal;
 use canic_core::cdk::utils::hash::decode_hex;
 use std::path::Path;
 
+pub use crate::fleet_ensure::ops::clean_reinstall::validate_publication_path;
 pub use crate::fleet_ensure::view::clean_reinstall::CleanReinstallReport;
 
 /// Cancel only the exact unpaid review; no canister, Ledger or artifact effect occurs.
@@ -78,12 +79,12 @@ pub fn selected(
 }
 
 /// A same-operation retry uses its frozen current desired authority.
-pub fn retained_desired(
+pub fn retained_selection(
     workspace: &Path,
     environment: &str,
     fleet: &str,
     reinstall: bool,
-) -> Result<Option<DesiredFleet>, EnsureStateError> {
+) -> Result<Option<CleanReinstallRecord>, EnsureStateError> {
     let paths = EnsurePaths::under(workspace, environment, fleet);
     if ops::operation_selection::retirement::pending(&paths)?.is_some() {
         return Ok(None);
@@ -94,7 +95,7 @@ pub fn retained_desired(
     if !ops::operation_selection::clean_reinstall_current(&paths)? {
         return Ok(None);
     }
-    Ok(storage::read(&paths)?.map(|record| record.desired.desired().clone()))
+    storage::read(&paths)
 }
 
 /// Review the next bounded phase; every new reset starts with current custody.
@@ -121,7 +122,10 @@ pub fn review<P: EnsurePlatform>(
         retirement.finish(desired, policy, seed)?
     } else {
         match storage::read(&paths)? {
-            Some(record) if record.desired.desired() == desired => record,
+            Some(record) if record.desired.desired() == desired => {
+                storage::validate_inputs(&record, policy, seed)?;
+                record
+            }
             Some(_) => return Err(EnsureWorkflowError::PlanIntegrity),
             None => storage::bind(&paths, desired, policy, seed)?,
         }

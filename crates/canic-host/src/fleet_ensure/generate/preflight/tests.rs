@@ -40,6 +40,12 @@ fn completed_fresh_seed_rejects_before_build_or_network_and_explicit_inventory_p
     validate_generation_inputs(&request, operator, ledger).unwrap();
     assert!(!load(&request, None).unwrap().clean_reinstall);
     let paths = EnsurePaths::under(&root, "local", "fleet");
+    fs::create_dir_all(paths.plan.parent().unwrap()).unwrap();
+    for name in [".DS_Store", "notes.txt", "plan.json.bak", ".plan.json.tmp"] {
+        fs::write(paths.plan.with_file_name(name), b"unrelated local metadata").unwrap();
+    }
+    validate_generation_inputs(&request, operator, ledger).unwrap();
+    assert!(!load(&request, None).unwrap().clean_reinstall);
     write_completion(&paths);
     let original_plan = fs::read(&paths.plan).unwrap();
     let original_journal = fs::read(&paths.journal).unwrap();

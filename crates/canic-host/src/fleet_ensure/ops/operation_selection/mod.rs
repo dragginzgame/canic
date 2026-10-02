@@ -39,13 +39,61 @@ pub(in crate::fleet_ensure) fn has_retained_files(
             path: directory.into(),
             source,
         })?;
-        // A stopped-Root observation is an effect-free generation hint. Its
-        // executable Start, if reviewed, has its own plan/journal below this directory.
-        if entry.path() != paths.lock && entry.path() != paths.root_start_authority {
+        // Local metadata, editor backups and discarded temporary writes do not
+        // establish an installation. Keep unreadable owned records as evidence.
+        if operation_evidence_name(&entry.file_name()) {
+            let path = entry.path();
+            let kind = entry.file_type().map_err(|source| EnsureStateError::Io {
+                path: path.clone(),
+                source,
+            })?;
+            if kind.is_dir() {
+                let mut contents =
+                    std::fs::read_dir(&path).map_err(|source| EnsureStateError::Io {
+                        path: path.clone(),
+                        source,
+                    })?;
+                if contents
+                    .next()
+                    .transpose()
+                    .map_err(|source| EnsureStateError::Io { path, source })?
+                    .is_none()
+                {
+                    continue;
+                }
+            }
             return Ok(true);
         }
     }
     Ok(false)
+}
+
+fn operation_evidence_name(name: &std::ffi::OsStr) -> bool {
+    matches!(
+        name.to_str(),
+        Some(
+            "activation-reset-adoption.json"
+                | "activation-reset-evidence"
+                | "activation-reset-review.json"
+                | "capacity-import-history"
+                | "capacity-import-surveys"
+                | "capacity-import.json"
+                | "clean-reinstall-custody.json"
+                | "clean-reinstall-desired.json"
+                | "clean-reinstall.json"
+                | "infrastructure-bootstrap-completed"
+                | "infrastructure-bootstrap-inspections"
+                | "infrastructure-bootstrap-publications"
+                | "infrastructure-bootstrap-receipts"
+                | "infrastructure-bootstrap-survey.json"
+                | "infrastructure-bootstrap-surveys"
+                | "journal.json"
+                | "phases"
+                | "plan.json"
+                | "state.json"
+                | "terminal-receipts"
+        )
+    )
 }
 
 /// Retirement history still requires explicit physical inventory after an interrupted local cut.

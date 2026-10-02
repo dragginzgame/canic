@@ -146,6 +146,8 @@ pub struct InfrastructureBootstrapTerminalRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct InfrastructureBootstrapInspectionRecord {
+    pub attempt_recoveries:
+        Vec<crate::fleet_ensure::model::attempt_recovery::AttemptRecoveryGrantRecord>,
     #[serde(deserialize_with = "crate::fleet_ensure::model::serialization::required_option")]
     pub registration_recovery_sha256: Option<String>,
     pub schema_version: u16,

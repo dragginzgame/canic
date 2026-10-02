@@ -47,7 +47,14 @@ fn fleet_commands_are_current_generation_and_lexicographically_ordered() {
         .collect::<Vec<_>>();
     assert_eq!(
         names,
-        ["bootstrap", "ensure", "generate", "import", "readiness"]
+        [
+            "bootstrap",
+            "ensure",
+            "generate",
+            "import",
+            "readiness",
+            "recover-attempts"
+        ]
     );
 }
 
@@ -325,6 +332,10 @@ subnet = "rwlgt-iiaaa-aaaaa-aaaaa-cai"
     )
     .expect("retain in-progress journal");
     let options = EnsureOptions {
+        explicit_inputs: EnsureExplicitInputs {
+            source_explicit: false,
+            seed_explicit: false,
+        },
         seed: PathBuf::from("deployments/fleet.estate.toml"),
         source: PathBuf::from("deployments/fleet.toml"),
         observe_funding: None,

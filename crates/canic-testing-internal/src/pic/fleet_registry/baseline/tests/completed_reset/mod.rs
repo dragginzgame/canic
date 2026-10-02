@@ -576,6 +576,28 @@ fn apply_replacement(
     replacement: &FleetEnsurePlan,
     end: ResetEnd,
 ) {
+    let mutations = std::fs::read(root.join("reinstall-mutations.log")).unwrap();
+    for flag in ["--source", "--seed"] {
+        cli_output(
+            root,
+            executable,
+            &[
+                "fleet",
+                "ensure",
+                &desired.fleet,
+                "--apply",
+                &replacement.plan_sha256,
+                flag,
+                "wrong-selection.toml",
+                "--json",
+            ],
+            false,
+        );
+        assert_eq!(
+            std::fs::read(root.join("reinstall-mutations.log")).unwrap(),
+            mutations
+        );
+    }
     std::fs::remove_file(root.join("lost-install-response")).unwrap();
     std::fs::write(root.join("lose-install-response"), []).unwrap();
     cli_apply_receipt(
@@ -695,7 +717,19 @@ fn cli_apply_receipt(
     json: bool,
     succeeds: bool,
 ) -> Vec<serde_json::Value> {
-    let mut args = vec!["fleet", "ensure", fleet, "--apply", approval];
+    let mut args = vec![
+        "fleet",
+        "ensure",
+        fleet,
+        "--desired",
+        "desired-reset.toml",
+        "--source",
+        "fleet-policy.toml",
+        "--seed",
+        "fleet-seed.toml",
+        "--apply",
+        approval,
+    ];
     if json {
         args.push("--json");
     }
@@ -717,6 +751,9 @@ fn cli_receipt(
         .map(|entry| entry.unwrap().path())
         .collect::<std::collections::BTreeSet<_>>();
     let output = cli_output(root, executable, args, succeeds);
+    if reset && succeeds && args.contains(&"--json") {
+        assert_continuation_inputs(&output);
+    }
     let stderr = String::from_utf8_lossy(&output.stderr);
     assert!(
         stderr.contains("fleet_ensure_timing_receipt") || stderr.contains("Fleet timing receipt:"),
@@ -918,4 +955,26 @@ pub(super) fn generate(
     )
     .expect("generate fresh current authority without decoding source executable records")
     .desired
+}
+
+fn assert_continuation_inputs(output: &std::process::Output) {
+    let start = output.stdout.iter().position(|byte| *byte == b'{').unwrap();
+    let report: serde_json::Value = serde_json::Deserializer::from_slice(&output.stdout[start..])
+        .into_iter()
+        .next()
+        .unwrap()
+        .unwrap();
+    let next = &report["automation"]["next_action"];
+    if next.is_null() {
+        return;
+    }
+    let arguments = next["arguments"].as_array().unwrap();
+    for (flag, expected) in [
+        ("--source", "fleet-policy.toml"),
+        ("--seed", "fleet-seed.toml"),
+        ("--desired", "desired-reset.toml"),
+    ] {
+        let index = arguments.iter().position(|arg| arg == flag).unwrap();
+        assert_eq!(arguments[index + 1], expected, "{report}");
+    }
 }

@@ -76,6 +76,12 @@ inspect. The fields `executable` and `arguments` describe a direct process call
 in the same workspace. Pass the array as arguments without shell splitting or
 `eval`; paths and identities may contain spaces or quotes. A null executable
 requires an operator decision, such as the separately reported funding review.
+Ensure continuations carry the selected `--desired`, `--source`, `--seed` and
+identity through review, apply, resume and successor review. Source and seed
+flags are accepted with `--apply`; they do not request a new reset. If omitted
+on a retained reset, their paths come from the frozen selection. An explicitly
+changed publication path is refused before effects. Human `next_command` uses
+the same selected arguments.
 Explicit bootstrap/import completion may have no next action because selecting
 the next capacity or desired document is a separate decision.
 
@@ -257,6 +263,12 @@ or decoding a predecessor's executable contracts. A symbolic fresh seed is valid
 for initial creation. Replacing retained state requires explicit physical
 inventory, including when bootstrap, activation or import never completed.
 Readiness and generation do not require a healthy predecessor plan or journal.
+
+Only owned operation records and nonempty evidence directories establish retained
+work. Local metadata, notes, editor backups, temporary writes and empty evidence
+directories do not turn a fresh deployment into a reset. Malformed or unreadable
+owned records remain evidence; their presence still requires explicit physical
+inventory or same-operation recovery.
 
 Explicit reset review qualifies the current artifacts and checks certified
 physical custody before archiving the predecessor bytes. An unfinished Root import
@@ -1397,16 +1409,42 @@ bootstrap plan, journal or prior survey. Uncredited reviews include an empty
 approval and cannot alter an approved unfinished import. Completed replay remains
 effect-free.
 
-Before handoff, Host and Root require at least `17 × source_count + 1` paid calls
+Before handoff, Host and Root require at least `13 × source_count + 1` paid calls
 and a debit ceiling covering every allowed call at Root's largest current import
 quote. The quote is effect-free; it is a conservative allowance, not an expected
-payment. Clean reinstall derives `32 × source_count + 16` calls and the matching
+payment. Clean reinstall derives `26 × source_count + 16` calls and the matching
 cycle allowance automatically. Explicit import reviews report the required bound
 when their supplied limits are insufficient. Successful callbacks settle unused
 call allowance; failed or unresolved callbacks retain theirs and retries never
 reset consumed call counts. A capacity-limit error reports the protected phase,
 reserved and observed debits, and paid-call bounds; extra Root funding does not
 increase an existing reviewed allowance.
+
+Stop and controller confirmation can issue the next mutation from the same fresh
+status sample, with no await between validation and durable intent. Running
+sources take four advances; each advance still refreshes mainnet placement and
+issued controller/uninstall effects still require exact history evidence. Eight
+running sources require 105 calls before retries; the recommended allowance is
+224. Already issued allowances never change to match new workflow estimates.
+
+If a retained Host survey, submission or inspection allowance is exhausted, review
+an effect-free continuation with:
+
+```sh
+canic --environment staging fleet recover-attempts staging --json
+canic --environment staging fleet recover-attempts staging --apply <review-sha256> --json
+```
+
+The review lists exact owner files, operation bindings, spent counters and proposed
+ceilings. Approval adds two attempts to each reviewed exhausted resource under
+the Fleet lock. It preserves consumed attempts, original approvals, signed ingress,
+cycle baselines and Root paid-call/debit ceilings. Certified retired handoff
+envelopes have a separate reviewed ceiling. Changed owner files refuse before any
+grant; interrupted local publication resumes exact grants once, and replay adds
+nothing. Repeat the original interrupted command after approval. Further exhaustion
+requires a fresh explicit review; recovery performs no IC calls and cannot prove
+an uncertain paid effect completed. Exhausted Root authority requires the governed
+cycle-safe reset path, rather than a Host continuation.
 
 The policy and seed paths are publication outputs. Use mutable operator copies
 when release inputs must stay frozen. A semantic no-op preserves exact seed bytes,
@@ -1774,9 +1812,11 @@ already completed credit. This is the current schema-1 hard cut.
 Fleet Ensure no longer installs a temporary recovery canister. Direct pool
 creation and ordinary top-up target native canister balances, while
 `FundEstate` alone transfers the forecast shortfall to a Root's Cycles Ledger
-account. An externally created Ledger-account credit remains outside the
-reviewed operation and cannot be silently consumed or substituted for its
-durable transfer receipt.
+account. External Ledger-account credits do not block admission or completion,
+including when no creations are reviewed. They remain separate from transfer
+accounting: surplus never substitutes for a durable funding receipt or expands
+the reviewed creation count or debit ceiling. Terminal conservation includes
+the observed surplus as net credit and still rejects unexplained deficits.
 
 ## Retirement Boundary
 

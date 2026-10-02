@@ -1,3 +1,0 @@
-fn decode_legacy_state(bytes: &[u8]) -> Result<State, Error> {
-    decode(bytes)
-}

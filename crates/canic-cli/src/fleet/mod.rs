@@ -4,6 +4,7 @@
 //! Does not own: desired-state policy, IC effects, durable intent, or historical compatibility.
 //! Boundary: delegates immediately to the host reconciler after resolving local paths.
 
+mod attempt_recovery;
 mod automation;
 mod bootstrap;
 mod clean_reinstall;
@@ -234,7 +235,15 @@ impl GenerateOptions {
 }
 
 #[derive(Clone, Debug, Eq, PartialEq)]
+/// Presence of exact publication destinations in the original CLI invocation.
+struct EnsureExplicitInputs {
+    source_explicit: bool,
+    seed_explicit: bool,
+}
+
+#[derive(Clone, Debug, Eq, PartialEq)]
 struct EnsureOptions {
+    explicit_inputs: EnsureExplicitInputs,
     seed: PathBuf,
     source: PathBuf,
     observe_funding: Option<String>,
@@ -269,6 +278,10 @@ impl EnsureOptions {
             PathBuf::from,
         );
         Ok(Self {
+            explicit_inputs: EnsureExplicitInputs {
+                source_explicit: ensure.contains_id("source"),
+                seed_explicit: ensure.contains_id("seed"),
+            },
             observe_funding: string_option(ensure, "observe-funding"),
             seed: string_option(ensure, "seed").map_or_else(
                 || PathBuf::from(format!("deployments/{fleet}.estate.toml")),
@@ -306,6 +319,7 @@ fn fleet_command() -> Command {
         .subcommand(generate_command())
         .subcommand(import::command())
         .subcommand(readiness::command())
+        .subcommand(attempt_recovery::command())
         .after_help(FLEET_HELP_AFTER)
 }
 
@@ -437,8 +451,8 @@ fn ensure_command() -> Command {
                     "Review a clean current-build reinstall, retaining supplied IDs and cycles",
                 ),
         )
-        .arg(value_arg("seed").long("seed").value_name("PATH").requires("reinstall").help("Retained canister inventory; apply may publish resolved IDs here (defaults to deployments/<fleet>.estate.toml)"))
-        .arg(value_arg("source").long("source").value_name("PATH").requires("reinstall").help("Current Fleet policy for reset/import publication; defaults to deployments/<fleet>.toml"))
+        .arg(value_arg("seed").long("seed").value_name("PATH").help("Retained canister inventory; apply may publish resolved IDs here (defaults to deployments/<fleet>.estate.toml)"))
+        .arg(value_arg("source").long("source").value_name("PATH").help("Current Fleet policy for reset/import publication; defaults to deployments/<fleet>.toml"))
         .arg(value_arg("operator-mint").long("operator-mint").action(ArgAction::SetTrue).num_args(0)
             .help("Review, inspect or apply one receipt-bound ICP conversion for a retained operator shortfall"))
         .arg(value_arg("mint-cmc").long("mint-cmc").default_value("rkp4c-7iaaa-aaaaa-aaaca-cai").requires("operator-mint")
@@ -486,6 +500,9 @@ where
     if args.first().and_then(|arg| arg.to_str()) == Some("readiness") {
         return readiness::run(args[1..].to_vec());
     }
+    if args.first().and_then(|arg| arg.to_str()) == Some("recover-attempts") {
+        return attempt_recovery::run(args[1..].to_vec());
+    }
     let options = EnsureOptions::parse(args)?;
     let json = options.json;
     run_ensure(&options).map_err(|error| {
@@ -498,6 +515,9 @@ where
 }
 
 fn json_error(source: FleetCommandError, options: Option<&EnsureOptions>) -> FleetCommandError {
+    if matches!(source, FleetCommandError::JsonReported { .. }) {
+        return source;
+    }
     let successor = matches!(&source, FleetCommandError::Workflow(error) if matches!(error.as_ref(),
         EnsureWorkflowError::SuccessorReviewRequired { .. } | EnsureWorkflowError::ReplanRequiredAfterCreateBalanceDrift { .. }));
     let next_action = options.filter(|_| successor).map(|options| {
