@@ -69,7 +69,7 @@ pub enum InfrastructureBootstrapError {
     )]
     RegistrationApproval { review_sha256: String },
     #[error(
-        "bootstrap inspection allowance exhausted; retained effects and original balances remain authoritative"
+        "bootstrap inspection allowance exhausted; retain original effects and balances and review continuation with canic --environment <environment> fleet recover-attempts <fleet>"
     )]
     InspectionBudget,
     #[error("infrastructure bootstrap source, plan or current authority differs")]

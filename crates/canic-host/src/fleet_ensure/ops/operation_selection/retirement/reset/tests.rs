@@ -250,3 +250,42 @@ fn uncertain_paid_effects_remain_reconcilable_and_unchanged() {
     ));
     fs::remove_dir_all(paths.workspace).unwrap();
 }
+
+#[test]
+fn current_reset_keeps_nondefault_paths_and_rejects_changed_publication_destinations() {
+    let (paths, desired) = current_fixture();
+    let policy = paths.workspace.join(".tools/selected policy.toml");
+    let seed = paths.workspace.join(".tools/selected estate.toml");
+    let record = CleanReinstallRecord {
+        schema_version: 1,
+        desired: crate::fleet_ensure::model::ReviewedDesiredFleetRecord::capture(&desired),
+        policy: policy.clone(),
+        seed: seed.clone(),
+    };
+    write_current(&paths.plan.with_file_name("clean-reinstall.json"), &record).unwrap();
+    let retained = ops::clean_reinstall::read(&paths).unwrap().unwrap();
+    ops::clean_reinstall::validate_inputs(&retained, &policy, &seed).unwrap();
+    fs::create_dir_all(policy.parent().unwrap().join("nested")).unwrap();
+    fs::write(&policy, []).unwrap();
+    fs::write(&seed, []).unwrap();
+    ops::clean_reinstall::validate_inputs(
+        &retained,
+        &policy
+            .parent()
+            .unwrap()
+            .join("nested/../selected policy.toml"),
+        &seed,
+    )
+    .unwrap();
+    for (policy, seed) in [
+        (paths.workspace.join("wrong.toml"), seed),
+        (policy, paths.workspace.join("wrong.toml")),
+    ] {
+        assert!(matches!(
+            ops::clean_reinstall::validate_inputs(&retained, &policy, &seed),
+            Err(EnsureStateError::ResetInputConflict { .. })
+        ));
+        assert_eq!(ops::clean_reinstall::read(&paths).unwrap().unwrap(), record);
+    }
+    fs::remove_dir_all(paths.workspace).unwrap();
+}

@@ -1,0 +1,96 @@
+# Code review implementation status
+
+Last updated: **2026-10-02**. Scope: Canic implementation and qualification;
+Toko Miner is downstream feedback and read-only context.
+
+The current corrective batch targets the **0.110.50 draft**; workspace packages
+remain **0.110.49**. Recent deployment fixes and ic-memory 0.15.2 adoption are
+locally qualified. The subsequently selected upstream patches have the narrower
+review evidence recorded below; selection alone is not combined qualification.
+This page tracks progress; it is not release authority or evidence of publication.
+
+## Review coverage
+
+The original review contains **401 findings**. The implementation tracker has
+**27 distinct original finding IDs explicitly counted as addressed and qualified**.
+That is a conservative minimum, not a current total of every fix. Recent work
+below has additional evidence but has not all been reconciled against original
+IDs. Do not interpret the other 374 entries as 374 confirmed remaining defects,
+or add issue counts and test counts to the closure total.
+
+- [Original review export](<Canic Code Review.html>) — preserved source findings.
+- [Implementation tracker and counted IDs](../design/0.110-fleet-runtime-contraction/status.md#accepted-code-review-corrections--2026-09-30) — detailed R1–R8 ownership and traceability.
+- [Current session handoff](../status/current.md) — latest execution evidence and concurrent work.
+- [Deployment reliability audit](../audits/reports/2026-09/2026-09-30/deployment-reliability.md) — separate 18-finding audit; its snapshot findings are historical, not current dispositions.
+- [0.110 release notes](../changelog/0.110.md) — included behavior changes, distinct from validation and publication status.
+
+## Recent delivery status
+
+“Qualified” means the recorded targeted checks passed for their tested source
+and dependency state. It does not mean published, live-deployed, or accepted by
+Toko. Evidence paths below are local retained logs under
+`target/review-validation/`; the linked handoff gives detailed results.
+
+| Work | Current disposition | Evidence / remaining boundary |
+| --- | --- | --- |
+| CANIC-192: preserve selected deployment inputs | **Implemented and qualified.** Desired, policy, inventory and identity survive apply, resume, import and successor review. Changed destinations reject before effects; equivalent paths are accepted. | 82 CLI tests, 23 Host tests, affected-package Clippy and public CLI PocketIC reset/recovery/offline replay pass. `canic192-*`; PocketIC 481.48s. The binaries predate the concurrent ic-memory 0.15.2 bump. |
+| CANIC-191 / RD1: reset unfinished installations | **Implemented and qualified.** Current artifacts and physical custody replace predecessor-completion requirements, including malformed application state. | Partial bootstrap/activation/import reset, uncertain-effect fences, conservation and replay are qualified. `canic191-*`, `release-split-*`, and the later CANIC-192 journey. Live Toko adoption remains separate. |
+| CANIC-190: exhausted Host attempts | **Implemented and qualified.** `fleet recover-attempts` grants two additional attempts per reviewed exhausted resource after exact-digest approval. | Original counters, baselines, ingress and Root spending limits remain intact. Native partial-publication/replay checks and exhausted signed-handoff PocketIC recovery pass. `r2-*`. Exhausted Root spending authority still requires cycle-safe reset. |
+| R2: Root import call reduction | **Implemented and qualified for this bounded outcome.** Confirmation reuses its final status sample before the next mutation. | Eight running sources use 105 calls; placement-drift refusal/recovery uses 106. Minimum/recommended review allowances are 105/224. `r2-*`. This does not close all R2 findings or qualify cross-advance placement caching. |
+| Deployment and release guard cleanup | **Implemented and qualified.** Incidental files and surplus cycles no longer cause false refusals; release checks validate authority and behavior rather than source spelling. | 17 selected Rust regressions, focused Clippy, release-integrity fixtures, ShellCheck and document/inventory checks pass. `deployment-guards-*`. Custody, unexplained deficits and uncertain paid effects remain protected. |
+| Rust 1.99 and ordinary-test fallout | **Implemented and qualified.** Toolchain pins, lint cleanup, optional IcyDB selection, isolated runner inputs and stale native fixtures are corrected. | Full Canic-owned Clippy was explicitly run for the toolchain update; subsequent corrections have targeted evidence. `rust199-*`, `ordinary-fallout-*`. IcyDB drift remains an optional local-consumer limitation, not a Canic release blocker. |
+| ic-memory adoption | **0.15.2 qualified; 0.15.3 now selected.** The later patch fixes prebootstrap diagnostic construction. | 0.15.2: 35 memory, 70 receipt, four ABI/identity tests, Core Clippy and the public managed-component lifecycle PocketIC case pass (201.44s). `ic-memory-0152-*`. A fresh 0.15.3 public-API probe passes for the diagnostic fix; this is not a new whole-graph lifecycle qualification. |
+| Deployment reliability audit, findings 1–18 | **Implementation follow-through recorded in the handoff.** Includes complete failure reporting, test selection, bootstrap budgets, held-source funding, build reuse, packaging and automation. | Findings 9/10 have installed-package and embedded-fixture journeys; finding 17 has command-array/phase evidence, extended by CANIC-192. Native macOS execution, formal audit closeout and downstream live acceptance are separate qualifications. Do not count these 18 again as original-review closures. |
+
+## Upstream feedback recheck — 2026-10-02
+
+Read-only review of sibling checkouts, release source and retained feedback.
+Canic's manifest and registry lock select all four versions below. No upstream
+files or dependencies were changed by this recheck.
+
+| Dependency selected | Feedback disposition | Remaining boundary |
+| --- | --- | --- |
+| ic-memory 0.15.3 | **Fixed.** Default export, commit-recovery and both doctor helpers no longer construct the runtime before bootstrap. | Fresh public-API probe confirms typed `NotBootstrapped` followed by successful configured 16-page bootstrap for all four helpers and a control. `upstream-feedback-recheck-memory.{rs,log}`. |
+| ic-query 0.44.1 | **Open in the released version.** Dry-run export can alias and overwrite the managed cache despite reporting no cache write. Upstream has an uncommitted fix with recorded tests for path, symlink and hardlink aliases. | Await a released fix. Canic's current loader does not select an export output path, so this is not an observed deployment blocker. Cross-process acquisition checkpoint reuse remains a performance opportunity; no new Canic latency benchmark was run. |
+| ic-testkit 0.10.3 | **Classifier fix verified through the selected registry package.** Generic channel-closure and quoted refusal text no longer count as dead PocketIC transport; maintained request shapes and wrapped transport errors still qualify. | Locked package build and three fresh public-API regressions pass: `testkit-0103-{build,probe}.log`. 0.10.3 adds an experimental PocketIC teardown patch and synthetic probe, with no production teardown change. The hang and original Busy/tick cause remain unresolved. |
+| ic-timers 0.8.1 | **No new runtime defect found.** Release changes are tooling, lint annotations and documentation; registration/deadline behavior is unchanged. | Retained four-case timer evidence remains relevant. Upstream handoff still calls 0.8.1 unpublished despite its release commit and Canic registry selection: documentation drift only. |
+
+This recheck does not claim complete Canic qualification of the newly selected
+memory/query/testkit combination. The previous lifecycle evidence is explicitly
+for memory 0.15.2 with timers 0.8.1. Query's local upstream tests are upstream
+evidence, not tests run here or evidence that its fix has shipped.
+
+## Remaining accepted work
+
+| Owner / batch | Work still open |
+| --- | --- |
+| R2 — Host, CLI, Control Plane | Remaining import/operation recovery findings, older unknown outcomes and Root-cap disposition. Host attempt recovery is now qualified; do not continue tracking that specific gap as unimplemented. |
+| R3 — funding and conservation | Remaining funding accounting and authority work beyond qualified signing admission, grant replay and native-credit corrections. |
+| R4 — placement and recycling | Caller replay, issuer and funding authority isolation. Existing placement/recycling and allocation-bound recovery evidence does not close these remaining findings. |
+| R5 — Backup, CLI, Core | Complete uploads, consistent capture and remaining release/restore authority. Filesystem locking and retention corrections are qualified; fresh live backup remains unavailable. |
+| R6 — background drivers | Driver ownership and trap recovery; typed platform-unavailable retry classification is already qualified. |
+| R7 — convergence | Operation-specific authority across unrelated Fleet changes, mirror acknowledgements, rotation and activation fences. |
+| R8 / FR1 — retirement and release | Complete paid-obligation and account collection, cycle/ICP accounting, quiescence, execution/recovery, CLI, whole-Fleet proof and retirement contraction. Newer FR1 work is parked outside the corrective release tree; preserve its retained bundle. |
+| CS1 — simplification | Accepted simplification work follows FR1; its direct evidence, propagation and cleanup remain outstanding. |
+| Qualification and triage | Native macOS results, remaining execution-boundary work, and finding-by-finding disposition of the full original review. R1's bounded quota outcome is already qualified. |
+
+The [implementation sequence](../design/0.110-fleet-runtime-contraction/status.md)
+owns detailed acceptance and dependencies. Completing every review finding is
+not a prerequisite for shipping a bounded corrective batch. Final 0.110 closeout
+must be explicitly requested and accepted before starting 0.111.
+
+## Next checkpoints and maintenance
+
+1. Record combined corrective-batch qualification for the latest selected
+   dependencies in the handoff; keep previous exact-version evidence distinct.
+2. Keep the 0.110.50 draft aligned with the completed batch. Publication and live
+   deployment remain separate maintainer-selected actions; none is implied here.
+3. Continue the accepted remaining sequence, including parked FR1 and CS1, using
+   the detailed tracker rather than treating historical snapshot findings as new bugs.
+4. Reconcile completed work with original finding IDs before changing the 27/401
+   count. Record duplicates, partial fixes and superseded findings explicitly.
+
+For each completed batch, update this file's date, disposition, evidence and
+remaining boundary alongside the current handoff. Keep detailed test output in
+retained logs and exact finding IDs in the implementation tracker. Do not turn
+this descriptive status file, its wording or its counts into a release gate.

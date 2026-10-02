@@ -714,7 +714,7 @@ fn qualify_inspection_budget(root: &Path, plan: &FleetEnsurePlan) {
             )
         ));
     let projection: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(retained).unwrap()).unwrap();
+        serde_json::from_slice(&std::fs::read(&retained).unwrap()).unwrap();
     assert_eq!(
         projection["registration_recovery_sha256"],
         serde_json::Value::Null
@@ -728,6 +728,41 @@ fn qualify_inspection_budget(root: &Path, plan: &FleetEnsurePlan) {
         .unwrap_err();
         assert_eq!(error.classify(), serde_json::error::Category::Data);
     }
+    let recovery = crate::fleet_ensure::ops::attempt_recovery::review(
+        &paths,
+        &plan.environment,
+        "bootstrap-budget-proof",
+    )
+    .unwrap();
+    crate::fleet_ensure::ops::attempt_recovery::apply(
+        &paths,
+        &plan.environment,
+        "bootstrap-budget-proof",
+        recovery.review_sha256,
+    )
+    .unwrap();
+    for phase in [
+        inspection::InspectionPhase::Review,
+        inspection::InspectionPhase::Apply,
+        inspection::InspectionPhase::Terminal,
+    ] {
+        inspection::reserve(&paths, plan, phase).unwrap();
+        inspection::reserve(&paths, plan, phase).unwrap();
+        assert!(matches!(
+            inspection::reserve(&paths, plan, phase),
+            Err(InfrastructureBootstrapError::InspectionBudget)
+        ));
+    }
+    inspection::reserve_effect(&paths, plan, action).unwrap();
+    let extended = std::fs::read(&retained).unwrap();
+    crate::fleet_ensure::ops::attempt_recovery::apply(
+        &paths,
+        &plan.environment,
+        "bootstrap-budget-proof",
+        recovery.review_sha256,
+    )
+    .unwrap();
+    assert_eq!(std::fs::read(retained).unwrap(), extended);
 }
 
 fn qualify_review_retry(

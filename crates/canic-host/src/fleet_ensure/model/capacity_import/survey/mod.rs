@@ -28,6 +28,8 @@ pub struct CapacityImportSurveyCanisterRecord {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportSurveyRecord {
+    pub attempt_recoveries:
+        Vec<crate::fleet_ensure::model::attempt_recovery::AttemptRecoveryGrantRecord>,
     pub schema_version: u16,
     pub request_sha256: [u8; 32],
     pub canisters: BTreeMap<String, CapacityImportSurveyCanisterRecord>,

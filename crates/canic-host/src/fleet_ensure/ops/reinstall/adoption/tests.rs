@@ -1,7 +1,7 @@
 use super::*;
 use crate::fleet_ensure::model::{
-    CycleConservation, FleetActivationResetRecord, FleetActivationSourceRecord,
-    FleetEnsureCompletion, FleetEnsurePlanScope, FleetReinstallRecord,
+    CycleConservation, DesiredFleet, FleetActivationResetRecord, FleetActivationSourceRecord,
+    FleetEnsureCompletion, FleetEnsurePlanScope, FleetReinstallRecord, ReviewedDesiredFleetRecord,
 };
 use std::{collections::BTreeMap, fs};
 
@@ -34,6 +34,7 @@ fn completed_review_is_evidence_and_only_a_new_review_requires_execution_decodin
 pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
     source_paths: &EnsurePaths,
     source: &FleetActivationSourceRecord,
+    desired: &DesiredFleet,
 ) {
     let root = crate::test_support::temp_dir("activation-reset-adoption");
     let paths = EnsurePaths::under(&root, "local", "source");
@@ -44,7 +45,9 @@ pub(in crate::fleet_ensure::ops) fn assert_review_handoff(
     ] {
         write_bytes(to, &fs::read(from).unwrap()).unwrap();
     }
-    let plan = fixture_plan(source.clone());
+    let mut plan = fixture_plan(source.clone());
+    plan.reviewed_desired = Some(Box::new(ReviewedDesiredFleetRecord::capture(desired)));
+    plan.plan_sha256 = expected_plan_sha256(&plan);
     assert_handoff(&paths, plan);
     fs::remove_dir_all(root).unwrap();
 }

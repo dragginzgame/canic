@@ -4,7 +4,10 @@
 
 use crate::{
     ops::canister_pool::capacity_import::CanisterPoolImportOps,
-    view::canister_pool::{PoolImportCallBudgetView, PoolImportCallReservationView},
+    view::canister_pool::{
+        PoolImportCallBudgetView, PoolImportCallReservationView, PoolImportHistoryView,
+        PoolImportObservationView,
+    },
     workflow::canister_pool::require_import_candidate,
 };
 use canic_core::{
@@ -107,7 +110,8 @@ pub fn status(identity: PoolImportIdentity) -> Result<PoolImportStatus, Internal
     CanisterPoolImportOps::status(identity)
 }
 
-/// Advance at most one source transition. Issued effects are observed on later calls.
+/// Reconcile issued work and submit its next mutation from one fresh coherent observation.
+/// Every mutation retains its own intent and allowance; a failed continuation resumes there.
 pub async fn advance(
     identity: PoolImportIdentity,
     canister_id: Principal,
@@ -126,24 +130,10 @@ pub async fn advance(
     let _execution = CanisterPoolImportOps::claim_execution(identity)?;
     require_destination(&retained.reservation)?;
     require_import_candidate(canister_id)?;
-    if BuildNetworkOps::build_network() == Some(BuildNetwork::Ic) {
-        let paid = reserve_observation(
-            identity,
-            NnsRegistryOps::subnet_lookup_call_cost(canister_id)?,
-        )?;
-        let subnet = NnsRegistryOps::get_subnet_for_canister(canister_id).await?;
-        complete_call(identity, paid)?;
-        if subnet != Some(retained.reservation.subnet) {
-            return Err(InternalError::conflict());
-        }
-    }
-    let paid = reserve_observation(
-        identity,
-        MgmtOps::canister_inspection_reserve(canister_id)?.required_liquid_cycles,
-    )?;
-    let observed = CanisterPoolImportOps::observe_source(canister_id).await?;
-    complete_call(identity, paid)?;
-    require_destination(&retained.reservation)?;
+    // History precedes the final status sample. No await separates that sample's
+    // validation from the next mutation's durable intent, including on recovery.
+    let history = observe_issued_history(identity, canister_id, progress).await?;
+    let observed = observe_source(identity, canister_id, &retained.reservation).await?;
     match progress {
         PoolImportSourceProgress::AwaitingHandoff
             if !retained.reservation.sources[index].stopped =>
@@ -155,57 +145,108 @@ pub async fn advance(
             complete_call(identity, paid)?;
         }
         PoolImportSourceProgress::AwaitingHandoff | PoolImportSourceProgress::Stopped => {
-            let args = UpdateSettingsArgs {
-                canister_id,
-                settings: CanisterSettings {
-                    controllers: Some(retained.reservation.final_controllers),
-                    ..CanisterSettings::default()
-                },
-                sender_canister_version: None,
-            };
-            let budget = budget(MgmtOps::update_settings_call_cost(&args)?);
-            let paid = CanisterPoolImportOps::issue_controllers(
-                identity,
-                &observed,
-                budget,
-                IcOps::now_nanos(),
-            )?;
-            MgmtOps::update_settings(&args).await?;
-            complete_call(identity, paid)?;
+            issue_controllers(identity, &observed, &retained.reservation).await?;
         }
         PoolImportSourceProgress::ControllersIssued => {
-            let paid =
-                reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
-            let history = CanisterPoolImportOps::observe_history(canister_id).await?;
-            complete_call(identity, paid)?;
-            require_destination(&retained.reservation)?;
-            CanisterPoolImportOps::observe_controllers(identity, &observed, &history)?;
+            CanisterPoolImportOps::observe_controllers(
+                identity,
+                &observed,
+                history.as_ref().ok_or_else(InternalError::invariant)?,
+            )?;
+            issue_uninstall(identity, &observed).await?;
         }
         PoolImportSourceProgress::StopIssued => {
             CanisterPoolImportOps::observe_stopped(identity, &observed)?;
+            issue_controllers(identity, &observed, &retained.reservation).await?;
         }
         PoolImportSourceProgress::ControllersConfirmed => {
-            let budget = budget(MgmtOps::uninstall_code_call_cost(canister_id)?);
-            let paid = CanisterPoolImportOps::issue_uninstall(identity, &observed, budget)?;
-            MgmtOps::uninstall_code(canister_id).await?;
-            complete_call(identity, paid)?;
+            issue_uninstall(identity, &observed).await?;
         }
         PoolImportSourceProgress::UninstallIssued => {
-            let paid =
-                reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
-            let history = CanisterPoolImportOps::observe_history(canister_id).await?;
-            complete_call(identity, paid)?;
-            require_destination(&retained.reservation)?;
             CanisterPoolImportOps::observe_cleared(
                 identity,
                 &observed,
-                &history,
+                history.as_ref().ok_or_else(InternalError::invariant)?,
                 IcOps::now_nanos(),
             )?;
         }
         PoolImportSourceProgress::Ready(_) => return Err(InternalError::invariant()),
     }
     CanisterPoolImportOps::status(identity)
+}
+
+async fn observe_issued_history(
+    identity: PoolImportIdentity,
+    canister_id: Principal,
+    progress: &PoolImportSourceProgress,
+) -> Result<Option<PoolImportHistoryView>, InternalError> {
+    if !matches!(
+        progress,
+        PoolImportSourceProgress::ControllersIssued | PoolImportSourceProgress::UninstallIssued
+    ) {
+        return Ok(None);
+    }
+    let paid = reserve_observation(identity, MgmtOps::canister_history_call_cost(canister_id)?)?;
+    let history = CanisterPoolImportOps::observe_history(canister_id).await?;
+    complete_call(identity, paid)?;
+    Ok(Some(history))
+}
+
+async fn observe_source(
+    identity: PoolImportIdentity,
+    canister_id: Principal,
+    reservation: &PoolImportReservation,
+) -> Result<PoolImportObservationView, InternalError> {
+    require_destination(reservation)?;
+    if BuildNetworkOps::build_network() == Some(BuildNetwork::Ic) {
+        let paid = reserve_observation(
+            identity,
+            NnsRegistryOps::subnet_lookup_call_cost(canister_id)?,
+        )?;
+        let subnet = NnsRegistryOps::get_subnet_for_canister(canister_id).await?;
+        complete_call(identity, paid)?;
+        if subnet != Some(reservation.subnet) {
+            return Err(InternalError::conflict());
+        }
+    }
+    let paid = reserve_observation(
+        identity,
+        MgmtOps::canister_inspection_reserve(canister_id)?.required_liquid_cycles,
+    )?;
+    let observed = CanisterPoolImportOps::observe_source(canister_id).await?;
+    complete_call(identity, paid)?;
+    require_destination(reservation)?;
+    Ok(observed)
+}
+
+async fn issue_controllers(
+    identity: PoolImportIdentity,
+    observed: &PoolImportObservationView,
+    reservation: &PoolImportReservation,
+) -> Result<(), InternalError> {
+    let args = UpdateSettingsArgs {
+        canister_id: observed.canister_id,
+        settings: CanisterSettings {
+            controllers: Some(reservation.final_controllers.clone()),
+            ..CanisterSettings::default()
+        },
+        sender_canister_version: None,
+    };
+    let budget = budget(MgmtOps::update_settings_call_cost(&args)?);
+    let paid =
+        CanisterPoolImportOps::issue_controllers(identity, observed, budget, IcOps::now_nanos())?;
+    MgmtOps::update_settings(&args).await?;
+    complete_call(identity, paid)
+}
+
+async fn issue_uninstall(
+    identity: PoolImportIdentity,
+    observed: &PoolImportObservationView,
+) -> Result<(), InternalError> {
+    let budget = budget(MgmtOps::uninstall_code_call_cost(observed.canister_id)?);
+    let paid = CanisterPoolImportOps::issue_uninstall(identity, observed, budget)?;
+    MgmtOps::uninstall_code(observed.canister_id).await?;
+    complete_call(identity, paid)
 }
 
 /// Retain the final Root balance boundary before any host inventory publication.

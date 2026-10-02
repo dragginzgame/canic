@@ -187,7 +187,7 @@ impl CapacityImportJournalStore {
 
 // Reserve space for every current-contract effect and the Root reservation
 // before approval. A small initial record must not strand a paid handoff later.
-fn require_completion_fits(
+pub(in crate::fleet_ensure) fn require_completion_fits(
     record: &CapacityImportJournalRecord,
 ) -> Result<(), CapacityImportJournalError> {
     let mut largest = record.clone();
@@ -236,7 +236,7 @@ fn require_completion_fits(
                 },
                 certificate_sha256: [u8::MAX; 32],
             };
-            retirement::MAXIMUM_REQUESTS
+            retirement::maximum_requests(record, handoff.canister_id)?
         ];
         handoff.before_reserved_cycles = Some(u128::MAX);
         handoff.after_reserved_cycles = Some(u128::MAX);

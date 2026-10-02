@@ -1023,7 +1023,11 @@ fn assert_activation_source_review(
         canic_core::cdk::utils::hash::sha256_hex(&fs::read(&paths.journal).expect("journal bytes"))
     );
     let mut requested = desired;
-    crate::fleet_ensure::ops::reinstall::adoption::tests::assert_review_handoff(&paths, &evidence);
+    crate::fleet_ensure::ops::reinstall::adoption::tests::assert_review_handoff(
+        &paths,
+        &evidence,
+        &source_desired,
+    );
     requested.fleet = "source".to_string();
     requested.environment = "local".to_string();
     let mut platform = crate::fleet_ensure::tests::MockPlatform::new(requested.clone(), []);

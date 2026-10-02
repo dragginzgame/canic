@@ -92,19 +92,17 @@ pub(super) fn ensure_command(options: &EnsureOptions, environment: &str) -> Vec<
     args.extend([
         "--desired".into(),
         options.desired.to_string_lossy().into_owned(),
+        "--source".into(),
+        options.source.to_string_lossy().into_owned(),
+        "--seed".into(),
+        options.seed.to_string_lossy().into_owned(),
     ]);
     args
 }
 
 pub(super) fn reinstall_review_command(options: &EnsureOptions, environment: &str) -> Vec<String> {
     let mut args = ensure_command(options, environment);
-    args.extend([
-        "--reinstall".into(),
-        "--source".into(),
-        options.source.to_string_lossy().into_owned(),
-        "--seed".into(),
-        options.seed.to_string_lossy().into_owned(),
-    ]);
+    args.push("--reinstall".into());
     args
 }
 

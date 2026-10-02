@@ -156,7 +156,7 @@ fn collect_named_files(root: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
             continue;
         };
         if path.is_dir() {
-            if matches!(name, ".git" | ".tmp" | "target") {
+            if matches!(name, ".canic" | ".git" | ".tmp" | "target") {
                 continue;
             }
             collect_named_files(&path, file_name, files);
@@ -166,10 +166,12 @@ fn collect_named_files(root: &Path, file_name: &str, files: &mut Vec<PathBuf>) {
     }
 }
 
-// Returns the declared Canic roles from repository configs, keyed by app and role.
+// Returns maintained package-tree roles, excluding local state and archived configs.
 fn declared_canic_roles(root: &Path) -> BTreeMap<(String, String), CanicConfigRole> {
     let mut config_paths = Vec::new();
-    collect_named_files(root, "canic.toml", &mut config_paths);
+    for source_root in ["apps", "canisters", "crates"] {
+        collect_named_files(&root.join(source_root), "canic.toml", &mut config_paths);
+    }
 
     let mut roles = BTreeMap::new();
     for config_path in config_paths {

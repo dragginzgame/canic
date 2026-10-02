@@ -94,7 +94,7 @@ pub(in crate::fleet_ensure) fn qualify_unpaid_infrastructure_review(
     )
     .unwrap();
     assert!(
-        crate::fleet_ensure::workflow::clean_reinstall::retained_desired(
+        crate::fleet_ensure::workflow::clean_reinstall::retained_selection(
             &root,
             request.environment,
             request.fleet,

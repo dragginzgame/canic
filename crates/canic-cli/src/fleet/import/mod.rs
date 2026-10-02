@@ -259,7 +259,7 @@ fn render(record: &CapacityImportJournalRecord, command: &str) -> String {
             plan.root_budget.maximum_paid_calls
         ),
         format!(
-            "Initial status attempts: at most {MAXIMUM_ATTEMPTS} per canister; successful balances retained across restart"
+            "Initial status allowance: {MAXIMUM_ATTEMPTS} per canister; reviewed continuation retains spent attempts and original successful balances"
         ),
     ];
     for credit in &plan.funding_credits {

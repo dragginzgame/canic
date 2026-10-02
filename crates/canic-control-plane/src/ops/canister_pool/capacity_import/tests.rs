@@ -796,3 +796,40 @@ fn capacity_import_source_credits_keep_custody_receipts_and_effect_free_replay()
     CanisterPoolImportOps::release(identity(), [5; 32]).unwrap();
     assert_eq!(CanisterPoolStore::state(), terminal);
 }
+
+#[test]
+fn exhausted_next_mutation_keeps_confirmation_and_source_drift_refuses_recovery() {
+    start();
+    CanisterPoolImportOps::issue_controllers(identity(), &observed(1), budget(), 2).unwrap();
+    let sample = observed(2);
+    CanisterPoolImportOps::observe_controllers(
+        identity(),
+        &sample,
+        &history(&sample, PoolImportHistoryKind::Controllers),
+    )
+    .unwrap();
+    for _ in 1..reservation().maximum_paid_calls {
+        CanisterPoolImportOps::reserve_paid_call(identity(), 1, 10_000).unwrap();
+    }
+    let before = CanisterPoolStore::state();
+    assert_eq!(
+        CanisterPoolImportOps::issue_uninstall(identity(), &sample, budget())
+            .unwrap_err()
+            .public_error(),
+        InternalError::resource_exhausted().public_error()
+    );
+    assert_eq!(CanisterPoolStore::state(), before);
+    assert!(matches!(
+        CanisterPoolImportOps::status(identity()).unwrap().progress[0],
+        PoolImportSourceProgress::ControllersConfirmed
+    ));
+    let mut changed = sample;
+    changed.canister_version += 1;
+    assert_eq!(
+        CanisterPoolImportOps::issue_uninstall(identity(), &changed, budget())
+            .unwrap_err()
+            .public_error(),
+        InternalError::conflict().public_error()
+    );
+    assert_eq!(CanisterPoolStore::state(), before);
+}

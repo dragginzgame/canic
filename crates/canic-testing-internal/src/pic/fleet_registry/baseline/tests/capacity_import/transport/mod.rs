@@ -266,7 +266,9 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
             .unwrap()
             .contains(&toml::Value::String(source.to_text()))
     );
-    fresh_handoff(&pic, &paths, &store, &icp, &runtime, &transport, &completed);
+    drop(store);
+    fresh_handoff(&pic, &paths, &icp, &runtime, &transport, &completed);
+    let store = CapacityImportJournalStore::open(&paths).unwrap();
     rejection::uncertified_rejection_keeps_original_request(
         &pic, &paths, &store, &icp, &runtime, &transport,
     );
@@ -276,12 +278,12 @@ pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_rec
 fn fresh_handoff(
     pic: &PocketIc,
     paths: &EnsurePaths,
-    store: &CapacityImportJournalStore,
     icp: &IcpCli,
     runtime: &tokio::runtime::Runtime,
     transport: &CapacityImportTransport,
     previous: &canic_host::fleet_ensure::model::capacity_import::CapacityImportJournalRecord,
 ) {
+    let store = CapacityImportJournalStore::open(paths).unwrap();
     let root = previous.plan.authority.root;
     let operator = previous.plan.authority.operator;
     let source = pic.create_canister_on_subnet(None, None, pic.get_subnet(root).unwrap());
@@ -300,11 +302,27 @@ fn fresh_handoff(
     .unwrap();
     let digest = staged.operation.as_ref().unwrap().review.review_sha256;
     store.stage_review(staged).unwrap();
-    let expired_request = expiry::retain_expired_intent(store, icp, runtime, transport);
+    let expired_request = expiry::retain_expired_intent(&store, icp, runtime, transport);
+    // Consume the second submission before a simulated process death. The exact
+    // unsent signed request stays uncertain until certified expiry reconciliation.
+    let spent =
+        publication::reserve_submission(&store.read().unwrap().unwrap(), "0:handoff").unwrap();
+    store.save(&spent).unwrap();
     let mut reader = CapacityImportLiveObserver::from_icp(icp).unwrap();
+    assert!(matches!(
+        runtime.block_on(canic_host::fleet_ensure::workflow::capacity_import::apply(
+            &store,
+            paths,
+            digest,
+            icp,
+            &mut reader,
+        )),
+        Err(CapacityImportJournalError::BudgetExhausted { .. })
+    ));
+    let store = approve_attempt_continuation(paths, store);
     let completed = runtime
         .block_on(canic_host::fleet_ensure::workflow::capacity_import::apply(
-            store,
+            &store,
             paths,
             digest,
             icp,
@@ -321,7 +339,7 @@ fn fresh_handoff(
     );
     assert_eq!(
         completed.operation.as_ref().unwrap().submissions["0:handoff"],
-        2
+        3
     );
     let status = pic.canister_status(source, Some(root)).unwrap();
     assert!(status.module_hash.is_none());
@@ -336,7 +354,7 @@ fn fresh_handoff(
     assert_eq!(
         runtime
             .block_on(canic_host::fleet_ensure::workflow::capacity_import::apply(
-                store,
+                &store,
                 paths,
                 original_digest,
                 &unavailable,
@@ -346,6 +364,37 @@ fn fresh_handoff(
         *previous
     );
     assert_eq!(store.read().unwrap().unwrap(), completed);
+}
+
+fn approve_attempt_continuation(
+    paths: &EnsurePaths,
+    store: CapacityImportJournalStore,
+) -> CapacityImportJournalStore {
+    let interrupted = store.read().unwrap().unwrap();
+    drop(store);
+    let review = canic_host::fleet_ensure::workflow::attempt_recovery::review(
+        &paths.workspace,
+        "local",
+        "capacity-import",
+    )
+    .unwrap();
+    canic_host::fleet_ensure::workflow::attempt_recovery::apply(
+        &paths.workspace,
+        "local",
+        "capacity-import",
+        review.review_sha256,
+    )
+    .unwrap();
+    let store = CapacityImportJournalStore::open(paths).unwrap();
+    let continued = store.read().unwrap().unwrap();
+    assert_eq!(continued.plan, interrupted.plan);
+    assert_eq!(continued.handoffs, interrupted.handoffs);
+    assert_eq!(continued.reservation, interrupted.reservation);
+    assert_eq!(
+        continued.operation.as_ref().unwrap().submissions["0:handoff"],
+        2
+    );
+    store
 }
 
 fn retain_inputs(

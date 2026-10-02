@@ -1,5 +1,256 @@
 # Current handoff — 2026-10-02
 
+Review progress, closure-count limits and remaining owners are summarized in
+[the code-review status](../code-review/status.md).
+
+## Testkit follow-up — 2026-10-02
+
+Canic's manifest permits ic-testkit 0.10.2 and its lockfile now selects registry
+0.10.3. The upstream release changes only the teardown proposal/probe and related
+documentation; production crate source is unchanged from the classifier fix in
+0.10.2. No dependency edits were made by this check.
+
+The exact locked 0.10.3 library builds successfully in 6.57 seconds. Three fresh
+public-API probe tests pass: application/quoted text and bare I/O refusal do not
+trigger dead-transport recovery; maintained refused/incomplete/channel-closed
+instance request shapes still qualify; consumer error wrappers preserve both
+positive and negative classification. Logs and source are retained under
+`target/review-validation/testkit-0103-*`. Direct Cargo dependency unit testing
+was unavailable because the package is not a workspace member, so the successful
+regression probe links the freshly built registry library instead.
+
+0.10.3 does not fix production PocketIC teardown. Its candidate upstream patch
+adds bounded fallible shutdown and has seven synthetic parent tests reported
+upstream; Canic still uses unmodified registry PocketIC 16. Persistent-state
+handoff after unconfirmed deletion requires further review, and the original
+Busy/tick cause remains unproven. No live PocketIC or full Canic suite ran here.
+The classifier feedback is resolved; teardown must remain open in the tracker.
+
+## Upstream feedback recheck — 2026-10-02
+
+Read-only sibling review confirms Canic now selects registry releases ic-memory
+0.15.3, ic-query 0.44.1, ic-testkit 0.10.2 and ic-timers 0.8.1. This supersedes
+the feedback dispositions in the earlier 0.15.2 checkpoint below, not its exact
+qualification record. No dependency or upstream repository edits ran here.
+
+- Memory 0.15.3 fixes diagnostic-triggered default runtime construction. A fresh
+  public-API probe against Canic's existing exact-version rlib confirms export,
+  commit-recovery and both doctor helpers return typed `NotBootstrapped` before
+  bootstrap, then allow configured 16-page bootstrap. All four cases and the
+  fresh-thread control pass. Source and log:
+  `target/review-validation/upstream-feedback-recheck-memory.{rs,log}`.
+- Query 0.44.1 still writes an export before its dry-run cache-write branch and
+  opens that output with `File::create`; an alias can overwrite the cache. The
+  upstream working tree has the alias fix and records successful focused/full
+  tests, but that fix is uncommitted and absent from the selected release.
+  Canic's loader does not supply an output path, so the triggering combination
+  is not exposed there. Persistent acquisition checkpoints across CLI processes
+  remain a performance opportunity; no new live timing claim is made.
+- Testkit 0.10.2 fixes the generic-text dead-transport false positives. Source
+  and upstream tests cover negative application/quoted messages and positive
+  transport evidence. PocketIC 16 synchronous teardown waiting is now reproduced
+  in isolation, not fixed; the original Busy/tick cause is still unproven.
+- Timers 0.8.1 changes tooling, lints and docs without scheduling logic changes.
+  No new runtime issue was found. Its handoff's claim that 0.8.1 is unpublished
+  is stale relative to the release commit and registry selection.
+
+The [review status](../code-review/status.md#upstream-feedback-recheck--2026-10-02)
+tracks these dispositions. This was source review plus the small memory probe,
+not combined Canic lifecycle qualification of the new dependency graph. Prior
+memory 0.15.2 / timers 0.8.1 lifecycle evidence remains correctly scoped below.
+
+## ic-memory 0.15.2 and upstream feedback — 2026-10-02
+
+The maintainer selected published ic-memory 0.15.2 and feedback notes here,
+without upstream issue publication. The workspace dependency, lockfile, runtime
+guides and existing 0.110.50 changelog draft now select 0.15.2. Package versions
+remain 0.110.49. This supersedes the earlier 0.15.0 adoption checkpoint below;
+the upstream maintenance patches require no Canic API or allocation-policy change.
+
+Qualification passes 35 focused memory tests, 70 receipt tests, four stable-memory
+ABI/identity guards and Core library/test all-feature Clippy with warnings denied.
+These native checks used timers 0.8.0. The refreshed embedded peer and its structured
+provenance qualify the final graph with the concurrent timers 0.8.1 selection;
+the exact public managed-component lifecycle PocketIC case passes in 201.44 seconds,
+including six freshly built Wasm fixtures; the governed runner completes in
+285 seconds with cleanup. The selected production/peer Wasm graph
+contains one ic-memory identity, 0.15.2. Documentation semantics, scoped diff checks
+and the 0.110.50 draft preflight pass.
+
+Earlier lifecycle attempts stopped at sandbox loopback restrictions or concurrent
+manifest/lockfile changes. The final permitted run uses consistent current inputs.
+Locked packages were fetched for offline metadata after another session changed
+optional IcyDB entries; this work did not change those versions, build or repair
+IcyDB composition, or mutate sibling repositories. Optional composition remains
+separately unqualified and does not block Canic-owned adoption.
+
+Updated upstream feedback remains reproducible through public APIs:
+
+- Memory 0.15.2: default export/recovery/doctor diagnostics before bootstrap
+  construct 128-page buckets, then configured 16-page bootstrap rejects with
+  `BucketSizeMismatch`. Export first returns `NotBootstrapped` despite this effect.
+  A fresh-thread control bootstraps 16 pages successfully. Request nonconstructing
+  inspection and explicit configuration ownership for prebootstrap diagnostics.
+  This is an upstream API hazard, not an observed failure in Canic's normal startup.
+- Testkit 0.10.1: dead-transport matching accepts unrelated application channel
+  closure and quoted `ConnectionRefused` text. Narrow recognition to transport
+  evidence; the existing upstream classifier issue already owns this feedback.
+- Query 0.44.0: a dry run whose output path is the managed catalog overwrites that
+  valid catalog while reporting `wrote_catalog=false`. A distinct-output control
+  preserves it. Reject managed-path aliases before writing.
+- Timers: four focused registration/deadline/ownership tests pass. The 0.8.1
+  production-source changes are lint annotations; no additional runtime defect
+  was found in this review.
+
+Evidence: `target/review-validation/ic-memory-0152-*`, including the feedback log,
+retained probe source, timer review and final PocketIC log. Complete lifecycle output
+is in `target/test-runs/20261002T083700Z-61887.pWYK00/1.log`.
+The dependency-adoption batch is ready for maintainer review/push and its changelog
+surfaces are complete. Publication still requires the selected version/release
+transaction. Preserve concurrent corrective batches. No broad gate, Canic version
+transaction, commit, push, upstream posting or live deployment ran.
+
+## Deployment and release guard cleanup — 2026-10-02
+
+The maintainer authorized correcting trivial deployment refusals after the
+guard audit. This cleanup batch is complete in the open 0.110.50 draft; package
+versions remain .49 and all changes are uncommitted.
+
+Retained-operation selection now recognizes owned records and evidence instead
+of treating arbitrary directory entries as an installation. Metadata, notes,
+backups, temporary writes and empty evidence directories no longer require a
+reset. Incomplete owned records and paid-effect evidence retain their recovery
+and explicit-inventory requirements. Root Ledger-account surplus is accepted
+at admission and terminal conservation, including no-creation operations;
+observed net credit never expands reviewed authority or replaces exact receipts.
+Unexplained deficits, wrong custody, excess creations and uncertain payments
+still refuse or require their existing recovery owner.
+
+Release integrity now checks authority records and executable behavior instead
+of freezing shell/Make source spelling. CI authority is parsed as YAML; product
+generations are checked through Rust syntax, excluding comments, rustdoc and
+test-only input. Audit-method fingerprints remain an explicit audit lane rather
+than a deployment/release blocker. Passing release-tool fixtures capture their
+expected rejection diagnostics.
+
+All 17 selected Rust regressions passed, including exact creation receipts,
+transfer-loss recovery, surplus accounting and metadata selection. Focused Host
+and Canic Clippy passed with warnings denied. The complete targeted
+release-integrity-contract gate, ShellCheck, formatting, document semantics and
+test-inventory checks passed. Evidence: `target/review-validation/deployment-guards-*`.
+No broad validation, version transaction, Git publication or live deployment ran.
+
+This guard-cleanup batch is ready to push. The combined 0.110.50 draft also
+contains concurrent batches whose qualification is tracked below; preserve them.
+Root and detailed changelog notes are updated; package publication still requires
+the maintainer-selected version/release transaction.
+
+## R2 import efficiency and CANIC-190 — 2026-10-02
+
+The maintainer explicitly selected R2 import-call reduction and adjacent CANIC-190.
+Both implementations and their direct qualification are complete in the open
+0.110.50 corrective draft. Package versions remain .49 and changes are uncommitted.
+
+Root continues stop/controller confirmation into the next mutation from the
+same final status sample, with no intervening await before durable intent. Fresh
+mainnet placement is still required on every resumed advance and controller/
+uninstall history remains exact. Admission derives 13 calls per running source
+plus one terminal Root read; recommended retries derive 26 per source plus 16.
+Eight sources require 105/224 minimum/recommended, down from 137/272. A 72-call
+envelope still refuses before handoff. No issued Root authority is expanded.
+
+`fleet recover-attempts` reviews exact exhausted Host owners without IC calls and
+grants two attempts per resource only after exact-digest approval. Surveys,
+submissions, inspections and retired handoff envelopes retain consumption,
+original approvals, ingress and balance baselines. Changed owners refuse before
+publication; partial publication and approval replay retain each grant once.
+Current v1 owner records require `attempt_recoveries` arrays, through the existing
+reinstall-only hard cut. Root cap exhaustion still requires cycle-safe reset.
+
+Qualification passes three Core budget tests, 32 Control Plane import tests,
+88 Host import tests, three Host recovery tests, bootstrap qualification,
+121 focused CLI tests and recursive help checks. Warning-denied all-target/
+all-feature Clippy passes for the five affected packages. Native continuation
+proofs retain spent counters, Root caps and retired-envelope history, reject
+changed owner files, and resume partially published grants exactly once.
+
+All three focused PocketIC cases pass: mainnet-shaped eight-source call/debit
+measurement with placement drift, retained running/stopped IDs and reset receipts,
+and signed HTTP handoff recovery after Host submission exhaustion. The clean
+eight-source run uses 105 paid calls in 2,087 ms with 44,571,742,321 observed Root
+debit cycles. The placement-drift run refuses the mutation and completes with
+106 calls in 2,026 ms and 44,616,376,394 debit cycles. These are individual
+PocketIC measurements, not a comparative latency benchmark. The previous
+137-call baseline derives from the original workflow. Applied journal effect
+counts are unchanged; the reduction removes observations.
+
+Evidence: `target/review-validation/r2-*`. The active R2 tracker records this
+bounded outcome without closing unrelated R2 findings or conditional placement
+caching. R2 plus CANIC-190 is ready for maintainer review/push, with its changelog
+surfaces complete; package publication still needs the governed version/release
+transaction. Combined 0.110.50 readiness also depends on the concurrent batches
+tracked here, including CANIC-192 qualification. Preserve those edits and serialize
+target validation. No broad gate, version transaction, Git publication, sibling
+edit or live effect ran.
+
+## Toko input continuity: CANIC-192 — 2026-10-02
+
+CANIC-192 is implemented and qualified. Ensure's argument arrays and human
+next-command retain desired, policy, seed and identity through apply/resume/import/
+successor review. Policy/seed flags are accepted on apply without requesting a new
+reset. Omitted retry paths inherit the retained selection. Explicit destination
+changes reject before paid work with both paths in the typed error; equivalent
+existing path spellings remain valid. The Host checks path continuity when
+reviewing the next phase. Typed successor errors use the resolved reset selection.
+
+Final checks pass: 82 Fleet CLI tests, 23 Host operation-selection tests (one
+existing manual test ignored), and warning-denied all-target/all-feature Clippy
+for CLI, Host and Testing. Scoped formatting, document semantics and the 0.110.50
+release-draft preflight pass. The extended public CLI PocketIC journey passes in
+481.48 seconds (484-second governed invocation). It covers non-default paths,
+changed-input refusal without mutations, interrupted infrastructure and import,
+Fleet completion, retained accounting and effect-free offline replay. Fixture
+artifact preparation accounts for roughly 214 seconds of the journey.
+
+Evidence: `target/review-validation/canic192-{cli-final,host,clippy,pocketic,docs}.log`
+and `target/test-runs/20261002T080829Z-48987.qOe5vd/1.log`. The earlier Host attempt
+failed during concurrent, incomplete CANIC-190 edits; the final Host run above
+replaces that incomplete-build result. The existing 0.110.50 draft and Fleet guide
+include this correction; package versions remain .49. No broad gate, deployment,
+version transaction, commit, sibling edit or Cargo cleanup ran.
+
+This closes CANIC-192's implementation and qualification for the corrective
+release batch. CANIC-190/R2 and guard-cleanup qualification are recorded above.
+A separate session changed ic-memory from 0.15.0 to 0.15.2 while the PocketIC
+journey was running; this journey's already-built binaries and artifacts qualify
+0.15.0. The dependency update owns its separate final qualification and combined
+push-readiness handoff; preserve its edits and evidence. Its 35 memory and 70
+receipt native checks already pass in `ic-memory-0152-{native,receipts}.log`.
+Do not represent this journey as exact-source validation of that later update.
+Toko's reported .49 operation remains untouched; local Canic qualification does
+not establish downstream adoption or live acceptance.
+
+## Ordinary test guard follow-up — 2026-10-02
+
+The maintainer's release run reported seven real failures across the workspace
+manifest guard, receipt inventory guard and Host library. The runner deliberately
+collects the remaining native results before its ordinary-test barrier rejects
+PocketIC execution; these failures are not swallowed or expected negative cases.
+
+Corrected the test fixtures and inventories without changing runtime behavior:
+role declarations are discovered only under maintained package trees and skip
+`.canic` state; the receipt inventory names the memory-reservation regression;
+the IcyDB guard verifies the optional dependency, feature and absent default
+harness edge; activation handoff fixtures retain reviewed desired input before
+sealing their plan hash. Production plan-integrity checks remain intact.
+
+All 15 targeted tests pass (six manifest, two receipt and seven Host tests), as
+does all-target/all-feature warning-denied Clippy for the three affected packages.
+Evidence: `target/review-validation/ordinary-fallout-{guards,host,clippy}.log`.
+The 0.110.50 draft includes these corrections. The corrective batch is ready for
+maintainer review and another selected release attempt; no full gate, version
+transaction, commit or deployment was run for this follow-up.
+
 ## Rust 1.99 qualified — 2026-10-02
 
 The maintainer-requested Rust 1.99 update and full Canic-owned Clippy check are

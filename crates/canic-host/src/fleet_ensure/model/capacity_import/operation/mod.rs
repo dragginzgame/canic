@@ -44,6 +44,8 @@ pub enum CapacityImportPublicationKind {
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 #[serde(deny_unknown_fields)]
 pub struct CapacityImportOperationRecord {
+    pub attempt_recoveries:
+        Vec<crate::fleet_ensure::model::attempt_recovery::AttemptRecoveryGrantRecord>,
     pub review: CapacityImportOperationReviewRecord,
     pub submissions: BTreeMap<String, u32>,
     pub inspections: BTreeMap<String, u32>,

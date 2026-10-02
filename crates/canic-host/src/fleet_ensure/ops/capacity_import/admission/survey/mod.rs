@@ -25,7 +25,7 @@ use std::{
     path::PathBuf,
 };
 
-const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
+pub(in crate::fleet_ensure) const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
 /// Initial planning may issue at most this many status requests per exact physical ID.
 pub const MAXIMUM_ATTEMPTS: u32 = 2;
 
@@ -138,6 +138,7 @@ impl<'a> CapacityImportSurveyStore<'a> {
         let record = match retained {
             Some(bytes) => serde_json::from_slice(&bytes)?,
             None => CapacityImportSurveyRecord {
+                attempt_recoveries: Vec::new(),
                 schema_version: 1,
                 request_sha256,
                 canisters: keys
@@ -175,6 +176,12 @@ impl<'a> CapacityImportSurveyStore<'a> {
 
     /// Persist a spent attempt before invoking management; lost responses remain spent.
     pub fn reserve(&mut self, canister: Principal) -> Result<(), CapacityImportJournalError> {
+        let maximum = crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+            &self.record.attempt_recoveries,
+            self.record.request_sha256,
+            &canister.to_text(),
+            MAXIMUM_ATTEMPTS,
+        )?;
         let entry = self
             .record
             .canisters
@@ -183,7 +190,7 @@ impl<'a> CapacityImportSurveyStore<'a> {
         if entry.sample.is_some() {
             return Err(CapacityImportJournalError::Integrity);
         }
-        if entry.attempts >= MAXIMUM_ATTEMPTS {
+        if entry.attempts >= maximum {
             return Err(CapacityImportJournalError::BudgetExhausted {
                 step: format!("initial survey of {canister}"),
             });
@@ -237,13 +244,27 @@ fn validate(
         return Err(CapacityImportJournalError::Integrity);
     }
     for (id, entry) in &record.canisters {
-        if entry.attempts > MAXIMUM_ATTEMPTS
+        let maximum = crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+            &record.attempt_recoveries,
+            record.request_sha256,
+            id,
+            MAXIMUM_ATTEMPTS,
+        )?;
+        if entry.attempts > maximum
             || entry.sample.as_ref().is_some_and(|sample| {
                 entry.attempts == 0 || sample.binding.canister_id.to_text() != *id
             })
         {
             return Err(CapacityImportJournalError::Integrity);
         }
+    }
+    if record.attempt_recoveries.iter().any(|grant| {
+        record
+            .canisters
+            .get(&grant.resource)
+            .is_none_or(|entry| entry.attempts < grant.spent_attempts)
+    }) {
+        return Err(CapacityImportJournalError::Integrity);
     }
     Ok(())
 }

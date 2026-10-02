@@ -17590,6 +17590,10 @@ cycles = "80T"
                 capacity_import::reviewed_capacity_import_retains_exact_ids_and_reset_receipts,
             ),
             (
+                "mainnet import counts calls and refreshes placement",
+                capacity_import::mainnet_import_counts_calls_and_refreshes_placement,
+            ),
+            (
                 "host import transport recovers signed handoff and Root progress",
                 capacity_import::host_import_transport_recovers_signed_handoff_and_root_progress,
             ),

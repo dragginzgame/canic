@@ -17,6 +17,8 @@ use crate::{
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 
+pub(in crate::fleet_ensure) const MAXIMUM_BYTES: usize = 256 * 1024;
+
 /// Recover the first review's clock even when its paid observation never completed.
 pub(in crate::fleet_ensure) fn planned_at_time(
     paths: &EnsurePaths,
@@ -37,7 +39,7 @@ fn read(
     source_sha256: [u8; 32],
 ) -> Result<Option<InfrastructureBootstrapInspectionRecord>, InfrastructureBootstrapError> {
     let Some(bytes) =
-        read_optional_regular_bytes_bounded(&record_path(paths, source_sha256), 256 * 1024)
+        read_optional_regular_bytes_bounded(&record_path(paths, source_sha256), MAXIMUM_BYTES)
             .map_err(|_| InfrastructureBootstrapError::Integrity)?
     else {
         return Ok(None);
@@ -105,6 +107,7 @@ fn reserve_inner(
     let mut record = match read(paths, source.source_sha256)? {
         Some(record) => record,
         None => InfrastructureBootstrapInspectionRecord {
+            attempt_recoveries: Vec::new(),
             registration_recovery_sha256: None,
             schema_version: 1,
             source_sha256: source.source_sha256,
@@ -126,14 +129,10 @@ fn reserve_inner(
     if record.schema_version != 1
         || record.planned_at_time != plan.planned_at_time
         || record.plan_sha256 != plan.plan_sha256
-        || [record.review_attempts, record.apply_attempts]
-            .iter()
-            .any(|n| *n > BOOTSTRAP_PHASE_INSPECTION_ROUNDS)
-        || record.terminal_attempts > extended_rounds
-        || record.registration_attempts > extended_rounds
     {
         return Err(InfrastructureBootstrapError::Integrity);
     }
+    validate_phase_counters(&record, extended_rounds)?;
     let expected = plan
         .canisters
         .iter()
@@ -149,13 +148,26 @@ fn reserve_inner(
         .cloned()
         .collect::<std::collections::BTreeSet<_>>()
         != expected
-        || record
-            .effect_observations
-            .values()
-            .any(|count| *count > BOOTSTRAP_EFFECT_INSPECTION_ROUNDS)
     {
         return Err(InfrastructureBootstrapError::Integrity);
     }
+    validate_effect_counters(&record)?;
+    let resource = match phase {
+        InspectionPhase::Review => "review".to_owned(),
+        InspectionPhase::Apply => "apply".to_owned(),
+        InspectionPhase::Terminal => "terminal".to_owned(),
+        InspectionPhase::Registration => "registration".to_owned(),
+        InspectionPhase::Effect => format!(
+            "effect:{}",
+            action.ok_or(InfrastructureBootstrapError::Integrity)?
+        ),
+    };
+    let base = match phase {
+        InspectionPhase::Effect => BOOTSTRAP_EFFECT_INSPECTION_ROUNDS,
+        InspectionPhase::Registration | InspectionPhase::Terminal => extended_rounds,
+        _ => BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
+    };
+    let maximum = maximum(&record, &resource, base)?;
     let counter = match phase {
         InspectionPhase::Review => &mut record.review_attempts,
         InspectionPhase::Apply => &mut record.apply_attempts,
@@ -166,17 +178,82 @@ fn reserve_inner(
             .get_mut(action.ok_or(InfrastructureBootstrapError::Integrity)?)
             .ok_or(InfrastructureBootstrapError::Integrity)?,
     };
-    let maximum = match phase {
-        InspectionPhase::Effect => BOOTSTRAP_EFFECT_INSPECTION_ROUNDS,
-        InspectionPhase::Registration | InspectionPhase::Terminal => extended_rounds,
-        _ => BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
-    };
     if *counter >= maximum {
         return Err(InfrastructureBootstrapError::InspectionBudget);
     }
     *counter += 1;
     write_bytes(&path, &serde_json::to_vec(&record)?)?;
     Ok(())
+}
+
+fn validate_phase_counters(
+    record: &InfrastructureBootstrapInspectionRecord,
+    extended: u32,
+) -> Result<(), InfrastructureBootstrapError> {
+    for (key, count, base) in [
+        (
+            "review",
+            record.review_attempts,
+            BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
+        ),
+        (
+            "apply",
+            record.apply_attempts,
+            BOOTSTRAP_PHASE_INSPECTION_ROUNDS,
+        ),
+        ("terminal", record.terminal_attempts, extended),
+        ("registration", record.registration_attempts, extended),
+    ] {
+        if count > maximum(record, key, base)? {
+            return Err(InfrastructureBootstrapError::Integrity);
+        }
+    }
+    Ok(())
+}
+
+fn validate_effect_counters(
+    record: &InfrastructureBootstrapInspectionRecord,
+) -> Result<(), InfrastructureBootstrapError> {
+    for (key, count) in &record.effect_observations {
+        if *count
+            > maximum(
+                record,
+                &format!("effect:{key}"),
+                BOOTSTRAP_EFFECT_INSPECTION_ROUNDS,
+            )?
+        {
+            return Err(InfrastructureBootstrapError::Integrity);
+        }
+    }
+    for grant in &record.attempt_recoveries {
+        let spent = match grant.resource.as_str() {
+            "review" => Some(record.review_attempts),
+            "apply" => Some(record.apply_attempts),
+            "terminal" => Some(record.terminal_attempts),
+            "registration" => Some(record.registration_attempts),
+            resource => resource
+                .strip_prefix("effect:")
+                .and_then(|key| record.effect_observations.get(key).copied()),
+        };
+        if spent.is_none_or(|spent| spent < grant.spent_attempts) {
+            return Err(InfrastructureBootstrapError::Integrity);
+        }
+    }
+    Ok(())
+}
+
+fn maximum(
+    record: &InfrastructureBootstrapInspectionRecord,
+    resource: &str,
+    base: u32,
+) -> Result<u32, InfrastructureBootstrapError> {
+    crate::fleet_ensure::ops::attempt_recovery::allowance::maximum(
+        &record.attempt_recoveries,
+        record.source_sha256,
+        resource,
+        base,
+    )
+    .map_err(|_| InfrastructureBootstrapError::Integrity)
 }
 
 /// Extend the allowance map once for the immutable successor; never reset a retained counter.
