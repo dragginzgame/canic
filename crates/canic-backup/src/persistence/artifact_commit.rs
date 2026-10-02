@@ -153,10 +153,10 @@ mod supported {
             temporary: temporary.display().to_string(),
             canonical: canonical.display().to_string(),
         };
-        let temporary_parent = temporary.parent().ok_or_else(&invalid_paths)?;
-        let canonical_parent = canonical.parent().ok_or_else(&invalid_paths)?;
-        let temporary_name = temporary.file_name().ok_or_else(&invalid_paths)?;
-        let canonical_name = canonical.file_name().ok_or_else(&invalid_paths)?;
+        let temporary_parent = temporary.parent().ok_or_else(invalid_paths)?;
+        let canonical_parent = canonical.parent().ok_or_else(invalid_paths)?;
+        let temporary_name = temporary.file_name().ok_or_else(invalid_paths)?;
+        let canonical_name = canonical.file_name().ok_or_else(invalid_paths)?;
         if temporary == canonical || temporary_parent != canonical_parent {
             return Err(invalid_paths());
         }

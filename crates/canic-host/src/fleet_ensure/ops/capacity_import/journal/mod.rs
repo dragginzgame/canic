@@ -343,7 +343,9 @@ fn apply_observed_handoff(
             .before_reserved_cycles
             .ok_or(CapacityImportJournalError::Integrity)?,
     )?;
-    if source_total(observed.cycles, observed.reserved_cycles)? > before {
+    if before.saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?)
+        > source.maximum_debit_cycles
+    {
         return Err(CapacityImportJournalError::Unresolved);
     }
     let mut updated = journal.clone();
@@ -440,9 +442,11 @@ pub fn validate(journal: &CapacityImportJournalRecord) -> Result<(), CapacityImp
                 let after_reserved = handoff
                     .after_reserved_cycles
                     .ok_or(CapacityImportJournalError::Integrity)?;
-                if source_total(after, after_reserved)? > source_total(before, before_reserved)?
-                    || effect.receipt.as_deref() != Some(version.to_string().as_str())
-                {
+                let interval_debit = source_total(before, before_reserved)?
+                    .saturating_sub(source_total(after, after_reserved)?);
+                let receipt_matches =
+                    effect.receipt.as_deref() == Some(version.to_string().as_str());
+                if interval_debit > source.maximum_debit_cycles || !receipt_matches {
                     return Err(CapacityImportJournalError::Integrity);
                 }
                 retained_source_debit(source, after, after_reserved)?;

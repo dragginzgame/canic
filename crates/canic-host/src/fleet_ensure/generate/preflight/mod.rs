@@ -11,7 +11,7 @@ use crate::fleet_ensure::{
     model::infrastructure_bootstrap::{
         BootstrapCoordinatorSelection, InfrastructureBootstrapFundingTarget,
     },
-    ops::{EnsurePaths, operation_selection, retained_contract},
+    ops::{EnsurePaths, operation_selection},
 };
 use candid::Principal;
 use std::path::Path;
@@ -39,8 +39,18 @@ pub fn validate_generation_inputs(
     operator: Principal,
     cycles_ledger: Principal,
 ) -> Result<(), FleetGenerateError> {
+    validate_selection(request, operator, cycles_ledger).map(|_| ())
+}
+
+/// Tell readiness whether current explicit inventory supersedes predecessor execution inputs.
+pub(in crate::fleet_ensure) fn validate_selection(
+    request: &FleetGenerationInputsRequest<'_>,
+    operator: Principal,
+    cycles_ledger: Principal,
+) -> Result<bool, FleetGenerateError> {
     let inputs = load(request, None)?;
-    validate_input_authority(&inputs, operator, cycles_ledger)
+    validate_input_authority(&inputs, operator, cycles_ledger)?;
+    Ok(inputs.clean_reinstall)
 }
 
 fn validate_input_authority(
@@ -131,25 +141,24 @@ pub(super) fn load(
 ) -> Result<GenerationInputs, FleetGenerateError> {
     crate::fleet_ensure::policy::validate_path_labels(request.environment, request.fleet)?;
     let paths = EnsurePaths::under(request.root, request.environment, request.fleet);
-    let cancelled =
-        crate::fleet_ensure::ops::clean_reinstall::cancellation::ready_for_review(&paths)
-            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    let completed =
-        operation_selection::completed_fleet(&paths, request.environment, request.fleet)
-            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    let clean_reinstall = initialization.is_none() && (completed || cancelled);
-    if clean_reinstall {
-        retained_contract::check(request.root, request.environment, request.fleet)
-            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
-    }
-    let initialization = initialization
-        .or_else(|| clean_reinstall.then_some(BootstrapCoordinatorSelection::Initialize));
     let source: FleetSource = load_toml(request.source, "source")?;
     let seed: EstateSeed = load_toml(request.seed, "seed")?;
     require_schema(source.schema_version, "source")?;
     require_schema(seed.schema_version, "seed")?;
+    let cancelled =
+        crate::fleet_ensure::ops::clean_reinstall::cancellation::ready_for_review(&paths)
+            .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    // Generation selects current input, not predecessor execution authority. Even
+    // an unreadable or partly written old plan must permit a physical-inventory reset.
+    let retained = operation_selection::has_retained_files(&paths)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let retired = operation_selection::has_retirement_history(&paths)
+        .map_err(|error| FleetGenerateError::Authority(error.to_string()))?;
+    let clean_reinstall = initialization.is_none() && (retained || cancelled || retired);
+    let initialization = initialization
+        .or_else(|| clean_reinstall.then_some(BootstrapCoordinatorSelection::Initialize));
     if clean_reinstall && seed.fresh_estate {
-        return Err(FleetGenerateError::CompletedFleetRequiresExplicitInventory);
+        return Err(FleetGenerateError::ResetRequiresExplicitInventory);
     }
     if let Some(selection) = initialization {
         infrastructure_bootstrap::validate_seed(&source, &seed, selection)?;

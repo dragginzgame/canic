@@ -65,6 +65,8 @@ pub struct PoolImportSourceReceipt {
     pub before_uninstall_canister_version: u64,
     pub retained_cycles: u128,
     pub retained_reserved_cycles: u128,
+    /// Net deficit from the original native plus reserved balance; zero for net surplus.
+    /// Positive retained surplus does not authenticate funding or replenish debit authority.
     pub observed_debit_cycles: u128,
 }
 
@@ -119,6 +121,8 @@ pub struct PoolImportContext {
 pub struct PoolImportRootReceipt {
     pub retained_cycles: u128,
     pub retained_reserved_cycles: u128,
+    /// Net deficit from the original native plus reserved balance; zero for net surplus.
+    /// Positive retained surplus does not authenticate funding or replenish debit authority.
     pub observed_debit_cycles: u128,
 }
 

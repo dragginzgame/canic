@@ -121,13 +121,11 @@ impl DiagnosticCatalog {
     }
 
     /// Iterate over current entries in numeric order.
-    #[must_use]
     pub fn current_entries(&self) -> impl ExactSizeIterator<Item = &DiagnosticEntry> {
         self.current.iter()
     }
 
     /// Iterate over retired entries in numeric order.
-    #[must_use]
     pub fn retired_entries(&self) -> impl ExactSizeIterator<Item = &RetiredDiagnosticEntry> {
         self.retired.iter()
     }

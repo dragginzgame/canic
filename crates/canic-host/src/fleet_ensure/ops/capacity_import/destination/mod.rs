@@ -74,6 +74,9 @@ pub(in crate::fleet_ensure::ops::capacity_import) fn validate_authority(
 ) -> Result<(), CapacityImportPrerequisiteError> {
     let binding = &context.binding;
     let observed = &binding.authority.binding;
+    // Review construction sorts this membership; the authority hash still binds raw input.
+    let mut recovery_controllers = observed.recovery_controllers.clone();
+    recovery_controllers.sort_unstable();
     let expected = DestinationIdentity {
         fleet: &reviewed.fleet,
         coordinator: reviewed.coordinator,
@@ -86,7 +89,7 @@ pub(in crate::fleet_ensure::ops::capacity_import) fn validate_authority(
         coordinator: observed.coordinator,
         root: binding.fleet_subnet_root,
         subnet: binding.placement_subnet,
-        recovery_controllers: &observed.recovery_controllers,
+        recovery_controllers: &recovery_controllers,
     };
     let hash = CanisterPoolApi::import_authority_hash(binding)
         .map_err(|_| CapacityImportPrerequisiteError::RootAuthorityMismatch)?;

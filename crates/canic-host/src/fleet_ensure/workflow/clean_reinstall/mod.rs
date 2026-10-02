@@ -1,6 +1,6 @@
 //! Drive clean reset through reviewed current infrastructure, imports and workload convergence.
 //!
-//! Each apply digest belongs to one durable owner. Completed predecessor records are opaque history.
+//! Each apply digest belongs to one durable owner. Retired predecessor records are opaque history.
 
 use crate::{
     fleet_ensure::{
@@ -51,7 +51,7 @@ pub fn cancel_review(
     )
 }
 
-/// Select the normal completed-Fleet reset before attempting to decode predecessor desired state.
+/// Explicit reset selects current inventory before decoding any predecessor execution state.
 pub fn selected(
     workspace: &Path,
     environment: &str,
@@ -63,23 +63,11 @@ pub fn selected(
         .map_err(|_| EnsureStateError::InvalidTerminalSource)?;
     let paths = EnsurePaths::under(workspace, environment, fleet);
     storage::cancellation::require_no_pending(&paths)?;
-    if reinstall && storage::cancellation::ready_for_review(&paths)? {
+    if reinstall {
         return Ok(true);
     }
     if ops::operation_selection::retirement::pending(&paths)?.is_some() {
         return Ok(reinstall);
-    }
-    if reinstall
-        && !paths.plan.exists()
-        && !paths.journal.exists()
-        && workspace
-            .join(".canic/fleet-ensure/history")
-            .join(environment)
-            .join(fleet)
-            .join("retirements")
-            .exists()
-    {
-        return Ok(true);
     }
     if ops::operation_selection::completed_fleet(&paths, environment, fleet)? {
         return Ok(
@@ -100,7 +88,7 @@ pub fn retained_desired(
     if ops::operation_selection::retirement::pending(&paths)?.is_some() {
         return Ok(None);
     }
-    if reinstall && ops::operation_selection::completed_fleet(&paths, environment, fleet)? {
+    if reinstall {
         return Ok(None);
     }
     if !ops::operation_selection::clean_reinstall_current(&paths)? {
@@ -109,7 +97,7 @@ pub fn retained_desired(
     Ok(storage::read(&paths)?.map(|record| record.desired.desired().clone()))
 }
 
-/// Review the next bounded phase; every new completed-estate reset starts with current custody.
+/// Review the next bounded phase; every new reset starts with current custody.
 pub fn review<P: EnsurePlatform>(
     workspace: &Path,
     desired: &DesiredFleet,
@@ -119,12 +107,24 @@ pub fn review<P: EnsurePlatform>(
     platform: &mut P,
     icp: &IcpCli,
 ) -> Result<CleanReinstallReport, EnsureWorkflowError<P::Error>> {
+    crate::fleet_ensure::policy::validate_path_labels(&desired.environment, &desired.fleet)?;
     let paths = EnsurePaths::under(workspace, &desired.environment, &desired.fleet);
-    ops::operation_selection::retirement::prepare_bootstrap(&paths, desired)?;
-    let record = match storage::read(&paths)? {
-        Some(record) if record.desired.desired() == desired => record,
-        Some(_) => return Err(EnsureWorkflowError::PlanIntegrity),
-        None => storage::bind(&paths, desired, policy, seed)?,
+    let record = if let Some(retirement) =
+        ops::operation_selection::retirement::ResetRetirement::prepare(&paths, desired)?
+    {
+        let agent = automatic::agent(icp, desired)?;
+        let runtime = tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .map_err(InfrastructureBootstrapError::from)?;
+        runtime.block_on(automatic::reset_custody(desired, &agent))?;
+        retirement.finish(desired, policy, seed)?
+    } else {
+        match storage::read(&paths)? {
+            Some(record) if record.desired.desired() == desired => record,
+            Some(_) => return Err(EnsureWorkflowError::PlanIntegrity),
+            None => storage::bind(&paths, desired, policy, seed)?,
+        }
     };
     let Some(plan) = ops::read_plan(&paths)? else {
         let plan = infrastructure_bootstrap::review_clean(

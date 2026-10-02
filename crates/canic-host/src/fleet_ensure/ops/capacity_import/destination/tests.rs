@@ -18,7 +18,14 @@ use canic_core::{
 
 pub(in crate::fleet_ensure::ops::capacity_import) fn fixture()
 -> (CapacityImportPlanRecord, PoolImportContext, FleetRegistry) {
-    let initial = plan();
+    fixture_with_controllers(vec![principal(8)])
+}
+
+pub(in crate::fleet_ensure::ops::capacity_import) fn fixture_with_controllers(
+    recovery_controllers: Vec<Principal>,
+) -> (CapacityImportPlanRecord, PoolImportContext, FleetRegistry) {
+    let mut initial = plan();
+    initial.authority.recovery_controllers = recovery_controllers;
     let authority = FleetRegistryAuthority {
         binding: FleetCoordinatorBinding {
             fleet: initial.authority.fleet.clone(),
@@ -106,6 +113,40 @@ pub(in crate::fleet_ensure::ops::capacity_import) fn fixture()
         services: vec![],
     };
     (plan, context, registry)
+}
+
+#[test]
+fn recovery_controller_order_preserves_destination_authority_hashes() {
+    let (plan, context, registry) = fixture_with_controllers(vec![principal(8), principal(7)]);
+    let retained = candid::encode_one(&context).unwrap();
+    let reviewed = serde_json::to_vec(&plan).unwrap();
+    assert_eq!(
+        plan.authority.recovery_controllers,
+        vec![principal(7), principal(8)]
+    );
+    validate_destination_authority(&plan, &context, &registry).unwrap();
+    assert_eq!(candid::encode_one(&context).unwrap(), retained);
+    assert_eq!(serde_json::to_vec(&plan).unwrap(), reviewed);
+    assert_eq!(
+        CanisterPoolApi::import_authority_hash(&context.binding).unwrap(),
+        plan.authority.root_authority_sha256
+    );
+
+    for controllers in [
+        vec![principal(7), principal(7)],
+        vec![principal(7), principal(9)],
+    ] {
+        let mut changed = context.clone();
+        changed.binding.authority.binding.recovery_controllers = controllers;
+        changed.root_authority_sha256 =
+            CanisterPoolApi::import_authority_hash(&changed.binding).unwrap();
+        let mut authority = plan.authority.clone();
+        authority.root_authority_sha256 = changed.root_authority_sha256;
+        assert_eq!(
+            validate_authority(&authority, &changed, &registry),
+            Err(CapacityImportPrerequisiteError::RootAuthorityMismatch)
+        );
+    }
 }
 
 #[test]

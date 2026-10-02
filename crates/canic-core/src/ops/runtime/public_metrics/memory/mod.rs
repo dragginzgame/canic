@@ -14,7 +14,7 @@ use crate::{
     model::public_metrics::{PublicMetricSample, PublicMetricsCache},
     ops::runtime::{env::EnvOps, memory::MemoryRegistryOps, public_metrics::PublicMetricsOps},
 };
-use ic_memory::{AllocationBinding, MemoryAllocations};
+use ic_memory::MemoryAllocationSummary;
 
 const PREFIX: &str = "memory.allocations.";
 const STATE: &str = "memory.allocations.state";
@@ -32,7 +32,7 @@ pub(super) fn sample(now: u64) -> Vec<PublicMetricSample> {
         PublicMetricsOps::enabled().contains(&PublicMetricFamily::Performance),
         EnvOps::canister_role().is_ok_and(|role| role != CanisterRole::WASM_STORE),
         now,
-        MemoryRegistryOps::allocation_report,
+        MemoryRegistryOps::allocation_summary,
     )
 }
 
@@ -40,7 +40,7 @@ fn collect(
     enabled: bool,
     supported: bool,
     now: u64,
-    read: impl FnOnce() -> Result<MemoryAllocations, InternalError>,
+    read: impl FnOnce() -> Result<MemoryAllocationSummary, InternalError>,
 ) -> Vec<PublicMetricSample> {
     if !enabled {
         return Vec::new();
@@ -78,7 +78,10 @@ fn gauge(name: &str, value: u64, unit: &str, now: u64) -> PublicMetricSample {
     }
 }
 
-fn project(report: &MemoryAllocations, now: u64) -> Result<Vec<PublicMetricSample>, InternalError> {
+fn project(
+    report: &MemoryAllocationSummary,
+    now: u64,
+) -> Result<Vec<PublicMetricSample>, InternalError> {
     let groups = validate(report)?;
     let mut rows = vec![state(AllocationSampleState::Available, now)];
     for (name, value) in [
@@ -99,7 +102,7 @@ fn project(report: &MemoryAllocations, now: u64) -> Result<Vec<PublicMetricSampl
         ("allocated_buckets", u64::from(report.allocated_buckets)),
         ("bucket_capacity", u64::from(report.bucket_capacity)),
         ("remaining_buckets", u64::from(report.remaining_buckets)),
-        ("ids_measured", report.memories.len() as u64),
+        ("ids_measured", u64::from(report.memories_measured)),
         ("ids_total", u64::from(ic_memory::MEMORY_MANAGER_INVALID_ID)),
         ("payload_available", 0),
     ] {
@@ -130,32 +133,23 @@ fn sum(a: u64, b: u64) -> Result<u64, InternalError> {
 }
 
 /// Independently verify physical, capacity and binding partitions before publishing them.
-fn validate(report: &MemoryAllocations) -> Result<[(u64, u64); 3], InternalError> {
+fn validate(report: &MemoryAllocationSummary) -> Result<[(u64, u64); 3], InternalError> {
     if report.current_generation.is_none()
-        || report.memories.len() != usize::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
+        || report.memories_measured != u16::from(ic_memory::MEMORY_MANAGER_INVALID_ID)
     {
         return Err(invalid());
     }
-    let mut groups = [(0, 0); 3];
-    let mut virtual_bytes = 0;
-    let mut buckets = 0;
-    for (id, entry) in report.memories.iter().enumerate() {
-        if usize::from(entry.memory_manager_id) != id
-            || entry.payload_bytes.is_some()
-            || entry.allocated_bytes != sum(entry.virtual_extent.bytes, entry.bucket_slack_bytes)?
-        {
-            return Err(invalid());
-        }
-        let index = match entry.binding {
-            AllocationBinding::Current { .. } => 0,
-            AllocationBinding::Ledger { .. } => 1,
-            AllocationBinding::Unknown => 2,
-        };
-        groups[index].0 = sum(groups[index].0, entry.allocated_bytes)?;
-        groups[index].1 = sum(groups[index].1, entry.bucket_slack_bytes)?;
-        virtual_bytes = sum(virtual_bytes, entry.virtual_extent.bytes)?;
-        buckets = sum(buckets, u64::from(entry.allocated_buckets))?;
+    let groups = [
+        report.current_binding,
+        report.ledger_binding,
+        report.unknown_binding,
+    ]
+    .map(|binding| (binding.allocated_bytes, binding.bucket_slack_bytes));
+    if groups.iter().any(|(allocated, slack)| slack > allocated) {
+        return Err(invalid());
     }
+    let virtual_bytes = report.virtual_extent.bytes;
+    let buckets = u64::from(report.allocated_buckets);
     let known = sum(groups[0].0, groups[1].0)?;
     let allocated = sum(known, groups[2].0)?;
     let slack = sum(sum(groups[0].1, groups[1].1)?, groups[2].1)?;
@@ -167,10 +161,8 @@ fn validate(report: &MemoryAllocations) -> Result<[(u64, u64); 3], InternalError
         && report.allocated_bucket_bytes == allocated
         && report.known_binding_bytes == known
         && report.unknown_binding_bytes == groups[2].0;
-    let valid_capacity = report.virtual_extent.bytes == virtual_bytes
-        && report.bucket_slack_bytes == slack
+    let valid_capacity = report.bucket_slack_bytes == slack
         && allocated == sum(virtual_bytes, slack)?
-        && u64::from(report.allocated_buckets) == buckets
         && report.bucket_size_bytes == u64::from(report.bucket_size_pages) * 65_536
         && allocated
             == buckets

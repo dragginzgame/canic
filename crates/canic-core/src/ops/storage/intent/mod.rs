@@ -245,9 +245,12 @@ pub enum IntentStoreOpsError {
     ApplicationReceiptReclamationCountOverflow,
 
     #[error(
-        "application receipt terminal-capacity reservation unavailable for {required_records} records"
+        "application receipt terminal-capacity reservation unavailable for {required_records} records: {source}"
     )]
-    ApplicationReceiptEligibilityCapacityUnavailable { required_records: u64 },
+    ApplicationReceiptEligibilityCapacityUnavailable {
+        required_records: u64,
+        source: ic_memory::RuntimeGrowError,
+    },
 
     #[error("receipt-backed intent {operation_id} has incompatible {owner} resource ownership")]
     ReceiptBackedOwnershipMismatch {
@@ -1679,14 +1682,13 @@ fn create_receipt(
         let required_records = ReceiptBackedIntentStore::application_count()
             .checked_add(1)
             .ok_or(IntentStoreOpsError::ApplicationReceiptEligibilityReservationOverflow)?;
-        if !ReceiptBackedIntentStore::reserve_application_eligibility_capacity(required_records) {
-            return Err(
+        ReceiptBackedIntentStore::reserve_application_eligibility_capacity(required_records)
+            .map_err(|source| {
                 IntentStoreOpsError::ApplicationReceiptEligibilityCapacityUnavailable {
                     required_records,
+                    source,
                 }
-                .into(),
-            );
-        }
+            })?;
     }
 
     assert!(

@@ -22,7 +22,6 @@ pub fn validate_root_status(
     let budget = &plan.root_budget;
     if status.paid_calls > budget.maximum_paid_calls
         || status.reserved_debit_cycles > budget.maximum_debit_cycles
-        || status.last_root_cycles > budget.observed_cycles
         || status.last_root_cycles < budget.minimum_retained_cycles
     {
         return Err(CapacityImportReviewError::RootEvidenceMismatch);
@@ -112,12 +111,16 @@ fn require_conservation(
         .native
         .checked_add(original.reserved)
         .ok_or(CapacityImportReviewError::RootEvidenceMismatch)?;
-    let accounted = retained
+    let retained_total = retained
         .native
         .checked_add(retained.reserved)
-        .and_then(|balance| balance.checked_add(debit))
         .ok_or(CapacityImportReviewError::RootEvidenceMismatch)?;
-    if original_total != accounted || retained.native < native_floor || debit > maximum_debit {
+    // Receipts bind net debit; a positive difference is observable native surplus,
+    // never proof of an operator payment or permission to replenish a call budget.
+    if debit != original_total.saturating_sub(retained_total)
+        || retained.native < native_floor
+        || debit > maximum_debit
+    {
         return Err(CapacityImportReviewError::RootEvidenceMismatch);
     }
     Ok(())

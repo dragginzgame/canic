@@ -100,6 +100,13 @@ with this file, the code is wrong.
 - Keep flat `crates/` unless doing a full Cargo/CI/docs/publish migration.
 
 ## Pre-1.0 Hard Cuts
+- Prefer deleting obsolete contracts and correcting current-state defects over
+  preserving accidental behavior. A refusal must protect a concrete property
+  such as custody, bounded spending or an uncertain paid effect. Historical
+  completion, representation differences and incidental bookkeeping drift are
+  not independent safety requirements. Normalize semantically equivalent inputs
+  at their owning boundary; repair deterministically recoverable current state
+  from authoritative evidence without rewriting issued spending authority.
 - Before 1.0, removed surfaces are hard-cut. Do not add aliases, shims,
   compatibility wrappers, legacy fallback paths, or backwards-compatibility
   layers unless the maintainer explicitly asks.
@@ -109,15 +116,11 @@ with this file, the code is wrong.
   Exact upstream version names, immutable historical records and versioned
   audit-method/evidence revisions are not product compatibility generations
   and may retain their truthful versions.
-- Ordinary pre-1.0 release transitions are reinstall-only. Active designs must
-  not specify cross-release upgrades, state
+- Pre-1.0 release transitions are always hard cuts and reinstall-only, including
+  malformed or incomplete installations. Do not repair predecessor state to
+  continue it. Active designs must not specify cross-release upgrades, state
   migration or import, authority handoff, existing-installation adoption,
   mixed-version operation, rollback or compatibility recovery.
-- The maintainer authorized in-repository implementation and qualification of
-  the exact [CANIC-188 incident repair](docs/design/0.110-fleet-runtime-contraction/issued-import-recovery.md).
-  This exception retains the frozen .48 layout for one unfinished import and
-  restores its original Root artifact afterward. It grants no general upgrade
-  lane, live execution, or mutation authority over the Toko Miner repository.
 - Application data, stable memory, canister identities, topology, historical
   release authority, old plans, old journal formats and predecessor
   compatibility may be discarded at a release boundary. The sole
@@ -133,12 +136,14 @@ with this file, the code is wrong.
   an identity, controller set or topology across releases.
 - Same-release interruption recovery, retry, idempotency, backup, and restore
   remain required. They are operational safety, not compatibility behavior.
-- Clean reinstall is the normal pre-1.0 deployment path. A completed previous
-  release must not require repair, migration, its old CLI, or decoding its
-  executable/application schema before it can be discarded. Completed records
-  are historical evidence; only genuinely unfinished paid effects retain
-  reconciliation authority. Reset authority comes from the selected current
-  build, explicit physical inventory and current controllers. Qualify replacement
+- Clean reinstall is the required pre-1.0 deployment path. A previous release,
+  including a malformed or unfinished installation, must not require repair,
+  migration, its old CLI, or decoding its executable/application schema before
+  it can be discarded. Historical records are evidence. Reconcile genuinely
+  unfinished paid effects only to prevent duplicate spending and establish
+  cycle-safe reset; do not revive the predecessor installation. Reset authority
+  comes from the selected current build, explicit physical inventory and current
+  controllers. Qualify replacement
   artifacts before destructive effects and retain the exact bytes across retries.
   When the maintainer selects ID-preserving reset, retain those IDs and their
   controlled cycles while clearing application and framework state.
@@ -216,6 +221,30 @@ policy and ops independently; ops may call model. Policy never calls ops.
   Rust's normal module discovery works.
 
 ## Testing
+- IcyDB is an optional local test consumer, never a deployed Canic dependency.
+  Its upstream dependency schedule is independent of Canic's. Never synchronize
+  Canic and IcyDB upstream dependencies, chase matching IcyDB releases, or wait
+  for them to complete a Canic upgrade or release. Do not upgrade or downgrade
+  either dependency solely to align the test consumer. Upstream skew may leave
+  optional IcyDB composition unqualified; report that limitation separately and
+  continue Canic-owned validation. It is not a Canic implementation, push or
+  publication blocker. Production runtime-identity checks remain scoped to the
+  selected deployed Canic graph; test-only dependency versions and workspace
+  lockfile duplicates do not establish a production defect.
+- Expected IcyDB drift includes incompatible shared dependency types (for
+  example, different `ic-memory` versions), API changes and fixture compilation
+  failures. During Canic toolchain/dependency upgrades, ordinary validation and
+  release preparation, do not investigate or repair that drift, add adapters,
+  pin dependencies to make it compile, or ask the maintainer to coordinate
+  upstream releases. Work on IcyDB composition only when explicitly requested.
+- Full Canic validation means all Canic-owned production and maintained test
+  targets, not optional external-consumer composition. Keep IcyDB-only fixture
+  packages and integration targets outside default build, check, Clippy and
+  release-test selection; retain their explicit opt-in qualification command.
+  If a broad command includes them accidentally, classify that as validation
+  selection drift, continue checking the Canic-owned targets, and report the
+  optional integration as unqualified. Never describe expected IcyDB skew as a
+  Canic regression or a reason to delay an otherwise qualified push/release.
 - Within an already authorized implementation or release batch, a request to
   check, inspect or diagnose a failing test also authorizes correcting any
   confirmed in-scope source or test defect and running its narrow regression.

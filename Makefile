@@ -366,6 +366,7 @@ release-validation-matrix-gate:
 validation-runner-gate:
 	bash scripts/ci/test-sccache-wrapper.sh
 	bash scripts/ci/test-validation-target-runner.sh
+	bash scripts/ci/test-workspace-cargo.sh
 	bash scripts/ci/test-workspace-test-runner.sh
 	bash scripts/ci/test-pocketic-workers.sh
 	bash scripts/ci/test-native-icp.sh
@@ -446,13 +447,13 @@ test-runtime-fast: test-unit-fast
 #
 
 build:
-	$(CARGO_ENV) cargo build --locked --workspace --release --keep-going
+	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh build --release --keep-going
 
 check:
-	$(CARGO_ENV) cargo check --locked --workspace --keep-going
+	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh check --keep-going
 
 clippy:
-	$(CARGO_ENV) cargo clippy --locked --workspace --all-targets --all-features -- -D warnings
+	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh clippy -D warnings
 
 fmt:
 	cargo sort --workspace

@@ -84,6 +84,21 @@ pub(in crate::fleet_ensure) async fn custody(
     desired: &DesiredFleet,
     agent: &ic_agent::Agent,
 ) -> Result<BTreeMap<String, InfrastructureBootstrapCustodyRecord>, InfrastructureBootstrapError> {
+    let observed = reset_custody(desired, agent).await?;
+    let path = paths.plan.with_file_name("clean-reinstall-custody.json");
+    match read_current::<BTreeMap<String, InfrastructureBootstrapCustodyRecord>>(&path)? {
+        Some(retained) if retained == observed => {}
+        Some(_) => return Err(InfrastructureBootstrapError::Integrity),
+        None => write_current(&path, &observed)?,
+    }
+    Ok(observed)
+}
+
+/// Establish executable custody of each selected physical ID without predecessor interfaces.
+pub(in crate::fleet_ensure) async fn reset_custody(
+    desired: &DesiredFleet,
+    agent: &ic_agent::Agent,
+) -> Result<BTreeMap<String, InfrastructureBootstrapCustodyRecord>, InfrastructureBootstrapError> {
     let mut observed = BTreeMap::new();
     for configured in &desired.canisters {
         let id = configured
@@ -117,11 +132,25 @@ pub(in crate::fleet_ensure) async fn custody(
             },
         );
     }
-    let path = paths.plan.with_file_name("clean-reinstall-custody.json");
-    match read_current::<BTreeMap<String, InfrastructureBootstrapCustodyRecord>>(&path)? {
-        Some(retained) if retained == observed => {}
-        Some(_) => return Err(InfrastructureBootstrapError::Integrity),
-        None => write_current(&path, &observed)?,
+    direct_ids(desired, &observed)?;
+    for child in desired
+        .canisters
+        .iter()
+        .filter(|entry| entry.kind == DesiredCanisterKind::Pool)
+    {
+        let parent = desired
+            .canisters
+            .iter()
+            .find(|entry| Some(&entry.name) == child.parent.as_ref())
+            .filter(|entry| entry.kind == DesiredCanisterKind::Root && entry.subnet == child.subnet)
+            .and_then(|entry| observed.get(&entry.name))
+            .ok_or(InfrastructureBootstrapError::Integrity)?;
+        let source = observed
+            .get(&child.name)
+            .ok_or(InfrastructureBootstrapError::Integrity)?;
+        if !source.controllers.contains(&parent.canister) {
+            return Err(InfrastructureBootstrapError::Integrity);
+        }
     }
     Ok(observed)
 }

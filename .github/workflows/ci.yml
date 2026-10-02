@@ -2,7 +2,7 @@ name: CI
 
 env:
   CANIC_MSRV: 1.91.0
-  CANIC_INTERNAL_TOOLCHAIN: 1.98.1
+  CANIC_INTERNAL_TOOLCHAIN: 1.99.0
   CARGO_INCREMENTAL: 0
 
 permissions:
@@ -181,7 +181,7 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "MSRV before check" --min-free-mib 3072 --summary-only
       - name: Check workspace MSRV
-        run: cargo check --workspace --locked
+        run: bash scripts/ci/run-workspace-cargo.sh check --keep-going
       - name: Report runner disk after MSRV failure
         if: ${{ failure() }}
         shell: bash
@@ -434,7 +434,7 @@ jobs:
         shell: bash
         run: bash scripts/ci/check-runner-disk-space.sh --label "release build before compile" --min-free-mib 4096 --summary-only
       - name: Build release workspace
-        run: cargo build --release --workspace --locked
+        run: bash scripts/ci/run-workspace-cargo.sh build --release --keep-going
       - name: Report runner disk after release-build failure
         if: ${{ failure() }}
         shell: bash

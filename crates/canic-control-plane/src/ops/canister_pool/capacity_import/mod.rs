@@ -278,11 +278,13 @@ impl CanisterPoolImportOps {
         if record.root_receipt.is_some() || receipt != expected {
             return Err(InternalError::conflict());
         }
+        // Positive native observations are net credits, not changed call authority.
         let debit = receipt
             .before_root_cycles
-            .checked_sub(observed_root_cycles)
-            .filter(|debit| *debit <= receipt.maximum_debit_cycles)
-            .ok_or_else(InternalError::conflict)?;
+            .saturating_sub(observed_root_cycles);
+        if debit > receipt.maximum_debit_cycles {
+            return Err(InternalError::conflict());
+        }
         let retained = record
             .reserved_debit_cycles
             .checked_sub(receipt.maximum_debit_cycles)
@@ -320,7 +322,9 @@ impl CanisterPoolImportOps {
                 ..
             } => {
                 required_reserved_asset(observed.canister_id)?;
-                if source_total(observed.cycles, observed.reserved_cycles)? > retained_total_cycles
+                if retained_total_cycles
+                    .saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?)
+                    > record.reservation.sources[index].maximum_debit_cycles
                 {
                     return Err(InternalError::conflict());
                 }
@@ -366,7 +370,10 @@ impl CanisterPoolImportOps {
                 PoolImportHistoryKind::Controllers,
             )?;
             require_observation(record, index, observed, false, false)?;
-            if source_total(observed.cycles, observed.reserved_cycles)? > before_total_cycles {
+            if before_total_cycles
+                .saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?)
+                > record.reservation.sources[index].maximum_debit_cycles
+            {
                 return Err(InternalError::conflict());
             }
             record.progress[index] = PoolImportResetProgressRecord::ControllersConfirmed {
@@ -392,7 +399,10 @@ impl CanisterPoolImportOps {
                 return Err(InternalError::conflict());
             };
             require_observation(record, index, observed, false, false)?;
-            if source_total(observed.cycles, observed.reserved_cycles)? > retained_total_cycles {
+            if retained_total_cycles
+                .saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?)
+                > record.reservation.sources[index].maximum_debit_cycles
+            {
                 return Err(InternalError::conflict());
             }
             let receipt = reserve_call(
@@ -456,7 +466,9 @@ impl CanisterPoolImportOps {
             };
             require_observation(record, index, observed, false, true)?;
             let retained_total_cycles = source_total(observed.cycles, observed.reserved_cycles)?;
-            if retained_total_cycles > before_total_cycles {
+            if before_total_cycles.saturating_sub(retained_total_cycles)
+                > record.reservation.sources[index].maximum_debit_cycles
+            {
                 return Err(InternalError::conflict());
             }
             record.progress[index] = PoolImportResetProgressRecord::Stopped {
@@ -496,7 +508,10 @@ impl CanisterPoolImportOps {
             PoolImportHistoryKind::Uninstall,
         )?;
         require_observation(record, index, observed, true, false)?;
-        if source_total(observed.cycles, observed.reserved_cycles)? > before_total_cycles {
+        if before_total_cycles
+            .saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?)
+            > record.reservation.sources[index].maximum_debit_cycles
+        {
             return Err(InternalError::conflict());
         }
         let mut asset = required_reserved_asset(observed.canister_id)?;
@@ -510,7 +525,8 @@ impl CanisterPoolImportOps {
             observed_debit_cycles: source_total(
                 record.reservation.sources[index].observed_cycles,
                 record.reservation.sources[index].observed_reserved_cycles,
-            )? - source_total(observed.cycles, observed.reserved_cycles)?,
+            )?
+            .saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?),
         };
         record.progress[index] = PoolImportResetProgressRecord::Ready(receipt.clone());
         if record
@@ -547,8 +563,7 @@ impl CanisterPoolImportOps {
             authority.observed_root_cycles,
             authority.observed_root_reserved_cycles,
         )?
-        .checked_sub(source_total(native_cycles, reserved_cycles)?)
-        .ok_or_else(InternalError::conflict)?;
+        .saturating_sub(source_total(native_cycles, reserved_cycles)?);
         if debit > authority.maximum_root_debit_cycles
             || native_cycles < authority.minimum_root_cycles
         {
@@ -872,8 +887,7 @@ fn require_observation(
         return Err(InternalError::conflict());
     }
     let debit = source_total(source.observed_cycles, source.observed_reserved_cycles)?
-        .checked_sub(source_total(observed.cycles, observed.reserved_cycles)?)
-        .ok_or_else(InternalError::conflict)?;
+        .saturating_sub(source_total(observed.cycles, observed.reserved_cycles)?);
     if debit > source.maximum_debit_cycles || observed.cycles < source.minimum_ready_cycles {
         return Err(InternalError::resource_exhausted());
     }
@@ -976,8 +990,7 @@ fn reserve_call(
     let authority = &record.reservation;
     let debit = authority
         .observed_root_cycles
-        .checked_sub(observed_root_cycles)
-        .ok_or_else(InternalError::conflict)?;
+        .saturating_sub(observed_root_cycles);
     if observed_root_cycles < authority.minimum_root_cycles
         || debit > authority.maximum_root_debit_cycles
     {
@@ -988,10 +1001,14 @@ fn reserve_call(
         .checked_add(1)
         .filter(|count| *count <= authority.maximum_paid_calls)
         .ok_or_else(InternalError::resource_exhausted)?;
+    // Retain earlier observed debits and uncertain reserves across every credit.
+    // Account for consumption between callbacks before reserving the next call.
+    let interval_debit = record.last_root_cycles.saturating_sub(observed_root_cycles);
     let reserved = record
         .reserved_debit_cycles
-        .max(debit)
-        .checked_add(maximum_call_debit)
+        .checked_add(interval_debit)
+        .map(|amount| amount.max(debit))
+        .and_then(|amount| amount.checked_add(maximum_call_debit))
         .filter(|amount| *amount <= authority.maximum_root_debit_cycles)
         .ok_or_else(InternalError::resource_exhausted)?;
     if maximum_call_debit == 0

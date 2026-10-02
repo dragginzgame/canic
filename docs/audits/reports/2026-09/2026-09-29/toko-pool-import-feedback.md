@@ -103,9 +103,9 @@ real ID updates continue through the durable publication owner.
 
 Targeted native tests, warning-denied Clippy, the real Root import PocketIC journey
 and the public CLI completed-estate recovery/replay journey pass. The
-[repair decision](../../../../design/0.110-fleet-runtime-contraction/issued-import-recovery.md)
+[repair decision](../../../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-issued-import-recovery.md)
 records the maintainer's narrow exception and exact live preconditions. The
-[incident tooling](../../../../../scripts/dev/canic188/README.md) reproduces a
+[incident tooling](../../../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-retired-tooling.md) reproduces a
 frozen `.48` repair and qualifies real installation, discarded-reply reconciliation,
 replay rejection and restoration of the original Root within its original debit
 ceiling. Native tests cover exact evidence rejection and the remaining 242-call

@@ -727,11 +727,7 @@ pub(in crate::fleet_ensure) fn verify_initial(
                 {
                     expected_binding.canister_version = actual.binding.canister_version;
                 }
-                if expected_binding != actual.binding
-                    || before
-                        .checked_sub(after)
-                        .is_none_or(|debit| debit > allowance)
-                {
+                if expected_binding != actual.binding || before.saturating_sub(after) > allowance {
                     return Err(InfrastructureBootstrapError::Integrity);
                 }
             }

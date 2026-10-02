@@ -266,11 +266,10 @@ pub fn admit_handoffs(
         plan.root_budget.observed_cycles,
         plan.root_budget.observed_reserved_cycles,
     )?
-    .checked_sub(source_total(
+    .saturating_sub(source_total(
         destination.controlled_cycles,
         destination.reserved_cycles,
-    )?)
-    .ok_or(CapacityImportPolicyError::InvalidCycleBounds)?;
+    )?);
     if root_debit > plan.root_budget.maximum_debit_cycles {
         return Err(CapacityImportPolicyError::InvalidCycleBounds);
     }
@@ -372,10 +371,10 @@ pub fn retained_source_debit(
     let canister = reviewed.binding.canister_id;
     let total_before = source_total(reviewed.observed_cycles, reviewed.observed_reserved_cycles)?;
     let total_after = source_total(retained_cycles, retained_reserved_cycles)?;
-    let debit = total_before
-        .checked_sub(total_after)
-        .filter(|debit| *debit <= reviewed.maximum_debit_cycles)
-        .ok_or(CapacityImportPolicyError::ConservationUnproven { canister })?;
+    let debit = total_before.saturating_sub(total_after);
+    if debit > reviewed.maximum_debit_cycles {
+        return Err(CapacityImportPolicyError::ConservationUnproven { canister });
+    }
     if retained_cycles < reviewed.minimum_ready_cycles {
         return Err(CapacityImportPolicyError::InsufficientCycles {
             canister,

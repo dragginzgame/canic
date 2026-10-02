@@ -174,6 +174,11 @@ fn retained_capacity_journey(root_owned: bool) {
         PoolImportSourceProgress::UninstallIssued,
     ]);
     for expected in steps {
+        if root_owned {
+            // Real native credits cross every retained effect and lost-reply boundary.
+            pic.add_cycles(root, 1_000_000_000_000);
+            pic.add_cycles(source, 1_000_000_000_000);
+        }
         // The next invocation uses protected retained evidence, as after a lost host reply.
         command(
             pic,
@@ -216,10 +221,15 @@ fn retained_capacity_journey(root_owned: bool) {
         receipt.canister_version,
         receipt.before_uninstall_canister_version + 1
     );
-    assert_eq!(
-        receipt.retained_cycles + receipt.retained_reserved_cycles + receipt.observed_debit_cycles,
-        reservation.sources[0].observed_cycles + reservation.sources[0].observed_reserved_cycles
-    );
+    let source_before =
+        reservation.sources[0].observed_cycles + reservation.sources[0].observed_reserved_cycles;
+    let source_after = receipt.retained_cycles + receipt.retained_reserved_cycles;
+    if root_owned {
+        assert!(source_after > source_before);
+        assert_eq!(receipt.observed_debit_cycles, 0);
+    } else {
+        assert_eq!(source_after + receipt.observed_debit_cycles, source_before);
+    }
     assert!(receipt.observed_debit_cycles <= reservation.sources[0].maximum_debit_cycles);
     let cleared = pic.canister_status(source, Some(root)).unwrap();
     assert!(cleared.module_hash.is_none());
@@ -240,12 +250,14 @@ fn retained_capacity_journey(root_owned: bool) {
     );
     let settled = command(pic, root, operator, PoolImportCommand::Settle(identity)).unwrap();
     let root_receipt = settled.root_receipt.as_ref().unwrap();
-    assert_eq!(
-        root_receipt.retained_cycles
-            + root_receipt.retained_reserved_cycles
-            + root_receipt.observed_debit_cycles,
-        reservation.observed_root_cycles + reservation.observed_root_reserved_cycles
-    );
+    let root_before = reservation.observed_root_cycles + reservation.observed_root_reserved_cycles;
+    let root_after = root_receipt.retained_cycles + root_receipt.retained_reserved_cycles;
+    if root_owned {
+        assert!(root_after > root_before);
+        assert_eq!(root_receipt.observed_debit_cycles, 0);
+    } else {
+        assert_eq!(root_after + root_receipt.observed_debit_cycles, root_before);
+    }
     let released = command(
         pic,
         root,
@@ -280,6 +292,10 @@ fn retained_capacity_journey(root_owned: bool) {
         BlobCompression::NoCompression,
     );
     let reused = pic.canister_status(source, Some(root)).unwrap();
+    if root_owned {
+        pic.add_cycles(root, 1_000_000_000_000);
+        pic.add_cycles(source, 1_000_000_000_000);
+    }
     for replay in [
         PoolImportCommand::Advance {
             identity,

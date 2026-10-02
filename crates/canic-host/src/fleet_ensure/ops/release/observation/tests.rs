@@ -68,7 +68,7 @@ fn physical_samples_reject_changed_versions_custody_and_snapshot_inventory() {
     for mutate in [
         |sample: &mut CapacityImportSampleRecord| sample.binding.canister_version += 1,
         |sample: &mut CapacityImportSampleRecord| {
-            sample.binding.controllers.push(Principal::from_slice(&[4]))
+            sample.binding.controllers.push(Principal::from_slice(&[4]));
         },
         |sample: &mut CapacityImportSampleRecord| sample.binding.stopped = false,
         |sample: &mut CapacityImportSampleRecord| sample.binding.module_sha256 = Some([8; 32]),
@@ -100,6 +100,10 @@ fn physical_samples_reject_changed_versions_custody_and_snapshot_inventory() {
 
 #[test]
 #[ignore = "the workspace runner supplies one shared PocketIC server and serial execution"]
+#[expect(
+    clippy::too_many_lines,
+    reason = "one real management journey proves authority binding and preparation-to-observation drift refusal"
+)]
 fn governed_pocketic_release_physical_observation_binds_custody() {
     let mut pic = start_pocket_ic(
         PocketIcBuilder::new()

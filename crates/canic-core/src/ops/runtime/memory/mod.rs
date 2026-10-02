@@ -86,6 +86,14 @@ impl MemoryRegistryOps {
             .map_err(Into::into)
     }
 
+    /// Collect numeric allocation totals without constructing per-ID rows or copying names.
+    pub(crate) fn allocation_summary() -> Result<ic_memory::MemoryAllocationSummary, InternalError>
+    {
+        ic_memory::default_memory_manager_memory_allocation_summary()
+            .map_err(MemoryRegistryOpsError::from)
+            .map_err(Into::into)
+    }
+
     // Initialize the stable-memory registry for this crate and summarize the layout.
     pub(crate) fn init_registry() -> Result<(), InternalError> {
         memory::bootstrap_default_memory_manager().map_err(MemoryRegistryOpsError::from)?;

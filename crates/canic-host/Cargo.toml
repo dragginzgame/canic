@@ -60,10 +60,6 @@ ic-testkit = { workspace = true }
 ic-verify-bls-signature = { workspace = true }
 
 [[example]]
-name = "canic188_qualify"
-required-features = ["local-fleet"]
-
-[[example]]
 name = "local_fleet"
 required-features = ["local-fleet"]
 

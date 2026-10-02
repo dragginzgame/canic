@@ -6,6 +6,7 @@ fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-workspace-runner-test.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/scripts/ci" "$fixture/bin"
 cp "$ROOT/scripts/ci/run-workspace-tests.sh" \
+    "$ROOT/scripts/ci/workspace-scope.sh" \
     "$ROOT/scripts/ci/list-internal-native-tests.sh" \
     "$ROOT/scripts/ci/workspace-test-inventory.tsv" "$fixture/scripts/ci/"
 cp "$ROOT/tool-versions.env" "$fixture/"
@@ -44,6 +45,10 @@ if [[ "$1" == run ]]; then
     exit 0
 fi
 [[ "$1" == test ]]
+if [[ " $* " == *' --workspace '* ]]; then
+    [[ " $* " == *' --exclude canic-icydb-lifecycle-schema '* ]]
+    [[ " $* " == *' --exclude canic_icydb_lifecycle_probe '* ]]
+fi
 stage=ordinary
 fail_fast=1
 phase=execute
@@ -70,6 +75,11 @@ esac
 [[ " $* " != *' --list '* ]] || phase=list
 if [[ -n "$target" && " $* " == *' -p canic-tests '* ]]; then
     stage="$(awk -F '\t' -v target="$target" '$2 == target { print $5 }' scripts/ci/workspace-test-inventory.tsv)"
+    if [[ "$stage" == external-composition ]]; then
+        [[ " $* " == *' --features external-composition '* ]]
+    else
+        [[ " $* " != *'external-composition'* ]]
+    fi
 fi
 if [[ "$phase" == compile || "$stage" == ordinary || "$stage" == native-* || "$stage" == documentation ]]; then
     [[ ! -e "$CANIC_TEST_SCRATCH/server.pid" ]]
@@ -298,6 +308,17 @@ for mode in ordinary fast targeted-pocketic; do
     if rg -q '\[(CANIC-(REQUEST|OBSERVATION|TIMING|CACHE)|FLEET-MEASURE)\]' "$scratch/output.log"; then exit 1; fi
 done
 echo 'workspace test runner barriers, selectors, failure ordering, quiet output, retained diagnostics and cleanup passed'
+
+# Explicit external selection enables its optional dependency before list/run.
+scratch="$fixture/external-composition"
+mkdir -p "$scratch"
+CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+    POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+    RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE=none \
+    bash "$fixture/scripts/ci/run-workspace-tests.sh" targeted-pocketic icydb_lifecycle_composition \
+    > "$scratch/output.log" 2>&1
+printf 'list\texternal-composition\t1\nexecute\texternal-composition\t0\n' > "$scratch/expected.tsv"
+diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
 
 # Cache accounting distinguishes misses/uncacheable outputs from infrastructure
 # errors, rejects partial stats and never reports a negative delta after reset.

@@ -94,13 +94,8 @@ impl From<OperatorMintTransportError> for FleetReadinessError {
 /// Observe current funding and local blockers without creating operator state.
 pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, FleetReadinessError> {
     validate_path_labels(request.environment, request.fleet)?;
-    crate::fleet_ensure::ops::retained_contract::check(
-        request.workspace,
-        request.environment,
-        request.fleet,
-    )?;
-    if let Some(inputs) = &request.generation_inputs {
-        crate::fleet_ensure::generate::preflight::validate_generation_inputs(
+    let reset = if let Some(inputs) = &request.generation_inputs {
+        crate::fleet_ensure::generate::preflight::validate_selection(
             &crate::fleet_ensure::generate::preflight::FleetGenerationInputsRequest {
                 root: request.workspace,
                 environment: request.environment,
@@ -111,11 +106,24 @@ pub fn inspect(request: &FleetReadinessRequest<'_>) -> Result<FleetReadiness, Fl
             request.operator,
             request.cycles_ledger,
         )
-        .map_err(Box::new)?;
+        .map_err(Box::new)?
+    } else {
+        false
+    };
+    if !reset {
+        crate::fleet_ensure::ops::retained_contract::check(
+            request.workspace,
+            request.environment,
+            request.fleet,
+        )?;
     }
     let started = now_ms()?;
     let paths = EnsurePaths::under(request.workspace, request.environment, request.fleet);
-    let retained_operation = retained(&paths, request)?;
+    let retained_operation = if reset {
+        None
+    } else {
+        retained(&paths, request)?
+    };
     let expected_network =
         resolve_canonical_network_id_from_root(request.workspace, request.environment)?;
     if let Some(selected) = request.desired {

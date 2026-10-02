@@ -23,6 +23,110 @@ use canic_host::{
     icp::IcpCli,
 };
 
+/// Retain a real unfinished Root import with cleared, stopped and untouched sources.
+pub(super) fn pause_reset(input: &ReinstallJourney<'_>, journal: &CapacityImportJournalRecord) {
+    use canic_host::fleet_ensure::ops::capacity_import::{
+        journal as persistence, reservation_evidence, root_reservation,
+    };
+    let operator = journal.plan.authority.operator;
+    let owner = CapacityImportJournalStore::open(&paths(input)).unwrap();
+    let mut approved = journal.clone();
+    approved.approved = true;
+    owner.save(&approved).unwrap();
+    let reservation = root_reservation(&approved.plan).unwrap();
+    let identity = PoolImportIdentity {
+        sequence: reservation.sequence,
+        plan_sha256: reservation.plan_sha256,
+    };
+    let reserved = super::super::capacity_import::command(
+        input.pic,
+        input.root,
+        operator,
+        PoolImportCommand::Reserve(Box::new(reservation)),
+    )
+    .unwrap();
+    approved = persistence::reserve(
+        &approved,
+        reservation_evidence(&approved.plan, &reserved).unwrap(),
+    )
+    .unwrap();
+    owner.save(&approved).unwrap();
+    let running = approved
+        .plan
+        .sources
+        .iter()
+        .enumerate()
+        .filter(|(_, source)| source.binding.module_sha256.is_some() && !source.binding.stopped)
+        .map(|(index, source)| (index, source.binding.canister_id))
+        .collect::<Vec<_>>();
+    assert!(running.len() >= 2);
+    let (cleared_index, cleared) = running[0];
+    for _ in 0..8 {
+        let status = super::super::capacity_import::command(
+            input.pic,
+            input.root,
+            operator,
+            PoolImportCommand::Advance {
+                identity,
+                canister_id: cleared,
+            },
+        )
+        .unwrap();
+        if matches!(
+            status.progress[cleared_index],
+            PoolImportSourceProgress::Ready(_)
+        ) {
+            break;
+        }
+    }
+    let (stopped_index, stopped) = running[1];
+    let status = super::super::capacity_import::command(
+        input.pic,
+        input.root,
+        operator,
+        PoolImportCommand::Advance {
+            identity,
+            canister_id: stopped,
+        },
+    )
+    .unwrap();
+    assert!(matches!(
+        status.progress[cleared_index],
+        PoolImportSourceProgress::Ready(_)
+    ));
+    assert_eq!(
+        status.progress[stopped_index],
+        PoolImportSourceProgress::StopIssued
+    );
+    assert!(
+        status
+            .progress
+            .iter()
+            .any(|entry| matches!(entry, PoolImportSourceProgress::AwaitingHandoff))
+    );
+    assert!(status.root_receipt.is_none());
+    assert!(
+        input
+            .pic
+            .canister_status(cleared, Some(input.root))
+            .unwrap()
+            .module_hash
+            .is_none()
+    );
+    let stopped = input
+        .pic
+        .canister_status(stopped, Some(input.root))
+        .unwrap();
+    assert!(stopped.module_hash.is_some());
+    let status: canic_core::dto::canister::CanisterStatusType =
+        candid::decode_one(&encode_one(stopped.status).unwrap()).unwrap();
+    assert_eq!(
+        status,
+        canic_core::dto::canister::CanisterStatusType::Stopped
+    );
+    assert!(approved.handoffs.iter().all(|entry| entry.effect.is_none()));
+}
+
 pub(super) fn qualify_reset_review(
     input: &ReinstallJourney<'_>,
     journal: &CapacityImportJournalRecord,
@@ -30,20 +134,16 @@ pub(super) fn qualify_reset_review(
     let plan = &journal.plan;
     let (workloads, ready) = expected_counts(input);
     assert_eq!(plan.sources.len(), workloads + ready);
-    assert_eq!(
-        plan.sources
-            .iter()
-            .filter(|source| source.binding.module_sha256.is_some())
-            .count(),
-        workloads
-    );
-    assert_eq!(
-        plan.sources
-            .iter()
-            .filter(|source| source.binding.module_sha256.is_none() && source.binding.stopped)
-            .count(),
-        ready
-    );
+    for source in &plan.sources {
+        let status = input
+            .pic
+            .canister_status(source.binding.canister_id, Some(input.root))
+            .unwrap();
+        assert_eq!(
+            source.binding.module_sha256.map(Vec::from),
+            status.module_hash
+        );
+    }
     let operator = plan.authority.operator;
     let context = super::super::capacity_import::context(input.pic, input.root, operator);
     assert_eq!(

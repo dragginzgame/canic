@@ -899,8 +899,8 @@ public CLI completed-estate recovery/replay PocketIC journeys pass after these
 changes. Logs are `/tmp/canic-import-*.log`; no broad workspace gate ran.
 
 The maintainer accepted a narrow CANIC-188 repair exception for local implementation
-and qualification. The [repair decision](../../design/0.110-fleet-runtime-contraction/issued-import-recovery.md)
-and [incident instructions](../../../scripts/dev/canic188/README.md) bind the exact
+and qualification. The [repair decision](../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-issued-import-recovery.md)
+and [incident instructions](../../audits/release-lines/supporting/0.110-fleet-runtime-contraction/canic188-retired-tooling.md) bind the exact
 issued import. A frozen `.48` repair releases only the exact retained completed
 allowances, preserves operation/progress and original ceilings, and restores the
 original Root before settlement. Native exact-record tests and actual PocketIC

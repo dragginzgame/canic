@@ -885,14 +885,18 @@ impl ReceiptBackedIntentStore {
     }
 
     /// Provision the pinned B-tree's maximum live-node envelope before admission.
-    pub(crate) fn reserve_application_eligibility_capacity(record_count: u64) -> bool {
-        let Some(required_pages) = application_eligibility_required_pages(record_count) else {
-            return false;
-        };
+    pub(crate) fn reserve_application_eligibility_capacity(
+        record_count: u64,
+    ) -> Result<(), ic_memory::RuntimeGrowError> {
+        let required_pages = application_eligibility_required_pages(record_count)
+            .ok_or(ic_memory::RuntimeGrowError::ArithmeticOverflow)?;
 
         APPLICATION_RECEIPT_ELIGIBILITY.with_borrow(|state| {
             let current_pages = state.1.size();
-            current_pages >= required_pages || state.1.grow(required_pages - current_pages) >= 0
+            if current_pages >= required_pages {
+                return Ok(());
+            }
+            state.1.grow(required_pages - current_pages).map(|_| ())
         })
     }
 
@@ -1248,7 +1252,10 @@ mod tests {
         assert_eq!(application_eligibility_required_pages(1), Some(1));
         assert_eq!(application_eligibility_required_pages(1_000), Some(8));
         assert_eq!(application_eligibility_required_pages(u64::MAX), None);
-        assert!(!ReceiptBackedIntentStore::reserve_application_eligibility_capacity(u64::MAX));
+        assert_eq!(
+            ReceiptBackedIntentStore::reserve_application_eligibility_capacity(u64::MAX),
+            Err(ic_memory::RuntimeGrowError::ArithmeticOverflow)
+        );
     }
 
     #[test]

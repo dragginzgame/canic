@@ -44,8 +44,7 @@ use canic_host::{
         dto::{FleetEnsureProgress, FleetEnsureProgressState},
         generate_desired_fleet, initialize_fresh_estate_seed, load_desired_fleet,
         model::{EnsureAction, InstallMode},
-        plan, plan_reinstall, report_json_value, retained_in_progress_plan,
-        retained_reinstall_apply_plan,
+        plan, report_json_value, retained_in_progress_plan, retained_reinstall_apply_plan,
         view::continuation::ImportHeadroomAssessment,
     },
     icp_config::{IcpConfigError, resolve_current_canic_icp_root},
@@ -582,15 +581,6 @@ fn run_ensure(options: &EnsureOptions) -> Result<(), FleetCommandError> {
             if let canic_host::fleet_ensure::workflow::EnsureWorkflowError::SuccessorReviewRequired { review: Some(review), .. } = &mut error { review.next_review_command = next_review; }
             error
         })?
-        } else if options.reinstall {
-            plan_reinstall(
-                &root,
-                &loaded.desired,
-                &loaded.sha256,
-                &options.fleet,
-                now_nanoseconds()?,
-                &mut platform,
-            )?
         } else {
             plan(
                 &root,
@@ -778,7 +768,9 @@ fn run_generate(options: GenerateOptions) -> Result<(), FleetCommandError> {
     println!("fleet: {}", options.fleet);
     println!("release_build: {}", generated.release_build_id);
     if generated.clean_reinstall {
-        println!("deployment: clean reinstall; completed records are historical evidence");
+        println!(
+            "deployment: clean reinstall from explicit physical inventory; predecessor records are historical evidence"
+        );
         println!(
             "balances: not sampled during generation; review current custody with fleet ensure --reinstall"
         );

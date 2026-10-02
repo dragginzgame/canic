@@ -295,3 +295,208 @@ fn memory_allocation_record_response_omits_failed_size_measurements() {
     assert_eq!(response.memory_size, None);
     assert_eq!(memory_ledger_memory_entry_response(&response), None);
 }
+
+#[derive(Clone, Default)]
+struct RefusableMemory {
+    bytes: VectorMemory,
+    refuse: std::rc::Rc<std::cell::Cell<bool>>,
+}
+
+impl Memory for RefusableMemory {
+    fn size(&self) -> u64 {
+        self.bytes.size()
+    }
+
+    fn grow(&self, pages: u64) -> i64 {
+        if self.refuse.get() {
+            -1
+        } else {
+            self.bytes.grow(pages)
+        }
+    }
+
+    fn read(&self, offset: u64, bytes: &mut [u8]) {
+        self.bytes.read(offset, bytes);
+    }
+
+    fn write(&self, offset: u64, bytes: &[u8]) {
+        self.bytes.write(offset, bytes);
+    }
+}
+
+#[test]
+fn early_default_access_preserves_configured_bootstrap_and_authority() {
+    // A fresh thread isolates the default runtime from other native store tests.
+    std::thread::spawn(|| {
+        use ic_memory::{RuntimeAdoptionError, RuntimeDiagnosticError, RuntimeOpenError};
+        let key = "canic.core.runtime.bindings.v1";
+        let id = crate::role_contract::allocation::memory::runtime::RUNTIME_BINDINGS_ID;
+        let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
+        assert!(matches!(
+            ic_memory::open_default_memory_manager_memory(key, id),
+            Err(RuntimeOpenError::NotBootstrapped)
+        ));
+        assert!(matches!(
+            ic_memory::open_default_memory_manager_memory_by_key(key),
+            Err(RuntimeOpenError::NotBootstrapped)
+        ));
+        assert_eq!(
+            ic_memory::default_memory_manager_memory_id(key),
+            Err(RuntimeOpenError::NotBootstrapped)
+        );
+        assert_eq!(
+            ic_memory::verify_default_memory_manager_authority(
+                &declarations,
+                memory::CANIC_CORE_MEMORY_AUTHORITY,
+            ),
+            Err(RuntimeAdoptionError::Open(
+                RuntimeOpenError::NotBootstrapped
+            ))
+        );
+        assert!(matches!(
+            ic_memory::default_memory_manager_memory_allocation_summary(),
+            Err(RuntimeDiagnosticError::NotBootstrapped)
+        ));
+        assert!(!MemoryRegistryOps::is_initialized().unwrap());
+        ic_memory::bootstrap_default_memory_manager_with_config(
+            ic_memory::MemoryManagerConfig::new(1).unwrap(),
+            &memory::CanicMemoryManagerPolicy::new(),
+        )
+        .unwrap();
+        let before = MemoryRegistryOps::allocation_snapshot().unwrap();
+        assert_eq!(before.bucket_size_pages, 1);
+        assert_eq!(ic_memory::default_memory_manager_memory_id(key), Ok(id));
+        ic_memory::verify_default_memory_manager_authority(
+            &declarations,
+            memory::CANIC_CORE_MEMORY_AUTHORITY,
+        )
+        .unwrap();
+        assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), before);
+    })
+    .join()
+    .unwrap();
+}
+
+#[test]
+fn ledger_growth_refusal_publishes_no_authority_and_retries_canic_bootstrap() {
+    let backing = RefusableMemory::default();
+    let mut runtime = ic_memory::MemoryRuntime::new_with_config(
+        backing.clone(),
+        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+    )
+    .unwrap();
+    let declarations = ic_memory::sealed_declaration_snapshot().unwrap();
+    let policy = memory::CanicMemoryManagerPolicy::new();
+    let before = backing.bytes.borrow().clone();
+    backing.refuse.set(true);
+    assert!(matches!(
+        runtime.bootstrap(&declarations, &policy),
+        Err(ic_memory::RuntimeBootstrapError::LedgerGrowth(
+            ic_memory::RuntimeGrowError::BackingRefused { .. }
+        ))
+    ));
+    assert!(!runtime.is_bootstrapped());
+    assert!(matches!(
+        runtime.committed_allocations(),
+        Err(ic_memory::RuntimeOpenError::NotBootstrapped)
+    ));
+    assert_eq!(*backing.bytes.borrow(), before);
+    backing.refuse.set(false);
+    assert_eq!(
+        runtime
+            .bootstrap(&declarations, &policy)
+            .unwrap()
+            .generation(),
+        1
+    );
+    runtime
+        .verify_authority(&declarations, memory::CANIC_CORE_MEMORY_AUTHORITY)
+        .unwrap();
+}
+
+#[test]
+fn application_growth_refusal_preserves_shared_extents_and_retry() {
+    let backing = RefusableMemory::default();
+    let mut runtime = ic_memory::MemoryRuntime::new_with_config(
+        backing.clone(),
+        ic_memory::MemoryManagerConfig::new(1).unwrap(),
+    )
+    .unwrap();
+    runtime
+        .bootstrap(
+            &ic_memory::sealed_declaration_snapshot().unwrap(),
+            &memory::CanicMemoryManagerPolicy::new(),
+        )
+        .unwrap();
+    let rows = runtime
+        .open_memory_by_key("canic.core.runtime.bindings.v1")
+        .unwrap();
+    let clone = rows.clone();
+    let before = backing.bytes.borrow().clone();
+    let summary = runtime.memory_allocation_summary().unwrap();
+    backing.refuse.set(true);
+    assert_eq!(
+        clone.grow(1),
+        Err(ic_memory::RuntimeGrowError::BackingRefused {
+            additional_pages: 1
+        })
+    );
+    assert_eq!(rows.size(), 0);
+    assert_eq!(*backing.bytes.borrow(), before);
+    assert_eq!(runtime.memory_allocation_summary().unwrap(), summary);
+    backing.refuse.set(false);
+    assert_eq!(clone.grow(1), Ok(0));
+    rows.write(0, b"retained");
+    let before = backing.bytes.borrow().clone();
+    assert_eq!(
+        rows.grow(u64::MAX),
+        Err(ic_memory::RuntimeGrowError::ArithmeticOverflow)
+    );
+    assert!(matches!(
+        rows.grow(32_768),
+        Err(ic_memory::RuntimeGrowError::BucketExhausted { .. })
+    ));
+    assert_eq!(*backing.bytes.borrow(), before);
+    drop(runtime);
+    assert_eq!(rows.grow(1), Ok(1));
+    let mut bytes = [0; 8];
+    clone.read(0, &mut bytes);
+    assert_eq!(&bytes, b"retained");
+}
+
+#[test]
+fn receipt_capacity_growth_exhaustion_preserves_store_and_typed_ops_failure() {
+    use crate::{
+        ops::storage::intent::IntentStoreOpsError,
+        storage::stable::intent::ReceiptBackedIntentStore,
+    };
+    ReceiptBackedIntentStore::reserve_application_eligibility_capacity(1).unwrap();
+    let before = MemoryRegistryOps::allocation_snapshot().unwrap();
+    let required_records = u64::from(u32::MAX);
+    let source =
+        ReceiptBackedIntentStore::reserve_application_eligibility_capacity(required_records)
+            .unwrap_err();
+    assert!(matches!(
+        source,
+        ic_memory::RuntimeGrowError::BucketExhausted { .. }
+    ));
+    assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), before);
+    let error = IntentStoreOpsError::ApplicationReceiptEligibilityCapacityUnavailable {
+        required_records,
+        source,
+    };
+    assert!(matches!(
+        error,
+        IntentStoreOpsError::ApplicationReceiptEligibilityCapacityUnavailable {
+            source: ic_memory::RuntimeGrowError::BucketExhausted { .. },
+            ..
+        }
+    ));
+    let internal: InternalError = error.into();
+    assert_eq!(
+        internal.code(),
+        crate::diagnostics::codes::CAPACITY_UNAVAILABLE
+    );
+    ReceiptBackedIntentStore::reserve_application_eligibility_capacity(1).unwrap();
+    assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), before);
+}

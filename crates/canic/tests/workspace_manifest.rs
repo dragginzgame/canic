@@ -656,6 +656,28 @@ fn blob_storage_billing_feature_is_opt_in_and_implies_blob_storage() {
 
 #[test]
 fn external_composition_qualification_is_explicit() {
+    let manifest = read_manifest(&workspace_root().join("crates/canic-tests/Cargo.toml"));
+    assert_eq!(
+        manifest["dependencies"]["icydb"]["optional"].as_bool(),
+        Some(true)
+    );
+    if manifest["features"].get("default").is_some() {
+        assert!(!feature_entries(&manifest, "default").contains("external-composition"));
+    }
+    assert_eq!(
+        feature_entries(&manifest, "external-composition"),
+        BTreeSet::from(["dep:icydb"])
+    );
+    let target = manifest["test"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|target| target["name"].as_str() == Some("icydb_lifecycle_composition"))
+        .unwrap();
+    assert_eq!(
+        target["required-features"].as_array().unwrap(),
+        &[Value::String("external-composition".into())]
+    );
     let plan = |mode: &str, target: Option<&str>| {
         let mut command = std::process::Command::new("bash");
         command
@@ -684,8 +706,10 @@ fn external_composition_qualification_is_explicit() {
         assert!(release.contains("--test lifecycle_boundary"));
         assert!(release.contains("--test pic_root_funding_recovery"));
         assert!(!release.contains("--test icydb_lifecycle_composition"));
+        assert!(!release.contains("--features external-composition"));
     }
     let integration = plan("targeted-pocketic", Some("icydb_lifecycle_composition"));
     assert!(integration.contains("--test icydb_lifecycle_composition"));
+    assert!(integration.contains("--features external-composition"));
     assert!(!integration.contains("--test pic_root_funding_recovery"));
 }

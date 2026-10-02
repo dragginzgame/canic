@@ -9,13 +9,16 @@ For other starting points, see [supplied infrastructure bootstrap](#supplied-inf
 and [capacity import](#add-supplied-capacity-to-a-current-fleet). These explicitly
 reviewed setup operations publish authority for subsequent Ensure convergence.
 
-Clean reinstall is the normal pre-1.0 release transition. Select the complete
-physical inventory and a qualified current build; `fleet ensure --reinstall`
+Every pre-1.0 release transition requires hard cut plus clean reinstall, including
+malformed or incomplete installations. Select the complete physical inventory
+and a qualified current build; `fleet ensure --reinstall`
 reviews replacement infrastructure, child clearing and fresh workload convergence.
 Completed operations become immutable history before current execution authority
 is created. Their old desired documents, application interfaces and executable
-schemas do not participate in the replacement decision. Unfinished paid work
-retains its recovery owner.
+schemas do not participate in the replacement decision. Predecessor state is
+cleared rather than repaired to continue it. Unfinished paid effects require
+cycle-safe disposition before destructive reset. Current same-release recovery
+still prevents duplicated effects and spending.
 
 Current certified controllers and subnet placement authorize the reset. The
 operator must control the supplied Coordinator, Root and Store. Root-controlled
@@ -246,14 +249,24 @@ reject the snapshot. Observations are sequential and have no retained freshness
 lease; every fact can change immediately afterward. Success means the known early
 checks passed, not that deployment is affordable or approved.
 
-## Clean reinstall of a completed Fleet
+## Clean reinstall from physical inventory
 
 Run readiness before building, supplying the current policy and intended estate
 seed together. This uses the generator's input checks without loading artifacts
-or decoding a completed predecessor's executable contracts. A symbolic fresh seed
-is valid for initial creation, but a completed Fleet requires explicit physical
-inventory for new generation. An unresolved paid operation must resume its
-recorded operation before another reset can begin.
+or decoding a predecessor's executable contracts. A symbolic fresh seed is valid
+for initial creation. Replacing retained state requires explicit physical
+inventory, including when bootstrap, activation or import never completed.
+Readiness and generation do not require a healthy predecessor plan or journal.
+
+Explicit reset review qualifies the current artifacts and checks certified
+physical custody before archiving the predecessor bytes. An unfinished Root import
+with no uncertain host handoffs can be discarded: its Root and child IDs remain
+controlled, and the new Root imports their actual cleared, stopped or running
+state. The old reservation and budget are not amended or reused. A genuinely
+uncertain host payment, creation or controller effect still requires reconciliation;
+`ResetUncertainEffect` identifies its file and effect. An unreadable paid-effect
+journal cannot prove those outcomes. Preserve it; do not delete evidence or infer
+that an Ensure `Intent` means the call was never sent.
 
 ```sh
 canic --environment staging fleet readiness toko-miner-staging-001 \
@@ -263,7 +276,7 @@ canic --environment staging fleet readiness toko-miner-staging-001 \
   --seed deployments/toko-miner-staging-001.estate.toml
 ```
 
-Prepare those inputs explicitly: select the completed estate's physical
+Prepare those inputs explicitly: select the estate's physical
 Coordinator, Root and Store IDs, plus every Root-owned child, including allocated
 workloads and descendants. Terminal identity metadata is an inventory source,
 not import approval. Keep its records unchanged; write the selected IDs into a
@@ -281,7 +294,7 @@ generation and review check their inputs again. `--source` and `--seed` cannot b
 combined with `--desired` on readiness. Preserve the selected source, seed and
 qualified build throughout interrupted reinstall phases.
 
-For completed Fleets, that readiness command also reports
+For explicit replacement inventory, that readiness command also reports
 `funding.clean_reinstall_infrastructure`: current native balances and an upper
 funding forecast for each selected Coordinator, Root and Store. It uses the
 current generated allowances and a bounded installation window, before loading
@@ -300,11 +313,11 @@ An unavailable quote does not itself block compilation of replacement artifacts
 needed for review. Empty blockers still do not establish funding sufficiency;
 a null forecast is never a zero quote.
 
-This includes an unpaid review selected before a release changed the funding
-calculation. Readiness reads only its bounded operation metadata; it does not
-decode historical executable authority, replace the review, approve payment or
-invent a conversion amount. Preserve retained authority and obtain exact funding
-through the supported current-release review flow before approving effects.
+Explicit current inventory also enables the forecast for an unpaid review or
+unfinished predecessor. Readiness does not decode its executable authority,
+replace the review, approve payment or invent a conversion amount. A new reset
+review binds its own current funding; same-operation retry retains its original
+authority.
 The unavailable reason is null when an infrastructure forecast is present;
 individual unavailable observations remain on that forecast's targets.
 
@@ -380,8 +393,8 @@ canic --environment staging fleet generate toko-miner-staging-001 \
 
 Use a new output path, or the explicit replacement digest when replacing an
 existing output. Do not use `--fresh`: the seed supplies the retained Coordinator,
-Roots, Stores and every child ID, including allocated workloads. Generation of a
-completed Fleet compiles the replacement without querying its old runtime. It
+Roots, Stores and every child ID, including allocated workloads. Generation with retained state compiles the replacement without querying its old
+runtime. It
 does not claim observed cycle balances; those are sampled during current review.
 
 Review the first phase:
@@ -414,9 +427,13 @@ Additional funding requires its own bounded review. `fleet_completed: true`
 marks completion of the whole reset; infrastructure or import completion alone
 does not. Immediate completed apply replays the retained receipt locally.
 
-A later explicit `--reinstall` starts a distinct reset, archiving the completed
-operation. Ordinary `fleet ensure` does not discard a completed Fleet. Historical
-records remain evidence; they are never repaired into executable authority and
+A later explicit `--reinstall` with a different qualified desired selection starts
+a new reset after the paid-effect checks, even if the predecessor is unfinished.
+A matching unfinished current selection resumes its frozen operation and allowances.
+After Fleet completion, explicit `--reinstall` starts another reset. A matching
+selection marker does not require repairing malformed current execution files;
+those files fall back to the same physical reset and paid-effect checks. Ordinary
+`fleet ensure` does not discard a completed Fleet. Historical records remain evidence; they are never repaired into executable authority and
 missing controller fields are never filled with guessed defaults.
 
 These commands clear Canic and application state. Supplied IDs and their cycles
@@ -1639,6 +1656,15 @@ opening another batch. The stall budget counts only consecutive non-progress.
 Durable Store publication requests contain exact `bytes_sha256` and `bytes_size`
 fields. The content-addressed object store retains the bytes before plan
 publication; reopening verifies their hash, size and prepared authority.
+Infrastructure bootstrap and unfinished activation preparation also admit native
+credits while retaining the original source observations, bindings and debit
+limits. A new activation preparation records its current controlled balance and
+keeps the original activation source unchanged. Fleet-release custody and
+held-capacity checks admit increases in the checked native-plus-reserved total;
+the original debit ceiling and minimum native balance still apply at both
+boundaries. Credits do not expand funding authority or permit Ledger-account
+drift.
+
 Current import reviews always contain `funding_credits`, including an empty
 array, and registration recovery fields serialize as explicit `null` until
 requested. These fields bind current review and journal hashes.
@@ -1810,9 +1836,10 @@ A release boundary discards the predecessor's application/framework state and
 completed execution authority. The new host does not resume an old journal with
 substituted desired input or silently fill omitted durable fields. Cycle
 conservation must be established before controlled infrastructure is erased.
-Only unfinished issued effects require reconciliation under their exact
-authority. Completed records are archived as history; they do not admit old
-stable bytes or protocols into the new Fleet. The replacement uses a separately
+Unfinished issued effects require exact accounting and cycle-safe disposition
+before reset; they do not require repairing predecessor state or restoring an old
+Root/client. Historical records are archived without admitting old stable bytes
+or protocols into the new Fleet. The replacement uses a separately
 reviewed current plan. Selected ID-preserving reset retains those physical
 identities and controlled cycle accounts, subject to reviewed protocol debit.
 Same-operation interruption recovery retains the exact current plan, journal,
@@ -1820,8 +1847,8 @@ artifact bytes and paid-effect receipts.
 
 ## Unreadable retained plan
 
-An unreadable plan or journal is not permission to replace an unfinished
-operation. For active unfinished work, missing required fields such as plan
+An unreadable plan or journal cannot authorize continuation or destructive
+spending. For active current-release work, missing required fields such as plan
 `recovery_review` or journal effect `publication_attempts` are rejected even when
 `schema_version` is 1. Preserve the complete Fleet directory, referenced
 content objects, release artifacts, desired inputs, estate seed and paid-effect
@@ -1829,17 +1856,21 @@ receipts. Do not insert null fields, recalculate the plan digest or delete the
 journal. The current decoder cannot determine whether omission reflects a
 different source contract or damaged evidence.
 
-Completion selection runs before executable plan decoding. A completed operation
-with consistent completion identities and no unresolved issued effects is history,
-even when its executable payload belongs to an older release. Follow
-[clean reinstall of a completed Fleet](#clean-reinstall-of-a-completed-fleet)
-for current-build qualification, physical inventory, custody review and archival.
+Explicit `--reinstall` selects current-build reset before predecessor executable
+plan decoding. It does not require completion identities or a readable application
+state. Follow [clean reinstall from physical inventory](#clean-reinstall-from-physical-inventory)
+for current-build qualification, custody review and archival. Uncertain paid-effect
+evidence is checked separately; malformed application fields alone do not block
+replacement. Ordinary continuation still requires its exact current contract.
 
 An unreadable executable payload alone neither proves nor disproves completion.
 If completion metadata is damaged, contradictory or genuinely unfinished, retain
-the evidence and reconcile the outstanding effects under their existing owner.
-Do not fill missing fields or delete journals. A working frontend is not proof
-that a paid operation finished. Read-only commands that need an active role map
+the evidence and establish cycle-safe disposition from physical inventory,
+current controllers and exact paid-effect evidence. Release replacement remains
+a current-build hard cut plus reinstall; do not repair old state or require the
+old executable owner to make it work again. Do not fill missing fields or delete
+journals to manufacture reset authority. A working frontend is not proof that a
+paid operation finished. Read-only commands that need an active role map
 also cannot invent it from an unreadable plan.
 
 For an explicitly disposable **local simulator**, use its owner's exact-session
@@ -1850,7 +1881,7 @@ resolve outstanding live payments or discard controlled real cycles.
 
 ## Deliberate selected-build database wipe
 
-Follow [the current clean-reinstall sequence](#clean-reinstall-of-a-completed-fleet)
+Follow [the current clean-reinstall sequence](#clean-reinstall-from-physical-inventory)
 for both changed-build and identical-build resets, including its distinct operation
 identity, reviewed phase digests, artifact retention and same-digest interruption
 recovery. Infrastructure or pool clearing alone is not Fleet convergence.

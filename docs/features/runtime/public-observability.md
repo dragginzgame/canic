@@ -174,6 +174,9 @@ sampler reads bounded memory-manager metadata; public queries and history reads
 only read the cache. There is no additional endpoint, selector, remote collector
 or application callback. Omitting `performance` skips this collection and hides
 its values. Raw keys, owner strings, memory IDs and range claims remain protected.
+The sampler uses ic-memory 0.15.0's numeric `MemoryAllocationSummary`, avoiding
+per-ID rows and copied binding names. It shares accounting with the protected
+detailed report and retains the 34,848-byte metadata-read bound.
 
 All summary names have the `memory.allocations.` prefix and no canister label.
 Rows use `Gauge`, preserve `observed_at_ns`, and use the existing bounded history.

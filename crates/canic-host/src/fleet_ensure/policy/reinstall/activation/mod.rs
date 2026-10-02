@@ -229,8 +229,8 @@ pub(in crate::fleet_ensure) fn preparation(
     if input
         .source
         .initial_controlled_cycles
-        .checked_sub(cycles)
-        .is_none_or(|burn| burn > input.source.maximum_execution_burn_cycles)
+        .saturating_sub(cycles)
+        > input.source.maximum_execution_burn_cycles
     {
         return Err(conflict("bounded source protocol debit"));
     }

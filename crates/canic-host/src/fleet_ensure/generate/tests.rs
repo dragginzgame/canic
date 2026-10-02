@@ -3191,7 +3191,9 @@ fn generated_multi_component_retained_estate_plans_applies_and_replays_without_e
         fs::read(&stopped_paths.root_start_authority).expect("retained exact Root-start authority");
     let regenerated = generate_desired_fleet(&stopped_request)
         .expect("generate the replacement after the Start prerequisite");
-    assert_eq!(regenerated.observed_canisters, 2);
+    assert!(regenerated.clean_reinstall);
+    assert_eq!(regenerated.observed_canisters, 0);
+    assert!(regenerated.startup_funding.is_none());
     assert_eq!(
         fs::read(&stopped_paths.root_start_authority).expect("unchanged Root-start authority"),
         authority_before_reinstall_gate,

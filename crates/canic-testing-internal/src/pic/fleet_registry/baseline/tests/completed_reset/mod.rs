@@ -3,6 +3,7 @@
 //! All remote effects use production adapters against disposable PocketIC canisters.
 
 mod capacity_import;
+mod interruption;
 
 use super::*;
 use canic_core::cdk::utils::hash::sha256_hex;
@@ -22,6 +23,9 @@ pub(super) fn completed_estate_reset_recovers_and_replays() {
     if let Ok(arguments) = std::env::var(CLI_ARGUMENTS) {
         let arguments: Vec<String> = serde_json::from_str(&arguments).unwrap();
         canic_cli::run(arguments.into_iter().map(std::ffi::OsString::from)).unwrap();
+        return;
+    }
+    if interruption::run_child() {
         return;
     }
     assert_literal_zero_host_journey(FundingJourney::CompletedReset, RETAINED_ESTATE_WORKLOADS);
@@ -134,12 +138,13 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         &executable,
         input.desired.bootstrap.as_ref().unwrap().release_build_id,
     );
-    let desired = generate(&input, &executable, replacement.release_build_id);
+    let mut desired = generate(&input, &executable, replacement.release_build_id);
     std::fs::write(
         root.join("desired-reset.toml"),
         toml::to_string_pretty(&initial).unwrap(),
     )
     .unwrap();
+    let fleet = desired.fleet.clone();
     let review = || {
         cli_receipt(
             root,
@@ -147,7 +152,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
             &[
                 "fleet",
                 "ensure",
-                &desired.fleet,
+                &fleet,
                 "--desired",
                 "desired-reset.toml",
                 "--source",
@@ -214,7 +219,11 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         ledger_account_balance(input.pic, ledger, operator),
         before_operator
     );
-    let regenerated = generate(&input, &executable, replacement.release_build_id);
+    let regenerated = generate(
+        &input,
+        &executable,
+        initial.bootstrap.as_ref().unwrap().release_build_id,
+    );
     std::fs::write(
         root.join("desired-reset.toml"),
         toml::to_string_pretty(&regenerated).unwrap(),
@@ -233,7 +242,7 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
             .as_ref()
             .unwrap()
             .release_build_id,
-        replacement.release_build_id
+        initial.bootstrap.as_ref().unwrap().release_build_id
     );
     let current_review = std::fs::read(&paths.plan).unwrap();
     cli_output(
@@ -280,20 +289,34 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         Err(canic_host::fleet_ensure::ops::EnsureStateError::ResetReviewEffectEvidence { .. })
     ));
     assert_eq!(std::fs::read(&paths.journal).unwrap(), issued);
-    let initialized = cli_apply_receipt(
+    interruption::pause_after(
         root,
         &executable,
         &desired.fleet,
         &infrastructure.plan_sha256,
-        true,
-        true,
+        infrastructure.canisters[0].actions.len(),
     );
-    assert_eq!(initialized.last().unwrap()["data"]["terminal"], true);
-    assert!(
-        initialized.last().unwrap()["data"]["effects_applied"]
-            .as_u64()
-            .unwrap()
-            > 0
+    reset_predecessor(&input, &desired, &executable, ResetEnd::PartialActivation);
+    desired.maximum_stalled_observations += 1;
+    reset_predecessor(
+        &input,
+        &desired,
+        &executable,
+        ResetEnd::InfrastructureComplete,
+    );
+    review();
+    let import = CapacityImportJournalStore::open(&paths)
+        .unwrap()
+        .read()
+        .unwrap()
+        .unwrap();
+    capacity_import::pause_reset(&input, &import);
+    desired.maximum_stalled_observations += 1;
+    let (infrastructure, before_operator) = reset_predecessor(
+        &input,
+        &desired,
+        &executable,
+        ResetEnd::InfrastructureComplete,
     );
     review();
     let import = CapacityImportJournalStore::open(&paths)
@@ -350,6 +373,9 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
         plan.scope,
         canic_host::fleet_ensure::model::FleetEnsurePlanScope::Full
     );
+    let unpaid_successor = std::fs::read(&paths.plan).unwrap();
+    review();
+    assert_eq!(std::fs::read(&paths.plan).unwrap(), unpaid_successor);
     let completed = cli_apply_receipt(
         root,
         &executable,
@@ -453,6 +479,149 @@ pub(super) fn assert_journey(input: ReinstallJourney<'_>) {
     qualify_ordinary_ensure_after_reset(&input, &desired, &executable, &plan);
     capacity_import::qualify(&input, &desired, &icp);
     span.finish();
+}
+
+enum ResetEnd {
+    PartialActivation,
+    InfrastructureComplete,
+}
+
+fn reset_predecessor(
+    input: &ReinstallJourney<'_>,
+    desired: &DesiredFleet,
+    executable: &Path,
+    end: ResetEnd,
+) -> (FleetEnsurePlan, Nat) {
+    let root = input.adapter_root;
+    let paths = paths(input);
+    std::fs::write(&paths.plan, b"malformed predecessor execution plan").unwrap();
+    std::fs::write(&paths.state, b"obsolete predecessor application state").unwrap();
+    let retained = [
+        &paths.plan,
+        &paths.state,
+        &paths.journal,
+        &paths.plan.with_file_name("capacity-import.json"),
+    ]
+    .into_iter()
+    .filter(|path| path.exists())
+    .map(|path| (path.clone(), std::fs::read(path).unwrap()))
+    .collect::<BTreeMap<_, _>>();
+    std::fs::write(
+        root.join("desired-reset.toml"),
+        toml::to_string_pretty(desired).unwrap(),
+    )
+    .unwrap();
+    let arguments = [
+        "fleet",
+        "ensure",
+        &desired.fleet,
+        "--desired",
+        "desired-reset.toml",
+        "--source",
+        "fleet-policy.toml",
+        "--seed",
+        "fleet-seed.toml",
+        "--reinstall",
+        "--json",
+    ];
+    let operator = Principal::from_text(&desired.operator).unwrap();
+    let ledger = Principal::from_text(&desired.cycles_ledger).unwrap();
+    let before_operator = ledger_account_balance(input.pic, ledger, operator);
+
+    // A child outside the selected Root's custody refuses before historical files retire.
+    let child = input.pools[0];
+    let controllers = input
+        .pic
+        .canister_status(child, Some(input.root))
+        .unwrap()
+        .settings
+        .controllers;
+    input
+        .pic
+        .set_controllers(child, Some(input.root), vec![operator])
+        .unwrap();
+    cli_output(root, executable, &arguments, false);
+    for (path, bytes) in &retained {
+        assert_eq!(std::fs::read(path).unwrap(), *bytes);
+    }
+    input
+        .pic
+        .set_controllers(child, Some(operator), controllers)
+        .unwrap();
+    cli_receipt(root, executable, &arguments, true, None, true);
+    let replacement = read_plan(&paths).unwrap().unwrap();
+    assert_eq!(
+        replacement.scope,
+        canic_host::fleet_ensure::model::FleetEnsurePlanScope::InfrastructureBootstrap
+    );
+    assert_replacement_selection(&replacement, desired, &paths);
+    let history = root
+        .join(".canic/fleet-ensure/history/local")
+        .join(&desired.fleet)
+        .join("objects");
+    for bytes in retained.values() {
+        assert_eq!(
+            std::fs::read(history.join(sha256_hex(bytes))).unwrap(),
+            *bytes
+        );
+    }
+    apply_replacement(root, executable, desired, &replacement, end);
+    (replacement, before_operator)
+}
+
+fn apply_replacement(
+    root: &Path,
+    executable: &Path,
+    desired: &DesiredFleet,
+    replacement: &FleetEnsurePlan,
+    end: ResetEnd,
+) {
+    std::fs::remove_file(root.join("lost-install-response")).unwrap();
+    std::fs::write(root.join("lose-install-response"), []).unwrap();
+    cli_apply_receipt(
+        root,
+        executable,
+        &desired.fleet,
+        &replacement.plan_sha256,
+        true,
+        false,
+    );
+    assert!(root.join("lost-install-response").is_file());
+    match end {
+        ResetEnd::PartialActivation => {
+            interruption::pause_activation(root, executable, &desired.fleet, replacement);
+        }
+        ResetEnd::InfrastructureComplete => {
+            let completed = cli_apply_receipt(
+                root,
+                executable,
+                &desired.fleet,
+                &replacement.plan_sha256,
+                true,
+                true,
+            );
+            assert_eq!(completed.last().unwrap()["data"]["terminal"], true);
+        }
+    }
+}
+
+fn assert_replacement_selection(
+    replacement: &FleetEnsurePlan,
+    desired: &DesiredFleet,
+    paths: &EnsurePaths,
+) {
+    let selected = replacement.reviewed_desired.as_ref().unwrap().desired();
+    assert_eq!(selected.canisters, desired.canisters);
+    assert_eq!(
+        selected.bootstrap.as_ref().unwrap().release_build_id,
+        desired.bootstrap.as_ref().unwrap().release_build_id
+    );
+    let frozen: canic_host::fleet_ensure::model::clean_reinstall::CleanReinstallRecord =
+        serde_json::from_slice(
+            &std::fs::read(paths.plan.with_file_name("clean-reinstall.json")).unwrap(),
+        )
+        .unwrap();
+    assert_eq!(frozen.desired.desired(), desired);
 }
 
 fn qualify_ordinary_ensure_after_reset(
@@ -711,7 +880,7 @@ pub(super) fn generate(
     {
         assert!(matches!(
             canic_host::fleet_ensure::validate_generation_inputs(&preflight, operator, ledger),
-            Err(canic_host::fleet_ensure::FleetGenerateError::CompletedFleetRequiresExplicitInventory)
+            Err(canic_host::fleet_ensure::FleetGenerateError::ResetRequiresExplicitInventory)
         ));
     }
     seed_value["fresh_estate"] = false.into();

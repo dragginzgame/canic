@@ -58,6 +58,32 @@ pub(in crate::fleet_ensure::ops) fn capture_review(
     if !is_sha256(operation_id) || !is_sha256(plan_sha256) {
         return Err(invalid());
     }
+    capture_snapshot(
+        paths,
+        environment,
+        fleet,
+        Some(operation_id),
+        Some(plan_sha256),
+    )
+}
+
+/// Preserve opaque predecessor bytes for a current-inventory reset, without invented old identities.
+pub(in crate::fleet_ensure::ops) fn capture_reset(
+    paths: &EnsurePaths,
+    environment: &str,
+    fleet: &str,
+) -> Result<String, EnsureStateError> {
+    validate_path_labels(environment, fleet).map_err(|_| invalid())?;
+    capture_snapshot(paths, environment, fleet, None, None)
+}
+
+fn capture_snapshot(
+    paths: &EnsurePaths,
+    environment: &str,
+    fleet: &str,
+    operation_id: Option<&str>,
+    plan_sha256: Option<&str>,
+) -> Result<String, EnsureStateError> {
     let directory = paths.plan.parent().ok_or_else(invalid)?;
     let mut snapshot = Snapshot {
         archive: paths
@@ -83,8 +109,8 @@ pub(in crate::fleet_ensure::ops) fn capture_review(
         schema_version: 1,
         environment: environment.into(),
         fleet: fleet.into(),
-        operation_id: operation_id.into(),
-        plan_sha256: plan_sha256.into(),
+        operation_id: operation_id.map(String::from),
+        plan_sha256: plan_sha256.map(String::from),
         files: snapshot.files,
         unavailable_objects: snapshot.unavailable_objects,
     };

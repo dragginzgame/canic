@@ -360,9 +360,9 @@ for invariant_target in \
 done
 
 declare -A primitive_commands=(
-    [build]='cargo build'
-    [check]='cargo check'
-    [clippy]='cargo clippy'
+    [build]='bash scripts/ci/run-workspace-cargo.sh build'
+    [check]='bash scripts/ci/run-workspace-cargo.sh check'
+    [clippy]='bash scripts/ci/run-workspace-cargo.sh clippy'
     [fmt]='cargo fmt'
     [fmt-check]='cargo fmt'
 )
@@ -370,16 +370,13 @@ for primitive_target in "${!primitive_commands[@]}"; do
     primitive_recipe="$(sed -n "/^$primitive_target:/,/^$/p" "$MAKEFILE")"
     rg -F "${primitive_commands[$primitive_target]}" <<<"$primitive_recipe" >/dev/null ||
         fail "make $primitive_target omits its named Cargo operation"
-    if rg '\$\(MAKE\)|scripts/' <<<"$primitive_recipe" >/dev/null; then
+    unrelated_recipe="$(sed '\|bash scripts/ci/run-workspace-cargo.sh |d' <<<"$primitive_recipe")"
+    if rg '\$\(MAKE\)|scripts/' <<<"$unrelated_recipe" >/dev/null; then
         fail "make $primitive_target delegates hidden repository work"
     fi
-    case "$primitive_target" in
-        build | check | clippy)
-            rg -F -- '--locked' <<<"$primitive_recipe" >/dev/null ||
-                fail "make $primitive_target does not freeze Cargo.lock"
-            ;;
-    esac
 done
+# Exercise actual Cargo arguments and failure propagation through the scope helper.
+bash "$ROOT/scripts/ci/test-workspace-cargo.sh"
 rg -F 'cargo test --locked --no-fail-fast "${cargo_args[@]}"' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "workspace test execution does not freeze Cargo.lock"
 
@@ -452,7 +449,7 @@ if rg '^[[:space:]]+tags:' "$CI" >/dev/null; then
 fi
 rg -F "startsWith(github.event.head_commit.message, 'Release ')" "$CI" >/dev/null ||
     fail "the release workspace build is not bound to a main release commit"
-rg -F 'run: cargo build --release --workspace --locked' "$CI" >/dev/null ||
+rg -F 'run: bash scripts/ci/run-workspace-cargo.sh build --release --keep-going' "$CI" >/dev/null ||
     fail "CI omits the release-profile workspace build"
 rg -F 'run_serial_pocketic_test' "$WORKSPACE_TEST_RUNNER" >/dev/null ||
     fail "the workspace test runner does not isolate serial PocketIC execution"
@@ -521,7 +518,7 @@ if rg -- '(^==> plan:.*--(workspace|lib|bins)|pocketic-serial)' <<<"$fast_test_p
 fi
 full_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" full)" ||
     fail "the full workspace test plan cannot be resolved"
-rg -F -- '--workspace --lib --bins governed_pocketic_ -- --test-threads=1 --nocapture --ignored' \
+rg -- '--workspace .*--lib --bins governed_pocketic_ -- --test-threads=1 --nocapture --ignored' \
     <<<"$full_test_plan" >/dev/null ||
     fail "full validation must reuse the ordinary workspace graph for governed host proofs"
 # This filter is reserved for host proofs: selecting the already-built workspace
@@ -536,15 +533,21 @@ while IFS= read -r source_file; do
 done < <(rg -l 'fn .*governed_pocketic_' "$ROOT/crates" --glob '*.rs')
 ordinary_test_plan="$(CANIC_TEST_PLAN_ONLY=1 bash "$WORKSPACE_TEST_RUNNER" ordinary)" ||
     fail "the ordinary workspace test plan cannot be resolved"
-rg -F -- '--workspace --lib --bins' <<<"$ordinary_test_plan" >/dev/null ||
+rg -- '--workspace .*--lib --bins' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary library tests must share the workspace compile graph"
-if rg -- '^==> plan:.*(--exclude|--ignored)' <<<"$ordinary_test_plan" >/dev/null; then
-    fail "the ordinary workspace plan excludes library coverage or enables stateful tests"
+if rg -- '^==> plan:.*--ignored' <<<"$ordinary_test_plan" >/dev/null; then
+    fail "the ordinary workspace plan enables stateful tests"
 fi
-ordinary_workspace_invocations="$(rg -c '^==> plan:.*--workspace --lib --bins' <<<"$ordinary_test_plan")"
+while IFS= read -r workspace_command; do
+    excluded_packages="$(awk '{ for (i = 1; i < NF; i++) if ($i == "--exclude") print $(i + 1) }' \
+        <<<"$workspace_command" | LC_ALL=C sort)"
+    [[ "$excluded_packages" == $'canic-icydb-lifecycle-schema\ncanic_icydb_lifecycle_probe' ]] ||
+        fail "workspace tests must exclude only optional external fixture packages"
+done < <(rg '^==> plan:.*--workspace' <<<"$ordinary_test_plan")
+ordinary_workspace_invocations="$(rg -c '^==> plan:.*--workspace .*--lib --bins' <<<"$ordinary_test_plan")"
 [[ "$ordinary_workspace_invocations" -eq 1 ]] ||
     fail "ordinary unit/binary and integration tests must share one Cargo invocation"
-rg -F -- '--workspace --doc' <<<"$ordinary_test_plan" >/dev/null ||
+rg -- '--workspace .*--doc' <<<"$ordinary_test_plan" >/dev/null ||
     fail "ordinary validation omits public documentation contracts"
 ordinary_selected_targets="$(sed -n 's/^==> plan: cargo test //p' <<<"$ordinary_test_plan" |
     awk '{ for (i = 1; i < NF; i++) if ($i == "--test") print $(i + 1) }' | LC_ALL=C sort)"

@@ -64,15 +64,16 @@ fn validate_infrastructure(
     let invalid = || CapacityImportReviewError::AdmissionInvalid;
     let authority = &plan.authority;
     let binding = &registry.authority.binding;
-    if (
-        &binding.fleet,
-        binding.coordinator,
-        &binding.recovery_controllers,
-    ) != (
-        &authority.fleet,
-        authority.coordinator,
-        &authority.recovery_controllers,
-    ) {
+    // Compare membership without changing the retained Registry bytes or review hash.
+    let mut recovery_controllers = binding.recovery_controllers.clone();
+    recovery_controllers.sort_unstable();
+    if (&binding.fleet, binding.coordinator, &recovery_controllers)
+        != (
+            &authority.fleet,
+            authority.coordinator,
+            &authority.recovery_controllers,
+        )
+    {
         return Err(invalid());
     }
     let roots = registry

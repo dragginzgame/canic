@@ -10,8 +10,9 @@ pub struct OperationArchiveRecord {
     pub schema_version: u16,
     pub environment: String,
     pub fleet: String,
-    pub operation_id: String,
-    pub plan_sha256: String,
+    /// Present only when an admitted historical envelope established these identities.
+    pub operation_id: Option<String>,
+    pub plan_sha256: Option<String>,
     pub files: BTreeMap<String, String>,
     /// Unavailable historical content is recorded, never reconstructed or executed.
     pub unavailable_objects: BTreeSet<String>,

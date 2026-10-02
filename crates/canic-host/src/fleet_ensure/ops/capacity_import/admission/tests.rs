@@ -6,14 +6,18 @@ use crate::fleet_ensure::{
         CapacityImportInfrastructureKind, CapacityImportInfrastructureRecord,
     },
     ops::capacity_import::{
-        destination::tests::fixture, prepare_review, verify_review, with_admission,
+        destination::tests::fixture_with_controllers, prepare_review, verify_review, with_admission,
     },
     policy::capacity_import::tests::principal,
 };
 use canic_core::cdk::utils::hash::hex_bytes;
 
 fn reviewed() -> CapacityImportPlanRecord {
-    let (initial, _, registry) = fixture();
+    reviewed_with_controllers(vec![principal(8)])
+}
+
+fn reviewed_with_controllers(controllers: Vec<Principal>) -> CapacityImportPlanRecord {
+    let (initial, _, registry) = fixture_with_controllers(controllers);
     let declaration = CapacityImportDeclaration {
         canister: initial.sources[0].binding.canister_id.to_text(),
         subnet: initial.authority.subnet.into_principal().to_text(),
@@ -79,6 +83,28 @@ fn reviewed() -> CapacityImportPlanRecord {
         },
     )
     .unwrap()
+}
+
+#[test]
+fn recovery_controller_order_preserves_admission_bytes_and_review_hash() {
+    let plan = reviewed_with_controllers(vec![principal(8), principal(7)]);
+    let bytes = serde_json::to_vec(&plan).unwrap();
+    verify_review(&plan, plan.plan_sha256).unwrap();
+    assert_eq!(serde_json::to_vec(&plan).unwrap(), bytes);
+    for controllers in [
+        vec![principal(7), principal(7)],
+        vec![principal(7), principal(9)],
+    ] {
+        let mut changed = plan.clone();
+        let admission = changed.admission.as_mut().unwrap();
+        let mut observed = registry(admission).unwrap();
+        observed.authority.binding.recovery_controllers = controllers;
+        admission.registry_candid_hex = hex_bytes(candid::encode_one(&observed).unwrap());
+        assert!(matches!(
+            validate(&changed),
+            Err(CapacityImportReviewError::AdmissionInvalid)
+        ));
+    }
 }
 
 #[test]

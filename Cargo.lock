@@ -2364,9 +2364,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.14.3"
+version = "0.15.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b9368f37df84f896d04da5b980e0e038302c4da24892f89e00124c6d7cb953c7"
+checksum = "21a7b22c19fd5a35f074f7ecac0abb8544a4c84b0e925967ff5588d40a1d9c39"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2672,9 +2672,9 @@ dependencies = [
 
 [[package]]
 name = "icydb"
-version = "0.262.2"
+version = "0.264.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0901048262817cc87efd443d1a46242a5bb68c825eef158ee4998cde73d725f2"
+checksum = "a4e13327bed83ce594aed8b20a4de96801635298fe285addc08b8285687cda14"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -2690,9 +2690,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-core"
-version = "0.262.2"
+version = "0.264.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b7c1ab3dbdfa3f4bb23957bb0f7e7167de5a2813271ffef52f11f036e66d8bc8"
+checksum = "29e7d87defcadbb50e98a8bff9cc76bcd8c2f26b547e515ab175bc205c686009"
 dependencies = [
  "base64 0.23.1",
  "candid",
@@ -2714,18 +2714,18 @@ dependencies = [
 
 [[package]]
 name = "icydb-diagnostic-code"
-version = "0.262.2"
+version = "0.264.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "03218b2cb65c28ff6b4e73958aec7e6ee531117d237b9d486394717f123a9950"
+checksum = "222d658a37e2eb1d780c9eb02c992408eae2c4b96b62d5bb314dc451d129188e"
 dependencies = [
  "remain",
 ]
 
 [[package]]
 name = "icydb-model"
-version = "0.262.2"
+version = "0.264.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f2acffe1a213a20b7c2e33508392a77fe036d847cb3871e16761270332391a8c"
+checksum = "a2c8aa048e057287248188171b629ffae6267e5aa32d4a5e6e6923bcce703f97"
 dependencies = [
  "candid",
  "convert_case 0.12.0",
@@ -2745,9 +2745,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-model-macros"
-version = "0.262.2"
+version = "0.264.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "87aeae9d91ef0217472bab1bcbf016c28092b4f461a9f2ab27fc9139d09bca62"
+checksum = "3da6b8918c64d58d0a5c645867a0f39ffddcafa8c8ac5b3b05e70881fb158f98"
 dependencies = [
  "convert_case 0.12.0",
  "darling 0.24.1",
@@ -2762,9 +2762,9 @@ dependencies = [
 
 [[package]]
 name = "icydb-schema"
-version = "0.262.2"
+version = "0.264.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "38db441af3d6caa40bbafa63b3b69672105b490d5389927386a99291ed7a60ae"
+checksum = "a0217d1b43b19e0e4f4dbd01ca400ae5349bf02e977b721fee1e307e2fb889a0"
 dependencies = [
  "candid",
  "derive_more",
@@ -3286,9 +3286,9 @@ dependencies = [
 
 [[package]]
 name = "num-modular"
-version = "0.6.5"
+version = "0.6.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bd8e500409e6cd603b03e477c26a6caecdc27ac58979a53e881c75eafc079f44"
+checksum = "26ac76200f74e658124f95fa63e1a82b2fd2181c5b2fdde80b3d89d2d3f905e7"
 
 [[package]]
 name = "num-order"
