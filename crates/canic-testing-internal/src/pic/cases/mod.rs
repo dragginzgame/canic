@@ -42,6 +42,7 @@ const ORDINARY_NATIVE_MODULES: &[&str] = &[
 // Intentional opt-in proofs and runner entry points must remain explicitly
 // ignored. A new ignored case needs classification, just like a new normal case.
 const EXPLICIT_SELECTIONS: &[&str] = &[
+    "embedded_root::tests::embedded_peer_reproduces_across_paths_and_release_versions",
     "pic::artifacts::tests::infrastructure_direct_builds_match_examples_and_cached_coordinator",
     "pic::fleet_registry::baseline::tests::completed_reset::incident_estate_reset_recovers_and_replays",
     "pic::fleet_registry::baseline::tests::frontend_handoff_public_cli_and_sdk_preserve_admission_and_local_trust",

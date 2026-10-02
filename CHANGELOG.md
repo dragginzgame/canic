@@ -8,15 +8,6 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Reduce `fast` Wasm size with ThinLTO and eight code-generation units, trading
-  some build speed for deployment headroom. Generated infrastructure profiles
-  and the application workspace example use the same settings.
-
-- Preserve Binaryen's required macOS runtime library during installation and
-  install the pinned Cargo version-editing tool for CI release-guard tests.
-  Build the embedded allocation peer with a synthetic test-only version and
-  remapped source paths, keeping normal release bumps from invalidating its proof.
-
 - Resume the unfinished whole-Fleet release-to-capacity batch: durable observation
   budgets, authenticated ownership and declared Ledger-account observations, and
   release-specific authority fencing. Equivalent default subaccounts share one
@@ -31,6 +22,10 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.
+  Reduces `fast` Wasm size, repairs macOS Binaryen and CI tool installation,
+  and makes embedded-fixture qualification independent of release-version bumps
+  and builder paths, with complete opt-in test registration. Clarifies
+  service-authority access errors.
 
 - `0.110.50` fixes unfinished-installation reset and continuation inputs
   (CANIC-191/192), reduces Root import calls and adds reviewed recovery for
