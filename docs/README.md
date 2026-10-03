@@ -14,6 +14,7 @@ Canic's internal architecture before getting started.
 
 | If you want to… | Read… |
 | --- | --- |
+| Understand why Canic exists and how its pieces fit together | [How Canic works](getting-started/how-canic-works.md) |
 | Install the matching CLI and runtime toolchain | [Install Canic](../INSTALLING.md) |
 | Build a small application and its management canisters | [First managed application](getting-started/minimal-managed-fleet.md) |
 | Describe an application's canisters and layout | [Configuration](../CONFIG.md) |
