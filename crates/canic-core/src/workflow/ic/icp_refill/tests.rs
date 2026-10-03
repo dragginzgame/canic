@@ -41,6 +41,7 @@ fn icp_refill_payload_hash(
 
 fn sample_record(status: IcpRefillStatus) -> IcpRefillRecord {
     IcpRefillRecord {
+        transfer_uncertain: false,
         id: 7,
         operation_id: [9; 32],
         trigger: IcpRefillTriggerRecord::Manual,
@@ -73,6 +74,7 @@ fn sample_record(status: IcpRefillStatus) -> IcpRefillRecord {
 
 fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
     IcpRefillOperation {
+        transfer_uncertain: record.transfer_uncertain,
         id: record.id,
         operation_id: record.operation_id,
         trigger: record.trigger.into(),
@@ -96,6 +98,8 @@ fn operation_from_record(record: &IcpRefillRecord) -> IcpRefillOperation {
         status: record.status.into(),
         error_code: record.error_code.map(Into::into),
         error_message: record.error_message.clone(),
+        refund_block_index: record.refund_block_index,
+        transaction_too_old_min_block_index: record.transaction_too_old_min_block_index,
     }
 }
 
@@ -1219,6 +1223,7 @@ fn transfer_bad_fee_updates_persisted_fee() {
         TransferError::BadFee {
             expected_fee: Nat::from(20_000_u64),
         },
+        false,
     )
     .expect("bad fee should update persisted fee");
 
@@ -1237,6 +1242,7 @@ fn transfer_duplicate_records_recovered_block_index() {
         TransferError::Duplicate {
             duplicate_of: Nat::from(58_u64),
         },
+        false,
     )
     .expect("duplicate transfer should recover block index");
 
@@ -1250,7 +1256,7 @@ fn transfer_duplicate_records_recovered_block_index() {
 fn transfer_too_old_marks_retry_window_stale() {
     let record = stored_record(10_010, 110, IcpRefillStatus::Requested);
 
-    let record = apply_transfer_error(record.id, TransferError::TooOld)
+    let record = apply_transfer_error(record.id, TransferError::TooOld, false)
         .expect("too-old transfer should mark stale retry window");
 
     assert_eq!(record.status, IcpRefillStatus::Failed);
@@ -1259,4 +1265,68 @@ fn transfer_too_old_marks_retry_window_stale() {
         Some(IcpRefillErrorCode::TransferWindowStale)
     );
     assert!(!IcpRefillStoreOps::is_resumable(&record));
+}
+
+#[test]
+fn transfer_refusal_preserves_only_prior_uncertainty_and_its_budget() {
+    for (offset, prior_uncertainty) in [false, true].into_iter().enumerate() {
+        for (kind, error) in [TransferError::TooOld, TransferError::TemporarilyUnavailable]
+            .into_iter()
+            .enumerate()
+        {
+            let original = stored_record(
+                10_020 + (offset * 2 + kind) as u64,
+                120 + u8::try_from(offset * 2 + kind).unwrap(),
+                IcpRefillStatus::Requested,
+            );
+            IcpRefillStoreOps::mark_transfer_attempt_started(original.id, 2_000).unwrap();
+            assert!(
+                IcpRefillRecordOps::get(original.id)
+                    .unwrap()
+                    .transfer_uncertain
+            );
+            let refused = apply_transfer_error(original.id, error, prior_uncertainty).unwrap();
+            assert_eq!(refused.transfer_uncertain, prior_uncertainty);
+            assert_eq!(refused.budget_reserved, prior_uncertainty);
+            assert_eq!(refused.ledger_block_index, None);
+            assert!(!IcpRefillStoreOps::is_resumable(&refused));
+        }
+    }
+}
+
+#[test]
+fn bad_fee_after_lost_reply_preserves_transfer_identity_until_duplicate_resolution() {
+    let original = stored_record(10_024, 124, IcpRefillStatus::Requested);
+    IcpRefillStoreOps::mark_transfer_attempt_started(original.id, 2_000).unwrap();
+    let refused = apply_transfer_error(
+        original.id,
+        TransferError::BadFee {
+            expected_fee: Nat::from(20_000_u64),
+        },
+        true,
+    )
+    .unwrap();
+    assert!(refused.transfer_uncertain);
+    assert!(refused.budget_reserved);
+    assert_eq!(refused.fee_e8s, original.fee_e8s);
+    assert_eq!(refused.memo, original.memo);
+    assert_eq!(refused.created_at_time_ns, original.created_at_time_ns);
+    assert_eq!(refused.operation_id, original.operation_id);
+    assert_eq!(
+        refused.error_code,
+        Some(IcpRefillErrorCode::LedgerTransferFailed)
+    );
+    assert!(!IcpRefillStoreOps::can_retry_bad_fee(&refused));
+    let recovered = apply_transfer_error(
+        original.id,
+        TransferError::Duplicate {
+            duplicate_of: Nat::from(60_u64),
+        },
+        true,
+    )
+    .unwrap();
+    assert!(!recovered.transfer_uncertain);
+    assert!(recovered.budget_reserved);
+    assert_eq!(recovered.ledger_block_index, Some(60));
+    assert!(IcpRefillStoreOps::should_notify(&recovered));
 }

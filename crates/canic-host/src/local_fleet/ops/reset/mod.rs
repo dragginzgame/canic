@@ -52,9 +52,14 @@ pub fn begin(directory: &Path, expected: &str) -> Result<bool, LocalFleetError> 
 
 /// Remove only the selected owned instance tree after the durable intent.
 pub fn remove_instance(directory: &Path) -> Result<(), LocalFleetError> {
-    ops::validate_tree(directory)?;
     let reset = read(directory)?.ok_or(LocalFleetError::Session)?;
     let instance = ops::instance_directory(directory, &reset.session_id)?;
+    match fs::symlink_metadata(&instance) {
+        Ok(metadata) if metadata.is_dir() => {}
+        Ok(_) => return Err(LocalFleetError::UnsafePath),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(()),
+        Err(error) => return Err(error.into()),
+    }
     match fs::remove_dir_all(&instance) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(()),

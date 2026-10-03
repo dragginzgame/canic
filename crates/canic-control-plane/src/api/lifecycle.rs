@@ -43,6 +43,13 @@ use std::time::Duration;
 pub struct LifecycleApi;
 
 impl LifecycleApi {
+    /// Read release funding evidence after endpoint-level controller authentication.
+    pub fn root_funding_release_status(
+        start_after: Option<u64>,
+    ) -> Result<crate::dto::root::RootFundingReleaseResponse, canic_core::dto::error::Error> {
+        crate::workflow::root_funding::release_status(start_after).map_err(Into::into)
+    }
+
     /// Return protected Root funding state after endpoint-level controller authentication.
     pub fn root_funding_status()
     -> Result<crate::dto::root::RootFundingStatusResponse, canic_core::dto::error::Error> {

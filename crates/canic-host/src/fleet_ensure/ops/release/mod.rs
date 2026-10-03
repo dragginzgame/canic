@@ -3,6 +3,7 @@
 //! Sealing grants no effect authority. Physical observations separately consume caller-reserved reads.
 
 pub mod accounts;
+pub mod funding;
 pub mod inventory;
 pub mod observation;
 pub mod reservation;

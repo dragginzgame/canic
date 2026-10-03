@@ -934,7 +934,7 @@ fn require_completion_fits(state: &CanisterPoolStateRecord) -> Result<(), Intern
     Ok(())
 }
 
-fn status(record: &PoolImportRecord) -> PoolImportStatus {
+pub(super) fn status(record: &PoolImportRecord) -> PoolImportStatus {
     PoolImportStatus {
         reserved_at_ns: record.reserved_at_ns,
         root_receipt: record.root_receipt.clone(),

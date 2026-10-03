@@ -24,7 +24,6 @@ pub enum IcpBalanceError {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 struct BalanceOutput {
     balance: String,
 }
@@ -92,5 +91,17 @@ mod tests {
             parse_cycles("1.5 cycles"),
             Err(IcpBalanceError::InvalidAmount { unit: "cycles", .. })
         ));
+    }
+
+    #[test]
+    fn balance_json_accepts_additive_fields_and_requires_the_balance() {
+        let output: BalanceOutput =
+            serde_json::from_str(r#"{"balance":"42 cycles","account":{"owner":"2vxsx-fae"}}"#)
+                .expect("additional upstream fields are informational");
+        assert_eq!(parse_cycles(&output.balance).unwrap(), 42);
+
+        for invalid in [r#"{"account":{}}"#, r#"{"balance":42}"#] {
+            assert!(serde_json::from_str::<BalanceOutput>(invalid).is_err());
+        }
     }
 }

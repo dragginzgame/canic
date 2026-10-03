@@ -150,6 +150,12 @@ pub fn stop() -> Result<(), InternalError> {
     Ok(())
 }
 
+/// Read retained pool obligations under protected Root identity, without new-effect admission.
+pub fn release_status() -> Result<crate::dto::root::RootPoolReleaseResponse, InternalError> {
+    let authority = FleetActivationWorkflow::root_authority()?;
+    CanisterPoolOps::release_status(authority.binding.fleet_subnet_root)
+}
+
 /// Return the exact immutable policy and durable asset inventory.
 pub fn status(request: CanisterPoolStatusRequest) -> Result<CanisterPoolResponse, InternalError> {
     if request.limit == 0 || request.limit > MAX_STATUS_PAGE_ENTRIES {

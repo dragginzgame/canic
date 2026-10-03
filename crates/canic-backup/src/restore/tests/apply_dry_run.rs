@@ -1,5 +1,42 @@
 use super::*;
 
+#[test]
+fn apply_dry_run_verifies_uppercase_manifest_checksums() {
+    let root = temp_dir("canic-restore-uppercase-checksum");
+    let mut manifest = valid_manifest(IdentityMode::Relocatable);
+    for (canister, path) in [(ROOT, "artifacts/root"), (CHILD, "artifacts/child")] {
+        set_member_artifact(&mut manifest, canister, &root, path, b"snapshot bytes");
+    }
+    for member in &mut manifest.deployment.members {
+        member.source_snapshot.checksum = member
+            .source_snapshot
+            .checksum
+            .as_ref()
+            .map(|hash| hash.to_ascii_uppercase());
+    }
+    let plan = RestorePlanner::plan(&manifest, None).expect("uppercase hashes are valid");
+    let mut dry_run = RestoreApplyDryRun::try_from_plan_with_artifacts(&plan, &root)
+        .expect("equivalent hex verifies actual artifact bytes");
+    dry_run.validate().expect("checksum projections agree");
+    assert!(dry_run.ready);
+
+    let validation = dry_run
+        .artifact_validation
+        .as_mut()
+        .expect("artifact checks");
+    assert!(validation.checksums_verified);
+    for check in &mut validation.checks {
+        check.checksum_expected = check
+            .checksum_expected
+            .as_ref()
+            .map(|hash| hash.to_ascii_lowercase());
+    }
+    dry_run
+        .validate()
+        .expect("equivalent upload binding hashes");
+    fs::remove_dir_all(root).expect("remove artifacts");
+}
+
 // Ensure apply dry-runs render ordered operations without mutating targets.
 #[test]
 fn apply_dry_run_renders_ordered_member_operations() {

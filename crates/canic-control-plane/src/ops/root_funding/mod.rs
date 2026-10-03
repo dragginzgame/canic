@@ -5,7 +5,10 @@
 //! Boundary: workflow supplies validated authority and ambient observations around each transition.
 
 use crate::{
-    dto::root::{RootFundingStatusResponse, RootIcpRefillStatusResponse},
+    dto::root::{
+        RootFundingReleaseResponse, RootFundingStatusResponse, RootIcpRefillReleaseEvidence,
+        RootIcpRefillStatusResponse,
+    },
     storage::stable::root_funding::{
         ROOT_FUNDING_SCHEMA_VERSION, RootFundingActiveOperationRecord,
         RootFundingActivePhaseRecord, RootFundingCommitError, RootFundingCommitOutcome,
@@ -32,6 +35,37 @@ use canic_core::{
 pub struct RootFundingOps;
 
 impl RootFundingOps {
+    /// Preserve exact funding evidence for release without changing any producer.
+    pub(crate) fn release_status(
+        authority: &RootFundingAuthorityView,
+        start_after: Option<u64>,
+    ) -> Result<RootFundingReleaseResponse, InternalError> {
+        let funding = current(authority)?;
+        let page = IcpRefillStoreOps::release_page(start_after)?;
+        let accepted_grant = funding
+            .current
+            .as_ref()
+            .and_then(|active| match &active.phase {
+                RootFundingActivePhaseRecord::CoordinatorRequested => None,
+                RootFundingActivePhaseRecord::GrantAccepted(receipt) => Some((**receipt).clone()),
+            });
+        Ok(RootFundingReleaseResponse {
+            fleet_subnet_root: authority.fleet_subnet_root,
+            policy_generation: funding.policy_generation,
+            policy_hash: fleet_subnet_root_funding_policy_hash(&authority.funding),
+            icp_refill_policy: authority.funding.icp_refill.clone(),
+            current_request: funding.current.map(|active| active.request),
+            accepted_grant,
+            rotation_current: funding.rotation_current.map(|rotation| rotation.request),
+            icp_refills: page
+                .operations
+                .into_iter()
+                .map(|operation| refill_release_evidence(authority.fleet_subnet_root, operation))
+                .collect::<Result<_, _>>()?,
+            next_after: page.next_after,
+        })
+    }
+
     #[must_use]
     pub(crate) fn compile_genesis() -> RootFundingRecord {
         RootFundingRecord::default()
@@ -505,6 +539,39 @@ impl RootFundingOps {
     ) -> Result<RootFundingRecord, InternalError> {
         current(authority)
     }
+}
+
+fn refill_release_evidence(
+    root: candid::Principal,
+    operation: canic_core::control_plane_support::view::icp_refill::IcpRefillOperation,
+) -> Result<RootIcpRefillReleaseEvidence, InternalError> {
+    if operation.source_canister != root || operation.target_canister != root {
+        return Err(InternalError::conflict());
+    }
+    let response = IcpRefillStoreOps::to_response(&operation);
+    Ok(RootIcpRefillReleaseEvidence {
+        transfer_uncertain: operation.transfer_uncertain,
+        record_id: operation.id,
+        trigger: operation.trigger,
+        policy_hash: operation.policy_hash,
+        source_canister: operation.source_canister,
+        source_subaccount: operation.source_subaccount,
+        target_canister: operation.target_canister,
+        ledger_canister_id: operation.ledger_canister_id,
+        cmc_canister_id: operation.cmc_canister_id,
+        cmc_to_account_owner: operation.cmc_to_account_owner,
+        cmc_to_account_subaccount: operation.cmc_to_account_subaccount,
+        amount_e8s: operation.amount_e8s,
+        fee_e8s: operation.fee_e8s,
+        budget_window_start_secs: operation.budget_window_start_secs,
+        budget_reserved: operation.budget_reserved,
+        memo: operation.memo,
+        created_at_time_ns: operation.created_at_time_ns,
+        notify_attempts: operation.notify_attempts,
+        response,
+        refund_block_index: operation.refund_block_index,
+        transaction_too_old_min_block_index: operation.transaction_too_old_min_block_index,
+    })
 }
 
 fn current(authority: &RootFundingAuthorityView) -> Result<RootFundingRecord, InternalError> {

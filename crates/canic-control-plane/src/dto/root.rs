@@ -83,6 +83,49 @@ pub struct RootIcpRefillStatusResponse {
     pub response: IcpRefillResponse,
 }
 
+/// One exact retained ICP-refill effect and its source account for release review.
+/// Retry exhaustion is evidence, never a settlement receipt.
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct RootIcpRefillReleaseEvidence {
+    pub transfer_uncertain: bool,
+    pub record_id: u64,
+    pub trigger: IcpRefillTrigger,
+    pub policy_hash: [u8; 32],
+    pub source_canister: Principal,
+    pub source_subaccount: Option<[u8; 32]>,
+    pub target_canister: Principal,
+    pub ledger_canister_id: Principal,
+    pub cmc_canister_id: Principal,
+    pub cmc_to_account_owner: Principal,
+    pub cmc_to_account_subaccount: Option<[u8; 32]>,
+    pub amount_e8s: u64,
+    pub fee_e8s: u64,
+    pub budget_window_start_secs: u64,
+    pub budget_reserved: bool,
+    pub memo: Vec<u8>,
+    pub created_at_time_ns: u64,
+    pub notify_attempts: u32,
+    pub response: IcpRefillResponse,
+    pub refund_block_index: Option<u64>,
+    pub transaction_too_old_min_block_index: Option<u64>,
+}
+
+/// Controller-only funding census; does not seal producers or authorize reset.
+/// Pages include all retained refill outcomes and historical source accounts.
+#[derive(CandidType, Clone, Debug, Deserialize)]
+pub struct RootFundingReleaseResponse {
+    pub fleet_subnet_root: Principal,
+    pub policy_generation: u64,
+    pub policy_hash: [u8; 32],
+    pub icp_refill_policy: Option<FleetSubnetRootIcpRefillPolicy>,
+    pub current_request: Option<FleetRootFundingRequest>,
+    pub accepted_grant: Option<canic_core::dto::fleet_funding::FleetRootFundingAcceptanceReceipt>,
+    pub rotation_current:
+        Option<canic_core::dto::fleet_funding::FleetFundingPolicyRotationRootPrepareRequest>,
+    pub icp_refills: Vec<RootIcpRefillReleaseEvidence>,
+    pub next_after: Option<u64>,
+}
+
 /// Controller-only Root operating-funding and emergency-refill projection.
 #[derive(CandidType, Clone, Debug, Deserialize)]
 pub struct RootFundingStatusResponse {
@@ -136,4 +179,24 @@ pub enum RootOperationStatusResponse {
     RemoveRoot(RootRemovalOperationStatus),
     RemoveSubtree(RootComponentSubtreeRemovalResponse),
     SynchronizeRegistry(RootRegistrySynchronizationOperationStatus),
+}
+
+/// Retained pool obligations, independent of admission for new import or maintenance work.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct RootPoolReleaseResponse {
+    pub root: Principal,
+    pub bootstrap: Option<RootPoolBootstrapReleaseEvidence>,
+    pub capacity_import: Option<canic_core::dto::pool_import::PoolImportStatus>,
+    pub creation: Option<canic_core::dto::pool::CanisterPoolCreation>,
+    pub handoff: Option<canic_core::dto::pool::CanisterPoolHandoff>,
+}
+
+/// Keep all supplied identities and the initialization hold until custody is accounted for.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct RootPoolBootstrapReleaseEvidence {
+    pub review_sha256: [u8; 32],
+    pub install_id: [u8; 32],
+    pub operator: Principal,
+    pub store: Principal,
+    pub sources: Vec<Principal>,
 }

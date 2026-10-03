@@ -43,7 +43,6 @@ impl IcpCli {
 }
 
 #[derive(Deserialize)]
-#[serde(deny_unknown_fields)]
 pub(super) struct IcpSnapshotInventory {
     pub(super) snapshots: Vec<IcpSnapshot>,
 }

@@ -587,11 +587,11 @@ domain = canic-root-role-attestation
 
 Issuance flow:
 
-- `canic_prepare_role_attestation` is an update call on an `Active` Fleet
-  Subnet Root by an active Component Registry member
+- `canic_root_command::PrepareRoleAttestation` is an update call on an `Active`
+  Fleet Subnet Root by an active Component Registry member
 - prepare resolves the protected Registry partition and requires its exact
   canister, role and placement Subnet to match the request
-- `canic_get_role_attestation` is a query call by the same still-active caller
+- `canic_root_auth_status::RoleAttestation` is a query call by the same still-active caller
 - retrieval is caller-bound and returns the embedded root proof
 
 The query retrieval step requires a Root data certificate. It is therefore a
@@ -605,47 +605,245 @@ Verifier behavior:
 - hash the canonical `RoleAttestation` payload
 - verify the embedded role-attestation root proof against the configured root
   canister id and raw IC root public key
-- enforce subject, role, audience, subnet, time window, and minimum accepted
-  epoch locally; `issued_at_ns` may be at most
+- enforce subject, audience, subnet, time window, and minimum accepted
+  epoch locally; the receiving endpoint separately checks the attested role
+  against its allowed roles. `issued_at_ns` may be at most
   `AUTH_TIME_SKEW_ALLOWANCE_NS` ahead of verifier time, while
   `expires_at_ns` remains strict
 - make no root, issuer, or management-canister call on the protected path
 
 Current issuance rule:
 
-- `canic_prepare_role_attestation` / `canic_get_role_attestation` are the
-  active root role-attestation endpoints
-- retired request-style endpoints such as `canic_request_role_attestation` and
-  `canic_request_internal_invocation_proof` are not part of the active
-  protocol
-- standalone capability proof DTOs are not part of the active protocol
+- `canic_root_command::PrepareRoleAttestation` and
+  `canic_root_auth_status::RoleAttestation` are the active Root protocol variants
 - delegated tokens are the supported reusable endpoint-auth path
 
-### Online Same-Root Membership Authorization
+The current role-attestation request supplies its epoch; issuance validates
+the subject, role, placement and TTL but does not derive that epoch from a
+membership revocation transaction. A configured minimum epoch is therefore
+not, by itself, a membership-removal protocol. Do not rely on it to establish
+that a removed member's previously issued proof has been revoked.
 
-An application that needs current same-root topology authorization rather than
-a portable signed proof may perform one online lookup against its Fleet Subnet
-Root. The Root application exposes a narrow update endpoint, first admits only
-an active local Component caller, and resolves the subject through
-`RootComponentMembershipApi::active_member`. The receiving Component supplies
-only its observed `AccessContext::transport_caller()` from a custom async
-access predicate; it never accepts a caller-supplied role or binding.
+### Root-local Membership Boundary
 
-This path is deliberately narrower than role attestation:
+`RootComponentMembershipApi::active_member` is a read-only facade over the
+current protected Registry inside Root. It resolves a top-level Component or
+registered descendant and preserves the distinction between negative active
+membership and Registry/runtime failure. It does not itself authorize access
+to a lookup or grant an application permission.
 
-- it is read-only against the Root's current protected Component Registry;
-- Root failure, inactive membership, or a disallowed application role fails
-  closed before the receiving endpoint body runs;
-- the decision is local to one Root and adds one inter-Canister round trip;
-- it does not grant sibling call permission by itself; the application still
-  owns the admitted-role policy; and
-- cross-root service calls continue to use the Fleet-service peer authority
-  model rather than treating a local Registry lookup as Fleet-wide proof.
+Canonical 0.110.51 Root does not expose an equivalent cross-Component lookup
+endpoint. The public Directory query requires the caller to belong to the
+queried Component; it cannot be used to classify arbitrary sibling callers.
+The Root-local Rust helper is not a remote API. Cross-Root service calls retain
+the Fleet-service peer authority boundary.
 
-Like any online authorization lookup, the result describes Registry state at
-lookup time. A mutation requiring exact serialization with revocation must be
-owned by the Root workflow rather than relying on a decision that another
-Canister consumes after the call returns.
+Adding an online membership endpoint would still observe Registry state only
+at lookup time and introduce an await before receiver work. An operation
+requiring exact serialization with revocation needs an explicit lifecycle and
+effect boundary, rather than treating the lookup result as a lasting permit.
+
+### Receiver-local Caller Authority — Design Proposal, 2026-10-03
+
+This is the maintainer-requested design assessment for cross-Component system
+calls. It is not implemented behavior, a scheduled later minor, or authority
+to mutate downstream repositories. The proposed default preserves strict
+revocation completion; bounded proof-expiry revocation requires an explicit
+product decision. The source baseline is Canic 0.110.51.
+
+The missing capability is distribution of registered caller identity to the
+receivers that need it. The IC already authenticates the transport Principal.
+Root owns the corresponding managed binding and lifecycle; each receiver owns
+its application permissions. An ordinary system call should combine those facts
+locally, without asking Root to classify the caller on every request.
+
+#### Decision and alternatives
+
+Use durable, receiver-specific projections of Root-issued managed bindings.
+Maintain them as part of activation, registration and removal. Keep caller
+authentication at endpoints and extend protected Directory distribution with
+the required receiver view and lifecycle receipts. Do not create a separately
+managed topology or a background synchronization service. The existing Fleet
+admission projection supplies a useful prepare/activate/open pattern, but its
+operator Principal list is not managed canister membership and must not be
+repurposed as that authority.
+
+| Approach | Ordinary call | Removal semantics | Assessment |
+| --- | --- | --- | --- |
+| Root membership lookup | Remote authorization lookup before work | Observes membership at lookup time; an await still separates lookup from effects | Would require an additional Root endpoint; not the proposed default |
+| Root role attestation | Local proof verification | Issued material can survive membership removal until expiry or receiver fencing | Current issuance needs a caller-bound direct query certificate; it is not an autonomous canister update flow |
+| New update-delivered signed permit | Local proof verification | Expiry or explicit receiver fencing | Adds issuance, renewal and cryptographic work without removing the strict-revocation distribution requirement |
+| Periodically refreshed Directory | Local lookup | Stale entries remain usable until refresh | Insufficient for strict completion |
+| Receiver-specific binding projection | Local Principal-to-binding lookup and application policy | Removal commits only after all affected receivers deny new admission | Proposed default for controlled Fleet system calls |
+
+Portable credentials remain useful when the receiver is outside the controlled
+deployment graph or a bounded authorization lifetime is the selected contract.
+They are not required to establish the identity of an IC transport caller.
+
+```mermaid
+flowchart LR
+    Root[Root protected Registry] -->|activation and revocation receipts| View[Receiver binding projection]
+    Source[Registered source canister] -->|ordinary system call| Guard[Receiver endpoint guard]
+    View --> Guard
+    Guard -->|local identity and application policy| Work[Application workflow]
+```
+
+#### Authority and state ownership
+
+The selected build declares receiver policies in Canic-owned TOML. A policy
+names the admitted source Component Specs/roles, relevant tree or Fleet scope,
+and receiver operation classes. Endpoint guards select the declared policy;
+they never accept a claimed role, source binding or policy from the request.
+Unknown roles, ambiguous scopes and undeclared receiver policies reject during
+build admission. Exact syntax remains an implementation decision.
+
+Root derives each entry from protected Registry evidence. A projection retains
+the exact receiver binding and installation identity, issuing Root/Fleet
+authority, source managed binding and source installation identity, policy
+digest, monotonic projection generation and content digest. Generation is
+authority-owned; a caller cannot select it. No role string supplied by the
+source can enlarge its permissions. Dynamic descendants use their own role and
+Principal while retaining the owning Component and parent bindings.
+
+Root also retains the exact receiver set and publication progress for each
+operation. Receiver enrollment and source membership transitions share an
+ordering boundary so a new receiver cannot escape an in-progress removal.
+New receivers start fenced and obtain a complete current projection before
+opening. The source of truth remains the existing Registry; the projection is
+a materialized authorization view, not a second independently editable registry.
+
+Ordinary calls rely on this committed authority, not on Root's instantaneous
+reachability. A Root outage therefore leaves already granted calls available
+while blocking new publication and revocation completion. This intentionally
+changes the availability contract of an online lookup that refused whenever
+Root could not answer. Local authority failures still fail closed. Planned
+Root/Component deactivation, reinstall or authority changes must fence affected
+receivers before invalidating the corresponding grant; an unfenced lifecycle
+change cannot be declared complete. A receiver cannot locally detect an
+unobserved remote lifecycle change or external controller intervention.
+
+Receiver endpoints authenticate publication against protected installation
+authority, then delegate to workflow. Model owns records and generation/digest
+invariants; ops owns conversion, storage and individual platform effects;
+policy owns pure admission/transition decisions; workflow owns publication and
+receipt reconciliation. Application endpoint guards perform local admission.
+Missing, fenced or inconsistent authority fails closed with a distinct typed
+reason; it never becomes an ordinary wrong-role denial or triggers a hidden
+remote fallback.
+
+#### Activation and dynamic children
+
+Root registers the exact source identity while application startup remains
+fenced. It derives the affected receiver set from declared policy and publishes
+the source binding as pending authority. Receivers retain the exact operation,
+generation and digest and acknowledge without admitting a not-yet-active source.
+Root commits active membership, opens the corresponding receiver entries, and
+only then declares publication complete and releases application startup.
+
+Partial publication can temporarily deny a valid newly active source. It must
+never admit an unregistered or inactive source. Root serializes conflicting
+activation/removal work until this operation is reconciled. A lost reply is
+resolved from the receiver's exact durable receipt; retry does not add another
+grant. Application readiness includes this publication outcome, including for
+dynamically created Project Instances. It cannot be a best-effort timer after
+the child has already been reported ready.
+
+Adding a receiver later requires the same complete initialization boundary.
+Removing a receiver removes its publication obligation only after its own
+retirement proves it cannot resume with stale authority. An unavailable or
+temporarily stopped receiver does not satisfy that condition by itself.
+
+#### Strict revocation and in-flight work
+
+Revocation is a distributed lifecycle operation with an explicit completion
+point. Root freezes the source identity, receiver set and successor projection
+under the transition ordering boundary. It prevents new grant publication for
+that source, then asks every affected receiver to retain a durable denial fence.
+Only after all exact fence receipts are reconciled may Root commit inactive
+membership and report revocation complete. Successor activation retains the
+denial; a delayed grant or stale-generation replay cannot reopen it.
+
+During preparation the source is revocation-pending, not falsely reported as
+fully revoked. Receivers that have acknowledged already deny it; a receiver
+that has not acknowledged may still admit it until fenced. There is no claim
+of simultaneous cross-canister revocation at command submission. An unavailable
+receiver blocks completion while other healthy receivers can deny the source.
+This is the availability cost of the strict contract, not a reason to bypass
+the missing acknowledgement. No timeout implicitly converts it to TTL revocation.
+
+The default guarantee is no new protected admission after revocation completes.
+Previously admitted work is tracked separately. A local admission ticket binds
+the exact source, receiver, policy generation and operation class. Workflow
+revalidates ticket/fence state before new protected effects after each await;
+it does not repeat caller authentication. Already-issued paid effects retain
+their original operation authority and reconcile instead of being discarded.
+Operations requiring quiescence also wait for applicable admitted work to reach
+its defined terminal boundary before deletion or lifecycle completion. Endpoint
+admission alone cannot retroactively cancel an issued remote effect.
+
+Receiver upgrade restores and validates the projection and pending denial
+synchronously before hooks or deferred application work. Publication/revocation
+retries are same-release recovery. Pre-1.0 release replacement is a clean
+reinstall: qualify current artifacts, clear framework/application state, install
+current authority, and initialize fenced. No predecessor adoption, migration,
+mixed-version operation or compatibility endpoint is introduced.
+
+#### The four reported consumers
+
+| Consumer | Local identity decision | Application responsibility |
+| --- | --- | --- |
+| User Hub system calls | Admit the observed caller from declared system roles | Bind user/project arguments to the actual operation and caller's permitted scope |
+| Notification producer batches | Admit the observed Market or Project Instance caller | Bind producer identity to caller and enforce batch replay, payload and recipient rules |
+| Discovery registration | Admit the observed Project Instance caller and its owning tree | Require the registered Project principal to match the caller; constrain registration fields |
+| Remote metrics proxy | Validate selected target against a permitted-target projection; target independently admits the calling User Shard | Authenticate the Admin subject at the proxy and preserve caller/target direction |
+
+Target selection is not caller authentication. A subject-bound attestation for
+the proxy does not classify an arbitrary metrics target. The proxy needs a
+Root-derived target view, scoped to its declared allowed target roles, alongside
+the target's own caller policy. Requesting an arbitrary Principal must not turn
+the proxy into an unrestricted remote-call facility.
+
+Cross-Root distribution requires exact source Root and receiver Root authority
+linked through the current Coordinator/Registry and Fleet-service peer model.
+A same-Root binding must not silently become a Fleet-wide permit. This is a
+required qualification boundary before declaring cross-Root support.
+
+#### Bounds and recovery evidence
+
+Publish only entries required by a receiver's declared policies, with paged
+staging and atomic digest-bound activation. Define limits for retained entries,
+receivers, encoded bytes and concurrent operations; refuse capacity before
+partial authority is opened. Use source-indexed recipient tracking and changes
+to affected entries rather than full-Fleet fanout for every child. Bound retries
+and return resumable progress. Generation ordering must survive acknowledged
+entry removal so a delayed old grant cannot be mistaken for a fresh operation.
+
+An activation cost scales with relevant receiver instances, and retained state
+scales with authorized source/receiver relationships. Receiver projections are
+recommended for this controlled graph, not claimed to have constant lifecycle
+cost. Qualification must measure the actual dynamic-instance and receiver-shard
+cardinalities. If policy creates an impractically dense graph, review aggregation
+or the explicitly bounded credential alternative before expanding limits.
+
+| Evidence | Required property |
+| --- | --- |
+| Native model/policy tests | Exact caller, role, tree, Fleet, installation, generation and digest checks; capacity refusal and unchanged state on conflicts |
+| PocketIC lifecycle | New dynamic child calls each admitted receiver after readiness; wrong role, caller and owning tree reject |
+| Exact interruption/retry | Lost publication and fence replies, partial activation, unavailable receiver and reordered messages reconcile without widening authority |
+| Revocation boundary | Every receiver denies new admission when completion is reported; enrollment races cannot omit a receiver |
+| Await/effect boundary | Suspended work cannot issue a newly forbidden effect; uncertain previously issued effects reconcile under original operation identity |
+| Same-release upgrade | Two identical-Wasm upgrades retain bindings, fences, receipts and generation ordering before hooks run |
+| Metrics direction | Valid Admin plus invalid target rejects; valid target plus unauthorized proxy caller rejects |
+| Cost and isolation | After publication, ordinary authorization performs no Root/management call; unrelated source changes do not replace every receiver's full state |
+
+Implementation must be one coherent outcome covering policy/build admission,
+Core storage and endpoint guards, Control Plane activation/removal publication,
+target projection, bounded recovery, generated Candid/fixtures, documentation
+and direct evidence. A guard alone or a successful fresh activation is not
+completion. Downstream Toko adoption and its application regression suite remain
+separate read-only-repository work until explicitly authorized. Keep the full
+current contract at v1 through the pre-1.0 hard cut; do not introduce a second
+product protocol generation or a lookup fallback during rollout.
 
 ## 10. Configuration
 

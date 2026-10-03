@@ -126,7 +126,8 @@ it does not establish the complete Internet Identity registration/login UI.
 `LocalFleetSession` exclusively locks `.canic/local-fleets/<name>`. It records
 an unpredictable session identity before startup, verifies the executable's
 exact SHA-256 and retains configuration, subnet placement, trust and Canic
-version. State traversal rejects symlinks and special files. Every reset
+version. Loading state rejects symlinks and special files and bounds traversal.
+Every reset
 receives a distinct `instance-<session>` simulator path and environment name.
 A late orphan write can reach only its discarded generation, never the new
 instance or its Ensure journal.
@@ -161,6 +162,9 @@ cargo run --locked --features local-fleet --example local_fleet -- \
 
 Reset retains intent before removing that session's simulator directory and
 preparation records. Interrupted reset resumes; terminal replay does nothing.
+Reset can discard a simulator tree that exceeds load traversal limits or contains
+interior symlinks. The selected instance root must be a real directory; interior
+links are removed without following them or touching their targets.
 An old reset cannot discard a replacement. Stored PIDs never authorize cleanup,
 and a busy owner rejects reset. An orphaned server may retain its gateway until
 its configured lifetime expires; the harness does not signal an unowned PID.

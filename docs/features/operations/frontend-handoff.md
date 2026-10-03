@@ -31,6 +31,8 @@ bundle. Origins belong to environment input, not the network-neutral App name.
 Prepare `frontend-local.json` or `frontend-ic.json` with the following shape.
 Replace the illustrative values with the reviewed environment and actual
 canister identities; `info env <fleet> --json` supplies the terminal role map.
+`info env` refuses colliding shell variable names before emitting shell or JSON
+output, including collisions between a numbered duplicate role and another role.
 
 ```json
 {

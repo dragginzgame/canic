@@ -2,6 +2,7 @@
 
 mod bootstrap;
 mod efficiency;
+mod release;
 pub(super) mod reset;
 mod transport;
 
@@ -31,12 +32,14 @@ enum Response {
 enum StatusRequest {
     PoolImport(PoolImportIdentity),
     PoolImportContext,
+    PoolRelease,
 }
 
 #[derive(CandidType, Deserialize)]
 enum StatusResponse {
     PoolImport(Box<PoolImportStatus>),
     PoolImportContext(Box<PoolImportContext>),
+    PoolRelease(Box<canic_control_plane::dto::root::RootPoolReleaseResponse>),
 }
 
 #[test]
@@ -154,6 +157,7 @@ fn retained_capacity_journey(root_owned: bool) {
     )
     .unwrap();
     assert_eq!(reserved.phase, PoolImportPhase::Reserved);
+    release::assert_census(pic, root, operator, &reserved);
     assert_eq!(root_pool_status(pic, root).entries, before.entries);
     if !root_owned {
         pic.set_controllers(
@@ -188,10 +192,9 @@ fn retained_capacity_journey(root_owned: bool) {
             },
         )
         .unwrap_or_else(|error| panic!("capacity step {expected:?}, root_owned={root_owned}: {error:?}; retained={:?}; source={:?}", status(pic, root, operator, identity), pic.canister_status(source, Some(root))));
-        assert_eq!(
-            status(pic, root, operator, identity).progress,
-            vec![expected]
-        );
+        let retained = status(pic, root, operator, identity);
+        assert_eq!(retained.progress, vec![expected]);
+        release::assert_census(pic, root, operator, &retained);
     }
     assert_eq!(
         pic.canister_status(source, Some(operator))
@@ -210,6 +213,7 @@ fn retained_capacity_journey(root_owned: bool) {
     )
     .unwrap();
     assert_eq!(ready.phase, PoolImportPhase::Ready);
+    release::assert_census(pic, root, operator, &ready);
     assert!(ready.root_receipt.is_none());
     let PoolImportSourceProgress::Ready(receipt) = &ready.progress[0] else {
         panic!("import must retain the exact cleared source receipt");
@@ -274,6 +278,7 @@ fn retained_capacity_journey(root_owned: bool) {
             publication_sha256: [0x52; 32]
         }
     );
+    release::assert_census(pic, root, operator, &released);
     let pool = root_pool_status(pic, root);
     assert_eq!(pool.entries.len(), before.entries.len() + 1);
     let imported = pool

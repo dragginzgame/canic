@@ -67,6 +67,29 @@ fn checksum_verify_rejects_mismatch() {
     std::assert_matches!(err, ArtifactChecksumError::ChecksumMismatch { .. });
 }
 
+#[test]
+fn checksum_verification_accepts_equivalent_hex_case() {
+    let lower = ArtifactChecksum::from_bytes(&[]);
+    let upper = ArtifactChecksum {
+        algorithm: lower.algorithm.clone(),
+        hash: lower.hash.to_ascii_uppercase(),
+    };
+    lower.verify(&upper.hash).expect("uppercase expected hash");
+    upper.verify(&lower.hash).expect("uppercase observed hash");
+    std::assert_matches!(
+        lower.verify(
+            &ArtifactChecksum::from_bytes(b"different")
+                .hash
+                .to_ascii_uppercase()
+        ),
+        Err(ArtifactChecksumError::ChecksumMismatch { .. })
+    );
+    std::assert_matches!(
+        lower.verify("invalid"),
+        Err(ArtifactChecksumError::InvalidHash(_))
+    );
+}
+
 #[cfg(unix)]
 #[test]
 fn filesystem_checksums_reject_symlinked_files_and_entries() {

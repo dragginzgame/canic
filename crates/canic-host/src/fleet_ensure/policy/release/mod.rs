@@ -5,6 +5,7 @@
 #[cfg(test)]
 pub(in crate::fleet_ensure) mod tests;
 
+pub(in crate::fleet_ensure) mod funding;
 pub(in crate::fleet_ensure) mod snapshots;
 
 use crate::fleet_ensure::{

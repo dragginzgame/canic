@@ -24,6 +24,9 @@ Verification and restore of existing valid same-release backups retain their
 own artifact, identity and journal checks. Preserve the backup runner and its
 recovery machinery while the missing live preflight remains fail-closed.
 
+Artifact SHA-256 verification accepts uppercase and lowercase hex as the same
+digest. Malformed hashes and different artifact bytes still reject.
+
 The local runner resolves the selected backup directory once before deriving
 download and verification paths. Relative paths and directory links selected by
 the operator are supported; links inside artifact trees remain rejected.

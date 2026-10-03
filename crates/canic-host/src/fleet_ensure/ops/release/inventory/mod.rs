@@ -4,7 +4,7 @@
 //! inventory, not producer quiescence, paid-effect settlement or reset authority.
 
 #[cfg(test)]
-mod tests;
+pub(super) mod tests;
 
 use crate::{
     fleet_ensure::{
@@ -102,7 +102,7 @@ async fn collect_with_agent(
     Ok(FleetReleaseInventoryView { children })
 }
 
-fn validate_registry_selection(
+pub(super) fn validate_registry_selection(
     review: &FleetReleaseReviewRecord,
     registry: &FleetRegistry,
 ) -> Result<FleetReleaseInventoryView, FleetReleaseError> {
@@ -145,7 +145,7 @@ fn validate_registry_selection(
     Ok(FleetReleaseInventoryView { children })
 }
 
-async fn verify_registry(
+pub(super) async fn verify_registry(
     agent: &Agent,
     review: &FleetReleaseReviewRecord,
     expected: &FleetRegistry,
@@ -156,7 +156,7 @@ async fn verify_registry(
     Ok(())
 }
 
-async fn verify_custody<'a>(
+pub(super) async fn verify_custody<'a>(
     agent: &Agent,
     sources: impl IntoIterator<Item = &'a FleetReleaseSourceRecord>,
 ) -> Result<(), ReleaseInventoryError> {

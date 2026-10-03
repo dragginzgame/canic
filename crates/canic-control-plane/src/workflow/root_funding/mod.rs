@@ -62,6 +62,13 @@ pub fn current_request() -> Result<Option<FleetRootFundingRequest>, InternalErro
     RootFundingOps::current_request(&funding_authority()?)
 }
 
+/// Read a bounded funding census under the current protected Root authority.
+pub fn release_status(
+    start_after: Option<u64>,
+) -> Result<crate::dto::root::RootFundingReleaseResponse, InternalError> {
+    RootFundingOps::release_status(&funding_authority()?, start_after)
+}
+
 /// Reject authority capture while a value-transfer workflow still requires reconciliation.
 pub fn require_authority_snapshot_resumable() -> Result<(), InternalError> {
     if RootFundingOps::policy_rotation_in_progress()

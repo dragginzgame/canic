@@ -833,3 +833,36 @@ fn exhausted_next_mutation_keeps_confirmation_and_source_drift_refuses_recovery(
     );
     assert_eq!(CanisterPoolStore::state(), before);
 }
+
+#[test]
+fn release_census_retains_exhausted_import_without_refunding_allowances() {
+    start();
+    let request = reservation();
+    for _ in 0..request.maximum_paid_calls {
+        CanisterPoolImportOps::reserve_paid_call(identity(), 100, request.observed_root_cycles)
+            .unwrap();
+    }
+    assert!(
+        CanisterPoolImportOps::reserve_paid_call(identity(), 100, request.observed_root_cycles)
+            .is_err()
+    );
+    let before = CanisterPoolStore::state();
+    let retained = CanisterPoolImportOps::status(identity()).unwrap();
+    let observed = CanisterPoolOps::release_status(request.root).unwrap();
+    assert_eq!(observed.capacity_import, Some(retained));
+    assert_eq!(
+        observed.capacity_import.as_ref().unwrap().paid_calls,
+        request.maximum_paid_calls
+    );
+    assert_eq!(
+        observed
+            .capacity_import
+            .as_ref()
+            .unwrap()
+            .reserved_debit_cycles,
+        request.maximum_root_debit_cycles
+    );
+    assert_eq!(CanisterPoolStore::state(), before);
+    assert!(CanisterPoolOps::release_status(principal(99)).is_err());
+    assert_eq!(CanisterPoolStore::state(), before);
+}

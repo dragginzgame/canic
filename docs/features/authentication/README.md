@@ -26,6 +26,7 @@ an application token into controller or Fleet authority.
 ## Start Here
 
 - [Authentication architecture](../../architecture/authentication.md)
+- [Receiver-local caller authority proposal](../../architecture/authentication.md#receiver-local-caller-authority--design-proposal-2026-10-03)
 - [Delegated-signature contract](../../contracts/AUTH_DELEGATED_SIGNATURES.md)
 - [Access architecture](../../contracts/ACCESS_ARCHITECTURE.md)
 - [Authentication configuration](../../../CONFIG.md#authdelegated_tokens)
