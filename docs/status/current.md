@@ -3,6 +3,25 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## ic-query 0.45.4 catalog fixture correction — 2026-10-03
+
+The release Clippy failure came from ic-query removing the catalog collection
+constructor and evidence builder. Both Canic callers now construct its public
+fields directly: Host source tests and the governed growth catalog fixture.
+Registry evidence, routing source and endpoint agreement behavior are unchanged.
+All ten Host catalog tests pass. Warning-denied Clippy for both affected packages,
+including tests and all features, passes with the selected ic-timers 0.10.2 patch;
+that concurrent lockfile update is preserved. The Host test run preceded the timer
+patch selection. The exact native growth-catalog regression also passes with
+timers 0.10.2, preserving Host agreement assurance and route resolution. Formatting,
+whitespace and current-document semantics pass. Logs are retained under
+`target/review-validation/canic-query0454-*.log`. Both .52 changelog views are updated.
+
+This corrects the reported compiler blocker, not the complete release batch.
+The prior three IcyDB-backed cases remain unqualified, the workstation override
+still needs portable CI configuration, and FR1 whole-Fleet execution remains
+unfinished. No broad suite, version bump, commit, push or deployment ran.
+
 ## Testkit 0.14 fixture pool migration — 2026-10-03
 
 The prepared `/tmp/ic-testkit-0.14-migrations/canic.patch` is now applied to
