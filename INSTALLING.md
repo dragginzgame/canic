@@ -5,6 +5,30 @@ Canic has two pieces that work together:
 - the `canic` command-line program, which runs on your computer; and
 - the `canic` Rust crate, which is compiled into your application canisters.
 
+<img src="assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the installation choices" />
+
+## Choose An Installation Path
+
+| Goal | Install |
+| --- | --- |
+| Use a published Canic release | Published CLI, governed Wasm tools, compatible `icp`, and the matching Rust crate |
+| Work on this repository | Local CLI from the checkout |
+| Maintain or release Canic | Complete repository toolchain |
+
+```text
+canic CLI
+   +-- governed Wasm tools
+   +-- compatible ICP CLI
+   +-- matching canic Rust crate in each role
+                     |
+                     v
+              build -> review -> Fleet
+```
+
+<br clear="left" />
+
+## Install The CLI
+
 Use the same Canic version for both pieces. To install the published
 command-line program:
 
@@ -25,6 +49,8 @@ Canic maintainers can install the complete repository toolchain:
 ```bash
 make install-dev
 ```
+
+## Install The Wasm Tools
 
 The maintainer setup installs the repository-selected ICP command-line tool,
 `ic-wasm`, Binaryen, Candid tools and `sccache`, and configures the repository
@@ -93,6 +119,8 @@ icp identity reauth <identity-name> --duration 1h
 
 ## Canister Dependencies
 
+<img src="assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding a configuration checklist" />
+
 A Rust crate that builds one Canic-managed canister needs runtime dependencies,
 a build dependency, and a small metadata block that tells Canic which App and
 role it implements:
@@ -115,6 +143,8 @@ The **role** is the canister's job in the application. It must exist in the
 selected App configuration. Application developers provide their application
 canister packages. Canic generates its own Root, Coordinator, and Store
 management packages from the configuration.
+
+<br clear="left" />
 
 The build script remains small:
 
@@ -209,11 +239,15 @@ destructive effects.
 
 ## Cycle-Recovery Limitation
 
+<img src="assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
+
 The IC does not let a controller pull cycles from an arbitrary canister. A
 material canister may be replaced or deleted only when it exposes the exact
 configured, idempotent treasury-drain contract. Without it, Canic returns a
 typed blocker and leaves the canister untouched. Never bypass that blocker with
 a raw stop/delete command.
+
+<br clear="left" />
 
 ## Development Validation
 
