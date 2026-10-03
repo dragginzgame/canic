@@ -55,3 +55,11 @@ The separate desired Fleet format is documented in
 Isolated test probes and PocketIC fixtures live under `canisters/test/`.
 
 Nonlocal targets expect their environment to be managed externally.
+
+## Continue From Here
+
+- [Build your first managed application](../docs/getting-started/minimal-managed-fleet.md)
+- [Configure an App](../CONFIG.md)
+- [Choose the Canic features you need](../docs/features/README.md)
+- [Browse all documentation](../docs/README.md)
+- [Back to the main README](../README.md)

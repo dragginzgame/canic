@@ -5,6 +5,23 @@ approve its exact digest, apply it, and confirm immediate no-effect replay.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
+<img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="96" alt="The Canic mechanic pointing toward the plan and apply workflow" />
+
+**Operator outcome:** a Fleet that matches the approved desired state, followed
+by an immediate successor plan with no mutation actions.
+
+<br clear="left" />
+
+## At A Glance
+
+| Phase | Operator decision |
+| --- | --- |
+| [Plan](#plan-without-paid-effects) | Inspect actions and bounds; no paid Fleet effect |
+| Review | Approve only the exact `plan_sha256` |
+| [Apply](#apply-the-reviewed-digest) | Perform and reconcile the approved effects |
+| Verify | Run a fresh plan and confirm that no mutations remain |
+
+## Plan Without Paid Effects
 
 Planning performs observation and local current-state writes but no paid Fleet
 mutation:
@@ -21,6 +38,8 @@ canic fleet ensure staging \
   --desired fleets/staging.toml \
   --apply <plan_sha256>
 ```
+
+## Apply The Reviewed Digest
 
 The `--json` report preserves the complete plan metadata without embedding
 Store publication payloads. Each `publish_store_chunk` request contains a
@@ -43,6 +62,8 @@ issuance. Each asset keeps its own intent, controller/module/balance checks,
 receipt and interruption recovery. All submitted calls finish before a failure
 returns, retaining successful siblings. Duplicate assets or changed authority
 end a batch; funding, provisioning and maintenance actions remain ordered.
+
+## Revalidation And Interruption Recovery
 
 Before the first effect, changed desired bytes, artifacts, authority-bearing
 live state, funding sufficiency or the live Cycles Ledger fee stop apply and
@@ -80,6 +101,8 @@ Current import reviews always contain `funding_credits`, including an empty
 array, and registration recovery fields serialize as explicit `null` until
 requested. These fields bind current review and journal hashes.
 
+## Partial Reset Observation
+
 When a partial current-control-plane reset makes a Root's protected pool status
 return `STATE_CONFLICT` or `STATE_UNAVAILABLE`, planning does not invent an
 empty pool or configured-capacity balance. For an exact desired Store or pool
@@ -88,6 +111,8 @@ public Canic cycle-balance query and otherwise uses the last exact balance
 retained by the current Fleet Ensure state. A zero-valued `PendingReset` row is
 treated the same way. Missing exact evidence is a blocker. This narrow
 observation cannot create, fund, replace, transfer, drain or delete anything.
+
+## Infrastructure Prerequisites And Proof
 
 Root management prerequisites use management status before protected Root
 queries. The Start-only plan embeds its generator authority, and apply revalidates
@@ -130,4 +155,5 @@ open.
 - [Recover an interrupted operation](fleet-ensure-recovery-and-cycle-safety.md)
 - [Return to Fleet Ensure](fleet-ensure.md)
 - [Browse Fleet operations](README.md)
-
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)
