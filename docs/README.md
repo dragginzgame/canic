@@ -3,6 +3,19 @@
 This is the front door to Canic's documentation. You do not need to understand
 Canic's internal architecture before getting started.
 
+<img src="../assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the documentation paths" />
+
+```text
+New to Canic -> How it works -> Install -> First App -> Configuration
+Operating    -> Feature guide -> Procedure -> Recovery or status reference
+Contributing -> Architecture -> Contract -> Active design -> Targeted tests
+```
+
+Choose the route that matches your task. Move into deeper reference material
+only when you need its exact rules.
+
+<br clear="left" />
+
 - **Guides** explain a task or feature in practical terms.
 - **Operations pages** give step-by-step procedures for people running Canic.
 - **Architecture documents** explain why the system is designed as it is.
@@ -47,6 +60,8 @@ for people who build, inspect, deploy, recover, or remove a Fleet.
 
 ## How To Read These Docs
 
+<img src="../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding a documentation checklist" />
+
 1. Start with a feature guide or task guide for an overview.
 2. Follow its configuration or operations links when you are ready to use it.
 3. Use contracts and architecture pages when you need exact implementation
@@ -54,6 +69,8 @@ for people who build, inspect, deploy, recover, or remove a Fleet.
 4. Check current status for work in progress and known limits.
 5. Treat archived designs, dated audits and older release notes as historical
    evidence, not current product support.
+
+<br clear="left" />
 
 Use current guides for commands and schemas. Archived designs, dated audits and
 older release notes describe their recorded checkpoints; they do not establish
