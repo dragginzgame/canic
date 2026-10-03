@@ -6,6 +6,9 @@ pub mod accounts;
 pub mod funding;
 pub mod inventory;
 pub mod observation;
+pub mod pool;
+pub mod provisioning;
+pub mod receipts;
 pub mod reservation;
 
 use crate::fleet_ensure::{

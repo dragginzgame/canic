@@ -8,10 +8,22 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
+- Develop receiver-local managed-caller authorization with recoverable publication
+  progress in an isolated draft; production publication and startup ordering
+  remain unfinished.
+
 - Continue whole-Fleet release-to-capacity work with bounded ownership, declared
   account, Root pool obligations and Root/Coordinator funding observations, plus
-  release authority fencing. Pool evidence preserves exhausted import budgets,
-  creation uncertainty and held identities without admitting new work.
+  release authority fencing. Host collects exact pool evidence through bounded
+  signed reads, preserving exhausted import budgets, creation uncertainty and
+  held identities without admitting new work.
+  Controller-only provisioning discovery preserves original operation identities,
+  stages and outstanding publication/Directory delivery across paginated reads;
+  bounded Host collection returns no partial result on owner/header/cursor drift.
+  Replay-receipt discovery retains expired uncertainty, original effect targets
+  and accounting intent IDs without returning cached application replies; encoded
+  receipt bounds prevent unbounded stable-value decoding. Host retains the original
+  Root and Coordinator receipt pages through bounded authenticated collection.
   Completed history and spent read allowances do not independently block reset;
   uncertain paid effects retain reconciliation. Durable Ledger uncertainty
   preserves reserved funding and the original transfer identity after lost replies,
@@ -26,7 +38,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 - `0.110.52` accepts additive ICP CLI output fields and verifies equivalent
   checksum hex casing in backup artifacts and restore previews. Rejects colliding
   canister ID exports and permits exact local reset of unloadable simulator trees.
-  Corrects authentication endpoint and composed native-test initialization guidance.
+  Preserves frozen input bytes for unchanged capacity imports and corrects
+  authentication, native initialization and repeated memory-restoration coverage.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

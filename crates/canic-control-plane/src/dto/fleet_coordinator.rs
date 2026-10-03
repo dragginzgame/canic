@@ -130,6 +130,7 @@ pub enum CoordinatorObservabilityRequest {
     Funding,
     RegistryManifest,
     RegistryVersion,
+    ReplayRelease(Option<[u8; 32]>),
     RootAcknowledgements,
 }
 
@@ -243,6 +244,7 @@ pub enum CoordinatorObservabilityResponse {
     Funding(CoordinatorFundingStatusResponse),
     RegistryManifest(FleetRegistryManifest),
     RegistryVersion(FleetRegistryVersion),
+    ReplayRelease(canic_core::dto::release_receipts::ReplayReleaseResponse),
     RootAcknowledgements(Vec<FleetSubnetRootSnapshotAcknowledgement>),
 }
 
@@ -265,6 +267,8 @@ mod tests {
             CoordinatorObservabilityRequest::Funding,
             CoordinatorObservabilityRequest::RegistryManifest,
             CoordinatorObservabilityRequest::RegistryVersion,
+            CoordinatorObservabilityRequest::ReplayRelease(None),
+            CoordinatorObservabilityRequest::ReplayRelease(Some([7; 32])),
             CoordinatorObservabilityRequest::RootAcknowledgements,
         ];
 

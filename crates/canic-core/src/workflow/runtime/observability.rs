@@ -13,6 +13,13 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::Deserialize;
 
+/// Discover exact receipt metadata without filtering expired or completed history.
+pub fn release_receipts(
+    start_after: Option<[u8; 32]>,
+) -> Result<crate::dto::release_receipts::ReplayReleaseResponse, InternalError> {
+    crate::ops::runtime::release_receipts::observe(IcOps::canister_self(), start_after)
+}
+
 /// Read exact parent-local child funding evidence after controller authentication.
 pub fn child_funding(
     child: Principal,

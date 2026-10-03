@@ -47,9 +47,13 @@ mod tests {
     #[cfg(test)]
     mod packaged_consumer;
     #[cfg(test)]
+    mod provisioning_release;
+    #[cfg(test)]
     mod release_artifacts;
     #[cfg(test)]
     mod repeat_reset;
+    #[cfg(test)]
+    mod replay_release;
     #[cfg(test)]
     mod root_public_key;
     #[cfg(test)]
@@ -6202,6 +6206,12 @@ exec icp "$@"
                         coordinator,
                         request.operation_id,
                     );
+                    provisioning_release::assert_census(
+                        &pic,
+                        installed.root_id,
+                        request.operation_id,
+                        canic_control_plane::dto::root::RootProvisioningReleasePhase::Accepted,
+                    );
                     pic.start_canister(wasm_store, Some(installation_controller))
                         .expect("resume the same operation after Accepted-phase Store outage");
                     await_root_provisioning(
@@ -6317,6 +6327,15 @@ exec icp "$@"
             await_current_protocol_step(&pic, step, installation_controller);
         }
         assert!(replayed_component_command);
+
+        provisioning_release::assert_census(
+            &pic,
+            installed.root_id,
+            operation_id,
+            canic_control_plane::dto::root::RootProvisioningReleasePhase::RuntimesActive,
+        );
+        let _coordinator_receipts =
+            replay_release::collect(&pic, coordinator, canic::protocol::CANIC_OBSERVABILITY);
 
         let CoordinatorRegistryResponse::Registry(terminal_registry) =
             coordinator_status(&pic, coordinator, CoordinatorRegistryRequest::Registry)

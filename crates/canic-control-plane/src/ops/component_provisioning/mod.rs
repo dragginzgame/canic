@@ -6,6 +6,7 @@
 //! that durable record.
 
 mod failure;
+mod release;
 #[cfg(test)]
 mod tests;
 

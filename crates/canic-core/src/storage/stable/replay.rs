@@ -16,8 +16,16 @@ use crate::{
     },
     role_contract::allocation::memory::replay::REPLAY_RECEIPTS_ID,
     storage::prelude::*,
+    view::replay_release::ReplayReleasePageView,
 };
-use std::{borrow::Cow, cell::RefCell};
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    ops::Bound::{Excluded, Unbounded},
+};
+
+// Keep small B-tree overflow pages while bounding each encoded product record.
+const REPLAY_RECEIPT_MAX_BYTES: usize = 32 * 1024 * 1024;
 
 std::thread_local! {
     static REPLAY_RECEIPTS: RefCell<
@@ -152,14 +160,24 @@ impl Storable for ReplayReceiptRecord {
     const BOUND: Bound = Bound::Unbounded;
 
     fn to_bytes(&self) -> Cow<'_, [u8]> {
-        Cow::Owned(self.clone().into_bytes())
+        let bytes = crate::cdk::serialize::serialize(self)
+            .expect("replay receipt record serializes to cbor");
+        assert!(
+            bytes.len() <= REPLAY_RECEIPT_MAX_BYTES,
+            "replay receipt exceeds its encoded limit"
+        );
+        Cow::Owned(bytes)
     }
 
     fn into_bytes(self) -> Vec<u8> {
-        crate::cdk::serialize::serialize(&self).expect("replay receipt record serializes to cbor")
+        self.to_bytes().into_owned()
     }
 
     fn from_bytes(bytes: Cow<'_, [u8]>) -> Self {
+        assert!(
+            bytes.len() <= REPLAY_RECEIPT_MAX_BYTES,
+            "replay receipt exceeds its encoded limit"
+        );
         crate::cdk::serialize::deserialize(bytes.as_ref())
             .expect("replay receipt record decodes from cbor")
     }
@@ -202,6 +220,22 @@ impl ReplayReceiptsData {
 pub struct ReplayReceiptStore;
 
 impl ReplayReceiptStore {
+    /// Observe a single record without expiry filtering, pruning or replay admission.
+    #[must_use]
+    pub(crate) fn release_page(start_after: Option<ReplayReceiptSlotKey>) -> ReplayReleasePageView {
+        REPLAY_RECEIPTS.with_borrow(|map| {
+            let mut rows = map.range((start_after.map_or(Unbounded, Excluded), Unbounded));
+            let entry = rows.next().map(|row| ReplayReceiptEntryRecord {
+                key: *row.key(),
+                record: row.value(),
+            });
+            ReplayReleasePageView {
+                entry,
+                has_more: rows.next().is_some(),
+            }
+        })
+    }
+
     #[must_use]
     pub(crate) fn get(key: ReplayReceiptSlotKey) -> Option<ReplayReceiptRecord> {
         REPLAY_RECEIPTS.with_borrow(|map| map.get(&key))
@@ -495,6 +529,32 @@ mod tests {
         let decoded = ReplayReceiptRecord::from_bytes(Cow::Owned(encoded));
 
         assert_eq!(decoded, record);
+    }
+
+    #[test]
+    fn replay_record_limit_refuses_oversize_before_stable_writes() {
+        let memory = crate::cdk::structures::VectorMemory::default();
+        let mut map = StableBtreeMap::init(memory.clone());
+        let key = ReplayReceiptSlotKey([4; 32]);
+        let record = receipt_record_fixture();
+        map.insert(key, record.clone());
+        let before = memory.borrow().clone();
+        let mut oversized = record.clone();
+        oversized.response_bytes = Some(vec![0; REPLAY_RECEIPT_MAX_BYTES]);
+        assert!(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                map.insert(key, oversized);
+            }))
+            .is_err()
+        );
+        assert_eq!(*memory.borrow(), before);
+        assert_eq!(map.get(&key), Some(record));
+        assert!(
+            std::panic::catch_unwind(|| {
+                ReplayReceiptRecord::from_bytes(Cow::Owned(vec![0; REPLAY_RECEIPT_MAX_BYTES + 1]))
+            })
+            .is_err()
+        );
     }
 
     #[test]
