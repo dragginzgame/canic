@@ -39,15 +39,16 @@ same host artifact builder whose outputs are bound by `canic fleet ensure`.
 - Build one role: `canic build test app`
 - Build production-optimized artifacts explicitly:
   `canic build test --profile release`
-- Review the managed test Fleet:
+- After creating the desired Fleet document, review it:
   `canic fleet ensure test-local --desired fleets/test-local.toml`
 - Create/build test canisters manually: `icp deploy -e test`
 
-The desired Fleet reconciler creates or reuses the configured top-level `app`,
-`index_hub`, `scale_hub`, `test`, and `user_hub` canisters according to its
-reviewed plan. `index_child`, `scale_replica`, and `user_shard` descendants are
-created only by later application/runtime requests. The demo sharding
-walkthrough is `demo_user_hub_plan("alice")`,
+The test App exposes top-level Component Specs for `app`, `index_hub`,
+`scale_hub`, `test`, and `user_hub`. The selected desired Fleet derives concrete
+occurrences from explicit Component Group deployments; declaring a Spec alone
+does not install it. `index_child`, `scale_replica`, and `user_shard`
+descendants are created only by later application/runtime requests. The demo
+sharding walkthrough is `demo_user_hub_plan("alice")`,
 `demo_user_hub_assign("alice")`, then
 `demo_user_shard_describe("alice")` on the returned shard.
 

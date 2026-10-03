@@ -10,11 +10,25 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.0-orange.svg)](rust-toolchain.toml)
 
-Canic is a Rust toolkit and operator CLI for building and running Internet
-Computer canister fleets. Its capabilities are deliberately separable: use the
-runtime facade without Fleet installation, add authentication without scaling,
-or use the host-side backup tools without giving application canisters access
-to files, credentials, or operator authority.
+Canic helps Rust developers build and operate applications on the Internet
+Computer (IC). The IC runs applications in **canisters**: programs that contain
+both code and data, much like backend services that run directly on the
+network.
+
+Canic provides a Rust library that runs inside those canisters and a
+command-line tool for managing them from your computer.
+
+Use Canic when you want to:
+
+- handle startup, persistent data, scheduled tasks, communication between
+  canisters, and health information;
+- control who can use an application's methods;
+- build and deploy an application made up of one or many canisters; or
+- manage growth, backups, restores, and troubleshooting from one tool.
+
+You can use only the parts you need. A single canister can use Canic's Rust
+helpers on their own. A larger application can also use Canic to coordinate
+many canisters running across different parts of the IC network.
 
 ## Start Here
 
@@ -34,80 +48,89 @@ make install
 
 Then choose the path that matches what you are doing:
 
-- **Build a first managed canister:**
-  [Minimal managed Fleet](docs/getting-started/minimal-managed-fleet.md)
-- **Install and operate Canic:** [Installing Canic](INSTALLING.md)
-- **Configure roles and topology:** [Canic configuration](CONFIG.md)
-- **Work on Canic itself:** [Contributor rules](AGENTS.md) and
-  [testing guide](TESTING.md)
+| Goal | Start here |
+| --- | --- |
+| Build and deploy a small Canic application | [First managed application](docs/getting-started/minimal-managed-fleet.md) |
+| Install the command-line tools and prerequisites | [Installing Canic](INSTALLING.md) |
+| Describe an application's canisters and layout | [Canic configuration](CONFIG.md) |
+| Learn what each part of Canic does | [Feature guides](docs/features/README.md) |
+| Contribute to Canic | [Contributor rules](AGENTS.md) and [testing guide](TESTING.md) |
 
-Canic uses the installed `icp` binary for replica, canister, snapshot, and
-restore operations. Supported versions and upgrade guidance are maintained in
-[INSTALLING.md](INSTALLING.md#icp-cli-compatibility).
+Some Canic commands use the `icp` command-line program behind the scenes. It
+starts a local IC network for development and performs low-level canister,
+backup snapshot, and restore operations. Supported versions and upgrade
+guidance are maintained in [INSTALLING.md](INSTALLING.md#icp-cli-compatibility).
 
 [rust-toolchain.toml](rust-toolchain.toml) pins internal Rust `1.99.0`;
 published crates declare MSRV `1.91.0` in [Cargo.toml](Cargo.toml).
 
 ## Features
 
-Each feature has a short guide of its own. The guides explain the capability
-and its authority boundary, then point to the detailed contracts and runbooks.
+Canic is a collection of features rather than an all-or-nothing framework.
+Each feature has a short guide that explains what it does, what access it
+needs, and where to find the detailed reference material.
 
 ### Canister Runtime
 
-Lifecycle and build macros, stable-memory helpers, timers, typed calls,
-metrics, and configuration-derived runtime context for Rust canisters.
+Reusable Rust tools that run inside a canister. They handle startup and state
+restoration, data that must survive restarts, scheduled tasks, safe calls to
+other canisters, health information, and application configuration.
 
 [Explore the canister runtime](docs/features/runtime/README.md)
 
 ### Authentication
 
-Endpoint guards, delegated subject tokens, root-managed chain-key proof
-renewal, issuer proofs, role attestation, and explicit caller/subject binding.
+Controls for deciding who may call an application's public methods and what
+they may do. Canic can also verify when one service is acting for a user or
+another service without confusing their identities.
 
 [Explore authentication](docs/features/authentication/README.md)
 
-### Fleet Orchestration
+### Deploying An Application
 
-Coordinator-backed Fleet installation, one root and Wasm Store per occupied
-Subnet, qualified artifacts, registries, directories, and root-owned platform
-effects.
+A running copy of a Canic application is called a **Fleet**. Canic can build
+the application's canisters, check that the intended code is being used, place
+them on the IC network, and coordinate their installation.
 
 [Explore Fleet orchestration](docs/features/fleet-orchestration/README.md)
 
-### Scaling And Placement
+### Growing An Application
 
-Reusable Component Specs and Groups, bounded placement, service roles,
-dynamic child trees, sharding pools, scaling pools, and reduction-only limits.
+Describe reusable kinds of canisters, how many are allowed to run, and where
+they may run. Larger applications can divide work or data among more canisters
+and add capacity within limits set by the operator.
 
 [Explore scaling and placement](docs/features/scaling-and-placement/README.md)
 
-### Builds, Provenance, And Evidence
+### Verifiable Builds
 
-Role-aware Wasm builds, stable build provenance, evidence comparison, and
-passive policy gates.
+Build canister programs in WebAssembly (Wasm), record exactly how they were
+built, and compare that evidence before deployment. This helps operators check
+that the code they intend to run is the code that was produced.
 
 [Explore builds and evidence](docs/features/build-and-evidence/README.md)
 
 ### Backup And Restore
 
-The host backup domain and current `canic backup` / `canic restore` workflows
-remain available. They resolve exact canisters from terminal current ensure
-inventory rather than historical install or recovery evidence.
+Create and restore snapshots of the canisters in an application. These tasks
+run from the operator's computer, so application canisters do not receive
+access to local files or credentials.
 
 [Explore backup and restore](docs/features/backup-and-restore/README.md)
 
-### Blob Storage
+### File Storage
 
-Optional runtime APIs for product blob storage, with the non-billing
-integration kept separate from Cashier-backed billing support.
+Optional APIs let an application store large pieces of data, such as uploaded
+files, without every application implementing that machinery itself. Storage
+can be used with or without a separate billing integration.
 
 [Explore blob storage](docs/features/blob-storage/README.md)
 
-### Operations And Diagnostics
+### Developer And Operator Tools
 
-App setup, network trust, local replicas, builds, evidence, diagnostics and the
-reviewed Fleet ensure workflow.
+Set up an application, run a local IC network, build canisters, inspect their
+state, troubleshoot problems, and safely bring a deployed application to its
+declared configuration.
 
 [Explore operations and diagnostics](docs/features/operations/README.md)
 
@@ -116,24 +139,34 @@ operator runbooks.
 
 ## Reference Apps
 
-- [Demo App](apps/demo/canic.toml) — a small Component and sharding example.
-- [Test App](apps/test/canic.toml) — the reference topology used for indexed,
-  sharded and scaling placement qualification.
+- [Demo App](apps/demo/canic.toml) — a small example that shows how an
+  application can divide work among several canisters.
+- [Test App](apps/test/canic.toml) — a larger example used to test lookup,
+  data distribution, growth, and network placement.
 
-See the [App guide](apps/README.md) for their canister packages, build commands
-and local workflow. Root, Coordinator and Store entrypoints are generated by
-Canic from the selected configuration.
+See the [App guide](apps/README.md) for their source packages, build commands,
+and local workflow. Canic generates the internal management canisters needed
+by the selected configuration.
 
 ## Core Vocabulary
 
-- An **App** is checked-in source and configuration.
-- A **Fleet** is one installed instance of an App on one network.
-- A **workspace** is the local checkout containing configuration and operator
-  state; it is not a deployment identity.
-- A **Component Spec** is a reusable blueprint. A concrete Component is one
-  deployed occurrence with its own identity, root, state, and limits.
-- A **Fleet Subnet Root** owns lifecycle effects for Components on its physical
-  Subnet. The Fleet Coordinator owns Fleet-wide planning and publication.
+- An **App** is the source code and configuration stored in a local checkout.
+- A **Fleet** is one running copy of an App on one IC network.
+- A **workspace** is the local folder containing the App and Canic's operator
+  files. It does not identify a deployed application.
+- A **Component Spec** is a reusable blueprint for one kind of application
+  canister. A **Component** is one deployed canister created from that
+  blueprint, with its own identity, data, and limits.
+- A **Component Group** collects related blueprints. Each deployment of a Group
+  has its own size and rules about where its canisters may run.
+- A **Fleet service** is a stable name for a selected set of deployed
+  Components. Application code can target the service without choosing a
+  particular canister itself.
+- A **Subnet** is one part of the IC network. A **Fleet Subnet Root** is a
+  Canic management canister that performs approved actions for the Fleet's
+  Components on that Subnet.
+- The **Fleet Coordinator** is the management canister that coordinates plans
+  and shared information for the whole Fleet.
 
 See [CONFIG.md](CONFIG.md) for the App vocabulary and
 [Fleet ensure](docs/features/operations/fleet-ensure.md) for the separate
@@ -141,18 +174,19 @@ operator-owned desired Fleet contract.
 
 ## Repository Map
 
-- [crates/canic](crates/canic/) — public canister facade
-- [crates/canic-core](crates/canic-core/) — shared runtime, models, policy, and
-  protocols
-- [crates/canic-control-plane](crates/canic-control-plane/) — root,
-  Coordinator, and Store runtime support
-- [crates/canic-cli](crates/canic-cli/) — published `canic` operator binary
-- [crates/canic-host](crates/canic-host/) — host-side build and Fleet
-  reconciliation
-- [crates/canic-backup](crates/canic-backup/) — backup and restore domain
-  contracts
+- [crates/canic](crates/canic/) — the public Rust library used by application
+  canisters
+- [crates/canic-core](crates/canic-core/) — shared internal behavior and data
+  types
+- [crates/canic-control-plane](crates/canic-control-plane/) — implementation
+  of Canic's management canisters
+- [crates/canic-cli](crates/canic-cli/) — the published `canic` command-line
+  program
+- [crates/canic-host](crates/canic-host/) — building and deployment behavior
+  that runs on the operator's computer
+- [crates/canic-backup](crates/canic-backup/) — backup and restore behavior
 - [crates/canic-testing-internal](crates/canic-testing-internal/) — internal
-  fixtures and governed PocketIC journeys
+  test support and deployment scenarios
 - [crates/canic-tests](crates/canic-tests/) — runtime and integration tests
 - [apps](apps/) — reference App configurations and canister packages
 - [docs](docs/) — architecture, contracts, operations, designs, and audits
@@ -161,13 +195,17 @@ Detailed ownership and dependency rules live in [AGENTS.md](AGENTS.md).
 
 ## Status
 
-Canic is pre-1.0. Release transitions are reinstall-only. Cycle conservation
-remains required; application state, canister identities and topology are not
-cross-release compatibility promises. Same-release retry, backup and recovery
-remain supported operational contracts. Read the
-[current implementation status](docs/status/current.md) for the exact completed
-boundary rather than relying on a version-specific summary in this landing
-page.
+Canic is still pre-1.0, so releases may make breaking changes. Moving an
+existing deployment to a new Canic release currently requires a clean
+reinstallation rather than an in-place upgrade. Application data, canister
+identities, and network layout are not guaranteed to carry across that
+boundary. Canic must still account for **cycles**, the IC's units for paying
+for computation, so they are not silently lost. Retry, backup, and recovery
+within the same release remain supported.
+
+Read the [current implementation status](docs/status/current.md) for the exact
+completed boundary rather than relying on a version-specific summary in this
+landing page.
 
 The repository is being opened for wider use; issues and pull requests are
 currently limited to the core team.

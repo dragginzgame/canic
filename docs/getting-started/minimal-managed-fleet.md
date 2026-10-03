@@ -13,7 +13,8 @@ layout below contains only application source packages.
 This guide tracks the current Canic scaffold shape. For new fleets, prefer
 `canic app create <name>` and keep all `canic` dependencies on the same
 release as the installed `canic` CLI. The current schema uses
-`[app].name`, flat Component role catalogs, bounded descendants, `topup`, and
+`[app].name`, flat Component role catalogs, reusable Component Groups,
+independent Group deployments, bounded descendants, `topup`, and
 `canic::finish!()`.
 
 The root executes lifecycle, topology, and artifact effects. It does not proxy
@@ -141,7 +142,22 @@ topup = {}
 
 [component_specs.main.spawn_grants.hub.registry]
 maximum_instances_per_parent = 1
+
+[component_groups.main.components.hub]
+component_spec = "main"
+
+[component_group_deployments.main]
+component_group = "main"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
 ```
+
+The Spec defines what one Component may contain. The Group selects that Spec as
+one reusable occurrence, and the deployment asks the Fleet composition planner
+for exactly one placement. None of these source declarations selects a physical
+Subnet or grants mutation authority; the reviewed desired Fleet does that.
 
 ## Build Scripts
 
@@ -238,9 +254,10 @@ canic fleet ensure example-local --desired fleets/example-local.toml
 canic fleet ensure example-local --desired fleets/example-local.toml --apply <plan_sha256>
 ```
 
-On success, the reviewed operation has created or reused every configured
-canister, reconciled its funding/controllers/Wasm/runtime state, and recorded
-terminal cycle conservation. An immediate second run has zero mutation actions.
+On success, the reviewed operation has created or reused every canister selected
+by that desired Fleet, reconciled its funding/controllers/Wasm/runtime state,
+and recorded terminal cycle conservation. An immediate second run has zero
+mutation actions.
 
 Build one role without installing:
 

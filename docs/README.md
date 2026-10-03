@@ -1,34 +1,47 @@
 # Canic Documentation
 
+Use this page as the front door. Current guides describe supported behavior;
+designs explain decisions; contracts define exact boundaries; operations pages
+tell an operator what to do.
+
 ## Get Started
 
-- [Install Canic](../INSTALLING.md) — matching CLI/runtime versions and tools.
-- [Minimal managed Fleet](getting-started/minimal-managed-fleet.md) — roles,
-  configuration, builds and reviewed deployment.
-- [Configuration](../CONFIG.md) — App schema and topology.
-- [Reference Apps](../apps/README.md) — repository examples and local workflows.
-- [Feature guides](features/README.md) — runtime, authentication, orchestration,
-  scaling, builds, backup, blob storage and operations.
+| If you want to… | Read… |
+| --- | --- |
+| Install the matching CLI and runtime toolchain | [Install Canic](../INSTALLING.md) |
+| Build the smallest complete managed shape | [Minimal managed Fleet](getting-started/minimal-managed-fleet.md) |
+| Define roles, Specs, Groups, deployments and services | [Configuration](../CONFIG.md) |
+| Explore checked-in application examples | [Reference Apps](../apps/README.md) |
+| Understand one capability and its boundary | [Feature guides](features/README.md) |
 
 ## Operate A Fleet
 
-- [CLI guide](../crates/canic-cli/README.md) — command families and examples.
-- [Fleet ensure](features/operations/fleet-ensure.md) — generation, review/apply,
-  supplied infrastructure, capacity import and same-operation recovery.
-- [Fleet funding](operations/fleet-funding.md) — funding and conversion recovery.
-- [Frontend handoff](features/operations/frontend-handoff.md) — browser bindings
-  and capacity checks.
-- [Local Fleet](features/operations/local-development-fleet.md) — persistent
-  PocketIC development sessions.
-- [Operations index](operations/README.md) — runbooks and release validation.
+| Task | Guide |
+| --- | --- |
+| Find a command or JSON surface | [CLI guide](../crates/canic-cli/README.md) |
+| Generate, review, apply or resume desired state | [Fleet ensure](features/operations/fleet-ensure.md) |
+| Diagnose funding or conversion recovery | [Fleet funding](operations/fleet-funding.md) |
+| Hand verified bindings to a browser frontend | [Frontend handoff](features/operations/frontend-handoff.md) |
+| Run a persistent local PocketIC Fleet | [Local Fleet](features/operations/local-development-fleet.md) |
+| Find recovery and release runbooks | [Operations index](operations/README.md) |
 
 ## Develop And Review
 
-- [Contributor rules](../AGENTS.md) and [testing guide](../TESTING.md).
-- [Architecture](architecture/README.md) and [contracts](contracts/ARCHITECTURE.md).
-- [Current status](status/current.md) — latest handoff and qualification limits.
-- [Design roadmap](design/README.md) — current line and future work.
-- [Changelog](../CHANGELOG.md) — published changes and the open patch draft.
+| Need | Source |
+| --- | --- |
+| Repository rules and targeted-test policy | [Contributor rules](../AGENTS.md) and [testing guide](../TESTING.md) |
+| System shape and exact ownership boundaries | [Architecture](architecture/README.md) and [contracts](contracts/ARCHITECTURE.md) |
+| Latest implementation and qualification handoff | [Current status](status/current.md) |
+| Accepted sequence and future design work | [Design roadmap](design/README.md) |
+| Published history and the open patch draft | [Changelog](../CHANGELOG.md) |
+
+## Reading Order And Authority
+
+1. Start with a feature or operator guide for orientation.
+2. Follow its configuration, contract or architecture links for exact rules.
+3. Check current status for work-in-progress and qualification limits.
+4. Treat archived designs, dated audits and older release notes as historical
+   evidence, not current product support.
 
 Use current guides for commands and schemas. Archived designs, dated audits and
 older release notes describe their recorded checkpoints; they do not establish

@@ -3,6 +3,37 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## Documentation accuracy baseline — 2026-10-03
+
+The requested documentation-wide refresh begins with a source-backed accuracy
+pass over the maintained landing pages, README files, configuration reference,
+feature guides and onboarding flow. The canonical configuration guide now
+describes the live host-compiled configuration boundary, role observability,
+offline chain-key derivation, local application authorization, peer Component
+provisioning, Component Groups, independent Group deployments, reduction-only
+member limits and Fleet-service targets. Its canonical example includes a real
+Group deployment and active-pool service and passes the strict current parser.
+
+Correct the Core layering diagram so workflow calls pure policy and ops as
+independent branches, complete the facade's config-to-feature requirements,
+and align current timer and memory guide versions with `ic-timers 0.8.1` and
+`ic-memory 0.15.3`. The timer guide no longer presents optional IcyDB version
+alignment as a Canic requirement. The minimal Fleet and reference-App guides
+now distinguish declaring a reusable Spec from selecting a concrete Group
+deployment or desired Fleet occurrence. Root vocabulary and scaling navigation
+include Groups, deployments and logical services.
+
+The exact `config_guide` integration test passes. The maintained README and
+non-archived local-link scans find no missing targets; the CLI command catalogue
+and facade feature table match source; document semantics, scoped whitespace
+and diff checks pass. Archived designs, dated audits and release notes remain
+historical evidence and were not rewritten as current guidance. The first
+scanability pass adds task-oriented tables to the root landing page,
+documentation index, feature index and configuration map without changing
+their authority. This documentation-only batch changes no runtime, package
+version, release readiness, Git publication or deployment state. FR1 remains
+unfinished and not push-ready.
+
 ## Cross-Component caller authority assessment — 2026-10-03
 
 At the maintainer's request, assess the missing .51 membership flow as a whole

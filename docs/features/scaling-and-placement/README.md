@@ -46,7 +46,10 @@ reuses that ID; it returns the retained completion without affecting the replace
 
 ## Start Here
 
-- [Component configuration](../../../CONFIG.md#component-specs)
+- [Component Specs](../../../CONFIG.md#component-specs)
+- [Component Groups](../../../CONFIG.md#component-groups)
+- [Component Group deployments](../../../CONFIG.md#component-group-deployments)
+- [Fleet services](../../../CONFIG.md#fleet-services)
 - [Composable Component deployment design](../../design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md)
 - [Current implementation status](../../design/0.110-fleet-runtime-contraction/status.md)
 - [Fleet ensure bounds](../operations/fleet-ensure.md)
