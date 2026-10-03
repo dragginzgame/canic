@@ -571,7 +571,7 @@ dependencies = [
  "ic-canister-sig-creation",
  "ic-cdk",
  "ic-certification",
- "ic-memory 0.20.0",
+ "ic-memory 0.21.0",
  "ic-secp256k1",
  "ic-signature-verification",
  "ic-timers",
@@ -672,7 +672,7 @@ dependencies = [
  "canic-testing-internal",
  "ciborium",
  "ic-agent",
- "ic-memory 0.20.0",
+ "ic-memory 0.21.0",
  "ic-testkit",
  "ic-timers",
  "icydb",
@@ -690,7 +690,7 @@ dependencies = [
  "canic",
  "canic-icydb-lifecycle-schema",
  "ic-cdk",
- "ic-memory 0.20.0",
+ "ic-memory 0.21.0",
  "ic-timers",
  "icydb",
  "serde",
@@ -786,7 +786,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-memory 0.20.0",
+ "ic-memory 0.21.0",
 ]
 
 [[package]]
@@ -796,7 +796,7 @@ dependencies = [
  "candid",
  "canic",
  "ic-cdk",
- "ic-memory 0.20.0",
+ "ic-memory 0.21.0",
 ]
 
 [[package]]
@@ -2377,9 +2377,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.20.0"
+version = "0.21.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "552bd60e1c99e4eea5ec3474049b904a3398423bbfaf09bd9ae4e4a9a6e49112"
+checksum = "4a6e8fc6f51f42560d6ded45f32550d7abbad399ae85fceb94efbdcb65808f0c"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2390,9 +2390,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.45.2"
+version = "0.45.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "641bcdec49b0e4eaf3a4aefe19b418bb455c868a7936b6c187816fd26659a601"
+checksum = "c42ec52eeaca7ef4e3f88f019c9abf95279f7204278ea59640d8083ee0ebbd8d"
 dependencies = [
  "candid",
  "cap-fs-ext",

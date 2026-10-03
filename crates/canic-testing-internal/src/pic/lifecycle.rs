@@ -1953,6 +1953,10 @@ mod tests {
     pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
         crate::pic::cases::registered![
             (
+                "standalone memory restoration across identical Wasm upgrades",
+                standalone_memory_registry_survives_two_identical_wasm_upgrades,
+            ),
+            (
                 "managed projection restoration",
                 managed_projection_fences_then_opens_and_restores,
             ),
