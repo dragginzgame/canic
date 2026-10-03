@@ -187,3 +187,10 @@ This crate lives in the Canic workspace. See the workspace guide at
 packages against this exact Canic dependency. Their runtime implementations
 remain in the facade and control plane. The `candid/` directory ships canonical
 Coordinator and Store interfaces for artifact building and consumer bindings.
+
+## Continue From Here
+
+- [Choose the features you need](../../docs/features/README.md)
+- [Read the architecture overview](../../docs/architecture/README.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)

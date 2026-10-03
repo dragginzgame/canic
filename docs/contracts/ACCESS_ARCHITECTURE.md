@@ -145,3 +145,10 @@ Implementation:
 
 - `docs/contracts/ARCHITECTURE.md`
 - `docs/contracts/AUTH_DELEGATED_SIGNATURES.md`
+
+## Continue From Here
+
+- [Read the authentication design](../architecture/authentication.md)
+- [Browse the architecture guides](../architecture/README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

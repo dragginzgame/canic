@@ -6,6 +6,23 @@ consumer canisters.
 It is intentionally narrower than the design document. Use it when wiring a
 downstream canister to Canic's current blob-storage backend.
 
+<img src="../../assets/256x256/mechanic-tip.png" align="left" width="96" alt="The Canic mechanic presenting a blob-storage integration tip" />
+
+**Integration outcome:** a consumer canister enables only the required runtime
+feature, exposes the maintained gateway endpoints, and preserves the documented
+state and root-hash contract.
+
+<br clear="left" />
+
+## At A Glance
+
+| Task | Section |
+| --- | --- |
+| Confirm the supported surface | [Scope](#scope) |
+| Enable the Rust feature and endpoints | [Cargo Wiring](#cargo-wiring) and [Endpoint Macro](#endpoint-macro) |
+| Connect lifecycle and state | [Lifecycle API](#lifecycle-api) and [State Transitions](#state-transitions) |
+| Qualify the integration | [Validation](#validation) |
+
 ## Scope
 
 0.69 provides the non-billing immutable object-storage gateway surface:
@@ -194,3 +211,12 @@ path.
 - `crates/canic/src/macros/endpoints/blob_storage.rs`
 - `canisters/test/blob_storage_probe/src/lib.rs`
 - `crates/canic-tests/tests/pic_blob_storage.rs`
+
+## Continue From Here
+
+- [Read the Blob Storage feature guide](../features/blob-storage/README.md)
+- [Check billing readiness](blob-storage-billing-readiness.md)
+- [Review the blob-storage contracts](../contracts/BLOB_STORAGE_INVENTORY.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

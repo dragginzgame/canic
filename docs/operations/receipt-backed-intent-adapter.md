@@ -12,6 +12,23 @@ capacity accounting, and compare-and-set settlement. A downstream adapter
 owns request and identity derivation, authorization, the external call,
 receipt storage, receipt validation, and domain responses.
 
+<img src="../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside receipt-backed integration boundaries" />
+
+**Integrator outcome:** one domain-owned external effect is bound to one durable
+Canic reservation and settles only from validated terminal evidence.
+
+<br clear="left" />
+
+## At A Glance
+
+| Concern | Section |
+| --- | --- |
+| Implement first entrance and retry | [Required Flow](#required-flow) |
+| Keep resource names domain-owned | [Resource Namespace Ownership](#resource-namespace-ownership) |
+| Handle begin decisions correctly | [Begin Decisions](#begin-decisions) |
+| Validate terminal evidence | [Evidence Boundary](#evidence-boundary) |
+| Qualify a consumer | [Focused Conformance Fixture](#focused-conformance-fixture) |
+
 ## Required Flow
 
 For every first entrance or retry, the adapter must:
@@ -147,3 +164,12 @@ row.
 
 Canic publication does not certify those downstream properties. It provides
 and tests the generic reservation and settlement contract on which they rely.
+
+## Continue From Here
+
+- [Read the architecture contracts](../contracts/ARCHITECTURE.md)
+- [Follow recovery and retry procedures](recovery-retry-runbooks.md)
+- [Review Code Hygiene](../governance/code-hygiene/README.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

@@ -61,3 +61,10 @@ canic build \
 
 Use absolute explicit paths so Cargo and ICP artifact ownership cannot diverge.
 Every managed package should declare exact App/role metadata.
+
+## Continue From Here
+
+- [Create your first managed application](../../docs/getting-started/minimal-managed-fleet.md)
+- [Configure an App](../../CONFIG.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)

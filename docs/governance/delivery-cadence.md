@@ -239,3 +239,10 @@ Automation may invoke `scripts/dev/report-release-cadence.sh --tsv [VERSION]`.
 It emits one tab-separated row: minor line, published release count, advisory
 limit and next release ordinal. Plain output remains descriptive; exceeding the
 limit remains advisory in either format.
+
+## Continue From Here
+
+- [Review changelog governance](changelog.md)
+- [Review CI and deployment governance](ci-deployment.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

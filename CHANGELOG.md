@@ -33,8 +33,10 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   plan/apply, reinstall, bootstrap/capacity, automation and recovery guides.
   Refreshes the individual feature, operations, architecture, design-authoring,
   audit and code-hygiene indexes with visual workflows, task choosers and
-  consistent continuation navigation; aligns reset, configuration, build and
-  platform instructions with the current implementation. Includes the FR1 discovery
+  consistent continuation navigation. Extends task summaries and return paths
+  across maintained operations, architecture, contracts, runtime, crate, testing
+  and contributor references; aligns reset, configuration, build and platform
+  instructions with the current implementation. Includes the FR1 discovery
   checkpoint, preserves uncertain pool-creation effects across later refusals,
   and adopts the current memory, query, timer and testkit dependencies.
 

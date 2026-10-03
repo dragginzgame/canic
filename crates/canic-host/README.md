@@ -106,3 +106,10 @@ binds one exact former session. See the
 [local Fleet guide](../../docs/features/operations/local-development-fleet.md)
 for configuration, executable fingerprinting, resource limits and simulation
 fidelity. Production canisters do not gain a testing dependency.
+
+## Continue From Here
+
+- [Plan and operate a Fleet](../../docs/operations/README.md)
+- [Review build evidence](../../docs/features/build-and-evidence/README.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)

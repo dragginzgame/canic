@@ -59,3 +59,10 @@ role = "app"
 
 Manifest gate reports expose `workspace_name`. App and Fleet remain the deployment
 identities; the workspace names the local evidence bundle and filesystem root.
+
+## Continue From Here
+
+- [Review build provenance policy](build-provenance-ci-policy.md)
+- [Use build evidence](../features/build-and-evidence/README.md)
+- [Browse the architecture guides](README.md)
+- [Back to the main README](../../README.md)

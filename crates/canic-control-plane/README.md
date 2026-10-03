@@ -43,3 +43,10 @@ Store canister package.
 
 See `../../README.md` for the broader workspace overview and use `canic` as the
 default public entry surface unless you specifically need this crate.
+
+## Continue From Here
+
+- [Read the architecture overview](../../docs/architecture/README.md)
+- [Browse the public Canic crate](../canic/README.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)

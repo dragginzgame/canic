@@ -115,3 +115,10 @@ remains unready while the Root is unavailable or the child operation is
 nonterminal, and Root membership activation independently checks that readiness
 before publishing the Hub as Active. The fixture therefore cannot turn a failed
 initial-child bootstrap into a successful top-level lifecycle result.
+
+## Continue From Here
+
+- [Review fixture artifacts](fixture-artifacts.md)
+- [Browse build and evidence](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

@@ -197,3 +197,10 @@ overlap the protected operator tiers:
   `canister_ops` rows.
 - Coarse system counters are redundant with `platform_call`,
   `inter_canister_call`, and `timer`.
+
+## Continue From Here
+
+- [Understand public observability](features/runtime/public-observability.md)
+- [Explore runtime features](features/runtime/README.md)
+- [Browse all documentation](README.md)
+- [Back to the main README](../README.md)

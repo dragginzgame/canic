@@ -2,6 +2,16 @@
 
 Canic provides one offline workspace validation command for ordinary CI:
 
+<img src="../../assets/256x256/mechanic-help.png" align="left" width="96" alt="The Canic mechanic helping choose a CI diagnostic command" />
+
+<br clear="left" />
+
+| Need | Command |
+| --- | --- |
+| Validate the local workspace | `canic medic --ci` |
+| Isolate declared-state findings | `canic state audit --ci` |
+| Inspect live Fleet drift | `canic medic fleet <fleet> --ci` |
+
 ```text
 canic medic --ci
 ```
@@ -27,3 +37,11 @@ canic medic fleet <fleet> --ci
 Bare `canic medic` intentionally has workspace scope. Without an explicit
 environment, Fleet-only checks are `not_evaluated`; their absence is not a
 workspace warning.
+
+## Continue From Here
+
+- [Read the CLI guide](../../crates/canic-cli/README.md)
+- [Review the validation matrix](release-validation-matrix.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)
