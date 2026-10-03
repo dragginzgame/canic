@@ -5,7 +5,25 @@ harness for CANIC-017. It owns a foreground PocketIC process, persistent local
 state and one fixed browser gateway. Canic's normal artifact, initialization,
 Fleet Ensure and frontend handoff owners supply the deployment contracts.
 
-## Start a consumer
+<img src="../../../assets/256x256/mechanic-help.png" align="left" width="96" alt="The Canic mechanic helping start a local development Fleet" />
+
+**Developer outcome:** run a persistent PocketIC-backed Fleet through the same
+artifact, desired-state, Fleet Ensure, and frontend-handoff contracts used by
+other Canic environments.
+
+<br clear="left" />
+
+## At A Glance
+
+| Task | Section |
+| --- | --- |
+| Start the reusable harness | [Start A Consumer](#start-a-consumer) |
+| Generate and deploy desired state | [Generate And Converge A Fleet](#generate-and-converge-a-fleet) |
+| Connect a browser or discover endpoints | [Discovery And Browser Use](#discovery-and-browser-use) |
+| Resume or reset local state | [Persistence, Recovery And Reset](#persistence-recovery-and-reset) |
+| Understand simulator limits | [Resource And Fidelity Limits](#resource-and-fidelity-limits) |
+
+## Start A Consumer
 
 Enable `local-fleet` on `canic-host`, or run the packaged
 [`local_fleet` example](../../../crates/canic-host/examples/local_fleet.rs) from
@@ -44,7 +62,7 @@ resolved from the selected workspace. `status` is read-only; EOF requests a
 clean checkpoint and shutdown. A wrong-session shutdown command rejects while
 leaving the owner running.
 
-## Generate and converge a Fleet
+## Generate And Converge A Fleet
 
 First build the App's complete **local** release through `canic build`; retain
 its finalized release-build ID and sealed artifacts in the workspace. Use the
@@ -91,7 +109,7 @@ publication, registration, provisioning and activation. A changed source or
 release cannot retarget that preparation. An interrupted command resumes from
 the same desired document; do not regenerate or retimestamp an uncertain effect.
 
-## Discovery and browser use
+## Discovery And Browser Use
 
 `status` describes local allocations. Its `allocation_role` is the originally
 requested role: a pool asset can subsequently become an application canister.
@@ -121,7 +139,7 @@ bindings remain usable after a same-release restart when their identities and
 trust remain intact. The SDK qualification uses an admitted Ed25519 identity;
 it does not establish the complete Internet Identity registration/login UI.
 
-## Persistence, recovery and reset
+## Persistence, Recovery And Reset
 
 `LocalFleetSession` exclusively locks `.canic/local-fleets/<name>`. It records
 an unpredictable session identity before startup, verifies the executable's
@@ -173,7 +191,7 @@ recovery procedure. Historical Ensure records and the shared sealed-artifact
 cache remain with their normal owners; reset does not sweep them or other local
 sessions.
 
-## Resource and fidelity limits
+## Resource And Fidelity Limits
 
 Configuration bounds application subnets to 2–8, named allocations to 8–64,
 per-canister memory reservation to 64 MiB–2 GiB in 64 KiB increments, request
@@ -241,3 +259,12 @@ Clippy and layering checks also pass.
 This is generic Canic qualification. Toko Miner still needs to adopt the
 published package and verify its own representative workload; no sibling
 repository or live Fleet was changed.
+
+## Continue From Here
+
+- [Build your first managed application](../../getting-started/minimal-managed-fleet.md)
+- [Open the Fleet Ensure overview](fleet-ensure.md)
+- [Read the Frontend Handoff guide](frontend-handoff.md)
+- [Browse Fleet Operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

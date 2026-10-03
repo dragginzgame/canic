@@ -47,3 +47,10 @@ output across different compiler releases or host architectures.
 The peer retains allocation replies until host settlement has installed the child
 and synchronized its parent's exact allocation identity. On-demand calls must be
 submitted before host settlement and awaited afterward.
+
+## Continue From Here
+
+- [Read the testing rules](../../../../../../TESTING.md)
+- [Browse the test canisters](../../../../../../canisters/README.md)
+- [Browse all documentation](../../../../../../docs/README.md)
+- [Back to the main README](../../../../../../README.md)

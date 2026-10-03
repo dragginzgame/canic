@@ -6,6 +6,24 @@ apply, interruption recovery, and terminal replay.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
+<img src="../../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside a clean-reinstall caution" />
+
+**Operator outcome:** a clean current-release installation using explicitly
+selected physical inventory, with controlled cycles and retained historical
+evidence accounted for before predecessor state is cleared.
+
+<br clear="left" />
+
+## At A Glance
+
+| Phase | What is established |
+| --- | --- |
+| Readiness | Current inputs and complete physical inventory |
+| Review | Qualified replacement artifacts, custody, funding, and bounds |
+| Apply | Journaled clearing, installation, import, and workload convergence |
+| Replay | Same-operation recovery and terminal effect-free verification |
+
+## Check Readiness And Inventory
 
 Run readiness before building, supplying the current policy and intended estate
 seed together. This uses the generator's input checks without loading artifacts
@@ -55,6 +73,8 @@ funding only. Input checks do not qualify artifacts or guarantee live admission;
 generation and review check their inputs again. `--source` and `--seed` cannot be
 combined with `--desired` on readiness. Preserve the selected source, seed and
 qualified build throughout interrupted reinstall phases.
+
+## Forecast Or Cancel Before Effects
 
 For explicit replacement inventory, that readiness command also reports
 `funding.clean_reinstall_infrastructure`: current native balances and an upper
@@ -106,6 +126,8 @@ writers; repeat the exact cancellation command to finish archival/removal.
 Changed or newly introduced files stop recovery before further removal. Ordinary
 review observations are archived, including their bounded attempt records.
 
+## Generate And Review The Replacement
+
 After cancellation, generate current desired state from the complete explicit
 physical inventory and qualified replacement build, then request a new
 `fleet ensure --reinstall` review. That review refreshes custody and funding under
@@ -138,6 +160,8 @@ Already retained approvals keep their original execution ceiling and effect
 records. Repeating their review does not apply fresh admission retroactively.
 If registration exceeds that approval, use the separately approved bootstrap
 registration recovery review; a new estimate alone grants no extra spending.
+
+## Build And Run The Reinstall
 
 Build Toko against the same current Canic release as the CLI, using the normal
 `canic build` command. Keep the selected build's artifacts. Generate fresh current
@@ -205,6 +229,8 @@ separate ICP asset canister outside that inventory: publish its new assets to it
 existing ID to retain the origin. No Canic command here changes Toko's wrapper or
 frontend configuration.
 
+## After Convergence
+
 Downstream orchestration should call readiness before `canic build`, use the
 current release consistently for CLI and runtime, and follow the phase commands
 until Fleet completion. Readiness does not authorize payment or predict complete
@@ -217,6 +243,8 @@ Each command verifies manifest hashes and the retained role/module/protocol
 binding before transport. Missing or changed artifacts reject; these commands
 neither rebuild interfaces nor require environment-local sidecar copies. A newer
 unapplied Fleet review must first complete its own plan/journal handoff.
+
+## Funding And Diagnostics
 
 Human-readable reports describe a **planning budget**: maximum operator debit,
 unavoidable fees, Root-funded creation fees and execution burn are allowances,
@@ -346,6 +374,8 @@ remains its bounded diagnostic code (for example E66); rejection text does not
 select retry or recovery behavior. Allocation admission reserves space for the
 maximum diagnostic before any failure occurs.
 
+## Current Qualification Status
+
 > Development status: canister/code/controller/cycle convergence and the typed
 > Store, Registry, Root-mirror, local Component Registry and Component action
 > graph are implemented. A fresh-estate governed PocketIC journey traverses the
@@ -364,3 +394,6 @@ maximum diagnostic before any failure occurs.
 - [Review and apply the resulting Fleet plan](fleet-ensure-plan-and-apply.md)
 - [Read the recovery and cycle-safety rules](fleet-ensure-recovery-and-cycle-safety.md)
 - [Return to Fleet Ensure](fleet-ensure.md)
+- [Browse Fleet operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

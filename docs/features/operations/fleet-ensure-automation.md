@@ -5,7 +5,24 @@ continuation commands, timing receipts, or completion evidence.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-## Automation results
+<img src="../../../assets/256x256/mechanic-tip.png" align="left" width="96" alt="The Canic mechanic presenting an automation tip" />
+
+**Automation outcome:** a wrapper follows structured next actions and explicit
+approval boundaries until `fleet_completed: true`, without parsing display text
+or guessing from private journals.
+
+<br clear="left" />
+
+## At A Glance
+
+| Need | Use |
+| --- | --- |
+| Determine the current phase | `automation.phase` and completion fields |
+| Continue safely | Structured `next_action.executable` and `arguments` |
+| Distinguish approval from resumption | `review`, `apply`, `resume`, or `review_funding` |
+| Diagnose duration or interruption | Per-invocation timing receipts |
+
+## Automation Results
 
 Use `--json` for deployment wrappers. Successful Ensure, clean-reinstall,
 bootstrap and import responses include `automation` with `phase`, nullable
@@ -13,6 +30,8 @@ bootstrap and import responses include `automation` with `phase`, nullable
 `fleet_completed` and nullable `next_action`. Only `fleet_completed: true` means
 the complete Fleet has converged. Infrastructure and import completion do not
 imply workload completion.
+
+## Continuation And Completion
 
 `next_action.kind` distinguishes `review`, `apply`, `resume` and `review_funding`.
 An `apply` or `review_funding` action requires explicit operator approval;
@@ -39,6 +58,8 @@ unhandled failures. They should not infer completion from private journals or
 use a fixed number of repeated commands. Human `next_command` and
 `apply_command` renderings are for display, not process execution.
 
+## Receipts And Replay
+
 Clean reinstall selects its local owner and current input before opening the
 receipt; local selection is outside the measured interval. Remote review and
 apply use the shared receipt owner with `invocation_started.command: ensure`.
@@ -60,6 +81,8 @@ binds the plan, final journal and state, plus the reset selection when applicabl
 An interrupted final journal write recovers from that receipt. Missing or altered
 completion evidence rejects locally. Run a new review to observe subsequent
 balance or topology changes; replay is historical completion, not a live health check.
+
+## Timing Evidence
 
 Each line has UTC Unix milliseconds and monotonic elapsed microseconds. Existing
 progress DTOs bind operation, plan and phase; stage and request identifiers link
@@ -110,6 +133,8 @@ The observation span ties each inspection to inventory, planning or final
 authority verification. Changing or missing subjects never grants authority to
 reuse an observation; all existing freshness and reserve checks still run.
 
+## Progress And Retry Diagnostics
+
 Receipts distinguish confirmed increases in applied receipts or provisioning
 counts from repeated polls and local activity. They retain the exact next
 no-effect review command and available originating retry owner/cause. A missing
@@ -138,6 +163,8 @@ remain separately attributed to their reported owner. The live panel prioritizes
 current members and shows up to four occurrences; plain/JSON milestones and
 receipts include the full list. Terminal clipping and observation age apply to
 these rows. Animation adds no reads.
+
+## Read Retry Boundaries
 
 Fleet apply's Root status reads (authority, registry and pool observations) use
 the authenticated query transport with at most three logical attempts, ten
@@ -168,6 +195,8 @@ upstream agreement, cache validation and publication boundary. Existing validate
 cache reuse and freshness/assurance rules remain unchanged. See the
 [qualification report](../../audits/reports/2026-09/2026-09-21/deployment-timing.md)
 for measured costs and coverage limits.
+
+## Readiness Automation
 
 Before compiling or qualifying a release, or attempting recovery with a newly
 installed CLI, run `canic medic --ci` from the application workspace. Its locked,
@@ -223,3 +252,5 @@ checks passed, not that deployment is affordable or approved.
 - [Recover an interrupted operation](fleet-ensure-recovery-and-cycle-safety.md)
 - [Return to Fleet Ensure](fleet-ensure.md)
 - [Browse Fleet operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

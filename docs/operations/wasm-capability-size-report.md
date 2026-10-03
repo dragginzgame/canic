@@ -6,6 +6,14 @@ authentication and admission, metrics, child provisioning, remaining Canic
 runtime, application and upstream code, unattributed stripped code, and Wasm
 structure/ABI bytes.
 
+<img src="../../assets/256x256/mechanic-tip.png" align="left" width="96" alt="The Canic mechanic presenting a Wasm-size diagnostic tip" />
+
+**Diagnostic outcome:** one machine-readable attribution report for a named,
+symbol-preserving Wasm artifact. The result supports investigation; it is not a
+deployment gate or marginal-cost proof.
+
+<br clear="left" />
+
 Use a diagnostic artifact that retains function names:
 
 ```text
@@ -39,3 +47,12 @@ equal.
 This focused report does not replace or change the retained
 `CANIC-WASM-001/v4` recurring audit method. A future audit-method revision may
 adopt it after its own method-change gate.
+
+## Continue From Here
+
+- [Read Builds, Provenance, And Evidence](../features/build-and-evidence/README.md)
+- [Review build artifact architecture](../architecture/build-artifacts.md)
+- [Review the validation matrix](release-validation-matrix.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

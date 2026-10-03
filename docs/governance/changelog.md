@@ -207,7 +207,7 @@ For root changelog references to detailed notes, links must be clickable Markdow
 Use this source text in the root `CHANGELOG.md`:
 
 ```markdown
-[docs/changelog/0.33.md](docs/changelog/0.33.md)
+[docs/changelog/0.33.md](../changelog/0.33.md)
 ```
 
 Do not use plain backticked path text for detailed-breakdown links.
@@ -410,3 +410,10 @@ Changelog governance is architectural, not cosmetic.
 It documents system evolution and must reflect real semantic shifts.
 
 It is part of Canic's correctness discipline.
+
+## Continue From Here
+
+- [Review delivery cadence](delivery-cadence.md)
+- [Review CI and deployment governance](ci-deployment.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

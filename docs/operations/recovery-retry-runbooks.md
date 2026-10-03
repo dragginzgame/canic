@@ -10,6 +10,24 @@ changelogs and status docs, not in the operational runbook entry point.
 Current release-line context comes from `docs/status/current.md`. This file is
 the canonical operator recovery reference for current release work.
 
+<img src="../../assets/256x256/mechanic-attention.png" align="left" width="96" alt="The Canic mechanic raising a hand beside recovery runbooks" />
+
+**Operator outcome:** classify the retained operation and typed failure, resume
+only under its existing authority, and preserve evidence until a terminal result
+or explicit operator decision is reached.
+
+<br clear="left" />
+
+## At A Glance
+
+| Need | Section |
+| --- | --- |
+| Confirm this runbook applies | [Scope](#scope) |
+| Preserve replay and spending safety | [Operator Safety Rules](#operator-safety-rules) |
+| Record a new procedure consistently | [Runbook Template](#runbook-template) |
+| Select a concrete recovery | [Runbooks](#runbooks) |
+| Re-run the owning guards | [Validation Gates](#validation-gates) |
+
 ## Scope
 
 These runbooks cover manual retry and recovery decisions for:
@@ -320,3 +338,12 @@ ordinary docs slice.
 The runbooks remain the operator procedure; they do not issue a release
 verdict. Current diagnostic and recovery sufficiency is established by dated
 audit evidence and the active release-line closeout.
+
+## Continue From Here
+
+- [Read Fleet recovery and cycle safety](../features/operations/fleet-ensure-recovery-and-cycle-safety.md)
+- [Diagnose Fleet funding](fleet-funding.md)
+- [Review the validation matrix](release-validation-matrix.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

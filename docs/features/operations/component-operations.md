@@ -1,10 +1,25 @@
-# Operator Component operations
+# Operator Component Operations
 
 `canic component` provisions one ordinary top-level Component on a selected
 active Root. Fleet Ensure owns initial Component Group deployment; Root owns
 allocation, installation, activation and Directory synchronization.
 
-## Review and apply
+<img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="96" alt="The Canic mechanic pointing toward Component operations" />
+
+**Operator outcome:** add one admitted top-level Component to a terminal Fleet
+through a no-effect review and exact-digest apply workflow.
+
+<br clear="left" />
+
+## At A Glance
+
+| Phase | Section |
+| --- | --- |
+| Review and approve the exact Component | [Review And Apply](#review-and-apply) |
+| Resume or export the result | [Interruption And Export](#interruption-and-export) |
+| Confirm maintained behavior | [Qualification](#qualification) |
+
+## Review And Apply
 
 Use a terminal current-release Fleet and an ICP identity that controls the
 selected Root. Select its logical name from the reviewed Fleet desired state
@@ -27,7 +42,7 @@ once; the maximum selectable polling window is 3,600 seconds. A successful
 incomplete response is pending work, not a ready Component. Check
 `progress.complete` in JSON before using its Principal.
 
-## Interruption and export
+## Interruption And Export
 
 Repeat `component apply` with the same Fleet, local operation name and review
 digest after an interrupted command. The original operation ID remains bound
@@ -81,3 +96,11 @@ ICP identity, exact Candid sidecars, lost response, completion and JSON export.
 Its starting terminal inventory is an explicit fixture; it is not a new complete
 Fleet Ensure proof or an immutable published-package adoption result. Its `ic`
 identity is synthetic and routed only to its isolated PocketIC gateway.
+
+## Continue From Here
+
+- [Open the Fleet Ensure overview](fleet-ensure.md)
+- [Read Scaling And Placement](../scaling-and-placement/README.md)
+- [Browse Fleet Operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

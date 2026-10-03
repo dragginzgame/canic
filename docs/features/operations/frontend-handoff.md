@@ -1,10 +1,27 @@
-# Frontend handoff
+# Frontend Handoff
 
 Canic's host exports browser bindings from one terminal Fleet review. The
 frontend remains an independently built application. Its asset canister and
 Internet Identity provider remain outside Canic's managed topology.
 
-## Bind the admission origin before installation
+<img src="../../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside frontend handoff boundaries" />
+
+**Operator outcome:** export bounded browser bindings from one reviewed Fleet,
+upload them through the frontend's own delivery process, and verify the exact
+uploaded bytes without moving Fleet authority into the browser.
+
+<br clear="left" />
+
+## At A Glance
+
+| Phase | Section |
+| --- | --- |
+| Bind browser identity authority | [Bind The Admission Origin Before Installation](#bind-the-admission-origin-before-installation) |
+| Select exported roles | [Export The Selected Roles](#export-the-selected-roles) |
+| Connect the browser agent | [Agent And Internet Identity Integration](#agent-and-internet-identity-integration) |
+| Verify uploaded bytes | [Verify The Uploaded Handoff After Sync](#verify-the-uploaded-handoff-after-sync) |
+
+## Bind The Admission Origin Before Installation
 
 For browser users, set the intended Internet Identity derivation origin in the
 selected environment's protected Fleet generation policy:
@@ -26,7 +43,7 @@ nonempty admission policy requires the retained origin to equal its derivation
 origin. Admission Principals and operator authority never enter the browser
 bundle. Origins belong to environment input, not the network-neutral App name.
 
-## Export the selected roles
+## Export The Selected Roles
 
 Prepare `frontend-local.json` or `frontend-ic.json` with the following shape.
 Replace the illustrative values with the reviewed environment and actual
@@ -84,7 +101,7 @@ inventory may be exported with `info env --component-operation`; generating
 bindings for that later instance requires a terminal inventory that includes
 its exact protocol binding.
 
-## Agent and Internet Identity integration
+## Agent And Internet Identity Integration
 
 The [independent SDK consumer](../../../crates/canic-host/examples/frontend-consumer/README.md)
 provides manifest verification and actor construction. Mainnet uses the SDK's
@@ -113,7 +130,7 @@ its asset environment must link the selected role IDs before synchronisation
 and verify the published cookie. The manifest is an equivalent explicit build
 input; it does not rewrite ICP links or cookies.
 
-## External asset capacity
+## External Asset Capacity
 
 Before a destructive asset reinstall or an upload, review the exact payload and
 the canister's **native** cycle balance:
@@ -134,7 +151,7 @@ native canister cycles. `icp cycles transfer` credits a Cycles Ledger account;
 that account balance is not the canister's execution balance. Failed atomic
 upload batches and their cleanup remain the asset owner's responsibility.
 
-## Bounds and qualification
+## Bounds And Qualification
 
 Host export currently permits 128 selected instances, 4 MiB per file and 32 MiB
 of referenced artifacts. These are host allocation budgets, not IC, IcyDB or
@@ -164,7 +181,7 @@ requires Node.js and the example's npm dependencies. The recorded final run take
 4.01 seconds. The one-role fixture's complete bundle is 136,858 bytes. These are
 controlled qualification measurements, not a Toko workload or asset-upload cost.
 
-## Verify the uploaded handoff after sync
+## Verify The Uploaded Handoff After Sync
 
 Keep the existing asset uploader. After it completes, read back the exact handoff:
 
@@ -216,3 +233,11 @@ bounded. Local ICP identity/network discovery precedes that query deadline.
 The check observes exact asset content, not an atomic snapshot of every file,
 HTTP certification, CORS, content-type headers, caching or a browser II ceremony.
 Those remain the asset owner's delivery checks.
+
+## Continue From Here
+
+- [Read Authentication](../authentication/README.md)
+- [Review ICP CLI integration](icp-integration.md)
+- [Browse Fleet Operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

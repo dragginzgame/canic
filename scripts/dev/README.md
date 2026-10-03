@@ -15,3 +15,10 @@ maintenance tasks.
   checksums in `tool-versions.env`, and aligns installation guidance. It
   refuses an automatic major-version transition. `make update-dev` runs it
   before installing the resulting exact pin.
+
+## Continue From Here
+
+- [Read the testing rules](../../TESTING.md)
+- [Review CI and deployment governance](../../docs/governance/ci-deployment.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)

@@ -1,4 +1,4 @@
-# Fleet observatory
+# Fleet Observatory
 
 The host-owned observatory collects one terminal Fleet's retained identity and
 independent live role observations. `canic-host::observatory` supplies passive
@@ -7,6 +7,24 @@ The downstream application owns serving, collection scheduling and its own
 application sections. Canonical canisters do not contain a renderer or a new
 polling service. These are current schema-version-1 contracts, subject to the
 pre-1.0 reinstall-only hard cut.
+
+<img src="../../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a Fleet observatory checklist" />
+
+**Operator outcome:** collect a bounded passive snapshot or escaped HTML report
+from one terminal Fleet without giving canisters a renderer, filesystem access,
+or a new polling service.
+
+<br clear="left" />
+
+## At A Glance
+
+| Need | Section |
+| --- | --- |
+| Interpret partial evidence | [Evidence And Partial Results](#evidence-and-partial-results) |
+| Investigate cost | [Cost Investigation](#cost-investigation) |
+| Inspect Store artifacts | [Store Inventory](#store-inventory) |
+| Publish a bounded public view | [Public Publication And Freshness](#public-publication-and-freshness) |
+| Check resource ceilings | [Host Budgets](#host-budgets) |
 
 ```sh
 canic --environment local observatory snapshot demo
@@ -277,3 +295,11 @@ those need a refreshed exact inventory/binding source. A valid partial report
 is not a healthy-Fleet verdict: consumers must inspect each observation's state.
 No immutable package publication, live Toko adoption, browser identity-provider
 ceremony or external static-asset deployment is claimed.
+
+## Continue From Here
+
+- [Open the Fleet Ensure overview](fleet-ensure.md)
+- [Read Public Status And Protected Observability](../runtime/public-observability.md)
+- [Browse Fleet Operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

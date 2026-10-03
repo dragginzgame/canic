@@ -193,3 +193,10 @@ envelope still needs its own semantic validation and decoding limits. The public
 returns `ArgumentDecodeError::TooLarge { actual, maximum }` or `InvalidCandid`.
 It does not replace selecting the initial lifecycle bound. Omitting the option
 retains the existing lifecycle decoder.
+
+## Continue From Here
+
+- [Review stable-memory layout](stable-memory-layout.md)
+- [Browse runtime features](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

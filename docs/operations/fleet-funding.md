@@ -4,6 +4,24 @@ This runbook covers the maintained funding paths for a terminal current Canic
 Fleet. The Fleet Coordinator normally funds current Fleet Subnet Roots. Direct
 cycle top-up and Root-owned ICP conversion are explicit recovery actions.
 
+<img src="../../assets/256x256/mechanic-attention.png" align="left" width="96" alt="The Canic mechanic raising a hand beside Fleet funding procedures" />
+
+**Operator outcome:** identify the current funding owner and any retained
+operation before selecting Coordinator funding, direct cycle top-up, or manual
+Root ICP conversion.
+
+<br clear="left" />
+
+## At A Glance
+
+| Situation | Start here |
+| --- | --- |
+| Understand current balances and owners | [Observe Before Acting](#observe-before-acting) |
+| Diagnose deployment or inspection reserve | [Deployment Reserve Failures](#deployment-reserve-failures) |
+| Handle child-grant deadlines | [Funding Deadlines After Child Grants](#funding-deadlines-after-child-grants) |
+| Apply an explicit recovery top-up | [Direct Cycle Top-Up](#direct-cycle-top-up) |
+| Convert ICP for one Root | [Manual Root ICP Conversion](#manual-root-icp-conversion) |
+
 ## Observe Before Acting
 
 Read the Coordinator and every current Root through the terminal ensure
@@ -535,3 +553,12 @@ plan a fresh reinstall rather than deleting replay evidence.
 After any recovery, run both text and JSON status as needed, confirm there is no
 unresolved current operation, and retain the terminal receipt for the incident
 record.
+
+## Continue From Here
+
+- [Open Fleet Ensure](../features/operations/fleet-ensure.md)
+- [Follow recovery and retry procedures](recovery-retry-runbooks.md)
+- [Browse Fleet Operations](../features/operations/README.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)
