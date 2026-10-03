@@ -493,3 +493,18 @@ fn receipt_capacity_growth_exhaustion_preserves_store_and_typed_ops_failure() {
     ReceiptBackedIntentStore::reserve_application_eligibility_capacity(1).unwrap();
     assert_eq!(MemoryRegistryOps::allocation_snapshot().unwrap(), before);
 }
+
+#[test]
+fn memory_ledger_generation_response_preserves_current_fields() {
+    let response = memory_ledger_generation_response(
+        GenerationRecord::new(7, 6, Some("host-build".to_string()), 4, Some(123))
+            .expect("current generation record"),
+    );
+    let bytes = candid::encode_one(&response).expect("generation response Candid");
+    let decoded: MemoryLedgerGenerationEntry = candid::decode_one(&bytes).expect("current Candid");
+    assert_eq!(decoded.generation, 7);
+    assert_eq!(decoded.parent_generation, Some(6));
+    assert_eq!(decoded.runtime_fingerprint.as_deref(), Some("host-build"));
+    assert_eq!(decoded.declaration_count, 4);
+    assert_eq!(decoded.committed_at, Some(123));
+}

@@ -24,18 +24,19 @@ separate maintainer-selected actions. This page records implementation handoffs.
 
 ## Recent delivery status
 
-The maintainer requested an earlier .52 checkpoint. Its draft includes FR1
-discovery/assessment, pool uncertainty and release-preflight corrections, and
-test-reliability fixes; whole-Fleet execution remains unfinished. The latest
-[current handoff](../status/current.md) records qualification against ic-memory
-0.22, ic-query 0.45, ic-timers 0.9 and ic-testkit 0.13. It supersedes earlier
-dependency snapshots and separates final-graph evidence from prior runs.
-Candid checks now use wire structure, receipt guards check layer ownership, and
-targeted internal PocketIC runs check registration before simulator startup.
-The affected native, Clippy, fixture, runner and exact lifecycle checks pass; the
-.52 checkpoint is ready for the normal release flow. No broad suite was rerun.
-This checkpoint does not close FR1 or add review-finding closures; issue
-disposition remains in GitHub.
+The latest release run exposed three normal governed cases that still build the
+optional IcyDB fixture. The maintainer selected local IcyDB; its updated dependency
+metadata now has one memory/timer identity. Those three cases still need runtime
+requalification, and the workstation Cargo override is not portable release
+configuration. See the [current handoff](../status/current.md) for these boundaries.
+
+The testkit 0.14 pool migration is applied. Targeted warning-denied Clippy and all
+six payload-limit PocketIC tests pass, including repeated snapshot reuse. The
+embedded peer is refreshed and verified for memory 0.23, query 0.45, timers 0.10
+and testkit 0.14. The .52 draft includes these corrections and the earlier FR1
+discovery/assessment checkpoint; whole-Fleet execution remains unfinished. This
+does not close FR1 or add review-finding closures; issue disposition remains in
+GitHub. Prior qualification below applies only to its recorded source graph.
 
 FR1 shared replay discovery is now in progress: controller-only pages retain
 expired uncertainty and original effect/accounting identities, with bounded

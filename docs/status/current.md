@@ -3,6 +3,72 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Testkit 0.14 fixture pool migration — 2026-10-03
+
+The prepared `/tmp/ic-testkit-0.14-migrations/canic.patch` is now applied to
+`pic_ingress_payload_limits`: the pool owns its builder at construction, and
+acquisition uses `acquire()` without a replacement builder. Its dependency hunk
+was already present. Targeted Clippy passes with warnings denied. All six
+payload-limit PocketIC integration tests pass (51.18s tests, 118s runner),
+including one pool construction and five snapshot restorations without rebuilds.
+Embedded peer refresh and the runner's verification preflight pass; artifact
+SHA-256 is `44e0bce396ab1d224ce86ccf0df315dfb7e72f41e719e5c4fc42073e8c3a74d0`.
+Formatting, whitespace and current-document semantics pass. Manifest and lockfile
+remained byte-identical during final validation. Evidence is retained under
+`target/review-validation/canic-testkit014-*.log`. The .52 changelog records the
+migration and current dependency selection. This session has finished its builds.
+
+Current selection is ic-memory 0.23.0, ic-query 0.45.4, ic-timers 0.10.1 and
+ic-testkit 0.14.0. Local IcyDB 0.264.7 has adopted memory 0.23 and timers 0.10;
+selected Wasm metadata now has one identity for each, superseding the dual-runtime
+observation below. This metadata result is not yet qualification of the three
+previously failing IcyDB-backed cases. The workstation Cargo override remains
+local-only, and this session did not mutate the sibling repository. This focused
+migration is complete; the complete release batch still needs the previously
+failing composition cases qualified and a portable dependency configuration.
+No broad suite, version bump, commit, push or deployment was performed.
+
+## Local IcyDB test selection — 2026-10-03
+
+The maintainer requested local IcyDB and confirmed its dependency update is still
+underway. `.cargo/config.toml` now has a workstation-only Cargo patch selecting
+`/home/adam/projects/icydb/crates/icydb`. Cargo resolves IcyDB 0.264.7 and
+its supporting crates from that read-only sibling checkout. `Cargo.lock` is
+refreshed and locked/offline Wasm-target metadata resolution passes for this
+snapshot. No sibling files were modified.
+
+This does not yet qualify composition: local IcyDB still selects ic-memory 0.22
+and ic-timers 0.9, while current Canic selects 0.23 and 0.10. The earlier three
+normal governed cases still reach the IcyDB fixture. Their dual-runtime refusal
+remains expected until the upstream update finishes; no expensive test rerun was
+started. Canic-owned production graphs remain distinct from optional composition.
+The source switch alone does not fix the default-suite ownership defect.
+
+The absolute Cargo override and local-source lock entries are local development
+state, not portable release configuration. Before a portable CI/release run,
+remove the workstation patch and resolve the intended published graph, or
+separately provide explicit local-source CI setup. Do not commit the absolute
+patch table. After upstream edits finish, refresh the selected lock graph and
+rerun the affected exact cases. Earlier push-readiness statements below predate
+this newly exposed composition blocker and the current dependency edits.
+
+## ic-memory 0.23 reader adoption — 2026-10-03
+
+The manifest now requests ic-memory 0.23. Apply its diagnostic hard cut directly:
+the memory ledger adapter consumes `GenerationRecord` and no longer imports or
+unwraps `DiagnosticGeneration`. The focused Candid regression preserves all five
+public generation fields. This exact source patch previously passed 14 Core
+memory tests and strict Core all-target/all-feature Clippy in an isolated copy
+against the local release candidate; it is not published-graph qualification.
+
+Concurrent dependency edits are preserved. At this handoff the manifest also
+requests ic-timers 0.10 and ic-testkit 0.14, while the lockfile still selects
+ic-memory 0.22.0, ic-timers 0.9.5 and ic-testkit 0.13.0. The dependency-update owner
+must finish the selected lock graph, qualify the reader against that graph, and
+refresh/verify the embedded allocation peer. No actual-checkout build or fixture
+refresh ran here. Earlier 0.22 qualification below applies to its recorded graph.
+No version bump, commit, push, deployment or optional IcyDB alignment ran.
+
 ## Test reliability and ic-memory 0.22 qualification — 2026-10-03
 
 The maintainer authorized finishing the 0.22 adoption in this checkout. The

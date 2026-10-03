@@ -23,7 +23,7 @@ use crate::{
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
-    DiagnosticGeneration, DiagnosticMemorySize, DiagnosticRecord, MemoryManagerRangeMode,
+    DiagnosticMemorySize, DiagnosticRecord, GenerationRecord, MemoryManagerRangeMode,
     SchemaMetadataRecord,
 };
 use thiserror::Error as ThisError;
@@ -329,10 +329,7 @@ const fn memory_schema_metadata_response(
     }
 }
 
-fn memory_ledger_generation_response(
-    generation: DiagnosticGeneration,
-) -> MemoryLedgerGenerationEntry {
-    let generation = generation.generation;
+fn memory_ledger_generation_response(generation: GenerationRecord) -> MemoryLedgerGenerationEntry {
     MemoryLedgerGenerationEntry {
         generation: generation.generation(),
         parent_generation: Some(generation.parent_generation()),
