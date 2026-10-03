@@ -868,6 +868,7 @@ mod fast_tests {
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod tests {
     use super::*;
+    use crate::pic::CanicPicExt;
     use canic::{
         Error,
         dto::{
@@ -884,6 +885,103 @@ mod tests {
     };
     use ic_testkit::pic::{CandidCallExt, CanisterInstallExt};
     use std::time::Duration;
+
+    fn standalone_memory_allocations(
+        pic: &PocketIc,
+        canister: Principal,
+    ) -> canic::dto::memory::MemoryAllocationsResponse {
+        let result: Result<canic::dto::memory::MemoryAllocationsResponse, Error> =
+            pic.query_candid_or_panic(canister, "memory_allocations_probe", ());
+        result.expect("admitted memory observation")
+    }
+
+    #[test]
+    fn standalone_memory_registry_survives_two_identical_wasm_upgrades() {
+        let fixture = install_lifecycle_boundary_fixture();
+        let canister = fixture.install_runtime_probe_canister();
+        fixture
+            .pic
+            .wait_for_ready(canister, Principal::anonymous(), 120, "standalone install");
+        let first: Result<u64, Error> = fixture.pic.update_candid_or_panic(
+            canister,
+            "begin_timer_probe_intent",
+            (211_u8, None::<u64>),
+        );
+        let first = first.expect("initial retained TTL-free reservation");
+        let baseline = standalone_memory_allocations(&fixture.pic, canister);
+        assert!(baseline.current_generation > 0);
+        assert_eq!(baseline.unknown_binding_bytes, 0);
+        let original_bindings: Vec<_> = baseline
+            .memories
+            .iter()
+            .map(|memory| {
+                (
+                    memory.memory_manager_id,
+                    memory.binding.clone(),
+                    memory.range_claim.clone(),
+                )
+            })
+            .collect();
+        let mut previous_generation = baseline.current_generation;
+        for attempt in 1..=2_u8 {
+            fixture
+                .pic
+                .wait_out_install_code_rate_limit(Duration::from_mins(5));
+            fixture
+                .pic
+                .upgrade_canister(
+                    canister,
+                    fixture.runtime_probe_wasm.clone(),
+                    upgrade_args(),
+                    None,
+                )
+                .expect("identical-Wasm standalone upgrade");
+            fixture
+                .pic
+                .wait_for_ready(canister, Principal::anonymous(), 120, "standalone upgrade");
+            let duplicate: Result<u64, Error> = fixture.pic.update_candid_or_panic(
+                canister,
+                "begin_timer_probe_intent",
+                (211_u8, None::<u64>),
+            );
+            assert_eq!(
+                duplicate
+                    .expect_err("original reservation remains held")
+                    .code(),
+                canic::diagnostics::codes::CAPACITY_LIMIT.raw_code()
+            );
+            let next: Result<u64, Error> = fixture.pic.update_candid_or_panic(
+                canister,
+                "begin_timer_probe_intent",
+                (211_u8 + attempt, None::<u64>),
+            );
+            assert_eq!(
+                next.expect("new reservation after cold restoration"),
+                first + u64::from(attempt)
+            );
+            let reopened = standalone_memory_allocations(&fixture.pic, canister);
+            assert!(reopened.current_generation >= previous_generation);
+            previous_generation = reopened.current_generation;
+            assert_eq!(
+                reopened.manager_layout_version,
+                baseline.manager_layout_version
+            );
+            assert_eq!(reopened.bucket_size_pages, baseline.bucket_size_pages);
+            assert_eq!(reopened.unknown_binding_bytes, 0);
+            let bindings: Vec<_> = reopened
+                .memories
+                .iter()
+                .map(|memory| {
+                    (
+                        memory.memory_manager_id,
+                        memory.binding.clone(),
+                        memory.range_claim.clone(),
+                    )
+                })
+                .collect();
+            assert_eq!(bindings, original_bindings);
+        }
+    }
 
     #[derive(candid::CandidType)]
     enum ManagedCommand {

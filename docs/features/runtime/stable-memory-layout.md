@@ -152,6 +152,15 @@ PocketIC evidence must additionally exercise its lifecycle participants and
 store restoration; a substrate regression cannot substitute for that proof.
 The reported Toko failures do not yet establish an ic-memory implementation bug.
 
+A Canic-owned standalone PocketIC regression installs the runtime, retains a
+TTL-free local intent reservation and upgrades the exact same Wasm twice. It
+checks memory ownership and geometry, reservation denial and the persistent
+intent counter after both cold restorations. This passes with Canic 0.110.51 and
+ic-memory 0.15.3. It covers Canic's local intent stores and lifecycle participant;
+it does not reproduce Toko's Generator, IcyDB composition or the native
+receipt-backed store at memory ID 45. Matching package identities remains a
+prerequisite for a composed artifact, not a sufficient qualification result.
+
 The 0.14 update retains fixed-ID declarations and bucket selection. It adds
 upstream limits to ledger recovery (including 16 MiB logical payloads, depth 32
 and bounded histories); out-of-contract state rejects. Canic retains its fixed
