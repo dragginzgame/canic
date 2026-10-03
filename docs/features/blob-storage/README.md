@@ -46,3 +46,4 @@ automation.
 - [Cashier inventory contract](../../contracts/BLOB_STORAGE_CASHIER_INVENTORY.md)
 - [Choose another feature](../README.md)
 - [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

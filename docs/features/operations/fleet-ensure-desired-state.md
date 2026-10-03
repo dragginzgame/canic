@@ -6,6 +6,23 @@ by Fleet Ensure.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
+<img src="../../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a desired-state checklist" />
+
+**Operator outcome:** one reviewable document that binds the intended network,
+infrastructure, application canisters, placement, funding, artifacts, and
+spending limits for a Fleet.
+
+<br clear="left" />
+
+## At A Glance
+
+| Task | Result |
+| --- | --- |
+| Select current build and estate inputs | Exact authority and artifact sources |
+| Generate a fresh or retained Fleet document | No paid Fleet effect |
+| Review deployment fields and bounds | Operator-owned desired state for planning |
+| Pass the document to Fleet Ensure | A separate no-effect plan to review |
+
 ## Generate Current Desired State
 
 Do not hand-author the low-level Coordinator/Root/Store authority document.
@@ -30,6 +47,8 @@ of those canisters; this is not threshold approval. Generation rejects
 duplicates, the operator Principal and more than eight entries. The exact set
 is carried through controller creation, observation and retry. This hard-cut
 contract is for new installations; it does not update an existing live Fleet.
+
+### Retained Estate Seed
 
 A retained estate seed has this shape:
 
@@ -59,6 +78,8 @@ listed. In particular, `pool_imports` must contain every retained pool asset,
 including idle, claimed and workload assets; omitting one fails closed rather
 than leaving its cycles outside the reviewed estate.
 
+### Generate Without Mutation
+
 Generate the current document without a Fleet mutation:
 
 ```bash
@@ -83,6 +104,8 @@ configuration exactly; policy drift fails closed. A seeded
 pool identity remains in the conservation set as it moves from idle bootstrap
 capacity through claimed state to a Component workload, without receiving pool
 minimum top-ups or being counted twice.
+
+### Mainnet Catalog And Root Readiness
 
 Mainnet generation reports catalog acquisition progress on stderr, including the
 active endpoints, elapsed time and completed endpoint collections, with a heartbeat
@@ -134,6 +157,8 @@ that plan to stop the Root, reinstall its sealed current initializer and start
 it again. The same journal records intent and the pre-install canister version;
 a lost response resumes observation instead of repeating an already completed
 reset.
+
+### Funding And Activation Forecasts
 
 Each Root must hold its own conservative stop-and-observation allowance. If it
 cannot cover that first effect, the typed headroom error names the Root,
@@ -200,6 +225,8 @@ response recovery, retained assets, conservation and effect-free replay. Exact
 evidence and the separate live-adoption boundary are in the
 [activation feedback report](../../audits/reports/2026-09/2026-09-08/activation-feedback.md).
 
+### Completed Fleets And Reset Selection
+
 For ordinary startup of a completed Fleet on the same build, reuse its retained
 current desired document with `fleet ensure <fleet> --desired <path>`, without
 `--reinstall` or a new `fleet generate`. Ensure resolves symbolic names in that
@@ -244,6 +271,8 @@ flow. Explicit reinstall requires no current endpoints on old code or temporary
 recovery artifact. The Root-start
 prerequisite itself authorizes no reinstall. Current source changes do not add
 endpoints to an installed release; protected queries require current authority.
+
+### Treasury, Fees, And Network Binding
 
 Retained-estate treasury policy requires an explicit identity: it must
 name an already-present, non-replaceable controlled canister. Omitting
@@ -358,6 +387,8 @@ Waiting events report elapsed seconds for the current effect or terminal check
 within this invocation, measured with a monotonic clock. The timer includes
 issuing and observing that effect, continues across provisioning stages, and
 starts anew when an invocation resumes it; it is not the operation's durable age.
+#### Progress And Timing
+
 When the existing Coordinator observation is available, provisioning detail names
 the phase and accepted/provisioned, directory and runtime Root counts, plus the
 Component count. For example, `ActivatingRuntimes` with `runtime Roots 0/1`
@@ -423,6 +454,8 @@ prerequisite and review reports retain their detailed output. Dated
 and the [combined paid-growth proof](../../audits/reports/2026-09/2026-09-07/canic-140-retained-creation-fee.md)
 record the completed focused qualification and its downstream acceptance limits.
 
+#### Estate Funding
+
 The management creation fee is explicit because it is network/Subnet economic
 authority and cannot be inferred from release metadata. Zero is appropriate
 only where the selected local platform actually charges zero. A wrong value
@@ -470,7 +503,7 @@ loss or funding above the reviewed bounds fails before a new debit. Terminal
 verification still reconciles every credit and exact creation debit; the funding
 review does not increase creation limits or excuse an unexplained balance change.
 
-### Operator ICP conversion
+### Operator ICP Conversion
 
 Fresh apply checks the complete reviewed operator debit before retaining a new
 execution journal. When it reports a shortfall, `canic fleet ensure <fleet>
@@ -522,6 +555,8 @@ operation and plan digest. After original convergence and effect-free replay,
 request a separate `--reinstall` review selecting the current build. Existing
 receipt, retry, authority and conservation checks determine whether the
 withdrawal paid and which recovery effects remain admissible.
+
+#### Pool Funding And Capacity
 
 Every autonomous pool creation retains its exact Ledger block, operation,
 amount, Ledger fee, management creation fee, readiness floor, execution margin
@@ -693,3 +728,5 @@ installs the current Store artifact.
 - [Review and apply a Fleet plan](fleet-ensure-plan-and-apply.md)
 - [Return to Fleet Ensure](fleet-ensure.md)
 - [Browse Fleet operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

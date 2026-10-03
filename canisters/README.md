@@ -25,3 +25,10 @@ PocketIC fixtures, but `canic app list` must not discover them as Apps.
   `cargo check -p canister_minimal -p canister_minimal_metrics -p audit_leaf_probe -p audit_root_probe -p audit_scaling_probe`
 - Build isolated test fixtures through Cargo, for example:
   `cargo check -p runtime_probe -p payload_limit_probe`
+
+## Continue From Here
+
+- [Read the testing rules](../TESTING.md)
+- [Browse the internal testing crate](../crates/canic-testing-internal/README.md)
+- [Browse all documentation](../docs/README.md)
+- [Back to the main README](../README.md)

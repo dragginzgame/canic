@@ -6,6 +6,22 @@ authority before ordinary Fleet convergence continues.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
+<img src="../../../assets/256x256/mechanic-help.png" align="left" width="96" alt="The Canic mechanic helping choose a bootstrap or capacity path" />
+
+**Operator outcome:** reviewed current authority over explicitly supplied
+infrastructure or additional pool canisters before ordinary Fleet convergence
+uses them.
+
+<br clear="left" />
+
+## At A Glance
+
+| Starting point | Procedure |
+| --- | --- |
+| New untracked Fleet with supplied Coordinator, Root, or Store | [Supplied infrastructure bootstrap](#supplied-infrastructure-bootstrap) |
+| Current Fleet that needs supplied pool canisters | [Capacity import](#add-supplied-capacity-to-a-current-fleet) |
+| Tracked completed estate moving releases | [Clean reinstall instead](fleet-ensure-clean-reinstall.md) |
+
 ## Supplied Infrastructure Bootstrap
 
 `fleet bootstrap` initializes a new, untracked current-release Fleet using explicit
@@ -43,6 +59,8 @@ snapshots before the initial review. Bootstrap journals infrastructure stops,
 wipes, installs, starts and controller handoffs itself. Declare disposable state,
 no outside obligations and no ownership by another Fleet explicitly.
 
+### Review And Stage Supplied Infrastructure
+
 With current CLI/runtime artifacts finalized, the supplied-ID staging flow is:
 
 ```sh
@@ -70,6 +88,8 @@ workloads do not run at this point. Repeat the exact apply digest after an
 interruption, including an interrupted local seed publication. Do not edit
 journals or regenerate a replacement operation. Completed bootstrap replay reads
 its local receipt before resolving ICP, even after ordinary Ensure has begun.
+
+### Registration Funding
 
 If initialization effects are all applied but registration cannot fit its balance
 or approved execution allowance, preserve the operation directory and selected
@@ -99,6 +119,8 @@ is available after initialization and before a registration successor has begun;
 it does not authorize replacement artifacts or pool import. Import the held pool
 canisters only after bootstrap reports `completed: true`.
 
+### Import Held Capacity
+
 Next import **every held ID for one Root together**, using pool-only declarations
 with the original reviewed bindings. Repeat separately for each Root. For the
 Root supplied in the staging request, the command shape is:
@@ -127,6 +149,8 @@ bootstrap survey's original source balances and the setup receipt's Root balance
 It clears capacity through Root, publishes both generator inputs without duplicating
 seeded IDs, and releases the allocation hold only after publication completes.
 
+### Continue With Workload Convergence
+
 Finally generate and review ordinary workload convergence from the same current
 configuration and release build:
 
@@ -154,7 +178,7 @@ keeps its existing live convergence verification. Retain `.canic` receipts,
 referenced immutable phase/content files and the published policy/seed together.
 
 
-## Add supplied capacity to a current Fleet
+## Add Supplied Capacity To A Current Fleet
 
 `fleet import` reviews and clears explicitly supplied canisters after a completed
 current-release Fleet or receipted infrastructure bootstrap setup. The Coordinator,
@@ -176,6 +200,8 @@ later effects instead of assuming a fixed version throughout application activit
 It does not invent an operator handoff receipt.
 Remove snapshots before reviewing import. Clearing code and application state is
 destructive.
+
+### Declare Supplied Capacity
 
 Create `deployments/capacity-import.toml` with the original physical identities and
 an explicit disposition for every `--canister`. All fields below are required;
@@ -210,6 +236,8 @@ cannot establish. Canic independently verifies the declared physical binding and
 absence from this Fleet's infrastructure and complete pool inventory. Unknown or
 incomplete declarations reject.
 
+### Review The Import
+
 For Gabriel, after the Toko hard cut has completed, an additional-capacity review
 has this form. Substitute exact IDs and choose debit limits appropriate to the
 observed balances; these example limits are not funding estimates or payments.
@@ -234,6 +262,8 @@ source subnet. Without `--source` or `--seed`, paths default to
 `deployments/<fleet>.toml` and `deployments/<fleet>.estate.toml`. The command prints
 an exact apply command retaining the environment, identity and ICP executable.
 `--json` exposes the complete journal/review and the same next command.
+
+### Funding Credits And Paid-Call Bounds
 
 Review shows original, transitional and final controllers; code/state clearing;
 separate source and Root balances, floors and maximum debits; paid-call limits;
@@ -281,6 +311,8 @@ issued controller/uninstall effects still require exact history evidence. Eight
 running sources require 105 calls before retries; the recommended allowance is
 224. Already issued allowances never change to match new workflow estimates.
 
+### Exhausted Allowance Recovery
+
 If a retained Host survey, submission or inspection allowance is exhausted, review
 an effect-free continuation with:
 
@@ -299,6 +331,8 @@ nothing. Repeat the original interrupted command after approval. Further exhaust
 requires a fresh explicit review; recovery performs no IC calls and cannot prove
 an uncertain paid effect completed. Exhausted Root authority requires the governed
 cycle-safe reset path, rather than a Host continuation.
+
+### Apply And Reconcile
 
 The policy and seed paths are publication outputs. Use mutable operator copies
 when release inputs must stay frozen. A semantic no-op preserves exact seed bytes,
@@ -350,3 +384,6 @@ certified absence window or an exhausted allowance remains fenced for recovery.
 - [Review and apply a Fleet plan](fleet-ensure-plan-and-apply.md)
 - [Read the recovery and cycle-safety rules](fleet-ensure-recovery-and-cycle-safety.md)
 - [Return to Fleet Ensure](fleet-ensure.md)
+- [Browse Fleet operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

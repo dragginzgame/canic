@@ -91,3 +91,10 @@ For delegated token and signature invariants, see:
 - New code must satisfy this contract end-to-end.
 - If one feature spans multiple layers, migrate all layers coherently.
 - If code appears to belong to multiple layers, split it.
+
+## Continue From Here
+
+- [Review the access architecture contract](ACCESS_ARCHITECTURE.md)
+- [Browse the architecture guides](../architecture/README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

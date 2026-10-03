@@ -1144,3 +1144,10 @@ When changing auth code:
 - update `docs/contracts/AUTH_DELEGATED_SIGNATURES.md` when wire structs or
   verification rules change
 - update this document when trust boundaries or auth flows change
+
+## Continue From Here
+
+- [Use Canic authentication](../features/authentication/README.md)
+- [Review the delegated-signature contract](../contracts/AUTH_DELEGATED_SIGNATURES.md)
+- [Browse the architecture guides](README.md)
+- [Back to the main README](../../README.md)

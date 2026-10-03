@@ -6,6 +6,24 @@ boundaries.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
+<img src="../../../assets/256x256/mechanic-attention.png" align="left" width="96" alt="The Canic mechanic raising a hand beside recovery safety rules" />
+
+**Recovery outcome:** interrupted or exceptional work reaches a reviewed,
+cycle-accounted terminal state without duplicating effects or reviving obsolete
+pre-1.0 state.
+
+<br clear="left" />
+
+## At A Glance
+
+| Situation | Read |
+| --- | --- |
+| Account for controlled cycles | [Cycle Conservation](#cycle-conservation) |
+| Remove or replace a canister | [Retirement Boundary](#retirement-boundary) |
+| Move between pre-1.0 releases | [Hard-Cut Boundary](#hard-cut-boundary) |
+| Retained evidence cannot be decoded | [Unreadable Retained Plan](#unreadable-retained-plan) |
+| Repeat or review completed recovery | [Retained Growth And Dependent Recovery Review](#retained-growth-and-dependent-recovery-review) |
+
 ## Cycle Conservation
 
 The reviewed maximum equation is:
@@ -261,7 +279,7 @@ identities and controlled cycle accounts, subject to reviewed protocol debit.
 Same-operation interruption recovery retains the exact current plan, journal,
 artifact bytes and paid-effect receipts.
 
-## Unreadable retained plan
+## Unreadable Retained Plan
 
 An unreadable plan or journal cannot authorize continuation or destructive
 spending. For active current-release work, missing required fields such as plan
@@ -295,7 +313,7 @@ reset procedure after the owner exits. For Canic's `LocalFleetSession`, follow
 Deleting just an Ensure plan is not a simulator reset. A simulator reset cannot
 resolve outstanding live payments or discard controlled real cycles.
 
-## Deliberate selected-build database wipe
+## Deliberate Selected-Build Database Wipe
 
 Follow [the current clean-reinstall sequence](fleet-ensure-clean-reinstall.md#clean-reinstall-from-physical-inventory)
 for both changed-build and identical-build resets, including its distinct operation
@@ -305,7 +323,7 @@ Logical workload assignments may change within the reviewed Root/subnet inventor
 Ordinary Ensure does not request another wipe; a later explicit `--reinstall`
 does. Do not combine `--reinstall` and `--apply`.
 
-## Retained growth and dependent recovery review
+## Retained Growth And Dependent Recovery Review
 
 During same-operation dependent recovery, Ensure compares retained descendant
 identities with the selected Root pool imports. Known assets missing from that
@@ -371,7 +389,7 @@ funding still requires fresh authority, fee and balance revalidation before any
 debit. The same informative pause also applies after an explicitly reviewed
 recovery phase when activation work remains.
 
-### Completed replay after operator account activity
+### Completed Replay After Operator Account Activity
 
 A completed plan still checks its original operator source and reviewed debit
 against the current Cycles Ledger balance. Unrelated account activity is outside
@@ -395,3 +413,5 @@ effect-free.
 - [Follow the clean-reinstall procedure](fleet-ensure-clean-reinstall.md)
 - [Return to Fleet Ensure](fleet-ensure.md)
 - [Browse Fleet operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

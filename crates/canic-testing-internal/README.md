@@ -27,3 +27,10 @@ with `governed-pocketic-tests`; fixture-library consumers retain the default
 recovery precedes two isolated internal workers, with serial execution within
 each worker. Exact single-case selection stays serial. See the
 [testing guide](../../TESTING.md) for targeted commands and retained diagnostics.
+
+## Continue From Here
+
+- [Read the testing rules](../../TESTING.md)
+- [Browse the test canisters](../../canisters/README.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)

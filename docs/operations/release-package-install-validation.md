@@ -10,6 +10,24 @@ changelogs and status docs, not in the operational validation entry point.
 Current release-line context comes from `docs/status/current.md`. This file is
 the canonical package/install validation reference for current release work.
 
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a package-validation checklist" />
+
+**Maintainer outcome:** account for package construction, installed and
+downstream smoke tests, artifact verification, and environment-owned gates
+without turning this checklist into release authority.
+
+<br clear="left" />
+
+## At A Glance
+
+| Need | Section |
+| --- | --- |
+| Select the package/install gates | [Existing Package And Install Gates](#existing-package-and-install-gates) |
+| Verify promoted artifacts | [Artifact Verification Expectations](#artifact-verification-expectations) |
+| Assign environment-owned work | [Environment And Ownership](#environment-and-ownership) |
+| Distinguish slice, RC, and release work | [Release Flow Boundary](#release-flow-boundary) |
+| Record candidate results | [Required RC Gates](#required-rc-gates) |
+
 ## Scope
 
 This checklist covers:
@@ -173,3 +191,12 @@ This checklist does not issue a release verdict. Record each required gate as
 `PASS`, `FAIL`, `BLOCKED`, `SKIPPED`, or `NOT_APPLICABLE` in the dated
 release-line closeout, including the owner and target environment for every
 unexecuted environment-specific gate.
+
+## Continue From Here
+
+- [Review the release validation matrix](release-validation-matrix.md)
+- [Review CI and deployment governance](../governance/ci-deployment.md)
+- [Follow recovery and retry procedures](recovery-retry-runbooks.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

@@ -78,3 +78,10 @@ canic fleet ensure <fleet> --desired <path> --apply <plan_sha256>
 Automated coding work runs only targeted checks. The human deployment/release
 workflow owns the full workspace tests, broad PocketIC matrix, validation,
 versioning, tagging and publication.
+
+## Continue From Here
+
+- [Follow the operator walkthrough](v1-operator-walkthrough.md)
+- [Review the release validation matrix](../operations/release-validation-matrix.md)
+- [Browse the architecture guides](README.md)
+- [Back to the main README](../../README.md)

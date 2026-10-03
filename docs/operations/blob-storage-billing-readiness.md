@@ -8,6 +8,23 @@ or automatic funding. Product backends may orchestrate the same status, sync,
 and fund endpoints programmatically, but product frontends should not become
 responsible for provisioning blob-storage billing during normal upload flows.
 
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a blob-storage billing checklist" />
+
+**Operator outcome:** identify the billing host, inspect its configuration and
+Cashier state, synchronize gateway Principals, and confirm readiness without
+moving provisioning authority into a product frontend.
+
+<br clear="left" />
+
+## At A Glance
+
+| Task | Section |
+| --- | --- |
+| Select the endpoint-owning canister | [Target](#target) |
+| Inspect, synchronize, fund, and verify | [Operator Flow](#operator-flow) |
+| Preserve authority and payment boundaries | [Safety Rules](#safety-rules) |
+| Recheck after changing Wasm | [After Upgrade](#after-upgrade) |
+
 ## Target
 
 Choose the blob-storage billing host canister as `<canister-or-role>`.
@@ -134,3 +151,11 @@ canic blob-storage status <fleet> <canister-or-role>
 
 Confirm billing configuration, last gateway sync timestamp, gateway principal
 count, funding status, and readiness blockers still match expectations.
+
+## Continue From Here
+
+- [Read the Blob Storage feature guide](../features/blob-storage/README.md)
+- [Integrate blob storage](blob-storage-integration.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

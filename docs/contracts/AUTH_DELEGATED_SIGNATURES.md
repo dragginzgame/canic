@@ -502,3 +502,10 @@ delegation epoch rather than login volume.
 The following are explicitly test-only or demo-local:
 
 - `create_account` and `plan_create_account` in fleet demo canisters
+
+## Continue From Here
+
+- [Read the authentication design](../architecture/authentication.md)
+- [Use Canic authentication](../features/authentication/README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)
