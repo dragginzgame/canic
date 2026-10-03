@@ -9,16 +9,14 @@ service it may represent. Canic keeps those identities separate so an
 application login cannot accidentally become permission to manage canisters or
 spend their cycles.
 
-```text
-Calling canister identity -----------+
-                                     |
-Represented user or service proof ---+--> endpoint guard --> application logic
-                                     |
-Receiver's allowed-role policy ------+
+<p align="center">
+  <a href="../../../assets/endpoint-access-checks.jpg">
+    <img src="../../../assets/endpoint-access-checks.jpg" alt="Calling canister identity, represented user or service proof, and the receiver's allowed-role policy feed into an endpoint guard before application logic runs" width="650" />
+  </a>
+</p>
 
-Management methods use the calling canister's infrastructure authority.
-An application token never becomes controller or Fleet authority.
-```
+Management methods use the calling canister's infrastructure authority. An
+application token never becomes controller or Fleet authority.
 
 ## What It Provides
 
@@ -41,7 +39,7 @@ creation, placement, upgrade, recycling, and cycles operations continue to use
 the raw transport caller and protected topology authority. Canic does not turn
 an application token into controller or Fleet authority.
 
-## Start Here
+## Continue From Here
 
 - [Authentication architecture](../../architecture/authentication.md)
 - [Receiver-local caller authority proposal](../../architecture/authentication.md#receiver-local-caller-authority--design-proposal-2026-10-03)
@@ -49,3 +47,5 @@ an application token into controller or Fleet authority.
 - [Access architecture](../../contracts/ACCESS_ARCHITECTURE.md)
 - [Authentication configuration](../../../CONFIG.md#authdelegated_tokens)
 - [Root proof provisioning](../../operations/root-proof-provisioning.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)

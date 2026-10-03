@@ -8,17 +8,11 @@ compare that evidence before deciding to deploy anything.
 Building, inspecting evidence, and deploying are deliberately separate actions.
 An evidence check can report a problem, but it cannot modify a Fleet.
 
-```text
-Rust source + canic.toml + Cargo.lock + governed tools
-                         |
-                    canic build
-                         |
-              +----------+----------+
-              |          |          |
-             Wasm      Candid    provenance
-              \          |          /
-               +---- reviewed Fleet plan
-```
+<p align="center">
+  <a href="../../../assets/canic-build-deploy.jpg">
+    <img src="../../../assets/canic-build-deploy.jpg" alt="Canic turns Rust source and App configuration into qualified build artifacts and evidence before a desired Fleet plan is reviewed and applied" width="650" />
+  </a>
+</p>
 
 `canic build <app> --json` writes one schema-1 result to stdout; progress and
 tool diagnostics stay on stderr. Read `release_build_id` and `release_manifest`
@@ -81,7 +75,7 @@ or adopt discovered resources. Ordinary deployment convergence belongs to the
 reviewed `canic fleet ensure` workflow; bootstrap, capacity import and other
 explicit control operations retain their own reviewed authority.
 
-## Start Here
+## Continue From Here
 
 - [Build artifact architecture](../../architecture/build-artifacts.md)
 - [Evidence envelopes](../../architecture/evidence-envelopes.md)
@@ -89,3 +83,5 @@ explicit control operations retain their own reviewed authority.
 - [Managed-App qualification](managed-app-qualification.md)
 - [Fixture build artifacts](fixture-artifacts.md)
 - [Operator walkthrough](../../architecture/v1-operator-walkthrough.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)

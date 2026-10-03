@@ -28,8 +28,13 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Preserves frozen input bytes for unchanged capacity imports and corrects
   authentication, native initialization and repeated memory-restoration coverage.
   Refreshes newcomer documentation with a concise landing page, visual model guide
-  and task-oriented navigation; aligns reset, configuration, build and platform
-  instructions with the current implementation. Includes the FR1 discovery
+  and task-oriented navigation; replaces introductory text diagrams with supplied
+  artwork and splits the Fleet Ensure operator reference into focused desired-state,
+  plan/apply, reinstall, bootstrap/capacity, automation and recovery guides.
+  Refreshes the individual feature, operations, architecture, design-authoring,
+  audit and code-hygiene indexes with visual workflows, task choosers and
+  consistent continuation navigation; aligns reset, configuration, build and
+  platform instructions with the current implementation. Includes the FR1 discovery
   checkpoint, preserves uncertain pool-creation effects across later refusals,
   and adopts the current memory, query, timer and testkit dependencies.
 

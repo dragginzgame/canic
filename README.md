@@ -33,14 +33,29 @@ uncertain network effects.
 ## How It Works
 
 <p align="center">
-  <a href="assets/how-works.jpg">
-    <img src="assets/how-works.jpg" alt="Canic workflow from Rust canister code and App configuration through build, plan, review, and apply to a Fleet Coordinator, per-Subnet Roots, Wasm Stores, and application Components" width="650" />
+  <a href="assets/canic-build-deploy.jpg">
+    <img src="assets/canic-build-deploy.jpg" alt="Canic build and deployment workflow from Rust canister code and App configuration through build evidence, desired Fleet planning, review, and apply" width="650" />
   </a>
 </p>
 
-The CLI plans and applies reviewed changes from the operator's computer. The
-Coordinator manages the Fleet-wide view, while each Root performs approved work
-for the application Components on its own Subnet.
+The first stage stays under operator control. `canic build` produces the Wasm
+and evidence for the exact App configuration. `canic fleet ensure` then combines
+those artifacts, the desired Fleet, and live IC observations into a plan without
+making paid changes.
+
+Applying the reviewed plan digest is the boundary between local intent and
+IC-side effects. After that approval, Canic's management canisters perform only
+the work admitted by that plan and retain the evidence needed for safe retry.
+
+<p align="center">
+  <a href="assets/canic-ic-fleet.jpg">
+    <img src="assets/canic-ic-fleet.jpg" alt="IC Fleet structure with a Fleet Coordinator, one Root and Wasm Store on each occupied Subnet, and application Components" width="650" />
+  </a>
+</p>
+
+The Coordinator manages the Fleet-wide view. Each occupied Subnet has a Root
+that performs approved work for its local application Components and uses its
+Wasm Store for qualified installation artifacts.
 
 [Read the complete model and terminology](docs/getting-started/how-canic-works.md).
 

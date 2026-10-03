@@ -514,6 +514,14 @@ callouts retain descriptive alternative text. Detailed contracts, active
 designs, audits and historical records retain their precise technical language
 and evidence role.
 
+The next design pass carries that visual language through the focused model,
+installation, first managed App, configuration and documentation-index pages.
+It reuses the split build/deploy and Fleet-structure diagrams, and adds compact
+operator/runtime, installation-path, minimal-topology, milestone,
+configuration-ownership, App-hierarchy and audience-route maps. Small 256-pixel
+callouts are integrated beside orientation, checklist and warning text rather
+than used as full-width section art.
+
 ## Cross-Component caller authority assessment — 2026-10-03
 
 At the maintainer's request, assess the missing .51 membership flow as a whole

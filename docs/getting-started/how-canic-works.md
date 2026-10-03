@@ -8,9 +8,13 @@ the terms used throughout the rest of the documentation.
 
 ## Why Use Canic?
 
+<img src="../../assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic thinking about a canister" />
+
 An individual canister combines program code with persistent data. A real
 application often needs several of them: an API, user or data shards, indexes,
 workers, storage gateways, and management infrastructure.
+
+<br clear="left" />
 
 Without a shared application model, each canister may be easy to understand
 while the system as a whole becomes difficult to operate. The operator still
@@ -56,6 +60,12 @@ The operator reviews a concrete plan and explicitly applies its exact digest.
 
 ## The Two Parts Of Canic
 
+<p align="center">
+  <a href="../../assets/operator-to-canisters.jpg">
+    <img src="../../assets/operator-to-canisters.jpg" alt="Host-side CLI tools, credentials, builds, evidence, plans, and recovery on the operator's computer send approved work to the runtime and application inside IC canisters" width="650" />
+  </a>
+</p>
+
 | Part | Runs where | Responsibility |
 | --- | --- | --- |
 | Rust runtime | Inside application and management canisters | Lifecycle, configuration, authentication, persistent state, timers, calls, status, and protected management workflows |
@@ -66,23 +76,11 @@ identity keys, or deployment credentials.
 
 ## From Source To A Running Fleet
 
-```text
- Rust canister code            App configuration
-                              (canic.toml)
-          \                         /
-           +------ canic build ----+
-                       |
-                       v
-             Wasm artifacts + evidence
-                       |
- Desired Fleet --------+-------- live IC observations
-                       |
-                       v
-              plan -> review -> apply
-                       |
-                       v
-                 Fleet on the IC
-```
+<p align="center">
+  <a href="../../assets/canic-build-deploy.jpg">
+    <img src="../../assets/canic-build-deploy.jpg" alt="Canic build and deployment workflow from Rust canister code and App configuration through build evidence, desired Fleet planning, review, and apply" width="650" />
+  </a>
+</p>
 
 1. **Write the canisters.** Application code remains ordinary Rust and owns its
    product behavior.
@@ -105,17 +103,15 @@ identity keys, or deployment credentials.
 
 ## The Fleet Control Plane
 
-```text
-Operator's computer
-  desired Fleet -> plan -> reviewed digest -> apply
-                                            |
-                                            v
-IC network                             Fleet Coordinator
-                                      /                 \
-                              Subnet A Root       Subnet B Root
-                               /        \          /        \
-                         Wasm Store  Components  Store    Components
-```
+Applying the reviewed plan is the boundary between local operator intent and
+IC-side effects. The resulting Fleet has one Coordinator for the whole
+deployment and one Root for each occupied Subnet.
+
+<p align="center">
+  <a href="../../assets/canic-ic-fleet.jpg">
+    <img src="../../assets/canic-ic-fleet.jpg" alt="IC Fleet structure with a Fleet Coordinator, one Root and Wasm Store on each occupied Subnet, and application Components" width="650" />
+  </a>
+</p>
 
 - The **Fleet Coordinator** owns Fleet-wide composition planning and shared
   publication.
@@ -144,6 +140,8 @@ IC network                             Fleet Coordinator
 
 ## When To Use Only Part Of Canic
 
+<img src="../../assets/256x256/mechanic-idea.png" align="left" width="110" alt="The Canic mechanic presenting an idea" />
+
 Canic is a pick-and-choose system rather than one mandatory stack. A canister
 role enables only the Rust runtime features it needs, while host-side tools stay
 on the operator's computer.
@@ -163,6 +161,8 @@ Billing-backed blob storage,
 for example, includes the base blob-storage feature. Each feature guide states
 its own requirements and boundary.
 
+<br clear="left" />
+
 The complete model becomes most valuable as soon as several canisters must be
 built, funded, placed, changed, and recovered as one application.
 
@@ -171,5 +171,6 @@ built, funded, placed, changed, and recovered as one application.
 - [Install Canic](../../INSTALLING.md)
 - [Build the first managed application](minimal-managed-fleet.md)
 - [Configure an App](../../CONFIG.md)
-- [Browse feature guides](../features/README.md)
-- [Read the Fleet ensure workflow](../features/operations/fleet-ensure.md)
+- [Choose the Canic features you need](../features/README.md)
+- [Plan and operate a Fleet](../operations/README.md)
+- [Browse all documentation](../README.md)

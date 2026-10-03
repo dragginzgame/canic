@@ -1,8 +1,40 @@
 # Canic Design Authoring
 
+Design documents describe accepted or proposed implementation work. They do
+not replace current feature guides, operational procedures, or exact contracts.
+
+<img src="../../assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic considering where a design belongs" />
+
 Every new minor design must follow
 [delivery cadence governance](../governance/delivery-cadence.md) and include a
 release-batch plan before implementation begins.
+
+Before writing, decide whether the work is an unscheduled idea, an accepted
+release-line design, or historical material. That choice determines where the
+document belongs and whether it grants implementation authority.
+
+<br clear="left" />
+
+## Choose A Destination
+
+| State of the work | Location | Meaning |
+| --- | --- | --- |
+| Interesting but unscheduled | [`ideas/`](ideas/README.md) | No release position or implementation authority |
+| Accepted and scheduled | Numbered top-level directory | Maintained release lineage with a design and status tracker |
+| Completed or superseded | `archive/` | Immutable historical design record |
+| Temporary evidence for an active batch | `working/<line>-<topic>/` | Bounded source material owned by that batch |
+
+## Authoring Workflow
+
+1. State the problem, owner, security boundary, and concrete completion
+   condition.
+2. Identify affected runtime, CLI, configuration, protocol, persistence, and
+   operator surfaces.
+3. Divide the work into coherent release batches using the template below.
+4. Include positive, adversarial, interruption, recovery, propagation, and
+   cleanup evidence where the behavior requires them.
+5. Link the design from its status tracker and keep implementation progress in
+   that tracker rather than rewriting the accepted design as a diary.
 
 ## Directory Meaning
 
@@ -116,3 +148,12 @@ Each batch should include its direct implementation, positive and adversarial
 tests, interruption/retry evidence where applicable, documentation, generated
 or fixture propagation and required cleanup. Do not create separate batches
 for ordinary compile fallout or changelog maintenance.
+
+## Continue From Here
+
+- [Read delivery cadence governance](../governance/delivery-cadence.md)
+- [Review deferred design ideas](ideas/README.md)
+- [Check the current implementation handoff](../status/current.md)
+- [Find architecture documents](../architecture/README.md)
+- [Find audit methods and evidence](../audits/README.md)
+- [Browse all documentation](../README.md)

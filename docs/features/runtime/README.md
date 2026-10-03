@@ -9,16 +9,11 @@ Applications add the public `canic` crate as a Rust dependency. The crate
 connects Canic's lifecycle and generated configuration while leaving business
 logic in the application package.
 
-```text
-Application methods and business logic
-                  |
-                  v
-        Canic runtime and guards
-        /          |           \
- lifecycle   persistent data   calls and timers
-        \          |           /
-                  IC
-```
+<p align="center">
+  <a href="../../../assets/application-and-runtime.jpg">
+    <img src="../../../assets/application-and-runtime.jpg" alt="Application methods and business logic connect through Canic runtime and guards to lifecycle, persistent data, calls and timers on the Internet Computer" width="650" />
+  </a>
+</p>
 
 ## What It Provides
 
@@ -117,7 +112,7 @@ the owners' replay or journal state supply idempotency if the old continuation
 later resumes. Application timers, lifecycle deferrals and advisory cleanup
 remain in their separately documented reliability classes.
 
-## Start Here
+## Continue From Here
 
 - [Canister dependencies](../../../INSTALLING.md#canister-dependencies)
 - [Facade crate guide](../../../crates/canic/README.md)
@@ -126,3 +121,5 @@ remain in their separately documented reliability classes.
 - [Configuration reference](../../../CONFIG.md)
 - [Runtime architecture contract](../../contracts/ARCHITECTURE.md)
 - [Released 0.104 timer/lifecycle hard cut](../../design/archive/0.104-ic-timers-consumer-hard-cut/0.104-design.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)

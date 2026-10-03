@@ -1,13 +1,29 @@
-# Operations Docs
+# Operations Reference
 
 These documents are for people operating Canic or preparing a Canic release.
 They cover deployment, recovery, funding, diagnostics, packaging, and release
 checks.
 
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding an operations checklist" />
+
 If you are deploying an application for the first time, begin with
 [Installing Canic](../../INSTALLING.md), then follow the
 [Fleet ensure guide](../features/operations/fleet-ensure.md). The remaining
 pages are references for a specific operational task or failure.
+
+<br clear="left" />
+
+## Choose An Operations Path
+
+| If you need to… | Start here |
+| --- | --- |
+| Deploy or change a Fleet | [Operations and diagnostics](../features/operations/README.md) |
+| Choose the correct Fleet Ensure workflow | [Fleet Ensure overview](../features/operations/fleet-ensure.md) |
+| Recover an interrupted operation | [Recovery and retry runbooks](recovery-retry-runbooks.md) |
+| Diagnose Fleet funding | [Fleet funding](fleet-funding.md) |
+| Back up or restore canisters | [Backup and restore](../features/backup-and-restore/README.md) |
+| Validate a release | [Release validation matrix](release-validation-matrix.md) |
+| Diagnose CI or packaging | [CI diagnostics](ci-diagnostics.md) and [package validation](release-package-install-validation.md) |
 
 ## Current Release Validation
 
@@ -34,10 +50,21 @@ validation procedures only.
 
 ## Fleet Operations
 
-- [Supplied infrastructure bootstrap](../features/operations/fleet-ensure.md#supplied-infrastructure-bootstrap)
+- [Fleet Ensure overview](../features/operations/fleet-ensure.md) selects the
+  correct workflow for ordinary convergence, reinstall, bootstrap, automation,
+  or recovery.
+- [Desired state](../features/operations/fleet-ensure-desired-state.md) covers
+  generation and the complete deployment contract.
+- [Plan and apply](../features/operations/fleet-ensure-plan-and-apply.md) covers
+  review, exact-digest approval, resumption, and no-effect replay.
+- [Supplied infrastructure bootstrap](../features/operations/fleet-ensure-bootstrap-and-capacity.md#supplied-infrastructure-bootstrap)
   reviews explicit infrastructure IDs and Coordinator setup.
-- [Capacity import](../features/operations/fleet-ensure.md#add-supplied-capacity-to-a-current-fleet)
+- [Capacity import](../features/operations/fleet-ensure-bootstrap-and-capacity.md#add-supplied-capacity-to-a-current-fleet)
   adds supplied canisters on an initialized Root's subnet.
+- [Clean reinstall](../features/operations/fleet-ensure-clean-reinstall.md)
+  replaces every pre-1.0 installation from selected physical inventory.
+- [Recovery and cycle safety](../features/operations/fleet-ensure-recovery-and-cycle-safety.md)
+  covers interruption, conservation, retirement, and exceptional recovery.
 - [Fleet funding](fleet-funding.md) documents Coordinator funding, direct
   cycle top-up, and manual Root ICP conversion and recovery.
 - [Backup and restore](../features/backup-and-restore/README.md) covers verified
@@ -75,3 +102,11 @@ validation procedures only.
   packaged downstream CLI proof.
 - [Packaged wasm store](0.56-packaged-wasm-store.md) documents the special
   packaged downstream `wasm_store` bootstrap proof.
+
+## Continue From Here
+
+- [Read the Fleet operations guide](../features/operations/README.md)
+- [Configure an App](../../CONFIG.md)
+- [Choose the Canic features you need](../features/README.md)
+- [Build your first managed application](../getting-started/minimal-managed-fleet.md)
+- [Browse all documentation](../README.md)
