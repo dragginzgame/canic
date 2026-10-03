@@ -4,20 +4,29 @@ This directory separates current audit policy and reusable definitions from
 retained historical evidence. Start here instead of browsing dated report
 artifacts directly.
 
-## Start Here
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding an audit checklist" />
 
-- To run or record an audit, read [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
-- To review the architecture invariants every audit applies, read
-  [META-AUDIT.md](META-AUDIT.md).
-- To select an active method or find its canonical owner, read
-  [METHODS.md](METHODS.md).
-- To execute a required release-line end-to-end trace, use the fingerprinted
-  [mandatory trace protocol](mandatory-trace-protocol.md).
-- For repeatable auth and system audits, use [recurring/](recurring/README.md).
-- For module-surface review or an explicitly requested cleanup, use
-  [modular/](modular/README.md).
-- For numbered release-line closeouts, use
-  [release-lines/](release-lines/README.md).
+Audit methods define how to examine a property. Reports record what one audit
+found at a particular point in time. Historical reports remain evidence, but
+they do not define current product behavior or release readiness by themselves.
+
+<br clear="left" />
+
+## Choose An Audit Path
+
+| If you need to… | Start here |
+| --- | --- |
+| Run and record an audit | [Audit how-to](AUDIT-HOWTO.md) |
+| Review the invariants every audit applies | [Meta-audit](META-AUDIT.md) |
+| Select the current method and its owner | [Methods catalog](METHODS.md) |
+| Run a required release-line end-to-end trace | [Mandatory trace protocol](mandatory-trace-protocol.md) |
+| Repeat an authentication or system audit | [Recurring audits](recurring/README.md) |
+| Review module surface or perform requested cleanup | [Modular audits](modular/README.md) |
+| Close out a numbered release line | [Release-line audits](release-lines/README.md) |
+| Find historical audit runs | [Report archive](reports/README.md) |
+
+## Working And Supporting Evidence
+
 - Active design batches may keep necessary source inventories or bounded
   supporting investigations under `working/<line>-<topic>/`; the owning
   compact design or status must link them and they must be consolidated or
@@ -64,3 +73,12 @@ New audit runs must keep the Markdown report as the primary evidence. Raw
 artifacts are retained only when they are necessary for reproducibility or a
 future comparison, and must follow the bounded artifact rules in
 [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
+
+## Continue From Here
+
+- [Run or record an audit](AUDIT-HOWTO.md)
+- [Review the active method catalog](METHODS.md)
+- [Read the architecture baseline](../architecture/README.md)
+- [Review the design roadmap](../design/README.md)
+- [Check the current implementation handoff](../status/current.md)
+- [Browse all documentation](../README.md)

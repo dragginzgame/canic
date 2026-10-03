@@ -37,10 +37,12 @@ backup repository, and enabling it does not upload Canic backups. Non-billing
 gateway administration also does not imply Cashier authority or monetary
 automation.
 
-## Start Here
+## Continue From Here
 
 - [Runtime feature selection](../../../crates/canic/README.md#feature-contract)
 - [Blob storage integration](../../operations/blob-storage-integration.md)
 - [Billing readiness](../../operations/blob-storage-billing-readiness.md)
 - [Blob storage inventory contract](../../contracts/BLOB_STORAGE_INVENTORY.md)
 - [Cashier inventory contract](../../contracts/BLOB_STORAGE_CASHIER_INVENTORY.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)
