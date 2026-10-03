@@ -57,6 +57,7 @@ pub mod placement;
 pub mod pool;
 pub mod pool_import;
 pub mod public_status;
+pub mod release_intents;
 pub mod release_receipts;
 pub mod role;
 pub mod root_store;

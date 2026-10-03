@@ -4,9 +4,10 @@
 which kinds of canisters make up the App, how they relate to one another, which
 optional features they use, and how far they are allowed to grow.
 
-The file does **not** choose concrete canister IDs, controllers, funding, or IC
-subnets. Those deployment decisions belong to a separate desired Fleet file so
-the same App source can be installed in more than one environment.
+The file defines reusable role funding policies, including initial cycles and
+top-ups. Concrete canister IDs, controllers, physical IC subnets and reviewed
+deployment funding belong to a separate desired Fleet file so the same App
+source can be installed in more than one environment.
 
 <img src="assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic thinking about application configuration" />
 
@@ -79,7 +80,7 @@ endpoint bundle.
 
 <br clear="left" />
 
-Physical Subnets, concrete canister identities, controllers, funding, and
+Physical Subnets, concrete canister identities, controllers, deployment funding, and
 decisions to replace or delete canisters belong to the separately reviewed
 desired Fleet, not to App source configuration.
 
@@ -102,11 +103,13 @@ Canic treats config/env identity as startup invariants. Missing env data is a fa
   - One root may manage several admitted Component Specs.
   - The protected `fleet_subnet_root_pid` env field identifies the exact
     owning Fleet Subnet Root, not a Fleet-wide singleton root.
-- Non-root env: children must receive a complete `EnvBootstrapArgs` in `CanisterInitPayload` from root.
-  - The current transitional selector names the exact owning Component Spec;
-    the frozen protected `ComponentBinding` replaces it when root-local
-    allocation can supply a real concrete Component identity.
-  - Missing env fields always trap (no local fallback).
+- Managed application env: Root supplies `CanisterInitPayload` with exact
+  `CanisterInitAuthority::Component` or `ComponentChild` authority, release and
+  install identities, protected deployment policy and selected admission data.
+  - The authority carries the owning Root and the concrete `ComponentBinding`
+    or `ComponentChildBinding`; Canic derives the runtime env from that binding.
+  - Missing or inconsistent authority refuses initialization. The explicit
+    standalone-local development path does not provide managed Fleet authority.
 
 ---
 

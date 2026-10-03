@@ -7,6 +7,8 @@
 #[cfg(test)]
 pub(super) mod tests;
 
+mod assessment;
+
 use crate::{
     fleet_ensure::{
         model::release::{FleetReleaseReviewRecord, FleetReleaseRole},
@@ -30,6 +32,8 @@ use ic_agent::Agent;
 use serde::Deserialize;
 use std::{collections::BTreeMap, time::Duration};
 use thiserror::Error;
+
+pub(in crate::fleet_ensure) use assessment::assessment_facts;
 
 const RESPONSE_BYTES: usize = 256 * 1024;
 const MAXIMUM_CENSUS_BYTES: usize = 8 * 1024 * 1024;

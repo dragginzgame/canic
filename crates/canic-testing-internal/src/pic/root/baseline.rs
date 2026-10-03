@@ -44,13 +44,12 @@ impl RootBaselineRecipe {
     ) -> Result<Self, BaselinePoolContractError> {
         Ok(Self {
             id: FixtureRecipeId::try_new(identity)?,
-            reset_requirements: ResetRequirements::try_new([
-                ResetRequirement::CanisterSnapshots,
-                ResetRequirement::CanisterCycles(CycleResetPolicy::TopUpTo(
-                    crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-                )),
-                ResetRequirement::PocketIcTime(TimeResetPolicy::PreserveCurrent),
-            ])?,
+            reset_requirements: ResetRequirements::try_new(
+                CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
+                [ResetRequirement::PocketIcTime(
+                    TimeResetPolicy::PreserveCurrent,
+                )],
+            )?,
             spec,
         })
     }

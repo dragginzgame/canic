@@ -4,6 +4,8 @@
 //! Does not own: business policy, workflow orchestration, or endpoint DTOs.
 //! Boundary: storage ops facade over stable intent records.
 
+pub mod release;
+
 #[cfg(test)]
 mod tests;
 

@@ -27,13 +27,20 @@ pub(super) fn assert_complete(
     };
     replace_registry(&expanded_registry);
     let collect = || {
-        runtime.block_on(pool::collect_with_agent(
-            agent,
-            &expanded,
-            &expanded_registry,
-        ))
+        runtime
+            .block_on(pool::collect_with_agent(
+                agent,
+                &expanded,
+                &expanded_registry,
+            ))
+            .map(assess_pools)
     };
-    assert_eq!(collect().unwrap().roots, [first, second.clone()]);
+    let assessed = collect().unwrap();
+    assert_eq!(assessed.evidence.roots, [first, second.clone()]);
+    assert_eq!(assessed.roots[1].facts.root, second.root);
+    assert_eq!(assessed.roots[1].import, None);
+    assert_eq!(assessed.roots[1].creation, None);
+    assert!(assessed.roots[1].facts.custody_candidates.is_empty());
     pic.update_call(
         second.root,
         review.authority.operator,

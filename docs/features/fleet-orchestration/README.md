@@ -5,8 +5,9 @@ orchestration is the process of creating its canisters, installing the intended
 code, supplying cycles, and keeping the deployed result aligned with an
 operator-approved plan.
 
-Canic first shows the operator what it intends to do. Only an explicitly
-approved `canic fleet ensure` plan may make those changes. If an operation is
+Canic first shows the operator what it intends to do. Ordinary deployment
+convergence requires an explicitly approved `canic fleet ensure` plan;
+bootstrap and capacity import have their own reviewed operations. If an operation is
 interrupted or its result is unclear, Canic records enough information to check
 what happened before trying again.
 
@@ -37,8 +38,10 @@ drain effects additionally retain exact replay identities.
 
 Application canisters never receive filesystem, repository, identity-key, or
 operator configuration authority. A material canister must explicitly expose
-an idempotent treasury drain before Canic may replace or delete it. Historical
-install and recovery state is not a current authority.
+an idempotent treasury drain before Canic may physically replace or delete it.
+ID-preserving clean reinstall retains native cycles on the selected IDs while
+clearing application and framework state. Historical install and recovery state
+is not a current authority.
 
 ## Continue From Here
 

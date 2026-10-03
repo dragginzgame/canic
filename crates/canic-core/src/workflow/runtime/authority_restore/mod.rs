@@ -4,6 +4,9 @@
 //! Does not own: controller authentication, stable record encoding, or external snapshot effects.
 //! Boundary: authority endpoints delegate here before host stop/capture/start operations.
 
+#[cfg(test)]
+mod tests;
+
 use crate::{
     InternalError,
     domain::policy::pure::{
@@ -57,10 +60,15 @@ impl AuthorityRestoreWorkflow {
         suspend_role: impl FnOnce() -> Result<(), TimerError>,
     ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
         require_root_authority_runtime()?;
-        prepare_release_with(request, require_settled, || {
-            suspend_role()?;
-            TimerAuthorityWorkflow::suspend_root()
-        })
+        prepare_release_with(
+            request,
+            TimerAuthorityWorkflow::require_root_resumable,
+            require_settled,
+            || {
+                suspend_role()?;
+                TimerAuthorityWorkflow::suspend_root()
+            },
+        )
     }
 
     /// Coordinator counterpart; the caller owns Registry/funding/provisioning
@@ -75,6 +83,7 @@ impl AuthorityRestoreWorkflow {
         require_coordinator_authority_runtime()?;
         prepare_release_with(
             request,
+            TimerAuthorityWorkflow::require_coordinator_resumable,
             require_settled,
             TimerAuthorityWorkflow::suspend_coordinator,
         )
@@ -152,6 +161,7 @@ impl AuthorityRestoreWorkflow {
 
 fn prepare_release_with(
     request: AuthorityReleaseRequest,
+    preflight: impl FnOnce() -> Result<(), TimerError>,
     require_settled: impl FnOnce() -> Result<(), InternalError>,
     suspend: impl FnOnce() -> Result<(), TimerError>,
 ) -> Result<AuthorityRestoreFenceStatusResponse, InternalError> {
@@ -161,16 +171,33 @@ fn prepare_release_with(
     if AuthorityRestoreFenceOps::mutation_fence_for(authority)? == AuthorityMutationFence::Release {
         return AuthorityRestoreFenceOps::status();
     }
-    require_settled()?;
-    suspend().unwrap_or_else(|error| {
-        trap_timer_transition("suspend timers before sealing Fleet release", error)
-    });
+    quiesce_release(preflight, require_settled, suspend)?;
     Ok(
         AuthorityRestoreFenceOps::seal_release(request, authority, IcOps::now_nanos())
             .unwrap_or_else(|error| {
                 trap_authority_transition("commit release after producer suspension", error)
             }),
     )
+}
+
+// Both checks are read-only and synchronous. A busy refusal must leave every
+// producer intact; only a failure after cancellation starts requires rollback.
+fn quiesce_release(
+    preflight: impl FnOnce() -> Result<(), TimerError>,
+    require_settled: impl FnOnce() -> Result<(), InternalError>,
+    suspend: impl FnOnce() -> Result<(), TimerError>,
+) -> Result<(), InternalError> {
+    preflight().map_err(|error| match error {
+        TimerError::ActiveJob(_) | TimerError::RunningClaim(_) | TimerError::CustodyBusy => {
+            InternalError::conflict()
+        }
+        error => error.into(),
+    })?;
+    require_settled()?;
+    suspend().unwrap_or_else(|error| {
+        trap_timer_transition("suspend timers before sealing Fleet release", error)
+    });
+    Ok(())
 }
 
 fn trap_timer_transition(context: &str, error: TimerError) -> ! {

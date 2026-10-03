@@ -82,9 +82,10 @@ prefers those canonical paths and passes them directly to every transform, so
 shell `PATH` changes are not required for `canic build`; PATH is used only when
 the canonical installation is absent. Installation warns when `HOME=/`, while
 missing-tool diagnostics name the canonical path that was checked. Explicit
-`CARGO_TARGET_DIR`, `CARGO_INCREMENTAL` and `RUSTC_WRAPPER` values remain
-authoritative. Otherwise Make and Canic artifact builds discover `sccache` and
-keep deterministic Wasm builds non-incremental.
+`CARGO_TARGET_DIR` and Cargo compiler-wrapper settings remain authoritative.
+Canic artifact builds force `CARGO_INCREMENTAL=0` and use Cargo's selected
+wrapper; configure `RUSTC_WRAPPER` or Cargo settings to use a compiler cache.
+The repository's Make flow separately discovers `sccache` when no wrapper is set.
 
 ## ICP CLI compatibility
 
@@ -243,9 +244,11 @@ For additional pool canisters on a ready Root's subnet, follow
 [capacity import](docs/features/operations/fleet-ensure.md#add-supplied-capacity-to-a-current-fleet).
 Both require their own reviewed authority before ordinary Fleet convergence.
 
-Release transitions are reinstall-only. Completed-source review requires valid
-current-schema records and receipts; it does not decode historical contracts or
-fill missing fields. Preserve unreadable evidence and follow the
+Release transitions are reinstall-only. Explicit reset review uses the selected
+current build, complete physical inventory and current controllers; it does not
+require a completed predecessor or a readable predecessor application schema.
+Preserve retained evidence and reconcile genuinely uncertain paid or controller
+effects before reset. Follow the
 [retained-plan guidance](docs/features/operations/fleet-ensure.md#unreadable-retained-plan).
 Every controlled canister with recoverable cycles must be accounted for before
 destructive effects.
@@ -255,10 +258,13 @@ destructive effects.
 <img src="assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
 
 The IC does not let a controller pull cycles from an arbitrary canister. A
-material canister may be replaced or deleted only when it exposes the exact
-configured, idempotent treasury-drain contract. Without it, Canic returns a
-typed blocker and leaves the canister untouched. Never bypass that blocker with
-a raw stop/delete command.
+canister with a material cycle balance may be physically replaced or deleted
+only when it exposes the exact configured, idempotent treasury-drain contract.
+Without it, Canic returns a typed blocker and leaves the canister untouched.
+Never bypass that blocker with
+a raw stop/delete command. ID-preserving clean reinstall retains native cycles
+on the selected canisters; it clears their application and framework state
+under a separate reviewed reset operation.
 
 <br clear="left" />
 

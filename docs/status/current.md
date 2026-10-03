@@ -1,7 +1,363 @@
 # Current handoff — 2026-10-03
 
-Review progress, closure-count limits and remaining owners are summarized in
-[the code-review status](../code-review/status.md).
+This file records implementation and validation handoffs. Track bugs, review
+findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
+
+## .52 checkpoint qualification — 2026-10-03
+
+The maintainer confirmed dependency edits are finished and needs an early push.
+The open .52 draft now includes the implemented FR1 discovery/assessment APIs,
+pool-creation uncertainty and release-preflight corrections, alongside the
+existing Host/Backup and documentation work. The whole-Fleet release command
+remains unfinished; this checkpoint does not close FR1. The earlier waiting and
+whole-batch readiness statements below describe their earlier source states.
+
+Current selection: ic-memory 0.20.0, ic-query 0.45.2, ic-timers 0.9.2 and ic-testkit
+0.13.0. The manifest and lockfile already agreed; no additional dependency update
+was necessary. Adapted both test baseline recipes to testkit's explicit cycle
+policy constructor, preserving mandatory snapshots, minimum-cycle top-up and
+current time. This fixes the actual compile failure from removed reset variants.
+
+Affected-package Clippy passes with warnings denied. Selected native tests pass
+(11 Core, four control-plane, 73 Host; three simulator cases excluded), as do
+two receipt-storage and 15 timer inventory checks and the canonical Coordinator
+Candid contract. Embedded peer refresh and verification pass; its SHA-256 is
+`368dc211042138128fcf3413ac49167189def2e2c951594721f3938aebcc09d7`.
+Four exact PocketIC proofs pass on this graph: signed Host ownership/obligation
+collection (3.78s case, 134s runner), real Root/Coordinator grant accounting and
+canonical intent queries (388.56s case including Wasm builds, 488s runner),
+uncertain creation across five retry refusals (145.79s case, 149s runner), and
+baseline reacquisition plus sealed restored-Root inventory/allocation refusal
+(95.29s case, 97s runner). Formatting, whitespace and document semantics pass.
+Logs are retained under `target/review-validation/canic-fr1-push-*.log`.
+The manifest and lockfile remained byte-identical throughout qualification.
+
+The maintainer-selected .52 checkpoint is ready for the normal release flow;
+no known blocker remains in this checkpoint. Its changelog views are prepared.
+The complete FR1 outcome remains open: remaining owner/application obligations,
+continuation quiescence, custody handoff, account recovery, journaled execution /
+resume / CLI, whole-Fleet conservation proof and retirement contraction.
+Do not describe the checkpoint as completed FR1 or complete workspace validation.
+
+Packages remain .51 with the existing .52 changelog draft. No broad suite,
+versioning, commit, push, deployment or sibling mutation was performed. Preserve
+the isolated caller-authority work and optional IcyDB independence. All compiled
+artifacts remain available for reuse. The maintainer-selected complete release
+gate owns broad validation and version advancement; this runtime/fixture batch
+is not eligible for the documentation-only fast lane.
+
+## FR1 canonical intent census — 2026-10-03
+
+Controller-only `IntentRelease` now discovers canonical local accounting and
+receipt-backed reservations on Roots and Coordinator independently of replay links
+and cleanup indexes. One bounded primary row per query retains original identities,
+resources, quantities, state, payload binding, revision, application replay deadline
+and terminal evidence. Expiry does not hide rows or establish payment outcome;
+contradictory terminal evidence refuses observation. Host collects signed pages
+inside certified custody/Registry brackets with byte, count, decoder and time
+bounds; late refusal returns no partial inventory. This does not settle work or
+supply reset authority. Pages are not an atomic multi-query snapshot.
+
+The initial ic-memory 0.17.1 selection passed eight Core accounting/replay tests,
+73 Host native tests (three simulator cases ignored), both receipt-storage ownership
+checks, affected-package Clippy, generated Coordinator Candid equality, embedded
+peer refresh/verification, formatting and document semantics. Before PocketIC,
+another session changed the manifest to ic-memory 0.19 and ic-query resolved to
+0.45.1. The maintainer confirmed the update was finished and authorized refreshing
+the lockfile. That refresh now selects ic-memory 0.19.0, preserving the optional
+IcyDB consumer's pre-refresh selection. Its separate dependencies remain outside
+Canic qualification; no consumer source or integration was investigated or aligned.
+
+On ic-memory 0.19.0 / ic-query 0.45.1, all eight Core, four control-plane and
+73 Host selected native tests pass; affected-package Clippy also passes. The
+signed Host PocketIC census proof passes (2.57s case, 130s runner). Embedded peer
+refresh passed. However, dependencies changed again during the production
+Root/Coordinator proof: ic-memory 0.20.0, ic-testkit 0.13.0 and ic-timers 0.9.2.
+Artifact acquisition refused changed inputs after 70.26s; query assertions never
+ran. The runner took 174s including native compilation. This is input instability,
+not a demonstrated census assertion failure. None of the earlier results qualifies
+the latest graph. Await a stable checkout, then run affected lint/native checks,
+refresh/verify the peer, verify canonical Candid and rerun the two exact PocketIC
+cases. Do not repeatedly rebuild underneath dependency edits.
+
+Logs are retained under `target/review-validation/canic-fr1-intents-*.log`.
+The runtime failure is `canic-fr1-intents-runtime-pocketic.log`; complete runner
+output is under `target/test-runs/20261003T131244Z-13971.Jlp1EI/1.log`.
+Preserve all dirty work and the isolated caller-authority session. No broad suite,
+version, commit, push, deployment or sibling edit was performed. Compiled artifacts
+remain cached.
+
+FR1 remains unfinished and not push-ready. Next integrate canonical accounting
+with original owner assessments and application observations, complete remaining
+paid-owner/continuation quiescence, then custody handoff, account-recovery artifact
+qualification, journaled execution/resume/CLI, whole-Fleet conservation/interruption
+proof and retirement contraction. Root/Coordinator discovery does not prove the
+absence of arbitrary application debts or child-owned stores. Keep the accepted
+outcome in the same Unreleased batch.
+
+## FR1 Host provisioning assessment — 2026-10-03
+
+Host now assesses the existing authenticated provisioning census alongside its
+complete original pages. Provisioning and Directory synchronization keep separate
+owner-qualified identities, even when they share the same operation ID. Explicit
+in-flight delivery retains its exact recipient for reconciliation. Other
+unfinished aggregate work remains with its original owner to account for
+lower-level effects; release does not require completing a disposable installation.
+Terminal history stays completed despite stale failures, exhausted failure
+counters, retry deadlines or active pointers. Active pointers with no matching
+owner-qualified record remain explicit observations, including empty journals.
+None of these assessments issues dispatch, replacement spending or reset authority.
+
+All 70 selected Host native tests pass (three simulator cases explicitly ignored),
+as does Host library/test Clippy with warnings denied. The exact signed ownership
+query PocketIC case passes with the new assessment, preserving delivery targets,
+owner identity, unmatched pointers, typed collection refusals, pagination bounds
+and effect-free repeated reads. It uses the existing wire fixture to qualify Host
+collection/assessment, not Root effect execution. The case took 2.48s; the runner
+took 93s including the Host rebuild. Scoped formatting, whitespace and document
+semantics pass. Evidence is retained under
+`target/review-validation/canic-fr1-provisioning-assessment-*.log`.
+
+Cargo.toml and Cargo.lock remained byte-identical throughout these checks. This
+step changes Host only: canonical Candid, stable schemas, issued budgets and the
+qualified embedded peer remain unchanged. Preserve all earlier dirty work and
+the isolated caller-authority work. Optional IcyDB composition was not investigated
+or aligned. No broad suite, version change, commit, push, deployment or sibling
+edit was performed; compiled artifacts remain cached.
+
+FR1 remains unfinished and not push-ready. Funding, pool, replay and provisioning
+now have Host assessments, but they are not a complete destructive admission.
+Next integrate orphan accounting/application obligations and the remaining paid
+owners with continuation quiescence; then complete custody handoff, account-recovery
+artifact qualification, journaled execution/resume/CLI, whole-Fleet conservation /
+interruption proof and retirement contraction. Keep this accepted outcome in the
+same Unreleased batch; these library steps are not separate patch releases.
+
+## FR1 Host pool assessment — 2026-10-03
+
+Host now combines bounded authenticated pool collection with pure assessment of
+retained owner work. Import recovery, Root settlement, Host publication and
+recorded completion remain distinct; exhausted original call/debit ceilings are
+separate observations and never replacement authority. Creation assessment keeps
+known unissued/refused work, uncertain Ledger effects, exact created identities
+and unresolved expiry distinct. Cancellation still requires the original owner's
+accounting checks. Bootstrap, import source/receipt, creation and handoff IDs
+remain custody candidates, with original recipients and full evidence retained.
+Historical references do not prove current custody, and no assessment grants
+reset, spending or producer-quiescence authority.
+
+Validation passes: 66 selected Host native tests (three simulator cases explicitly
+ignored), Host library/test Clippy with warnings denied, and the exact signed
+ownership-query PocketIC case. The simulator proof includes retained exhausted
+imports and uncertain creation, complete two-Root collection, empty-owner
+assessment, late refusal without partial results and effect-free repeated reads.
+It uses the existing wire fixture to qualify Host collection/assessment; it does
+not claim to execute Root import recovery or whole-Fleet release. The case took
+2.42s; its runner took 190s including a dependency rebuild. Scoped formatting,
+whitespace and document semantics pass. Logs are retained under
+`target/review-validation/canic-fr1-pool-assessment-*.log`.
+
+Concurrent dependency updates advanced the deployed selection to ic-memory
+0.17.1 and ic-timers 0.9.1, with ic-query 0.45.0 and ic-testkit 0.12.0. The memory
+lock entry had already been refreshed when inspected; this session refreshed only
+the stale testkit entry after maintainer authorization. The final native, Clippy
+and simulator checks above use this selection. Optional IcyDB skew was neither
+investigated nor aligned. Embedded Root refresh and read-only verification pass
+with artifact SHA-256
+`e53ffcd2656dbcde822ac406cafe84f92efabcdbaba382301254d4a9f9230517`.
+The timer guide explains selecting the actual provider version for inverse lookup.
+Retain compiled artifacts; dependency edits during validation caused the repeated
+rebuilds, not test execution failures.
+
+FR1 remains unfinished and not push-ready. Continue the remaining paid-owner and
+application/orphan-obligation integration, then complete continuation quiescence,
+custody handoff, account-recovery artifact qualification, journaled execution /
+resume / CLI, whole-Fleet conservation/recovery proof and retirement contraction.
+This Host assessment changes no RPC, stable schema or issued budget. Changelog
+stays Unreleased. No broad suite, version change, commit, push, deployment or
+sibling edit was performed; preserve the isolated caller-authority work.
+
+## Code-review issue migration — 2026-10-03
+
+The [review catalogue](https://github.com/dragginzgame/canic/issues/40) owns the
+complete September 29 review transfer. Finding issues retain the full original
+record, verification/reproduction evidence and merged duplicate records; refuted
+source reports remain in the catalogue. Every issue body was read back from GitHub
+and matches the prepared source exactly. Qualified-fix closures were independently
+checked against GitHub's closed-issue results.
+
+The original review export and implementation/validation evidence remain available.
+Local finding lists and counters now point to the catalogue, and finding references
+link to their owning issues. Record future triage and completion decisions in GitHub.
+This migration does not qualify the unfinished FR1 runtime batch. No runtime,
+version, commit, push or deployment action was performed.
+
+## FR1 pool-creation uncertainty correction — 2026-10-03
+
+Root pool refill now retains earlier creation uncertainty across later Ledger
+refusals. Previously insufficient funds, a future timestamp, temporary
+unavailability, creation failure or generic refusal could clear uncertainty or
+make the retained operation cancelable. A rejected retry does not prove an
+earlier creation absent. The correction preserves the original operation,
+timestamp, amount, fee and authority bindings until an exact principal resolves
+custody; fresh refusal and unresolved-expiry behavior remain unchanged. No stable
+schema or spending-authority change is added by this correction. The touched
+refill workflow now uses a directory module; its active inventory link is updated.
+
+The registered PocketIC case passes on the mainnet Root refill path. A test Ledger
+retains one debit, first withholds the created principal, then injects each of the
+five refusal variants before returning the exact original identity. The proof
+checks retained creation identity, one recorded debit, Ready inventory and
+terminal replay. It took 185.02s including fresh Wasm builds; the runner took 276s
+including native compilation. The ordinary mainnet refill regression also passes,
+reusing artifacts in a 21s runner. Test Ledger fault controls are controller-only.
+
+The first simulator attempt exposed a production Wasm dead-code error left by
+the prior timer preflight change: the exact issuer-timer identity wrapper has only
+test callers. Its wrapper is now test-only; the production claimed-identity path
+is unchanged. The subsequent mainnet Wasm build passes. An intermediate rerun was
+stopped to yield the shared target to an editor check; no other build was stopped.
+
+The maintainer confirmed the concurrent dependency edits were finished. Preserve
+the selected ic-memory 0.16, ic-query 0.45 and ic-timers 0.9 graph. Core, Control
+Plane, Ledger fixture and internal-test library/test Clippy passes with warnings
+denied on that graph, as do both simulator cases above. Embedded Root refresh
+and read-only verification pass with artifact SHA-256
+`228dfd0786707de5dfe88e44fe10ff69008ee755b1f9945807967f955bdd3bcf`.
+Both refill native regressions also pass on the updated graph; the three Ledger
+fixture native tests passed earlier and that fixture's dependency graph is
+unchanged. Scoped formatting, whitespace and document semantics pass.
+The timer guide now matches the selected 0.9 provider. Evidence is retained under
+`target/review-validation/canic-fr1-pool-uncertainty-*.log`; compiled artifacts
+remain cached. Optional IcyDB skew was not investigated or aligned.
+
+FR1 remains unfinished and not push-ready. This correction protects an existing
+paid owner; it does not add Host pool assessment or a whole-Fleet release command.
+Paid-owner integration, continuation quiescence, custody handoff, journaled
+execution/resume/CLI, recovery/conservation proof and retirement contraction
+still belong to the accepted batch. No broad validation, version change, commit,
+push, deployment or sibling edit was performed. Changelog remains Unreleased.
+
+## FR1 release preflight before producer cancellation — 2026-10-03
+
+Core's internal Root/Coordinator release hooks now check native timer custody and
+durable async-job attempts before cancelling role producers. Busy preflight and
+unsettled paid-owner refusals leave producers intact; failures after cancellation
+still trap for atomic rollback. Exact terminal seal replay still skips producer
+checks. Both authority roles inspect the shared job-owner catalogue, including
+fixture import, and return a typed active-job observation. Lease expiry and stale
+completion never clear the current attempt; terminal job history does not block.
+Moved the touched authority workflow to its directory module and updated its
+owning inventory reference.
+
+The targeted timer inventory test exposed an obsolete exact-version pin check:
+the maintained manifest uses `ic-timers = "0.8"`. Removed that syntax restriction
+and its unused parser. The guard still validates a locked deployed graph with
+one shared timer provider and one raw provider identity. Duplicate identity
+coverage remains; no dependency version or IcyDB integration was changed. The
+native-timer guide and Unreleased changelog reflect the maintained contract.
+
+Validation passes: 90 selected runtime tests, all 15 timer inventory checks,
+Core/Control Plane library-and-test Clippy with warnings denied, scoped formatting,
+whitespace and document semantics. Embedded Root refresh and read-only verification
+pass with SHA-256
+`3f8bde513c9a7d2e5d5c3bb299d9295a54ab751e04d8f0ce4bd4f1f6d5519159`.
+The exact Coordinator joining/replay PocketIC case passes, including real snapshot
+sealing, resume and restored-authority refusal (62.33s including Coordinator Wasm
+build; runner 154s with native compilation). Evidence is retained under
+`target/review-validation/fr1-quiescence-*.log`; compiled artifacts remain cached.
+
+This is release-hook preflight qualification plus a shared snapshot-path
+regression, not whole-Fleet release proof or a new release endpoint. Registered
+jobs and timers do not cover every direct endpoint continuation or retained paid
+obligation. Remaining paid-owner integration, orphan/application obligations,
+custody handoff, account-recovery artifact qualification, journaled execution /
+resume / CLI, whole-Fleet conservation/recovery and retirement contraction remain
+in FR1. The batch is unfinished and not push-ready; its changelog stays Unreleased.
+No broad validation, version change, commit, push or deployment was performed.
+
+## FR1 Host replay assessment — 2026-10-03
+
+Host now combines the authenticated replay census with pure assessment of the
+remaining operation-owner work. Recorded terminal responses, reserved operations,
+uncertain effects, child-lifecycle recovery, response recovery and cost settlement
+remain distinct. Pending and missing accounting IDs are separate observations:
+released reservations never clear payment uncertainty, and missing bookkeeping
+never invalidates an already recorded terminal response. Original pages, owners,
+slots and operation identities remain available; no settlement or spending
+authority is issued. This does not expose a new CLI or establish release readiness.
+
+Validation: 61 selected Host native tests pass (three explicit simulator cases
+ignored), including every replay phase across all linked accounting states and
+bounded wire-to-assessment preservation. Host library/tests Clippy passes with
+warnings denied. The exact signed-query ownership PocketIC case passes, including
+assessment after both owners' collection, late refusals with no partial result,
+empty-owner evidence and effect-free repetition (2.64s test, 205s runner including
+native compilation). Scoped formatting, whitespace and document semantics pass.
+Evidence: `target/review-validation/fr1-assessment-*.log`.
+
+This step changes Host only; the qualified embedded Root and canonical Candid
+from the preceding step remain intact. For subsequent direct Cargo checks, match
+Make's `ICP_ENVIRONMENT=local`, `CARGO_INCREMENTAL=0` and repository sccache wrapper
+settings when reusing its compiled graph; this run switched from direct Cargo's
+incremental build to Make's compiler-cache configuration and rebuilt native code.
+
+Next connect the remaining paid owners and producer shutdown to the existing
+Core release-fence hooks, accounting for callbacks already in flight. Orphan
+intents/application obligations, custody handoff, account-recovery artifact
+qualification, journaled execution/resume/CLI, whole-Fleet conservation/recovery
+proof and retirement contraction still belong to the accepted FR1 batch. FR1
+remains unfinished and not push-ready. Changelog stays in Unreleased; no version,
+commit, push, deployment or broad validation was performed. Preserve the other
+session's isolated membership/authentication work and the earlier dirty changes.
+
+## Documentation refresh verification — 2026-10-03
+
+Reviewed the 30 Markdown files changed by the merged documentation refresh
+against current source owners, CLI declarations, manifests and governance.
+Corrected reset prerequisites, managed initialization bindings, role funding
+policy, compiler-cache behavior, platform support and standalone-local scope.
+Clarified that the minimal Fleet example permits a child without creating it,
+and updated its Wasm crate configuration and the native timer dependency example.
+Updated the open .52 documentation notes. Historical measurements remain dated
+evidence; this documentation pass does not qualify FR1 or close its release batch.
+Validation: all 365 local references and 43 section fragments resolve; current
+document semantics and whitespace checks pass. No Cargo, PocketIC or broad
+release validation was run for these documentation-only corrections.
+
+## FR1 linked replay accounting — 2026-10-03
+
+Root and Coordinator replay discovery now reads each receipt's original quota
+and cycle-reservation records in the same query. It retains exact resource keys,
+quantities, stored pending/committed/aborted state, creation times and TTLs.
+Missing records stay explicit; expiry and released bookkeeping do not prove an
+external payment absent. Collection adds at most two bounded intent-record reads
+per receipt and performs no settlement, cleanup, IC call or new reservation.
+Host preserves these fields through its existing bounded decoder and collector.
+
+Four Core regressions, five Host receipt regressions and four Coordinator
+contract checks pass. Core/Host/governed-journey Clippy passes with warnings denied.
+Coordinator Candid was regenerated through the owning artifact builder and the
+ordinary build without refresh also passes. Canonical bytes retain the generator's
+trailing blank line; other source whitespace and scoped formatting pass.
+Embedded Root refresh and read-only verification pass with artifact SHA-256
+`e232883593618c6a688e5a6760cefb32e393d3382b1726fb5824f38da37018b2`.
+The real paid child-grant PocketIC case passes through the production Host decoder,
+checking committed accounting, controller denial and effect-free repeated reads.
+Its runner took 545 seconds including native and Wasm rebuilds; artifacts remain
+available for reuse. Evidence: `target/review-validation/fr1-accounting-*.log`.
+
+The first locked check found the existing manifest already requiring ic-testkit
+0.11 while Cargo.lock retained 0.10.4. Offline resolution updated only that package
+to 0.11.0; IcyDB dependencies were not changed. Preserve the separate documentation
+corrections and isolated membership/authentication work.
+
+These are linked accounting observations, not an orphan-intent census or a release
+safety verdict. FR1 still needs the remaining paid-owner integration, producer
+quiescence, custody handoff, account-recovery artifact qualification, journaled
+execution/resume/CLI, whole-Fleet recovery/conservation proof and retirement
+contraction. It remains unfinished and not push-ready. No broad suite, version
+change, commit, push or deployment was performed.
 
 ## FR1 shared replay discovery — 2026-10-03
 

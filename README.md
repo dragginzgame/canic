@@ -80,9 +80,11 @@ cargo install --locked canic-cli --version <version>
 
 Canic is not an all-or-nothing framework. Each canister role enables only the
 runtime capabilities it needs, and operator tools remain outside the canisters.
-You can use the runtime helpers without Fleet orchestration, add authentication
-without scaling, or use host-side diagnostics and recovery tools without giving
-application canisters access to local files or credentials.
+You can add authentication without scaling, or use host-side diagnostics and
+recovery tools without giving application canisters access to local files or
+credentials.
+Managed lifecycle and endpoints require their Fleet bindings. The explicit
+standalone-local lifecycle supports local development and testing.
 
 | Capability | What it does |
 | --- | --- |

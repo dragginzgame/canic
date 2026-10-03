@@ -1,8 +1,8 @@
 # Operations And Diagnostics
 
-Canic's operator tools run on your computer. They build canisters, inspect IC
-networks, prepare deployment plans, apply approved changes, collect diagnostics,
-and help recover interrupted work.
+The `canic` command-line program runs on your computer. It creates local workspace
+files, builds canisters, inspects trusted IC networks, prepares deployment plans,
+applies approved changes, collects diagnostics, and helps recover interrupted work.
 
 <img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the operations guides" />
 

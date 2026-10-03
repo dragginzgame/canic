@@ -124,6 +124,18 @@ struct CreateCanisterSuccess {
 
 #[derive(CandidType)]
 enum CreateCanisterError {
+    InsufficientFunds {
+        balance: Nat,
+    },
+    CreatedInFuture {
+        ledger_time: u64,
+    },
+    TemporarilyUnavailable,
+    FailedToCreate {
+        fee_block: Option<Nat>,
+        refund_block: Option<Nat>,
+        error: String,
+    },
     Duplicate {
         duplicate_of: Nat,
         canister_id: Option<Principal>,
@@ -132,6 +144,34 @@ enum CreateCanisterError {
         message: String,
         error_code: Nat,
     },
+}
+
+/// Retry-only fault leaves the original debit and creation identity retained.
+#[derive(CandidType, Clone, Copy, Deserialize)]
+enum CreationRetryRefusal {
+    InsufficientFunds,
+    CreatedInFuture,
+    TemporarilyUnavailable,
+    FailedToCreate,
+    GenericError,
+}
+
+impl CreationRetryRefusal {
+    fn into_error(self) -> CreateCanisterError {
+        match self {
+            Self::InsufficientFunds => CreateCanisterError::InsufficientFunds {
+                balance: Nat::from(0_u8),
+            },
+            Self::CreatedInFuture => CreateCanisterError::CreatedInFuture { ledger_time: 1 },
+            Self::TemporarilyUnavailable => CreateCanisterError::TemporarilyUnavailable,
+            Self::FailedToCreate => CreateCanisterError::FailedToCreate {
+                fee_block: None,
+                refund_block: None,
+                error: "retry refused".into(),
+            },
+            Self::GenericError => generic_error("retry refused"),
+        }
+    }
 }
 
 #[derive(CandidType, Deserialize)]
@@ -151,6 +191,7 @@ struct State {
     expected_root: Principal,
     expected_subnet: Principal,
     pending_first_index: Option<usize>,
+    creation_retry_refusal: Option<CreationRetryRefusal>,
     requests: Vec<CreateCanisterArgs>,
     creation_callers: Vec<Principal>,
     request_count: u64,
@@ -209,6 +250,7 @@ fn init(args: InitArgs) {
             expected_root: args.expected_root,
             expected_subnet: args.expected_subnet,
             pending_first_index,
+            creation_retry_refusal: None,
             requests: Vec::new(),
             creation_callers: Vec::new(),
             request_count: 0,
@@ -442,6 +484,17 @@ fn withdrawal_count() -> u64 {
 }
 
 #[ic_cdk::update]
+fn set_creation_retry_refusal(refusal: Option<CreationRetryRefusal>) {
+    assert!(ic_cdk::api::is_controller(&ic_cdk::api::msg_caller()));
+    STATE.with_borrow_mut(|state| {
+        state
+            .as_mut()
+            .expect("Cycles Ledger stub is initialized")
+            .creation_retry_refusal = refusal;
+    });
+}
+
+#[ic_cdk::update]
 fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, CreateCanisterError> {
     STATE.with_borrow_mut(|state| {
         let state = state.as_mut().expect("Cycles Ledger stub is initialized");
@@ -455,6 +508,9 @@ fn create_canister(args: CreateCanisterArgs) -> Result<CreateCanisterSuccess, Cr
                 existing == &args && state.creation_callers[index] == caller
             })
         {
+            if let Some(refusal) = state.creation_retry_refusal {
+                return Err(refusal.into_error());
+            }
             return Err(CreateCanisterError::Duplicate {
                 duplicate_of: Nat::from(index + 1),
                 canister_id: Some(state.canister_ids[index]),

@@ -2,9 +2,12 @@
 
 use super::*;
 use crate::{
-    ids::IntentId,
+    ids::IntentResourceKey,
     model::replay::{ReplayActor, ReplayCostGuardSettlement},
-    storage::stable::replay::{ReplayReceiptRecord, ReplayReceiptStore},
+    storage::stable::{
+        intent::{IntentRecord, IntentStore},
+        replay::{ReplayReceiptRecord, ReplayReceiptStore},
+    },
 };
 
 fn fixture(id: u8) -> ReplayReceiptEntryRecord {
@@ -44,6 +47,7 @@ fn fixture(id: u8) -> ReplayReceiptEntryRecord {
 #[test]
 fn census_retains_expired_uncertainty_and_history_without_pruning_or_mutation() {
     ReplayReceiptStore::reset_for_tests();
+    IntentStoreOps::reset_for_tests();
     let owner = Principal::from_slice(&[1]);
     assert_eq!(observe(owner, None).unwrap().entry, None);
     for (id, status) in [
@@ -78,7 +82,9 @@ fn census_retains_expired_uncertainty_and_history_without_pruning_or_mutation() 
             entry.cost_guard_settlement,
             Some(ReplayReleaseSettlement {
                 quota_intent_id: 7,
-                reservation_intent_id: 8
+                reservation_intent_id: 8,
+                quota: None,
+                reservation: None,
             })
         );
         assert_eq!(
@@ -116,6 +122,67 @@ fn census_retains_expired_uncertainty_and_history_without_pruning_or_mutation() 
     );
     assert_eq!(ReplayReceiptStore::export(), before);
     assert_eq!(observe(owner, Some([255; 32])).unwrap().entry, None);
+}
+
+#[test]
+fn accounting_observation_retains_pending_expiry_terminal_state_and_missing_records() {
+    IntentStoreOps::reset_for_tests();
+    let quota = IntentRecord {
+        id: IntentId(7),
+        resource_key: IntentResourceKey::try_from("canic:quota:test").unwrap(),
+        quantity: 1,
+        state: IntentState::Committed,
+        created_at: 1,
+        ttl_secs: Some(2),
+    };
+    IntentStore::insert_record(quota.clone());
+    for state in [
+        IntentState::Pending,
+        IntentState::Committed,
+        IntentState::Aborted,
+    ] {
+        let reservation = IntentRecord {
+            id: IntentId(8),
+            resource_key: IntentResourceKey::try_from("canic:cycles:test").unwrap(),
+            quantity: u64::MAX,
+            state,
+            created_at: 2,
+            ttl_secs: Some(1),
+        };
+        IntentStore::insert_record(reservation.clone());
+        let observed = project(fixture(1)).unwrap().cost_guard_settlement.unwrap();
+        let projected = observed.reservation.unwrap();
+        assert_eq!(projected.quantity, u64::MAX);
+        assert_eq!(projected.resource_key, reservation.resource_key.as_str());
+        assert_eq!(projected.created_at_secs, 2);
+        assert_eq!(projected.ttl_secs, Some(1));
+        assert_eq!(
+            projected.state,
+            match state {
+                IntentState::Pending => ReplayReleaseIntentState::Pending,
+                IntentState::Committed => ReplayReleaseIntentState::Committed,
+                IntentState::Aborted => ReplayReleaseIntentState::Aborted,
+            }
+        );
+        assert_eq!(
+            observed.quota.unwrap().state,
+            ReplayReleaseIntentState::Committed
+        );
+        assert_eq!(
+            IntentStoreOps::load(IntentId(7)).unwrap(),
+            Some(quota.clone())
+        );
+        assert_eq!(
+            IntentStoreOps::load(IntentId(8)).unwrap(),
+            Some(reservation)
+        );
+    }
+    IntentStoreOps::reset_for_tests();
+    let missing = project(fixture(1)).unwrap().cost_guard_settlement.unwrap();
+    assert_eq!(missing.quota, None);
+    assert_eq!(missing.reservation, None);
+    assert_eq!(missing.quota_intent_id, 7);
+    assert_eq!(missing.reservation_intent_id, 8);
 }
 
 #[test]

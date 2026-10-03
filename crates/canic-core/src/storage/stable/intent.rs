@@ -704,6 +704,13 @@ impl IntentStore {
         INTENT_RECORDS.with_borrow(|map| map.get(&id))
     }
 
+    /// Read canonical local accounting independently of derived pending/expiry indexes.
+    pub(crate) fn with_records<R>(
+        f: impl FnOnce(&StableBtreeMap<IntentId, IntentRecord, RuntimeMemory<DefaultMemoryImpl>>) -> R,
+    ) -> R {
+        INTENT_RECORDS.with_borrow(|map| f(map))
+    }
+
     pub(crate) fn insert_record(record: IntentRecord) -> Option<IntentRecord> {
         INTENT_RECORDS.with_borrow_mut(|map| map.insert(record.id, record))
     }

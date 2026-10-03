@@ -3,6 +3,7 @@
 //! Custody and Registry reads bracket observation; neither history nor exhaustion
 //! grants settlement, new spending authority or permission to clear an owner.
 
+mod assessment;
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -28,6 +29,8 @@ use canic_core::{
 use ic_agent::Agent;
 use serde::Deserialize;
 use thiserror::Error;
+
+pub(in crate::fleet_ensure) use assessment::assessment_facts;
 
 const RESPONSE_BYTES: usize = 1024 * 1024;
 const MAXIMUM_CENSUS_BYTES: usize = 16 * RESPONSE_BYTES;

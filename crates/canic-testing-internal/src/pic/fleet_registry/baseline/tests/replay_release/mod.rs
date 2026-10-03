@@ -2,12 +2,19 @@
 
 use candid::{CandidType, Principal};
 use canic::{
-    dto::release_receipts::{
-        ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry, ReplayReleasePhase,
+    dto::{
+        release_intents::{IntentReleaseEntry, IntentReleaseKey},
+        release_receipts::{
+            ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry,
+            ReplayReleaseIntentState, ReplayReleasePhase,
+        },
     },
     protocol,
 };
-use canic_host::fleet_ensure::ops::release::receipts::{ReleaseReceiptsError, decode_response};
+use canic_host::fleet_ensure::ops::release::{
+    intents::{self, ReleaseIntentsError, entry_key},
+    receipts::{ReleaseReceiptsError, decode_response},
+};
 use ic_testkit::pic::PocketIc;
 
 #[derive(CandidType)]
@@ -29,6 +36,7 @@ pub(super) fn collect(pic: &PocketIc, owner: Principal, method: &str) -> Vec<Rep
         let mut remaining = 8 * 1024 * 1024;
         decode_response(owner, &bytes, &mut remaining)
     };
+    let _ = collect_intents(pic, owner, method);
     let balance = pic.cycle_balance(owner);
     let mut cursor = None;
     let mut complete = false;
@@ -79,7 +87,31 @@ pub(super) fn assert_funding_receipt(
         ReplayReleaseAuthentication::DirectCaller
     );
     assert_eq!(entry.phase, ReplayReleasePhase::Committed);
-    assert!(entry.cost_guard_settlement.is_some());
+    let settlement = entry
+        .cost_guard_settlement
+        .as_ref()
+        .expect("paid accounting identity");
+    assert_ne!(settlement.quota_intent_id, settlement.reservation_intent_id);
+    let canonical = collect_intents(pic, root, protocol::CANIC_ROOT_STATUS);
+    for (id, expected) in [
+        (settlement.quota_intent_id, &settlement.quota),
+        (settlement.reservation_intent_id, &settlement.reservation),
+    ] {
+        assert!(canonical.iter().any(|entry| matches!(entry,
+            canic::dto::release_intents::IntentReleaseEntry::Local { intent_id, record }
+            if *intent_id == id && Some(record) == expected.as_ref()
+        )));
+    }
+
+    let quota = settlement.quota.as_ref().expect("retained quota");
+    let reservation = settlement
+        .reservation
+        .as_ref()
+        .expect("retained cycle reservation");
+    assert_eq!(quota.state, ReplayReleaseIntentState::Committed);
+    assert_eq!(reservation.state, ReplayReleaseIntentState::Committed);
+    assert_eq!(quota.quantity, 1);
+    assert!(reservation.quantity > 0);
     assert_eq!(
         entry.effect,
         Some(ReplayReleaseEffect::ManagementCall {
@@ -87,4 +119,49 @@ pub(super) fn assert_funding_receipt(
             method: "deposit_cycles".into(),
         })
     );
+}
+
+/// Query both canonical stores on production Wasm and prove controller-only, effect-free replay.
+pub(super) fn collect_intents(
+    pic: &PocketIc,
+    owner: Principal,
+    method: &str,
+) -> Vec<canic::dto::release_intents::IntentReleaseEntry> {
+    #[derive(CandidType)]
+    enum IntentRequest {
+        IntentRelease(Option<IntentReleaseKey>),
+    }
+    let read = |caller, cursor| {
+        let argument = candid::encode_one(IntentRequest::IntentRelease(cursor)).unwrap();
+        let bytes = pic
+            .query_call(owner, caller, method, argument)
+            .expect("canonical accounting query transport");
+        intents::decode_response(owner, &bytes, &mut (8 * 1024 * 1024))
+    };
+    let balance = pic.cycle_balance(owner);
+    let mut entries: Vec<IntentReleaseEntry> = Vec::new();
+    let mut cursor = None;
+    let mut complete = false;
+    for _ in 0..256 {
+        let page = read(Principal::anonymous(), cursor).unwrap();
+        assert_eq!(page.owner, owner);
+        assert_eq!(read(Principal::anonymous(), cursor).unwrap(), page);
+        if let Some(entry) = page.entry {
+            let key = entry_key(&entry);
+            assert!(cursor.is_none_or(|previous| previous < key));
+            assert!(page.next_after.is_none_or(|next| next == key));
+            entries.push(entry);
+        }
+        cursor = page.next_after;
+        if cursor.is_none() {
+            complete = true;
+            break;
+        }
+    }
+    assert!(complete, "small canonical accounting census must terminate");
+    assert!(
+        matches!(read(Principal::from_slice(&[99; 29]), None), Err(ReleaseIntentsError::Rejected { rejection, .. }) if rejection.code() == canic_core::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code())
+    );
+    assert_eq!(pic.cycle_balance(owner), balance);
+    entries
 }

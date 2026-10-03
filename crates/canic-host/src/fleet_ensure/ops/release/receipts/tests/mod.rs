@@ -1,9 +1,13 @@
 //! Retained uncertainty, exact pagination and bounded wire decoding.
 
 use super::*;
+use crate::fleet_ensure::{
+    view::release::receipts::ReleaseReplayDisposition, workflow::release::assess_receipts,
+};
 use canic_core::dto::release_receipts::{
-    ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry, ReplayReleasePhase,
-    ReplayReleaseRecoveryReason, ReplayReleaseSettlement,
+    ReplayReleaseAuthentication, ReplayReleaseEffect, ReplayReleaseEntry, ReplayReleaseIntent,
+    ReplayReleaseIntentState, ReplayReleasePhase, ReplayReleaseRecoveryReason,
+    ReplayReleaseSettlement,
 };
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> ReplayReleaseResponse {
@@ -26,6 +30,20 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Replay
             cost_guard_settlement: Some(ReplayReleaseSettlement {
                 quota_intent_id: 5,
                 reservation_intent_id: 6,
+                quota: Some(ReplayReleaseIntent {
+                    resource_key: "canic:quota:test".into(),
+                    quantity: 1,
+                    state: ReplayReleaseIntentState::Committed,
+                    created_at_secs: 1,
+                    ttl_secs: Some(1),
+                }),
+                reservation: Some(ReplayReleaseIntent {
+                    resource_key: "canic:cycles:test".into(),
+                    quantity: u64::MAX,
+                    state: ReplayReleaseIntentState::Pending,
+                    created_at_secs: 1,
+                    ttl_secs: None,
+                }),
             }),
             effect: Some(ReplayReleaseEffect::ManagementCall {
                 canister: Principal::from_slice(&[7]),
@@ -38,6 +56,83 @@ pub(in crate::fleet_ensure::ops::release) fn fixture(owner: Principal) -> Replay
 
 pub(in crate::fleet_ensure::ops::release) fn wire(page: ReplayReleaseResponse) -> Vec<u8> {
     candid::encode_one(Ok::<_, CanicError>(Response::ReplayRelease(page))).unwrap()
+}
+
+#[test]
+fn assessment_preserves_wire_evidence_and_separates_completion_from_accounting_drift() {
+    let owner = Principal::from_slice(&[1]);
+    let other = Principal::from_slice(&[2]);
+    let empty_owner = Principal::from_slice(&[3]);
+    let mut uncertain = fixture(owner);
+    let entry = uncertain.entry.as_mut().unwrap();
+    entry.phase = ReplayReleasePhase::ExternalEffectInFlight;
+    entry
+        .cost_guard_settlement
+        .as_mut()
+        .unwrap()
+        .reservation
+        .as_mut()
+        .unwrap()
+        .state = ReplayReleaseIntentState::Aborted;
+    uncertain.next_after = Some(entry.slot);
+    let mut completed = fixture(owner);
+    let entry = completed.entry.as_mut().unwrap();
+    entry.slot = [9; 32];
+    entry.phase = ReplayReleasePhase::Committed;
+    entry.cost_guard_settlement.as_mut().unwrap().quota = None;
+    let empty = ReplayReleaseResponse {
+        owner: empty_owner,
+        entry: None,
+        next_after: None,
+    };
+    let originals = FleetReleaseReceiptsView {
+        owners: [
+            (owner, vec![uncertain, completed]),
+            (other, vec![fixture(other)]),
+            (empty_owner, vec![empty]),
+        ]
+        .into(),
+    };
+    let mut remaining = MAXIMUM_CENSUS_BYTES;
+    let evidence = FleetReleaseReceiptsView {
+        owners: originals
+            .owners
+            .iter()
+            .map(|(owner, pages)| {
+                (
+                    *owner,
+                    pages
+                        .iter()
+                        .map(|page| {
+                            decode_response(*owner, &wire(page.clone()), &mut remaining).unwrap()
+                        })
+                        .collect(),
+                )
+            })
+            .collect(),
+    };
+    let result = assess_receipts(evidence);
+    assert_eq!(result.evidence, originals);
+    let assessments = &result.owners[&owner];
+    assert_eq!(assessments.len(), 2);
+    assert_eq!(
+        assessments[0].disposition,
+        ReleaseReplayDisposition::EffectReconciliation
+    );
+    assert!(assessments[0].pending_intents.is_empty());
+    assert_eq!(
+        assessments[1].disposition,
+        ReleaseReplayDisposition::RecordedCompletion
+    );
+    assert_eq!(assessments[1].missing_intents, vec![5]);
+    assert_eq!(assessments[1].pending_intents, vec![6]);
+    assert_ne!(assessments[0].slot, assessments[1].slot);
+    assert_eq!(assessments[0].operation_id, assessments[1].operation_id);
+    assert_eq!(
+        result.owners[&other][0].disposition,
+        ReleaseReplayDisposition::AccountingRecovery
+    );
+    assert!(result.owners[&empty_owner].is_empty());
 }
 
 #[test]
