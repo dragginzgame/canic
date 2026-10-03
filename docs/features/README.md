@@ -1,7 +1,19 @@
 # Canic Features
 
-Canic is a toolbox: an application can use one feature without adopting all of
-them. Start with the problem you want to solve, then follow that feature's guide.
+Canic is a toolbox, not a mandatory stack. An application uses only the
+capabilities it needs:
+
+- each canister role selects its own runtime features;
+- authentication, scaling, blob storage, and other optional capabilities are
+  enabled independently where their contracts permit;
+- a canister may use Canic's runtime without adopting Fleet orchestration; and
+- build, diagnostic, backup, and recovery tools stay on the operator's computer
+  rather than becoming canister permissions.
+
+Start with the problem you want to solve, then follow only that feature's guide.
+Some features deliberately depend on another feature—for example, blob-storage
+billing includes the base blob-storage capability—but unrelated features do not
+need to be enabled together.
 
 Each guide begins with a plain-language overview, explains what the feature can
 and cannot do, and links to its configuration and operating instructions.
