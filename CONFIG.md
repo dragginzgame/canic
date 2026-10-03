@@ -9,9 +9,32 @@ top-ups. Concrete canister IDs, controllers, physical IC subnets and reviewed
 deployment funding belong to a separate desired Fleet file so the same App
 source can be installed in more than one environment.
 
+<img src="assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic thinking about application configuration" />
+
 This page is the complete field reference. New readers can begin with the
 [configuration map](#configuration-map), then follow only the sections needed
 for their App.
+
+Before adding a setting, decide which configuration layer owns it:
+
+<br clear="left" />
+
+<p align="center">
+  <a href="assets/app-model-desired-fleet.jpg">
+    <img src="assets/app-model-desired-fleet.jpg" alt="The reusable canic.toml App model and one concrete desired Fleet file combine as inputs to canic fleet ensure" width="650" />
+  </a>
+</p>
+
+`canic.toml` is reusable source input. The desired Fleet is separately reviewed
+operator intent; it may differ between local, staging, and production networks.
+
+## App Shape At A Glance
+
+<p align="center">
+  <a href="assets/app-model.jpg">
+    <img src="assets/app-model.jpg" alt="The Canic App model connects roles, Component Specs and their children, grants and pools, Component Groups, deployments, and Fleet services" width="650" />
+  </a>
+</p>
 
 At a high level, the file describes:
 
@@ -43,6 +66,8 @@ endpoint bundle.
 
 ## Configuration Map
 
+<img src="assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the configuration map" />
+
 | Concern | Owner in `canic.toml` |
 | --- | --- |
 | App identity and startup mode | [`[app]`](#app) |
@@ -52,6 +77,8 @@ endpoint bundle.
 | Reusable multi-Component composition | [Component Groups](#component-groups) |
 | Independent count, spread and reduction-only limits | [Component Group deployments](#component-group-deployments) |
 | Logical Fleet-wide target selection | [Fleet services](#fleet-services) |
+
+<br clear="left" />
 
 Physical Subnets, concrete canister identities, controllers, deployment funding, and
 decisions to replace or delete canisters belong to the separately reviewed
@@ -735,3 +762,10 @@ Enabling a family publishes only its bounded cached aggregate snapshot through
 `canic_public_status`; it never changes `canic_observability` authorization.
 See [public observability](docs/features/runtime/public-observability.md) for
 sampling, staleness, units and application publication APIs.
+
+## Continue From Here
+
+- [Build your first managed application](docs/getting-started/minimal-managed-fleet.md)
+- [Choose the Canic features you need](docs/features/README.md)
+- [Plan and operate a Fleet](docs/operations/README.md)
+- [Browse all documentation](docs/README.md)

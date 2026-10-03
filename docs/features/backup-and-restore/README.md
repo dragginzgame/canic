@@ -9,15 +9,11 @@ Backups are for recovery within the same Canic release. They are not a way to
 carry application state across the clean reinstall required between pre-1.0
 releases.
 
-```text
-Live canisters -> snapshots -> verified local backup
-                                      |
-                               restore preparation
-                                      |
-                              journaled restore run
-                                      |
-                              recovered canisters
-```
+<p align="center">
+  <a href="../../../assets/backup-and-restore.jpg">
+    <img src="../../../assets/backup-and-restore.jpg" alt="Backup and restore workflow from live canisters through snapshots and a verified local backup to restore preparation, a journaled restore run, and recovered canisters" width="650" />
+  </a>
+</p>
 
 ## Current Availability
 
@@ -128,8 +124,11 @@ state before the matching `Converged` journal.
 Remote snapshot archival is outside the current local backup contract.
 Product blob storage is a separate feature.
 
-## Start Here
+## Continue From Here
 
 - [CLI backup and restore guide](../../../crates/canic-cli/README.md)
 - [Backup domain crate](../../../crates/canic-backup/README.md)
 - [Recovery and retry runbooks](../../operations/recovery-retry-runbooks.md)
+- [Fleet recovery and cycle safety](../operations/fleet-ensure-recovery-and-cycle-safety.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)

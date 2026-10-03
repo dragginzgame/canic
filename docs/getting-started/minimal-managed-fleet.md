@@ -1,4 +1,4 @@
-# Minimal Managed Fleet
+# Your First Managed Application
 
 This guide shows a minimal managed application layout with two application roles:
 
@@ -31,6 +31,40 @@ Root creates, installs, funds, and manages admitted canisters; it does not
 forward normal application requests. Application canisters call one another
 directly. A parent may ask Root to create an allowed child, and that child may
 later do the same within the limits declared in configuration.
+
+<img src="../../assets/256x256/mechanic-help.png" align="left" width="110" alt="The Canic mechanic offering help" />
+
+The walkthrough keeps product code deliberately small so the relationship
+between App configuration, generated management canisters, and deployed
+Components stays visible.
+
+<br clear="left" />
+
+## What You Will Build
+
+<p align="center">
+  <a href="../../assets/management-and-application-canisters.jpg">
+    <img src="../../assets/management-and-application-canisters.jpg" alt="Management canisters include the Fleet Coordinator, Fleet Subnet Root, and Wasm Store; Root manages the hub application canister, which has a registry child" width="650" />
+  </a>
+</p>
+
+The Coordinator owns the Fleet-wide view. Root performs approved lifecycle and
+funding work on its Subnet. The `hub` and `registry` contain the application's
+own behavior and call each other directly.
+
+## Journey At A Glance
+
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding a build checklist" />
+
+| Milestone | What you add |
+| --- | --- |
+| 1. Source layout | One App configuration and two Rust canister packages |
+| 2. Local IC configuration | Build entries for Root, `hub`, and `registry` |
+| 3. App configuration | Roles, one Component Spec, one Group, and one deployment |
+| 4. Build integration | A small `build.rs` and Canic lifecycle macros |
+| 5. Fleet convergence | A reviewed desired Fleet plan and its exact apply digest |
+
+<br clear="left" />
 
 ## Layout
 
@@ -253,6 +287,8 @@ role = "registry"
 
 ## Ensure The Fleet
 
+<img src="../../assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the deployment commands" />
+
 Create a desired Fleet document using the exact local Subnet, controllers,
 artifacts and cycle bounds. The complete contract is in
 [Fleet ensure](../features/operations/fleet-ensure.md).
@@ -269,6 +305,8 @@ On success, the reviewed operation has created or reused every canister selected
 by that desired Fleet, reconciled its funding/controllers/Wasm/runtime state,
 and recorded terminal cycle conservation. An immediate second run has zero
 mutation actions.
+
+<br clear="left" />
 
 Build one role without installing:
 
@@ -302,3 +340,11 @@ production `ICP_ENVIRONMENT=ic` artifacts skip that metadata. A focused
 Candid only in the adjacent `.did`, proves the runtime method exports match it,
 and omits both the pointer export and embedded metadata from the deployable
 Wasm.
+
+## Continue From Here
+
+- [Configure an App](../../CONFIG.md)
+- [See how Canic works](how-canic-works.md)
+- [Choose the Canic features you need](../features/README.md)
+- [Plan and operate a Fleet](../operations/README.md)
+- [Browse all documentation](../README.md)

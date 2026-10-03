@@ -38,3 +38,11 @@ architecture explains the design, and operations pages provide procedures.
 
 For the exact delivery boundary of work in progress, see
 [Current Status](../status/current.md).
+
+## Continue From Here
+
+- [Build your first managed application](../getting-started/minimal-managed-fleet.md)
+- [Configure an App](../../CONFIG.md)
+- [Plan and operate a Fleet](../operations/README.md)
+- [See how Canic works](../getting-started/how-canic-works.md)
+- [Browse all documentation](../README.md)

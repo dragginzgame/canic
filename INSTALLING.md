@@ -5,6 +5,43 @@ Canic has two pieces that work together:
 - the `canic` command-line program, which runs on your computer; and
 - the `canic` Rust crate, which is compiled into your application canisters.
 
+## Choose An Installation Path
+
+<table>
+  <thead>
+    <tr>
+      <th aria-label="Guide"></th>
+      <th>Goal</th>
+      <th>Install</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="3" width="120" valign="top">
+        <img src="assets/256x256/mechanic-point-right.png" width="110" alt="The Canic mechanic pointing toward the installation choices" />
+      </td>
+      <td>Use a published Canic release</td>
+      <td>Published CLI, governed Wasm tools, compatible <code>icp</code>, and the matching Rust crate</td>
+    </tr>
+    <tr>
+      <td>Work on this repository</td>
+      <td>Local CLI from the checkout</td>
+    </tr>
+    <tr>
+      <td>Maintain or release Canic</td>
+      <td>Complete repository toolchain</td>
+    </tr>
+  </tbody>
+</table>
+
+<p align="center">
+  <a href="assets/cli-toolchain.jpg">
+    <img src="assets/cli-toolchain.jpg" alt="The Canic CLI combines governed Wasm tools, a compatible ICP CLI, and matching Canic Rust crates to build and review a Fleet" width="650" />
+  </a>
+</p>
+
+## Install The CLI
+
 Use the same Canic version for both pieces. To install the published
 command-line program:
 
@@ -25,6 +62,8 @@ Canic maintainers can install the complete repository toolchain:
 ```bash
 make install-dev
 ```
+
+## Install The Wasm Tools
 
 The maintainer setup installs the repository-selected ICP command-line tool,
 `ic-wasm`, Binaryen, Candid tools and `sccache`, and configures the repository
@@ -94,6 +133,8 @@ icp identity reauth <identity-name> --duration 1h
 
 ## Canister Dependencies
 
+<img src="assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding a configuration checklist" />
+
 A Rust crate that builds one Canic-managed canister needs runtime dependencies,
 a build dependency, and a small metadata block that tells Canic which App and
 role it implements:
@@ -116,6 +157,8 @@ The **role** is the canister's job in the application. It must exist in the
 selected App configuration. Application developers provide their application
 canister packages. Canic generates its own Root, Coordinator, and Store
 management packages from the configuration.
+
+<br clear="left" />
 
 The build script remains small:
 
@@ -212,6 +255,8 @@ destructive effects.
 
 ## Cycle-Recovery Limitation
 
+<img src="assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
+
 The IC does not let a controller pull cycles from an arbitrary canister. A
 canister with a material cycle balance may be physically replaced or deleted
 only when it exposes the exact configured, idempotent treasury-drain contract.
@@ -220,6 +265,8 @@ Never bypass that blocker with
 a raw stop/delete command. ID-preserving clean reinstall retains native cycles
 on the selected canisters; it clears their application and framework state
 under a separate reviewed reset operation.
+
+<br clear="left" />
 
 ## Development Validation
 
@@ -233,3 +280,12 @@ make validate
 Versioning, tagging, package publication, pushing and live deployment remain
 separate human-owned actions governed by
 [CI and deployment governance](docs/governance/ci-deployment.md).
+
+## Continue From Here
+
+- [Build your first managed application](docs/getting-started/minimal-managed-fleet.md)
+- [Configure an App](CONFIG.md)
+- [See how Canic works](docs/getting-started/how-canic-works.md)
+- [Choose the Canic features you need](docs/features/README.md)
+- [Plan and operate a Fleet](docs/operations/README.md)
+- [Browse all documentation](docs/README.md)
