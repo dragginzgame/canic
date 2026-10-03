@@ -1,9 +1,5 @@
 # Operations And Diagnostics
 
-<p align="center">
-  <img src="../../../assets/1400x600/canic-diagnostics.jpg" alt="The Canic mechanic inspecting and repairing a diagnostic console" width="700" />
-</p>
-
 The `canic` command-line program runs on a developer's or operator's computer.
 It creates local project files, builds canisters, connects to trusted networks,
 shows diagnostic information, and prepares reviewed deployment changes.
@@ -11,6 +7,19 @@ shows diagnostic information, and prepares reviewed deployment changes.
 Commands provide readable output for people and stable JSON for scripts. Both
 forms follow the same safety boundaries: inspecting or planning a change does
 not silently grant permission to apply it.
+
+```text
+inspect current state
+        |
+        v
+prepare a plan  (no paid Fleet effect)
+        |
+        v
+review exact actions, spending bounds, and digest
+        |
+        v
+apply that digest -> verify result -> retry safely if interrupted
+```
 
 ## What It Provides
 

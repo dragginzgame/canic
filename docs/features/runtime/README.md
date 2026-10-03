@@ -1,9 +1,5 @@
 # Canister Runtime
 
-<p align="center">
-  <img src="../../../assets/1400x600/canic-runtime.jpg" alt="The Canic mechanic assembling canister modules at a workbench" width="700" />
-</p>
-
 The **runtime** is the part of Canic compiled into an application's Rust
 canisters. It supplies common foundations—startup, persistent state, scheduled
 work, calls to other canisters, and health information—so application code can
@@ -12,6 +8,17 @@ focus on its own behavior.
 Applications add the public `canic` crate as a Rust dependency. The crate
 connects Canic's lifecycle and generated configuration while leaving business
 logic in the application package.
+
+```text
+Application methods and business logic
+                  |
+                  v
+        Canic runtime and guards
+        /          |           \
+ lifecycle   persistent data   calls and timers
+        \          |           /
+                  IC
+```
 
 ## What It Provides
 

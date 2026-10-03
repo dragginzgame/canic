@@ -37,11 +37,14 @@ unfinished and not push-ready.
 The newcomer pass now defines IC and Canic vocabulary before using it across
 the root README, documentation and feature indexes, installation, configuration,
 the minimal managed Fleet walkthrough, reference Apps, public crate/CLI guides,
-operations and architecture entry points. The supplied Canic mechanic artwork
-appears on the root landing page and its matching runtime, authentication,
-orchestration, scaling, build-evidence, backup and diagnostics guides with
-descriptive alternative text. Detailed contracts, active designs, audits and
-historical records retain their precise technical language and evidence role.
+operations and architecture entry points. The root now presents Canic as the
+Kubernetes-like orchestration and operations layer for multi-canister IC Apps,
+then traces source and configuration through build evidence, reviewed planning
+and per-Subnet management. Compact diagrams replace full-width character
+banners; one combined logo/welcome hero anchors the landing page, and small
+supplied callouts retain descriptive alternative text. Detailed contracts,
+active designs, audits and historical records retain their precise technical
+language and evidence role.
 
 ## Cross-Component caller authority assessment — 2026-10-03
 

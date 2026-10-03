@@ -1,9 +1,5 @@
 # Authentication
 
-<p align="center">
-  <img src="../../../assets/1400x600/canic-authentication.jpg" alt="The Canic mechanic opening a secure door with an access key" width="700" />
-</p>
-
 Authentication answers two questions: **who is making this request, and are
 they allowed to make it?** Canic checks those answers before application logic
 runs.
@@ -12,6 +8,17 @@ The IC also needs to distinguish the canister that made a call from the user or
 service it may represent. Canic keeps those identities separate so an
 application login cannot accidentally become permission to manage canisters or
 spend their cycles.
+
+```text
+Calling canister identity -----------+
+                                     |
+Represented user or service proof ---+--> endpoint guard --> application logic
+                                     |
+Receiver's allowed-role policy ------+
+
+Management methods use the calling canister's infrastructure authority.
+An application token never becomes controller or Fleet authority.
+```
 
 ## What It Provides
 
