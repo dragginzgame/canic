@@ -1,11 +1,21 @@
 //! Pool evidence preserves exact history and rejects unbounded or foreign observations.
 
 use super::*;
+use crate::fleet_ensure::{
+    view::release::{
+        FleetReleasePoolView,
+        pool::{ReleasePoolCreationDisposition, ReleasePoolImportDisposition},
+    },
+    workflow::release::assess_pools,
+};
 use canic_control_plane::dto::root::RootPoolBootstrapReleaseEvidence;
 use canic_core::{
     cdk::types::Cycles,
     dto::{
-        pool::{CanisterPoolCreation, CanisterPoolCreationProgress, CanisterPoolHandoff},
+        pool::{
+            CanisterPoolCreation, CanisterPoolCreationFailure, CanisterPoolCreationProgress,
+            CanisterPoolHandoff,
+        },
         pool_import::{
             PoolImportPhase, PoolImportReservation, PoolImportSource, PoolImportSourceProgress,
             PoolImportStatus,
@@ -215,4 +225,107 @@ fn empty_obligations_and_typed_refusal_are_distinct() {
     assert!(matches!(decode(root, &bytes, &mut remaining),
         Err(ReleasePoolError::Rejected { root: target, rejection: observed })
             if target == root && observed == rejection));
+}
+
+#[test]
+fn assessment_keeps_wire_evidence_and_every_custody_candidate() {
+    let root = Principal::from_slice(&[1]);
+    let mut status = fixture(root, Principal::from_slice(&[2]));
+    let created = Principal::from_slice(&[31]);
+    let handed_off = Principal::from_slice(&[32]);
+    let imported = Principal::from_slice(&[33]);
+    let receipted = Principal::from_slice(&[34]);
+    status.creation.as_mut().unwrap().progress = CanisterPoolCreationProgress::Created {
+        block_index: 42,
+        canister_id: created,
+    };
+    status.handoff.as_mut().unwrap().canister_id = handed_off;
+    let import = status.capacity_import.as_mut().unwrap();
+    import.reservation.sources[0].canister_id = imported;
+    import.progress = vec![PoolImportSourceProgress::Ready(
+        canic_core::dto::pool_import::PoolImportSourceReceipt {
+            root_sender_canister_version: 1,
+            canister_id: receipted,
+            canister_version: 2,
+            before_uninstall_canister_version: 1,
+            retained_cycles: 900,
+            retained_reserved_cycles: 0,
+            observed_debit_cycles: 100,
+        },
+    )];
+    import.phase = PoolImportPhase::Released {
+        publication_sha256: [99; 32],
+    };
+    import.reserved_debit_cycles = import.reservation.maximum_root_debit_cycles;
+    let mut remaining = MAXIMUM_CENSUS_BYTES;
+    let decoded = decode(root, &wire(status.clone()), &mut remaining).unwrap();
+    let evidence = FleetReleasePoolView {
+        roots: vec![decoded],
+    };
+    let assessed = assess_pools(evidence.clone());
+    assert_eq!(assessed.evidence, evidence);
+    let [assessment] = assessed.roots.as_slice() else {
+        panic!("one selected Root");
+    };
+    assert_eq!(assessment.facts.root, root);
+    assert_eq!(
+        assessment.import,
+        Some(ReleasePoolImportDisposition::RecordedCompletion)
+    );
+    assert_eq!(
+        assessment.creation,
+        Some(ReleasePoolCreationDisposition::InventoryRecovery {
+            canister_id: created
+        })
+    );
+    let facts = assessment.facts.import.as_ref().unwrap();
+    assert_eq!(facts.plan_sha256, [3; 32]);
+    assert_eq!(facts.sequence, 0);
+    assert!(facts.call_budget_exhausted);
+    assert!(facts.debit_budget_exhausted);
+    assert_eq!(
+        assessment.facts.creation.as_ref().unwrap().operation_id,
+        [8; 32]
+    );
+    assert_eq!(
+        assessment.facts.handoff.as_ref().unwrap().recipient,
+        status.handoff.as_ref().unwrap().recipient
+    );
+    let bootstrap = status.bootstrap.as_ref().unwrap();
+    let expected = bootstrap
+        .sources
+        .iter()
+        .copied()
+        .chain([bootstrap.store, created, handed_off, imported, receipted])
+        .collect();
+    assert_eq!(assessment.facts.custody_candidates, expected);
+}
+
+#[test]
+fn decoded_creation_uncertainty_cannot_be_assessed_as_cancelable() {
+    let root = Principal::from_slice(&[1]);
+    for (progress, expected) in [
+        (
+            CanisterPoolCreationProgress::Intent {
+                uncertain_result: true,
+            },
+            ReleasePoolCreationDisposition::LedgerReconciliation,
+        ),
+        (
+            CanisterPoolCreationProgress::Blocked {
+                failure: CanisterPoolCreationFailure::UnresolvedAfterLedgerWindow,
+            },
+            ReleasePoolCreationDisposition::UnresolvedLedgerCreation,
+        ),
+    ] {
+        let mut status = fixture(root, Principal::from_slice(&[2]));
+        status.creation.as_mut().unwrap().progress = progress;
+        let mut remaining = MAXIMUM_CENSUS_BYTES;
+        let decoded = decode(root, &wire(status.clone()), &mut remaining).unwrap();
+        let assessment = assess_pools(FleetReleasePoolView {
+            roots: vec![decoded],
+        });
+        assert_eq!(assessment.evidence.roots, [status]);
+        assert_eq!(assessment.roots[0].creation, Some(expected));
+    }
 }

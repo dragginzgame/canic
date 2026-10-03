@@ -47,6 +47,8 @@ mod tests {
     #[cfg(test)]
     mod packaged_consumer;
     #[cfg(test)]
+    mod pool_creation_uncertainty;
+    #[cfg(test)]
     mod provisioning_release;
     #[cfg(test)]
     mod release_artifacts;
@@ -1486,13 +1488,12 @@ mod tests {
         fn new() -> Result<Self, BaselinePoolContractError> {
             Ok(Self {
                 id: FixtureRecipeId::try_new("canic/active-component-registry/v1")?,
-                reset_requirements: ResetRequirements::try_new([
-                    ResetRequirement::CanisterSnapshots,
-                    ResetRequirement::CanisterCycles(CycleResetPolicy::TopUpTo(
-                        crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-                    )),
-                    ResetRequirement::PocketIcTime(TimeResetPolicy::PreserveCurrent),
-                ])?,
+                reset_requirements: ResetRequirements::try_new(
+                    CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
+                    [ResetRequirement::PocketIcTime(
+                        TimeResetPolicy::PreserveCurrent,
+                    )],
+                )?,
             })
         }
     }
@@ -13547,6 +13548,7 @@ cycles = "80T"
     #[derive(Clone, Copy)]
     struct MainnetRefillScenario {
         first_response_pending: bool,
+        hold_creation_retries: bool,
         required_ready_assets: u32,
     }
 
@@ -13619,6 +13621,13 @@ cycles = "80T"
             .expect("encode Cycles Ledger stub init"),
             None,
         );
+        if scenario.hold_creation_retries {
+            pool_creation_uncertainty::set_refusal(
+                pic,
+                cycles_ledger,
+                Some(pool_creation_uncertainty::CreationRetryRefusal::TemporarilyUnavailable),
+            );
+        }
         assets
     }
 
@@ -13752,6 +13761,7 @@ cycles = "80T"
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let fixture = build_mainnet_refill_fixture(MainnetRefillScenario {
             first_response_pending,
+            hold_creation_retries: false,
             required_ready_assets,
         });
         converge_mainnet_refill(&fixture, required_ready_assets);
@@ -17714,6 +17724,10 @@ cycles = "80T"
             (
                 "autonomous refill margin and exact replay",
                 autonomous_refill_margin_survives_burn_and_replays_without_another_debit,
+            ),
+            (
+                "pool creation uncertainty survives retry refusals",
+                pool_creation_uncertainty::uncertain_creation_retains_custody_across_retry_refusals,
             ),
             (
                 "topped-up imported pool asset refresh",

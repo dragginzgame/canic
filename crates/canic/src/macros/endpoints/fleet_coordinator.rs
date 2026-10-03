@@ -164,6 +164,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             Funding,
             RegistryManifest,
             RegistryVersion,
+            IntentRelease(Option<::canic::dto::release_intents::IntentReleaseKey>),
             ReplayRelease(Option<[u8; 32]>),
             RootAcknowledgements,
         }
@@ -175,6 +176,7 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
             Funding(::canic::dto::fleet_coordinator::CoordinatorFundingStatusResponse),
             RegistryManifest(::canic::dto::fleet_registry::FleetRegistryManifest),
             RegistryVersion(::canic::dto::fleet_registry::FleetRegistryVersion),
+            IntentRelease(::canic::dto::release_intents::IntentReleaseResponse),
             ReplayRelease(::canic::dto::release_receipts::ReplayReleaseResponse),
             RootAcknowledgements(Vec<::canic::dto::fleet_registry::FleetSubnetRootSnapshotAcknowledgement>),
         }
@@ -202,6 +204,10 @@ macro_rules! canic_emit_fleet_coordinator_endpoints {
                 ObservabilityRequest::RegistryVersion => {
                     $crate::__internal::control_plane::api::fleet_coordinator::FleetCoordinatorApi::version()
                         .map(ObservabilityResponse::RegistryVersion)
+                }
+                ObservabilityRequest::IntentRelease(start_after) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::release_intents(start_after)
+                        .map(ObservabilityResponse::IntentRelease)
                 }
                 ObservabilityRequest::ReplayRelease(start_after) => {
                     $crate::__internal::core::api::observability::ObservabilityApi::release_receipts(start_after)

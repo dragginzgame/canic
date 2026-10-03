@@ -1,7 +1,7 @@
 # Operations And Diagnostics
 
 The `canic` command-line program runs on a developer's or operator's computer.
-It creates local project files, builds canisters, connects to trusted networks,
+It creates local workspace files, builds canisters, connects to trusted networks,
 shows diagnostic information, and prepares reviewed deployment changes.
 
 Commands provide readable output for people and stable JSON for scripts. Both

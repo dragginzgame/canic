@@ -30,7 +30,7 @@ supported inventory, but it does not prove the live layout or permissions and
 does not create a backup. Current selection requires exactly one Fleet Subnet
 Root.
 
-<br clear="right" />
+<br clear="left" />
 
 This gap dates from the 0.100.80 removal of the public Subnet Registry query.
 It has no accepted implementation slice in the current 0.110 batch or scheduled

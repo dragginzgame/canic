@@ -4,6 +4,7 @@
 //! Does not own: settlement, producer fences, execution or new spending authority.
 //! Boundary: certified custody and Registry observations bracket the complete collection.
 
+mod assessment;
 #[cfg(test)]
 pub(super) mod tests;
 
@@ -31,6 +32,8 @@ use ic_agent::Agent;
 use serde::Deserialize;
 use std::time::Duration;
 use thiserror::Error;
+
+pub(in crate::fleet_ensure) use assessment::assessment_facts;
 
 const RESPONSE_BYTES: usize = 256 * 1024;
 const MAXIMUM_CENSUS_BYTES: usize = 8 * 1024 * 1024;

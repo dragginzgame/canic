@@ -4,6 +4,7 @@
 
 pub mod accounts;
 pub mod funding;
+pub mod intents;
 pub mod inventory;
 pub mod observation;
 pub mod pool;

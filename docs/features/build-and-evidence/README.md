@@ -77,8 +77,9 @@ admission checks, not a substitute for replica validation of the whole module.
 
 Build provenance is not runtime attestation. Evidence and policy commands do
 not install canisters, change controllers, sign artifacts, import registries,
-or adopt discovered resources. Fleet mutation remains solely in the reviewed
-`canic fleet ensure` workflow.
+or adopt discovered resources. Ordinary deployment convergence belongs to the
+reviewed `canic fleet ensure` workflow; bootstrap, capacity import and other
+explicit control operations retain their own reviewed authority.
 
 ## Start Here
 

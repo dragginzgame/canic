@@ -5,6 +5,16 @@ use crate::fleet_ensure::ops::release::{
     observation::ReleaseObservationError,
     provisioning::{self, ReleaseProvisioningError as Failure, ReleaseProvisioningStage as Stage},
 };
+use crate::fleet_ensure::{
+    view::release::provisioning::{
+        FleetReleaseProvisioningAssessment, ReleaseProvisioningDisposition,
+        ReleaseProvisioningIdentity, ReleaseProvisioningOwner,
+    },
+    workflow::release::assess_provisioning_evidence,
+};
+use canic_control_plane::dto::root::{
+    RootProvisioningReleasePhase, RootProvisioningReleaseResponse,
+};
 use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
@@ -15,13 +25,15 @@ pub(super) fn assert_census(
     registry: &FleetRegistry,
 ) {
     let root = registry.fleet_subnet_roots[0].fleet_subnet_root;
-    let page = provisioning::tests::fixture(root);
+    let page = delivery_fixture(root);
     let replace = |bytes| {
         pic.update_call(root, review.authority.operator, "replace", bytes)
             .unwrap();
     };
     let collect = |review, registry| {
-        runtime.block_on(provisioning::collect_with_agent(agent, review, registry))
+        runtime
+            .block_on(provisioning::collect_with_agent(agent, review, registry))
+            .map(assess_provisioning_evidence)
     };
     replace(provisioning::tests::wire(page.clone()));
     let balances = review
@@ -30,10 +42,7 @@ pub(super) fn assert_census(
         .map(|source| pic.cycle_balance(source.binding.canister_id))
         .collect::<Vec<_>>();
     let observed = collect(review, registry).unwrap();
-    assert_eq!(
-        observed.roots[0].pages.as_slice(),
-        std::slice::from_ref(&page)
-    );
+    assert_assessment(&observed, &page);
     assert_eq!(collect(review, registry).unwrap(), observed);
     assert_eq!(
         review
@@ -93,8 +102,71 @@ pub(super) fn assert_census(
     let mut empty = page;
     empty.entry = None;
     replace(provisioning::tests::wire(empty.clone()));
+    assert_empty(&collect(review, registry).unwrap(), &empty);
+}
+
+fn delivery_fixture(root: Principal) -> RootProvisioningReleaseResponse {
+    let mut page = provisioning::tests::fixture(root);
+    page.active_provisioning = Some([7; 32]);
+    page.active_directory_synchronization = Some([7; 32]);
+    let entry = page.entry.as_mut().unwrap();
+    entry.phase = RootProvisioningReleasePhase::Publishing;
+    entry.delivery_in_flight = Some(Principal::from_slice(&[41]));
+    page
+}
+
+fn identity(owner: ReleaseProvisioningOwner) -> ReleaseProvisioningIdentity {
+    ReleaseProvisioningIdentity {
+        owner,
+        operation_id: [7; 32],
+    }
+}
+
+fn assert_assessment(
+    observed: &FleetReleaseProvisioningAssessment,
+    page: &RootProvisioningReleaseResponse,
+) {
     assert_eq!(
-        collect(review, registry).unwrap().roots[0].pages.as_slice(),
-        std::slice::from_ref(&empty)
+        observed.evidence.roots[0].pages.as_slice(),
+        std::slice::from_ref(page)
+    );
+    let root = &observed.roots[0];
+    assert_eq!(root.root, page.root);
+    assert_eq!(
+        root.unmatched_active,
+        [identity(ReleaseProvisioningOwner::DirectorySynchronization)].into()
+    );
+    let [operation] = root.operations.as_slice() else {
+        panic!("one observed provisioning record");
+    };
+    assert_eq!(
+        operation.facts.identity,
+        identity(ReleaseProvisioningOwner::Provisioning)
+    );
+    assert_eq!(
+        operation.disposition,
+        ReleaseProvisioningDisposition::DeliveryReconciliation {
+            recipient: Principal::from_slice(&[41])
+        }
+    );
+}
+
+fn assert_empty(
+    observed: &FleetReleaseProvisioningAssessment,
+    page: &RootProvisioningReleaseResponse,
+) {
+    assert_eq!(
+        observed.evidence.roots[0].pages.as_slice(),
+        std::slice::from_ref(page)
+    );
+    let root = &observed.roots[0];
+    assert!(root.operations.is_empty());
+    assert_eq!(
+        root.unmatched_active,
+        [
+            identity(ReleaseProvisioningOwner::Provisioning),
+            identity(ReleaseProvisioningOwner::DirectorySynchronization)
+        ]
+        .into()
     );
 }

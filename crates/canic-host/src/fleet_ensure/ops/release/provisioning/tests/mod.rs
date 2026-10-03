@@ -1,8 +1,15 @@
 //! Complete discovery, bounded decoding and exact cursor/header refusal proofs.
 
 use super::*;
+use crate::fleet_ensure::{
+    view::release::provisioning::{ReleaseProvisioningDisposition, ReleaseProvisioningOwner},
+    workflow::release::assess_provisioning_evidence,
+};
 use candid::types::{Field, Label, Type, TypeEnv, TypeInner};
 use canic_control_plane::dto::root::RootProvisioningReleaseEntry;
+use canic_core::dto::component_provisioning::{
+    ProvisioningFailureStage, ProvisioningRetryCategory, RootComponentProvisioningFailure,
+};
 
 pub(in crate::fleet_ensure::ops::release) fn fixture(
     root: Principal,
@@ -205,4 +212,76 @@ fn accepts_expanded_reply_type_tables_while_preserving_the_selected_page() {
         .is_err()
     );
     assert_eq!(decode_with_budget(root, &expanded).unwrap(), page);
+}
+
+#[test]
+fn wire_assessment_retains_both_owners_and_ignores_stale_failure_on_completion() {
+    let root = Principal::from_slice(&[1]);
+    let mut first = fixture(root);
+    first.active_provisioning = Some([7; 32]);
+    first.active_directory_synchronization = Some([7; 32]);
+    let entry = first.entry.as_mut().unwrap();
+    entry.phase = Phase::RuntimesActive;
+    entry.last_failure = Some(RootComponentProvisioningFailure {
+        stage: ProvisioningFailureStage::Provisioning,
+        target: root,
+        operation_id: [7; 32],
+        diagnostic_code: 81,
+        retry_category: ProvisioningRetryCategory::ReviewRequired,
+        failed_at_ns: 1,
+        consecutive_failures: u32::MAX,
+        retry_at_ns: None,
+    });
+    first.next_after = Some(entry.key);
+    let recipient = Principal::from_slice(&[2]);
+    let mut second = fixture(root);
+    second.active_provisioning = first.active_provisioning;
+    second.active_directory_synchronization = first.active_directory_synchronization;
+    let entry = second.entry.as_mut().unwrap();
+    entry.key = Key::DirectorySynchronization([7; 32]);
+    entry.phase = Phase::DirectorySynchronizing;
+    entry.delivery_in_flight = Some(recipient);
+    let originals = vec![first, second];
+    let mut pages = Pages::new(root);
+    for page in &originals {
+        pages
+            .push(decode_with_budget(root, &wire(page.clone())).unwrap())
+            .unwrap();
+    }
+    let evidence = FleetReleaseProvisioningView {
+        roots: vec![FleetReleaseRootProvisioningView {
+            root,
+            pages: pages.pages,
+        }],
+    };
+    let assessed = assess_provisioning_evidence(evidence);
+    assert_eq!(assessed.evidence.roots[0].pages, originals);
+    let result = &assessed.roots[0];
+    assert_eq!(result.root, root);
+    assert!(result.unmatched_active.is_empty());
+    let [provisioning, directory] = result.operations.as_slice() else {
+        panic!("two independently owned journals");
+    };
+    assert_eq!(
+        provisioning.facts.identity.owner,
+        ReleaseProvisioningOwner::Provisioning
+    );
+    assert_eq!(
+        directory.facts.identity.owner,
+        ReleaseProvisioningOwner::DirectorySynchronization
+    );
+    assert_eq!(
+        provisioning.facts.identity.operation_id,
+        directory.facts.identity.operation_id
+    );
+    assert_eq!(provisioning.facts.plan_hash, [8; 32]);
+    assert_eq!(directory.facts.plan_hash, [8; 32]);
+    assert_eq!(
+        provisioning.disposition,
+        ReleaseProvisioningDisposition::RecordedCompletion
+    );
+    assert_eq!(
+        directory.disposition,
+        ReleaseProvisioningDisposition::DeliveryReconciliation { recipient }
+    );
 }

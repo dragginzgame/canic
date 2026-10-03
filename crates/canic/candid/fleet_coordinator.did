@@ -1,10 +1,10 @@
 // Durable phase of one authority canister's restore fence.
 type AuthorityRestoreFencePhase = variant {
+  ReleaseSealed : record { recipient : principal; review_sha256 : blob };
   Open;
   Sealed;
-  ReleaseSealed : record { review_sha256 : blob; recipient : principal };
 };
-// Current durable authority snapshot/restore-fence state.
+// Current durable authority snapshot/release-fence state.
 type AuthorityRestoreFenceStatusResponse = record {
   history_total_num_changes : opt nat64;
   authority_canister : principal;
@@ -1239,63 +1239,63 @@ type FleetSubnetRootSnapshotAcknowledgementRequest = record {
 // Lifecycle state of one Fleet Subnet Root in the Fleet Registry snapshot.
 //
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
+// One original accounting row; local records need not have a linked replay receipt.
+type IntentReleaseEntry = variant {
+  Local : record { intent_id : nat64; "record" : ReplayReleaseIntent };
+  ReceiptBacked : IntentReleaseReceipt;
+};
+// Retained terminal evidence, without interpreting it as a new authorization.
+type IntentReleaseEvidence = record {
+  source_canister : principal;
+  schema_version : nat32;
+  fingerprint : blob;
+};
+// Canonical scan order: local accounting first, then receipt-backed reservations.
+type IntentReleaseKey = variant { Local : nat64; ReceiptBacked : blob };
+// One canonical receipt-backed reservation, including application retention.
+type IntentReleaseReceipt = record {
+  updated_at_ns : nat64;
+  operation_id : blob;
+  created_at_ns : nat64;
+  state : IntentReleaseReceiptState;
+  resource_key : text;
+  payload_hash_schema_version : nat32;
+  application_replay_deadline_ns : opt nat64;
+  quantity : nat64;
+  revision : nat64;
+  payload_hash : blob;
+};
+// Exact receipt-backed state, independent of retention deadlines.
+type IntentReleaseReceiptState = variant {
+  Committed : IntentReleaseEvidence;
+  RolledBack : IntentReleaseEvidence;
+  Pending;
+};
+// One bounded row with key-only lookahead; discovery never expires or settles work.
+type IntentReleaseResponse = record {
+  owner : principal;
+  entry : opt IntentReleaseEntry;
+  next_after : opt IntentReleaseKey;
+};
 type ObservabilityRequest = variant {
-  ReplayRelease : opt blob;
   RootAcknowledgements;
   Admission : FleetAdmissionStatusRequest;
+  IntentRelease : opt IntentReleaseKey;
   RegistryManifest;
   Funding;
   AuthorityRestore;
   RegistryVersion;
+  ReplayRelease : opt blob;
 };
 type ObservabilityResponse = variant {
-  ReplayRelease : ReplayReleaseResponse;
   RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
   Admission : FleetAdmissionStatusResponse;
+  IntentRelease : IntentReleaseResponse;
   RegistryManifest : FleetRegistryManifest;
   Funding : CoordinatorFundingStatusResponse;
   AuthorityRestore : AuthorityRestoreFenceStatusResponse;
   RegistryVersion : FleetRegistryVersion;
-};
-// Original authentication retained independently of the release observer.
-type ReplayReleaseAuthentication = variant { DirectCaller; DelegatedToken; RoleAttestation };
-type ReplayReleaseRecoveryReason = variant {
-  ExternalEffectStatusUnknown;
-  ComponentChildLifecycleInterrupted;
-  ResponseCommitFailed;
-  CostSettlementFailed;
-};
-type ReplayReleasePhase = variant {
-  Reserved;
-  ExternalEffectInFlight;
-  Committed;
-  RecoveryRequired : ReplayReleaseRecoveryReason;
-};
-type ReplayReleaseEffect = variant {
-  RootCanisterProvision : record { command_kind : text };
-  ManagementCall : record { canister : principal; method : text };
-  IcpTransfer : record { operation_id : blob };
-};
-type ReplayReleaseSettlement = record { quota_intent_id : nat64; reservation_intent_id : nat64 };
-type ReplayReleaseEntry = record {
-  slot : blob;
-  command_kind : text;
-  operation_id : blob;
-  actor : principal;
-  authentication : ReplayReleaseAuthentication;
-  payload_hash_schema_version : nat32;
-  payload_hash : blob;
-  phase : ReplayReleasePhase;
-  created_at_ns : nat64;
-  updated_at_ns : nat64;
-  expires_at_ns : opt nat64;
-  cost_guard_settlement : opt ReplayReleaseSettlement;
-  effect : opt ReplayReleaseEffect;
-};
-type ReplayReleaseResponse = record {
-  owner : principal;
-  entry : opt ReplayReleaseEntry;
-  next_after : opt blob;
+  ReplayRelease : ReplayReleaseResponse;
 };
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };
@@ -1345,6 +1345,71 @@ type PublicStatusRequest = variant { Overview; Health };
 type PublicStatusResponse = variant {
   Overview : RoleOverviewResponse;
   Health : PublicHealth;
+};
+// Authentication class retained by the original operation, independent of the current observer.
+type ReplayReleaseAuthentication = variant {
+  DirectCaller;
+  DelegatedToken;
+  RoleAttestation;
+};
+// Original effect identity; no field authorizes another dispatch.
+type ReplayReleaseEffect = variant {
+  IcpTransfer : OperationReceipt;
+  ManagementCall : record { method : text; canister : principal };
+  RootCanisterProvision : record { command_kind : text };
+};
+// Compact authority metadata for one retained replay receipt.
+type ReplayReleaseEntry = record {
+  authentication : ReplayReleaseAuthentication;
+  actor : principal;
+  slot : blob;
+  cost_guard_settlement : opt ReplayReleaseSettlement;
+  updated_at_ns : nat64;
+  effect : opt ReplayReleaseEffect;
+  operation_id : blob;
+  created_at_ns : nat64;
+  command_kind : text;
+  payload_hash_schema_version : nat32;
+  phase : ReplayReleasePhase;
+  expires_at_ns : opt nat64;
+  payload_hash : blob;
+};
+// Exact bounded local reservation record, observed in the same query as its receipt.
+type ReplayReleaseIntent = record {
+  state : ReplayReleaseIntentState;
+  resource_key : text;
+  quantity : nat64;
+  created_at_secs : nat64;
+  ttl_secs : opt nat64;
+};
+// Retained accounting state; TTL expiry does not establish an external effect's outcome.
+type ReplayReleaseIntentState = variant { Committed; Aborted; Pending };
+// Exact retained replay phase; expiry never proves an uncertain paid effect absent.
+type ReplayReleasePhase = variant {
+  Committed;
+  RecoveryRequired : ReplayReleaseRecoveryReason;
+  Reserved;
+  ExternalEffectInFlight;
+};
+// Original recovery reason, including unsettled accounting after a known effect.
+type ReplayReleaseRecoveryReason = variant {
+  ComponentChildLifecycleInterrupted;
+  ResponseCommitFailed;
+  ExternalEffectStatusUnknown;
+  CostSettlementFailed;
+};
+// One bounded stable row per page, with key-only lookahead and no expiry pruning.
+type ReplayReleaseResponse = record {
+  owner : principal;
+  entry : opt ReplayReleaseEntry;
+  next_after : opt blob;
+};
+// Original cost-guard identities and current records; missing records are not settlement proof.
+type ReplayReleaseSettlement = record {
+  quota : opt ReplayReleaseIntent;
+  reservation : opt ReplayReleaseIntent;
+  reservation_intent_id : nat64;
+  quota_intent_id : nat64;
 };
 type Result = variant { Ok : CoordinatorCommandResponse; Err : Error };
 type Result_1 = variant { Ok : CoordinatorOperationReadResponse; Err : Error };
@@ -1419,3 +1484,4 @@ service : (FleetCoordinatorInitArgs) -> {
   canic_public_status : (PublicStatusRequest) -> (Result_4) query;
 }
 // canic:payload-contract a46e736368656d615f76657273696f6e01782064656661756c745f7570646174655f696e67726573735f6d61785f6279746573194000707570646174655f6f766572726964657381a2666d6574686f64781963616e69635f636f6f7264696e61746f725f636f6d6d616e64696d61785f62797465731a00800000781976617269616e745f646570656e64656e745f6d6574686f647381781963616e69635f636f6f7264696e61746f725f636f6d6d616e64
+

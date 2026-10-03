@@ -41,11 +41,31 @@ pub enum ReplayReleaseEffect {
     IcpTransfer { operation_id: [u8; 32] },
 }
 
-/// Original cost-guard intent identities, without asserting their current settlement state.
+/// Retained accounting state; TTL expiry does not establish an external effect's outcome.
 #[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum ReplayReleaseIntentState {
+    Pending,
+    Committed,
+    Aborted,
+}
+
+/// Exact bounded local reservation record, observed in the same query as its receipt.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct ReplayReleaseIntent {
+    pub resource_key: String,
+    pub quantity: u64,
+    pub state: ReplayReleaseIntentState,
+    pub created_at_secs: u64,
+    pub ttl_secs: Option<u64>,
+}
+
+/// Original cost-guard identities and current records; missing records are not settlement proof.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
 pub struct ReplayReleaseSettlement {
     pub quota_intent_id: u64,
     pub reservation_intent_id: u64,
+    pub quota: Option<ReplayReleaseIntent>,
+    pub reservation: Option<ReplayReleaseIntent>,
 }
 
 /// Compact authority metadata for one retained replay receipt.

@@ -1,5 +1,18 @@
 # Canic 0.110 Implementation Status
 
+## Maintainer-requested .52 checkpoint — 2026-10-03
+
+The maintainer needs an earlier push after dependency edits finish. Include the
+implemented FR1 discovery/assessment APIs and production corrections in the open
+.52 draft, alongside the completed Host/Backup and documentation work. This is a
+checkpoint boundary under delivery cadence; it does not close FR1 or expose its
+unfinished release command. Keep the remaining execution, quiescence, custody and
+conservation work in the accepted FR1 batch. Final-graph targeted lint, native,
+inventory, Candid, embedded-peer and four exact PocketIC proofs pass. The .52
+checkpoint is ready for the maintainer-selected release flow; the current handoff
+owns exact qualification evidence and remaining FR1 scope. No version or Git
+action was performed.
+
 ## Fresh-shard authentication simplification — complete for .51, 2026-10-02
 
 The maintainer selected restoration of automatic proof fetching for fresh shards
@@ -46,8 +59,8 @@ FR1/CS1 and the other session's qualification retain their separate owners.
 The maintainer reports 0.110.51 published and selected continuation of the
 accepted FR1 whole-Fleet release-to-capacity batch. Published corrections,
 including RD1/CANIC-191, CANIC-190 and CANIC-192, are not reopened. Packages remain
-.51; completed Host/Backup corrections have an open .52 changelog draft while
-incomplete FR1 remains in root `Unreleased`. Sibling blob implementation is
+.51; the open .52 checkpoint draft includes completed Host/Backup corrections
+and implemented FR1 discovery. Remaining FR1 execution stays in root `Unreleased`. Sibling blob implementation is
 outside this batch; the independent service must have no Canic dependency.
 
 The parked FR1 source has been restored and reconciled against .50. Keep
@@ -343,6 +356,11 @@ application acceptance remains separate from Canic release gates.
 
 ## Accepted code-review corrections — 2026-09-30
 
+Finding disposition is owned by the
+[GitHub review catalogue](https://github.com/dragginzgame/canic/issues/40) and its
+linked issues. This section retains the accepted sequence and qualification
+evidence. Record new finding triage and completion decisions in GitHub.
+
 The maintainer initially stopped publication and authorized correction of the September 29
 code review against the current source. The existing cleanup qualification does
 not establish readiness of this expanded batch. Keep the `.49` draft open and
@@ -369,12 +387,12 @@ Registry changes must not prevent safe same-operation recovery.
 | Qualification | macOS and execution boundaries / Host, CLI, Testing | Native macOS build/filesystem evidence, test selection, message/record admission and artifact identity; focused owner checks. | Native macOS CI configured; linked-directory Host/Backup/restore checks pass on Linux; native results and execution-boundary work pending |
 
 R4 traceability: the placement ownership, admission, quota and point-lookup work
-addresses `core-placement-fleet-1` through `core-placement-fleet-5`; delayed receipt
-completion addresses `core-placement-fleet-9`. Allocation-bound routing and
-Directory fencing address `r2-recycled-principal-authority-4`, while interrupted
-reset handling addresses `r2-recycled-principal-authority-6`. The issuer, replay
-and funding findings `r2-recycled-principal-authority-1` through
-`r2-recycled-principal-authority-3` remain open. The terminal-removal replay
+addresses [core-placement-fleet-1](https://github.com/dragginzgame/canic/issues/76) through [core-placement-fleet-5](https://github.com/dragginzgame/canic/issues/376); delayed receipt
+completion addresses [core-placement-fleet-9](https://github.com/dragginzgame/canic/issues/80). Allocation-bound routing and
+Directory fencing address [r2-recycled-principal-authority-4](https://github.com/dragginzgame/canic/issues/429), while interrupted
+reset handling addresses [r2-recycled-principal-authority-6](https://github.com/dragginzgame/canic/issues/430). The issuer, replay
+and funding findings [r2-recycled-principal-authority-1](https://github.com/dragginzgame/canic/issues/426) through
+[r2-recycled-principal-authority-3](https://github.com/dragginzgame/canic/issues/428) remain open. The terminal-removal replay
 regression additionally exposed permanent-absence checks in storage and workflow;
 their correction passes direct-command and RPC replay with the replacement unchanged.
 
@@ -386,40 +404,23 @@ complete accepted outcome and its direct rejection/recovery evidence, not only
 the most recent slice.
 
 R5 filesystem traceability: manifest publication recovery addresses
-`backup-persistence-4`; selected-root resolution addresses
-`backup-persistence-3` and `backup-persistence-5`; buffered JSON reads address
-`backup-persistence-10`; locking CLI layout creation addresses
-`backup-persistence-8`. The next continuation closes `backup-persistence-1` using
+[backup-persistence-4](https://github.com/dragginzgame/canic/issues/310); selected-root resolution addresses
+[backup-persistence-3](https://github.com/dragginzgame/canic/issues/309) and [backup-persistence-5](https://github.com/dragginzgame/canic/issues/311); buffered JSON reads address
+[backup-persistence-10](https://github.com/dragginzgame/canic/issues/316); locking CLI layout creation addresses
+[backup-persistence-8](https://github.com/dragginzgame/canic/issues/314). The next continuation closes [backup-persistence-1](https://github.com/dragginzgame/canic/issues/307) using
 a parent-side layout lock and durable restore references, including external
 journals. Owner death, surviving command descendants, paused/failed work and
-terminal replay retain/release the exact source authority. `backup-persistence-9`
+terminal replay retain/release the exact source authority. [backup-persistence-9](https://github.com/dragginzgame/canic/issues/315)
 is addressed by verified retention, locked retained copies and per-entry deletion
 outcomes. Qualification passes 125 owning Backup tests and 108 CLI tests; the
 disposable-live-environment restore test remains intentionally ignored. These
 corrections do not close upload completion, consistent capture or restore
 authority findings, and do not enable fresh live backup execution.
 
-The conservative counted set is 31 distinct original findings after R5
-filesystem/retention, output/checksum and low export/reset qualification. Duplicates map to
-their original primary finding;
-partial corrections and unrun native macOS qualification are excluded:
-
-- R1: `core-intent-replay-1`.
-- R2: `host-ensure-capacity-6`, `host-ensure-capacity-7`,
-  `host-ensure-capacity-9`, `host-ensure-reinstall-1`,
-  `host-ensure-reinstall-5`, `r2-wire-mirror-agreement-5`.
-- R3: `core-auth-1`.
-- R4: `core-placement-fleet-1`, `core-placement-fleet-2`,
-  `core-placement-fleet-4`, `core-placement-fleet-9`, `xc-efficiency-1`,
-  `r2-recycled-principal-authority-4`, `r2-recycled-principal-authority-6`,
-  `xc-async-7`.
-- R5: `backup-persistence-1`, `backup-persistence-3`, `backup-persistence-4`,
-  `backup-persistence-5`, `backup-persistence-8`, `backup-persistence-9`,
-  `backup-persistence-10`.
-- R6: `xc-async-1`.
-- Filesystem/governance: `host-icp-network-11`, `xc-contracts-5`, `xc-contracts-6`.
-- Simple output/checksum corrections: `host-icp-network-10`, `backup-persistence-12`.
-- Low export/reset corrections: `cli-core-5`, `host-icp-network-9`.
+The [GitHub review catalogue](https://github.com/dragginzgame/canic/issues/40) owns
+the original-ID qualification set and duplicate mapping. Its linked issues record
+individual disposition; partial corrections and unrun native macOS qualification
+remain separate from completed targeted evidence.
 
 The simple corrections accept additive fields in ICP-owned balance, snapshot
 inventory and known visibility output, and compare valid backup artifact hex
@@ -440,7 +441,7 @@ maintained normal exports. Evidence: `target/review-validation/low-review-*.log`
 Host/CLI all-feature library/test Clippy passes with `--no-deps` and warnings
 denied; scoped formatting and whitespace checks pass.
 
-This is a tracked minimum, not a completed disposition of all 401 findings.
+Individual finding disposition continues in the linked GitHub issues.
 
 ## Retained evidence and remaining acceptance
 

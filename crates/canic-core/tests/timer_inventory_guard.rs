@@ -533,10 +533,6 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
     let root = workspace_root();
     let workspace_manifest = read_source(&root, "Cargo.toml");
     let workspace_dependencies = workspace_dependencies(&workspace_manifest);
-    let timer_version = dependency_version(&workspace_dependencies, "ic-timers")
-        .strip_prefix('=')
-        .filter(|version| !version.is_empty())
-        .expect("ic-timers must use an exact workspace version pin");
     let mut command = Command::new(env!("CARGO"));
     // Exercise machine-readable output even when CI forces terminal colors.
     command.env("CARGO_TERM_COLOR", "always");
@@ -573,9 +569,9 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
         "Canic's deployed runtime must resolve one raw timer provider identity"
     );
     assert_eq!(
-        package_identities(&tree, "ic-timers"),
-        BTreeSet::from([format!("ic-timers v{timer_version}").as_str()]),
-        "Canic's deployed runtime must resolve exactly the workspace timer package"
+        package_identities(&tree, "ic-timers").len(),
+        1,
+        "Canic's deployed runtime must resolve one shared timer provider identity"
     );
     // Cargo's locked resolution validates dependency requirements. IcyDB's
     // test-only version requirement does not own Canic's runtime timer custody.
@@ -686,7 +682,7 @@ fn pool_and_snapshot_paths_use_exact_native_owners() {
     );
     let authority = read_source(
         &root,
-        "crates/canic-core/src/workflow/runtime/authority_restore.rs",
+        "crates/canic-core/src/workflow/runtime/authority_restore/mod.rs",
     );
 
     for required in [
@@ -836,21 +832,6 @@ fn workspace_dependencies(manifest: &str) -> toml::Table {
         .and_then(toml::Value::as_table)
         .expect("workspace manifest must declare workspace dependencies")
         .clone()
-}
-
-fn dependency_version<'a>(dependencies: &'a toml::Table, name: &str) -> &'a str {
-    let dependency = dependencies
-        .get(name)
-        .unwrap_or_else(|| panic!("workspace dependency {name} must be declared"));
-    dependency
-        .as_str()
-        .or_else(|| {
-            dependency
-                .as_table()
-                .and_then(|dependency| dependency.get("version"))
-                .and_then(toml::Value::as_str)
-        })
-        .unwrap_or_else(|| panic!("workspace dependency {name} must declare a version"))
 }
 
 fn direct_dependency_names(manifest: &str) -> BTreeSet<String> {

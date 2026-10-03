@@ -13,6 +13,13 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::Deserialize;
 
+/// Discover canonical accounting without requiring replay links or cleanup indexes.
+pub fn release_intents(
+    start_after: Option<crate::dto::release_intents::IntentReleaseKey>,
+) -> Result<crate::dto::release_intents::IntentReleaseResponse, InternalError> {
+    crate::ops::runtime::release_intents::observe(IcOps::canister_self(), start_after)
+}
+
 /// Discover exact receipt metadata without filtering expired or completed history.
 pub fn release_receipts(
     start_after: Option<[u8; 32]>,
