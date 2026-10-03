@@ -1,9 +1,25 @@
 # Operations And Diagnostics
 
-The `canic` binary is the operator surface for local workspace setup, builds,
-network trust, evidence, diagnostics, and current desired-state Fleet
-convergence. Human-readable output and stable JSON modes serve interactive and
-automated workflows without merging their authority.
+The `canic` command-line program runs on a developer's or operator's computer.
+It creates local project files, builds canisters, connects to trusted networks,
+shows diagnostic information, and prepares reviewed deployment changes.
+
+Commands provide readable output for people and stable JSON for scripts. Both
+forms follow the same safety boundaries: inspecting or planning a change does
+not silently grant permission to apply it.
+
+```text
+inspect current state
+        |
+        v
+prepare a plan  (no paid Fleet effect)
+        |
+        v
+review exact actions, spending bounds, and digest
+        |
+        v
+apply that digest -> verify result -> retry safely if interrupted
+```
 
 ## What It Provides
 

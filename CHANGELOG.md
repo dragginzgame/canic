@@ -40,6 +40,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   canister ID exports and permits exact local reset of unloadable simulator trees.
   Preserves frozen input bytes for unchanged capacity imports and corrects
   authentication, native initialization and repeated memory-restoration coverage.
+  Refreshes newcomer documentation with a concise landing page, visual model guide
+  and task-oriented navigation.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

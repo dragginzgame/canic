@@ -1,6 +1,8 @@
 # canic-core
 
-Core orchestration logic for Canic canisters: config handling, ops layer, registries, and IC interface helpers.
+`canic-core` contains Canic's shared internal runtime and orchestration logic,
+including compiled configuration, decisions, multi-step workflows, persistent
+state, registries, and IC interface helpers.
 
 Most canister projects should depend on `canic` (the facade crate) and use:
 - `canic::build!` from `build.rs` to validate/embed `canic.toml`
@@ -19,7 +21,8 @@ See `../../README.md` for the workspace overview and `../../CONFIG.md` for the `
 Canic is intentionally layered to keep the boundary surface small and ownership explicit:
 
 - `access/` – authorization and guard helpers used by endpoint macros.
-- `config/` – parse + validate `canic.toml` into a typed schema.
+- `config/` – validate and expose the typed configuration compiled by the
+  host-side build path. TOML parsing does not enter deployed Wasm.
 - `workflow/` – orchestration, retries, and multi-step behavior over time.
 - `domain/policy/pure/` – pure decisions invoked by workflow.
 - `ops/` – deterministic services over stored/runtime state plus approved
@@ -29,7 +32,15 @@ Canic is intentionally layered to keep the boundary surface small and ownership 
   model retains invariant ownership and ops owns access/conversion.
 - `view/` – internal read-only projections over stored/runtime state.
 
-The dependency flow is: endpoints → workflow → policy → ops → model.
+The dependency flow is:
+
+```text
+endpoints -> workflow -> policy
+                     +-> ops -> model
+```
+
+Workflow may call policy and ops independently. Policy is pure and never calls
+ops.
 
 ## Module Map
 

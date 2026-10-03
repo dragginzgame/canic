@@ -1,13 +1,17 @@
 # canic
 
-Facade crate that re-exports the main Canic stack for canister projects:
+This is the main Rust crate for application canisters using Canic. Most
+applications should depend on this crate rather than Canic's lower-level
+implementation crates.
+
+It provides:
 
 - endpoint and lifecycle macros
 - core runtime/types
 - stable-memory helpers under `canic::memory`
 
-Most downstream canister projects should start here instead of reaching for
-lower-level crates directly.
+In Rust terminology this is a **facade crate**: one public entry point that
+re-exports the parts of the Canic stack application developers normally need.
 
 Use the explicit module paths for the larger bundled surfaces:
 
@@ -45,7 +49,7 @@ not selected through a facade feature.
 | `sharding` | No | Sharding placement, storage, metrics, and lifecycle support from `canic-core`. |
 | `auth-chain-key-ecdsa` | No | Chain-key ECDSA validation and cryptographic support used by delegated-auth proof flows. |
 | `auth-chain-key-root-sign` | No | Root-managed chain-key delegation-batch signing; also enables `auth-chain-key-ecdsa`. |
-| `auth-local-application-authorization` | No | Local application session and replay-fence storage, synchronous restoration, and expiry cleanup. |
+| `auth-local-application-authorization` | No | Local application session and replay-fence storage, synchronous restoration, and expiry cleanup; also enables delegated-token verification. |
 | `auth-root-canister-sig-create` | No | Root canister-signature proof creation for role attestation. |
 | `auth-root-canister-sig-verify` | No | Root canister-signature proof verification for role attestation. |
 | `auth-issuer-canister-sig-create` | No | Issuer canister-signature token-proof creation. |
@@ -77,10 +81,11 @@ only `[build-dependencies]`.
 
 | Config setting | Role crate that needs the feature | Required runtime `canic` feature |
 | --- | --- | --- |
-| `auth.role_attestation_cache = true` on a non-root canister | that non-root role | `auth-root-canister-sig-verify` |
+| `auth.role_attestation_cache = true` on a non-root canister | that non-root role | `auth-root-canister-sig-verify`, `auth-chain-key-ecdsa` |
 | any non-root role uses `auth.role_attestation_cache = true` | root role | `auth-root-canister-sig-create` |
 | `auth.delegated_token_issuer = true` | that issuer role | `auth-issuer-canister-sig-create`, `auth-delegated-token-verify` |
 | `auth.delegated_token_verifier = true` | that verifier role | `auth-delegated-token-verify` |
+| `auth.local_application_authorization` is configured | that role | `auth-local-application-authorization` |
 
 Run `canic build <app> <role>` to validate the selected role contract and its
 required runtime features through the maintained generated build path.

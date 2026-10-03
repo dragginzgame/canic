@@ -1,10 +1,15 @@
 # canic-cli
 
-Running `canic` without arguments prints top-level help and exits successfully,
-just like `canic --help`.
+`canic-cli` provides the `canic` command-line program used by developers and
+operators. It runs on your computer—not inside a canister—and handles App
+setup, builds, local IC networks, deployment planning, diagnostics, backup, and
+recovery.
 
-`canic-cli` publishes the `canic` operator binary. The maintained command
-families are:
+Run `canic` without arguments, or run `canic --help`, to see the top-level help.
+Use `canic <command> --help` for one command's options and examples.
+
+The maintained command families are listed below. New users will most often
+begin with `app`, `build`, `fleet`, `replica`, and `scaffold`.
 
 ```text
 admission

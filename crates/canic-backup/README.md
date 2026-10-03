@@ -1,7 +1,8 @@
 # canic-backup
 
-Host-side manifest and orchestration primitives for Canic deployment backup and
-restore workflows.
+`canic-backup` contains the backup and restore behavior that runs on an
+operator's computer. Application canisters do not receive access to backup
+files, local credentials, or restore commands.
 
 The crate owns the host-side contracts behind the `canic` backup CLI:
 manifests, topology hashing, download journals, durable artifact integrity,

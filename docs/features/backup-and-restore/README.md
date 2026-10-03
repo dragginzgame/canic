@@ -1,16 +1,36 @@
 # Backup And Restore
 
-Canic's backup and restore primitives provide host-side operational recovery for
-canister snapshots, with manifests, checksums and durable execution journals.
+A canister snapshot is a saved copy of a canister's state. Canic's backup tools
+download and verify snapshots on the operator's computer. Its restore tools
+check those files, map them to the intended canisters, and record progress so an
+interrupted recovery can safely continue.
+
+Backups are for recovery within the same Canic release. They are not a way to
+carry application state across the clean reinstall required between pre-1.0
+releases.
+
+```text
+Live canisters -> snapshots -> verified local backup
+                                      |
+                               restore preparation
+                                      |
+                              journaled restore run
+                                      |
+                              recovered canisters
+```
 
 ## Current Availability
 
-Fresh `canic backup create <fleet>` execution is unavailable: its executor rejects
-before snapshot effects because Coordinator-backed Component Registry topology
-preflight is not implemented. `--dry-run` can prepare local planning files for a
-supported inventory, but does not prove live topology, controller authority or
-quiescence and does not create a backup. Current selection requires exactly one
-Fleet Subnet Root.
+<img src="../../../assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
+
+**Creating a new backup is currently unavailable.** `canic backup create
+<fleet>` stops before taking snapshots because the live topology safety check is
+not yet implemented. `--dry-run` can prepare local planning files for a
+supported inventory, but it does not prove the live layout or permissions and
+does not create a backup. Current selection requires exactly one Fleet Subnet
+Root.
+
+<br clear="right" />
 
 This gap dates from the 0.100.80 removal of the public Subnet Registry query.
 It has no accepted implementation slice in the current 0.110 batch or scheduled

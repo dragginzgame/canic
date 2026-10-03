@@ -86,7 +86,7 @@ completed measurement samples, whereas Operations contains starts. The latter
 may include callbacks whose measurement has not completed. Each timer instruction
 total and completed-sample count carries `measurement.kind = "timer_counter"`,
 its source registration (`canister_version`, `started_at_ns`, `sequence`) and
-per-field saturation. These fields are sampled together from ic-timers 0.8.0.
+per-field saturation. These fields are sampled together from ic-timers 0.8.1.
 Aggregate callback-start rows remain gauges because they mix registrations.
 Window anchors identify heap restarts. A final anchor newer than a collected
 sample produces `source_window_changed`; missing heap metadata produces

@@ -1,7 +1,9 @@
 # canic-control-plane
 
-Lower-level Fleet Coordinator, Fleet Subnet Root and `wasm_store`
-control-plane support crate for Canic.
+This lower-level crate implements Canic's management canisters: the Fleet
+Coordinator, each Fleet Subnet Root, and each Wasm Store. Together these are
+called the **control plane** because they plan and perform approved management
+actions for application canisters.
 
 Most downstream canister projects should use `canic` unless they are working
 directly on root/bootstrap/store behavior and need the lower-level control-plane

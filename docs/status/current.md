@@ -113,6 +113,51 @@ not yet establish paid-effect settlement.
 Keep FR1 in root `Unreleased`, the parallel .52 fixes intact and
 the original-review count at 31/401. FR1 remains unfinished and not push-ready.
 
+## Documentation accuracy baseline — 2026-10-03
+
+The requested documentation-wide refresh begins with a source-backed accuracy
+pass over the maintained landing pages, README files, configuration reference,
+feature guides and onboarding flow. The canonical configuration guide now
+describes the live host-compiled configuration boundary, role observability,
+offline chain-key derivation, local application authorization, peer Component
+provisioning, Component Groups, independent Group deployments, reduction-only
+member limits and Fleet-service targets. Its canonical example includes a real
+Group deployment and active-pool service and passes the strict current parser.
+
+Correct the Core layering diagram so workflow calls pure policy and ops as
+independent branches, complete the facade's config-to-feature requirements,
+and align current timer and memory guide versions with `ic-timers 0.8.1` and
+`ic-memory 0.15.3`. The timer guide no longer presents optional IcyDB version
+alignment as a Canic requirement. The minimal Fleet and reference-App guides
+now distinguish declaring a reusable Spec from selecting a concrete Group
+deployment or desired Fleet occurrence. Root vocabulary and scaling navigation
+include Groups, deployments and logical services.
+
+The exact `config_guide` integration test passes. The maintained README and
+non-archived local-link scans find no missing targets; the CLI command catalogue
+and facade feature table match source; document semantics, scoped whitespace
+and diff checks pass. Archived designs, dated audits and release notes remain
+historical evidence and were not rewritten as current guidance. The first
+scanability pass adds task-oriented tables to the root landing page,
+documentation index, feature index and configuration map without changing
+their authority. This documentation-only batch changes no runtime, package
+version, release readiness, Git publication or deployment state. FR1 remains
+unfinished and not push-ready.
+
+The newcomer pass now defines IC and Canic vocabulary before using it across
+the root README, documentation and feature indexes, installation, configuration,
+the minimal managed Fleet walkthrough, reference Apps, public crate/CLI guides,
+operations and architecture entry points. The root now presents Canic as the
+Kubernetes-like orchestration and operations layer for multi-canister IC Apps,
+then links to a focused model guide that traces source and configuration through
+build evidence, reviewed planning and per-Subnet management. The shorter root
+landing page retains only orientation, task navigation, a capability map and
+current pre-1.0 status. Compact diagrams replace full-width character banners;
+one combined logo/welcome hero anchors the landing page, and small supplied
+callouts retain descriptive alternative text. Detailed contracts, active
+designs, audits and historical records retain their precise technical language
+and evidence role.
+
 ## Cross-Component caller authority assessment — 2026-10-03
 
 At the maintainer's request, assess the missing .51 membership flow as a whole
@@ -151,7 +196,7 @@ encodes before synchronous row/header writes and exposes receipts afterward.
 Ordinary policy borrows a validated local cache. Restoration checks exact
 receiver/Root installations, policy, capacity, row keys/counts, grant revisions
 and retained phase/generation evidence. Root census construction also checks the
-current issuing installation, including empty coverage. Root now indexes
+current issuing installation, including empty coverage. The isolated Root persistence draft now indexes
 fixed publication headers and recipient progress by the original operation and
 receiver. Each acknowledgement replaces one row; earlier operations remain
 retained. An immutable census commitment binds issuing/source authority, the
@@ -163,7 +208,8 @@ All 33 selected native tests pass, including retained-memory reopening after
 every phase, lost-reply replay with unchanged bytes, unavailable revocation
 receivers, malformed restoration, irreversible retirement, pre-fence encoding
 bounds, exact aggregate byte refusal, isolated acknowledgements and retained
-multi-operation history. Separate 20,000-source and 20,000-recipient cases pass;
+terminal history retained before the next same-receiver operation. Separate
+20,000-source and 20,000-recipient cases pass;
 they do not qualify a dense source/receiver product graph. These are native
 storage/model proofs,
 not canister lifecycle or IC rollback qualification. The draft is not integrated
