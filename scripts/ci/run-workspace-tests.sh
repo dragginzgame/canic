@@ -789,6 +789,19 @@ if [[ "$MODE" != "targeted-pocketic" ]]; then
     PRECOMPILE_ONLY=1
     run_pocketic_suites
     PRECOMPILE_ONLY=0
+elif [[ "$TARGETED_POCKETIC_TEST" == pic::* ]]; then
+    # A successful individual journey must not hide an unregistered test that
+    # would fail the release run. This native check reuses the same test binary
+    # and completes before any server or Wasm fixture work starts.
+    run_test parallel "internal PocketIC inventory preflight" \
+        -p canic-testing-internal --features governed-pocketic-tests --lib \
+        pic::governed_suite::governed_pocketic_inventory_preserves_recovery_prefix_and_journey_suffix \
+        -- --exact
+    if [[ ${#FAILED_LABELS[@]} -ne 0 ]]; then
+        echo "POCKETIC INVENTORY PREFLIGHT FAILED: skipping server startup and fixture builds." >&2
+        finish_test_run
+        exit 1
+    fi
 fi
 start_owned_pocketic_server
 

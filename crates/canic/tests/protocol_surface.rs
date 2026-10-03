@@ -1,10 +1,11 @@
-use std::collections::HashSet;
+use std::collections::{BTreeSet, HashSet};
 
 use std::fmt::Debug;
 use std::fs;
 use std::path::{Path, PathBuf};
 
 use candid::types::internal::TypeContainer;
+use candid::types::{Type, TypeEnv, TypeInner};
 use candid::{Principal, decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 use canic::dto::blob_storage::{
@@ -17,6 +18,7 @@ use canic::dto::blob_storage::{
     BlobStorageGatewayPrincipalSyncAction, BlobStoragePaymentModelStatus,
     BlobStorageReadinessBlocker, BlobStorageStatusRequest, BlobStorageStatusResponse,
 };
+use canic::dto::{component_provisioning, fleet_admission, fleet_funding, fleet_registry, role};
 use canic::{
     api::protocol::icrc21::Icrc21Dispatcher,
     dto::auth::{
@@ -59,6 +61,7 @@ use canic::{
         ManagedCanisterBinding, SubnetId,
     },
 };
+use canic_core::ids;
 
 fn test_fleet() -> FleetKey {
     FleetKey {
@@ -134,6 +137,61 @@ fn candid_type_env<T: candid::CandidType>() -> String {
     let mut types = TypeContainer::new();
     types.add::<T>();
     types.env.to_string()
+}
+
+// Compare wire structure, independent of aliases, formatting and field order.
+fn candid_type_matches<T: candid::CandidType>(env: &TypeEnv, actual: &Type) -> bool {
+    let mut env = env.clone();
+    let mut rust = TypeContainer::new();
+    let expected = rust.add::<T>();
+    let expected = env.merge_type(rust.env, expected);
+    candid::types::subtype::equal(&mut HashSet::default(), &env, actual, &expected).is_ok()
+}
+
+fn assert_candid_type<T: candid::CandidType>(env: &TypeEnv, name: &str) {
+    let actual = env
+        .find_type(name)
+        .unwrap_or_else(|err| panic!("{name}: {err}"));
+    assert!(
+        candid_type_matches::<T>(env, actual),
+        "{name} differs from the Rust wire contract: {actual}"
+    );
+}
+
+fn candid_field(env: &TypeEnv, name: &str, field: &str) -> Type {
+    let ty = env.trace_type(env.find_type(name).unwrap()).unwrap();
+    let fields = match ty.as_ref() {
+        TypeInner::Record(fields) | TypeInner::Variant(fields) => fields,
+        other => panic!("{name} must be a record or variant, got {other:?}"),
+    };
+    fields
+        .iter()
+        .find(|entry| entry.id.get_id() == candid::idl_hash(field))
+        .unwrap_or_else(|| panic!("{name} has no field {field}"))
+        .ty
+        .clone()
+}
+
+#[test]
+fn wire_shape_checks_accept_aliases_and_layout_but_reject_changed_contracts() {
+    for source in [
+        "type Error = record { code : nat16 };",
+        "// another layout\ntype Code = nat16; type Error=record{code:Code;};",
+    ] {
+        let (env, _) = CandidSource::Text(source).load().unwrap();
+        assert_candid_type::<CanicError>(&env, "Error");
+    }
+    for source in [
+        "type Error = record { code : nat32 };",
+        "type Error = variant { code : nat16 };",
+        "type Error = record { code : nat16; extra : text };",
+    ] {
+        let (env, _) = CandidSource::Text(source).load().unwrap();
+        assert!(!candid_type_matches::<CanicError>(
+            &env,
+            env.find_type("Error").unwrap()
+        ));
+    }
 }
 
 #[test]
@@ -243,11 +301,10 @@ fn fleet_admission_projection_candid_uses_the_bounded_managed_role_contract() {
 
 #[test]
 fn public_error_contract_is_the_compact_nat16_hard_cut() {
-    let error_env = candid_type_env::<CanicError>();
-    assert!(
-        error_env.contains("type Error = record { code : nat16 }"),
-        "public Error must contain only one compact nat16 code:\n{error_env}"
-    );
+    let (env, _) = CandidSource::Text("type Error = record { code : nat16 };")
+        .load()
+        .unwrap();
+    assert_candid_type::<CanicError>(&env, "Error");
     assert_candid_roundtrip(CanicError::from_registered(
         canic_core::diagnostics::codes::REQUEST_INVALID,
     ));
@@ -258,10 +315,8 @@ fn public_error_contract_is_the_compact_nat16_hard_cut() {
     ] {
         let did_path = workspace_root().join(relative_path);
         let did = read_text(&did_path);
-        assert!(
-            did.contains("type Error = record { code : nat16 };"),
-            "checked-in service DID lacks the compact Error shape in {relative_path}"
-        );
+        let (env, _) = CandidSource::Text(&did).load().unwrap();
+        assert_candid_type::<CanicError>(&env, "Error");
     }
 }
 
@@ -510,37 +565,36 @@ fn wasm_store_exposes_cycle_history_through_observability() {
     let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
     let did = read_text(&did_path);
 
-    assert!(
-        did.contains("type PageRequest = record { offset : nat64; limit : nat64 };")
-            && did.contains("CycleHistory : PageRequest"),
-        "Store cycle history must be an observability variant in {}",
-        did_path.display()
-    );
+    let (env, _) = CandidSource::Text(&did).load().unwrap();
+    assert!(candid_type_matches::<canic::dto::page::PageRequest>(
+        &env,
+        &candid_field(&env, "ObservabilityRequest", "CycleHistory")
+    ));
 }
 
 #[test]
 fn wasm_store_canonical_did_parses() {
     let did_path = workspace_root().join("crates/canic/candid/wasm_store.did");
     let did = read_text(&did_path);
-    assert!(
-        did.contains("type FleetKey = record {")
-            && did.contains("canonical_network_id : text")
-            && did.contains("fleet_id : text"),
-        "canonical Wasm-store DID must expose the exact FleetKey member names"
-    );
-    assert!(
-        did.contains("type FleetSubnetWasmStoreInitArgs = record")
-            && did.contains("authority : FleetSubnetWasmStoreAuthority;")
-            && did.contains("Authority : FleetSubnetWasmStoreAuthority")
-            && did.contains(
-                "type StateSnapshotInput = record { fleet_state : opt FleetStateInput };"
-            )
-            && did.contains("SynchronizeState : StateSnapshotInput"),
-        "canonical Wasm-store DID must expose its exact sibling authority and state-cascade contract"
-    );
     let (env, actor) = CandidSource::Text(&did)
         .load()
         .unwrap_or_else(|err| panic!("failed to parse {}: {err}", did_path.display()));
+
+    assert_candid_type::<FleetKey>(&env, "FleetKey");
+    assert_candid_type::<canic::dto::fleet_subnet_root::FleetSubnetWasmStoreInitArgs>(
+        &env,
+        "FleetSubnetWasmStoreInitArgs",
+    );
+    assert!(candid_type_matches::<
+        canic::ids::FleetSubnetWasmStoreAuthority,
+    >(
+        &env,
+        &candid_field(&env, "StoreStatusResponse", "Authority")
+    ));
+    assert!(candid_type_matches::<StateSnapshotInput>(
+        &env,
+        &candid_field(&env, "StoreCommand", "SynchronizeState")
+    ));
 
     let actor = actor.unwrap_or_else(|| panic!("missing service in {}", did_path.display()));
     let service = env
@@ -622,68 +676,42 @@ fn fleet_coordinator_canonical_did_parses() {
 
 #[test]
 fn fleet_coordinator_candid_contains_protected_admission_and_funding_protocol_types() {
-    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
-    for declaration in [
-        "type FleetAdmissionMutationAction = variant {",
-        "type FleetAdmissionMutationRequest = record {",
-        "type FleetAdmissionMutationResponse = record {",
-        "CatalogChanged;",
-        "type FleetAdmissionOperationStatusResponse = record {",
-        "Releasing : record { successor : FleetAdmissionPolicyStatus };",
-        "type FleetAdmissionPolicyStatus = record {",
-        "type FleetAdmissionStatusRequest = record {",
-        "type FleetAdmissionStatusResponse = record {",
-        "FleetAdmissionProjection;",
-        "root_funding : opt FleetCoordinatorRootFundingPolicy;",
-        "type FleetCoordinatorRootFundingPolicy = record {",
-        "type FleetFundingProfile = variant {",
-        "preview_multi_subnet;",
-        "type FleetFundingPolicyRotationApplyRequest = record {",
-        "type FleetFundingPolicyRotationBeginRequest = record {",
-        "type FleetFundingPolicyRotationPlanHeader = record {",
-        "type FleetFundingPolicyRotationReceipt = record {",
-        "type FleetFundingPolicyRotationRootPlan = record {",
-        "type FleetFundingPolicyRotationStageRootRequest = record {",
-        "type FleetFundingPolicyRotationStatusResponse = record {",
-        "type FleetFundingPolicyUsage = record {",
-        "type FleetComponentProvisioningRetryStage = variant {",
-        "type FleetComponentProvisioningRootFailure = record {",
-        "type FleetSubnetRootFundingAuthority = record {",
-        "type FleetSubnetRootFundingPolicy = record {",
-        "type FleetSubnetRootIcpRefillPolicy = record {",
-        "type FleetSubnetRootAutomaticIcpRefillPolicy = record {",
-        "funding : FleetSubnetRootFundingAuthority;",
-        "type FleetRootFundingAcceptanceReceipt = record {",
-        "type FleetRootFundingAcceptanceRequest = record {",
-        "type FleetRootFundingNoGrantReason = variant {",
-        "type FleetRootFundingRequest = record {",
-        "type FleetRootFundingResponse = variant {",
-        "maximum_automatic_grants : nat32;",
-        "maximum_automatic_cycles : nat;",
-        "maximum_automatic_refills : nat32;",
-        "maximum_automatic_refill_e8s : nat64;",
-        "rotation_checkpoint_count : nat32;",
-        "rotation_checkpoint_root_count : nat32;",
-        "rotation_checkpoint_root_capacity_remaining : nat32;",
-        "participant_catalog_digest : blob;",
-        "participant_count : nat32;",
-        "pending_root_failure : opt FleetComponentProvisioningRootFailure;",
-    ] {
-        assert!(
-            did.contains(declaration),
-            "canonical Coordinator DID omits protected policy declaration {declaration}"
-        );
+    macro_rules! contracts {
+        ($env:ident, $module:ident: $($name:ident),+ $(,)?) => {
+            $(assert_candid_type::<$module::$name>(&$env, stringify!($name));)+
+        };
     }
-    assert_eq!(
-        did.matches("funding : FleetSubnetRootFundingAuthority;")
-            .count(),
-        2,
-        "only the protected root binding and Registry entry should carry root funding authority"
+    let did = read_text(&workspace_root().join("crates/canic/candid/fleet_coordinator.did"));
+    let (env, _) = CandidSource::Text(&did).load().unwrap();
+    contracts!(env, fleet_admission:
+        FleetAdmissionMutationAction, FleetAdmissionMutationRequest,
+        FleetAdmissionMutationResponse, FleetAdmissionOperationStatusResponse,
+        FleetAdmissionPolicyStatus, FleetAdmissionStatusRequest, FleetAdmissionStatusResponse,
     );
-    assert!(
-        !did.contains("participant_catalogs : vec"),
-        "Coordinator mutation request must retain only the bounded aggregate participant authority"
+    contracts!(env, fleet_funding:
+        FleetFundingPolicyRotationApplyRequest, FleetFundingPolicyRotationBeginRequest,
+        FleetFundingPolicyRotationPlanHeader, FleetFundingPolicyRotationReceipt,
+        FleetFundingPolicyRotationRootPlan, FleetFundingPolicyRotationStageRootRequest,
+        FleetFundingPolicyUsage, FleetRootFundingAcceptanceReceipt,
+        FleetRootFundingAcceptanceRequest, FleetRootFundingNoGrantReason,
+        FleetRootFundingRequest, FleetRootFundingResponse,
     );
+    contracts!(env, component_provisioning:
+        FleetComponentProvisioningRetryStage, FleetComponentProvisioningRootFailure,
+        FleetComponentProvisioningPrepareRequest, FleetComponentProvisioningStatusResponse,
+    );
+    contracts!(env, ids:
+        FleetCoordinatorRootFundingPolicy, FleetFundingProfile,
+        FleetSubnetRootFundingAuthority, FleetSubnetRootFundingPolicy,
+        FleetSubnetRootIcpRefillPolicy, FleetSubnetRootAutomaticIcpRefillPolicy,
+        FleetSubnetRootBinding,
+    );
+    contracts!(env, fleet_registry: FleetSubnetRootEntry);
+    contracts!(env, role: RoleCapability);
+    #[cfg(feature = "fleet-coordinator-canister")]
+    assert_candid_type::<
+        canic_control_plane::dto::fleet_coordinator::FleetFundingPolicyRotationStatusResponse,
+    >(&env, "FleetFundingPolicyRotationStatusResponse");
 }
 
 #[test]
@@ -742,11 +770,13 @@ fn provisioning_origin_preserves_explicit_deadline_presence() {
 fn fleet_coordinator_command_surface_is_profile_exact() {
     let did_path = workspace_root().join("crates/canic/candid/fleet_coordinator.did");
     let did = read_text(&did_path);
-    let request = did
-        .split("type CoordinatorCommand = variant {")
-        .nth(1)
-        .and_then(|tail| tail.split("};").next())
-        .expect("canonical Coordinator DID must declare CoordinatorCommand");
+    let (env, _) = CandidSource::Text(&did).load().unwrap();
+    let request = env
+        .trace_type(env.find_type("CoordinatorCommand").unwrap())
+        .unwrap();
+    let TypeInner::Variant(variants) = request.as_ref() else {
+        panic!("CoordinatorCommand must be a variant");
+    };
 
     let expected = [
         "AcknowledgeRootSnapshot",
@@ -766,16 +796,16 @@ fn fleet_coordinator_command_surface_is_profile_exact() {
         "SetRootFunding",
         "StageFundingPolicyRotationRoot",
     ];
-    for variant in expected {
-        assert!(
-            request.contains(variant),
-            "CoordinatorCommand omits {variant}:\n{request}"
-        );
-    }
     assert_eq!(
-        request.lines().filter(|line| line.contains(';')).count(),
-        expected.len(),
-        "CoordinatorCommand acquired an unreviewed variant:\n{request}"
+        variants
+            .iter()
+            .map(|variant| variant.id.get_id())
+            .collect::<BTreeSet<_>>(),
+        expected
+            .into_iter()
+            .map(candid::idl_hash)
+            .collect::<BTreeSet<_>>(),
+        "CoordinatorCommand must expose the reviewed command identities"
     );
 }
 
@@ -969,11 +999,21 @@ fn blob_storage_cashier_protocol_surface_is_pinned() {
             "Cashier fixture missing method: {method}"
         );
     }
-    assert!(
-        did.contains("account_top_up_v1 : (\n      opt record")
-            && did.contains("storage_gateway_principal_list_v1 : () -> (vec principal);"),
-        "Cashier fixture must pin optional top-up request and gateway list response"
-    );
+    let top_up = env.get_method(&actor, "account_top_up_v1").unwrap();
+    let [request] = top_up.args.as_slice() else {
+        panic!("Cashier top-up takes one request");
+    };
+    assert!(candid_type_matches::<
+        Option<BlobStorageCashierAccountTopUpRequest>,
+    >(&env, request));
+    let gateway_list = env
+        .get_method(&actor, "storage_gateway_principal_list_v1")
+        .unwrap();
+    assert!(gateway_list.args.is_empty());
+    let [response] = gateway_list.rets.as_slice() else {
+        panic!("Cashier gateway list returns one value");
+    };
+    assert!(candid_type_matches::<Vec<Principal>>(&env, response));
 }
 
 #[test]

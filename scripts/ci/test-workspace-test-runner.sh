@@ -68,6 +68,7 @@ for argument in "$@"; do
     [[ "$argument" == --no-run || "$argument" == --no-fail-fast ]] || graph_args+=("$argument")
 done
 case " $* " in
+    *' pic::governed_suite::governed_pocketic_inventory_preserves_recovery_prefix_and_journey_suffix '*) stage=native-inventory ;;
     *' pic::workers::tests:: '*) stage=native-internal ;;
     *' --features local-fleet '*) stage=native-host ;;
     *' --doc '*) stage=documentation ;;
@@ -265,6 +266,29 @@ for scenario in correct wrong duplicate; do
         [[ "$status" -ne 0 ]]
         rg -q 'exact PocketIC selector must resolve to one test' "$scratch/output.log"
     fi
+done
+
+# An omitted registration must fail even when an individual journey was selected.
+# Catch it before server startup; the zero-tests case also must not pass silently.
+for scenario in failure empty; do
+    scratch="$fixture/targeted-inventory-$scenario"
+    mkdir -p "$scratch"
+    failure=none zero='' status=0
+    if [[ "$scenario" == failure ]]; then
+        failure=execute/native-inventory
+    else
+        zero=native-inventory
+    fi
+    CI=0 RUSTC_WRAPPER='' CANIC_TEST_PLAN_ONLY=0 CANIC_TEST_SCRATCH="$scratch" \
+        POCKET_IC_BIN="$fixture/bin/pocket-ic" PATH="$fixture/bin:$PATH" \
+        RUNNER_TEST_TRACE="$scratch/trace.tsv" RUNNER_TEST_FAIL_STAGE="$failure" \
+        RUNNER_TEST_ZERO_STAGE="$zero" \
+        bash "$fixture/scripts/ci/run-workspace-tests.sh" targeted-pocketic "$exact" \
+        > "$scratch/output.log" 2>&1 || status=$?
+    [[ "$status" -ne 0 && ! -e "$scratch/server.pid" ]]
+    printf 'execute\tnative-inventory\t0\n' > "$scratch/expected.tsv"
+    diff -u "$scratch/expected.tsv" "$scratch/trace.tsv"
+    rg -q '^POCKETIC INVENTORY PREFLIGHT FAILED:' "$scratch/output.log"
 done
 
 scratch="$fixture/multiple-failures"

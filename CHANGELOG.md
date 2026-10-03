@@ -22,21 +22,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.52` accepts additive ICP CLI output fields and verifies equivalent
-  checksum hex casing in backup artifacts and restore previews. Rejects colliding
-  canister ID exports and permits exact local reset of unloadable simulator trees.
-  Preserves frozen input bytes for unchanged capacity imports and corrects
-  authentication, native initialization and repeated memory-restoration coverage.
-  Refreshes newcomer documentation with a concise landing page, visual model guide
-  and task-oriented navigation; replaces introductory text diagrams with supplied
-  artwork and splits the Fleet Ensure operator reference into focused desired-state,
-  plan/apply, reinstall, bootstrap/capacity, automation and recovery guides.
-  Refreshes the individual feature, operations, architecture, design-authoring,
-  audit and code-hygiene indexes with visual workflows, task choosers and
-  consistent continuation navigation; aligns reset, configuration, build and
-  platform instructions with the current implementation. Includes the FR1 discovery
-  checkpoint, preserves uncertain pool-creation effects across later refusals,
-  and adopts the current memory, query, timer and testkit dependencies.
+- `0.110.52` adds Fleet release discovery, hardens operator workflows and test
+  reliability, adopts ic-memory 0.22 and current runtime dependencies, and
+  refreshes the documentation with clearer models, navigation and deployment
+  guidance.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

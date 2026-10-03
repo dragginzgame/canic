@@ -239,9 +239,7 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
         .expect("reservation generation");
     let record = DiagnosticRecord {
         allocation: ledger.allocation_history().records()[0].clone(),
-        memory_size: Some(DiagnosticMemorySizeOutcome::Measured(
-            DiagnosticMemorySize::from_wasm_pages(3),
-        )),
+        memory_size: Some(DiagnosticMemorySize::from_wasm_pages(3)),
     };
 
     let response = memory_allocation_record_response(record);
@@ -268,7 +266,7 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
 }
 
 #[test]
-fn memory_allocation_record_response_omits_failed_size_measurements() {
+fn memory_allocation_record_response_omits_unmeasured_sizes() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
         AllocationSlotDescriptor::memory_manager(100).expect("usable slot"),
@@ -282,12 +280,7 @@ fn memory_allocation_record_response_omits_failed_size_measurements() {
         .expect("reservation generation");
     let record = DiagnosticRecord {
         allocation: ledger.allocation_history().records()[0].clone(),
-        memory_size: Some(DiagnosticMemorySizeOutcome::Failed(
-            ic_memory::DiagnosticFailure::new(
-                ic_memory::DiagnosticCode::MemorySize,
-                "slot could not be measured",
-            ),
-        )),
+        memory_size: None,
     };
 
     let response = memory_allocation_record_response(record);
