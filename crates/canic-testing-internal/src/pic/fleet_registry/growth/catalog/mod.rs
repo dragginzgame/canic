@@ -95,24 +95,22 @@ impl SyntheticCatalog {
                 SubnetCatalogRegistryValueEncoding::Inline,
             )
         };
-        let collection = UncertifiedCatalogCollection::new(
-            1,
-            &request.endpoint,
-            &request.fetched_at,
-            "canic-pocketic-growth-fixture",
-            env!("CARGO_PKG_VERSION"),
-            3,
-        )
-        .with_registry_evidence(
-            SubnetCatalogRoutingSource::CanisterRanges,
-            vec![
+        let collection = UncertifiedCatalogCollection {
+            registry_version: 1,
+            source_endpoint: request.endpoint.clone(),
+            fetched_at: request.fetched_at.clone(),
+            fetched_by: "canic-pocketic-growth-fixture".into(),
+            collector_version: env!("CARGO_PKG_VERSION").into(),
+            registry_query_call_count: 3,
+            routing_source: SubnetCatalogRoutingSource::CanisterRanges,
+            registry_records: vec![
                 evidence(SubnetCatalogRegistryRecordSubject::subnet_list()),
                 evidence(SubnetCatalogRegistryRecordSubject::canister_ranges(start)),
                 evidence(SubnetCatalogRegistryRecordSubject::subnet_record(
                     self.subnet,
                 )),
             ],
-        );
+        };
         Ok(RawSubnetCatalog::new_mainnet_uncertified(
             collection,
             vec![SubnetInfo {

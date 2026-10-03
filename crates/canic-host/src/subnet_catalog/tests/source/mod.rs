@@ -66,24 +66,22 @@ fn catalog(
             SubnetCatalogRegistryValueEncoding::Inline,
         )
     };
-    let collection = UncertifiedCatalogCollection::new(
-        version,
-        &request.endpoint,
-        &request.fetched_at,
-        &request.fetched_by,
-        "fixture",
-        3,
-    )
-    .with_registry_evidence(
-        SubnetCatalogRoutingSource::CanisterRanges,
-        vec![
+    let collection = UncertifiedCatalogCollection {
+        registry_version: version,
+        source_endpoint: request.endpoint.clone(),
+        fetched_at: request.fetched_at.clone(),
+        fetched_by: request.fetched_by.clone(),
+        collector_version: "fixture".into(),
+        registry_query_call_count: 3,
+        routing_source: SubnetCatalogRoutingSource::CanisterRanges,
+        registry_records: vec![
             evidence(SubnetCatalogRegistryRecordSubject::subnet_list()),
             evidence(SubnetCatalogRegistryRecordSubject::canister_ranges(
                 canister,
             )),
             evidence(SubnetCatalogRegistryRecordSubject::subnet_record(subnet)),
         ],
-    );
+    };
     Ok(RawSubnetCatalog::new_mainnet_uncertified(
         collection,
         vec![SubnetInfo {

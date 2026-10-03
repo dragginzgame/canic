@@ -24,6 +24,13 @@ separate maintainer-selected actions. This page records implementation handoffs.
 
 ## Recent delivery status
 
+The ic-query 0.45.4 constructor removal is now adopted by both synthetic catalog
+fixtures. Ten Host catalog tests and warning-denied Host/internal-testing Clippy
+pass, including feature-gated test compilation. The exact native growth fixture
+regression also passes, preserving agreement assurance and route resolution; see the
+[current handoff](../status/current.md) for qualification scope. This fixes the
+reported release Clippy blocker and adds no original-review finding closure.
+
 The latest release run exposed three normal governed cases that still build the
 optional IcyDB fixture. The maintainer selected local IcyDB; its updated dependency
 metadata now has one memory/timer identity. Those three cases still need runtime

@@ -23,7 +23,7 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.52` adds Fleet release discovery, hardens operator workflows and test
-  reliability, adopts ic-memory 0.23 and testkit 0.14 with their current APIs, and
+  reliability, adapts the current memory, query and testkit APIs, and
   refreshes the documentation with clearer models, navigation and deployment
   guidance.
 
