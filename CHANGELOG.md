@@ -27,7 +27,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   checksum hex casing in backup artifacts and restore previews. Rejects colliding
   canister ID exports and permits exact local reset of unloadable simulator trees.
   Corrects authentication endpoint and composed native-test initialization guidance,
-  and adds plain-language onboarding with illustrated feature guides.
+  and adds plain-language onboarding with a combined welcome hero, task-oriented
+  diagrams and integrated visual callouts.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

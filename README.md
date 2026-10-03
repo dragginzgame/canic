@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="assets/canic_logo.svg" alt="Canic logo" width="360" />
+  <img src="assets/canic-logo-hero.jpg" alt="Canic — user-friendly multi-canister management" width="800" />
 </p>
 
 # Canic
@@ -10,35 +10,87 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.0-orange.svg)](rust-toolchain.toml)
 
-<p align="center">
-  <img src="assets/canic-hero.jpg" alt="The Canic mechanic holding a canister beside a network of connected canisters" width="800" />
-</p>
+Canic is an application framework and orchestration system for Rust applications
+on the Internet Computer (IC).
 
-Canic helps Rust developers build and operate applications on the Internet
-Computer (IC). The IC runs applications in **canisters**: programs that contain
-both code and data, much like backend services that run directly on the
-network.
+> **If your IC application uses more than one canister, you should be using
+> Canic.**
 
-Canic provides a Rust library that runs inside those canisters and a
-command-line tool for managing them from your computer.
+The IC runs software in **canisters**: programs that contain both code and data.
+Building one canister is straightforward. Once an application has several
+canisters, you also need to decide how they are built, installed, connected,
+funded, placed, observed, recovered, and safely changed together. Canic provides
+one model and one toolchain for that work.
 
-Use Canic when you want to:
+## Think Kubernetes, But For IC Canisters
 
-- handle startup, persistent data, scheduled tasks, communication between
-  canisters, and health information;
-- control who can use an application's methods;
-- build and deploy an application made up of one or many canisters; or
-- manage growth, backups, restores, and troubleshooting from one tool.
+<img src="assets/600x600/mechanic-tip.png" align="right" width="150" alt="The Canic mechanic presenting a tip" />
 
-You can use only the parts you need. A single canister can use Canic's Rust
-helpers on their own. A larger application can also use Canic to coordinate
-many canisters running across different parts of the IC network.
+Kubernetes gives teams a consistent way to describe and operate applications
+made from multiple containers. Canic plays a similar role for applications made
+from multiple IC canisters.
+
+<br clear="right" />
+
+| Kubernetes concept | Canic concept |
+| --- | --- |
+| Container or Pod | Canister or Component |
+| Deployment manifests | `canic.toml` plus a desired Fleet file |
+| Container image | Versioned Wasm artifact with build evidence |
+| Cluster control plane | Fleet Coordinator, Subnet Roots, and Wasm Stores |
+| Scheduling and replica limits | Subnet placement, Groups, pools, and growth limits |
+| Reconciliation | Reviewed `canic fleet ensure` plan and apply workflow |
+
+Canic is not a Kubernetes port. Canisters combine code and persistent state,
+run on a network you do not administer, and pay for computation with cycles.
+Canic therefore emphasizes exact authority, bounded spending, reviewed changes,
+and safe recovery after interrupted or uncertain IC calls.
+
+## How Canic Works
+
+```text
+ Rust canister code            App configuration
+                              (canic.toml)
+          \                         /
+           +------ canic build ----+
+                       |
+                       v
+             Wasm artifacts + evidence
+                       |
+ Desired Fleet --------+-------- live IC observations
+                       |
+                       v
+              plan -> review -> apply
+                       |
+                       v
+                 Fleet on the IC
+                       |
+              Fleet Coordinator
+                       |
+          Root on each occupied Subnet
+                 /             \
+          Wasm Store     App Components
+```
+
+1. You write ordinary Rust canisters and describe their roles and allowed
+   relationships in `canic.toml`.
+2. `canic build` produces their Wasm files and evidence identifying exactly
+   what was built.
+3. A desired Fleet file selects the network, concrete deployment, funding, and
+   placement limits for one running copy of the App.
+4. `canic fleet ensure` compares that intent with the live IC and produces a
+   plan without making paid changes.
+5. The operator reviews the plan and applies its exact digest. Canic's
+   management canisters then perform the approved work and retain the evidence
+   needed for retry and recovery.
+
+The Rust runtime can also be used by a single canister for lifecycle,
+authentication, timers, calls, persistent-memory helpers, and monitoring. The
+main payoff comes when several canisters must behave as one application.
 
 ## Start Here
 
-<p align="center">
-  <img src="assets/1400x600/canic-start-here.jpg" alt="The Canic mechanic consulting a map beside signs for building, configuring, and operating an application" width="700" />
-</p>
+<img src="assets/600x600/mechanic-help.png" align="right" width="125" alt="The Canic mechanic offering help" />
 
 Install the published operator CLI at the same version as the `canic` crate
 used by your canisters:
@@ -53,6 +105,8 @@ For a checkout of this repository:
 ```bash
 make install
 ```
+
+<br clear="right" />
 
 Then choose the path that matches what you are doing:
 
@@ -120,9 +174,10 @@ that the code they intend to run is the code that was produced.
 
 ### Backup And Restore
 
-Create and restore snapshots of the canisters in an application. These tasks
-run from the operator's computer, so application canisters do not receive
-access to local files or credentials.
+Verify existing backup snapshots and restore the canisters in an application.
+These tasks run from the operator's computer, so application canisters do not
+receive access to local files or credentials. Creating fresh backups is
+currently unavailable while its live topology safety check remains incomplete.
 
 [Explore backup and restore](docs/features/backup-and-restore/README.md)
 
@@ -203,9 +258,7 @@ Detailed ownership and dependency rules live in [AGENTS.md](AGENTS.md).
 
 ## Status
 
-<p align="center">
-  <img src="assets/1400x600/canic-pre-1-0.jpg" alt="The Canic mechanic working beside a partially assembled rack of canisters" width="700" />
-</p>
+<img src="assets/600x600/mechanic-caution.png" align="right" width="130" alt="The Canic mechanic holding a caution sign" />
 
 Canic is still pre-1.0, so releases may make breaking changes. Moving an
 existing deployment to a new Canic release currently requires a clean
@@ -214,6 +267,8 @@ identities, and network layout are not guaranteed to carry across that
 boundary. Canic must still account for **cycles**, the IC's units for paying
 for computation, so they are not silently lost. Retry, backup, and recovery
 within the same release remain supported.
+
+<br clear="right" />
 
 Read the [current implementation status](docs/status/current.md) for the exact
 completed boundary rather than relying on a version-specific summary in this

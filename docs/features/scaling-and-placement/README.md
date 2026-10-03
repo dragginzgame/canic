@@ -1,9 +1,5 @@
 # Scaling And Placement
 
-<p align="center">
-  <img src="../../../assets/1400x600/canic-scaling.jpg" alt="The Canic mechanic watering a growing tree of connected canisters" width="700" />
-</p>
-
 **Scaling** means adding canisters when an application needs more capacity.
 **Placement** decides which part of the IC network may run them. Canic lets an
 operator define both ahead of time, including hard limits on how far an
@@ -12,6 +8,18 @@ application may grow.
 A **Component Spec** is a reusable blueprint for one kind of application
 canister and any child canisters it may create. Each deployed **Component** has
 its own identity, data, location, and limits.
+
+```text
+Component Spec            reusable blueprint and child rules
+      |
+Component Group           combines related blueprints
+      |
+Group deployment          selects count and placement limits
+      |
+Components                concrete canisters running on Subnets
+      |
+Children and pools        bounded growth requested at runtime
+```
 
 ## What It Provides
 

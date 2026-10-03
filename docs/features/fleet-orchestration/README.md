@@ -1,9 +1,5 @@
 # Fleet Orchestration
 
-<p align="center">
-  <img src="../../../assets/1400x600/canic-deployment.jpg" alt="The Canic mechanic tending a connected group of canisters" width="700" />
-</p>
-
 A **Fleet** is one deployed copy of a Canic application on one IC network. Fleet
 orchestration is the process of creating its canisters, installing the intended
 code, supplying cycles, and keeping the deployed result aligned with an
@@ -13,6 +9,22 @@ Canic first shows the operator what it intends to do. Only an explicitly
 approved `canic fleet ensure` plan may make those changes. If an operation is
 interrupted or its result is unclear, Canic records enough information to check
 what happened before trying again.
+
+```text
+Operator's computer
+  desired Fleet -> plan -> reviewed digest -> apply
+                                            |
+                                            v
+IC network                             Fleet Coordinator
+                                      /                 \
+                              Subnet A Root       Subnet B Root
+                               /        \          /        \
+                         Wasm Store  Components  Store    Components
+```
+
+The CLI and local files retain operator authority. The Coordinator plans for the
+whole Fleet, while each Root performs approved effects for Components on its own
+Subnet. Application Components do not receive local files or operator credentials.
 
 ## What It Provides
 
