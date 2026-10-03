@@ -28,14 +28,21 @@ describe the application, build versioned artifacts, review the intended
 changes, and operate the deployed system as a whole. Canic is designed around
 IC-specific concerns such as persistent state, cycles, canister authority, and
 uncertain network effects.
-
-```text
-Rust canisters + canic.toml -> build evidence -> reviewed plan -> Fleet on the IC
-```
-
-[See why Canic exists and how it works](docs/getting-started/how-canic-works.md).
-
 <br clear="left" />
+
+## How It Works
+
+<p align="center">
+  <a href="assets/how-works.jpg">
+    <img src="assets/how-works.jpg" alt="Canic workflow from Rust canister code and App configuration through build, plan, review, and apply to a Fleet Coordinator, per-Subnet Roots, Wasm Stores, and application Components" width="650" />
+  </a>
+</p>
+
+The CLI plans and applies reviewed changes from the operator's computer. The
+Coordinator manages the Fleet-wide view, while each Root performs approved work
+for the application Components on its own Subnet.
+
+[Read the complete model and terminology](docs/getting-started/how-canic-works.md).
 
 ## Start Here
 
