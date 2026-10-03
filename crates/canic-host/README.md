@@ -49,9 +49,10 @@ CLI -> workflow -> policy
 - `workflow` persists intent, reconciles replay and publishes terminal state.
 
 Supplied infrastructure and capacity use explicit reviewed bootstrap/import
-operations before ordinary Ensure. Completed-source preparation accepts only
-current-schema plans, journals and receipts. It archives original evidence and
-publishes separately reviewed reset authority. See the
+operations before ordinary Ensure. Clean reinstall reviews the selected current
+build, complete physical inventory and current controllers, including unfinished
+predecessors. It preserves original evidence and reconciles genuinely uncertain
+paid or controller effects before publishing new reset authority. See the
 [operator guide](../../docs/features/operations/fleet-ensure.md) for these
 procedures and unreadable-record handling; historical contracts are not decoded
 or migrated.
@@ -65,10 +66,12 @@ identities. Apply refuses a changed plan, unsafe live drift or a debit/burn
 above the reviewed maximum.
 
 A controller cannot pull cycles from an arbitrary canister. Material
-replacement/deletion therefore requires an exact treasury-bound idempotent
+physical replacement/deletion therefore requires an exact treasury-bound idempotent
 drain endpoint. Without it, policy returns `NoSafeDrain` and leaves the
 canister untouched. Stop and delete remain separate effects with fresh status
-and residual-balance checks.
+and residual-balance checks. ID-preserving clean reinstall instead keeps the
+selected IDs and their native cycles while clearing application and framework
+state under separately reviewed reset authority.
 
 The complete desired document and operator procedure are documented in
 [Fleet ensure](../../docs/features/operations/fleet-ensure.md).

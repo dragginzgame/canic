@@ -150,14 +150,16 @@ on the operator's computer.
 
 For example, you can:
 
-- use lifecycle, memory, timers, typed calls, or monitoring in a single canister
-  without adopting Fleet orchestration;
+- exercise a single canister through the explicit standalone-local development
+  and testing lifecycle;
 - add authentication without enabling scaling or blob storage;
 - use scaling and placement only for the roles that need dynamic capacity; or
 - use build, diagnostic, backup, and recovery tooling without giving deployed
   application canisters access to local files or operator credentials.
 
-Some capabilities have deliberate dependencies. Billing-backed blob storage,
+Managed lifecycle and endpoints require their Fleet bindings even when optional
+features are disabled. Some capabilities have deliberate dependencies.
+Billing-backed blob storage,
 for example, includes the base blob-storage feature. Each feature guide states
 its own requirements and boundary.
 

@@ -130,6 +130,7 @@ pub enum CoordinatorObservabilityRequest {
     Funding,
     RegistryManifest,
     RegistryVersion,
+    IntentRelease(Option<canic_core::dto::release_intents::IntentReleaseKey>),
     ReplayRelease(Option<[u8; 32]>),
     RootAcknowledgements,
 }
@@ -244,6 +245,7 @@ pub enum CoordinatorObservabilityResponse {
     Funding(CoordinatorFundingStatusResponse),
     RegistryManifest(FleetRegistryManifest),
     RegistryVersion(FleetRegistryVersion),
+    IntentRelease(canic_core::dto::release_intents::IntentReleaseResponse),
     ReplayRelease(canic_core::dto::release_receipts::ReplayReleaseResponse),
     RootAcknowledgements(Vec<FleetSubnetRootSnapshotAcknowledgement>),
 }
@@ -267,6 +269,13 @@ mod tests {
             CoordinatorObservabilityRequest::Funding,
             CoordinatorObservabilityRequest::RegistryManifest,
             CoordinatorObservabilityRequest::RegistryVersion,
+            CoordinatorObservabilityRequest::IntentRelease(None),
+            CoordinatorObservabilityRequest::IntentRelease(Some(
+                canic_core::dto::release_intents::IntentReleaseKey::Local(u64::MAX),
+            )),
+            CoordinatorObservabilityRequest::IntentRelease(Some(
+                canic_core::dto::release_intents::IntentReleaseKey::ReceiptBacked([0; 32]),
+            )),
             CoordinatorObservabilityRequest::ReplayRelease(None),
             CoordinatorObservabilityRequest::ReplayRelease(Some([7; 32])),
             CoordinatorObservabilityRequest::RootAcknowledgements,

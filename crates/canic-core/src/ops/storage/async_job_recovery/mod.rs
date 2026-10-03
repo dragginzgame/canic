@@ -34,6 +34,17 @@ pub enum AsyncJobOwner {
     PlacementReceiptAcknowledgement,
 }
 
+impl AsyncJobOwner {
+    /// Complete set of durable job owners inspected before authority suspension.
+    pub const ALL: &'static [Self] = &[
+        Self::AuthRenewal,
+        Self::CanisterPoolMaintenance,
+        Self::CycleTopup,
+        Self::FixtureImport,
+        Self::PlacementReceiptAcknowledgement,
+    ];
+}
+
 /// Exact durable attempt token. Only this token may finish its active lease.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub struct AsyncJobAttempt {

@@ -1084,6 +1084,7 @@ macro_rules! canic_emit_root_status_endpoint {
             PoolImportContext,
             PoolRelease,
             ProvisioningRelease(Option<::canic::dto::root::RootProvisioningReleaseKey>),
+            IntentRelease(Option<::canic::dto::release_intents::IntentReleaseKey>),
             ReplayRelease(Option<[u8; 32]>),
             StoreOverview,
         }
@@ -1114,6 +1115,7 @@ macro_rules! canic_emit_root_status_endpoint {
             PoolImportContext(::canic::dto::pool_import::PoolImportContext),
             PoolRelease(::canic::dto::root::RootPoolReleaseResponse),
             ProvisioningRelease(::canic::dto::root::RootProvisioningReleaseResponse),
+            IntentRelease(::canic::dto::release_intents::IntentReleaseResponse),
             ReplayRelease(::canic::dto::release_receipts::ReplayReleaseResponse),
             StoreOverview(::canic::dto::template::WasmStoreOverviewResponse),
         }
@@ -1134,6 +1136,7 @@ macro_rules! canic_emit_root_status_endpoint {
                     | RootStatusRequest::PoolImportContext
                     | RootStatusRequest::PoolRelease
                     | RootStatusRequest::ProvisioningRelease(_)
+                    | RootStatusRequest::IntentRelease(_)
                     | RootStatusRequest::ReplayRelease(_)
                     | RootStatusRequest::StoreOverview
             );
@@ -1214,6 +1217,10 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::ProvisioningRelease(start_after) => {
                     $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::release_status(start_after)
                         .map(RootStatusResponse::ProvisioningRelease)
+                }
+                RootStatusRequest::IntentRelease(start_after) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::release_intents(start_after)
+                        .map(RootStatusResponse::IntentRelease)
                 }
                 RootStatusRequest::ReplayRelease(start_after) => {
                     $crate::__internal::core::api::observability::ObservabilityApi::release_receipts(start_after)

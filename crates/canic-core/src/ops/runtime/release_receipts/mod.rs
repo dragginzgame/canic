@@ -11,15 +11,20 @@ use crate::{
     InternalError,
     dto::release_receipts::{
         ReplayReleaseAuthentication as Authentication, ReplayReleaseEffect as Effect,
-        ReplayReleaseEntry, ReplayReleasePhase as Phase, ReplayReleaseRecoveryReason as Reason,
-        ReplayReleaseResponse, ReplayReleaseSettlement,
+        ReplayReleaseEntry, ReplayReleaseIntent, ReplayReleaseIntentState,
+        ReplayReleasePhase as Phase, ReplayReleaseRecoveryReason as Reason, ReplayReleaseResponse,
+        ReplayReleaseSettlement,
     },
+    ids::IntentId,
     model::replay::{
         AuthKind, CommandKind, ExternalEffectDescriptor, OperationId,
         REPLAY_RECEIPT_SCHEMA_VERSION, RecoveryReason, ReplayReceiptStatus,
     },
-    ops::storage::replay::ReplayReceiptOps,
-    storage::stable::replay::ReplayReceiptEntryRecord,
+    ops::storage::{intent::IntentStoreOps, replay::ReplayReceiptOps},
+    storage::stable::{
+        intent::{IntentRecord, IntentState},
+        replay::ReplayReceiptEntryRecord,
+    },
 };
 use candid::Principal;
 
@@ -86,14 +91,43 @@ fn project(entry: ReplayReceiptEntryRecord) -> Result<ReplayReleaseEntry, Intern
         created_at_ns: record.created_at_ns,
         updated_at_ns: record.updated_at_ns,
         expires_at_ns: record.expires_at_ns,
-        cost_guard_settlement: record.cost_guard_settlement.map(|settlement| {
-            ReplayReleaseSettlement {
-                quota_intent_id: settlement.quota_intent_id.0,
-                reservation_intent_id: settlement.reservation_intent_id.0,
-            }
-        }),
+        cost_guard_settlement: record
+            .cost_guard_settlement
+            .map(|settlement| {
+                Ok::<_, InternalError>(ReplayReleaseSettlement {
+                    quota_intent_id: settlement.quota_intent_id.0,
+                    reservation_intent_id: settlement.reservation_intent_id.0,
+                    quota: observe_intent(settlement.quota_intent_id)?,
+                    reservation: observe_intent(settlement.reservation_intent_id)?,
+                })
+            })
+            .transpose()?,
         effect: record.effect.map(project_effect).transpose()?,
     })
+}
+
+fn observe_intent(id: IntentId) -> Result<Option<ReplayReleaseIntent>, InternalError> {
+    let Some(record) = IntentStoreOps::load(id)? else {
+        return Ok(None);
+    };
+    if record.id != id {
+        return Err(InternalError::conflict());
+    }
+    Ok(Some(project_intent(record)))
+}
+
+pub(super) fn project_intent(record: IntentRecord) -> ReplayReleaseIntent {
+    ReplayReleaseIntent {
+        resource_key: record.resource_key.as_str().to_owned(),
+        quantity: record.quantity,
+        state: match record.state {
+            IntentState::Pending => ReplayReleaseIntentState::Pending,
+            IntentState::Committed => ReplayReleaseIntentState::Committed,
+            IntentState::Aborted => ReplayReleaseIntentState::Aborted,
+        },
+        created_at_secs: record.created_at,
+        ttl_secs: record.ttl_secs,
+    }
 }
 
 fn project_effect(effect: ExternalEffectDescriptor) -> Result<Effect, InternalError> {

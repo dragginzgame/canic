@@ -102,6 +102,11 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
     assert_eq!(usage.pending_operations, 0);
     assert_eq!(usage.reserved_cycles, Some(0.into()));
     super::replay_release::assert_funding_receipt(&pic, root, child, request.metadata.request_id);
+    let _ = super::replay_release::collect_intents(
+        &pic,
+        coordinator,
+        canic::protocol::CANIC_OBSERVABILITY,
+    );
     assert!(pic.cycle_balance(child) > balance_before);
     let after = timer(&pic, root);
     assert!(

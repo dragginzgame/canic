@@ -1,48 +1,38 @@
-# Code review implementation status
+# Code review implementation handoff
 
-## Findings summary
-
-The original review found **401 distinct, non-refuted findings**, after merging
-67 duplicates and excluding 8 refuted reports.
-
-| Original severity | Findings |
-| --- | ---: |
-| Critical | 1 |
-| High | 44 |
-| Medium | 105 |
-| Low | 220 |
-| Info | 31 |
-| **Total** | **401** |
-
-| Current tracked status | Findings |
-| --- | ---: |
-| Addressed and qualified | 31 |
-| Awaiting finding-by-finding disposition | 370 |
-
-The 31 qualified original IDs are a conservative minimum. The other 370 include
-unchecked, partial and unreconciled work; they are not 370 confirmed current
-bugs. Severity describes the original review snapshot. Additional fixes do not
-increase the qualified count until reconciled with their original IDs.
+Finding disposition, original severity, duplicate mapping and future tracking
+belong to the [GitHub review catalogue](https://github.com/dragginzgame/canic/issues/40)
+and its linked issues. The original export and the dated implementation and
+validation evidence below remain available as source evidence. Record new triage
+and completion decisions in GitHub.
 
 Last updated: **2026-10-03**. Scope: Canic implementation and qualification;
 Toko Miner is downstream feedback and read-only context.
 
-The maintainer reports **0.110.51 published** and packages are **0.110.51**.
-The accepted **FR1 Fleet release-to-capacity batch is active and unfinished**.
-Completed Host/CLI/Backup corrections are recorded in the open **0.110.52** draft;
-incomplete FR1 remains in root `Unreleased`. Its restored foundations are qualified;
-evidence below remains scoped to the checks actually run.
-This page tracks progress; it is not release authority or evidence of publication.
+The accepted FR1 Fleet release-to-capacity batch remains unfinished. Evidence
+below is scoped to the checks actually run; publication and live deployment are
+separate maintainer-selected actions. This page records implementation handoffs.
 
 ## Review sources
 
 - [Original review export](<Canic Code Review.html>) — preserved source findings.
-- [Implementation tracker and counted IDs](../design/0.110-fleet-runtime-contraction/status.md#accepted-code-review-corrections--2026-09-30) — detailed R1–R8 ownership and traceability.
+- [GitHub review catalogue](https://github.com/dragginzgame/canic/issues/40) — original finding IDs, source records and individual issues.
+- [Implementation handoff](../design/0.110-fleet-runtime-contraction/status.md#accepted-code-review-corrections--2026-09-30) — accepted R1–R8 contracts and qualification evidence.
 - [Current session handoff](../status/current.md) — latest execution evidence and concurrent work.
 - [Deployment reliability audit](../audits/reports/2026-09/2026-09-30/deployment-reliability.md) — separate 18-finding audit; its snapshot findings are historical, not current dispositions.
 - [0.110 release notes](../changelog/0.110.md) — included behavior changes, distinct from validation and publication status.
 
 ## Recent delivery status
+
+The maintainer requested an earlier .52 checkpoint after dependency edits
+finished. Its draft includes implemented FR1 discovery/assessment and the
+pool-creation uncertainty and release-preflight fixes; whole-Fleet execution
+remains unfinished. The [current handoff](../status/current.md) records final-graph
+qualification: affected lint, native/inventory/Candid checks, refreshed embedded
+peer and four exact PocketIC proofs pass, including the ic-testkit 0.13 reset
+recipe and uncertainty/replay corrections. The .52 checkpoint is ready for the
+maintainer-selected release flow. It does not close FR1 or add review-finding
+closures; issue disposition remains in GitHub.
 
 FR1 shared replay discovery is now in progress: controller-only pages retain
 expired uncertainty and original effect/accounting identities, with bounded
@@ -74,7 +64,7 @@ release tests and Host Clippy pass. Fixture refresh/verification and the signed-
 Host PocketIC proof pass (2.17s, 4s runner). The exact interrupted-to-terminal Root
 PocketIC proof passes (30.46s, 51s runner), including controller denial, replay and
 unchanged balances. This is partial discovery, not complete settlement
-or push readiness; the original-review count remains 31/401.
+or push readiness.
 
 FR1's Host pool collector is implemented: bounded signed reads preserve each
 Root's exact obligations, with custody/Registry checks and no partial result on
@@ -93,8 +83,7 @@ All 62 selected pool tests, affected-package Clippy and fixture refresh/verifica
 pass. The exact import PocketIC case passes in 88.42s (170s runner), covering
 both custody paths, retained progress, authorization, replay and unchanged balances
 (`fr1-pool-census-*`, removed by subsequent external target cleanup). Other obligation owners and complete FR1
-execution remain unfinished. This
-partial slice leaves the original-review closure count at 31/401.
+execution remain unfinished. This partial slice does not establish whole-Fleet release readiness.
 
 FR1's bounded Host collector now includes existing Coordinator funding status,
 with exact Root membership/policy/lifecycle checks. It preserves pending grants,
@@ -138,8 +127,8 @@ preserve balances. This is observation only: complete obligation collection,
 quiescence, account recovery, execution/CLI and whole-Fleet proof remain. No
 additional original-review finding is counted from this partial FR1 slice.
 
-Two more low findings are fixed: `cli-core-5` rejects colliding canister ID export
-variables before either shell or JSON output; `host-icp-network-9` permits exact
+Two more low findings are fixed: [cli-core-5](https://github.com/dragginzgame/canic/issues/297) rejects colliding canister ID export
+variables before either shell or JSON output; [host-icp-network-9](https://github.com/dragginzgame/canic/issues/262) permits exact
 local reset of an instance that exceeds load traversal limits or contains
 interior symlinks. The instance root itself must remain a real directory, link
 targets remain untouched, and terminal replay preserves its receipt. Seven
@@ -148,9 +137,9 @@ targets remain untouched, and terminal replay preserves its receipt. Seven
 Clippy passes with `--no-deps` and warnings denied. Both corrections extend the .52 draft;
 FR1 remains unfinished.
 
-Two simple original findings are fixed: `host-icp-network-10` accepts additive
+Two simple original findings are fixed: [host-icp-network-10](https://github.com/dragginzgame/canic/issues/263) accepts additive
 ICP CLI fields in balance, snapshot inventory and known visibility output;
-`backup-persistence-12` accepts equivalent checksum hex casing during artifact
+[backup-persistence-12](https://github.com/dragginzgame/canic/issues/318) accepts equivalent checksum hex casing during artifact
 verification and restore-preview validation. Required fields, known visibility
 variants, hash syntax and actual artifact integrity remain checked. Focused
 native evidence is retained as `target/review-validation/simple-review-*`.
@@ -250,24 +239,14 @@ dependency gates. Evidence is in `target/review-validation/lock-reconcile-*`;
 this is targeted qualification, not a full workspace run. Query's own upstream
 tests remain separate evidence, and Canic disk-history adoption remains open.
 
-## Remaining accepted work
-
-| Owner / batch | Work still open |
-| --- | --- |
-| R2 — Host, CLI, Control Plane | Remaining import/operation recovery findings, older unknown outcomes and Root-cap disposition. Host attempt recovery is now qualified; do not continue tracking that specific gap as unimplemented. |
-| R3 — funding and conservation | Remaining funding accounting and authority work beyond qualified signing admission, grant replay and native-credit corrections. |
-| R4 — placement and recycling | Caller replay, issuer and funding authority isolation. Existing placement/recycling and allocation-bound recovery evidence does not close these remaining findings. |
-| R5 — Backup, CLI, Core | Complete uploads, consistent capture and remaining release/restore authority. Filesystem locking and retention corrections are qualified; fresh live backup remains unavailable. |
-| R6 — background drivers | Driver ownership and trap recovery; typed platform-unavailable retry classification is already qualified. |
-| R7 — convergence | Operation-specific authority across unrelated Fleet changes, mirror acknowledgements, rotation and activation fences. |
-| R8 / FR1 — retirement and release | Complete paid-obligation and account collection, cycle/ICP accounting, quiescence, execution/recovery, CLI, whole-Fleet proof and retirement contraction. Parked foundations are now restored and requalified after .50; preserve their original recovery bundle. |
-| CS1 — simplification | Accepted simplification work follows FR1; its direct evidence, propagation and cleanup remain outstanding. |
-| Qualification and triage | Native macOS results, remaining execution-boundary work, and finding-by-finding disposition of the full original review. R1's bounded quota outcome is already qualified. |
+## Accepted implementation contracts
 
 The [implementation sequence](../design/0.110-fleet-runtime-contraction/status.md)
-owns detailed acceptance and dependencies. Completing every review finding is
-not a prerequisite for shipping a bounded corrective batch. Final 0.110 closeout
-must be explicitly requested and accepted before starting 0.111.
+owns accepted implementation contracts and dependencies. Individual finding
+follow-ups and disposition belong to the GitHub catalogue and linked issues.
+Completing every review finding is not a prerequisite for shipping a bounded
+corrective batch. Final 0.110 closeout must be explicitly requested and accepted
+before starting 0.111.
 
 ## Next checkpoints and maintenance
 
@@ -277,11 +256,11 @@ must be explicitly requested and accepted before starting 0.111.
    do not assign one patch per restored helper. Publication and live deployment
    remain separate maintainer-selected actions.
 3. Continue the accepted remaining sequence, including resumed FR1 and CS1, using
-   the detailed tracker rather than treating historical snapshot findings as new bugs.
-4. Reconcile completed work with original finding IDs before changing the 31/401
-   count. Record duplicates, partial fixes and superseded findings explicitly.
+   the accepted implementation contracts and linked GitHub issues.
+4. Reconcile completed work with the original finding's GitHub issue. Record
+   duplicates, partial fixes and superseded findings in GitHub.
 
-For each completed batch, update this file's date, disposition, evidence and
-remaining boundary alongside the current handoff. Keep detailed test output in
-retained logs and exact finding IDs in the implementation tracker. Do not turn
-this descriptive status file, its wording or its counts into a release gate.
+For each completed batch, record implementation and validation evidence alongside
+the current handoff, and update finding disposition in GitHub. Keep detailed test
+output in retained logs. Finding counts and triage belong to the GitHub catalogue.
+This descriptive handoff does not establish release authority.

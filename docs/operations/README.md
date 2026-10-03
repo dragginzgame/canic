@@ -15,8 +15,8 @@ pages are references for a specific operational task or failure.
   current release-validation inventory. Use it for slice close-out,
   implementation close-out, RC promotion, and final release/tag validation.
 - [Supported host and target matrix](../governance/supported-platforms.md)
-  defines the sole release-supported host/native/Wasm cell and distinguishes
-  unvalidated installer branches.
+  defines the supported Linux and macOS hosts, native and Wasm targets, and
+  outstanding platform qualification.
 - [Fleet ensure](../features/operations/fleet-ensure.md) documents the sole
   current convergence and interruption-replay workflow.
 - [CI diagnostics](ci-diagnostics.md) distinguishes the one offline workspace

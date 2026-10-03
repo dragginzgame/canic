@@ -17,6 +17,13 @@ use candid::Principal;
 pub struct ObservabilityApi;
 
 impl ObservabilityApi {
+    /// Discover canonical accounting after controller authentication at the endpoint.
+    pub fn release_intents(
+        start_after: Option<crate::dto::release_intents::IntentReleaseKey>,
+    ) -> Result<crate::dto::release_intents::IntentReleaseResponse, Error> {
+        observability::release_intents(start_after).map_err(Into::into)
+    }
+
     /// Discover retained replay authority after controller authentication at the endpoint.
     pub fn release_receipts(
         start_after: Option<[u8; 32]>,

@@ -1,9 +1,13 @@
 //! Signed dual-owner receipt collection refuses a late Root failure without returning partial evidence.
 
 use super::*;
-use crate::fleet_ensure::ops::release::{
-    observation::ReleaseObservationError,
-    receipts::{self, ReleaseReceiptsError as Failure, ReleaseReceiptsStage as Stage},
+use crate::fleet_ensure::{
+    ops::release::{
+        observation::ReleaseObservationError,
+        receipts::{self, ReleaseReceiptsError as Failure, ReleaseReceiptsStage as Stage},
+    },
+    view::release::receipts::ReleaseReplayDisposition,
+    workflow::release::assess_receipts,
 };
 use ic_testkit::pocket_ic::PocketIc;
 
@@ -35,18 +39,29 @@ pub(super) fn assert_census(
         .unwrap()
     };
     replace(root_page.clone());
-    let collect =
-        |review, registry| runtime.block_on(receipts::collect_with_agent(agent, review, registry));
+    let collect = |review, registry| {
+        runtime
+            .block_on(receipts::collect_with_agent(agent, review, registry))
+            .map(assess_receipts)
+    };
     let balances = [pic.cycle_balance(coordinator), pic.cycle_balance(root)];
     let observed = collect(review, registry).unwrap();
     assert_eq!(
-        observed.owners,
+        observed.evidence.owners,
         [
             (coordinator, vec![coordinator_page]),
             (root, vec![root_page.clone()])
         ]
         .into()
     );
+    for owner in [coordinator, root] {
+        assert_eq!(
+            observed.owners[&owner][0].disposition,
+            ReleaseReplayDisposition::AccountingRecovery
+        );
+        assert_eq!(observed.owners[&owner][0].pending_intents, vec![6]);
+        assert!(observed.owners[&owner][0].missing_intents.is_empty());
+    }
     assert_eq!(collect(review, registry).unwrap(), observed);
     assert_eq!(
         [pic.cycle_balance(coordinator), pic.cycle_balance(root)],
@@ -90,8 +105,7 @@ pub(super) fn assert_census(
     let mut empty = root_page;
     empty.entry = None;
     replace(empty.clone());
-    assert_eq!(
-        collect(review, registry).unwrap().owners[&root],
-        vec![empty]
-    );
+    let assessed = collect(review, registry).unwrap();
+    assert_eq!(assessed.evidence.owners[&root], vec![empty]);
+    assert!(assessed.owners[&root].is_empty());
 }

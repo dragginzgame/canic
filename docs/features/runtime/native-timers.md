@@ -11,24 +11,28 @@ The maintained end-to-end fixture is
 one-shot, an after-completion registration, cancellation, native inventory and
 synchronous reconstruction without a Canic timer wrapper.
 
-## Pin One Provider
+## Use One Provider
 
 Every timer-owning crate linked into a canister must resolve the same exact
 package identity:
 
 ```toml
 [dependencies]
-ic-timers = "=0.8.1"
+ic-timers = "0.9"
 ```
 
+Canic's locked deployed graph must contain one provider identity. Compatible
+version requirements are supported; an exact manifest pin is not required.
 Check the composed graph, not only each direct manifest:
 
 ```text
 cargo tree -d
-cargo tree -i ic-timers@0.8.1
+cargo tree -i ic-timers@0.9.1
 ```
 
-Two resolved versions contain two independent sets of library statics and
+Use the provider version from your selected deployed graph in the inverse lookup;
+recheck it when dependencies change. Two resolved versions contain two independent
+sets of library statics and
 therefore two inventories. Do not combine a direct `ic-cdk-timers` consumer
 with this design without separately inventorying and qualifying that second
 provider path.
