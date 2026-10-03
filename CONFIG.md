@@ -1,16 +1,19 @@
 # Canic Configuration
 
-This guide documents the canonical shape of `canic.toml`, the configuration file consumed by Canic build scripts and runtime helpers.
+This guide documents the canonical shape of `canic.toml`, the human-authored
+App configuration consumed by Canic's host-side build path.
 
 At a high level the file describes:
 
 - App identity and package-backed roles (`app`, `roles`).
-- Global settings (`standards`, `app`, `auth`, `log`).
+- Global settings (`public_metrics`, `standards`, `app`, `auth`, `log`).
 - Flat Component topology under `component_specs.<name>`.
 - One top-level Component role and a flat catalog of every potential
   descendant role per Component Spec.
 - Per-Component-tree and role-to-role spawn-grant ceilings, cycles policy, and
   optional scaling, sharding, and keyed index pools.
+- Reusable Component Groups, independently scalable Group deployments, and
+  logical Fleet-service targets.
 - The implicit Fleet Subnet Root-local wasm-store behavior used by
   chunk-store-backed installs.
 
@@ -31,12 +34,35 @@ endpoint bundle.
 
 ---
 
+## Configuration Map
+
+| Concern | Owner in `canic.toml` |
+| --- | --- |
+| App identity and startup mode | [`[app]`](#app) |
+| Package roles and optional observation providers | [`[roles.<role>]`](#rolesrole) |
+| Global auth, logs, standards and public metrics | [Global keys](#global-keys) and [public metric publication](#public-metric-publication) |
+| One Component blueprint and its descendant capability graph | [Component Specs](#component-specs) |
+| Reusable multi-Component composition | [Component Groups](#component-groups) |
+| Independent count, spread and reduction-only limits | [Component Group deployments](#component-group-deployments) |
+| Logical Fleet-wide target selection | [Fleet services](#fleet-services) |
+
+Physical Subnets, concrete canister identities, controllers, funding and
+destructive dispositions belong to the separately reviewed desired Fleet, not
+to App source configuration.
+
+---
+
 ## Runtime Config + Env Lifecycle
 
 Canic treats config/env identity as startup invariants. Missing env data is a fatal error.
 
-- Build time: `CANIC_CONFIG_PATH` is embedded into the Wasm and `ICP_ENVIRONMENT` is baked in (`local` or `ic`), defaulting to `local` when unset.
-- Init/post-upgrade: generated lifecycle code loads the embedded TOML and parsed config model; `ConfigOps::current_*` is infallible.
+- Build time: the build script selects `CANIC_CONFIG_PATH`, parses and validates
+  its TOML on the host, then generates typed Rust configuration. It also retains
+  compact TOML text for Root reporting; no TOML parser enters deployed Wasm.
+  `ICP_ENVIRONMENT` is baked in (`local` or `ic`), defaulting to `local` when
+  unset.
+- Init/post-upgrade: generated lifecycle code installs the compiled typed model
+  synchronously; `ConfigOps::current_*` is infallible.
 - Root env: fresh root installation sets base fields from
   `CurrentRootInstallIdentity` without a registry lookup.
   - The Fleet Subnet Root sits outside every Component Spec.
@@ -71,6 +97,12 @@ Component topology is present.
   that role receives no admission projection or admission surface. Enrollment
   does not itself protect application endpoints; each endpoint still selects
   its intended access policy explicitly.
+- `[roles.<role>.observability]` – optional build-time selection of the
+  `diagnostics`, `history`, `logs`, and `metrics` providers. Every switch
+  defaults to `true`; setting one to `false` removes that optional generated
+  read surface for the role. Health, readiness, binding, discovery, current
+  cycle balance, and child-funding accounting remain available. See
+  [public status and protected observability](docs/features/runtime/public-observability.md).
 
 Role declarations own package identity. The matching
 `component_specs.<name>` or
@@ -119,8 +151,14 @@ complete chain-key root proof policy. Verification uses that policy directly.
 
 Trust anchor for `RootProof::IcChainKeyBatchSignatureV1`.
 
-These fields are required when delegated tokens are enabled:
+The resolved proof policy requires the fields below when delegated tokens are
+enabled. `public_key_derivation` is an optional host-side input; when selected,
+the build path fills the derived key and path hash before final validation.
 
+- `public_key_derivation = "ic" | "pocketic"` – optional host-only catalog
+  selection that derives `public_key_hex` and `derivation_path_hash_hex` before
+  artifact generation. It must match `build_network`. Omit it when supplying
+  explicit key material for another environment.
 - `key_id: string` – IC chain-key ECDSA key id, such as `"key_1"`.
 - `derivation_path_hash_hex: string` – canonical 32-byte hash of the derivation path, encoded as hex.
 - `derivation_path_hex: [string, ...]` – derivation path components encoded as hex strings.
@@ -243,6 +281,10 @@ round, truncate, or saturate them.
   verifier; the role contract requires the matching verifier feature and the
   global delegated-token trust policy.
 - `auth.role_attestation_cache = true` – start the role-attestation key cache for canisters that verify root-signed role attestations. Delegated-token endpoint verification itself is driven by endpoint guards and `auth.delegated_tokens`, not this flag.
+- `auth.local_application_authorization` – optional role-local application
+  session policy with required `allowed_scopes`, `default_session_ttl_secs`,
+  and `maximum_session_ttl_secs`. Scope ordering is normalized; TTLs and scope
+  bounds are validated before build.
 - `standards.icrc21 = true` – enable the canister-local ICRC-21 endpoint. This
   is separate from the global `[standards]` setting.
 - `diagnostics.memory_ledger = true` – opt this role into the controller-only `canic_memory_ledger` recovery diagnostic. The endpoint is omitted by default to keep the shared Candid/runtime surface smaller.
@@ -278,6 +320,23 @@ maximum_instances_per_parent = 1
 
 Role-graph recursion is allowed, but every concrete Registry parentage graph
 is a finite tree bounded by the Component and root quotas.
+
+#### Peer Component Provisioning
+
+A Component Spec may request another exact Spec only through an explicit
+root-local provisioning grant:
+
+```toml
+[component_specs.api.provisions.worker]
+maximum_instances_per_requester_per_root = 4
+```
+
+The table key names the peer Component Spec. The positive limit bounds how many
+instances one concrete requester may cause on one Fleet Subnet Root. This is
+separate from `spawn_grants`: provisioning creates a peer top-level Component,
+while a spawn grant creates a descendant inside the requester's own Component
+tree. Physical placement and Fleet-wide admission remain Coordinator/Root
+authority.
 
 #### Component aggregate limits
 
@@ -389,6 +448,118 @@ Fields:
 
 ---
 
+## Component Groups
+
+Component Groups are reusable configuration-only compositions. They do not
+create a Group canister, runtime parent, controller, or local Wasm Store.
+
+Direct members select Component Specs:
+
+```toml
+[component_groups.api_cell.components.api]
+component_spec = "api"
+labels.region = "eu"
+```
+
+Nested members include another Group:
+
+```toml
+[component_groups.full_stack.groups.data]
+component_group = "data_cell"
+```
+
+The final path segment is the member ID. A direct component requires
+`component_spec`; an included group requires `component_group`. Both member
+kinds accept bounded `labels`. Groups may include other Groups, but the graph
+must be acyclic and compiles to a finite flattened list.
+
+A direct component may set `service = "<service-id>"`. A service member may
+also receive `service_purpose = "authority" | "replica" | "pool_member"`;
+ordinary members cannot receive a service purpose. Purpose may instead be
+assigned by an enclosing included-group edge or deployment, but each effective
+service member must resolve to one compatible purpose.
+
+## Component Group Deployments
+
+Each deployment independently scales one reusable Group:
+
+```toml
+[component_group_deployments.api_cells]
+component_group = "api_cell"
+service_purpose = "pool_member"
+initial_placements = 2
+maximum_placements = 8
+placement.maximum_per_root = 2
+placement.minimum_distinct_roots = 2
+labels.tier = "public"
+```
+
+- `component_group` selects the reusable composition.
+- `initial_placements` is the initial count and may be zero.
+- `maximum_placements` is a positive scale-out ceiling and must be at least the
+  initial count.
+- `placement.maximum_per_root` is the positive density ceiling.
+- `placement.minimum_distinct_roots` is the positive spread requirement and
+  cannot exceed what the placement ceiling can satisfy.
+- `service_purpose` optionally supplies one purpose to the deployment's
+  service members; it does not turn ordinary members into services.
+- `labels` supplies bounded deployment-wide labels.
+
+Reduction-only per-member limits use a TOML array of tables. `member` is the
+flattened member path, including every nested Group member ID:
+
+```toml
+[[component_group_deployments.api_cells.member_limits]]
+member = ["api"]
+maximum_descendants = 1000
+maximum_registry_bytes = 8388608
+
+[[component_group_deployments.api_cells.member_limits.spawn_grants]]
+parent_role = "api"
+child_role = "worker"
+maximum_instances_per_parent = 8
+```
+
+These values may only reduce the owning Component Spec's limits; deployments
+cannot expand source authority.
+
+## Fleet Services
+
+`[services.fleet.targets.<service-id>]` declares a logical Fleet-wide service
+over exact grouped occurrences. It never names physical Roots or concrete
+canister Principals.
+
+An active pool selects every current compatible `pool_member` occurrence:
+
+```toml
+[services.fleet.targets.api]
+mode = "active_pool"
+role = "api"
+component_spec = "api"
+placement.maximum_members_per_root = 2
+placement.minimum_distinct_roots = 2
+```
+
+An authority/replica service additionally binds its unique authority member:
+
+```toml
+[services.fleet.targets.database]
+mode = "authority_replica"
+role = "database"
+component_spec = "database"
+authority_deployment = "database_authority"
+authority_member = ["database"]
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 1
+```
+
+The named role must be the selected Component Spec's top-level role. Every
+service occurrence comes from a Group member carrying the same service ID and
+a mode-compatible purpose. Placement fields are positive logical-service
+density/spread bounds; physical assignments remain protected deployment output.
+
+---
+
 ## Example
 
 ```toml
@@ -486,12 +657,32 @@ kind = "replica"
 
 [component_specs.scaling.spawn_grants.scale_hub.scale]
 maximum_instances_per_parent = 32
+
+[component_groups.user_cell.components.users]
+component_spec = "users"
+service = "users"
+
+[component_group_deployments.user_cells]
+component_group = "user_cell"
+service_purpose = "pool_member"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1
+
+[services.fleet.targets.users]
+mode = "active_pool"
+role = "user_hub"
+component_spec = "users"
+placement.maximum_members_per_root = 1
+placement.minimum_distinct_roots = 1
 # CANIC_CONFIG_EXAMPLE_END
 ```
 
-This example defines three flat Component Specs, enables ICRC-21, and grants
-`user_hub` permission to create shards plus `scale_hub` permission to create
-replicas. Each occupied Fleet/Subnet root gets one implicit
+This example defines three flat Component Specs, enables ICRC-21, grants
+`user_hub` permission to create shards, grants `scale_hub` permission to create
+replicas, and deploys one `users` active-pool service member through a reusable
+Group. Each occupied Fleet/Subnet root gets one implicit
 `wasm_store`; physical Subnet placement and root-local Component admissions
 are separate deployment input.
 
@@ -507,6 +698,7 @@ Static config owns:
 - user-defined canister roles and policies
 - flat Component Specs, potential-descendant catalogs and bounded spawn grants
 - Component roles that a Fleet Subnet Root may create from admitted Specs
+- reusable Component Groups, deployment envelopes and logical Fleet services
 
 Root-authoritative runtime state owns:
 

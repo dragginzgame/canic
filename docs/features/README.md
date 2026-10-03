@@ -12,23 +12,16 @@ under `docs/architecture/`, and operator procedures remain under
 
 ## Feature Guides
 
-- [Canister runtime](runtime/README.md) — lifecycle, build integration, memory,
-  calls, timers, and metrics.
-- [Authentication](authentication/README.md) — endpoint guards, delegated
-  tokens, proof renewal, and role attestation.
-- [Fleet orchestration](fleet-orchestration/README.md) — desired-state
-  reconciliation, exact effects, cycle conservation, and lifecycle authority.
-- [Scaling and placement](scaling-and-placement/README.md) — Component Specs,
-  Groups, services, children, sharding, scaling, and limits.
-- [Builds and evidence](build-and-evidence/README.md) — artifacts, provenance,
-  evidence envelopes, comparison, policy gates, and the published managed-App
-  qualification surface.
-- [Backup and restore](backup-and-restore/README.md) — host-side snapshots,
-  verification and journaled same-release recovery through the CLI.
-- [Blob storage](blob-storage/README.md) — optional product-data storage and
-  billing integration.
-- [Operations and diagnostics](operations/README.md) — current CLI workflows,
-  network trust, local replicas, evidence, and Fleet ensure.
+| Capability | Use it for | Guide |
+| --- | --- | --- |
+| Canister runtime | Lifecycle, memory, typed calls, timers and metrics | [Runtime](runtime/README.md) |
+| Authentication | Endpoint guards, delegated subjects, proof renewal and attestation | [Authentication](authentication/README.md) |
+| Fleet orchestration | Reviewed desired-state effects, recovery and cycle conservation | [Fleet orchestration](fleet-orchestration/README.md) |
+| Scaling and placement | Specs, Groups, services, children, pools and limits | [Scaling and placement](scaling-and-placement/README.md) |
+| Builds and evidence | Artifacts, provenance, policy gates and managed-App qualification | [Builds and evidence](build-and-evidence/README.md) |
+| Backup and restore | Host-side snapshots, verification and same-release recovery | [Backup and restore](backup-and-restore/README.md) |
+| Blob storage | Optional product-data storage and Cashier-backed billing | [Blob storage](blob-storage/README.md) |
+| Operations and diagnostics | CLI workflows, network trust, local replicas and Fleet ensure | [Operations and diagnostics](operations/README.md) |
 
 For the exact delivery boundary of work in progress, see
 [Current Status](../status/current.md).
