@@ -59,6 +59,8 @@ pub enum TimerError {
     },
     #[error("Canic timer claim is running and cannot be suspended: {0}")]
     RunningClaim(String),
+    #[error("Canic async job still owns a durable attempt: {0:?}")]
+    ActiveJob(AsyncJobOwner),
     #[error(transparent)]
     Schedule(#[from] ScheduleError),
     #[error("Canic timers are suspended for an authority snapshot")]
@@ -161,6 +163,7 @@ impl TimerAuthorityWorkflow {
 
     /// Prove that Coordinator has no live private lifecycle work to snapshot.
     pub(crate) fn require_coordinator_resumable() -> Result<(), TimerError> {
+        require_no_active_async_job_attempts()?;
         require_observed_claims_resumable(
             &BTreeSet::new(),
             timer_inventory()?
@@ -253,28 +256,9 @@ impl TimerAuthorityWorkflow {
 }
 
 fn require_no_active_async_job_attempts() -> Result<(), TimerError> {
-    let owners = [
-        #[cfg(any(test, feature = "auth-root-delegation-state"))]
-        (
-            AsyncJobOwner::AuthRenewal,
-            runtime::auth::RuntimeAuthWorkflow::root_issuer_renewal_timer_identity()?,
-        ),
-        (
-            AsyncJobOwner::PlacementReceiptAcknowledgement,
-            PlacementAcknowledgementWorkflow::timer_identity()?,
-        ),
-        (
-            AsyncJobOwner::CanisterPoolMaintenance,
-            canister_pool_timer_identity()?,
-        ),
-        (
-            AsyncJobOwner::CycleTopup,
-            runtime::cycles::CycleWorkflow::timer_identity()?,
-        ),
-    ];
-    for (owner, identity) in owners {
+    for &owner in AsyncJobOwner::ALL {
         if AsyncJobRecoveryOps::active_lease_deadline(owner).is_some() {
-            return Err(TimerError::RunningClaim(format_identity(&identity)));
+            return Err(TimerError::ActiveJob(owner));
         }
     }
     Ok(())
@@ -572,9 +556,60 @@ mod tests {
 
         assert!(matches!(
             require_no_active_async_job_attempts(),
-            Err(TimerError::RunningClaim(identity))
-                if identity == "canic/canister_pool/maintain"
+            Err(TimerError::ActiveJob(
+                AsyncJobOwner::CanisterPoolMaintenance
+            ))
         ));
         AsyncJobRecoveryOps::abandon(owner);
+    }
+
+    #[test]
+    fn every_durable_owner_blocks_both_roles_until_its_exact_attempt_finishes() {
+        let _guard = crate::test::seams::lock();
+        AsyncJobRecoveryOps::reset_for_tests();
+        for &owner in AsyncJobOwner::ALL {
+            let AsyncJobClaim::Acquired(first) = AsyncJobRecoveryOps::claim(owner, 10, 20).unwrap()
+            else {
+                panic!("fresh owner must acquire an attempt");
+            };
+            for check in [
+                TimerAuthorityWorkflow::require_root_resumable,
+                TimerAuthorityWorkflow::require_coordinator_resumable,
+            ] {
+                assert!(matches!(check(), Err(TimerError::ActiveJob(active)) if active == owner));
+                assert_eq!(AsyncJobRecoveryOps::active_lease_deadline(owner), Some(20));
+            }
+            // An elapsed lease permits owner recovery; it does not establish that
+            // the old external effect or its callback has finished.
+            assert_eq!(AsyncJobRecoveryOps::expired_deadline(owner, 20), Some(20));
+            assert!(
+                matches!(require_no_active_async_job_attempts(), Err(TimerError::ActiveJob(active)) if active == owner)
+            );
+            let AsyncJobClaim::Acquired(successor) =
+                AsyncJobRecoveryOps::claim(owner, 20, 40).unwrap()
+            else {
+                panic!("expired attempt must be recoverable");
+            };
+            assert!(
+                !AsyncJobRecoveryOps::finish(
+                    first,
+                    crate::ops::storage::async_job_recovery::AsyncJobCompletion::Success,
+                    21
+                )
+                .unwrap()
+            );
+            assert!(
+                matches!(require_no_active_async_job_attempts(), Err(TimerError::ActiveJob(active)) if active == owner)
+            );
+            assert!(
+                AsyncJobRecoveryOps::finish(
+                    successor,
+                    crate::ops::storage::async_job_recovery::AsyncJobCompletion::Success,
+                    22
+                )
+                .unwrap()
+            );
+            assert!(require_no_active_async_job_attempts().is_ok());
+        }
     }
 }

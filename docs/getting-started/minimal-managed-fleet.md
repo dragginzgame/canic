@@ -1,10 +1,9 @@
 # Your First Managed Application
 
-This guide builds a minimal managed Fleet: a small but complete Canic
-application with two application canisters:
+This guide shows a minimal managed application layout with two application roles:
 
 - a `hub`, which is the main service; and
-- a `registry`, which the hub asks Canic to create as its child.
+- a `registry`, which the hub is permitted to request as its child.
 
 A **canister** is a program running on the Internet Computer. A **Fleet** is one
 deployed copy of the complete application. A **Component** is one deployed
@@ -20,9 +19,13 @@ Before continuing, [install Canic](../../INSTALLING.md) and make sure the
 `canic` command works. Keep the installed command-line tool and every `canic`
 Rust dependency on the same version.
 
-The example demonstrates a child canister because that is the smallest shape
-that exercises Canic's managed Component tree. Use it as a reference before
-adapting the layout to a real product.
+The initial Group deployment selects the hub. Declaring the registry role and
+spawn grant permits later child creation; it does not create a registry at
+startup. The handlers below demonstrate caller identity only. Add an application
+workflow that requests the child when needed; the maintained
+[index hub fixture](../../apps/test/index_hub/src/lib.rs) demonstrates runtime
+creation for a separately configured keyed instance pool. Use this layout as a
+reference before adapting it to a real product.
 
 Root creates, installs, funds, and manages admitted canisters; it does not
 forward normal application requests. Application canisters call one another
@@ -224,12 +227,16 @@ the exact configuration, capabilities and release identity. Fleet Ensure owns
 initialization and readiness; application initialization belongs in the child
 canisters. Pre-1.0 release transitions use explicit reviewed reinstall.
 
-## Child Canister
+## Application Canisters
 
-Child canisters declare their role in Cargo metadata and use Canic endpoint
-macros for application methods.
+Both the hub Component and its potential registry child declare their role in
+Cargo metadata and use Canic endpoint macros for application methods. Each
+canister package must produce a `cdylib` Wasm artifact:
 
 ```toml
+[lib]
+crate-type = ["cdylib"]
+
 [package.metadata.canic]
 app = "example"
 role = "hub"

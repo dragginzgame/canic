@@ -1,23 +1,106 @@
-//! Combine authenticated funding evidence with pure receipt assessment.
+//! Combine authenticated operation-owner evidence with pure release assessment.
 //!
 //! No release effect, producer fence, reconciliation call or reset authority is issued here.
 
 use crate::{
     fleet_ensure::{
         model::release::FleetReleaseReviewRecord,
-        ops::release::funding::{self, ReleaseFundingError},
-        policy::release::funding::assess_refill,
+        ops::release::{
+            funding::{self, ReleaseFundingError},
+            pool::{self, ReleasePoolError},
+            provisioning::{self, ReleaseProvisioningError},
+            receipts::{self, ReleaseReceiptsError},
+        },
+        policy::release::{
+            funding::assess_refill, pool::assess_pool, provisioning::assess_provisioning,
+            receipts::assess_receipt,
+        },
         view::release::{
-            FleetReleaseFundingView,
+            FleetReleaseFundingView, FleetReleasePoolView, FleetReleaseProvisioningView,
+            FleetReleaseReceiptsView,
             funding::{
                 FleetReleaseFundingAssessment, ReleaseRefillAssessment,
                 ReleaseRootFundingAssessment,
             },
+            pool::FleetReleasePoolAssessment,
+            provisioning::FleetReleaseProvisioningAssessment,
+            receipts::FleetReleaseReplayAssessment,
         },
     },
     icp::IcpCli,
 };
 use canic_core::dto::fleet_registry::FleetRegistry;
+
+/// Observe provisioning journals without requiring completion of a disposable installation.
+pub async fn observe_provisioning(
+    icp: &IcpCli,
+    review: &FleetReleaseReviewRecord,
+    registry: &FleetRegistry,
+) -> Result<FleetReleaseProvisioningAssessment, ReleaseProvisioningError> {
+    Ok(assess_provisioning_evidence(
+        provisioning::collect(icp, review, registry).await?,
+    ))
+}
+
+pub(in crate::fleet_ensure) fn assess_provisioning_evidence(
+    evidence: FleetReleaseProvisioningView,
+) -> FleetReleaseProvisioningAssessment {
+    let roots = evidence
+        .roots
+        .iter()
+        .map(|root| assess_provisioning(provisioning::assessment_facts(root)))
+        .collect();
+    FleetReleaseProvisioningAssessment { evidence, roots }
+}
+
+/// Observe original pool obligations without granting replacement spending or reset authority.
+pub async fn observe_pool(
+    icp: &IcpCli,
+    review: &FleetReleaseReviewRecord,
+    registry: &FleetRegistry,
+) -> Result<FleetReleasePoolAssessment, ReleasePoolError> {
+    Ok(assess_pools(pool::collect(icp, review, registry).await?))
+}
+
+pub(in crate::fleet_ensure) fn assess_pools(
+    evidence: FleetReleasePoolView,
+) -> FleetReleasePoolAssessment {
+    let roots = evidence
+        .roots
+        .iter()
+        .map(|root| assess_pool(pool::assessment_facts(root)))
+        .collect();
+    FleetReleasePoolAssessment { evidence, roots }
+}
+
+/// Observe retained replay work without treating local accounting as proof of payment outcome.
+pub async fn observe_receipts(
+    icp: &IcpCli,
+    review: &FleetReleaseReviewRecord,
+    registry: &FleetRegistry,
+) -> Result<FleetReleaseReplayAssessment, ReleaseReceiptsError> {
+    Ok(assess_receipts(
+        receipts::collect(icp, review, registry).await?,
+    ))
+}
+
+pub(in crate::fleet_ensure) fn assess_receipts(
+    evidence: FleetReleaseReceiptsView,
+) -> FleetReleaseReplayAssessment {
+    let owners = evidence
+        .owners
+        .iter()
+        .map(|(owner, pages)| {
+            let assessments = pages
+                .iter()
+                .filter_map(|page| page.entry.as_ref())
+                .map(|entry| assess_receipt(&receipts::assessment_facts(entry)))
+                .collect();
+            (*owner, assessments)
+        })
+        .collect();
+    FleetReleaseReplayAssessment { evidence, owners }
+}
 
 /// Observe exact Root funding history and describe what each retained effect still needs.
 ///

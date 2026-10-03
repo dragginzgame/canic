@@ -12,24 +12,11 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
   progress in an isolated draft; production publication and startup ordering
   remain unfinished.
 
-- Continue whole-Fleet release-to-capacity work with bounded ownership, declared
-  account, Root pool obligations and Root/Coordinator funding observations, plus
-  release authority fencing. Host collects exact pool evidence through bounded
-  signed reads, preserving exhausted import budgets, creation uncertainty and
-  held identities without admitting new work.
-  Controller-only provisioning discovery preserves original operation identities,
-  stages and outstanding publication/Directory delivery across paginated reads;
-  bounded Host collection returns no partial result on owner/header/cursor drift.
-  Replay-receipt discovery retains expired uncertainty, original effect targets
-  and accounting intent IDs without returning cached application replies; encoded
-  receipt bounds prevent unbounded stable-value decoding. Host retains the original
-  Root and Coordinator receipt pages through bounded authenticated collection.
-  Completed history and spent read allowances do not independently block reset;
-  uncertain paid effects retain reconciliation. Durable Ledger uncertainty
-  preserves reserved funding and the original transfer identity after lost replies,
-  preventing changed-fee replay. Current journal, fence and refill record changes
-  are potentially breaking pre-1.0 reinstall-only hard cuts. The whole-Fleet release
-  command remains unfinished.
+- Complete FR1's whole-Fleet release-to-capacity command: integrate remaining
+  obligations and continuation quiescence, custody handoff, account recovery,
+  journaled execution/resume, CLI and whole-Fleet conservation/recovery proof.
+  The .52 checkpoint includes the implemented discovery and assessment APIs;
+  it does not expose the unfinished release command.
 
 ## [0.110.x] - Fleet Runtime Contraction
 
@@ -46,7 +33,10 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   plan/apply, reinstall, bootstrap/capacity, automation and recovery guides.
   Refreshes the individual feature, operations, architecture, design-authoring,
   audit and code-hygiene indexes with visual workflows, task choosers and
-  consistent continuation navigation.
+  consistent continuation navigation; aligns reset, configuration, build and
+  platform instructions with the current implementation. Includes the FR1 discovery
+  checkpoint, preserves uncertain pool-creation effects across later refusals,
+  and adopts the current memory, query, timer and testkit dependencies.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

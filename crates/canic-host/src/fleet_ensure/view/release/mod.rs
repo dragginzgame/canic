@@ -3,6 +3,9 @@
 //! These views are neither serialized declarations nor substitutes for IC observations.
 
 pub mod funding;
+pub mod pool;
+pub mod provisioning;
+pub mod receipts;
 
 use crate::fleet_ensure::{
     model::{
@@ -102,4 +105,10 @@ pub struct FleetReleaseObservation {
     /// Complete observed account inventory, including zero-balance accounts.
     pub accounts: Vec<FleetReleaseAccountRecord>,
     pub destinations: Vec<CapacityImportDestinationView>,
+}
+
+/// Complete original canonical accounting pages for each selected Root and Coordinator.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetReleaseIntentsView {
+    pub owners: BTreeMap<Principal, Vec<canic_core::dto::release_intents::IntentReleaseResponse>>,
 }

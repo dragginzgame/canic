@@ -218,6 +218,16 @@ fn handle_ledger_result(
             )?;
             handle_expired_creation(creation.operation_id, was_uncertain)
         }
+        // A refusal of this retry says nothing about an earlier unanswered
+        // creation. Only a correlated principal above can resolve that custody.
+        Err(_) if was_uncertain => {
+            CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
+            CanisterPoolOps::finish_creation_attempt(creation.operation_id, settlement, true)?;
+            Ok(PoolAdminResponse::RefillPending {
+                operation_id: creation.operation_id,
+                uncertain_result: true,
+            })
+        }
         Err(CyclesLedgerCreateCanisterError::InsufficientFunds { balance }) => {
             CostGuardWorkflow::recover(permit, IcOps::now_secs())?;
             let available = CyclesLedgerOps::checked_cycles(balance)?.to_u128();

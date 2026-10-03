@@ -10,6 +10,7 @@ pub mod blob_storage;
 pub mod fleet_activation;
 pub mod icp_refill;
 pub mod intent;
+pub mod intent_release;
 pub mod provisioning_failure;
 pub mod public_metrics;
 pub mod replay_release;

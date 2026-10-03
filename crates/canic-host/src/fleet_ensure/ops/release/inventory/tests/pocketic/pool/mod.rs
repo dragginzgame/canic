@@ -4,6 +4,13 @@ mod multiple;
 
 use super::*;
 use crate::fleet_ensure::ops::release::{observation::ReleaseObservationError, pool};
+use crate::fleet_ensure::{
+    view::release::pool::{
+        FleetReleasePoolAssessment, ReleasePoolCreationDisposition, ReleasePoolImportDisposition,
+    },
+    workflow::release::assess_pools,
+};
+use canic_control_plane::dto::root::RootPoolReleaseResponse;
 use ic_testkit::pocket_ic::PocketIc;
 
 pub(super) fn assert_census(
@@ -20,8 +27,11 @@ pub(super) fn assert_census(
         pic.update_call(root, review.authority.operator, "replace", bytes)
             .unwrap();
     };
-    let collect =
-        |review, registry| runtime.block_on(pool::collect_with_agent(agent, review, registry));
+    let collect = |review, registry| {
+        runtime
+            .block_on(pool::collect_with_agent(agent, review, registry))
+            .map(assess_pools)
+    };
     replace(pool::tests::wire(status.clone()));
     let balances = review
         .sources
@@ -29,7 +39,7 @@ pub(super) fn assert_census(
         .map(|s| pic.cycle_balance(s.binding.canister_id))
         .collect::<Vec<_>>();
     let observed = collect(review, registry).unwrap();
-    assert_eq!(observed.roots.as_slice(), std::slice::from_ref(&status));
+    assert_assessment(&observed, &status);
     assert_eq!(collect(review, registry).unwrap(), observed);
     assert_eq!(
         review
@@ -92,4 +102,32 @@ pub(super) fn assert_census(
             ..
         })
     ));
+}
+
+fn assert_assessment(observed: &FleetReleasePoolAssessment, status: &RootPoolReleaseResponse) {
+    assert_eq!(
+        observed.evidence.roots.as_slice(),
+        std::slice::from_ref(status)
+    );
+    let assessment = &observed.roots[0];
+    assert_eq!(
+        assessment.import,
+        Some(ReleasePoolImportDisposition::ImportRecovery)
+    );
+    assert!(
+        assessment
+            .facts
+            .import
+            .as_ref()
+            .unwrap()
+            .call_budget_exhausted
+    );
+    assert_eq!(
+        assessment.creation,
+        Some(ReleasePoolCreationDisposition::LedgerReconciliation)
+    );
+    assert_eq!(
+        assessment.facts.handoff.as_ref().unwrap().recipient,
+        status.handoff.as_ref().unwrap().recipient
+    );
 }

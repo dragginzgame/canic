@@ -95,7 +95,7 @@ impl RuntimeAuthWorkflow {
     }
 
     /// Return the exact root issuer-renewal native identity.
-    #[cfg(any(test, feature = "auth-root-delegation-state"))]
+    #[cfg(test)]
     pub(crate) fn root_issuer_renewal_timer_identity()
     -> Result<ic_timers::TimerIdentity, crate::workflow::runtime::timer::TimerError> {
         renewal::RootIssuerRenewalWorkflow::timer_identity()
