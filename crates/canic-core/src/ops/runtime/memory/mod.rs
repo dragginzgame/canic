@@ -23,8 +23,8 @@ use crate::{
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
-    DiagnosticGeneration, DiagnosticMemorySize, DiagnosticMemorySizeOutcome, DiagnosticRecord,
-    MemoryManagerRangeMode, SchemaMetadataRecord,
+    DiagnosticGeneration, DiagnosticMemorySize, DiagnosticRecord, MemoryManagerRangeMode,
+    SchemaMetadataRecord,
 };
 use thiserror::Error as ThisError;
 
@@ -245,9 +245,7 @@ fn commit_recovery_response(
 }
 
 fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocationRecordEntry {
-    let memory_size = record
-        .memory_size
-        .and_then(memory_allocation_size_outcome_response);
+    let memory_size = record.memory_size.map(memory_allocation_size_response);
     let allocation = record.allocation;
     let allocation_state = allocation.state();
     MemoryAllocationRecordEntry {
@@ -303,15 +301,6 @@ const fn memory_allocation_size_response(size: DiagnosticMemorySize) -> MemoryAl
     MemoryAllocationSizeEntry {
         wasm_pages: size.wasm_pages,
         bytes: size.bytes,
-    }
-}
-
-fn memory_allocation_size_outcome_response(
-    outcome: DiagnosticMemorySizeOutcome,
-) -> Option<MemoryAllocationSizeEntry> {
-    match outcome {
-        DiagnosticMemorySizeOutcome::Measured(size) => Some(memory_allocation_size_response(size)),
-        DiagnosticMemorySizeOutcome::Failed(_) => None,
     }
 }
 

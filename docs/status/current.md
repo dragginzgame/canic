@@ -3,6 +3,65 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Test reliability and ic-memory 0.22 qualification — 2026-10-03
+
+The maintainer authorized finishing the 0.22 adoption in this checkout. The
+published adapter and matching lockfile are present: ic-memory 0.22.0,
+ic-query 0.45.3, ic-timers 0.9.4 and ic-testkit 0.13.0. Earlier dependency
+snapshots below are historical; qualification here uses the current selection.
+Optional IcyDB remains independent and nonblocking.
+
+The release-reliability correction replaces incidental Candid text assertions
+with structural wire-contract checks and exact receipt-consumer file lists with
+production layer boundaries. Storage IDs and ownership remain checked. Targeted
+internal PocketIC runs now check compiled registration before starting the server
+or building journey fixtures; missing registrations and zero executed tests fail
+there. The prior lifecycle registration omission remains fixed.
+
+Final-graph qualification passes: 49 protocol tests, four receipt ownership/
+allocation checks and 13 native memory regressions. Focused Core and protocol
+Clippy pass with warnings denied. Embedded peer refresh and verification pass;
+SHA-256 is `b2fa1c7c014ad99530857c8ad6faeaa3eaa02251b46754fb8cf681ff7335e13d`.
+The new real-runner registration preflight and exact standalone memory PocketIC
+journey both pass, including two identical-Wasm restoration rounds (128.35s case,
+217s runner including compilation). Runner shell regressions, scoped ShellCheck,
+formatting, whitespace and current-document semantics also pass. Manifest and
+lockfile stayed byte-identical throughout final qualification. Retained evidence:
+`target/review-validation/canic-test-reliability-*.log`.
+
+These checks address the reported release path; they are not an exhaustive audit
+of every test or a full-suite result. The maintainer-selected .52 checkpoint is
+ready for the normal release flow, and both changelog views are prepared. Packages
+remain .51 for the governed release bump. FR1 whole-Fleet execution remains
+unfinished. No broad suite, version, commit, push, deployment or sibling mutation
+was performed. This session has finished its builds; retained artifacts remain
+available for reuse.
+
+## Published upstream memory diagnostic hard cut — 2026-10-03
+
+Canic now selects published ic-memory 0.22.0 and reads its direct optional
+measured size. The obsolete measurement-outcome conversion is removed, and
+current measured/unmeasured fixtures preserve Canic's public response shape.
+The manifest already selected 0.22; the lockfile was resolved from 0.21.0 to
+0.22.0 without changing the independent optional IcyDB dependency schedule.
+
+All 13 native Core memory tests and warning-denied Core all-target/all-feature
+Clippy pass in a frozen source copy using the published registry dependency.
+The changed reader, tests, manifest and lockfile still match that tested copy.
+The locked production Canic Wasm graph selects only ic-memory 0.22.0.
+Concurrent Canic work refreshed and verified the embedded allocation peer on
+this same lockfile; its artifact SHA-256 is
+`b2fa1c7c014ad99530857c8ad6faeaa3eaa02251b46754fb8cf681ff7335e13d`.
+Refresh/verification logs are `/tmp/canic-test-reliability-peer-refresh.log`
+and `/tmp/canic-test-reliability-peer-verify.log`. Existing open .52 release
+notes describe the current reader and dependency selection.
+
+This qualifies the upstream adoption, not the complete .52 batch or optional
+IcyDB composition. The lifecycle PocketIC check pending at that handoff has
+since passed; final combined qualification is recorded above. Preserve the
+protocol-test, fixture, runner and release work. Edits remain
+unstaged and uncommitted; no version, commit, push or deployment was performed.
+
 ## Governed lifecycle inventory correction — 2026-10-03
 
 The maintainer's release test found that the new standalone memory restoration

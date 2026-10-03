@@ -24,15 +24,18 @@ separate maintainer-selected actions. This page records implementation handoffs.
 
 ## Recent delivery status
 
-The maintainer requested an earlier .52 checkpoint after dependency edits
-finished. Its draft includes implemented FR1 discovery/assessment and the
-pool-creation uncertainty and release-preflight fixes; whole-Fleet execution
-remains unfinished. The [current handoff](../status/current.md) records final-graph
-qualification: affected lint, native/inventory/Candid checks, refreshed embedded
-peer and four exact PocketIC proofs pass, including the ic-testkit 0.13 reset
-recipe and uncertainty/replay corrections. The .52 checkpoint is ready for the
-maintainer-selected release flow. It does not close FR1 or add review-finding
-closures; issue disposition remains in GitHub.
+The maintainer requested an earlier .52 checkpoint. Its draft includes FR1
+discovery/assessment, pool uncertainty and release-preflight corrections, and
+test-reliability fixes; whole-Fleet execution remains unfinished. The latest
+[current handoff](../status/current.md) records qualification against ic-memory
+0.22, ic-query 0.45, ic-timers 0.9 and ic-testkit 0.13. It supersedes earlier
+dependency snapshots and separates final-graph evidence from prior runs.
+Candid checks now use wire structure, receipt guards check layer ownership, and
+targeted internal PocketIC runs check registration before simulator startup.
+The affected native, Clippy, fixture, runner and exact lifecycle checks pass; the
+.52 checkpoint is ready for the normal release flow. No broad suite was rerun.
+This checkpoint does not close FR1 or add review-finding closures; issue
+disposition remains in GitHub.
 
 FR1 shared replay discovery is now in progress: controller-only pages retain
 expired uncertainty and original effect/accounting identities, with bounded
