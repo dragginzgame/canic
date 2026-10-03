@@ -1,7 +1,13 @@
 # Operations Docs
 
-This directory holds release, packaging, install, smoke-test, and operator
-validation notes.
+These documents are for people operating Canic or preparing a Canic release.
+They cover deployment, recovery, funding, diagnostics, packaging, and release
+checks.
+
+If you are deploying an application for the first time, begin with
+[Installing Canic](../../INSTALLING.md), then follow the
+[Fleet ensure guide](../features/operations/fleet-ensure.md). The remaining
+pages are references for a specific operational task or failure.
 
 ## Current Release Validation
 

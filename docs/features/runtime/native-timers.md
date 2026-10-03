@@ -18,14 +18,14 @@ package identity:
 
 ```toml
 [dependencies]
-ic-timers = "=0.8.0"
+ic-timers = "=0.8.1"
 ```
 
 Check the composed graph, not only each direct manifest:
 
 ```text
 cargo tree -d
-cargo tree -i ic-timers@0.8.0
+cargo tree -i ic-timers@0.8.1
 ```
 
 Two resolved versions contain two independent sets of library statics and
@@ -33,10 +33,13 @@ therefore two inventories. Do not combine a direct `ic-cdk-timers` consumer
 with this design without separately inventorying and qualifying that second
 provider path.
 
-The published IcyDB 0.261.13 composition fixtures share Canic's `ic-timers 0.8.0`
-package. Both the workspace and standalone audit lockfiles resolve one timer
-inventory. Qualify composed lifecycle and timer custody with
-`make test-pocketic-case CASE=icydb_lifecycle_composition`.
+IcyDB is an optional test consumer with an independent dependency schedule.
+Before attempting its explicit composition qualification, inspect the selected
+graph and confirm that every timer owner resolves the same `ic-timers` package
+identity. Upstream skew may leave this optional composition unqualified without
+changing or blocking Canic's production runtime. When the graph is compatible,
+qualify composed lifecycle and timer custody with `make test-pocketic-case
+CASE=icydb_lifecycle_composition`.
 
 ## Replace the Removed Canic Facade
 

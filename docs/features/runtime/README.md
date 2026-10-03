@@ -1,18 +1,35 @@
 # Canister Runtime
 
-Canic's public `canic` crate is the normal integration point for Rust canister
-packages. It keeps lifecycle and generated configuration wiring small while
-leaving application business logic in the consuming crate.
+The **runtime** is the part of Canic compiled into an application's Rust
+canisters. It supplies common foundations—startup, persistent state, scheduled
+work, calls to other canisters, and health information—so application code can
+focus on its own behavior.
+
+Applications add the public `canic` crate as a Rust dependency. The crate
+connects Canic's lifecycle and generated configuration while leaving business
+logic in the application package.
+
+```text
+Application methods and business logic
+                  |
+                  v
+        Canic runtime and guards
+        /          |           \
+ lifecycle   persistent data   calls and timers
+        \          |           /
+                  IC
+```
 
 ## What It Provides
 
-- `canic::build!(...)` for compile-time App and role configuration
-- `canic::start!()` for Canic lifecycle restoration and endpoint wiring
-- stable-memory helpers under `canic::memory`
-- one shared cross-framework inventory through `ic-timers 0.8.0`, with
+- `canic::build!(...)` to check configuration and generate Rust data while the
+  canister is being built
+- `canic::start!()` to restore Canic state and connect public methods at startup
+- stable-memory helpers under `canic::memory` for persistent canister data
+- one shared cross-framework inventory through `ic-timers 0.8.1`, with
   application timer registrations owned directly by their consuming crate
-- typed inter-canister calls with Canic metrics
-- optional endpoint bundles selected with Cargo features
+- type-checked calls between canisters, with measurements for monitoring
+- optional sets of public methods selected with Cargo features
 
 Use the same `canic` version in normal and build dependencies. Each canister
 package declares its App and role through `[package.metadata.canic]`; the App

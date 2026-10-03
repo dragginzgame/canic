@@ -7,6 +7,16 @@ with this file, the code is wrong.
 - At the start of a new session, read `docs/status/current.md` first. Treat it
   as the compact handoff and avoid replaying old chat history unless needed.
 
+## Issue and Feedback Tracking
+- GitHub issues are the sole tracker for bugs, feature requests, review findings,
+  upstream feedback and follow-up work. Create or update the issue in the relevant
+  GitHub repository and reference its URL or `owner/repo#number`.
+- Do not create or continue `CANIC-xxx` identifiers, local issue lists, feedback
+  files or any other parallel tracking system.
+- Handoffs, design documents and changelogs may link to GitHub issues and describe
+  implementation or validation status. Keep feedback, triage and tracking
+  decisions in the issues themselves instead of duplicating them in those files.
+
 ## Repository Scope
 - Automated edits are restricted to this Canic repository. Do not modify,
   format, generate files in, or otherwise mutate sibling or external

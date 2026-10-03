@@ -1,18 +1,34 @@
 # Scaling And Placement
 
-Canic models reusable topology separately from concrete deployment. A
-`ComponentSpec` describes one top-level role and its allowed descendant tree;
-each deployed Component receives its own identity, root binding, state, and
-effective limits.
+**Scaling** means adding canisters when an application needs more capacity.
+**Placement** decides which part of the IC network may run them. Canic lets an
+operator define both ahead of time, including hard limits on how far an
+application may grow.
+
+A **Component Spec** is a reusable blueprint for one kind of application
+canister and any child canisters it may create. Each deployed **Component** has
+its own identity, data, location, and limits.
+
+```text
+Component Spec            reusable blueprint and child rules
+      |
+Component Group           combines related blueprints
+      |
+Group deployment          selects count and placement limits
+      |
+Components                concrete canisters running on Subnets
+      |
+Children and pools        bounded growth requested at runtime
+```
 
 ## What It Provides
 
-- reusable Component Specs and configuration-only Component Groups
+- reusable Component Specs and Groups of related Specs
 - explicit Authority, Replica, PoolMember, and Ordinary deployment purposes
 - bounded initial placement and same-release monotonic scale-out
 - per-root density, aggregate placement, instance, descendant, and byte limits
 - dynamic root-owned child trees with exact parent bindings
-- sharding pools for stateful partitions and scaling pools for instances
+- sharding pools that divide data and scaling pools that add equivalent workers
 - reduction-only limits for each concrete deployment member
 
 Groups may include other groups, but compilation flattens them before planning.
@@ -46,7 +62,10 @@ reuses that ID; it returns the retained completion without affecting the replace
 
 ## Start Here
 
-- [Component configuration](../../../CONFIG.md#component-specs)
+- [Component Specs](../../../CONFIG.md#component-specs)
+- [Component Groups](../../../CONFIG.md#component-groups)
+- [Component Group deployments](../../../CONFIG.md#component-group-deployments)
+- [Fleet services](../../../CONFIG.md#fleet-services)
 - [Composable Component deployment design](../../design/archive/0.101-fleet-authoritative-service-provisioning-and-publication/0.101-design.md)
 - [Current implementation status](../../design/0.110-fleet-runtime-contraction/status.md)
 - [Fleet ensure bounds](../operations/fleet-ensure.md)

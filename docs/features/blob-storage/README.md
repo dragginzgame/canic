@@ -1,8 +1,12 @@
 # Blob Storage
 
-Canic exposes optional runtime and operator integrations for product blob
-storage. The base feature covers local gateway state and administration; the
-billing feature adds Cashier-backed status, funding, and readiness flows.
+Blob storage is for application data that is naturally handled as a large piece
+of content, such as an uploaded image, document, or media file. It is separate
+from snapshots used to back up an entire canister.
+
+Canic provides optional Rust and operator integrations for this storage. The
+base feature manages gateway state and administration; a separate billing
+feature adds payment status, funding, and readiness checks through Cashier.
 
 ## What It Provides
 

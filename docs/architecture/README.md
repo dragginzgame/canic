@@ -1,9 +1,13 @@
 # Canic Architecture
 
-This directory contains current approved Canic system design notes.
+Architecture pages explain how Canic's major parts fit together and why their
+security and ownership boundaries exist. They are intended for contributors,
+reviewers, and integrators who need more detail than a feature guide.
 
-For short capability overviews before entering these detailed designs, start
-with the [feature guides](../features/README.md).
+If you are learning or using Canic, start with the
+[feature guides](../features/README.md). Return here when you need the design
+behind a feature. For exact machine-facing rules, use the linked contracts
+rather than treating an overview as an API specification.
 
 Use these documents as the maintained architecture baseline for implementation,
 reviews, and developer handoff. Versioned WIP and release-line plans belong in
