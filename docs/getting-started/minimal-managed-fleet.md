@@ -337,3 +337,11 @@ production `ICP_ENVIRONMENT=ic` artifacts skip that metadata. A focused
 Candid only in the adjacent `.did`, proves the runtime method exports match it,
 and omits both the pointer export and embedded metadata from the deployable
 Wasm.
+
+## Continue From Here
+
+- [Configure an App](../../CONFIG.md)
+- [See how Canic works](how-canic-works.md)
+- [Choose the Canic features you need](../features/README.md)
+- [Plan and operate a Fleet](../operations/README.md)
+- [Browse all documentation](../README.md)

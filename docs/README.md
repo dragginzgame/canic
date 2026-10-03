@@ -75,3 +75,12 @@ for people who build, inspect, deploy, recover, or remove a Fleet.
 Use current guides for commands and schemas. Archived designs, dated audits and
 older release notes describe their recorded checkpoints; they do not establish
 support in the current release. Planned work is not an installed capability.
+
+## Continue From Here
+
+- [See how Canic works](getting-started/how-canic-works.md)
+- [Install Canic](../INSTALLING.md)
+- [Build your first managed application](getting-started/minimal-managed-fleet.md)
+- [Configure an App](../CONFIG.md)
+- [Choose the Canic features you need](features/README.md)
+- [Plan and operate a Fleet](operations/README.md)

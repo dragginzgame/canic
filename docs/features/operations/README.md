@@ -57,12 +57,19 @@ Planning has no paid Fleet effect; mutations require the exact reviewed
 
 App, Fleet, and workspace are distinct terms and must not be conflated.
 
-## Start Here
+## Continue From Here
 
 - [Installing Canic](../../../INSTALLING.md)
+- [Configure an App](../../../CONFIG.md)
+- [Choose the Canic features you need](../README.md)
 - [CLI guide](../../../crates/canic-cli/README.md)
-- [Fleet ensure](fleet-ensure.md)
+- [Fleet Ensure overview](fleet-ensure.md)
+- [Fleet desired state](fleet-ensure-desired-state.md)
+- [Fleet plan and apply](fleet-ensure-plan-and-apply.md)
+- [Clean reinstall](fleet-ensure-clean-reinstall.md)
+- [Fleet recovery and cycle safety](fleet-ensure-recovery-and-cycle-safety.md)
 - [Operations index](../../operations/README.md)
 - [Release validation matrix](../../operations/release-validation-matrix.md)
 - [Recovery and retry runbooks](../../operations/recovery-retry-runbooks.md)
 - [Supported platforms](../../governance/supported-platforms.md)
+- [Browse all documentation](../../README.md)
