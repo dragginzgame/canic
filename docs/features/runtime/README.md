@@ -9,16 +9,11 @@ Applications add the public `canic` crate as a Rust dependency. The crate
 connects Canic's lifecycle and generated configuration while leaving business
 logic in the application package.
 
-```mermaid
-flowchart TD
-    A[Application methods and business logic] --> C[Canic runtime and guards]
-    C --> L[Lifecycle]
-    C --> M[Persistent data]
-    C --> T[Calls and timers]
-    L --> IC[Internet Computer]
-    M --> IC
-    T --> IC
-```
+<p align="center">
+  <a href="../../../assets/application-and-runtime.jpg">
+    <img src="../../../assets/application-and-runtime.jpg" alt="Application methods and business logic connect through Canic runtime and guards to lifecycle, persistent data, calls and timers on the Internet Computer" width="650" />
+  </a>
+</p>
 
 ## What It Provides
 

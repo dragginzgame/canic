@@ -9,14 +9,11 @@ Backups are for recovery within the same Canic release. They are not a way to
 carry application state across the clean reinstall required between pre-1.0
 releases.
 
-```mermaid
-flowchart LR
-    L[Live canisters] --> S[Snapshots]
-    S --> B[Verified local backup]
-    B --> P[Restore preparation]
-    P --> R[Journaled restore run]
-    R --> C[Recovered canisters]
-```
+<p align="center">
+  <a href="../../../assets/backup-and-restore.jpg">
+    <img src="../../../assets/backup-and-restore.jpg" alt="Backup and restore workflow from live canisters through snapshots and a verified local backup to restore preparation, a journaled restore run, and recovered canisters" width="650" />
+  </a>
+</p>
 
 ## Current Availability
 

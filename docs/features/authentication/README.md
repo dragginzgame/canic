@@ -9,13 +9,11 @@ service it may represent. Canic keeps those identities separate so an
 application login cannot accidentally become permission to manage canisters or
 spend their cycles.
 
-```mermaid
-flowchart LR
-    C[Calling canister identity] --> G[Endpoint guard]
-    U[Represented user or service proof] --> G
-    P[Receiver's allowed-role policy] --> G
-    G --> A[Application logic]
-```
+<p align="center">
+  <a href="../../../assets/endpoint-access-checks.jpg">
+    <img src="../../../assets/endpoint-access-checks.jpg" alt="Calling canister identity, represented user or service proof, and the receiver's allowed-role policy feed into an endpoint guard before application logic runs" width="650" />
+  </a>
+</p>
 
 Management methods use the calling canister's infrastructure authority. An
 application token never becomes controller or Fleet authority.

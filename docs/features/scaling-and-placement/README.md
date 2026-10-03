@@ -9,15 +9,11 @@ A **Component Spec** is a reusable blueprint for one kind of application
 canister and any child canisters it may create. Each deployed **Component** has
 its own identity, data, location, and limits.
 
-```mermaid
-flowchart TD
-    S[Component Spec<br/>Reusable blueprint and child rules]
-    G[Component Group<br/>Related blueprints]
-    D[Group deployment<br/>Count and placement limits]
-    C[Components<br/>Canisters running on Subnets]
-    P[Children and pools<br/>Bounded runtime growth]
-    S --> G --> D --> C --> P
-```
+<p align="center">
+  <a href="../../../assets/blueprints-to-components.jpg">
+    <img src="../../../assets/blueprints-to-components.jpg" alt="A reusable Component Spec becomes part of a Component Group and Group deployment, producing concrete Components that can create bounded children and pools" width="650" />
+  </a>
+</p>
 
 ## What It Provides
 

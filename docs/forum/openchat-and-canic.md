@@ -43,15 +43,11 @@ OpenChat already handles difficult cases. Its multi-user creation path publishes
 
 A second opportunity is release evidence. OpenChat already builds [governance proposals around Wasm hashes](https://github.com/open-chat-labs/open-chat/blob/2611b2e5bdb2cc0dbe397bd04a87989e4c05553b/backend/tools/canister_upgrade_proposal_builder/src/lib.rs). Canic could contribute consistent artifact manifests, configuration and dependency fingerprints, size admission, endpoint inventories, and evidence comparisons. A reviewer should be able to trace:
 
-```text
-Source + toolchain + configuration
-              ↓
-          Final Wasm
-              ↓
-       Proposal payload
-              ↓
-     Observed deployment
-```
+<p align="center">
+  <a href="../../assets/source-to-deployment.jpg">
+    <img src="../../assets/source-to-deployment.jpg" alt="Release evidence connects source, toolchain, and configuration to the final Wasm, proposal payload, and observed deployment" width="650" />
+  </a>
+</p>
 
 This should initially work with OpenChat's existing build pipeline. Requiring a runtime conversion before offering useful build evidence would make the entry cost unnecessarily high. Canic's release-identity binding also means that reproducibility must include the selected identity and complete finalization inputs; matching a source commit alone is insufficient.
 
