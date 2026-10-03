@@ -18,13 +18,11 @@ targeted checks to run before handing work back for review.
 The goal is to keep the codebase easy to navigate while preserving Canic's
 layering:
 
-```mermaid
-flowchart LR
-    E[Endpoints] --> W[Workflow]
-    W --> P[Policy]
-    W --> O[Ops]
-    O --> M[Model]
-```
+<p align="center">
+  <a href="../../../assets/endpoints-and-workflow.jpg">
+    <img src="../../../assets/endpoints-and-workflow.jpg" alt="Endpoints delegate to workflow; workflow may call policy and ops independently, while ops may call model" width="650" />
+  </a>
+</p>
 
 The workflow branches are independent. Policy never calls ops.
 

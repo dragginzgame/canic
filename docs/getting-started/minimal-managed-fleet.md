@@ -39,15 +39,11 @@ Components stays visible.
 
 ## What You Will Build
 
-```text
-Management canisters                  Application canisters
-
-Fleet Coordinator
-       |
-Fleet Subnet Root --------------------------> hub
-       |                                      |
-       +-- Wasm Store                         +-- registry child
-```
+<p align="center">
+  <a href="../../assets/management-and-application-canisters.jpg">
+    <img src="../../assets/management-and-application-canisters.jpg" alt="Management canisters include the Fleet Coordinator, Fleet Subnet Root, and Wasm Store; Root manages the hub application canister, which has a registry child" width="650" />
+  </a>
+</p>
 
 The Coordinator owns the Fleet-wide view. Root performs approved lifecycle and
 funding work on its Subnet. The `hub` and `registry` contain the application's

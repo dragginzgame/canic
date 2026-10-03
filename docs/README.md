@@ -3,18 +3,14 @@
 This is the front door to Canic's documentation. You do not need to understand
 Canic's internal architecture before getting started.
 
-<img src="../assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the documentation paths" />
-
-```text
-New to Canic -> How it works -> Install -> First App -> Configuration
-Operating    -> Feature guide -> Procedure -> Recovery or status reference
-Contributing -> Architecture -> Contract -> Active design -> Targeted tests
-```
+<p align="center">
+  <a href="../assets/choose-doc-path.jpg">
+    <img src="../assets/choose-doc-path.jpg" alt="Documentation paths for new Canic users, Fleet operators, and contributors" width="650" />
+  </a>
+</p>
 
 Choose the route that matches your task. Move into deeper reference material
 only when you need its exact rules.
-
-<br clear="left" />
 
 - **Guides** explain a task or feature in practical terms.
 - **Operations pages** give step-by-step procedures for people running Canic.
