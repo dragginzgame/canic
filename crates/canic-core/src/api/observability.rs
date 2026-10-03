@@ -17,6 +17,13 @@ use candid::Principal;
 pub struct ObservabilityApi;
 
 impl ObservabilityApi {
+    /// Discover retained replay authority after controller authentication at the endpoint.
+    pub fn release_receipts(
+        start_after: Option<[u8; 32]>,
+    ) -> Result<crate::dto::release_receipts::ReplayReleaseResponse, Error> {
+        observability::release_receipts(start_after).map_err(Into::into)
+    }
+
     /// Return child funding usage without changing grants, reservations or replay state.
     pub fn child_funding(
         child: Principal,

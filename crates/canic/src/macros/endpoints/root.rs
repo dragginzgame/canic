@@ -1083,6 +1083,8 @@ macro_rules! canic_emit_root_status_endpoint {
             PoolImport(::canic::dto::pool_import::PoolImportIdentity),
             PoolImportContext,
             PoolRelease,
+            ProvisioningRelease(Option<::canic::dto::root::RootProvisioningReleaseKey>),
+            ReplayRelease(Option<[u8; 32]>),
             StoreOverview,
         }
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
@@ -1111,6 +1113,8 @@ macro_rules! canic_emit_root_status_endpoint {
             PoolImport(::canic::dto::pool_import::PoolImportStatus),
             PoolImportContext(::canic::dto::pool_import::PoolImportContext),
             PoolRelease(::canic::dto::root::RootPoolReleaseResponse),
+            ProvisioningRelease(::canic::dto::root::RootProvisioningReleaseResponse),
+            ReplayRelease(::canic::dto::release_receipts::ReplayReleaseResponse),
             StoreOverview(::canic::dto::template::WasmStoreOverviewResponse),
         }
         #[$crate::canic_query(requires(caller::is_controller()))]
@@ -1129,6 +1133,8 @@ macro_rules! canic_emit_root_status_endpoint {
                     | RootStatusRequest::PoolImport(_)
                     | RootStatusRequest::PoolImportContext
                     | RootStatusRequest::PoolRelease
+                    | RootStatusRequest::ProvisioningRelease(_)
+                    | RootStatusRequest::ReplayRelease(_)
                     | RootStatusRequest::StoreOverview
             );
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(prepared)?;
@@ -1204,6 +1210,14 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::PoolRelease => {
                     $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::release_status()
                         .map(RootStatusResponse::PoolRelease)
+                }
+                RootStatusRequest::ProvisioningRelease(start_after) => {
+                    $crate::__internal::control_plane::api::component_provisioning::RootComponentProvisioningApi::release_status(start_after)
+                        .map(RootStatusResponse::ProvisioningRelease)
+                }
+                RootStatusRequest::ReplayRelease(start_after) => {
+                    $crate::__internal::core::api::observability::ObservabilityApi::release_receipts(start_after)
+                        .map(RootStatusResponse::ReplayRelease)
                 }
                 RootStatusRequest::Pool(request) => {
                     $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(

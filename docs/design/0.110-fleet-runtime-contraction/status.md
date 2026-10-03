@@ -99,9 +99,36 @@ and execution remain incomplete.
 Root pool evidence now has a controller-only bounded singleton query preserving
 bootstrap Store/source holds, import progress and exhausted budgets, uncertain
 creation and pending handoff without new-work admission or mutation. All 62 pool
-native tests and affected-package Clippy pass; fixture refresh and exact PocketIC evidence
-remain pending (`fr1-pool-census-*`). Host collection, provisioning/child-funding
-owners, quiescence and execution remain unfinished.
+native tests, affected-package Clippy and fixture refresh/verification pass. The
+exact import PocketIC case passes in 88.42s (170s runner), including both custody
+paths, authorization, progress/replay and unchanged balances (`fr1-pool-census-*`).
+Host pool collection is implemented with bounded signed reads, custody/Registry
+bracketing and exact Root/subnet checks. After space was freed, its 22 selected
+release-ops native tests and Host library/test Clippy pass. The exact signed-query
+PocketIC proof passes in 1.77s (4s runner), including two Roots, late refusal,
+replay and unchanged balances (`fr1-host-pool-*`). Provisioning/Directory journal
+discovery now reads one bounded stable operation per page with key-only lookahead,
+independently of active pointers. Its 24 provisioning and three Directory native
+tests and affected-package/governed-journey Clippy pass. Host's bounded page
+collector passes all 27 selected release tests, Clippy and the extended signed-query
+PocketIC proof (2.17s, 4s runner). Fixture refresh/verification pass; the exact
+interrupted-to-terminal Root journey passes (30.46s, 51s runner;
+`fr1-provisioning-census-*` and
+`fr1-host-provisioning-*`). This is not complete paid settlement.
+Shared replay discovery now covers Root/Coordinator receipt metadata, retaining
+expired uncertainty and original effect/accounting identities. Affected-package
+and governed-journey Clippy, three discovery tests and 150 replay regressions pass;
+fixture refresh/verification pass. Host's expanded-envelope regression and all
+28 selected release tests pass after correcting its type/header limits. The
+extended real paid-grant/Coordinator journeys pass (325.14s/142.87s;
+`fr1-replay-census-*`). Host receipt collection and production decoder integration
+pass 33 selected Host tests, affected lint, signed-query proof (2.78s) and real
+Root decoder proof (36.09s). The public Coordinator request/Candid contract now
+includes the selector; five contract tests, isolated DTO round trips and affected
+lint pass. Final fixture verification and the public-request Coordinator journey
+pass (98.39s, 222s runner), as do format/document/whitespace checks
+(`fr1-host-receipts-*`, `fr1-replay-canonical-*`).
+Complete paid-owner integration, quiescence and execution remain unfinished.
 CS1 follows FR1. The normative [design](0.110-design.md) and independent
 [size follow-through amendment](2026-09-28-toko-size-follow-through.md) retain
 accepted scope; B3/B4 remain stopped/deferred and the human closeout gate remains.

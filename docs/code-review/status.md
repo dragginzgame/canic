@@ -44,12 +44,56 @@ This page tracks progress; it is not release authority or evidence of publicatio
 
 ## Recent delivery status
 
+FR1 shared replay discovery is now in progress: controller-only pages retain
+expired uncertainty and original effect/accounting identities, with bounded
+stable records and compact responses. Three discovery tests, 150 replay regressions
+and affected-package/governed-journey Clippy pass. Fixture refresh/verification
+pass; the real paid-grant journey passes (325.14s, 414s runner), as does the
+Coordinator/provisioning journey (142.87s, 143s runner).
+Host's provisioning reader now allows the complete Root reply type table; all
+28 selected Host tests and affected lint pass, with a real-wire decoder proof
+added to the passing Root journey. Bounded Host receipt collection now covers
+Coordinator and selected Roots; its new native/signed-wire tests and production
+Root decoder proof pass (33 native tests; signed-query proof 2.78s; paid-grant
+proof 36.09s). Coordinator public DTO/canonical Candid propagation passes five
+contract tests and affected lint. DTO round trips, fixture verification and the
+public-request Coordinator journey pass (98.39s; 222s runner), along with scoped
+format/document/whitespace checks. Evidence is retained under
+`target/review-validation/fr1-host-receipts-*` and `fr1-replay-canonical-*`.
+Live producer quiescence, custody handoff, account-recovery qualification,
+execution/resume/CLI, whole-Fleet proof and retirement contraction remain.
+This extends paid-owner discovery;
+it adds no completed original-review finding or push-readiness claim.
+
+FR1 provisioning discovery now pages both retained Root journals independently
+of active pointers, preserving original identity, exact stage and outstanding
+delivery without resuming work. Its 24 provisioning and three Directory native
+tests pass, along with affected-package and governed-journey Clippy. Host now
+collects the original pages under custody/Registry checks; all 27 selected Host
+release tests and Host Clippy pass. Fixture refresh/verification and the signed-query
+Host PocketIC proof pass (2.17s, 4s runner). The exact interrupted-to-terminal Root
+PocketIC proof passes (30.46s, 51s runner), including controller denial, replay and
+unchanged balances. This is partial discovery, not complete settlement
+or push readiness; the original-review count remains 31/401.
+
+FR1's Host pool collector is implemented: bounded signed reads preserve each
+Root's exact obligations, with custody/Registry checks and no partial result on
+refusal. After space was freed, all 22 selected release-ops native tests and Host
+library/test Clippy pass; four native tests cover pool evidence. The signed-query
+PocketIC case passes in 1.77s (4s runner), including failure after the first of two
+Roots succeeds, replay and unchanged balances (`fr1-host-pool-*` logs).
+Provisioning/Directory journal discovery is the next in-progress owner.
+Membership/authentication remains with the other session.
+This partial FR1 step adds no original-review closure count.
+
 FR1 now exposes controller-only Root pool evidence independently of new-work
 admission. Held Store/source IDs, exhausted import authority and progress,
 creation uncertainty and pending handoff remain observable without mutation.
-All 62 selected pool tests and affected-package Clippy pass; refreshed fixture and exact
-PocketIC qualification are pending (`fr1-pool-census-*`). Host integration,
-other obligation owners and complete FR1 execution remain unfinished. This
+All 62 selected pool tests, affected-package Clippy and fixture refresh/verification
+pass. The exact import PocketIC case passes in 88.42s (170s runner), covering
+both custody paths, retained progress, authorization, replay and unchanged balances
+(`fr1-pool-census-*`, removed by subsequent external target cleanup). Other obligation owners and complete FR1
+execution remain unfinished. This
 partial slice leaves the original-review closure count at 31/401.
 
 FR1's bounded Host collector now includes existing Coordinator funding status,

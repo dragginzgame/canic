@@ -24,6 +24,13 @@ use canic_core::{
 pub struct RootComponentProvisioningApi;
 
 impl RootComponentProvisioningApi {
+    /// Discover retained operations after controller authentication at the status endpoint.
+    pub fn release_status(
+        start_after: Option<crate::dto::root::RootProvisioningReleaseKey>,
+    ) -> Result<crate::dto::root::RootProvisioningReleaseResponse, Error> {
+        component_provisioning::release_status(start_after).map_err(Into::into)
+    }
+
     /// Authorize the protected Coordinator before endpoint workflow dispatch.
     pub fn authorize_coordinator_caller(caller: candid::Principal) -> Result<(), Error> {
         component_provisioning::authorize_coordinator_caller(caller).map_err(Into::into)

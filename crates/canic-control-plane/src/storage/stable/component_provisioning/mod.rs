@@ -4,6 +4,9 @@
 //! Does not own: caller authentication, plan validation, Component effects, or publication.
 //! Boundary: ops commits only a completely validated exact batch and reads it through typed keys.
 
+use crate::view::provisioning_release::{
+    RootComponentOperationEntryView, RootComponentOperationReleasePageView,
+};
 use canic_core::{
     cdk::structures::{
         DefaultMemoryImpl, Storable, btreemap::BTreeMap as StableBtreeMap, cell::Cell,
@@ -30,7 +33,11 @@ use canic_core::{
     },
 };
 use serde::{Deserialize, Serialize};
-use std::{borrow::Cow, cell::RefCell};
+use std::{
+    borrow::Cow,
+    cell::RefCell,
+    ops::Bound::{Excluded, Unbounded},
+};
 
 const ROOT_COMPONENT_PROVISIONING_OPERATION_MAX_BYTES: u32 = 8_650_000;
 // CBOR encodes a 32-byte `[u8; 32]` key as a two-byte array header followed by
@@ -691,6 +698,23 @@ impl RootComponentProvisioningStore {
         key: &RootComponentProvisioningPlacementKey,
     ) -> Option<RootComponentProvisioningPlacementRecord> {
         ROOT_COMPONENT_PROVISIONING_PLACEMENTS.with_borrow(|placements| placements.get(key))
+    }
+
+    #[must_use]
+    pub(crate) fn release_page(
+        start_after: Option<RootComponentOperationKey>,
+    ) -> RootComponentOperationReleasePageView {
+        ROOT_COMPONENT_PROVISIONING_OPERATIONS.with_borrow(|map| {
+            let mut rows = map.range((start_after.map_or(Unbounded, Excluded), Unbounded));
+            let entry = rows.next().map(|row| RootComponentOperationEntryView {
+                record: row.value(),
+                key: *row.key(),
+            });
+            RootComponentOperationReleasePageView {
+                entry,
+                has_more: rows.next().is_some(),
+            }
+        })
     }
 
     #[must_use]

@@ -1,7 +1,9 @@
 //! Focused proofs for durable root-batch acceptance and protected member derivation.
 
 use super::*;
+use crate::dto::root::{RootProvisioningReleaseKey as Key, RootProvisioningReleasePhase as Phase};
 use crate::storage::stable::component_provisioning::{
+    RootComponentDirectorySynchronizationRecord, RootComponentDirectorySynchronizationStateRecord,
     RootComponentProvisioningData, RootComponentProvisioningStore,
 };
 use crate::view::component_registry::{
@@ -36,6 +38,77 @@ use canic_core::{
     },
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+#[test]
+fn release_census_discovers_both_journals_without_admission_or_mutation() {
+    let fixture = fixture();
+    let root = fixture.request.batch.root.fleet_subnet_root;
+    assert!(
+        RootComponentProvisioningOps::release_status(root, None)
+            .unwrap()
+            .entry
+            .is_none()
+    );
+    accept_fresh_fixture(&fixture, 1);
+    let mut before = RootComponentProvisioningStore::export();
+    // Discovery reads canonical rows even when the latest-operation pointer is absent.
+    before.state.active_operation_id = None;
+    before
+        .directory_synchronizations
+        .push(RootComponentDirectorySynchronizationRecord {
+            operation_id: fixture.request.operation_id,
+            plan_hash: [8; 32],
+            source_fleet_registry: fixture.request.fleet_registry.clone(),
+            published_fleet_registry: fixture.request.fleet_registry.clone(),
+            fleet_subnet_root: root,
+            fleet_directory_content_hash: [9; 32],
+            targets: vec![],
+            state: RootComponentDirectorySynchronizationStateRecord::Synchronized {
+                planned_at_ns: 1,
+                synchronized_at_ns: 2,
+                receipt_content_hash: [10; 32],
+            },
+        });
+    RootComponentProvisioningStore::import(before.clone());
+    let first = RootComponentProvisioningOps::release_status(root, None).unwrap();
+    let key = Key::Provisioning(fixture.request.operation_id);
+    assert_eq!(first.entry.as_ref().unwrap().key, key);
+    assert_eq!(first.entry.as_ref().unwrap().phase, Phase::Accepted);
+    assert_eq!(first.next_after, Some(key));
+    assert_eq!(
+        RootComponentProvisioningOps::release_status(root, None).unwrap(),
+        first
+    );
+    let second = RootComponentProvisioningOps::release_status(root, first.next_after).unwrap();
+    assert_eq!(
+        second.entry.as_ref().unwrap().key,
+        Key::DirectorySynchronization(fixture.request.operation_id)
+    );
+    assert_eq!(
+        second.entry.as_ref().unwrap().phase,
+        Phase::DirectorySynchronized
+    );
+    assert_eq!(second.next_after, None);
+    let bytes = candid::encode_one(&second).unwrap();
+    assert_eq!(
+        candid::decode_one::<crate::dto::root::RootProvisioningReleaseResponse>(&bytes).unwrap(),
+        second
+    );
+    assert_eq!(
+        RootComponentProvisioningOps::release_status(principal(99), None)
+            .unwrap_err()
+            .code(),
+        InternalError::conflict().code()
+    );
+    let end = RootComponentProvisioningOps::release_status(
+        root,
+        Some(Key::DirectorySynchronization([255; 32])),
+    )
+    .unwrap();
+    assert_eq!(end.entry, None);
+    assert_eq!(end.next_after, None);
+    assert_eq!(RootComponentProvisioningStore::export(), before);
+}
 
 const CONFIG: &str = r#"
 [app]

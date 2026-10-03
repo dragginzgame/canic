@@ -21,6 +21,13 @@ const REPLAY_RECEIPT_SLOT_KEY_DOMAIN: &[u8] = b"canic-replay-receipt-slot-key:v1
 pub struct ReplayReceiptOps;
 
 impl ReplayReceiptOps {
+    /// Read one exact retained row independently of resumable and expiration indexes.
+    pub(crate) fn release_page(
+        start_after: Option<[u8; 32]>,
+    ) -> crate::view::replay_release::ReplayReleasePageView {
+        ReplayReceiptStore::release_page(start_after.map(ReplayReceiptSlotKey))
+    }
+
     /// Read one actor's unresolved command receipts without mutating retention.
     pub(crate) fn pending_for_actor_command(
         actor: ReplayActor,

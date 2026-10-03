@@ -1,9 +1,13 @@
 //! Focused durable-cursor qualification for root Directory synchronization.
 
 use super::*;
-use crate::storage::stable::component_provisioning::{
-    RootComponentOperationKey, RootComponentOperationRecord, RootComponentProvisioningData,
-    RootComponentProvisioningStore,
+use crate::{
+    dto::root::RootProvisioningReleasePhase,
+    ops::component_provisioning::RootComponentProvisioningOps,
+    storage::stable::component_provisioning::{
+        RootComponentOperationKey, RootComponentOperationRecord, RootComponentProvisioningData,
+        RootComponentProvisioningStore,
+    },
 };
 use canic_core::{
     cdk::structures::{BTreeMap, Memory, VectorMemory},
@@ -133,11 +137,28 @@ fn synchronization_journals_intent_reconciles_and_replays_terminal_receipt() {
         replay,
         RootComponentDirectorySynchronizationDisposition::Reconcile(intent.clone())
     );
+    let before = RootComponentProvisioningStore::export();
+    let census = RootComponentProvisioningOps::release_status(principal(9), None).unwrap();
+    let evidence = census.entry.unwrap();
+    assert_eq!(
+        evidence.phase,
+        RootProvisioningReleasePhase::DirectorySynchronizing
+    );
+    assert_eq!(evidence.delivery_in_flight, Some(intent.canister_id));
+    assert_eq!(RootComponentProvisioningStore::export(), before);
 
     let terminal =
         RootComponentDirectorySynchronizationOps::record_synchronized(&command, &intent, 202)
             .expect("record exact target evidence");
     assert!(terminal.complete);
+    assert_eq!(
+        RootComponentProvisioningOps::release_status(principal(9), None)
+            .unwrap()
+            .entry
+            .unwrap()
+            .phase,
+        RootProvisioningReleasePhase::DirectorySynchronized
+    );
     assert_eq!(terminal.synchronized_component_count, 1);
     assert_eq!(terminal.synchronized_at_ns, Some(202));
     assert_ne!(terminal.receipt_content_hash, [0; 32]);

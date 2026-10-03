@@ -1240,6 +1240,7 @@ type FleetSubnetRootSnapshotAcknowledgementRequest = record {
 //
 type FleetSubnetRootStatus = variant { Joining; Draining; Active; Removed };
 type ObservabilityRequest = variant {
+  ReplayRelease : opt blob;
   RootAcknowledgements;
   Admission : FleetAdmissionStatusRequest;
   RegistryManifest;
@@ -1248,12 +1249,53 @@ type ObservabilityRequest = variant {
   RegistryVersion;
 };
 type ObservabilityResponse = variant {
+  ReplayRelease : ReplayReleaseResponse;
   RootAcknowledgements : vec FleetSubnetRootSnapshotAcknowledgement;
   Admission : FleetAdmissionStatusResponse;
   RegistryManifest : FleetRegistryManifest;
   Funding : CoordinatorFundingStatusResponse;
   AuthorityRestore : AuthorityRestoreFenceStatusResponse;
   RegistryVersion : FleetRegistryVersion;
+};
+// Original authentication retained independently of the release observer.
+type ReplayReleaseAuthentication = variant { DirectCaller; DelegatedToken; RoleAttestation };
+type ReplayReleaseRecoveryReason = variant {
+  ExternalEffectStatusUnknown;
+  ComponentChildLifecycleInterrupted;
+  ResponseCommitFailed;
+  CostSettlementFailed;
+};
+type ReplayReleasePhase = variant {
+  Reserved;
+  ExternalEffectInFlight;
+  Committed;
+  RecoveryRequired : ReplayReleaseRecoveryReason;
+};
+type ReplayReleaseEffect = variant {
+  RootCanisterProvision : record { command_kind : text };
+  ManagementCall : record { canister : principal; method : text };
+  IcpTransfer : record { operation_id : blob };
+};
+type ReplayReleaseSettlement = record { quota_intent_id : nat64; reservation_intent_id : nat64 };
+type ReplayReleaseEntry = record {
+  slot : blob;
+  command_kind : text;
+  operation_id : blob;
+  actor : principal;
+  authentication : ReplayReleaseAuthentication;
+  payload_hash_schema_version : nat32;
+  payload_hash : blob;
+  phase : ReplayReleasePhase;
+  created_at_ns : nat64;
+  updated_at_ns : nat64;
+  expires_at_ns : opt nat64;
+  cost_guard_settlement : opt ReplayReleaseSettlement;
+  effect : opt ReplayReleaseEffect;
+};
+type ReplayReleaseResponse = record {
+  owner : principal;
+  entry : opt ReplayReleaseEntry;
+  next_after : opt blob;
 };
 // Durable identity returned when one role-owned asynchronous command is accepted.
 type OperationReceipt = record { operation_id : blob };

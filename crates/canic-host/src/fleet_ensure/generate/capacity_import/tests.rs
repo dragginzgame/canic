@@ -189,6 +189,54 @@ fn capacity_import_inventory_rejects_oversize_and_unknown_configuration() {
 }
 
 #[test]
+fn initial_import_preserves_unchanged_policy_and_seed_bytes_and_hashes() {
+    let plan = plan();
+    let (policy, seed) = inputs(&plan);
+    let imports = plan
+        .sources
+        .iter()
+        .map(|source| toml::Value::String(source.binding.canister_id.to_text()))
+        .collect::<Vec<_>>();
+    let mut policy_document = document(policy.as_bytes());
+    policy_document["fleet_subnet_roots"][0]["canister_pool"]
+        .as_table_mut()
+        .unwrap()
+        .insert("imports".to_string(), toml::Value::Array(imports.clone()));
+    let mut seed_document = document(seed.as_bytes());
+    seed_document["roots"][0]["pool_imports"] = toml::Value::Array(imports);
+    // Compact serialization and comments must survive an unchanged projection.
+    let policy = format!(
+        "# frozen policy\n{}",
+        toml::to_string(&policy_document).unwrap()
+    );
+    let seed = format!(
+        "# frozen estate\n{}",
+        toml::to_string(&seed_document).unwrap()
+    );
+    let projection =
+        prepare_initial_import_inventory(&plan, policy.as_bytes(), seed.as_bytes()).unwrap();
+    assert_eq!(projection.policy.replacement, policy.as_bytes());
+    assert_eq!(projection.seed.replacement, seed.as_bytes());
+    assert_eq!(
+        projection.policy.before_sha256,
+        <[u8; 32]>::from(Sha256::digest(policy.as_bytes()))
+    );
+    assert_eq!(
+        projection.policy.after_sha256,
+        projection.policy.before_sha256
+    );
+    assert_eq!(
+        projection.seed.before_sha256,
+        <[u8; 32]>::from(Sha256::digest(seed.as_bytes()))
+    );
+    assert_eq!(projection.seed.after_sha256, projection.seed.before_sha256);
+    assert_eq!(
+        prepare_initial_import_inventory(&plan, policy.as_bytes(), seed.as_bytes()).unwrap(),
+        projection
+    );
+}
+
+#[test]
 fn initial_import_publishes_only_the_exact_declared_held_set() {
     let plan = plan();
     let (policy, seed) = inputs(&plan);
