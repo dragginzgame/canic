@@ -1,19 +1,17 @@
 # Apps
 
-This directory contains config-defined Canic Apps. A directory belongs here
-when it has a `canic.toml` that describes an App topology and should be
-discoverable by `canic app list` and usable through commands that take the
-App name as a positional argument.
+This directory contains example Canic applications. Each App has a
+`canic.toml` file describing its canister roles and layout. The `canic app list`
+command discovers these directories, and other commands refer to an App by its
+name.
 
-Root, Coordinator and Store are Canic-owned infrastructure. The host generates
-one thin Cargo package per role from the selected Canic dependency. Apps own
-configuration and application canisters; they do not provide Fleet entrypoint
-crates. Root generation selects the exact configured capabilities.
+Apps provide their own configuration and application canisters. Canic generates
+the Root, Coordinator, and Store management canisters needed to deploy them;
+application authors do not create those packages themselves.
 
 ## Layout
 
-- `test/` – local reference topology wired through `icp.yaml` and used by CI
-  wasm/audit workflows.
+- `test/` – the larger reference App used by Canic's build and deployment tests.
   - `app/` – minimal application canister used as a placeholder service.
   - `index_hub/` + `index_child/` – indexed placement with children allocated
     on demand by the Hub.
@@ -23,15 +21,15 @@ crates. Root generation selects the exact configured capabilities.
   - `test/` – standalone test role used by the reference topology.
   - `canic.toml` – shared test topology referenced by each reference canister `build.rs`.
   - `test-configs/` – config fixtures used by local checks.
-- `demo/` – small Component and sharding App for source/build experiments.
+- `demo/` – a smaller App for learning and local build experiments.
   - `app/` – simple Component role.
   - `user_hub/` + `user_shard/` – local sharding walkthrough roles with
     human-readable planning, assignment, and shard inspection endpoints.
   - `canic.toml` – shared demo topology referenced by each demo App canister `build.rs`.
 ## Local Workflow
 
-The test Canisters are wired through `icp.yaml`; custom build steps invoke the
-same host artifact builder whose outputs are bound by `canic fleet ensure`.
+The test canisters are also listed in `icp.yaml` for low-level local testing.
+Normal Canic builds and `canic fleet ensure` use the same generated artifacts.
 
 - Inspect the source topology: `canic app config test --verbose`
 - Build the complete App and Canic infrastructure artifact set:

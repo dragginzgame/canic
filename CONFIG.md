@@ -1,24 +1,30 @@
 # Canic Configuration
 
-This guide documents the canonical shape of `canic.toml`, the human-authored
-App configuration consumed by Canic's host-side build path.
+`canic.toml` describes an application before it is deployed. It tells Canic
+which kinds of canisters make up the App, how they relate to one another, which
+optional features they use, and how far they are allowed to grow.
 
-At a high level the file describes:
+The file does **not** choose concrete canister IDs, controllers, funding, or IC
+subnets. Those deployment decisions belong to a separate desired Fleet file so
+the same App source can be installed in more than one environment.
 
-- App identity and package-backed roles (`app`, `roles`).
-- Global settings (`public_metrics`, `standards`, `app`, `auth`, `log`).
-- Flat Component topology under `component_specs.<name>`.
-- One top-level Component role and a flat catalog of every potential
-  descendant role per Component Spec.
-- Per-Component-tree and role-to-role spawn-grant ceilings, cycles policy, and
-  optional scaling, sharding, and keyed index pools.
-- Reusable Component Groups, independently scalable Group deployments, and
-  logical Fleet-service targets.
-- The implicit Fleet Subnet Root-local wasm-store behavior used by
-  chunk-store-backed installs.
+This page is the complete field reference. New readers can begin with the
+[configuration map](#configuration-map), then follow only the sections needed
+for their App.
 
-All fields are validated when `canic::build!` runs, so configuration drift fails
-fast at compile time. Every canister crate also declares the App and role it
+At a high level, the file describes:
+
+- the App's name and each canister role implemented by a Rust package;
+- global choices for authentication, logs, standards, and public monitoring;
+- Component Specs, which are reusable blueprints for deployable canisters;
+- which child canisters a Component may create and the limits on that growth;
+- optional pools for dividing data or adding equivalent workers;
+- Groups that combine Components and select how many copies to deploy; and
+- Fleet services, which give application code a stable way to find selected
+  deployed Components.
+
+Canic validates every field during the Rust build, before a canister is
+deployed. Every application canister crate also declares the App and role it
 implements in `Cargo.toml`:
 
 ```toml
@@ -46,9 +52,9 @@ endpoint bundle.
 | Independent count, spread and reduction-only limits | [Component Group deployments](#component-group-deployments) |
 | Logical Fleet-wide target selection | [Fleet services](#fleet-services) |
 
-Physical Subnets, concrete canister identities, controllers, funding and
-destructive dispositions belong to the separately reviewed desired Fleet, not
-to App source configuration.
+Physical Subnets, concrete canister identities, controllers, funding, and
+decisions to replace or delete canisters belong to the separately reviewed
+desired Fleet, not to App source configuration.
 
 ---
 

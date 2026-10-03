@@ -34,6 +34,15 @@ their authority. This documentation-only batch changes no runtime, package
 version, release readiness, Git publication or deployment state. FR1 remains
 unfinished and not push-ready.
 
+The newcomer pass now defines IC and Canic vocabulary before using it across
+the root README, documentation and feature indexes, installation, configuration,
+the minimal managed Fleet walkthrough, reference Apps, public crate/CLI guides,
+operations and architecture entry points. The supplied Canic mechanic artwork
+appears on the root landing page and its matching runtime, authentication,
+orchestration, scaling, build-evidence, backup and diagnostics guides with
+descriptive alternative text. Detailed contracts, active designs, audits and
+historical records retain their precise technical language and evidence role.
+
 ## Cross-Component caller authority assessment — 2026-10-03
 
 At the maintainer's request, assess the missing .51 membership flow as a whole

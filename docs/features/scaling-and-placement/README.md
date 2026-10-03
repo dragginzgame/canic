@@ -1,18 +1,26 @@
 # Scaling And Placement
 
-Canic models reusable topology separately from concrete deployment. A
-`ComponentSpec` describes one top-level role and its allowed descendant tree;
-each deployed Component receives its own identity, root binding, state, and
-effective limits.
+<p align="center">
+  <img src="../../../assets/1400x600/canic-scaling.jpg" alt="The Canic mechanic watering a growing tree of connected canisters" width="700" />
+</p>
+
+**Scaling** means adding canisters when an application needs more capacity.
+**Placement** decides which part of the IC network may run them. Canic lets an
+operator define both ahead of time, including hard limits on how far an
+application may grow.
+
+A **Component Spec** is a reusable blueprint for one kind of application
+canister and any child canisters it may create. Each deployed **Component** has
+its own identity, data, location, and limits.
 
 ## What It Provides
 
-- reusable Component Specs and configuration-only Component Groups
+- reusable Component Specs and Groups of related Specs
 - explicit Authority, Replica, PoolMember, and Ordinary deployment purposes
 - bounded initial placement and same-release monotonic scale-out
 - per-root density, aggregate placement, instance, descendant, and byte limits
 - dynamic root-owned child trees with exact parent bindings
-- sharding pools for stateful partitions and scaling pools for instances
+- sharding pools that divide data and scaling pools that add equivalent workers
 - reduction-only limits for each concrete deployment member
 
 Groups may include other groups, but compilation flattens them before planning.

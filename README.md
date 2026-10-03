@@ -10,6 +10,10 @@
 [![MSRV](https://img.shields.io/badge/MSRV-1.91.0-blue.svg)](Cargo.toml)
 [![Internal Rust](https://img.shields.io/badge/internal%20rust-1.99.0-orange.svg)](rust-toolchain.toml)
 
+<p align="center">
+  <img src="assets/canic-hero.jpg" alt="The Canic mechanic holding a canister beside a network of connected canisters" width="800" />
+</p>
+
 Canic helps Rust developers build and operate applications on the Internet
 Computer (IC). The IC runs applications in **canisters**: programs that contain
 both code and data, much like backend services that run directly on the
@@ -31,6 +35,10 @@ helpers on their own. A larger application can also use Canic to coordinate
 many canisters running across different parts of the IC network.
 
 ## Start Here
+
+<p align="center">
+  <img src="assets/1400x600/canic-start-here.jpg" alt="The Canic mechanic consulting a map beside signs for building, configuring, and operating an application" width="700" />
+</p>
 
 Install the published operator CLI at the same version as the `canic` crate
 used by your canisters:
@@ -194,6 +202,10 @@ operator-owned desired Fleet contract.
 Detailed ownership and dependency rules live in [AGENTS.md](AGENTS.md).
 
 ## Status
+
+<p align="center">
+  <img src="assets/1400x600/canic-pre-1-0.jpg" alt="The Canic mechanic working beside a partially assembled rack of canisters" width="700" />
+</p>
 
 Canic is still pre-1.0, so releases may make breaking changes. Moving an
 existing deployment to a new Canic release currently requires a clean

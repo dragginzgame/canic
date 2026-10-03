@@ -1,30 +1,33 @@
 # Minimal Managed Fleet
 
-This guide shows the smallest Canic-managed shape that exercises the
-root-owned Component-tree model: one Fleet Subnet Root manages a `hub`
-Component, and that Component asks the root to create one direct `registry`
-child.
-Use this as the reference before adapting a product canister layout.
+This guide shows a small but complete Canic application. It has two application
+canisters:
 
-The Fleet also requires its Coordinator and one Wasm Store for the Root. Canic
-generates those infrastructure packages and their typed initialization; the
-layout below contains only application source packages.
+- a `hub`, which is the main service; and
+- a `registry`, which the hub asks Canic to create as its child.
 
-This guide tracks the current Canic scaffold shape. For new fleets, prefer
-`canic app create <name>` and keep all `canic` dependencies on the same
-release as the installed `canic` CLI. The current schema uses
-`[app].name`, flat Component role catalogs, reusable Component Groups,
-independent Group deployments, bounded descendants, `topup`, and
-`canic::finish!()`.
+A **canister** is a program running on the Internet Computer. A **Fleet** is one
+deployed copy of the complete application. A **Component** is one deployed
+application canister together with its Canic identity and limits.
 
-The root executes lifecycle, topology, and artifact effects. It does not proxy
-ordinary application methods. Each registered node owns its direct children
-logically and asks the root to perform admitted cycle, creation, and
-installation effects. Those children may make the same request in turn, so
-runtime trees may have several levels even though the Spec's potential-Wasm
-catalog is flat. Callers resolve application Canister IDs from a
-revision-bound Component Directory or an application-owned Placement Index
-and call them directly.
+Canic also generates three management canisters: a Coordinator for the whole
+Fleet, a Root that performs approved actions on one IC Subnet, and a Wasm Store
+that holds the code Root may install. You do not write those management
+packages. The source layout below contains only the `hub` and `registry`
+application packages.
+
+Before continuing, [install Canic](../../INSTALLING.md) and make sure the
+`canic` command works. Keep the installed command-line tool and every `canic`
+Rust dependency on the same version.
+
+The example demonstrates a child canister because that is the smallest shape
+that exercises Canic's managed Component tree. Use it as a reference before
+adapting the layout to a real product.
+
+Root creates, installs, funds, and manages admitted canisters; it does not
+forward normal application requests. Application canisters call one another
+directly. A parent may ask Root to create an allowed child, and that child may
+later do the same within the limits declared in configuration.
 
 ## Layout
 
@@ -76,10 +79,11 @@ than `release`. Canic generates this profile for infrastructure packages.
 Existing application workspaces should update their own `[profile.fast]` block;
 Cargo does not inherit profiles from a dependency.
 
-## ICP Project Config
+## Local IC Config (`icp.yaml`)
 
-Local managed installs use `icp.yaml` plus `.icp/` state. Do not copy old
-`dfx.json` or `canister_ids.json` files just to start a new local Canic fleet.
+The `icp` command-line tool uses `icp.yaml` to run the application on a local IC
+network. Its generated local state lives under `.icp/`. A new Canic App does
+not need old `dfx.json` or `canister_ids.json` files.
 
 Add matching canister and environment entries for the fleet roles:
 
@@ -110,11 +114,11 @@ environments:
     canisters: [root, hub, registry]
 ```
 
-## Fleet Config
+## App Config (`canic.toml`)
 
-Declare one Component Spec with one top-level Component role and a flat catalog
-of its potential descendant roles. Do not use a flat `[[canisters]]` list or
-nest child tables to express runtime parentage.
+The App configuration declares the canister roles, a Component blueprint, the
+child it may create, and one deployment of that blueprint. It describes what is
+allowed, not the concrete canister IDs or physical IC Subnet used later.
 
 ```toml
 [app]
@@ -154,10 +158,10 @@ placement.maximum_per_root = 1
 placement.minimum_distinct_roots = 1
 ```
 
-The Spec defines what one Component may contain. The Group selects that Spec as
-one reusable occurrence, and the deployment asks the Fleet composition planner
-for exactly one placement. None of these source declarations selects a physical
-Subnet or grants mutation authority; the reviewed desired Fleet does that.
+The Spec defines what one Component may contain. The Group selects that Spec,
+and the Group deployment asks for exactly one running copy. None of these source
+declarations chooses a physical Subnet or grants permission to change a live
+network; the separately reviewed desired Fleet does that.
 
 ## Build Scripts
 
