@@ -570,7 +570,7 @@ dependencies = [
  "futures",
  "ic-canister-sig-creation",
  "ic-cdk",
- "ic-certification",
+ "ic-certification 4.0.0",
  "ic-memory 0.20.0",
  "ic-secp256k1",
  "ic-signature-verification",
@@ -602,7 +602,7 @@ dependencies = [
  "getrandom 0.4.3",
  "hmac 0.13.0",
  "ic-agent",
- "ic-certification",
+ "ic-certification 4.0.0",
  "ic-query",
  "ic-testkit",
  "ic-verify-bls-signature",
@@ -2214,7 +2214,7 @@ dependencies = [
  "http",
  "http-body",
  "http-body-util",
- "ic-certification",
+ "ic-certification 3.2.0",
  "ic-ed25519",
  "ic-transport-types",
  "ic-verify-bls-signature",
@@ -2249,7 +2249,7 @@ checksum = "d8b2a507d1bebb111fc8c76098468e4de9c745e9b9ef160a079568ae1d6f7fef"
 dependencies = [
  "candid",
  "hex",
- "ic-certification",
+ "ic-certification 3.2.0",
  "ic-representation-independent-hash",
  "ic0",
  "lazy_static",
@@ -2316,6 +2316,18 @@ name = "ic-certification"
 version = "3.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "754e3037360152de7e5f2bd0ccf51db8864b6a03c5a2b4ffc6a65286c0e2ffa7"
+dependencies = [
+ "hex",
+ "serde",
+ "serde_bytes",
+ "sha2 0.10.9",
+]
+
+[[package]]
+name = "ic-certification"
+version = "4.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9d58eda9bd0b012356ff1bd00d95cb25ea0235699f5475c288b2b6bbe68225cd"
 dependencies = [
  "hex",
  "serde",
@@ -2445,7 +2457,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f0e8f6b8a33244df75bddeef3ef1255552de517785f462a090ba218cf2abd93c"
 dependencies = [
  "ic-canister-sig-creation",
- "ic-certification",
+ "ic-certification 3.2.0",
  "ic-verify-bls-signature",
  "ic_principal",
  "serde",
@@ -2499,7 +2511,7 @@ checksum = "e2d13d859ea481e8d5766a54a3b4dfcf4c11ff6f21d5e2aeaf9a44dd710a76ff"
 dependencies = [
  "candid",
  "hex",
- "ic-certification",
+ "ic-certification 3.2.0",
  "leb128",
  "serde",
  "serde_bytes",
@@ -3599,7 +3611,7 @@ dependencies = [
  "candid",
  "flate2",
  "hex",
- "ic-certification",
+ "ic-certification 3.2.0",
  "ic-management-canister-types",
  "ic-transport-types",
  "reqwest",
