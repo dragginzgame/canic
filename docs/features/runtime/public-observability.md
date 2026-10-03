@@ -447,3 +447,10 @@ the single five-minute sampler, default-off family selection and bounded history
 
 See [matching-build qualification](public-metrics-qualification.md) before
 measuring enabled versus disabled publication or an application participant.
+
+## Continue From Here
+
+- [Read the metrics reference](../../metrics.md)
+- [Browse runtime features](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

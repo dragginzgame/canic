@@ -265,3 +265,10 @@ Before shipping a composed canister, prove:
   succeeds; and
 - the composed Wasm retains one lifecycle export pair and its intended Candid
   surface.
+
+## Continue From Here
+
+- [Review runtime observability](public-observability.md)
+- [Browse runtime features](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

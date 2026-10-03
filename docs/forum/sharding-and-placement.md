@@ -1,3 +1,5 @@
+# Sharding And Placement
+
 In Canic, we treat sharding as a **placement problem**: given an application key, which canister should own that partition of state?
 
 The application chooses the partition key — for example, a user ID, tenant ID, or game world ID. Canic manages a named pool of shard canisters and records the mapping from each key to its assigned shard.
@@ -16,3 +18,10 @@ Capacity here means **the number of assigned partition keys per shard**. It is n
 There are also two distinct placement decisions. Fleet placement determines which subnet Root owns a deployed Component; the Component's sharding pool determines which child shard owns an application key. The sharding selector itself does not choose subnets.
 
 Canic provides the assignment registry, bounded shard provisioning, and lookup machinery. The application still owns its data model, calls to the selected shard, and any coordination across shards. Automatic data splitting, data movement, and load rebalancing are outside this placement mechanism.
+
+## Continue From Here
+
+- [Use scaling and placement](../features/scaling-and-placement/README.md)
+- [Plan and operate a Fleet](../operations/README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

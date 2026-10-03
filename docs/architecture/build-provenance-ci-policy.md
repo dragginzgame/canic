@@ -35,3 +35,10 @@ canic evidence gate \
 Timestamps are explanatory metadata, not provenance. Build evidence does not
 authorize funding, canister identity, controllers, placement, replacement or
 deletion; the reviewed current Fleet plan owns those decisions.
+
+## Continue From Here
+
+- [Understand build artifacts](build-artifacts.md)
+- [Review CI policy gates](ci-policy-gates.md)
+- [Browse the architecture guides](README.md)
+- [Back to the main README](../../README.md)

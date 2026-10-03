@@ -86,3 +86,10 @@ Adding a supported cell requires an explicit maintainer decision, a governance
 update and a named CI or maintainer-owned qualification plan. Outstanding
 qualification must remain explicit until evidence exists; declaring support or
 adding an installer branch is not passing validation evidence.
+
+## Continue From Here
+
+- [Install Canic](../../INSTALLING.md)
+- [Review CI and deployment governance](ci-deployment.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

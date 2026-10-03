@@ -388,3 +388,10 @@ runner setup. All 1,643 source/lock inputs stayed unchanged. These results
 qualify the fresh-layout default; they do not measure the current Toko Miner
 estate or establish worst-case instruction cost for every maximum-sized record.
 Large provisioning records still traverse overflow pages when loaded.
+
+## Continue From Here
+
+- [Review update payload limits](update-payload-limits.md)
+- [Browse runtime features](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

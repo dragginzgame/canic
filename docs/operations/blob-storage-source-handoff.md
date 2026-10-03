@@ -7,6 +7,23 @@ project-side protocol source for 0.69 implementation work. Cashier remains
 consumer/wrapper evidence only until actual Cashier source or generated/deployed
 Cashier Candid is found for 0.70 billing work.
 
+<img src="../../assets/256x256/mechanic-note.png" align="left" width="96" alt="The Canic mechanic beside retained source-handoff evidence" />
+
+**Evidence boundary:** this page records the inspected source and inventory
+handoff for the maintained integration. It is evidence, not a replacement for
+the current feature guide or protocol contracts.
+
+<br clear="left" />
+
+## At A Glance
+
+| Need | Section |
+| --- | --- |
+| Identify the inspected source | [Current Evidence](#current-evidence) |
+| Repeat inspection safely | [Safe Inspection Path](#safe-inspection-path) |
+| Understand what the evidence proves | [Evidence Classification](#evidence-classification) |
+| Re-run the owning checks | [Validation](#validation) |
+
 ## Current Evidence
 
 The local Toko repository now has the blob-storage project-instance source on
@@ -108,3 +125,12 @@ bash scripts/ci/check-blob-storage-inventory-gate.sh
 bash scripts/ci/check-blob-storage-cashier-inventory-gate.sh
 cargo test --locked -p canic --test protocol_inventory_gate -- --nocapture
 ```
+
+## Continue From Here
+
+- [Read the Blob Storage feature guide](../features/blob-storage/README.md)
+- [Follow the integration guide](blob-storage-integration.md)
+- [Review the current implementation handoff](../status/current.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

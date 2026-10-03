@@ -2,7 +2,23 @@
 
 Canic requires ICP CLI `>=1.5.0, <2.0.0`; maintainer installation pins 1.6.0.
 
-## Configuration format boundary
+<img src="../../../assets/256x256/mechanic-note.png" align="left" width="96" alt="The Canic mechanic beside the ICP integration boundary" />
+
+**Integration outcome:** Canic uses ICP's selected environment, build metadata,
+management inspection, and YAML project boundary without introducing a second
+form of Canic configuration or a parser inside canister Wasm.
+
+<br clear="left" />
+
+## At A Glance
+
+| Concern | Section |
+| --- | --- |
+| Keep TOML and ICP YAML ownership separate | [Configuration Format Boundary](#configuration-format-boundary) |
+| Select an ICP environment and role build | [Environment And Selective Builds](#environment-and-selective-builds) |
+| Inspect management state safely | [Management Inspection](#management-inspection) |
+
+## Configuration Format Boundary
 
 Canic-owned human-authored configuration uses TOML, including `canic.toml` and
 new configuration surfaces. Cargo manifests also use TOML. YAML configuration
@@ -26,7 +42,7 @@ serves canister interfaces. Their runtime uses are separate from configuration
 parsing. Reuse the existing workspace format libraries for new Canic code;
 upstream transitive parsers do not justify introducing another direct parser.
 
-## Environment and selective builds
+## Environment And Selective Builds
 
 ICP script builds use `ICP_CLI_ENVIRONMENT`, which records the selection after
 `icp build -e <environment>` is resolved. The inherited `ICP_ENVIRONMENT` remains
@@ -49,7 +65,7 @@ Canic does not fetch or execute them during inspection.
 continues to assemble the complete configured App and infrastructure artifacts
 needed by Fleet operations. ICP selection is not authority to shrink that closure.
 
-## Management inspection
+## Management Inspection
 
 Host observation accepts additive ICP CLI JSON fields while validating the
 fields it consumes. Unknown visibility variants still reject because their
@@ -87,3 +103,12 @@ after use and recreate them for another invocation. Fleet argument limits and
 the separate durable intent/journal writes remain in force.
 
 See [frontend handoff](frontend-handoff.md) for read-only post-sync verification.
+
+## Continue From Here
+
+- [Install the supported toolchain](../../../INSTALLING.md)
+- [Read the Frontend Handoff guide](frontend-handoff.md)
+- [Review supported platforms](../../governance/supported-platforms.md)
+- [Browse Fleet Operations](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

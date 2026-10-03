@@ -395,3 +395,10 @@ Standalone Root removal remains unavailable while Coordinator group/service
 references exist. That rejection retains the Registry and fixture sources; this
 work does not introduce grouped application retirement. Generated publication and
 funding qualification do not expand that retirement authority.
+
+## Continue From Here
+
+- [Review managed-App qualification](managed-app-qualification.md)
+- [Browse build and evidence](README.md)
+- [Browse all documentation](../../README.md)
+- [Back to the main README](../../../README.md)

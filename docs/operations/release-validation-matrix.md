@@ -7,6 +7,13 @@ General command, git, versioning, network, and release authority remains in
 
 There is no standing RC-readiness audit or evergreen no-blocker conclusion.
 
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding the release-validation matrix" />
+
+**Maintainer outcome:** choose the narrowest valid gate for the current
+checkpoint and record every required result or externally owned limitation.
+
+<br clear="left" />
+
 ## Scope
 
 | Checkpoint | Purpose | Required outcome |
@@ -224,3 +231,12 @@ Do not translate `BLOCKED`, `SKIPPED`, or unavailable into `PASS`.
 - [Installed CLI smoke](0.56-installed-cli-smoke.md)
 - [Packaged downstream CLI](0.56-packaged-downstream-cli.md)
 - [Packaged Wasm store](0.56-packaged-wasm-store.md)
+
+## Continue From Here
+
+- [Validate packages and installation](release-package-install-validation.md)
+- [Review CI and deployment governance](../governance/ci-deployment.md)
+- [Follow recovery and retry procedures](recovery-retry-runbooks.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

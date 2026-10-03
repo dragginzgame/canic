@@ -692,3 +692,10 @@ helpers, or Python CI glue to this repository.
 
 Prefer Rust for durable tooling. Use shell only when a small wrapper is
 sufficient.
+
+## Continue From Here
+
+- [Review delivery cadence](delivery-cadence.md)
+- [Read the testing rules](../../TESTING.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

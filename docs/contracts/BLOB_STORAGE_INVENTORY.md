@@ -753,3 +753,10 @@ The 0.69 storage schema can now be designed around current Toko
 record and the presence of these source notes. Current protocol, policy and
 workflow tests validate implementation behavior. There is no pre-implementation
 branch or requirement for specific wording in this historical inventory.
+
+## Continue From Here
+
+- [Use blob storage](../features/blob-storage/README.md)
+- [Review blob-storage operations](../operations/blob-storage-integration.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

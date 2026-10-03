@@ -50,3 +50,10 @@ canic evidence gate \
 Success proves only that the saved evidence satisfied policy at evaluation
 time. It does not prove live Fleet convergence; `canic fleet ensure` owns that
 separate reviewed boundary.
+
+## Continue From Here
+
+- [Review build provenance policy](build-provenance-ci-policy.md)
+- [Read the release validation matrix](../operations/release-validation-matrix.md)
+- [Browse the architecture guides](README.md)
+- [Back to the main README](../../README.md)

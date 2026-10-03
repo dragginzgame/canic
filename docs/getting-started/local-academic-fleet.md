@@ -72,3 +72,10 @@ not a Canic promise. If its state is discarded, do not assume old canisters
 are gone on another endpoint. Any reachable old canister with recoverable
 cycles must be represented explicitly in current desired state for reuse or
 safe drain.
+
+## Continue From Here
+
+- [Create your first managed application](minimal-managed-fleet.md)
+- [Operate a Fleet](../operations/README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

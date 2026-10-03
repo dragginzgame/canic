@@ -4,6 +4,14 @@ This runbook is the compact developer handoff for delegated-auth root proof
 provisioning. It documents the maintained chain-key path, not the historical
 bridge-backed canister-signature flow.
 
+<img src="../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside Root proof provisioning boundaries" />
+
+**Operator outcome:** configure the exact Root public key, provision and renew
+delegation proofs through maintained authority, and diagnose failures without
+reviving removed bridge behavior.
+
+<br clear="left" />
+
 ## Source Map
 
 | Concern | Source |
@@ -319,3 +327,12 @@ git diff --check
 End-to-end root/issuer proof validation belongs to the Coordinator-anchored
 multi-root PocketIC journey required by the active 0.100 design. Do not
 substitute a directly installed single-root fixture.
+
+## Continue From Here
+
+- [Read the Authentication feature guide](../features/authentication/README.md)
+- [Review the authentication architecture](../architecture/authentication.md)
+- [Review the delegated-token contract](../contracts/AUTH_DELEGATED_SIGNATURES.md)
+- [Browse Operations](README.md)
+- [Browse all documentation](../README.md)
+- [Back to the main README](../../README.md)

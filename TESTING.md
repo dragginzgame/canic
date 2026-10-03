@@ -171,3 +171,10 @@ Preferred format:
 ```rust
 // Category A - Internal runtime-configured tests (ConfigTestBuilder when needed).
 ```
+
+## Continue From Here
+
+- [Browse the test canisters](canisters/README.md)
+- [Review contributor and CI policy](docs/governance/ci-deployment.md)
+- [Browse all documentation](docs/README.md)
+- [Back to the main README](README.md)

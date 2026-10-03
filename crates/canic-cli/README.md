@@ -301,3 +301,10 @@ and external native-cycle preflight. See the
 
 The [Fleet observatory](../../docs/features/operations/fleet-observatory.md) supplies
 independent role observations and bounded public reports from the host.
+
+## Continue From Here
+
+- [Install Canic](../../INSTALLING.md)
+- [Operate a Fleet](../../docs/operations/README.md)
+- [Browse all documentation](../../docs/README.md)
+- [Back to the main README](../../README.md)
