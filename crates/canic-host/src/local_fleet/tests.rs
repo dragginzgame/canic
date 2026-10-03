@@ -2,6 +2,80 @@ use super::{LocalFleetError, model::*, ops, policy, workflow::LocalFleetSession}
 use candid::Principal;
 use std::{fs, net::TcpListener, path::PathBuf};
 
+fn reset_fixture(label: &str) -> (PathBuf, PathBuf, LocalFleetRecord) {
+    let root = crate::test_support::temp_dir(label);
+    fs::create_dir_all(&root).unwrap();
+    let config = configuration(12345);
+    let (directory, lock) = ops::lock_directory(&root, &config.name).unwrap();
+    let record = ops::initial_record(&config).unwrap();
+    ops::write_record(&directory, &record).unwrap();
+    drop(lock);
+    (root, directory, record)
+}
+
+#[test]
+fn reset_discards_over_depth_instance_and_replays_without_rewriting_receipt() {
+    let (root, directory, record) = reset_fixture("canic-local-reset-depth");
+    let instance = ops::instance_directory(&directory, &record.session_id).unwrap();
+    let mut nested = instance.clone();
+    for _ in 0..65 {
+        nested.push("nested");
+    }
+    fs::create_dir_all(nested).unwrap();
+    std::assert_matches!(
+        ops::validate_tree(&directory),
+        Err(LocalFleetError::Capacity)
+    );
+    LocalFleetSession::reset(&root, &record.configuration.name, &record.session_id).unwrap();
+    assert!(!instance.exists());
+    assert!(ops::read_record(&directory).unwrap().is_none());
+    let receipt = fs::read(directory.join("reset.json")).unwrap();
+    LocalFleetSession::reset(&root, &record.configuration.name, &record.session_id).unwrap();
+    assert_eq!(fs::read(directory.join("reset.json")).unwrap(), receipt);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn reset_discards_interior_symlinks_without_touching_their_targets() {
+    let (root, directory, record) = reset_fixture("canic-local-reset-interior-link");
+    let instance = ops::instance_directory(&directory, &record.session_id).unwrap();
+    fs::create_dir_all(&instance).unwrap();
+    let outside = root.join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("keep"), b"unrelated").unwrap();
+    std::os::unix::fs::symlink(&outside, instance.join("link")).unwrap();
+    std::assert_matches!(
+        ops::validate_tree(&directory),
+        Err(LocalFleetError::UnsafePath)
+    );
+    LocalFleetSession::reset(&root, &record.configuration.name, &record.session_id).unwrap();
+    assert!(!instance.exists());
+    assert_eq!(fs::read(outside.join("keep")).unwrap(), b"unrelated");
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(unix)]
+#[test]
+fn reset_rejects_a_symlinked_instance_and_recovers_after_its_removal() {
+    let (root, directory, record) = reset_fixture("canic-local-reset-instance-link");
+    let instance = ops::instance_directory(&directory, &record.session_id).unwrap();
+    let outside = root.join("outside");
+    fs::create_dir(&outside).unwrap();
+    fs::write(outside.join("keep"), b"unrelated").unwrap();
+    std::os::unix::fs::symlink(&outside, &instance).unwrap();
+    std::assert_matches!(
+        LocalFleetSession::reset(&root, &record.configuration.name, &record.session_id),
+        Err(LocalFleetError::UnsafePath)
+    );
+    assert!(ops::read_record(&directory).unwrap().is_some());
+    assert_eq!(fs::read(outside.join("keep")).unwrap(), b"unrelated");
+    fs::remove_file(&instance).unwrap();
+    LocalFleetSession::reset(&root, &record.configuration.name, &record.session_id).unwrap();
+    assert!(ops::read_record(&directory).unwrap().is_none());
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[test]
 fn allocation_intent_preserves_timestamp_and_capacity_before_any_platform_call() {
     let root = crate::test_support::temp_dir("canic-local-allocation-intent");

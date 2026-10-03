@@ -2,6 +2,8 @@
 //!
 //! These views are neither serialized declarations nor substitutes for IC observations.
 
+pub mod funding;
+
 use crate::fleet_ensure::{
     model::{
         capacity_import::CapacityImportSourceBinding,
@@ -11,7 +13,24 @@ use crate::fleet_ensure::{
     view::capacity_import::CapacityImportDestinationView,
 };
 use candid::Principal;
+use canic_control_plane::dto::{
+    fleet_coordinator::CoordinatorFundingStatusResponse, root::RootFundingReleaseResponse,
+};
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Time-local Coordinator treasury and complete Root funding evidence, without settlement authority.
+#[derive(Clone, Debug)]
+pub struct FleetReleaseFundingView {
+    pub coordinator: CoordinatorFundingStatusResponse,
+    pub roots: Vec<FleetReleaseRootFundingView>,
+}
+
+/// Complete bounded refill history for one Root; producers may still be active.
+#[derive(Clone, Debug)]
+pub struct FleetReleaseRootFundingView {
+    pub root: Principal,
+    pub pages: Vec<RootFundingReleaseResponse>,
+}
 
 /// Complete queried ownership closure, with no assertion that producers are fenced.
 #[derive(Clone, Debug, Eq, PartialEq)]

@@ -15,6 +15,108 @@ use canic_core::dto::fleet_registry::FleetSubnetRootStatus;
 use canic_core::ids::SubnetId;
 
 #[test]
+fn release_census_binds_both_refill_participants_and_preserves_refund_evidence() {
+    let root = candid::Principal::from_slice(&[1]);
+    let operation = canic_core::control_plane_support::view::icp_refill::IcpRefillOperation {
+        transfer_uncertain: false,
+        id: 1,
+        operation_id: [2; 32],
+        trigger: canic_core::dto::icp_refill::IcpRefillTrigger::Manual,
+        policy_hash: [3; 32],
+        source_canister: root,
+        source_subaccount: Some([4; 32]),
+        target_canister: root,
+        ledger_canister_id: candid::Principal::from_slice(&[5]),
+        cmc_canister_id: candid::Principal::from_slice(&[6]),
+        cmc_to_account_owner: candid::Principal::from_slice(&[6]),
+        cmc_to_account_subaccount: Some([7; 32]),
+        amount_e8s: 100,
+        fee_e8s: 10,
+        budget_window_start_secs: 0,
+        budget_reserved: true,
+        memo: vec![8],
+        created_at_time_ns: 9,
+        ledger_block_index: Some(10),
+        notify_attempts: 1,
+        cycles_sent: None,
+        status: canic_core::dto::icp_refill::IcpRefillStatus::Refunded,
+        error_code: Some(canic_core::dto::icp_refill::IcpRefillErrorCode::Refunded),
+        error_message: None,
+        refund_block_index: Some(11),
+        transaction_too_old_min_block_index: None,
+    };
+    let evidence = refill_release_evidence(root, operation.clone()).expect("matching Root");
+    assert_eq!(evidence.response.operation_id, operation.operation_id);
+    assert_eq!(evidence.source_subaccount, operation.source_subaccount);
+    assert_eq!(evidence.refund_block_index, Some(11));
+    assert_eq!(evidence.response.ledger_block_index, Some(10));
+    let mut wrong_source = operation.clone();
+    wrong_source.source_canister = candid::Principal::from_slice(&[12]);
+    let mut wrong_target = operation;
+    wrong_target.target_canister = candid::Principal::from_slice(&[12]);
+    for wrong in [wrong_source, wrong_target] {
+        assert_eq!(
+            refill_release_evidence(root, wrong)
+                .expect_err("wrong participant")
+                .code(),
+            canic_core::diagnostics::codes::STATE_CONFLICT
+        );
+    }
+}
+
+#[test]
+fn release_census_distinguishes_pending_acceptance_from_completed_history() {
+    RootFundingStore::import(RootFundingData::default());
+    RootFundingOps::commit_genesis(RootFundingOps::compile_genesis()).expect("funding genesis");
+    let authority = authority();
+    let request =
+        RootFundingOps::prepare_request(&authority, 42_200_000_000, 10).expect("prepare request");
+    let prepared = RootFundingStore::export();
+    let census = RootFundingOps::release_status(&authority, None).expect("pending census");
+    assert_eq!(census.current_request, Some(request.clone()));
+    assert_eq!(census.accepted_grant, None);
+    assert_eq!(
+        census.policy_hash,
+        fleet_subnet_root_funding_policy_hash(&authority.funding)
+    );
+    assert_eq!(census.icp_refill_policy, authority.funding.icp_refill);
+    assert!(census.icp_refills.is_empty());
+    assert_eq!(census.next_after, None);
+    assert_eq!(RootFundingStore::export(), prepared);
+
+    let receipt = RootFundingOps::record_acceptance(&authority, &acceptance_request(&request), 20)
+        .expect("accept grant");
+    let accepted = RootFundingStore::export();
+    let census = RootFundingOps::release_status(&authority, None).expect("accepted census");
+    assert_eq!(census.current_request, Some(request));
+    assert_eq!(census.accepted_grant, Some(receipt.clone()));
+    assert_eq!(RootFundingStore::export(), accepted);
+
+    RootFundingOps::record_response(&authority, FleetRootFundingResponse::Granted(receipt), 30)
+        .expect("finish request");
+    let completed = RootFundingStore::export();
+    let census = RootFundingOps::release_status(&authority, None).expect("completed census");
+    assert_eq!(census.current_request, None);
+    assert_eq!(census.accepted_grant, None);
+    assert_eq!(RootFundingStore::export(), completed);
+}
+
+#[test]
+fn release_census_preserves_exact_pending_policy_rotation() {
+    RootFundingStore::import(RootFundingData::default());
+    RootFundingOps::commit_genesis(RootFundingOps::compile_genesis()).expect("funding genesis");
+    let authority = authority();
+    let request = rotation_prepare_request(&authority);
+    RootFundingOps::prepare_policy_rotation(&authority, request.clone(), 10)
+        .expect("prepare rotation");
+    let before = RootFundingStore::export();
+    let census = RootFundingOps::release_status(&authority, None).expect("rotation census");
+    assert_eq!(census.rotation_current, Some(request));
+    assert_eq!(census.current_request, None);
+    assert_eq!(RootFundingStore::export(), before);
+}
+
+#[test]
 #[expect(
     clippy::too_many_lines,
     reason = "one end-to-end journal interruption and successor proof"

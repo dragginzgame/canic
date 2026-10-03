@@ -12499,6 +12499,7 @@ cycles = "80T"
         assert_eq!(status.automatic_grants, 0);
         assert_eq!(status.automatic_icp_refills, 1);
         assert_eq!(status.automatic_icp_refill_e8s, refill.amount_e8s);
+        funding_inventory::assert_release_funding(&fixture.pic, fixture.root, &status);
         assert!(fixture.pic.cycle_balance(fixture.root) > fixture.root_balance_before_activation);
 
         let recipient_status = fixture

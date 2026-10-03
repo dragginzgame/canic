@@ -1836,6 +1836,75 @@ the observed surplus as net credit and still rejects unexplained deficits.
 
 ## Retirement Boundary
 
+Root's controller-only `canic_root_status` also accepts `PoolRelease`. It reads
+the bounded pool singleton independently of admission for new work, preserving
+bootstrap hold identities (including Store), retained import reservations and
+progress, consumed call/debit allowances, pending creation and pending handoff.
+Released import history remains visible. The query neither resumes effects nor
+changes their allowance, and a record bound to another Root refuses the result.
+It is available before activation once protected Root authority exists. Host
+collection and provision/child-funding evidence remain separate unfinished work;
+this pool observation alone cannot establish that a Root is safe to clear.
+
+Root's controller-only `canic_root_status` query accepts
+`FundingRelease : opt nat64`. Start with `null`, then pass each returned
+`next_after` until it is absent. Each page returns at most 32 retained ICP
+refills; stable storage reads at most one additional record for lookahead and
+seeks directly past the cursor. The response also preserves the current funding
+request, accepted grant, pending policy rotation and configured refill policy.
+Refill evidence includes exact historical accounts, transfer identity, ledger
+block, refund block and expired CMC notification evidence, including operations
+whose notification retry allowance is exhausted.
+
+The Host release funding collector retains those exact pages for every selected
+Root. It checks the reviewed operator/network, brackets queries with Coordinator
+and Root custody certificates and matching Registry observations, and requires
+the current policy binding, stable funding header and strictly advancing cursors.
+Its limits are 256 KiB per reply, 8 MiB total replies, 4,096 refills per Root,
+15 seconds per funding query and 120 seconds for collection. Candid decoding,
+skipping, type count and header size are bounded. A refusal returns no partial
+census, and no observation issues a management update or transfers funds.
+The same collection retains the Coordinator's existing controller-only
+`canic_observability::Funding` response under those byte/work/deadline limits.
+It requires every reviewed Root exactly once, with matching policy and lifecycle
+bindings; input ordering is immaterial. Coordinator cycle balances, reserved
+windows, current grants, terminal results and policy rotation remain intact.
+Pending operation IDs from both sides are deduplicated for follow-up. A retained
+terminal Coordinator result alone does not create pending work, while a Root
+still awaiting that result remains visible. These are time-local reads, not an
+atomic cross-role snapshot or permission to settle a grant.
+
+The Host `workflow::release::observe_funding` library boundary combines that
+collection with a receipt assessment. Exact conversion and refund receipts remain
+historical evidence, not automatic blockers. A refund without a refund block is
+marked for explicit residual review; incomplete or exhausted operations retain
+their Ledger/CMC reconciliation requirement, and inconsistent terminal receipts
+are identified separately. Current Coordinator requests remain visible even when
+Root has accepted a grant. Pending policy rotation is reported separately rather
+than treated as proof of a paid effect. The report retains original pages and
+accounts, including those attached to completed operations.
+
+The retained `transfer_uncertain` fact is persisted before Ledger dispatch. A
+first explicit refusal clears it; a refusal after a lost reply preserves it.
+A confirmed transfer or duplicate receipt clears uncertainty and retains its
+Ledger block. Unissued or definitely refused transfers can therefore report
+`NoLedgerTransfer` without unnecessary Ledger reconciliation. An expired window
+or a cleared accounting reservation alone does not establish that an earlier
+transfer failed. Uncertain expired/rejected transfers retain their reserved
+allowance; a fee error following a lost reply preserves the original fee and
+transfer identity instead of retrying different bytes. The assessment grants
+no new spending/retry authority and does not itself reconcile that effect.
+The required current refill record field follows the pre-1.0 reinstall-only
+hard cut; there is no predecessor-record conversion.
+
+This census is an observation, not a release seal or settlement receipt. Pages
+are not an atomic snapshot while producers remain active. A release executor must
+quiesce producers, reconcile unfinished effects, resolve configured default Ledger
+identities and observe account balances separately. Neither an empty retry queue
+nor a completed latest refill establishes that all historical obligations are
+settled. The whole-Fleet release command remains under implementation; this query
+does not authorize resetting the observed Root.
+
 An IC controller cannot pull cycles from an arbitrary canister. A material
 source selected for deletion must therefore declare an idempotent,
 controller-authorized drain endpoint. In-place reinstall retains its cycle

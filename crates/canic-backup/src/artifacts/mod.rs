@@ -130,8 +130,9 @@ impl ArtifactChecksum {
     /// Verify that the checksum matches an expected SHA-256 hash.
     pub fn verify(&self, expected_hash: &str) -> Result<(), ArtifactChecksumError> {
         self.validate()?;
+        Self::validate_hash(expected_hash)?;
 
-        if self.hash == expected_hash {
+        if self.hash.eq_ignore_ascii_case(expected_hash) {
             Ok(())
         } else {
             Err(ArtifactChecksumError::ChecksumMismatch {

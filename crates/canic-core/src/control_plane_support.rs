@@ -204,6 +204,10 @@ pub mod ops {
 }
 
 pub mod view {
+    pub mod icp_refill {
+        pub use crate::view::icp_refill::{IcpRefillOperation, IcpRefillReleasePage};
+    }
+
     pub mod state_cascade {
         pub use crate::view::state_cascade::{StateCascadeEndpoint, StateCascadeTarget};
     }

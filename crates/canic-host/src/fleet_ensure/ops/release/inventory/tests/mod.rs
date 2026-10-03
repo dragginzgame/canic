@@ -15,7 +15,8 @@ use canic_core::{
     },
 };
 
-fn fixture() -> (FleetReleaseReviewRecord, FleetRegistry) {
+pub(in crate::fleet_ensure::ops::release) fn fixture() -> (FleetReleaseReviewRecord, FleetRegistry)
+{
     let (review, _) = release_fixture();
     let registry = FleetRegistry {
         authority: FleetRegistryAuthority {

@@ -49,6 +49,15 @@ Examples:
 
 #[derive(Debug, ThisError)]
 pub enum InfoEnvCommandError {
+    #[error(
+        "canister ID export {variable} collides between {first_canister} and {second_canister}"
+    )]
+    BindingCollision {
+        variable: String,
+        first_canister: String,
+        second_canister: String,
+    },
+
     #[error(transparent)]
     Component(#[from] ComponentOperationError),
 
@@ -172,7 +181,7 @@ fn load_env_report(options: &InfoEnvOptions) -> Result<InfoEnvReport, InfoEnvCom
             },
         )?;
     }
-    Ok(env_report(options, &resolution))
+    env_report(options, &resolution)
 }
 
 fn include_component_entry(
@@ -201,15 +210,18 @@ fn resolve_info_env_fleet(
         .map_err(InfoEnvCommandError::from)
 }
 
-fn env_report(options: &InfoEnvOptions, resolution: &CurrentFleetResolution) -> InfoEnvReport {
-    InfoEnvReport {
+fn env_report(
+    options: &InfoEnvOptions,
+    resolution: &CurrentFleetResolution,
+) -> Result<InfoEnvReport, InfoEnvCommandError> {
+    Ok(InfoEnvReport {
         fleet: options.fleet.clone(),
         environment: options.environment.clone(),
-        bindings: env_bindings(&resolution.registry.entries),
-    }
+        bindings: env_bindings(&resolution.registry.entries)?,
+    })
 }
 
-fn env_bindings(entries: &[RegistryEntry]) -> Vec<InfoEnvBinding> {
+fn env_bindings(entries: &[RegistryEntry]) -> Result<Vec<InfoEnvBinding>, InfoEnvCommandError> {
     let mut entries = entries.to_vec();
     entries.sort_by(|left, right| {
         let left_base = binding_variable_base(left);
@@ -222,23 +234,32 @@ fn env_bindings(entries: &[RegistryEntry]) -> Vec<InfoEnvBinding> {
 
     let counts = binding_base_counts(&entries);
     let mut seen = BTreeMap::<String, usize>::new();
+    let mut variables = BTreeMap::<String, String>::new();
     entries
         .into_iter()
         .map(|entry| {
             let base = binding_variable_base(&entry);
             let index = seen.entry(base.clone()).or_default();
             *index += 1;
-            InfoEnvBinding {
-                variable: if counts.get(&base).copied().unwrap_or_default() > 1 {
-                    format!("{base}_{index}")
-                } else {
-                    base
-                },
+            let variable = if counts.get(&base).copied().unwrap_or_default() > 1 {
+                format!("{base}_{index}")
+            } else {
+                base
+            };
+            if let Some(first_canister) = variables.insert(variable.clone(), entry.pid.clone()) {
+                return Err(InfoEnvCommandError::BindingCollision {
+                    variable,
+                    first_canister,
+                    second_canister: entry.pid,
+                });
+            }
+            Ok(InfoEnvBinding {
+                variable,
                 role: entry.role,
                 canister_id: entry.pid,
                 kind: None,
                 parent_pid: entry.parent_pid,
-            }
+            })
         })
         .collect()
 }
@@ -390,7 +411,7 @@ mod tests {
             include_component_entry(&mut entries, wrong_root),
             Err(ComponentOperationError::Progress)
         ));
-        let bindings = env_bindings(&entries);
+        let bindings = env_bindings(&entries).unwrap();
         assert_eq!(bindings[0].variable, "CANIC_USER_HUB");
         assert_eq!(bindings[0].canister_id, USER_HUB);
     }
@@ -433,7 +454,8 @@ mod tests {
             registry_entry(USER_HUB, Some("user_hub")),
             registry_entry(ROOT, Some("root")),
             registry_entry(USER_SHARD_A, Some("user-shard")),
-        ]);
+        ])
+        .unwrap();
 
         assert_eq!(
             bindings
@@ -458,11 +480,39 @@ mod tests {
         let bindings = env_bindings(&[
             registry_entry(ROOT, None),
             registry_entry(USER_HUB, Some("user_hub")),
-        ]);
+        ])
+        .unwrap();
 
         assert_eq!(bindings[0].variable, "CANIC_CANISTER");
         assert_eq!(bindings[0].canister_id, ROOT);
         assert_eq!(bindings[0].role, None);
+    }
+
+    #[test]
+    fn bindings_reject_numbered_names_that_collide_with_another_role() {
+        let entries = [
+            registry_entry(USER_SHARD_A, Some("user_shard")),
+            registry_entry(USER_SHARD_B, Some("user_shard")),
+            registry_entry(USER_HUB, Some("user_shard_1")),
+        ];
+        let error = env_bindings(&entries).expect_err("export collision must refuse");
+        std::assert_matches!(
+            error,
+            InfoEnvCommandError::BindingCollision {
+                variable,
+                first_canister,
+                second_canister,
+            } if variable == "CANIC_USER_SHARD_1"
+                && first_canister == USER_SHARD_A
+                && second_canister == USER_HUB
+        );
+        let mut reversed = entries.to_vec();
+        reversed.reverse();
+        std::assert_matches!(
+            env_bindings(&reversed),
+            Err(InfoEnvCommandError::BindingCollision { variable, .. })
+                if variable == "CANIC_USER_SHARD_1"
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! Deterministic state access and DTO conversion for root-owned physical Canisters.
 
 pub mod capacity_import;
+mod release;
 
 use crate::storage::stable::canister_pool::{
     CanisterPoolAssetOriginRecord, CanisterPoolAssetRecord, CanisterPoolAssetStatusRecord,
@@ -1879,6 +1880,8 @@ fn asset_to_dto(canister_id: Principal, asset: CanisterPoolAssetRecord) -> Canis
 
 #[cfg(test)]
 mod tests {
+    mod release;
+
     use super::*;
     use canic_core::ids::IntentId;
 

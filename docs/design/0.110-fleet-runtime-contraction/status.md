@@ -43,11 +43,12 @@ FR1/CS1 and the other session's qualification retain their separate owners.
 
 ## Maintained scope
 
-The maintainer reports 0.110.50 published and selected continuation of the
-accepted FR1 whole-Fleet release-to-capacity batch. The .50 corrective work,
-including RD1/CANIC-191, CANIC-190 and CANIC-192, is not reopened. Packages remain
-.50; FR1 is incomplete and no next patch is assigned. The blob integration uses
-its own worktree and is not merged or modified by this batch.
+The maintainer reports 0.110.51 published and selected continuation of the
+accepted FR1 whole-Fleet release-to-capacity batch. Published corrections,
+including RD1/CANIC-191, CANIC-190 and CANIC-192, are not reopened. Packages remain
+.51; completed Host/Backup corrections have an open .52 changelog draft while
+incomplete FR1 remains in root `Unreleased`. Sibling blob implementation is
+outside this batch; the independent service must have no Canic dependency.
 
 The parked FR1 source has been restored and reconciled against .50. Keep
 `.canic/local-work/fr1-separated-20261001T200203Z/` as recovery evidence; do not
@@ -66,6 +67,41 @@ Declared-account observation now reads real ICRC balances with bounded signed
 queries and canonical default-subaccount identities; 30 selected native tests,
 Host Clippy and the exact account PocketIC proof pass. This does not yet discover
 every role/application account, qualify recovery artifacts or settle external effects.
+Root funding evidence now has a controller-only stable census, bounded to 32
+returned refills plus one lookahead. Exhausted notifications, historical
+accounts, refunds/CMC expiry, pending requests, accepted grants and rotations
+remain visible. Core's 84 refill tests, 10 Root funding tests, affected-package
+Clippy, fixture refresh and the real Ledger/CMC PocketIC case pass (226.87s;
+`fr1-funding-census-*`). This is evidence collection, not paid settlement or a
+producer fence, and adds no original-review closure count.
+The Host collection boundary now consumes those pages for every selected Root,
+bracketing bounded signed reads with certified owner custody and matching
+Registry observations. It retains exhausted/history evidence, checks page/header
+continuity and returns no partial census on refusal. Five native tests, Host
+Clippy and the extended ownership PocketIC case pass (0.88s; 70s runner;
+`fr1-host-funding-*`). Execution/CLI, settlement and quiescence remain separate
+unfinished FR1 requirements.
+Host receipt assessment now separates known no-transfer outcomes, completed
+conversions/refunds, residual review and unresolved Ledger/CMC work. Durable
+transfer uncertainty fixes reservation clearing and changed-fee replay after a
+lost Ledger reply. The required current-v1 record field is reinstall-only.
+Core/Host/Root selected native tests pass (86/42/17), along with affected-package
+Clippy, embedded refresh and the exact Ledger/CMC and Host PocketIC cases
+(229.71s/0.87s). Evidence: `fr1-funding-assessment-*` and
+`fr1-transfer-uncertainty-native.log`. This does not complete settlement or FR1.
+Coordinator treasury evidence now joins the bounded signed Host census through
+its existing funding query. Complete Root membership and policy/lifecycle binding
+are checked independently of order. Pending grants/rotations remain visible,
+while terminal history alone creates no pending work. All 44 selected Host tests,
+Host library/test Clippy and the exact signed-query PocketIC case pass (1.29s;
+72s runner; `fr1-coordinator-evidence-*`). Other obligation owners, quiescence
+and execution remain incomplete.
+Root pool evidence now has a controller-only bounded singleton query preserving
+bootstrap Store/source holds, import progress and exhausted budgets, uncertain
+creation and pending handoff without new-work admission or mutation. All 62 pool
+native tests and affected-package Clippy pass; fixture refresh and exact PocketIC evidence
+remain pending (`fr1-pool-census-*`). Host collection, provisioning/child-funding
+owners, quiescence and execution remain unfinished.
 CS1 follows FR1. The normative [design](0.110-design.md) and independent
 [size follow-through amendment](2026-09-28-toko-size-follow-through.md) retain
 accepted scope; B3/B4 remain stopped/deferred and the human closeout gate remains.
@@ -336,8 +372,9 @@ disposable-live-environment restore test remains intentionally ignored. These
 corrections do not close upload completion, consistent capture or restore
 authority findings, and do not enable fresh live backup execution.
 
-The conservative counted set is 27 distinct original findings after R5
-filesystem and retention qualification. Duplicates map to their original primary finding;
+The conservative counted set is 31 distinct original findings after R5
+filesystem/retention, output/checksum and low export/reset qualification. Duplicates map to
+their original primary finding;
 partial corrections and unrun native macOS qualification are excluded:
 
 - R1: `core-intent-replay-1`.
@@ -354,6 +391,27 @@ partial corrections and unrun native macOS qualification are excluded:
   `backup-persistence-10`.
 - R6: `xc-async-1`.
 - Filesystem/governance: `host-icp-network-11`, `xc-contracts-5`, `xc-contracts-6`.
+- Simple output/checksum corrections: `host-icp-network-10`, `backup-persistence-12`.
+- Low export/reset corrections: `cli-core-5`, `host-icp-network-9`.
+
+The simple corrections accept additive fields in ICP-owned balance, snapshot
+inventory and known visibility output, and compare valid backup artifact hex
+digests independent of letter case, including restore-preview projections.
+Missing/malformed consumed fields, unknown visibility variants and different
+artifact bytes still reject. Focused native evidence lives under
+`target/review-validation/simple-review-*`; the wider ICP selection encountered
+two sandbox-denied HTTP listener tests, which are outside these parsing changes.
+All 66 selected tests and affected-package library/test lint pass; Host lint uses
+`--no-deps` to exclude a separate in-progress Core refill panic-doc warning.
+
+The low export/reset corrections reject duplicate shell variables before output
+and discard only the exact simulator directory without applying load traversal
+bounds to its contents. Three filesystem regressions qualify deep-tree reset,
+interior-link target preservation, terminal replay and instance-root link refusal
+with recovery. Seven CLI export tests qualify deterministic collision refusal and
+maintained normal exports. Evidence: `target/review-validation/low-review-*.log`.
+Host/CLI all-feature library/test Clippy passes with `--no-deps` and warnings
+denied; scoped formatting and whitespace checks pass.
 
 This is a tracked minimum, not a completed disposition of all 401 findings.
 

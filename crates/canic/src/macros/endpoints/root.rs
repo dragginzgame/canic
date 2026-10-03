@@ -1075,12 +1075,14 @@ macro_rules! canic_emit_root_status_endpoint {
             FleetAuthority,
             FleetState,
             Funding,
+            FundingRelease(Option<u64>),
             Inventory,
             #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusRequest),
             Pool(::canic::dto::pool::CanisterPoolStatusRequest),
             PoolImport(::canic::dto::pool_import::PoolImportIdentity),
             PoolImportContext,
+            PoolRelease,
             StoreOverview,
         }
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
@@ -1101,12 +1103,14 @@ macro_rules! canic_emit_root_status_endpoint {
             FleetAuthority(::canic::dto::fleet_subnet_root::FleetSubnetRootAuthority),
             FleetState(::canic::dto::state::FleetStateResponse),
             Funding(::canic::dto::root::RootFundingStatusResponse),
+            FundingRelease(::canic::dto::root::RootFundingReleaseResponse),
             Inventory(::canic::dto::fleet_subnet_root::FleetSubnetRootCanisterSummary),
             #[cfg(canic_capability_root_delegation)]
             IssuerRenewal(::canic::dto::auth::RootIssuerRenewalStatusResponse),
             Pool(::canic::dto::pool::CanisterPoolResponse),
             PoolImport(::canic::dto::pool_import::PoolImportStatus),
             PoolImportContext(::canic::dto::pool_import::PoolImportContext),
+            PoolRelease(::canic::dto::root::RootPoolReleaseResponse),
             StoreOverview(::canic::dto::template::WasmStoreOverviewResponse),
         }
         #[$crate::canic_query(requires(caller::is_controller()))]
@@ -1124,6 +1128,7 @@ macro_rules! canic_emit_root_status_endpoint {
                     | RootStatusRequest::Pool(_)
                     | RootStatusRequest::PoolImport(_)
                     | RootStatusRequest::PoolImportContext
+                    | RootStatusRequest::PoolRelease
                     | RootStatusRequest::StoreOverview
             );
             $crate::__internal::core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::require_root_status_variant_allowed(prepared)?;
@@ -1173,6 +1178,10 @@ macro_rules! canic_emit_root_status_endpoint {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_funding_status()
                         .map(RootStatusResponse::Funding)
                 }
+                RootStatusRequest::FundingRelease(start_after) => {
+                    $crate::__internal::control_plane::api::lifecycle::LifecycleApi::root_funding_release_status(start_after)
+                        .map(RootStatusResponse::FundingRelease)
+                }
                 RootStatusRequest::Inventory => {
                     $crate::__internal::control_plane::api::lifecycle::LifecycleApi::fleet_subnet_root_canister_summary()
                         .map(RootStatusResponse::Inventory)
@@ -1191,6 +1200,10 @@ macro_rules! canic_emit_root_status_endpoint {
                 RootStatusRequest::PoolImportContext => {
                     $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::import_context()
                         .map(RootStatusResponse::PoolImportContext)
+                }
+                RootStatusRequest::PoolRelease => {
+                    $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::release_status()
+                        .map(RootStatusResponse::PoolRelease)
                 }
                 RootStatusRequest::Pool(request) => {
                     $crate::__internal::control_plane::api::canister_pool::CanisterPoolApi::status(

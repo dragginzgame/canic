@@ -298,6 +298,41 @@ fn parses_snapshot_inventory_json() {
     );
 }
 
+#[test]
+fn snapshot_inventory_accepts_additive_fields_and_requires_snapshot_identities() {
+    let inventory =
+        serde_json::from_value::<super::snapshot::IcpSnapshotInventory>(serde_json::json!({
+            "snapshots": [{"snapshot_id": "snapshot-1", "source": "upstream"}],
+            "canister": "aaaaa-aa"
+        }))
+        .expect("additional upstream fields are informational");
+    assert_eq!(inventory.snapshots[0].snapshot_id, "snapshot-1");
+
+    for invalid in [
+        serde_json::json!({"canister": "aaaaa-aa"}),
+        serde_json::json!({"snapshots": [{}]}),
+        serde_json::json!({"snapshots": "invalid"}),
+    ] {
+        assert!(serde_json::from_value::<super::snapshot::IcpSnapshotInventory>(invalid).is_err());
+    }
+}
+
+#[test]
+fn visibility_accepts_additive_fields_without_changing_its_authority() {
+    for visibility in [
+        IcpCanisterVisibility::Controllers,
+        IcpCanisterVisibility::Public,
+        IcpCanisterVisibility::AllowedViewers(vec![::candid::Principal::anonymous()]),
+    ] {
+        let mut output = serde_json::to_value(&visibility).unwrap();
+        output["description"] = serde_json::json!("upstream metadata");
+        assert_eq!(
+            serde_json::from_value::<IcpCanisterVisibility>(output).unwrap(),
+            visibility
+        );
+    }
+}
+
 // Ensure current ICP CLI status JSON parses into the typed host shape.
 #[test]
 fn parses_canister_status_report_json() {

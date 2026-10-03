@@ -308,8 +308,11 @@ fn validate_artifact_check(
         validate_checksum_hash("artifact_validation.checks[].checksum_actual", actual)?;
     }
     let checksum_verified = check.exists
-        && check.checksum_expected.is_some()
-        && check.checksum_expected == check.checksum_actual;
+        && check
+            .checksum_expected
+            .as_deref()
+            .zip(check.checksum_actual.as_deref())
+            .is_some_and(|(expected, actual)| expected.eq_ignore_ascii_case(actual));
     require_projection(
         "artifact_validation.checks[].checksum_verified",
         check.checksum_verified == checksum_verified,
@@ -323,7 +326,10 @@ fn artifact_check_matches_upload(
     let checksum_matches = match &upload.artifact_checksum {
         Some(checksum) => {
             checksum.algorithm == check.checksum_algorithm
-                && Some(checksum.hash.as_str()) == check.checksum_expected.as_deref()
+                && check
+                    .checksum_expected
+                    .as_deref()
+                    .is_some_and(|expected| checksum.hash.eq_ignore_ascii_case(expected))
         }
         None => check.checksum_expected.is_none(),
     };

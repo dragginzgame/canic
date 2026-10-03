@@ -34,9 +34,24 @@ pub struct IcpRefillOperation {
     pub memo: Vec<u8>,
     pub created_at_time_ns: u64,
     pub ledger_block_index: Option<u64>,
+    pub transfer_uncertain: bool,
     pub notify_attempts: u32,
     pub cycles_sent: Option<Nat>,
     pub status: IcpRefillStatus,
     pub error_code: Option<IcpRefillErrorCode>,
     pub error_message: Option<String>,
+    pub refund_block_index: Option<u64>,
+    pub transaction_too_old_min_block_index: Option<u64>,
+}
+
+/// A bounded, key-ordered census of retained refill evidence for Fleet release.
+///
+/// Includes terminal and non-resumable records: neither retry exhaustion nor a
+/// later completed operation proves an earlier paid effect settled. Source
+/// accounts remain relevant even after completion. This is a time-local read,
+/// not a producer fence, settlement decision or authority to repeat an effect.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct IcpRefillReleasePage {
+    pub operations: Vec<IcpRefillOperation>,
+    pub next_after: Option<u64>,
 }

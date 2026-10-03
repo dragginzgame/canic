@@ -1,6 +1,6 @@
 //! Module: pic::fleet_registry::baseline::tests::funding_inventory
 //!
-//! Responsibility: qualify controller directory reads against a real active Component tree.
+//! Responsibility: qualify controller directory and funding census reads against live fixtures.
 //! Boundary: query-only coverage retains member authorization and exact current-head checks.
 
 use candid::{CandidType, Deserialize, Principal, decode_one, encode_one};
@@ -13,18 +13,96 @@ use canic::{
     ids::{ComponentBinding, ComponentChildBinding},
     protocol,
 };
+use canic_control_plane::dto::root::{RootFundingReleaseResponse, RootFundingStatusResponse};
 use ic_testkit::pic::PocketIc;
 
 #[derive(CandidType)]
 enum Request {
     ComponentDirectoryHead(ComponentDirectoryHeadRequest),
     ComponentDirectoryPage(Box<ComponentDirectoryPageRequest>),
+    FundingRelease(Option<u64>),
 }
 
 #[derive(CandidType, Deserialize)]
 enum Response {
     ComponentDirectoryHead(ComponentDirectoryHead),
     ComponentDirectoryPage(ComponentDirectoryPageResponse),
+    FundingRelease(Box<RootFundingReleaseResponse>),
+}
+
+/// Observe the real Ledger/CMC completion through the controller-only release census.
+pub(super) fn assert_release_funding(
+    pic: &PocketIc,
+    root: Principal,
+    expected: &RootFundingStatusResponse,
+) {
+    let balance = pic.cycle_balance(root);
+    let read = |caller, cursor| {
+        query(
+            pic,
+            root,
+            caller,
+            protocol::CANIC_ROOT_STATUS,
+            Request::FundingRelease(cursor),
+        )
+    };
+    let Response::FundingRelease(page) = read(Principal::anonymous(), None).unwrap() else {
+        panic!("expected release funding census");
+    };
+    assert_eq!(page.fleet_subnet_root, root);
+    assert_eq!(page.policy_hash, expected.policy_hash);
+    assert_eq!(page.policy_generation, expected.policy_generation);
+    assert_eq!(page.icp_refill_policy, expected.icp_refill_policy);
+    assert_eq!(page.current_request, expected.current_operation);
+    assert_eq!(page.accepted_grant, None);
+    assert_eq!(page.rotation_current, None);
+    assert_eq!(page.icp_refills.len(), 1);
+    assert_eq!(page.next_after, None);
+    let entry = &page.icp_refills[0];
+    assert!(!entry.transfer_uncertain);
+    let refill = expected
+        .latest_icp_refill
+        .as_ref()
+        .expect("real completed refill");
+    assert_eq!(entry.response.operation_id, refill.response.operation_id);
+    assert_eq!(entry.response.status, refill.response.status);
+    assert_eq!(
+        entry.response.ledger_block_index,
+        refill.response.ledger_block_index
+    );
+    assert_eq!(entry.response.cycles_sent, refill.response.cycles_sent);
+    assert_eq!(entry.amount_e8s, refill.amount_e8s);
+    assert_eq!(entry.source_canister, root);
+    assert_eq!(entry.source_subaccount, None);
+    assert_eq!(entry.target_canister, root);
+    assert_eq!(
+        entry.ledger_canister_id,
+        Principal::from_text("ryjl3-tyaaa-aaaaa-aaaba-cai").unwrap()
+    );
+    assert_eq!(
+        entry.cmc_canister_id,
+        Principal::from_text("rkp4c-7iaaa-aaaaa-aaaca-cai").unwrap()
+    );
+    assert_eq!(entry.refund_block_index, None);
+    let Response::FundingRelease(replayed) = read(Principal::anonymous(), None).unwrap() else {
+        panic!("expected release funding replay");
+    };
+    assert_eq!(encode_one(&page).unwrap(), encode_one(&replayed).unwrap());
+    let Response::FundingRelease(end) =
+        read(Principal::anonymous(), Some(entry.record_id)).unwrap()
+    else {
+        panic!("expected final release funding page");
+    };
+    assert!(end.icp_refills.is_empty());
+    assert_eq!(end.next_after, None);
+    let denied = read(Principal::from_slice(&[99; 29]), None)
+        .err()
+        .expect("controller required");
+    assert_eq!(
+        denied.code(),
+        canic::diagnostics::codes::AUTHORITY_UNAVAILABLE.raw_code()
+    );
+    assert_eq!(pic.cycle_balance(root), balance);
 }
 
 pub(super) fn assert_controller_directory(

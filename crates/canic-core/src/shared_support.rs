@@ -3,7 +3,9 @@ pub mod format {
 }
 
 pub mod icp_refill {
-    pub use crate::domain::icp_refill::icp_refill_outcome_is_resumable;
+    pub use crate::domain::icp_refill::{
+        IcpRefillErrorCode, IcpRefillStatus, icp_refill_outcome_is_resumable,
+    };
 }
 
 /// Canonical Fleet admission policy compilation shared with protected host planning.

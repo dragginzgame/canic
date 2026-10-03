@@ -232,7 +232,7 @@ pub fn complete_allocation(
     Ok((next, allocation))
 }
 
-/// Reject state trees that could escape the one owned directory during load or reset.
+/// Bound state traversal and reject unsafe filesystem entries before loading an instance.
 pub fn validate_tree(directory: &Path) -> Result<(), LocalFleetError> {
     let mut pending = vec![(directory.to_path_buf(), 0_u16)];
     let mut count = 0_usize;

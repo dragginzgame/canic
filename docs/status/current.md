@@ -1,7 +1,248 @@
-# Current handoff — 2026-10-02
+# Current handoff — 2026-10-03
 
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
+
+## Cross-Component caller authority assessment — 2026-10-03
+
+At the maintainer's request, assess the missing .51 membership flow as a whole
+rather than adding a Root lookup endpoint. The
+[authentication proposal](../architecture/authentication.md#receiver-local-caller-authority--design-proposal-2026-10-03)
+selects receiver-specific managed binding projections maintained by protected
+Directory publication during activation and removal. Ordinary endpoint guards
+combine IC caller identity with local policy. Strict revocation completes only
+after every affected receiver has a durable denial fence; outages block that
+completion, while previously committed ordinary calls remain available.
+The revocation preference question has no answer at the time of this handoff;
+strict completion is the stated design baseline, not recorded maintainer acceptance.
+
+Existing role attestations require a caller-bound direct-query certificate and
+cannot be autonomously obtained through the normal canister update flow. Their
+request-supplied epoch is also not a Registry-backed revocation protocol. Correct
+the active command/status names and separate verifier identity checks from
+endpoint-owned allowed-role policy. The design distinguishes metrics target
+selection from incoming caller admission and covers dynamic children, receiver
+enrollment, in-flight effects, bounded state, lost replies, same-release recovery
+and required cross-Root evidence. It is a proposal, not a new runtime contract
+or a scheduled later minor. Implementation has not begun.
+
+The [memory guide](../features/runtime/stable-memory-layout.md#native-composed-tests)
+now documents host-first bootstrap on every native test thread, composed
+admission/grants and repeated-upgrade qualification beyond package alignment.
+The inspected Toko generator fixture asserts the role-validation build marker;
+that marker alone is not evidence that its selected Wasm graph was checked.
+Document the E137 cause-loss boundary and a bounded ic-memory cold-reopen
+qualification request; no library defect is established. Downstream source was
+read-only, and no failing Toko journey was reproduced. Keep all concurrent FR1
+and .52 work intact. Runtime, version, Git and deployment surfaces are unchanged.
+Document semantics and scoped whitespace checks pass. This documentation/design
+assessment adds no runtime qualification; the complete FR1 batch remains
+unfinished and not push-ready.
+
+## FR1 Root pool evidence — 2026-10-03
+
+Controller-only `canic_root_status::PoolRelease` now projects the bounded pool
+singleton without new-work admission. It preserves bootstrap Store/source holds,
+retained import reservations/progress and exhausted budgets, creation uncertainty
+and pending handoff. Released import history remains visible; queries do not
+resume effects, clear records or replenish authority. Foreign Root bindings
+refuse the complete result. Host integration and provisioning/child-funding
+evidence remain unfinished, so this is not a complete settled predicate.
+
+All 62 selected pool native tests and affected-package library/test Clippy pass
+with warnings denied. Scoped formatting, document semantics and whitespace checks
+pass. Embedded fixture refresh/verification and the extended exact import
+PocketIC journey are pending. Evidence is retained
+under `target/review-validation/fr1-pool-census-*.log`. This is runtime work and
+requires fresh fixture qualification. Keep FR1 in root `Unreleased`, preserve
+the parallel .52 corrections and keep the original-review count at 31/401.
+The complete FR1 batch remains unfinished and not push-ready.
+
+## FR1 Coordinator funding evidence — 2026-10-03
+
+The Host funding collector now retains the existing controller-only Coordinator
+funding status alongside every Root's pages. It shares the signed/certified
+custody and Registry bracket, per-reply/aggregate byte bounds, bounded decoding
+and query/census deadlines. Every reviewed Root must appear exactly once with
+matching policy and lifecycle state; ordering is irrelevant. Missing, duplicate,
+mismatched or malformed evidence refuses the complete result.
+
+The assessment includes pending Coordinator grants even when Root has no pending
+request, deduplicates operation IDs across both sides and reports Coordinator
+rotation separately. It retains cycle balances, reservation windows and terminal
+decisions exactly. Terminal history alone creates no pending operation; a Root
+still awaiting a terminal result stays visible. This reuses current endpoints
+and adds no canister runtime/schema change, paid effect or settlement authority.
+
+All 44 selected Host release tests and Host library/test Clippy with warnings
+denied pass. The extended signed-query PocketIC case passes in 1.29s (72s runner),
+covering exact combined evidence, pending grants, malformed/missing/mismatched
+Coordinator replies, replay and unchanged Root/Coordinator balances. Scoped
+formatting, document semantics and whitespace checks pass. This step changes
+Host collection and its wire fixture, with no canister runtime change. No embedded
+fixture refresh or broad validation was run. Evidence is retained under
+`target/review-validation/fr1-coordinator-evidence-*.log`.
+
+FR1 remains incomplete and not push-ready: provision/import/child-funding
+obligations, quiescence and handoff, account recovery, existing-journal execution
+and CLI, whole-Fleet interruption/conservation proof and retirement contraction
+remain. The current evidence is time-local; no cross-role atomic snapshot or
+complete settled predicate is claimed. Keep incomplete work in root `Unreleased`,
+preserve the parallel open .52 corrections and the 31/401 original-ID count.
+
+## FR1 funding assessment and transfer uncertainty — 2026-10-02
+
+Host now projects the retained funding pages into receipt assessments while
+keeping original accounts, pending Coordinator operations and policy rotation.
+Exact conversions/refunds are historical evidence; missing refund blocks need
+residual review, malformed receipts are distinct, and uncertain transfers retain
+Ledger/CMC reconciliation. Known unissued or explicitly refused transfers are
+not made automatic reconciliation blockers.
+
+That distinction exposed a runtime defect: expiry/rejection could clear a
+reservation after an earlier lost Ledger reply, and BadFee could change the
+original transfer identity. A required current-record `transfer_uncertain` fact
+is now persisted before dispatch, cleared by success/duplicate or a first
+explicit refusal, and preserved after a prior lost reply. Uncertain refusal or
+expiry retains the reserved allowance; BadFee cannot rewrite its original fee.
+This current-v1 schema change follows pre-1.0 reinstall-only policy.
+
+Core's 86 selected refill tests, 42 Host release tests and 17 selected Root
+funding tests pass. Affected-package library/test Clippy passes with warnings
+denied, including governed test code. Embedded fixture refresh passes with hash
+`ce51c5a228f8c08eab5cf6f5e2bc7ea8ba1e6bbead9f0201482dfbc3ce0f6704`.
+The exact real Ledger/CMC PocketIC case passes in 229.71s (307s runner), including
+completed transfer uncertainty, authorization, retained evidence and balance-safe
+query replay. The exact Host signed-query/assessment PocketIC case also passes
+in 0.87s (144s runner), preserving exact account/page evidence and distinguishing
+completed, uncertain and known-refused transfers. Final read-only fixture
+verification, scoped formatting, document semantics and whitespace checks pass. Logs:
+`target/review-validation/fr1-transfer-uncertainty-native.log` and
+`target/review-validation/fr1-funding-assessment-*.log`.
+
+FR1 remains unfinished and not push-ready. Complete paid-obligation collection,
+quiescence/handoff, account recovery, existing-journal execution/CLI and whole-Fleet
+interruption/conservation evidence still precede retirement contraction. Preserve
+parallel Host/CLI/Backup changes and the original-review count of 31/401. No
+broad gate, version/Git publication, deployment or sibling mutation is authorized.
+
+## FR1 Host funding collection — 2026-10-02
+
+Continued the accepted FR1 batch after qualification of Root's funding census.
+Host now collects and retains exact funding pages for every selected Registry
+Root. It verifies reviewed signer/network and Registry selection, brackets reads
+with certified Coordinator/Root custody and unchanged Registry observations,
+and rejects policy/header/participant drift, duplicate operation IDs or invalid
+cursors without returning a partial result. Bounded signed queries issue no
+management updates and transfer no funds. Historical/exhausted records remain
+evidence rather than being interpreted as either settlement or automatic blockers.
+
+Five native collector tests pass, including sparse/max cursors, full record
+capacity, exact exhausted evidence and a tiny wire payload with excessive
+skipping work. Host library/test Clippy passes with warnings denied. The existing
+certified ownership PocketIC case now also covers funding collection, replay,
+unchanged balances and network/custody/Registry/policy/pagination/decode refusals;
+it passes in 0.88s (70s runner, mostly native compilation). Evidence:
+`target/review-validation/fr1-host-funding-{native-final,clippy-final,pocketic,docs}.log`.
+Scoped formatting and document semantics pass. Runtime/Wasm source is unchanged
+by this step, so the prior embedded fixture qualification remains applicable.
+
+The collector is a Host library boundary, not yet a durable release executor or
+CLI. It does not establish a cross-page snapshot, quiesce producers, classify
+settlement, resolve default Ledger IDs, discover arbitrary application accounts
+or qualify account-recovery artifacts. Those owners and complete Coordinator,
+provision/import/child-funding obligations remain before destructive execution.
+FR1 remains unfinished and not push-ready. Changelog notes stay under root
+`Unreleased`; completed parallel fixes retain the open .52 draft. No broad
+suite, version/Git publication, deployment or sibling mutation ran.
+
+## Low code-review corrections — 2026-10-02
+
+At the maintainer's request, fix `cli-core-5` and `host-icp-network-9` against
+current source. `info env` now returns typed `BindingCollision` before shell or
+JSON output when a numbered duplicate role collides with another role's variable.
+Normal numbered exports retain their existing names and deterministic order.
+Exact-session local reset no longer applies load traversal limits to the tree
+being discarded; its root must be a real directory. Interior symlink targets
+remain untouched, interruption resumes and terminal replay keeps the same receipt.
+
+Seven CLI export tests and three native reset regressions pass. Host/CLI
+all-feature library/test Clippy passes with `--no-deps` and warnings denied;
+scoped formatting and whitespace checks pass. Evidence:
+`target/review-validation/low-review-*.log`.
+The counted original-ID minimum is now 31/401. Both changelog views extend the
+existing .52 draft; active frontend/local-operation guides describe the fixes.
+These fixes are complete for review; the complete FR1 batch remains unfinished
+and not push-ready. No broad gate, simulator journey, versioning, Git publication,
+deployment or sibling mutation ran. Pre-existing funding work is preserved.
+
+## FR1 Root funding evidence — active after .51, 2026-10-02
+
+The maintainer reports .51 live and authorizes continued FR1 work. Packages
+remain .51; completed parallel Host/Backup corrections belong in the open .52
+changelog draft, with published .51 notes preserved. FR1 remains in root
+`Unreleased`; no whole-Fleet release command or destructive executor is exposed.
+
+Root now exposes controller-only `FundingRelease : opt nat64` status. Its stable
+census returns at most 32 refills per page, preserves exhausted and historical
+records independently of resumable indexes, and includes exact funding requests,
+accepted grants, pending rotations, accounts, refunds and CMC expiry evidence.
+Key/record and Root participant conflicts refuse without mutation. This query
+does not settle effects, fence producers, resolve default Ledgers or observe
+balances; pages are time-local until the release owner establishes quiescence.
+
+Core's 84 selected refill tests and all 10 Root funding tests pass. Affected Core,
+Control Plane, facade and Internal Testing library/test Clippy passes with all
+features and warnings denied. Embedded peer refresh and final read-only
+verification pass, retaining SHA-256
+`6d4126c235ef483d5fdfd44cc740fb1b5ecaef28cf25a167a4d2b79fec2d895a`.
+The exact real Ledger/CMC fallback PocketIC case passes in 226.87s (243s runner),
+including controller denial, exact retained transfer evidence, pagination,
+repeat-query stability and unchanged cycle balances. Evidence:
+`target/review-validation/fr1-funding-census-*`, with the successful PocketIC
+run in `fr1-funding-census-pocketic-verified.log`.
+
+Earlier attempts were blocked by local-listener sandbox restrictions or stopped
+while waiting for the other session's build lock. The first compiled PocketIC
+attempt exposed a test import relying on the facade's optional Control Plane
+feature; the helper now uses its existing direct Control Plane dependency.
+The corrected case and final governed-feature lint pass. All four Core census
+regressions also pass again after the panic-free cursor cleanup. Preserve parallel
+Host/CLI/Backup edits. Scoped formatting and document semantics pass.
+
+The complete FR1 batch remains unfinished and is not push-ready. Next work is
+complete role-owned paid/account evidence, quiescence and bounded handoff,
+account recovery, existing-journal execution and CLI, whole-Fleet interruption
+proof and obsolete retirement contraction. No broad gate, version transaction,
+commit, publication, deployment or sibling mutation ran.
+
+## Simple code-review corrections — 2026-10-02
+
+At the maintainer's request, verify small original-review findings against current
+source and fix `host-icp-network-10` and `backup-persistence-12`. ICP CLI balance,
+snapshot inventory and known visibility output accept additive informational
+fields while retaining required-field/type checks and unknown-variant refusal.
+Backup artifact verification and restore-preview projections compare valid
+SHA-256 hex independent of letter case. Malformed expected hashes return typed
+`InvalidHash`; different artifact bytes still return `ChecksumMismatch`.
+
+Seven Backup artifact tests, 17 restore-preview tests and 42 selected Host tests
+pass. The initial wider ICP selection passed 72 cases but two unrelated local
+HTTP listener cases failed with sandbox `PermissionDenied`; affected parsing
+selections pass. Backup library/test Clippy passes with warnings denied. Host's
+dependency-inclusive lint stops on a pre-existing missing-panic-doc warning in
+the in-progress Core `IcpRefillOps::release_page`; its owning source is untouched.
+Host library/test Clippy then passes with `--no-deps` and warnings denied,
+checking the affected package without linting those separate dependency edits.
+Scoped formatting and whitespace checks pass.
+Evidence: `target/review-validation/simple-review-*.log`.
+
+The original-ID tracker now conservatively counts 29 of 401 findings. Both
+changelog views record the corrections in the .52 draft and active operation guides describe
+the corrected inputs. These bounded fixes are complete for review; the complete
+accepted FR1 batch remains unfinished and is not push-ready. No broad gate,
+version change, Git publication, deployment or sibling mutation ran. Preserve
+the pre-existing funding edits independently.
 
 ## Service-authority denial wording — 2026-10-02
 
@@ -1313,7 +1554,7 @@ The [0.110 tracker](../design/0.110-fleet-runtime-contraction/status.md#accepted
 owns remaining R2–R8 work. Open outcomes include exhausted/older-unknown imports,
 remaining funding accounting, allocation-scoped caller/issuer/funding authority,
 backup upload/capture/restore authority, background-driver trap recovery and
-operation-specific convergence. Its conservative count is 27 of 401 original
+operation-specific convergence. Its conservative count is 31 of 401 original
 findings; do not treat partial corrections as closed or the full queue as a gate
 for every bounded corrective release.
 

@@ -51,6 +51,10 @@ needed by Fleet operations. ICP selection is not authority to shrink that closur
 
 ## Management inspection
 
+Host observation accepts additive ICP CLI JSON fields while validating the
+fields it consumes. Unknown visibility variants still reject because their
+observation semantics are undefined.
+
 ```sh
 canic --environment ic inspect management <canister-principal> --json
 ```

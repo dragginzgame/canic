@@ -152,7 +152,7 @@ impl Eq for IcpCli {}
 ///
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-#[serde(tag = "type", content = "value", deny_unknown_fields)]
+#[serde(tag = "type", content = "value")]
 pub enum IcpCanisterVisibility {
     AllowedViewers(Vec<candid::Principal>),
     Controllers,

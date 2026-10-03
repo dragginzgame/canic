@@ -8,17 +8,25 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Resume the unfinished whole-Fleet release-to-capacity batch: durable observation
-  budgets, authenticated ownership and declared Ledger-account observations, and
-  release-specific authority fencing. Equivalent default subaccounts share one
-  review identity and cannot be counted twice.
-  Current journal/fence contracts change through the pre-1.0 reinstall-only cut;
-  no whole-Fleet release command is available yet. Spent read reservations alone
-  no longer block explicit reset; uncertain effects still require reconciliation.
+- Continue whole-Fleet release-to-capacity work with bounded ownership, declared
+  account, Root pool obligations and Root/Coordinator funding observations, plus
+  release authority fencing. Pool evidence preserves exhausted import budgets,
+  creation uncertainty and held identities without admitting new work.
+  Completed history and spent read allowances do not independently block reset;
+  uncertain paid effects retain reconciliation. Durable Ledger uncertainty
+  preserves reserved funding and the original transfer identity after lost replies,
+  preventing changed-fee replay. Current journal, fence and refill record changes
+  are potentially breaking pre-1.0 reinstall-only hard cuts. The whole-Fleet release
+  command remains unfinished.
 
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- `0.110.52` accepts additive ICP CLI output fields and verifies equivalent
+  checksum hex casing in backup artifacts and restore previews. Rejects colliding
+  canister ID exports and permits exact local reset of unloadable simulator trees.
+  Corrects authentication endpoint and composed native-test initialization guidance.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

@@ -1,6 +1,6 @@
 # Stable-memory layout
 
-Canic uses published ic-memory 0.15.2 and a single MemoryManager per canister.
+Canic uses published ic-memory 0.15.3 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
@@ -24,6 +24,30 @@ resolution and authority verification also observe only an existing runtime.
 Consumers can use `memory_id` / `default_memory_manager_memory_id` to resolve
 committed keys and `verify_authority` / `verify_default_memory_manager_authority`
 to check their fixed or logical requirements without replaying host admission.
+
+### Native composed tests
+
+Canic's own unit tests install a bootstrap hook under `cfg(test)`. An application
+compiling Canic as a dependency does not receive that hook. Initializing a
+database alone is not Canic test initialization, even when package identities
+have been unified.
+
+Use the same composed memory declarations and admission callback as the Wasm
+artifact. Bootstrap through the owning framework before the database's native
+initialization helper and before opening Canic stores:
+
+```rust
+canic::api::runtime::MemoryRuntimeApi::bootstrap_registry()
+    .expect("Canic composed memory bootstrap");
+// Run the application's generated database initialization helper next.
+```
+
+The default runtime is thread-local: run this ordering on every native thread
+that uses it. A process-global `Once` or a mutex serializing test bodies does
+not initialize another thread's runtime. Request-execution wrappers and the
+database's native helper retain their own startup/convergence responsibilities.
+Do not let the database choose a standalone bootstrap policy before the host
+has selected its composed policy and compiled bucket geometry.
 
 ## Capacity and selection
 
@@ -92,6 +116,41 @@ inactive features, native-only edges and procedural-macro subtrees do not count.
 Renamed runtime dependencies do count, and equal versions from different package
 sources are still distinct runtimes. Align the application's framework/database
 dependencies to one package identity, then qualify their composed lifecycle.
+
+Package identity alignment is necessary, not sufficient. Selected consumer
+APIs must compose with host admission, grants must accommodate the actual
+schema, and the database must verify/adopt the already committed host
+authority rather than starting an independent manager. Qualification covers
+fresh installation, repeated identical-Wasm upgrades and native initialization.
+Changing a dependency across a release boundary follows clean reinstall;
+repeated-upgrade evidence uses one exact selected release artifact.
+
+### Qualification failures and upstream feedback
+
+A direct Cargo fixture asserting `CANIC_ROLE_CONTRACT_VALIDATED=1` must separately
+retain evidence that the selected Wasm dependency graph passed role validation.
+The marker is the result of that validation, not a replacement for it. A manually
+asserted marker does not establish that a duplicate memory runtime was excluded.
+
+An unbootstrapped Canic receipt-backed intent store in a native consumer test
+identifies missing host initialization; database readiness alone does not satisfy
+it. A lifecycle trap carrying only `E137` identifies a generic invalid state.
+Canic currently projects memory bootstrap failures through that invariant path,
+so the code alone cannot distinguish declaration, policy, geometry, recovery or
+consumer-admission failures. Canic must retain the underlying typed cause at
+the bootstrap/lifecycle diagnostic boundary before assigning an upstream defect.
+
+Actionable ic-memory qualification feedback is a composed-host example and a
+repeated cold-reopen regression: bootstrap with one host policy and consumer
+admission, verify the consumer authority without replaying host admission, write
+selected stores, and reconstruct the runtime over the same backing twice with
+unchanged declarations and geometry. Each cold attempt runs admission; warm
+verification does not. Observe exact IDs, allocation authority and retained
+bytes, and assert typed failures with no candidate commitment on rejection.
+Include the native per-thread bootstrap ordering in the example. Canic-owned
+PocketIC evidence must additionally exercise its lifecycle participants and
+store restoration; a substrate regression cannot substitute for that proof.
+The reported Toko failures do not yet establish an ic-memory implementation bug.
 
 The 0.14 update retains fixed-ID declarations and bucket selection. It adds
 upstream limits to ledger recovery (including 16 MiB logical payloads, depth 32

@@ -15,13 +15,14 @@ use crate::{
         IcpRefillRecord, IcpRefillRecordErrorCode, IcpRefillRecordStatus, IcpRefillRecords,
         IcpRefillTriggerRecord,
     },
-    view::icp_refill::IcpRefillOperation,
+    view::icp_refill::{IcpRefillOperation, IcpRefillReleasePage},
 };
 use candid::{Nat, Principal};
 use std::{cell::RefCell, collections::BTreeMap};
 use thiserror::Error as ThisError;
 
 const ERROR_MESSAGE_MAX_CHARS: usize = 512;
+const RELEASE_PAGE_SIZE: usize = 32;
 
 thread_local! {
     static ICP_REFILL_DERIVED_INDEX: RefCell<IcpRefillDerivedIndex> =
@@ -419,6 +420,35 @@ impl From<IcpRefillOperationCreateInput> for IcpRefillRecordCreateInput {
 pub struct IcpRefillStoreOps;
 
 impl IcpRefillStoreOps {
+    /// Read at most 32 retained refills plus one lookahead from stable storage.
+    ///
+    /// Do not substitute the resumable index or latest record: exhausted CMC
+    /// notifications and historical source accounts must remain discoverable.
+    /// Callers must fence producers and reconcile paid effects separately before
+    /// treating a complete census as release evidence.
+    pub fn release_page(start_after: Option<u64>) -> Result<IcpRefillReleasePage, InternalError> {
+        let mut entries = IcpRefillRecords::page_after(start_after, RELEASE_PAGE_SIZE + 1);
+        for entry in &entries {
+            if entry.key.0 != entry.record.id {
+                return Err(IcpRefillRecordOpsError::IndexRecordMismatch {
+                    index: "release stable key",
+                    id: entry.key.0,
+                }
+                .into());
+            }
+        }
+        let has_more = entries.len() > RELEASE_PAGE_SIZE;
+        entries.truncate(RELEASE_PAGE_SIZE);
+        let next_after = entries.last().filter(|_| has_more).map(|entry| entry.key.0);
+        Ok(IcpRefillReleasePage {
+            operations: entries
+                .into_iter()
+                .map(|entry| record_to_operation(entry.record))
+                .collect(),
+            next_after,
+        })
+    }
+
     /// Rebuild all heap-only lookup and metric indexes from canonical records.
     pub fn rebuild_indexes() -> Result<(), InternalError> {
         IcpRefillRecordOps::rebuild_indexes()?;
@@ -557,6 +587,23 @@ impl IcpRefillStoreOps {
     ) -> Result<IcpRefillOperation, InternalError> {
         IcpRefillRecordOps::mark_transferred(id, ledger_block_index, now_ns)
             .map(record_to_operation)
+    }
+
+    /// Persist uncertainty before dispatch; an interrupted await must retain it.
+    pub fn mark_transfer_attempt_started(id: u64, now_ns: u64) -> Result<(), InternalError> {
+        update_record(id, now_ns, |record| record.transfer_uncertain = true).map(|_| ())
+    }
+
+    /// A refusal resolves only this attempt; an earlier lost reply remains uncertain.
+    pub fn record_transfer_refusal(
+        id: u64,
+        prior_uncertainty: bool,
+        now_ns: u64,
+    ) -> Result<(), InternalError> {
+        update_record(id, now_ns, |record| {
+            record.transfer_uncertain = prior_uncertainty;
+        })
+        .map(|_| ())
     }
 
     pub fn mark_duplicate_transferred(
@@ -1123,6 +1170,7 @@ impl IcpRefillRecordOps {
 
         let id = next_id()?;
         let record = IcpRefillRecord {
+            transfer_uncertain: false,
             id,
             operation_id: input.operation_id,
             trigger: input.trigger.into(),
@@ -1187,6 +1235,7 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
+            record.transfer_uncertain = false;
             record.ledger_block_index = Some(ledger_block_index);
             clear_error(record);
             record.status = IcpRefillRecordStatus::Transferred;
@@ -1199,6 +1248,7 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
+            record.transfer_uncertain = false;
             record.ledger_block_index = Some(ledger_block_index);
             set_error(
                 record,
@@ -1226,7 +1276,7 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.budget_reserved = false;
+            record.budget_reserved = record.transfer_uncertain;
             set_failure(
                 record,
                 IcpRefillErrorCode::LedgerTransferFailed,
@@ -1346,7 +1396,7 @@ impl IcpRefillRecordOps {
         now_ns: u64,
     ) -> Result<IcpRefillRecord, InternalError> {
         update_record(id, now_ns, |record| {
-            record.budget_reserved = false;
+            record.budget_reserved = record.transfer_uncertain;
             set_failure(
                 record,
                 IcpRefillErrorCode::TransferWindowStale,
@@ -1498,6 +1548,7 @@ fn truncate_error(error: String) -> String {
 
 fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
     IcpRefillOperation {
+        transfer_uncertain: record.transfer_uncertain,
         id: record.id,
         operation_id: record.operation_id,
         trigger: record.trigger.into(),
@@ -1521,6 +1572,8 @@ fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
         status: record.status.into(),
         error_code: record.error_code.map(Into::into),
         error_message: record.error_message,
+        refund_block_index: record.refund_block_index,
+        transaction_too_old_min_block_index: record.transaction_too_old_min_block_index,
     }
 }
 
@@ -1531,6 +1584,9 @@ fn record_to_operation(record: IcpRefillRecord) -> IcpRefillOperation {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::storage::stable::icp_refill::{
+        IcpRefillEntryRecord, IcpRefillRecordKey, IcpRefillRecordsData,
+    };
     use crate::test::seams;
 
     fn p(id: u8) -> Principal {
@@ -1539,6 +1595,7 @@ mod tests {
 
     fn record(id: u64, operation_id: [u8; 32], target: Principal) -> IcpRefillRecord {
         IcpRefillRecord {
+            transfer_uncertain: false,
             id,
             operation_id,
             trigger: IcpRefillTriggerRecord::Manual,
@@ -1572,6 +1629,119 @@ mod tests {
     fn reset_records() {
         IcpRefillRecords::clear_for_tests();
         ICP_REFILL_DERIVED_INDEX.with_borrow_mut(|index| *index = IcpRefillDerivedIndex::default());
+    }
+
+    #[test]
+    fn release_census_retains_exhausted_effects_and_historical_accounts() {
+        let _guard = seams::lock();
+        reset_records();
+        let mut exhausted = record(1, [1; 32], p(30));
+        exhausted.status = IcpRefillRecordStatus::Failed;
+        exhausted.error_code = Some(IcpRefillRecordErrorCode::NotifyMaxAttempts);
+        exhausted.ledger_block_index = Some(42);
+        exhausted.notify_attempts = 10;
+        exhausted.source_subaccount = Some([8; 32]);
+        let mut completed = record(2, [2; 32], p(30));
+        completed.status = IcpRefillRecordStatus::Completed;
+        completed.ledger_canister_id = p(40);
+        completed.ledger_block_index = Some(43);
+        completed.cycles_sent = Some(Nat::from(500_u64));
+        for entry in [&exhausted, &completed] {
+            IcpRefillRecords::insert(entry.clone());
+        }
+        IcpRefillStoreOps::rebuild_indexes().expect("rebuild");
+        assert_eq!(IcpRefillStoreOps::resumable_operation_count(), 0);
+        let before = IcpRefillRecords::data(0, 10);
+
+        let page = IcpRefillStoreOps::release_page(None).expect("complete census");
+        assert_eq!(
+            page.operations,
+            vec![
+                record_to_operation(exhausted),
+                record_to_operation(completed)
+            ]
+        );
+        assert_eq!(page.next_after, None);
+        assert_eq!(IcpRefillRecords::data(0, 10), before);
+        reset_records();
+    }
+
+    #[test]
+    fn release_census_preserves_refund_and_expired_cmc_evidence() {
+        let _guard = seams::lock();
+        reset_records();
+        let mut refunded = record(1, [1; 32], p(30));
+        refunded.status = IcpRefillRecordStatus::Refunded;
+        refunded.ledger_block_index = Some(42);
+        refunded.refund_block_index = Some(43);
+        let mut expired = record(2, [2; 32], p(30));
+        expired.status = IcpRefillRecordStatus::TransactionTooOld;
+        expired.ledger_block_index = Some(44);
+        expired.transaction_too_old_min_block_index = Some(100);
+        IcpRefillRecords::insert(refunded);
+        IcpRefillRecords::insert(expired);
+
+        // The stable census does not depend on a heap retry index being populated.
+        let page = IcpRefillStoreOps::release_page(None).expect("retained evidence");
+        assert_eq!(page.operations[0].refund_block_index, Some(43));
+        assert_eq!(page.operations[1].ledger_block_index, Some(44));
+        assert_eq!(
+            page.operations[1].transaction_too_old_min_block_index,
+            Some(100)
+        );
+        reset_records();
+    }
+
+    #[test]
+    fn release_census_pages_sparse_keys_without_dropping_lookahead_or_overflowing() {
+        let _guard = seams::lock();
+        reset_records();
+        for id in 1..=RELEASE_PAGE_SIZE {
+            let mut entry = record(1, [u8::try_from(id).expect("bounded page"); 32], p(30));
+            entry.id = u64::try_from(id).expect("bounded page") * 3;
+            IcpRefillRecords::insert(entry);
+        }
+        let full = IcpRefillStoreOps::release_page(None).expect("exactly full page");
+        assert_eq!(full.operations.len(), RELEASE_PAGE_SIZE);
+        assert_eq!(full.next_after, None);
+        let mut last = record(1, [255; 32], p(30));
+        last.id = u64::MAX;
+        IcpRefillRecords::insert(last);
+        let first = IcpRefillStoreOps::release_page(None).expect("first page");
+        assert_eq!(first.operations, full.operations);
+        assert_eq!(first.next_after, first.operations.last().map(|row| row.id));
+        let second = IcpRefillStoreOps::release_page(first.next_after).expect("last page");
+        assert_eq!(second.operations.len(), 1);
+        assert_eq!(second.operations[0].id, u64::MAX);
+        assert_eq!(second.next_after, None);
+        assert!(
+            IcpRefillStoreOps::release_page(Some(u64::MAX))
+                .expect("past final key")
+                .operations
+                .is_empty()
+        );
+        reset_records();
+    }
+
+    #[test]
+    fn release_census_rejects_corrupt_key_binding_without_partial_results() {
+        let _guard = seams::lock();
+        reset_records();
+        IcpRefillRecords::import(IcpRefillRecordsData {
+            entries: vec![IcpRefillEntryRecord {
+                key: IcpRefillRecordKey(4),
+                record: record(3, [3; 32], p(30)),
+            }],
+        });
+        let before = IcpRefillRecords::data(0, 10);
+        assert_eq!(
+            IcpRefillStoreOps::release_page(None)
+                .expect_err("corrupt identity")
+                .code(),
+            crate::diagnostics::codes::POSITION_CONFLICT
+        );
+        assert_eq!(IcpRefillRecords::data(0, 10), before);
+        reset_records();
     }
 
     #[test]

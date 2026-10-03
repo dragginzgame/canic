@@ -1,5 +1,7 @@
 //! Real signed queries and certificates qualify the collector, not runtime role quiescence.
 
+mod funding;
+
 use super::*;
 use candid::{CandidType, Principal};
 use canic_core::{
@@ -194,6 +196,7 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
             super::super::super::observation::ReleaseObservationError::Authority
         ))
     ));
+    funding::assert_census(&pic, &agent, &runtime, &review, &registry);
     pic.update_call(ids[1], operator, "replace", b"DIDL".to_vec())
         .unwrap();
     assert!(matches!(

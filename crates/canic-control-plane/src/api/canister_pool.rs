@@ -50,6 +50,11 @@ impl CanisterPoolApi {
         crate::workflow::canister_pool::capacity_import::status(identity).map_err(Into::into)
     }
 
+    /// Observe obligations even while a competing pool operation prevents new work.
+    pub fn release_status() -> Result<crate::dto::root::RootPoolReleaseResponse, Error> {
+        crate::workflow::canister_pool::release_status().map_err(Into::into)
+    }
+
     pub fn status(request: CanisterPoolStatusRequest) -> Result<CanisterPoolResponse, Error> {
         crate::workflow::canister_pool::status(request).map_err(Into::into)
     }

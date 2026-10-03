@@ -208,6 +208,7 @@ async fn transfer_operation(
     reserve_icp_refill_cost_guard_if_needed(token, &operation, cost_permit)?;
     let cost_permit = require_icp_refill_cost_permit(cost_permit.as_ref())?;
     mark_icp_refill_transfer_effect(token, &operation)?;
+    IcpRefillStoreOps::mark_transfer_attempt_started(operation.id, IcOps::now_nanos())?;
 
     let result =
         match IcpRefillOps::icrc1_transfer(cost_permit, operation.ledger_canister_id, transfer_arg)
@@ -240,7 +241,7 @@ async fn transfer_operation(
                 };
                 IcpRefillStoreOps::mark_transferred(operation.id, block_index, IcOps::now_nanos())
             }
-            Ok(Err(err)) => apply_transfer_error(operation.id, err),
+            Ok(Err(err)) => apply_transfer_error(operation.id, err, operation.transfer_uncertain),
         };
     preserve_icp_refill_post_effect_result(token, &operation, "ledger_transfer", result)
 }
@@ -338,9 +339,24 @@ pub(super) fn apply_notify_success(
 pub(super) fn apply_transfer_error(
     record_id: u64,
     err: TransferError,
+    prior_uncertainty: bool,
 ) -> Result<IcpRefillOperation, InternalError> {
+    // A duplicate proves the original debit; every other refusal only describes
+    // this attempt and cannot erase a previous lost response.
+    if !matches!(err, TransferError::Duplicate { .. }) {
+        IcpRefillStoreOps::record_transfer_refusal(
+            record_id,
+            prior_uncertainty,
+            IcOps::now_nanos(),
+        )?;
+    }
     match err {
         TransferError::BadFee { expected_fee } => {
+            if prior_uncertainty {
+                return IcpRefillStoreOps::mark_transfer_failed(record_id,
+                    IcpRefillErrorCode::LedgerTransferFailed,
+                    "earlier Ledger transfer remains uncertain; retain its original fee and transfer identity for reconciliation".to_string(), IcOps::now_nanos());
+            }
             let expected_fee_e8s = match crate::workflow::ic::icp_refill::checked_nat_u64(
                 "bad_fee.expected_fee",
                 expected_fee,

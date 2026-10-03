@@ -11,6 +11,7 @@ unsafe extern "C" {
 }
 
 thread_local! {
+    static FUNDING: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
     static REPLY: RefCell<Vec<u8>> = const { RefCell::new(Vec::new()) };
 }
 
@@ -46,4 +47,24 @@ pub extern "C" fn registry() {
 #[unsafe(export_name = "canister_query canic_root_status")]
 pub extern "C" fn pool() {
     reply();
+}
+
+#[unsafe(export_name = "canister_update replace_funding")]
+pub extern "C" fn replace_funding() {
+    let size = unsafe { msg_arg_data_size() };
+    let mut bytes = vec![0; size as usize];
+    unsafe { msg_arg_data_copy(bytes.as_mut_ptr() as i32, 0, size) };
+    FUNDING.with(|reply| reply.replace(bytes));
+    unsafe { msg_reply() };
+}
+
+#[unsafe(export_name = "canister_query canic_observability")]
+pub extern "C" fn funding() {
+    FUNDING.with(|reply| {
+        let bytes = reply.borrow();
+        unsafe {
+            msg_reply_data_append(bytes.as_ptr() as i32, bytes.len() as i32);
+            msg_reply();
+        }
+    });
 }

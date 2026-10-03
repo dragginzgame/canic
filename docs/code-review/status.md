@@ -1,23 +1,40 @@
 # Code review implementation status
 
-Last updated: **2026-10-02**. Scope: Canic implementation and qualification;
+## Findings summary
+
+The original review found **401 distinct, non-refuted findings**, after merging
+67 duplicates and excluding 8 refuted reports.
+
+| Original severity | Findings |
+| --- | ---: |
+| Critical | 1 |
+| High | 44 |
+| Medium | 105 |
+| Low | 220 |
+| Info | 31 |
+| **Total** | **401** |
+
+| Current tracked status | Findings |
+| --- | ---: |
+| Addressed and qualified | 31 |
+| Awaiting finding-by-finding disposition | 370 |
+
+The 31 qualified original IDs are a conservative minimum. The other 370 include
+unchecked, partial and unreconciled work; they are not 370 confirmed current
+bugs. Severity describes the original review snapshot. Additional fixes do not
+increase the qualified count until reconciled with their original IDs.
+
+Last updated: **2026-10-03**. Scope: Canic implementation and qualification;
 Toko Miner is downstream feedback and read-only context.
 
-The maintainer reports **0.110.50 published**; main retains its release tag and
-complete validation receipt, and packages are **0.110.50**. The accepted **FR1
-Fleet release-to-capacity batch is resumed and unfinished**, with no next patch
-allocated. Its restored foundations and current embedded peer are requalified;
+The maintainer reports **0.110.51 published** and packages are **0.110.51**.
+The accepted **FR1 Fleet release-to-capacity batch is active and unfinished**.
+Completed Host/CLI/Backup corrections are recorded in the open **0.110.52** draft;
+incomplete FR1 remains in root `Unreleased`. Its restored foundations are qualified;
 evidence below remains scoped to the checks actually run.
 This page tracks progress; it is not release authority or evidence of publication.
 
-## Review coverage
-
-The original review contains **401 findings**. The implementation tracker has
-**27 distinct original finding IDs explicitly counted as addressed and qualified**.
-That is a conservative minimum, not a current total of every fix. Recent work
-below has additional evidence but has not all been reconciled against original
-IDs. Do not interpret the other 374 entries as 374 confirmed remaining defects,
-or add issue counts and test counts to the closure total.
+## Review sources
 
 - [Original review export](<Canic Code Review.html>) — preserved source findings.
 - [Implementation tracker and counted IDs](../design/0.110-fleet-runtime-contraction/status.md#accepted-code-review-corrections--2026-09-30) — detailed R1–R8 ownership and traceability.
@@ -26,6 +43,80 @@ or add issue counts and test counts to the closure total.
 - [0.110 release notes](../changelog/0.110.md) — included behavior changes, distinct from validation and publication status.
 
 ## Recent delivery status
+
+FR1 now exposes controller-only Root pool evidence independently of new-work
+admission. Held Store/source IDs, exhausted import authority and progress,
+creation uncertainty and pending handoff remain observable without mutation.
+All 62 selected pool tests and affected-package Clippy pass; refreshed fixture and exact
+PocketIC qualification are pending (`fr1-pool-census-*`). Host integration,
+other obligation owners and complete FR1 execution remain unfinished. This
+partial slice leaves the original-review closure count at 31/401.
+
+FR1's bounded Host collector now includes existing Coordinator funding status,
+with exact Root membership/policy/lifecycle checks. It preserves pending grants,
+reservation windows, terminal history and policy rotation alongside Root evidence.
+Completed Coordinator history alone is not pending work; lost-reply work on
+Root remains visible. All 44 selected Host release tests, warning-denied Host
+library/test Clippy and the extended signed-query PocketIC case pass (1.29s;
+72s runner). Evidence: `target/review-validation/fr1-coordinator-evidence-*`.
+Runtime/Wasm source is unchanged; full FR1 execution remains incomplete.
+This Host-only continuation adds no original-review closure count.
+
+FR1 funding assessment now distinguishes historical receipts, known unissued or
+refused transfers, unresolved effects and refund residual review. It preserves
+pending Coordinator work and all original account evidence. The supporting Core
+fix persists transfer uncertainty across lost replies, retains uncertain spending
+reservations and prevents fee changes while the original debit is unresolved.
+The required current-record field follows pre-1.0 reinstall-only policy. Core's
+86 refill tests, 42 Host release tests and 17 Root funding selections pass;
+affected-package governed Clippy, fixture refresh and both exact PocketIC cases
+pass (Ledger/CMC 229.71s; Host 0.87s). Logs are
+`target/review-validation/fr1-funding-assessment-*`; the current handoff records
+qualification details.
+This partial FR1 work adds no original-finding closure count.
+
+FR1 now has a Host collector for every selected Root's funding pages, with signed
+network/operator binding, bracketed certified custody and Registry observations,
+bounded decoding/collection and no partial result after refusal. Five native
+tests, Host library/test Clippy and the extended certified-ownership PocketIC case
+pass (0.88s; 70s runner); evidence is `target/review-validation/fr1-host-funding-*`.
+This preserves evidence for later reconciliation, not producer quiescence or
+settlement authority, and adds no original-review closure count.
+
+FR1's bounded Root funding census is qualified: 84 Core refill tests, 10 Root
+funding tests, affected-package all-feature and governed-feature Clippy,
+embedded peer refresh/final verification and the
+exact real Ledger/CMC PocketIC case pass (226.87s; 243s runner).
+`target/review-validation/fr1-funding-census-pocketic-verified.log` records the
+successful case. Retained exhausted notifications, refund/expiry evidence and
+historical accounts remain discoverable; controller denial and query replay
+preserve balances. This is observation only: complete obligation collection,
+quiescence, account recovery, execution/CLI and whole-Fleet proof remain. No
+additional original-review finding is counted from this partial FR1 slice.
+
+Two more low findings are fixed: `cli-core-5` rejects colliding canister ID export
+variables before either shell or JSON output; `host-icp-network-9` permits exact
+local reset of an instance that exceeds load traversal limits or contains
+interior symlinks. The instance root itself must remain a real directory, link
+targets remain untouched, and terminal replay preserves its receipt. Seven
+`info_env` tests and three native reset regressions pass; retained evidence is
+`target/review-validation/low-review-*.log`. Host/CLI all-feature library/test
+Clippy passes with `--no-deps` and warnings denied. Both corrections extend the .52 draft;
+FR1 remains unfinished.
+
+Two simple original findings are fixed: `host-icp-network-10` accepts additive
+ICP CLI fields in balance, snapshot inventory and known visibility output;
+`backup-persistence-12` accepts equivalent checksum hex casing during artifact
+verification and restore-preview validation. Required fields, known visibility
+variants, hash syntax and actual artifact integrity remain checked. Focused
+native evidence is retained as `target/review-validation/simple-review-*`.
+The wider ICP selection passed 72 tests but two unrelated HTTP listener tests
+were denied by the sandbox; narrower affected selections pass.
+All 66 selected Host/Backup tests and Backup library/test Clippy pass. Host
+library/test Clippy passes with `--no-deps`; dependency-inclusive lint encounters
+the then-in-progress Core refill panic-doc warning. That warning is now corrected
+and dependency-inclusive FR1 lint passes. The .52 draft includes both corrections;
+FR1 remains unfinished.
 
 The service-authority denial now identifies the receiving canister's missing
 active authority and the required Fleet service ID, instead of suggesting a caller
@@ -143,7 +234,7 @@ must be explicitly requested and accepted before starting 0.111.
    remain separate maintainer-selected actions.
 3. Continue the accepted remaining sequence, including resumed FR1 and CS1, using
    the detailed tracker rather than treating historical snapshot findings as new bugs.
-4. Reconcile completed work with original finding IDs before changing the 27/401
+4. Reconcile completed work with original finding IDs before changing the 31/401
    count. Record duplicates, partial fixes and superseded findings explicitly.
 
 For each completed batch, update this file's date, disposition, evidence and

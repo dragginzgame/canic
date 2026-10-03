@@ -13,6 +13,7 @@ use crate::{
     storage::prelude::*,
 };
 use std::cell::RefCell;
+use std::ops::Bound::{Excluded, Unbounded};
 
 thread_local! {
     //
@@ -116,6 +117,8 @@ pub struct IcpRefillRecord {
     pub memo: Vec<u8>,
     pub created_at_time_ns: u64,
     pub ledger_block_index: Option<u64>,
+    /// An issued transfer lacks a definitive outcome, including an earlier lost reply.
+    pub transfer_uncertain: bool,
     pub notify_attempts: u32,
     pub cycles_sent: Option<Nat>,
     pub status: IcpRefillRecordStatus,
@@ -194,6 +197,22 @@ impl IcpRefillRecords {
         ICP_REFILL_RECORDS.with_borrow(|records| records.map.len())
     }
 
+    /// Seek directly after a stable key; never walk the preceding history.
+    pub(crate) fn page_after(start_after: Option<u64>, limit: usize) -> Vec<IcpRefillEntryRecord> {
+        let lower = start_after.map_or(Unbounded, |id| Excluded(IcpRefillRecordKey(id)));
+        ICP_REFILL_RECORDS.with_borrow(|records| {
+            records
+                .map
+                .range((lower, Unbounded))
+                .take(limit)
+                .map(|entry| IcpRefillEntryRecord {
+                    key: *entry.key(),
+                    record: entry.value(),
+                })
+                .collect()
+        })
+    }
+
     #[must_use]
     pub(crate) fn data(offset: usize, limit: usize) -> IcpRefillRecordsData {
         IcpRefillRecordsData {
@@ -242,6 +261,7 @@ mod tests {
         let _guard = seams::lock();
         IcpRefillRecords::clear_for_tests();
         let record = IcpRefillRecord {
+            transfer_uncertain: false,
             id: 1,
             operation_id: [2; 32],
             trigger: IcpRefillTriggerRecord::Automatic { sequence: 1 },

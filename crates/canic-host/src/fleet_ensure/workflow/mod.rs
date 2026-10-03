@@ -19,6 +19,7 @@ pub mod infrastructure_bootstrap;
 pub mod operator_mint;
 pub mod readiness;
 mod reinstall;
+pub mod release;
 mod retained_plan;
 mod root_reinstall;
 
