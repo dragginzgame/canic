@@ -1,9 +1,16 @@
 # Builds, Provenance, And Evidence
 
-Canic keeps artifact construction separate from deployment decisions. It can
-build attached roles, record exactly what produced an artifact, compare saved
-evidence envelopes, and apply passive policy without turning those reads into
-Fleet mutation authority.
+<p align="center">
+  <img src="../../../assets/1400x600/canic-verifiable.jpg" alt="The Canic mechanic comparing a finished canister module with its blueprint" width="700" />
+</p>
+
+IC canisters are deployed as **WebAssembly (Wasm)** files. Canic builds those
+files and records **provenance**: evidence about the source, configuration,
+tools, and dependencies that produced them. Operators and automated checks can
+compare that evidence before deciding to deploy anything.
+
+Building, inspecting evidence, and deploying are deliberately separate actions.
+An evidence check can report a problem, but it cannot modify a Fleet.
 
 `canic build <app> --json` writes one schema-1 result to stdout; progress and
 tool diagnostics stay on stderr. Read `release_build_id` and `release_manifest`

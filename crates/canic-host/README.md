@@ -1,8 +1,9 @@
 # canic-host
 
-`canic-host` owns operator-machine artifact builds, current desired-state Fleet
-reconciliation, network/ICP transport, evidence policy and supporting local
-state. It is not a canister runtime.
+`canic-host` contains the behavior that runs on an operator's computer: building
+canister Wasm, communicating with IC networks, comparing a deployed Fleet with
+its approved plan, checking evidence, and storing local operator state. None of
+this crate runs inside an application canister.
 
 Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current

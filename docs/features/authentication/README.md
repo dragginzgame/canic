@@ -1,17 +1,28 @@
 # Authentication
 
-Canic separates infrastructure caller authority from authenticated application
-subjects. Endpoint guards authenticate before workflow code runs, and every
-subnet, parent, subject, audience, and raw-caller binding remains explicit.
+<p align="center">
+  <img src="../../../assets/1400x600/canic-authentication.jpg" alt="The Canic mechanic opening a secure door with an access key" width="700" />
+</p>
+
+Authentication answers two questions: **who is making this request, and are
+they allowed to make it?** Canic checks those answers before application logic
+runs.
+
+The IC also needs to distinguish the canister that made a call from the user or
+service it may represent. Canic keeps those identities separate so an
+application login cannot accidentally become permission to manage canisters or
+spend their cycles.
 
 ## What It Provides
 
-- endpoint guards for callers, topology roles, and delegated subjects
-- reusable delegated tokens verified locally by endpoint canisters
+- guards that protect public canister methods by caller, infrastructure role,
+  or represented user
+- reusable signed tokens that a receiving canister can verify locally
 - root-managed chain-key delegation proof renewal
 - issuer canister-signature proofs and bounded replay protection
 - optional root-signed role attestation
-- delegated session subject binding without replacing infrastructure authority
+- session identities that do not replace the calling canister's infrastructure
+  permissions
 
 Cargo features and `canic.toml` settings are both explicit. Issuer and verifier
 roles must opt into the runtime capabilities they use.

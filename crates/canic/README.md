@@ -1,13 +1,17 @@
 # canic
 
-Facade crate that re-exports the main Canic stack for canister projects:
+This is the main Rust crate for application canisters using Canic. Most
+applications should depend on this crate rather than Canic's lower-level
+implementation crates.
+
+It provides:
 
 - endpoint and lifecycle macros
 - core runtime/types
 - stable-memory helpers under `canic::memory`
 
-Most downstream canister projects should start here instead of reaching for
-lower-level crates directly.
+In Rust terminology this is a **facade crate**: one public entry point that
+re-exports the parts of the Canic stack application developers normally need.
 
 Use the explicit module paths for the larger bundled surfaces:
 

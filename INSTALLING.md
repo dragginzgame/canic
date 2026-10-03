@@ -1,31 +1,38 @@
 # Installing Canic
 
-Install the operator CLI at the same version as the downstream `canic` crate:
+Canic has two pieces that work together:
+
+- the `canic` command-line program, which runs on your computer; and
+- the `canic` Rust crate, which is compiled into your application canisters.
+
+Use the same Canic version for both pieces. To install the published
+command-line program:
 
 ```bash
 cargo install --locked canic-cli --version <same-version-as-canic>
 canic --version
 ```
 
-From this checkout:
+If you are developing Canic itself from this repository, install the local
+version instead:
 
 ```bash
 make install
 ```
 
-For the complete maintainer toolchain:
+Canic maintainers can install the complete repository toolchain:
 
 ```bash
 make install-dev
 ```
 
-The maintainer setup installs the repository-pinned ICP CLI, `ic-wasm`,
-Binaryen, Candid tools and `sccache`, and configures the repository pre-commit
-formatter. Every artifact build requires `ic-wasm 0.11.1`; release builds also
-require the checksum-bound Binaryen 132 `wasm-opt`. Builds fail during tool
-preflight rather than accepting another version or emitting noncanonical
-bytes. Published CLI users can install both governed Wasm tools without a
-Canic checkout:
+The maintainer setup installs the repository-selected ICP command-line tool,
+`ic-wasm`, Binaryen, Candid tools and `sccache`, and configures the repository
+pre-commit formatter. Every artifact build requires `ic-wasm 0.11.1`; release
+builds also require the checksum-bound Binaryen 132 `wasm-opt`. Builds fail
+during tool preflight rather than accepting another version or emitting
+noncanonical bytes. Published CLI users can install both governed Wasm tools
+without a Canic checkout:
 
 ```bash
 canic toolchain install
@@ -41,6 +48,9 @@ authoritative. Otherwise Make and Canic artifact builds discover `sccache` and
 keep deterministic Wasm builds non-incremental.
 
 ## ICP CLI compatibility
+
+The `icp` command-line program performs low-level IC operations for Canic, such
+as running a local network, installing canisters, and managing snapshots.
 
 The maintained range is `icp-cli >=1.5.0, <2.0.0`; the maintainer toolchain currently pins `1.6.0`.
 
@@ -83,8 +93,9 @@ icp identity reauth <identity-name> --duration 1h
 
 ## Canister Dependencies
 
-Each Canic-managed canister needs runtime and build dependencies plus exact
-package metadata:
+A Rust crate that builds one Canic-managed canister needs runtime dependencies,
+a build dependency, and a small metadata block that tells Canic which App and
+role it implements:
 
 ```toml
 [dependencies]
@@ -100,10 +111,10 @@ app = "example"
 role = "app"
 ```
 
-The role must exist in the selected App configuration. Declare infrastructure
-roles in configuration; Canic generates their Root, Coordinator and Store
-packages with the required features. Applications supply their own canister
-packages, not infrastructure entrypoints.
+The **role** is the canister's job in the application. It must exist in the
+selected App configuration. Application developers provide their application
+canister packages. Canic generates its own Root, Coordinator, and Store
+management packages from the configuration.
 
 The build script remains small:
 
@@ -134,6 +145,9 @@ endpoint macros. The complete App schema is in [CONFIG.md](CONFIG.md).
 
 ## Configure And Build
 
+These commands create an App, create a Rust canister package for its `app` role,
+connect that role to a Component blueprint, and build it:
+
 ```bash
 canic app create example
 canic scaffold canister example app
@@ -146,6 +160,10 @@ For split Cargo/ICP roots, pass `--workspace`, `--icp-root` and an absolute
 `--config` path explicitly.
 
 ## Ensure A Fleet
+
+One deployed copy of an App is called a **Fleet**. Canic uses a separate desired
+Fleet file to describe the concrete network, canisters, funding, and placement
+that an operator intends to create.
 
 Start the selected local replica when applicable:
 

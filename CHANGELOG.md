@@ -26,7 +26,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 - `0.110.52` accepts additive ICP CLI output fields and verifies equivalent
   checksum hex casing in backup artifacts and restore previews. Rejects colliding
   canister ID exports and permits exact local reset of unloadable simulator trees.
-  Corrects authentication endpoint and composed native-test initialization guidance.
+  Corrects authentication endpoint and composed native-test initialization guidance,
+  and adds plain-language onboarding with illustrated feature guides.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

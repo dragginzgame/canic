@@ -1,7 +1,8 @@
 # canic-core
 
-Core runtime and orchestration logic for Canic canisters: compiled
-configuration, policy, workflows, state, registries, and IC interface helpers.
+`canic-core` contains Canic's shared internal runtime and orchestration logic,
+including compiled configuration, decisions, multi-step workflows, persistent
+state, registries, and IC interface helpers.
 
 Most canister projects should depend on `canic` (the facade crate) and use:
 - `canic::build!` from `build.rs` to validate/embed `canic.toml`
