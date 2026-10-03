@@ -101,6 +101,7 @@ pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_cred
     assert_eq!(usage.accounted_cycles.to_u128(), granted);
     assert_eq!(usage.pending_operations, 0);
     assert_eq!(usage.reserved_cycles, Some(0.into()));
+    super::replay_release::assert_funding_receipt(&pic, root, child, request.metadata.request_id);
     assert!(pic.cycle_balance(child) > balance_before);
     let after = timer(&pic, root);
     assert!(

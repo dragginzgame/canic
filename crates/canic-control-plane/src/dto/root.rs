@@ -200,3 +200,45 @@ pub struct RootPoolBootstrapReleaseEvidence {
     pub store: Principal,
     pub sources: Vec<Principal>,
 }
+
+/// Stable discovery cursor for the two Root provisioning journal owners.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd)]
+pub enum RootProvisioningReleaseKey {
+    Provisioning([u8; 32]),
+    DirectorySynchronization([u8; 32]),
+}
+
+/// Exact retained stage; completed history does not assert current release readiness.
+#[derive(CandidType, Clone, Copy, Debug, Deserialize, Eq, PartialEq)]
+pub enum RootProvisioningReleasePhase {
+    Accepted,
+    Provisioned,
+    Publishing,
+    Published,
+    Activating,
+    RuntimesActive,
+    DirectoryPlanned,
+    DirectorySynchronizing,
+    DirectorySynchronized,
+}
+
+/// Compact discovery evidence; the existing operation remains the reconciliation owner.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct RootProvisioningReleaseEntry {
+    pub key: RootProvisioningReleaseKey,
+    pub plan_hash: [u8; 32],
+    pub phase: RootProvisioningReleasePhase,
+    pub delivery_in_flight: Option<candid::Principal>,
+    pub last_failure:
+        Option<canic_core::dto::component_provisioning::RootComponentProvisioningFailure>,
+}
+
+/// One retained operation per page, with key-only lookahead and no new-work admission.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq)]
+pub struct RootProvisioningReleaseResponse {
+    pub root: candid::Principal,
+    pub active_provisioning: Option<[u8; 32]>,
+    pub active_directory_synchronization: Option<[u8; 32]>,
+    pub entry: Option<RootProvisioningReleaseEntry>,
+    pub next_after: Option<RootProvisioningReleaseKey>,
+}

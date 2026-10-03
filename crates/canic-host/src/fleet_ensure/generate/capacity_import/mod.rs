@@ -197,7 +197,11 @@ fn replacement(
     original: &[u8],
     document: &toml::Value,
 ) -> Result<CapacityImportDocumentView, CapacityImportInventoryError> {
-    let replacement = toml::to_string_pretty(document)?.into_bytes();
+    let replacement = if document == &toml::from_str::<toml::Value>(input_text(original)?)? {
+        original.to_vec()
+    } else {
+        toml::to_string_pretty(document)?.into_bytes()
+    };
     if replacement.len() > MAX_GENERATOR_INPUT_BYTES {
         return Err(CapacityImportInventoryError::TooLarge);
     }

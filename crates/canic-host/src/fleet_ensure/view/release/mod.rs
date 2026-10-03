@@ -14,9 +14,35 @@ use crate::fleet_ensure::{
 };
 use candid::Principal;
 use canic_control_plane::dto::{
-    fleet_coordinator::CoordinatorFundingStatusResponse, root::RootFundingReleaseResponse,
+    fleet_coordinator::CoordinatorFundingStatusResponse,
+    root::{RootFundingReleaseResponse, RootPoolReleaseResponse, RootProvisioningReleaseResponse},
 };
 use std::collections::{BTreeMap, BTreeSet};
+
+/// Original shared replay pages from every selected Root and Coordinator; not settlement proof.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetReleaseReceiptsView {
+    pub owners: BTreeMap<Principal, Vec<canic_core::dto::release_receipts::ReplayReleaseResponse>>,
+}
+
+/// Complete bounded provisioning discovery for the selected Roots, without settlement authority.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetReleaseProvisioningView {
+    pub roots: Vec<FleetReleaseRootProvisioningView>,
+}
+
+/// Original journal pages from one Root; producers may still be active.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetReleaseRootProvisioningView {
+    pub root: Principal,
+    pub pages: Vec<RootProvisioningReleaseResponse>,
+}
+
+/// Exact pool obligations for each selected Root, without settlement or custody disposition.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct FleetReleasePoolView {
+    pub roots: Vec<RootPoolReleaseResponse>,
+}
 
 /// Time-local Coordinator treasury and complete Root funding evidence, without settlement authority.
 #[derive(Clone, Debug)]

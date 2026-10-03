@@ -17,6 +17,7 @@ pub mod metrics;
 pub mod public_metrics;
 pub mod ready;
 pub mod recent_failure;
+pub mod release_receipts;
 pub mod root_funding;
 
 use crate::InternalError;

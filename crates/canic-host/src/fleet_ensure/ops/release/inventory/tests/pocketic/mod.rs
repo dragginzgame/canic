@@ -1,6 +1,9 @@
 //! Real signed queries and certificates qualify the collector, not runtime role quiescence.
 
 mod funding;
+mod pool;
+mod provisioning;
+mod receipts;
 
 use super::*;
 use candid::{CandidType, Principal};
@@ -197,6 +200,9 @@ fn governed_pocketic_release_inventory_binds_complete_ownership() {
         ))
     ));
     funding::assert_census(&pic, &agent, &runtime, &review, &registry);
+    pool::assert_census(&pic, &agent, &runtime, &review, &registry);
+    provisioning::assert_census(&pic, &agent, &runtime, &review, &registry);
+    receipts::assert_census(&pic, &agent, &runtime, &review, &registry);
     pic.update_call(ids[1], operator, "replace", b"DIDL".to_vec())
         .unwrap();
     assert!(matches!(

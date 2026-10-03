@@ -695,7 +695,9 @@ names the admitted source Component Specs/roles, relevant tree or Fleet scope,
 and receiver operation classes. Endpoint guards select the declared policy;
 they never accept a claimed role, source binding or policy from the request.
 Unknown roles, ambiguous scopes and undeclared receiver policies reject during
-build admission. Exact syntax remains an implementation decision.
+build admission. Preserve permitted Component Spec/role pairs per operation;
+independently unioning Specs and roles must not introduce undeclared pairings.
+Exact syntax remains an implementation decision.
 
 Root derives each entry from protected Registry evidence. A projection retains
 the exact receiver binding and installation identity, issuing Root/Fleet
@@ -705,8 +707,10 @@ authority-owned; a caller cannot select it. No role string supplied by the
 source can enlarge its permissions. Dynamic descendants use their own role and
 Principal while retaining the owning Component and parent bindings.
 
-Root also retains the exact receiver set and publication progress for each
-operation. Receiver enrollment and source membership transitions share an
+Root also retains the exact issuing Root installation, receiver set and
+publication progress within the existing lifecycle operation. Every recipient
+must match that issuing installation before any publication is sent. Receiver
+enrollment and source membership transitions share an
 ordering boundary so a new receiver cannot escape an in-progress removal.
 New receivers start fenced and obtain a complete current projection before
 opening. The source of truth remains the existing Registry; the projection is
@@ -748,6 +752,54 @@ grant. Application readiness includes this publication outcome, including for
 dynamically created Project Instances. It cannot be a best-effort timer after
 the child has already been reported ready.
 
+The current implementation releases application hooks when the runtime is
+activated, then Root waits for framework readiness before activating membership
+(`canic-control-plane::workflow::component_registry::{activate_child_membership_for_parent,
+activate_component_membership_with_plan}`). The lifecycle adapter schedules
+framework bootstrap and application hooks together. Simply making the existing
+readiness query wait for caller publication would create a cycle: Root would
+wait for readiness while the receiver waited for Root to publish membership.
+This ordering needs a coherent change before production integration.
+
+Separate the existing operation's framework-bootstrap observation from its
+application-startup release. Root may observe completed framework bootstrap
+while application hooks and ordinary application admission remain fenced. It
+then enrolls every new receiver under the membership ordering boundary, commits
+and publishes the source binding, reconciles the complete original recipient
+census, and issues the exact protected startup release through that operation.
+Only this release schedules application hooks and permits application readiness.
+An initial empty recipient census still requires the exact issuing installation
+and operation evidence. Bootstrap work that needs a prepared parent retains its
+existing allocation-scoped authority; it must not gain ordinary active-member
+permissions to break the cycle.
+
+The startup release belongs to the existing runtime/lifecycle owner. Retain
+application init arguments until that release and bind it to the current source
+installation and completed publication. A lost reply reconciles the same
+release; an interrupted operation does not become ready through a timer or
+upgrade. Synchronous lifecycle participants still run immediately after Canic
+restoration. Same-release upgrades restore the committed startup decision,
+receiver grants and pending fences before deferred hooks can run. No additional
+lifecycle owner or polling loop is introduced.
+
+The integration boundary is concrete and shared by top-level Components and
+dynamic children:
+
+| Owner | Required change | Evidence before integration |
+| --- | --- | --- |
+| Core activation storage and ops | Retain init arguments after framework activation; persist the exact publication-bound startup release in the existing activation record | Cold restoration before/after release, typed conflict refusal and unchanged replay |
+| Facade lifecycle adapter | Schedule framework bootstrap at runtime activation; schedule application hooks only from the retained startup release | No application hook before release, including interrupted same-release upgrades |
+| Endpoint admission | Keep application admission closed until startup release, independently of runtime activation and Fleet admission projection | Public and guarded application endpoints refuse while framework status/recovery remain available |
+| Control Plane membership journal | Observe framework bootstrap without waiting for application readiness; publish and reconcile every original recipient; release startup and then report application readiness | Top-level and dynamic-child PocketIC journeys, missing receipts, lost replies and enrollment races |
+
+`ConfigureRuntime` currently also opens fresh Fleet admission and invokes the
+application init adapter. Moving only the hook timer is insufficient: the
+application endpoint gate must use the same retained startup decision, and the
+upgrade path must not infer startup permission from runtime `Active`. Preserve
+explicit framework recovery and protected bootstrap commands while that gate
+is closed. These are coordinated changes to the existing owners, not additional
+independent state machines or qualified runtime behavior in the native draft.
+
 Adding a receiver later requires the same complete initialization boundary.
 Removing a receiver removes its publication obligation only after its own
 retirement proves it cannot resume with stale authority. An unavailable or
@@ -762,6 +814,26 @@ that source, then asks every affected receiver to retain a durable denial fence.
 Only after all exact fence receipts are reconciled may Root commit inactive
 membership and report revocation complete. Successor activation retains the
 denial; a delayed grant or stale-generation replay cannot reopen it.
+
+Component draining and subtree removal also invalidate descendant authority.
+The current `begin_component_draining` changes the authoritative partition from
+Active to Draining in its synchronous commit. Production integration must first
+freeze the complete affected receiver census and reconcile durable denial,
+including receivers whose policies admit descendant roles but exclude the parent
+role. Preserve source membership while this publication is pending; the existing
+operation independently closes new lifecycle work. Commit the draining or removal
+Registry transition only after denial coverage is complete.
+
+For a whole Component, publish an installation-bound Component-wide denial
+fence. Local admission and retained tickets check that fence for every descendant,
+without walking the full child catalog on each call. Clean up obsolete source
+rows in bounded pages while retaining the fence's original authority and replay
+ordering; clearing rows must not reopen delayed child grants. A nested subtree
+requires an exact bounded source census or an equally authoritative subtree
+fence. Do not infer affected receivers only from the removed parent role.
+The native draft's individual-source transitions do not yet qualify these group
+fences or their lifecycle ordering. Existing uncertain paid effects remain
+reconcilable under their issued operation authority throughout this change.
 
 During preparation the source is revocation-pending, not falsely reported as
 fully revoked. Receivers that have acknowledged already deny it; a receiver
@@ -788,6 +860,14 @@ reinstall: qualify current artifacts, clear framework/application state, install
 current authority, and initialize fenced. No predecessor adoption, migration,
 mixed-version operation or compatibility endpoint is introduced.
 
+Cross-release reset must not require a predecessor to implement the current
+publication protocol or decode its old membership state. The selected current
+build, explicit physical inventory and current controllers own that reset.
+Replace affected receivers with the qualified current artifact in its fenced
+initial state before opening current authority. Keep physical interruption,
+cycle conservation and uncertain paid-effect reconciliation under the governed
+reset flow; do not use predecessor membership adoption as reset authority.
+
 #### The four reported consumers
 
 | Consumer | Local identity decision | Application responsibility |
@@ -813,10 +893,24 @@ required qualification boundary before declaring cross-Root support.
 Publish only entries required by a receiver's declared policies, with paged
 staging and atomic digest-bound activation. Define limits for retained entries,
 receivers, encoded bytes and concurrent operations; refuse capacity before
-partial authority is opened. Use source-indexed recipient tracking and changes
-to affected entries rather than full-Fleet fanout for every child. Bound retries
+partial authority is opened. Preflight and reserve the complete affected
+recipient set before the first denial fence so a known capacity shortage cannot
+strand earlier participants in an unfinished change. Use source-indexed
+recipient tracking and changes to affected entries rather than full-Fleet fanout
+for every child. Persist recipient progress independently so an acknowledgement
+does not rewrite the complete recipient census. Bound retries
 and return resumable progress. Generation ordering must survive acknowledged
 entry removal so a delayed old grant cannot be mistaken for a fresh operation.
+
+Root publication progress uses an immutable census commitment and independent
+recipient rows keyed by the original operation and receiver. Stage changes update
+fixed metadata; acknowledgements update one recipient. Starting another operation
+must retain earlier unfinished and terminal evidence under its original identity.
+The enclosing lifecycle journal remains the operation owner; the index is its
+storage, not a replacement Registry or independently driven journal. Recovery
+checks the selected operation, current issuing installation, census count and
+commitment, exact recipient bindings and legal receipt phases. It never rebuilds
+an original census from today's Registry to omit an unavailable receiver.
 
 An activation cost scales with relevant receiver instances, and retained state
 scales with authorized source/receiver relationships. Receiver projections are
@@ -827,7 +921,7 @@ or the explicitly bounded credential alternative before expanding limits.
 
 | Evidence | Required property |
 | --- | --- |
-| Native model/policy tests | Exact caller, role, tree, Fleet, installation, generation and digest checks; capacity refusal and unchanged state on conflicts |
+| Native model/policy tests | Exact caller, Component Spec/role pair, tree, Fleet, installation, generation and digest checks; capacity refusal and unchanged state on conflicts |
 | PocketIC lifecycle | New dynamic child calls each admitted receiver after readiness; wrong role, caller and owning tree reject |
 | Exact interruption/retry | Lost publication and fence replies, partial activation, unavailable receiver and reordered messages reconcile without widening authority |
 | Revocation boundary | Every receiver denies new admission when completion is reported; enrollment races cannot omit a receiver |
@@ -844,6 +938,30 @@ completion. Downstream Toko adoption and its application regression suite remain
 separate read-only-repository work until explicitly authorized. Keep the full
 current contract at v1 through the pre-1.0 hard cut; do not introduce a second
 product protocol generation or a lookup fallback during rollout.
+
+#### Implementation boundary
+
+The maintainer has authorized implementation alongside the separate FR1 work.
+Begin with the exact receiver state machine, pure local admission and ticket
+revalidation, and Root's frozen recipient/receipt census. Develop and validate
+that draft in an isolated Canic-owned source copy while FR1 changes the shared
+lifecycle seams. The isolated draft now includes bounded receiver headers,
+independently indexed source grants and Root progress indexed by original
+operation/receiver, with an immutable census commitment. Native recovery covers
+single-row acknowledgement isolation, retention of earlier operations, missing or
+altered census refusal and phase/byte bounds. Separate 20,000-source and
+20,000-recipient cases qualify those mechanisms only. They do not establish a
+production cardinality limit, dense-graph cost, physical capacity reservation,
+production allocation admission, protected transport, complete recipient discovery,
+executable lifecycle integration or IC transaction rollback. The framework
+bootstrap/application-startup ordering change and PocketIC qualification remain
+required before the full batch is complete.
+
+The missing general Root membership lookup is tracked separately. A future
+inspection or discovery endpoint can return an authoritative point-in-time
+binding and preserve lookup failures without becoming the default endpoint
+guard. Membership changes still require protected inter-canister publication;
+ordinary application admission then uses receiver-local authority.
 
 ## 10. Configuration
 

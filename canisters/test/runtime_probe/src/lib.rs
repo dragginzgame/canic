@@ -181,6 +181,12 @@ async fn test() -> Result<(), Error> {
     Ok(())
 }
 
+/// Observe committed memory ownership after standalone cold restoration.
+#[canic_query(requires(caller::is_controller()))]
+fn memory_allocations_probe() -> Result<canic::dto::memory::MemoryAllocationsResponse, Error> {
+    canic::__internal::core::api::memory::MemoryQuery::allocations()
+}
+
 /// Reserve one test resource so PocketIC can exercise expiry scheduling and recovery.
 #[canic_update(public)]
 async fn begin_timer_probe_intent(resource_seed: u8, ttl_secs: Option<u64>) -> Result<u64, Error> {

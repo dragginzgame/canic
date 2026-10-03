@@ -3,6 +3,116 @@
 Review progress, closure-count limits and remaining owners are summarized in
 [the code-review status](../code-review/status.md).
 
+## FR1 shared replay discovery — 2026-10-03
+
+Continue the accepted FR1 batch with controller-only `ReplayRelease` observations
+on Root status and Coordinator observability. This reads one stable replay record
+per page with key-only lookahead, retaining expired uncertainty, original actor /
+authentication / payload bindings, effect targets and cost-guard intent IDs.
+Cached application responses are not returned. Encoded stable receipts now have
+a 32 MiB write/read limit, without changing their CBOR layout or allocation;
+projection also bounds command/method identities. This is paid-owner discovery,
+not accounting settlement or a release-ready predicate.
+
+Source and PocketIC discovery regressions pass targeted qualification. The real
+child-funding journey now inspects its committed paid receipt, and the provisioning
+journey checks Coordinator query authorization/replay. Core/affected-package and
+governed-journey Clippy pass with warnings denied. All three discovery tests and
+150 selected replay regressions pass, including refusal of an oversized stable
+replacement before any bytes change. Fixture refresh and read-only verification
+pass with artifact hash `3f767b151d2a1ff2ead015f435ba86b423b1d6993c0440031dfa4704953a512f`.
+The real paid-grant journey passes (325.14s, 414s runner), as does the
+Coordinator/provisioning journey (142.87s, 143s runner). These runs rebuilt missing
+fixture artifacts and retain them for reuse.
+The Host provisioning decoder's 128-type limit was too small for Root's expanded
+reply union (even an older generated Root has 145 types). It now uses the existing
+release readers' 512-type / 16 KiB header limits. All 28 selected Host release
+tests and affected Host/journey Clippy pass. The Root journey now decodes real
+wire replies through that production Host decoder.
+
+Host receipt collection is now implemented for Coordinator and every selected
+Root, preserving original pages under certified custody/Registry brackets with
+bounded signed reads and no partial result on a late refusal. Its new native and
+signed-wire regressions pass: 33 selected Host release tests (three simulator
+cases ignored), Host/journey Clippy and the exact signed-query PocketIC case
+(2.78s, 3s runner). The real paid-grant case passes through the production Host
+receipt decoder (36.09s, 123s runner; cached Wasm). Coordinator's public request
+DTO and canonical Candid now include the selector; five exact contract tests and
+affected Control Plane/journey lint pass. DTO round trips in package isolation,
+final read-only fixture verification and the public-request Coordinator journey
+also pass (98.39s, 222s runner; it rebuilt affected native/Wasm artifacts).
+Scoped formatting, whitespace and document semantics checks pass.
+Evidence: `target/review-validation/fr1-host-receipts-*` and
+`target/review-validation/fr1-replay-canonical-*`. Keep FR1 in
+`Unreleased`, preserve the parallel .52 and membership work, and do not claim
+push readiness. The completed provisioning/Host results
+below describe earlier discovery steps. No broad workspace/release gate was run.
+
+Next complete the maintained paid-owner integration and real producer quiescence,
+custody handoff, account-recovery artifact qualification, existing-journal
+execution/resume/CLI, whole-Fleet interruption/conservation proof and retirement
+contraction. Discovery is not a safety verdict: completed history and incidental
+accounting drift must not independently prevent an explicitly reviewed reset.
+Keep unfinished paid effects under their original authority and account for
+callbacks already in flight when establishing the live fence. FR1 remains
+unfinished and not push-ready; no commits, version changes or deployment occurred.
+
+## FR1 provisioning journal discovery — 2026-10-03
+
+Root's controller-only `ProvisioningRelease` query discovers retained aggregate
+provisioning and Directory synchronization operations independently of active
+pointers and new-work admission. Each page reads one bounded stable value with
+key-only lookahead. It preserves original operation/plan identities, exact stage,
+outstanding publication/Directory delivery and failure evidence without mutation.
+This is discovery, not a complete paid-obligation census or settlement predicate.
+
+Host now collects these original pages for every reviewed Root with bounded
+signed reads, exact key/phase checks, advancing cursors and unchanged active-pointer
+headers, bracketed by certified custody and Registry evidence. Refusal returns no
+partial result. The two journal kinds may retain the same operation ID.
+
+All 24 provisioning and three Directory synchronization native tests pass.
+The 27 selected Host release tests pass (three simulator cases ignored), including
+five new provisioning regressions. Control Plane/facade, Host and governed-journey
+library/test Clippy pass with warnings denied. Embedded fixture refresh and
+read-only verification pass with unchanged artifact hash
+`ce51c5a228f8c08eab5cf6f5e2bc7ea8ba1e6bbead9f0201482dfbc3ce0f6704`.
+The extended Host signed-query PocketIC proof passes in 2.17s (4s runner).
+The exact interrupted-to-terminal production Root journey passes in 30.46s
+(51s runner), proving original identity/failure evidence, controller denial,
+terminal discovery, replay and unchanged balances. Its first run exposed a
+test-only E30/E31 expectation error; correcting the assertion reused the retained
+Wasm/build artifacts. Runtime authorization was unchanged.
+Logs: `target/review-validation/fr1-provisioning-census-*` and
+`target/review-validation/fr1-host-provisioning-*`.
+Remaining paid owners, quiescence/handoff, whole-Fleet
+execution/recovery/CLI and retirement contraction remain in FR1 before push
+readiness. Document semantics and whitespace checks pass. Preserve the separate
+membership/authentication session's work.
+
+## FR1 Host pool collection — 2026-10-03
+
+Host now collects `PoolRelease` evidence for every reviewed Registry Root using
+bounded signed queries, bracketed by certified Coordinator/Root custody and
+matching Registry observations. It preserves exact exhausted import budgets,
+historical operators, bootstrap holds, uncertain creation and handoff records.
+Root/subnet mismatches and malformed/over-budget replies refuse the complete
+result. This does not settle effects or establish custody of historical sources.
+Root membership/authentication implementation belongs to the other session;
+this step changes only Host collection and its signed-query fixture coverage.
+
+After the maintainer freed space, all 22 selected release-ops native tests passed
+(three simulator cases ignored), including four new pool regressions. Host
+library/test Clippy passes with warnings denied. The exact signed-query PocketIC
+proof passes in 1.77s (4s runner), including two Roots, late refusal, replay and
+unchanged balances. Current logs are `target/review-validation/fr1-host-pool-*.log`.
+External cleanup had removed the earlier build cache and logs; this session did
+not perform cleanup. Membership/authentication uses its isolated source/target copy.
+Provisioning/Directory discovery follows in the current section above; it does
+not yet establish paid-effect settlement.
+Keep FR1 in root `Unreleased`, the parallel .52 fixes intact and
+the original-review count at 31/401. FR1 remains unfinished and not push-ready.
+
 ## Documentation accuracy baseline — 2026-10-03
 
 The requested documentation-wide refresh begins with a source-backed accuracy
@@ -58,8 +168,9 @@ Directory publication during activation and removal. Ordinary endpoint guards
 combine IC caller identity with local policy. Strict revocation completes only
 after every affected receiver has a durable denial fence; outages block that
 completion, while previously committed ordinary calls remain available.
-The revocation preference question has no answer at the time of this handoff;
-strict completion is the stated design baseline, not recorded maintainer acceptance.
+The maintainer has authorized continuing the implementation alongside FR1.
+Implementation uses strict completion as the stated baseline; no bounded-expiry
+authorization contract has been selected.
 
 Existing role attestations require a caller-bound direct-query certificate and
 cannot be autonomously obtained through the normal canister update flow. Their
@@ -68,8 +179,88 @@ the active command/status names and separate verifier identity checks from
 endpoint-owned allowed-role policy. The design distinguishes metrics target
 selection from incoming caller admission and covers dynamic children, receiver
 enrollment, in-flight effects, bounded state, lost replies, same-release recovery
-and required cross-Root evidence. It is a proposal, not a new runtime contract
-or a scheduled later minor. Implementation has not begun.
+and required cross-Root evidence. The Root membership lookup remains a separate
+API gap for inspection/discovery; it is not the proposed ordinary authorization
+path. This work does not schedule a later minor or introduce a runtime contract.
+
+The receiver state machine, pure admission/ticket policy and exact Root
+recipient census draft lives in an isolated source copy under
+`.canic/local-work/caller-authority-20261003/source`, with its own target directory.
+The draft covers exact Component Spec/role pairs, dynamic-child roles,
+ordered prepare/commit/complete phases,
+denial fencing, generation high-water retention, unchanged state on conflicts,
+exact replay and complete recipient acknowledgement. Receiver storage now uses
+a bounded fixed header and independently indexed source rows. An exclusive
+model plan validates one source delta without cloning unrelated grants; ops
+encodes before synchronous row/header writes and exposes receipts afterward.
+Ordinary policy borrows a validated local cache. Restoration checks exact
+receiver/Root installations, policy, capacity, row keys/counts, grant revisions
+and retained phase/generation evidence. Root census construction also checks the
+current issuing installation, including empty coverage. The isolated Root persistence draft now indexes
+fixed publication headers and recipient progress by the original operation and
+receiver. Each acknowledgement replaces one row; earlier operations remain
+retained. An immutable census commitment binds issuing/source authority, the
+complete receiver set, count and encoded byte reservation. Cold restoration
+refuses altered/missing recipients, changed operation keys and impossible receipt
+phases without rewriting the retained evidence.
+
+All 33 selected native tests pass, including retained-memory reopening after
+every phase, lost-reply replay with unchanged bytes, unavailable revocation
+receivers, malformed restoration, irreversible retirement, pre-fence encoding
+bounds, exact aggregate byte refusal, isolated acknowledgements and retained
+terminal history retained before the next same-receiver operation. Separate
+20,000-source and 20,000-recipient cases pass;
+they do not qualify a dense source/receiver product graph. These are native
+storage/model proofs,
+not canister lifecycle or IC rollback qualification. The draft is not integrated
+into live lifecycle operations. Production allocation and policy/build admission,
+protected publication, complete receiver enrollment and capacity reservation,
+lifecycle ordering, metrics, cross-Root qualification and PocketIC recovery remain
+in the same unfinished batch. Source formatting and patch application checks
+pass. Production Clippy refuses the draft's unwired types/functions under the
+existing dead-code rule; actual style findings were corrected, with no lint
+suppression or visibility change to bypass production integration.
+The existing runtime activation adapter currently schedules framework bootstrap
+and application hooks together, before Root membership activation. Making its
+current readiness barrier wait for publication would create a circular wait.
+The proposal now requires an internal framework-bootstrap observation followed
+by a protected application-startup release under the original membership
+operation. Init arguments remain retained until release; same-release recovery
+must restore the startup decision and caller fences before deferred hooks. This
+is the next lifecycle integration boundary, not an implemented startup change.
+Component draining also needs complete descendant-aware publication before its
+current Active-to-Draining Registry commit. The proposal selects a Component-wide
+installation-bound denial fence and bounded cleanup; nested subtree removal
+needs exact descendant coverage. Individual-source native proofs do not qualify
+these group fences. Preserve FR1's original paid-owner reconciliation throughout.
+Do not integrate that unwired patch or call this runtime qualification.
+The scoped `implementation.patch`, source hashes, native/Clippy logs and
+validation manifest are retained beside the isolated source. The failed
+disk-space build log is retained; only its invocation-owned target was removed.
+Keep concurrent FR1 source and validation intact. The caller-authority batch
+is unfinished and not push-ready; its runtime changelog/publication surfaces
+must wait for the coherent end-to-end outcome.
+
+The separate exact PocketIC memory regression now passes: fresh standalone
+installation, a retained TTL-free local intent reservation and two upgrades of
+the exact same Wasm preserve ownership, geometry, reservation denial and the
+intent counter. The private existing-runtime selection uses Canic 0.110.51 and
+ic-memory 0.15.3; it does not qualify Toko's Generator, optional IcyDB composition,
+ReceiptBackedIntentRecord at ID 45 or live caller-authority publication. The
+exact selected case passed in 18.83s (21s runner); owning library/test and fixture
+Wasm Clippy pass with warnings denied. A controller-only test-fixture probe reads
+committed memory allocations through the existing Core query facade.
+
+Only those two qualified fixture/test deltas were propagated to the main tree
+after checking build ownership and byte-exact baselines. Preserve them beside FR1;
+no production runtime or endpoint changed. The scoped patch, file hashes and
+logs are recorded in `standalone-memory-regression-manifest.json` beside the
+isolated source. The deep source-copy path exceeded PocketIC's Unix socket limit;
+a server-only short temporary path allowed the checksum-verified pinned binary
+to run. The original private runner and all four exact caller-authority module
+registrations are restored; the two selection manifests record that restoration.
+Earlier failed invocation logs remain retained. This is same-release repeated
+restoration coverage, not cross-release upgrade support.
 
 The [memory guide](../features/runtime/stable-memory-layout.md#native-composed-tests)
 now documents host-first bootstrap on every native test thread, composed
@@ -96,12 +287,18 @@ evidence remain unfinished, so this is not a complete settled predicate.
 
 All 62 selected pool native tests and affected-package library/test Clippy pass
 with warnings denied. Scoped formatting, document semantics and whitespace checks
-pass. Embedded fixture refresh/verification and the extended exact import
-PocketIC journey are pending. Evidence is retained
-under `target/review-validation/fr1-pool-census-*.log`. This is runtime work and
-requires fresh fixture qualification. Keep FR1 in root `Unreleased`, preserve
-the parallel .52 corrections and keep the original-review count at 31/401.
-The complete FR1 batch remains unfinished and not push-ready.
+pass. Embedded fixture refresh and read-only verification pass, retaining hash
+`ce51c5a228f8c08eab5cf6f5e2bc7ea8ba1e6bbead9f0201482dfbc3ce0f6704`.
+The extended exact import PocketIC journey passes in 88.42s (170s runner),
+covering operator- and Root-controlled sources, exact retained progress through
+issued/ready/released phases, controller denial, replay and unchanged balances.
+Evidence is retained under `target/review-validation/fr1-pool-census-*.log`.
+Keep FR1 in root `Unreleased`, preserve the parallel .52 corrections and keep the
+original-review count at 31/401. Host pool collection, provision/child-funding
+obligations, quiescence/handoff, account recovery, existing-journal execution/CLI,
+whole-Fleet interruption/conservation proof and retirement contraction remain.
+The complete FR1 batch is not push-ready. No broad gate, version/Git publication,
+deployment or sibling mutation ran.
 
 ## FR1 Coordinator funding evidence — 2026-10-03
 

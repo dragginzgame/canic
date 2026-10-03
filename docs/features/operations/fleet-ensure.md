@@ -1836,15 +1836,67 @@ the observed surplus as net credit and still rejects unexplained deficits.
 
 ## Retirement Boundary
 
+Root's controller-only `canic_root_status` and Coordinator's controller-only
+`canic_observability` accept `ReplayRelease : opt blob`. The cursor is the returned
+32-byte stable slot key. Each page reads one retained shared replay receipt and
+uses key-only lookahead. Entries preserve the original command, operation, actor,
+authentication class, payload hash, exact phase/recovery reason, timestamps,
+accounting intent IDs and effect target. Expired uncertainty and completed history
+remain visible; the query neither prunes nor resumes them. Cached response bytes
+stay in their existing owner. The encoded stable receipt is limited to 32 MiB
+before decoding or writing, and projected command/method identities to 1 KiB each.
+The record's CBOR layout and stable allocation are unchanged. This census does
+not prove settlement of the referenced cost intents or role-specific journals.
+
+Host collects these pages from the reviewed Coordinator and every Registry Root,
+bracketed by certified owner custody and unchanged Registry observations. It keeps
+the original owner, actor and accounting identities without expiry filtering or
+settlement inference. Reads are limited to 256 KiB per reply, 8 MiB overall,
+4096 receipts per owner, 512 Candid types and a 16 KiB header, with bounded decode
+and skip work, a 15-second query deadline and a 120-second collection deadline.
+Owner/cursor mismatches, malformed replies and exhausted bounds refuse the whole
+collection, including a failure after earlier owners succeeded. These are
+time-local observations, not a producer fence or a destructive-release decision.
+
+Root's controller-only `canic_root_status` accepts
+`ProvisioningRelease : opt variant { Provisioning : blob; DirectorySynchronization : blob }`.
+Start with `null` and follow `next_after` until it is absent. Each page reads one
+retained operation and uses key-only lookahead. It returns the original operation
+key, plan hash, exact stage, outstanding Directory/publication delivery and last
+provisioning failure, plus the two active-operation pointers. Discovery does not
+depend on those pointers, admit new work or resume effects. A missing delivery
+intent is not proof that lower-level paid work has settled. These are time-local
+observations; production release still needs producer quiescence and reconciliation
+before clearing an owner. Completed history alone is not a refusal condition.
+The internal Host collector `ops::release::provisioning::collect` retains the
+original pages for every reviewed Root, bounded to 4,096 operations per Root,
+256 KiB per reply and 8 MiB in total. Each query has a 15-second deadline; the
+collection has a 120-second deadline. Candid decoding and skipping each have
+2 MiB work quotas, with at most 512 types and a 16 KiB header. Certified custody
+and matching Registry observations bracket collection. Changed active pointers,
+foreign Root identities, invalid key/phase pairs and broken cursors refuse the
+complete result. Equal operation IDs in the two different journal kinds remain
+distinct owners. Host collection adds no settlement or destructive authority.
+
 Root's controller-only `canic_root_status` also accepts `PoolRelease`. It reads
 the bounded pool singleton independently of admission for new work, preserving
 bootstrap hold identities (including Store), retained import reservations and
 progress, consumed call/debit allowances, pending creation and pending handoff.
 Released import history remains visible. The query neither resumes effects nor
 changes their allowance, and a record bound to another Root refuses the result.
-It is available before activation once protected Root authority exists. Host
-collection and provision/child-funding evidence remain separate unfinished work;
-this pool observation alone cannot establish that a Root is safe to clear.
+It is available before activation once protected Root authority exists.
+
+Host's `ops::release::pool::collect` reads this evidence for every reviewed
+Registry Root. It binds the selected signer/network, verifies Coordinator/Root
+custody and Registry before and after the queries, and checks retained Root and
+subnet identities. Replies are limited to 1 MiB each and 16 MiB total, with bounded
+Candid decoding/skipping work, 512 types and a 16 KiB header. Each query has a
+15-second deadline and collection a 120-second deadline. Refusal returns no
+partial result. Historical operators, issued allowances and released imports are
+retained exactly; they are not required to match a new operator or new policy.
+This time-local pool observation does not settle effects, establish custody of
+every mentioned historical source or replace provision/child-funding evidence.
+It cannot by itself establish that a Root is safe to clear.
 
 Root's controller-only `canic_root_status` query accepts
 `FundingRelease : opt nat64`. Start with `null`, then pass each returned

@@ -85,6 +85,14 @@ enum RemoteCoordinatorOperationStatusResponse {
     ),
 }
 
+/// Discover retained operations under protected Root identity without admitting new work.
+pub fn release_status(
+    start_after: Option<crate::dto::root::RootProvisioningReleaseKey>,
+) -> Result<crate::dto::root::RootProvisioningReleaseResponse, InternalError> {
+    let authority = FleetActivationWorkflow::root_authority()?;
+    RootComponentProvisioningOps::release_status(authority.binding.fleet_subnet_root, start_after)
+}
+
 /// Durably accept one complete root batch under the exact protected Coordinator.
 pub async fn accept(
     caller: Principal,
