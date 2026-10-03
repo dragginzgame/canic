@@ -322,11 +322,12 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
 
 // Cases observe only the restored target; the relay created by one case is unrelated state.
 static PROBE_FIXTURES: CachedStandaloneCanisterFixturePool<1> =
-    CachedStandaloneCanisterFixturePool::new().with_restore_funding(
-        SnapshotRestoreFunding::TopUpTo {
-            minimum_cycles: SNAPSHOT_RESTORE_MINIMUM_CYCLES,
-        },
-    );
+    CachedStandaloneCanisterFixturePool::<1>::new(|| {
+        install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast)
+    })
+    .with_restore_funding(SnapshotRestoreFunding::TopUpTo {
+        minimum_cycles: SNAPSHOT_RESTORE_MINIMUM_CYCLES,
+    });
 
 // Verify generated inspect-message limits for default, explicit, and named updates.
 #[test]
@@ -381,9 +382,7 @@ fn raw_update_adapter_rejects_oversized_inter_canister_payload_before_decode() {
 
 fn acquire_probe_fixture() -> CachedStandaloneCanisterFixtureGuard<'static> {
     let (fixture, outcome) = PROBE_FIXTURES
-        .acquire(|| {
-            install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast)
-        })
+        .acquire()
         .expect("acquire payload-limit probe fixture");
     eprintln!("[payload-limit-probe] cached standalone fixture {outcome}");
     fixture
