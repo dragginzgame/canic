@@ -16,35 +16,24 @@ for their App.
 
 Before adding a setting, decide which configuration layer owns it:
 
-```text
-canic.toml                              desired Fleet file
-source-level App model                 one concrete deployment
+<br clear="left" />
 
-roles and optional features            network and canister identities
-Component blueprints and children      controllers and funding
-Groups, deployments, services          physical Subnet placement
-             \                         /
-              +--- canic fleet ensure -+
-```
+<p align="center">
+  <a href="assets/app-model-desired-fleet.jpg">
+    <img src="assets/app-model-desired-fleet.jpg" alt="The reusable canic.toml App model and one concrete desired Fleet file combine as inputs to canic fleet ensure" width="650" />
+  </a>
+</p>
 
 `canic.toml` is reusable source input. The desired Fleet is separately reviewed
 operator intent; it may differ between local, staging, and production networks.
 
-<br clear="left" />
-
 ## App Shape At A Glance
 
-```text
-App
-|-- roles                       Rust package and optional capabilities
-|-- component_specs             reusable canister and child blueprints
-|   +-- children                roles a Component may create
-|   +-- spawn_grants            bounded parent-to-child permission
-|   +-- pools                   optional scaling, sharding, and indexes
-|-- component_groups            reusable combinations of Specs
-|-- component_group_deployments count and placement limits
-+-- fleet_services              logical targets over deployed Components
-```
+<p align="center">
+  <a href="assets/app-model.jpg">
+    <img src="assets/app-model.jpg" alt="The Canic App model connects roles, Component Specs and their children, grants and pools, Component Groups, deployments, and Fleet services" width="650" />
+  </a>
+</p>
 
 At a high level, the file describes:
 
@@ -770,3 +759,10 @@ Enabling a family publishes only its bounded cached aggregate snapshot through
 `canic_public_status`; it never changes `canic_observability` authorization.
 See [public observability](docs/features/runtime/public-observability.md) for
 sampling, staleness, units and application publication APIs.
+
+## Continue From Here
+
+- [Build your first managed application](docs/getting-started/minimal-managed-fleet.md)
+- [Choose the Canic features you need](docs/features/README.md)
+- [Plan and operate a Fleet](docs/operations/README.md)
+- [Browse all documentation](docs/README.md)

@@ -60,14 +60,11 @@ The operator reviews a concrete plan and explicitly applies its exact digest.
 
 ## The Two Parts Of Canic
 
-```text
-Operator's computer                           IC canisters
-
-CLI + host libraries  ---- approved work --->  Canic runtime
-files and credentials                          application logic
-builds and evidence                            persistent state
-plans and recovery                             protected methods
-```
+<p align="center">
+  <a href="../../assets/operator-to-canisters.jpg">
+    <img src="../../assets/operator-to-canisters.jpg" alt="Host-side CLI tools, credentials, builds, evidence, plans, and recovery on the operator's computer send approved work to the runtime and application inside IC canisters" width="650" />
+  </a>
+</p>
 
 | Part | Runs where | Responsibility |
 | --- | --- | --- |
@@ -172,5 +169,6 @@ built, funded, placed, changed, and recovered as one application.
 - [Install Canic](../../INSTALLING.md)
 - [Build the first managed application](minimal-managed-fleet.md)
 - [Configure an App](../../CONFIG.md)
-- [Browse feature guides](../features/README.md)
-- [Read the Fleet ensure workflow](../features/operations/fleet-ensure.md)
+- [Choose the Canic features you need](../features/README.md)
+- [Plan and operate a Fleet](../operations/README.md)
+- [Browse all documentation](../README.md)

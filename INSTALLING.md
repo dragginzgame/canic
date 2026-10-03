@@ -5,27 +5,40 @@ Canic has two pieces that work together:
 - the `canic` command-line program, which runs on your computer; and
 - the `canic` Rust crate, which is compiled into your application canisters.
 
-<img src="assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the installation choices" />
-
 ## Choose An Installation Path
 
-| Goal | Install |
-| --- | --- |
-| Use a published Canic release | Published CLI, governed Wasm tools, compatible `icp`, and the matching Rust crate |
-| Work on this repository | Local CLI from the checkout |
-| Maintain or release Canic | Complete repository toolchain |
+<table>
+  <thead>
+    <tr>
+      <th aria-label="Guide"></th>
+      <th>Goal</th>
+      <th>Install</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td rowspan="3" width="120" valign="top">
+        <img src="assets/256x256/mechanic-point-right.png" width="110" alt="The Canic mechanic pointing toward the installation choices" />
+      </td>
+      <td>Use a published Canic release</td>
+      <td>Published CLI, governed Wasm tools, compatible <code>icp</code>, and the matching Rust crate</td>
+    </tr>
+    <tr>
+      <td>Work on this repository</td>
+      <td>Local CLI from the checkout</td>
+    </tr>
+    <tr>
+      <td>Maintain or release Canic</td>
+      <td>Complete repository toolchain</td>
+    </tr>
+  </tbody>
+</table>
 
-```text
-canic CLI
-   +-- governed Wasm tools
-   +-- compatible ICP CLI
-   +-- matching canic Rust crate in each role
-                     |
-                     v
-              build -> review -> Fleet
-```
-
-<br clear="left" />
+<p align="center">
+  <a href="assets/cli-toolchain.jpg">
+    <img src="assets/cli-toolchain.jpg" alt="The Canic CLI combines governed Wasm tools, a compatible ICP CLI, and matching Canic Rust crates to build and review a Fleet" width="650" />
+  </a>
+</p>
 
 ## Install The CLI
 
@@ -261,3 +274,12 @@ make validate
 Versioning, tagging, package publication, pushing and live deployment remain
 separate human-owned actions governed by
 [CI and deployment governance](docs/governance/ci-deployment.md).
+
+## Continue From Here
+
+- [Build your first managed application](docs/getting-started/minimal-managed-fleet.md)
+- [Configure an App](CONFIG.md)
+- [See how Canic works](docs/getting-started/how-canic-works.md)
+- [Choose the Canic features you need](docs/features/README.md)
+- [Plan and operate a Fleet](docs/operations/README.md)
+- [Browse all documentation](docs/README.md)
