@@ -24,7 +24,7 @@ one model and one toolchain for that work.
 
 ## Think Kubernetes, But For IC Canisters
 
-<img src="assets/600x600/mechanic-tip.png" align="right" width="150" alt="The Canic mechanic presenting a tip" />
+<img src="assets/600x600/mechanic-tip.png" align="left" width="110" alt="The Canic mechanic presenting a tip" />
 
 Kubernetes gives teams a consistent way to describe and operate applications
 made from multiple containers. Canic plays a similar role for applications made
@@ -90,7 +90,7 @@ main payoff comes when several canisters must behave as one application.
 
 ## Start Here
 
-<img src="assets/600x600/mechanic-help.png" align="right" width="125" alt="The Canic mechanic offering help" />
+<img src="assets/600x600/mechanic-help.png" align="left" width="110" alt="The Canic mechanic offering help" />
 
 Install the published operator CLI at the same version as the `canic` crate
 used by your canisters:
@@ -258,7 +258,7 @@ Detailed ownership and dependency rules live in [AGENTS.md](AGENTS.md).
 
 ## Status
 
-<img src="assets/600x600/mechanic-caution.png" align="right" width="130" alt="The Canic mechanic holding a caution sign" />
+<img src="assets/600x600/mechanic-caution.png" align="left" width="110" alt="The Canic mechanic holding a caution sign" />
 
 Canic is still pre-1.0, so releases may make breaking changes. Moving an
 existing deployment to a new Canic release currently requires a clean

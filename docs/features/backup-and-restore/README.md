@@ -21,7 +21,7 @@ Live canisters -> snapshots -> verified local backup
 
 ## Current Availability
 
-<img src="../../../assets/600x600/mechanic-caution.png" align="right" width="115" alt="The Canic mechanic holding a caution sign" />
+<img src="../../../assets/600x600/mechanic-caution.png" align="left" width="110" alt="The Canic mechanic holding a caution sign" />
 
 **Creating a new backup is currently unavailable.** `canic backup create
 <fleet>` stops before taking snapshots because the live topology safety check is
