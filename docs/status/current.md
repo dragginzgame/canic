@@ -3,6 +3,30 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Governed lifecycle inventory correction — 2026-10-03
+
+The maintainer's release test found that the new standalone memory restoration
+journey had a compiled `#[test]` but no governed runner registration. The
+inventory guard correctly refused its missing owner; the earlier individual
+checkpoint proofs did not check complete compiled membership. Register it in
+the runtime lifecycle group so normal execution and worker partitioning include
+both identical-Wasm restoration rounds. Preserve the discovered-membership,
+unique-owner and recovery-order checks; no guard is relaxed.
+
+The original failure reproduces with the exact native inventory selector.
+After correction, all four native runner/inventory/partition checks pass, as
+does warning-denied internal library/test Clippy. The exact lifecycle PocketIC
+journey passes through `make test-pocketic-case` (162.89s including fixture builds,
+170s runner). Formatting, whitespace and document semantics also pass. Evidence
+is retained under `target/review-validation/canic-inventory-*.log`, including the
+original reproduction. The .52 changelog records its normal-runner coverage.
+This confirmed inventory blocker is fixed. The final status check found concurrent
+manifest/lock changes to ic-memory 0.21.0 and ic-query 0.45.3 plus an active Canic
+build. Preserve those edits; this session's results do not qualify that later
+dependency selection. Its owner must finish dependency/fixture qualification
+before the combined checkpoint is called ready. No broad suite, version, commit,
+push or deployment was run; earlier checkpoint evidence remains scoped as recorded.
+
 ## .52 checkpoint qualification — 2026-10-03
 
 The maintainer confirmed dependency edits are finished and needs an early push.
