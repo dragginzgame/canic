@@ -10,17 +10,11 @@ approved `canic fleet ensure` plan may make those changes. If an operation is
 interrupted or its result is unclear, Canic records enough information to check
 what happened before trying again.
 
-```text
-Operator's computer
-  desired Fleet -> plan -> reviewed digest -> apply
-                                            |
-                                            v
-IC network                             Fleet Coordinator
-                                      /                 \
-                              Subnet A Root       Subnet B Root
-                               /        \          /        \
-                         Wasm Store  Components  Store    Components
-```
+<p align="center">
+  <a href="../../../assets/canic-ic-fleet.jpg">
+    <img src="../../../assets/canic-ic-fleet.jpg" alt="A Canic Fleet with one Coordinator and a Root, Wasm Store, and application Components on each occupied IC Subnet" width="650" />
+  </a>
+</p>
 
 The CLI and local files retain operator authority. The Coordinator plans for the
 whole Fleet, while each Root performs approved effects for Components on its own
@@ -46,10 +40,12 @@ operator configuration authority. A material canister must explicitly expose
 an idempotent treasury drain before Canic may replace or delete it. Historical
 install and recovery state is not a current authority.
 
-## Start Here
+## Continue From Here
 
 - [Installing Canic](../../../INSTALLING.md)
 - [Fleet ensure](../operations/fleet-ensure.md)
 - [Build artifact architecture](../../architecture/build-artifacts.md)
 - [Host library guide](../../../crates/canic-host/README.md)
 - [Current implementation status](../../status/current.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)

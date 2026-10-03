@@ -9,16 +9,14 @@ A **Component Spec** is a reusable blueprint for one kind of application
 canister and any child canisters it may create. Each deployed **Component** has
 its own identity, data, location, and limits.
 
-```text
-Component Spec            reusable blueprint and child rules
-      |
-Component Group           combines related blueprints
-      |
-Group deployment          selects count and placement limits
-      |
-Components                concrete canisters running on Subnets
-      |
-Children and pools        bounded growth requested at runtime
+```mermaid
+flowchart TD
+    S[Component Spec<br/>Reusable blueprint and child rules]
+    G[Component Group<br/>Related blueprints]
+    D[Group deployment<br/>Count and placement limits]
+    C[Components<br/>Canisters running on Subnets]
+    P[Children and pools<br/>Bounded runtime growth]
+    S --> G --> D --> C --> P
 ```
 
 ## What It Provides
@@ -41,7 +39,7 @@ Fleet-wide service publication. Each Fleet Subnet Root owns concrete identity
 allocation and lifecycle effects. Application Components may request admitted
 children, but they do not acquire management-canister or root authority.
 
-## Allocation and recovery
+## Allocation And Recovery
 
 Routing follows the allocation that owns a canister ID. Directory synchronization
 delivers that identity to the parent. Removing a child makes its index bindings
@@ -60,7 +58,7 @@ claim or recycle a replacement. Root also checks the expected allocation on ever
 new recycle request. An exact completed removal can replay after a later allocation
 reuses that ID; it returns the retained completion without affecting the replacement.
 
-## Start Here
+## Continue From Here
 
 - [Component Specs](../../../CONFIG.md#component-specs)
 - [Component Groups](../../../CONFIG.md#component-groups)
@@ -70,3 +68,5 @@ reuses that ID; it returns the retained completion without affecting the replace
 - [Current implementation status](../../design/0.110-fleet-runtime-contraction/status.md)
 - [Fleet ensure bounds](../operations/fleet-ensure.md)
 - [Academic Fleet walkthrough](../../getting-started/local-academic-fleet.md)
+- [Choose another feature](../README.md)
+- [Browse all documentation](../../README.md)

@@ -7,12 +7,23 @@ Canic workspace, including `canic`, `canic-core`, `canic-macros`,
 `canic-control-plane`, `canic-cli`, `canic-host`, and
 `canic-backup`.
 
+<img src="../../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding the code hygiene checklist" />
+
+Use this guide while adding or reviewing Rust code. It explains where code
+belongs, how modules should be arranged, what needs documentation, and which
+targeted checks to run before handing work back for review.
+
+<br clear="left" />
+
 The goal is to keep the codebase easy to navigate while preserving Canic's
 layering:
 
-```text
-endpoints -> workflow -> policy
-                     +-> ops -> model
+```mermaid
+flowchart LR
+    E[Endpoints] --> W[Workflow]
+    W --> P[Policy]
+    W --> O[Ops]
+    O --> M[Model]
 ```
 
 The workflow branches are independent. Policy never calls ops.
@@ -26,6 +37,18 @@ This standard is not the module hardening audit. Use
 [`module-surface-hardening.md`](../../audits/modular/module-surface-hardening.md)
 when the task is to justify retained surface, remove stale complexity, or
 evaluate cleanup against runtime shape.
+
+## Find A Rule
+
+| When you are checking… | Read… |
+| --- | --- |
+| File layout and imports | [Import organization](#1-import-organization) and [module headers](#2-module-header-comments) |
+| Public types and functions | [Type documentation](#3-type-documentation) and [function documentation](#4-function-documentation) |
+| Lints and large source files | [Lint suppressions](#41-lint-suppressions), [section banners](#5-section-banners), and [function size](#7-function-size) |
+| Architectural ownership | [Visibility and layer boundaries](#8-visibility-and-layer-boundaries) and [invariants](#9-invariants-and-error-semantics) |
+| Names and serialized contracts | [Naming consistency](#10-naming-consistency) and [data shapes](#11-data-shape-rules) |
+| Tests and cleanup | [Test placement](#12-test-placement-and-scope) and [redundant code removal](#13-redundant-code-removal) |
+| Handoff checks | [Formatting and checks](#14-formatting-and-checks) |
 
 ## Example Crate
 
@@ -440,3 +463,11 @@ Examples:
 1. `cleanup: normalize imports in canic-core workflow`
 2. `cleanup: tighten visibility in canic-control-plane`
 3. `cleanup: remove stale protocol helpers from blob storage`
+
+## Continue From Here
+
+- [Read the contributor rules](../../../AGENTS.md)
+- [Follow the targeted testing guide](../../../TESTING.md)
+- [Review CI and deployment governance](../ci-deployment.md)
+- [Understand the architecture](../../architecture/README.md)
+- [Browse all documentation](../../README.md)

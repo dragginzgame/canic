@@ -1,13 +1,29 @@
-# Operations Docs
+# Operations Reference
 
 These documents are for people operating Canic or preparing a Canic release.
 They cover deployment, recovery, funding, diagnostics, packaging, and release
 checks.
 
+<img src="../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding an operations checklist" />
+
 If you are deploying an application for the first time, begin with
 [Installing Canic](../../INSTALLING.md), then follow the
 [Fleet ensure guide](../features/operations/fleet-ensure.md). The remaining
 pages are references for a specific operational task or failure.
+
+<br clear="left" />
+
+## Choose An Operations Path
+
+| If you need to… | Start here |
+| --- | --- |
+| Deploy or change a Fleet | [Operations and diagnostics](../features/operations/README.md) |
+| Choose the correct Fleet Ensure workflow | [Fleet Ensure overview](../features/operations/fleet-ensure.md) |
+| Recover an interrupted operation | [Recovery and retry runbooks](recovery-retry-runbooks.md) |
+| Diagnose Fleet funding | [Fleet funding](fleet-funding.md) |
+| Back up or restore canisters | [Backup and restore](../features/backup-and-restore/README.md) |
+| Validate a release | [Release validation matrix](release-validation-matrix.md) |
+| Diagnose CI or packaging | [CI diagnostics](ci-diagnostics.md) and [package validation](release-package-install-validation.md) |
 
 ## Current Release Validation
 

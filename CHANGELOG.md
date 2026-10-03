@@ -44,6 +44,9 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   and task-oriented navigation; replaces introductory text diagrams with supplied
   artwork and splits the Fleet Ensure operator reference into focused desired-state,
   plan/apply, reinstall, bootstrap/capacity, automation and recovery guides.
+  Refreshes the individual feature, operations, architecture, design-authoring,
+  audit and code-hygiene indexes with visual workflows, task choosers and
+  consistent continuation navigation.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.
