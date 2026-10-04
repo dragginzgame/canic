@@ -93,18 +93,14 @@ reopen and interruption recovery retain the same manager geometry.
 
 The 1 MiB default balances the many small framework stores against manager
 capacity. It is not claimed to be globally optimal for every application's data
-or workload. Application-owned stores and IcyDB share the same manager geometry;
+or workload. Application-owned stores share the same manager geometry;
 Canic does not change their schemas, IDs or ownership.
 
 Consumers composed into the same canister must use the same ic-memory package
-identity. IcyDB is a test-only dependency of this repository and does not enter
-deployed Canic roles. Its upstream dependencies evolve independently; Canic
-never synchronizes dependency versions with this optional local consumer or
-waits for matching releases. Dependency skew can leave its composition fixture
-unqualified without blocking Canic upgrades or publication. Run the explicit
-`make test-pocketic-case CASE=icydb_lifecycle_composition` qualification when the
-selected fixture can compose. Canic's production Wasm dependency guard continues
-to require a single memory runtime in the selected deployed graph.
+identity. Qualify consumer-specific composition in the consuming application's
+repository. Canic's production Wasm dependency guard requires a single memory
+runtime in the selected deployed graph; Canic's own fixture suite contains no
+database dependency.
 
 Application role validation also rejects multiple reachable `ic-memory` package
 identities with `role_contract_multiple_memory_runtimes` before compiling the
@@ -170,29 +166,12 @@ Canic's reinstall-only policy; there is no automatic migration.
 
 ## Composed consumer admission
 
-IcyDB uses permanent logical namespace/store keys and explicit host
-grants. Register one composed admission callback for the entire artifact:
-
-```rust
-canic::memory::ic_memory_range!(
-    authority = "icydb.example",
-    start = 100,
-    end = 106,
-    mode = Allowed
-);
-canic::memory::memory_bootstrap_admission!(
-    identity = canic::memory::admission::PolicyIdentity::new(
-        "icydb.logical-memory-admission", 1,
-    ).expect("valid admission identity"),
-    prepare = icydb::db::prepare_memory_bootstrap,
-);
-```
-
-This seven-ID grant accommodates one namespace's three controls and one store's
-four allocations. Choose disjoint grants with sufficient capacity for the actual
-schema; admission itself grants no allocation authority. Schema declarations use
-`memory_namespace = "example"` and a journaled store's permanent `key` instead of
-physical memory IDs.
+A consuming application can register one composed admission callback for the
+entire artifact with `canic::memory::memory_bootstrap_admission!`. Supply the
+application-owned preparation function and a semantic `PolicyIdentity`; declare
+each consumer's disjoint allocation authority through `ic_memory_range!`.
+Admission itself grants no allocation authority. The consuming application owns
+its schema, logical keys, required capacity and database-specific qualification.
 
 The static callback registration is sealed when Canic selects its bootstrap
 policy. Duplicate and late registrations reject. Canic invokes the callback once
@@ -209,11 +188,10 @@ consumer errors remain available in `MemoryRegistryError::Admission`; Canic's
 existing lifecycle error boundary still maps bootstrap failures to its error code.
 A rejected attempt cannot commit the candidate allocation set.
 
-IcyDB rejects omitted historical namespaces and selects only omitted stores'
-original journals for its subsequent recovery checks. This does not retire data,
-rename a store, bypass journal debt or permit cross-release migration. Release
-transitions remain reinstall-only. Canic's own fixed IDs and bucket size are
-unchanged, and artifacts without a callback retain the base policy identity.
+Consumer admission must account for its own historical namespaces and outstanding
+recovery obligations. Release transitions remain reinstall-only. Canic's own
+fixed IDs and bucket size are unchanged, and artifacts without a callback retain
+the base policy identity.
 
 ## Representation and consolidation
 
@@ -380,8 +358,9 @@ The disposable Fleet Root reports 47,251,456 bytes (45.0625 MiB) of allocated
 stable memory, including 2,949,120 bytes of virtual extent. Virtual extent is
 not a payload-occupancy measurement. Protected observation preserves stable
 bytes and controller authority. Receipt conformance survives same-release
-restart, exact retries, settlement and reclamation. All seven Canic/IcyDB
-lifecycle/import cases pass, including held replies and consumer reinstall.
+restart, exact retries, settlement and reclamation. The historical seven-case
+database composition run also covered held replies and consumer reinstall;
+that consumer suite is no longer maintained in Canic.
 
 The three governed runtime targets took 359s, 51s and 191s including builds and
 runner setup. All 1,643 source/lock inputs stayed unchanged. These results

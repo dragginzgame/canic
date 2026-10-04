@@ -1,6 +1,2 @@
 [build]
 target-dir = "target"
-
-# Workstation-only test override; do not commit this patch table for CI.
-[patch.crates-io]
-icydb = { path = "/home/adam/projects/icydb/crates/icydb" }

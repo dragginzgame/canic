@@ -226,35 +226,21 @@ policy and ops independently; ops may call model. Policy never calls ops.
   CLI scope or report scope. Reserve project terminology for exact upstream or
   external concepts such as an ICP project root.
 - Rust edition is 2024.
+- Package versions and dependency declarations in Cargo members inherit from
+  their owning workspace. Declare versions only in `workspace.package` and
+  `workspace.dependencies`; isolated fixture workspaces own their fixture versions.
 - Use directory modules with `mod.rs`; never keep both `foo.rs` and `foo/`.
 - Do not use `#[path = "..."]` for module layout. Rename files/directories so
   Rust's normal module discovery works.
 
 ## Testing
-- IcyDB is an optional local test consumer, never a deployed Canic dependency.
-  Its upstream dependency schedule is independent of Canic's. Never synchronize
-  Canic and IcyDB upstream dependencies, chase matching IcyDB releases, or wait
-  for them to complete a Canic upgrade or release. Do not upgrade or downgrade
-  either dependency solely to align the test consumer. Upstream skew may leave
-  optional IcyDB composition unqualified; report that limitation separately and
-  continue Canic-owned validation. It is not a Canic implementation, push or
-  publication blocker. Production runtime-identity checks remain scoped to the
-  selected deployed Canic graph; test-only dependency versions and workspace
-  lockfile duplicates do not establish a production defect.
-- Expected IcyDB drift includes incompatible shared dependency types (for
-  example, different `ic-memory` versions), API changes and fixture compilation
-  failures. During Canic toolchain/dependency upgrades, ordinary validation and
-  release preparation, do not investigate or repair that drift, add adapters,
-  pin dependencies to make it compile, or ask the maintainer to coordinate
-  upstream releases. Work on IcyDB composition only when explicitly requested.
-- Full Canic validation means all Canic-owned production and maintained test
-  targets, not optional external-consumer composition. Keep IcyDB-only fixture
-  packages and integration targets outside default build, check, Clippy and
-  release-test selection; retain their explicit opt-in qualification command.
-  If a broad command includes them accidentally, classify that as validation
-  selection drift, continue checking the Canic-owned targets, and report the
-  optional integration as unqualified. Never describe expected IcyDB skew as a
-  Canic regression or a reason to delay an otherwise qualified push/release.
+- Canic validation owns its framework and Canic-only fixtures. Consumer-specific
+  database composition tests belong to downstream repositories. Do not add IcyDB
+  dependencies, local Cargo overrides or consumer release-alignment requirements
+  to Canic's build, tests or deployment flow. Qualify Canic's lifecycle, admission,
+  memory and timer contracts with framework-owned fixtures; consuming applications
+  own proof of their actual database composition. Production runtime-identity
+  checks remain scoped to the selected deployed graph.
 - Within an already authorized implementation or release batch, a request to
   check, inspect or diagnose a failing test also authorizes correcting any
   confirmed in-scope source or test defect and running its narrow regression.

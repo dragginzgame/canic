@@ -163,18 +163,18 @@ fn replica_leaf_usage_lists_options() {
 fn maps_foreign_local_replica_owner_error() {
     let error = replica_icp_error(IcpCommandError::Failed {
         command: "icp network start local --background".to_string(),
-        stderr: "Error: port 8000 is in use by the local network of the project at '/home/adam/projects/icydb'\n".to_string(),
+        stderr: "Error: port 8000 is in use by the local network of the project at '/workspaces/other-app'\n".to_string(),
     });
 
     std::assert_matches!(
         error,
         ReplicaCommandError::ForeignLocalReplicaOwner { ref network, ref project }
-            if network == "local" && project == "/home/adam/projects/icydb"
+            if network == "local" && project == "/workspaces/other-app"
     );
     assert!(
         error
             .to_string()
-            .contains("owned by ICP network `local` for project: /home/adam/projects/icydb")
+            .contains("owned by ICP network `local` for project: /workspaces/other-app")
     );
 }
 

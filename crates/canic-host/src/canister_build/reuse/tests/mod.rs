@@ -607,12 +607,8 @@ fn governed_fixture_inputs_invalidate_reuse() {
         root.join("Cargo.toml"),
         "[workspace]\n[package]\nname = \"reuse-fixture\"\nversion = \"0.1.0\"\nedition = \"2024\"\n",
     ).unwrap();
-    fs::write(
-        root.join("Cargo.lock"),
-        "version = 4\n[[package]]\nname = \"reuse-fixture\"\nversion = \"0.1.0\"\n",
-    )
-    .unwrap();
     fs::write(root.join("src/lib.rs"), "pub const VALUE: u8 = 1;\n").unwrap();
+    crate::test_support::generate_fixture_lockfile(&root);
     fs::write(root.join("canic.toml"), REUSE_CONFIG).unwrap();
     fs::write(root.join("tool"), "tool payload 1\n").unwrap();
     let context = WorkspaceBuildContext {
@@ -631,14 +627,15 @@ fn governed_fixture_inputs_invalidate_reuse() {
     let original_snapshot = input_snapshot(&context, &tools).unwrap();
     let original = original_snapshot.digest();
     let changed_config = format!("# changed configuration input\n{REUSE_CONFIG}");
+    let changed_lock = format!(
+        "# changed lock authority\n{}",
+        fs::read_to_string(root.join("Cargo.lock")).unwrap()
+    );
     for (path, replacement) in [
         ("src/lib.rs", "pub const VALUE: u8 = 2;\n"),
         ("canic.toml", changed_config.as_str()),
         ("tool", "tool payload 2\n"),
-        (
-            "Cargo.lock",
-            "# changed lock authority\nversion = 4\n[[package]]\nname = \"reuse-fixture\"\nversion = \"0.1.0\"\n",
-        ),
+        ("Cargo.lock", changed_lock.as_str()),
     ] {
         let path = root.join(path);
         let bytes = fs::read(&path).unwrap();

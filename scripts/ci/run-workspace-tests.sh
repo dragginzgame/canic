@@ -298,14 +298,6 @@ print_summary() {
 finish_test_run() {
     report_compiler_cache_observation
     print_summary
-    if [[ "$MODE" = "full" || "$MODE" = "pocketic" ]]; then
-        local package target lane execution suite
-        while IFS=$'\t' read -r package target lane execution suite; do
-            if [[ "$lane" = "integration" ]]; then
-                echo "==> external integration not selected: $package/$target; run make test-pocketic-case CASE=$target"
-            fi
-        done < <(tail -n +2 "$INVENTORY")
-    fi
     if [[ "$PLAN_ONLY" -eq 1 ]]; then
         echo "WORKSPACE TEST PLAN RESOLVED: all requested suites were classified."
         return
@@ -565,7 +557,6 @@ run_inventory_tests() {
         [ "$row_package" = "$package" ] || continue
         [ "$row_execution" = "$execution" ] || continue
         [ "$row_suite" = "$suite" ] || continue
-        [[ "$release_lane" != "integration" ]] || continue
         if [ "$MODE" = "fast" ] && [ "$release_lane" != "fast" ]; then
             continue
         fi
@@ -589,7 +580,6 @@ run_ordinary_tests() {
     local selected=0
     while IFS=$'\t' read -r row_package row_target release_lane row_execution row_suite; do
         [[ "$row_execution/$row_suite" = "parallel/ordinary" ]] || continue
-        [[ "$release_lane" != "integration" ]] || continue
         selected_packages["$row_package"]=1
         cargo_args+=(--test "$row_target")
         selected=$((selected + 1))
@@ -807,15 +797,11 @@ start_owned_pocketic_server
 
 if [[ "$MODE" == "targeted-pocketic" ]]; then
     targeted_integration_count=0
-    targeted_integration_args=()
-    while IFS=$'\t' read -r row_package row_target row_lane row_execution _; do
+    while IFS=$'\t' read -r row_package row_target _row_lane row_execution _; do
         if [[ "$row_package" == "canic-tests" &&
             "$row_target" == "$TARGETED_POCKETIC_TEST" &&
             "$row_execution" == "pocketic-serial" ]]; then
             targeted_integration_count=$((targeted_integration_count + 1))
-            if [[ "$row_lane" == integration ]]; then
-                targeted_integration_args+=(--features external-composition)
-            fi
         fi
     done < <(tail -n +2 "$INVENTORY")
 
@@ -826,7 +812,6 @@ if [[ "$MODE" == "targeted-pocketic" ]]; then
         run_serial_pocketic_test \
             "targeted canic-tests PocketIC integration proof" \
             -p canic-tests \
-            "${targeted_integration_args[@]}" \
             --test "$TARGETED_POCKETIC_TEST"
     elif [[ "$TARGETED_POCKETIC_TEST" = "pic::governed_suite::governed_internal_pocketic_suite" ]]; then
         run_serial_pocketic_test \

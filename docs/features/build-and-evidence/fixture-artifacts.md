@@ -336,36 +336,20 @@ qualifies autonomous later Shards after publication authority leaves, Store-outa
 recovery, exact account replay and permanent codec failure across target restart.
 It also proves revocation before recycling, stopped-target reuse with a new grant
 and completed import, and rejection of a stale previous-installation revocation.
-The Store/IcyDB journey covers reinstall after a partial automatic import and
-reconciliation of discarded Store grant receipts across restart. The held-reply
-extension below qualifies interrupted grant and revocation effects.
+Database-backed delivery, partial-import reinstall and held-response consumer
+reinstall were historically qualified by an external composition fixture. That
+fixture is no longer part of Canic. Consuming applications must qualify row and
+checkpoint atomicity, partial import recovery and in-flight reinstall against
+their actual storage engine. Canic retains its framework-owned grant, custody,
+transport and interrupted-operation checks.
 
-A further real Store/IcyDB case submits reinstall while the consumer's existing
-fetch lease is active. It places Store and the consumer on separate disposable
-subnets to observe the pending call between rounds. The replacement remains
-empty after additional network progress and completes only under its new grant
-and installation receipt; reads with the old grant reject. A controller-guarded
-probe query observes the lease through the `internal-test-fixtures` feature,
-without changing transport or scheduling.
-
-This vanilla case establishes pending fetch at reinstall submission. A separate
-case now holds the canonical Store response until after consumer reinstall,
-then proves empty replacement state, exact replacement completion and rejection
-of the old grant. Its response barrier is available only in internal test builds;
-normal Store builds emit neither the barrier nor its controller-only endpoints.
-The instrumented Store executes real authorization and storage operations, but
-is not a production-finalized or byte-identical shipping artifact.
-
-A Root journey holds replies after real grant and revocation mutations, starts
-stop during each held call, drains the bounded caller response, and restarts the
-same Root Wasm while Store still holds its reply. Grant revision, selected targets
-and effect-free revocation replay remain exact. Root restore now reschedules the
-retained provisioning owner while Prepared; the existing dispatcher preserves
-retry deadlines and review-required failures. This uses the supported stop/drain
-boundary before heap replacement, not a promise to interpret undrained callbacks
-after a Rust heap replacement. The generated Fleet proof above separately uses
-the ordinary Store package without these response controls.
-
+A retained Root journey holds replies after real Store grant and revocation
+mutations, stops and drains the caller, then restarts the same Root Wasm while
+Store still holds its reply. It checks exact grant revisions, selected targets
+and effect-free revocation replay. Its Store response barrier is confined to
+internal test builds; the production Store exports no barrier endpoints. This
+qualifies recovery through the supported stop/drain boundary, not replacement
+of a Rust heap with undrained callbacks.
 
 ## Source retirement
 

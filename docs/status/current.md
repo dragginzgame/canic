@@ -1,7 +1,104 @@
-# Current handoff — 2026-10-03
+# Current handoff — 2026-10-04
 
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
+
+## Cargo workspace inheritance — 2026-10-04
+
+All 49 checked-in Cargo manifests now source package versions and dependency
+specifications from their owning workspaces. The main workspace already supplied
+package versions; three audit/sandbox canisters now also inherit their Canic
+runtime/build dependencies. Five isolated role-fixture packages inherit from
+three fixture workspace roots. The standalone historical audit harness inherits
+its original exact pins from its own workspace tables; no dependency version or
+package identity was changed by this cleanup. Generated build artifacts are not
+edited.
+
+The existing version-inheritance test now covers example Apps and no longer
+allows local path exceptions. AGENTS records the ownership rule and .52 includes
+it. All five workspace-manifest tests, locked metadata, structural checks across
+all manifests and current-document semantics pass. All ten Host isolated-fixture
+regressions pass, including resolver selection, protected sibling detection and
+renamed dependency rejection. The batch and its .52 changelog are complete;
+FR1 remains unfinished. This session has finished its builds. Logs are retained
+under `target/review-validation/canic-workspace-versions-*`. No broad suite,
+version bump, commit, push or deployment was performed.
+
+## IcyDB removal — 2026-10-04
+
+Follow-up removal audit: 5,247 Rust lines deleted and 174 added, a net reduction
+of 5,073 lines including comments and blank lines, excluding the separate Cargo
+fixture-lock fixes. All 2,279 maintained non-document files were searched; current
+source, tests, build configuration and CI have no IcyDB references. Locked metadata
+and the lockfile have no IcyDB package, target or dependency edge. Call tracing
+found one orphaned `fetch_in_flight` qualification hook; its API, workflow, ops
+and model accessors are now removed. Generic application fixture-import contracts
+remain framework-owned. Historical documentation and build caches are retained.
+All eight fixture-importer regressions pass after hook removal, including lease
+serialization, stale cleanup fencing and exact receipt checks. This narrow rerun
+used the concurrently selected memory 0.24.1 / timers 0.10.5 graph; earlier
+PocketIC evidence below retains its original dependency selection. Scoped
+formatting and whitespace checks pass.
+
+The maintainer explicitly requested removal of all IcyDB testing. Canic's
+workspace and lockfile no longer contain IcyDB, its schema, its lifecycle actor
+or its local Cargo override. The independent audit probe and database-specific
+integration suite are removed. The three mandatory managed lifecycle/admission
+journeys now use `managed_lifecycle_probe`, a small Canic-only actor preserving
+explicit guard parity, denied-dispatch accounting, transition replay and public
+managed-App support. Framework Store response-barrier support remains because a
+Fleet recovery journey still uses it. No sibling repository was modified.
+
+Default workspace selection now includes every maintained package and feature;
+the external-composition lane and two-pass Clippy exception are removed. The
+framework no longer owns database row/checkpoint and consumer reinstall proof;
+those are downstream qualification obligations. Active docs and AGENTS describe
+that boundary. Historical reports remain evidence, with links to deleted fixture
+sources pinned to the prior immutable Git snapshot. .52 includes the removal.
+
+Locked metadata contains zero IcyDB packages, edges or sibling paths. Resolution
+removed 20 package identities and added only the Canic-owned probe; retained
+package versions did not change. Shell runner regressions, inventory, scoped
+ShellCheck, 15 manifest/endpoint tests, 15 timer inventory tests, Host fixture
+ownership and warning-denied replacement-probe/internal harness/integration-package
+Clippy pass. All
+three formerly database-backed mandatory PocketIC journeys pass with the Canic-only
+actor. The retained Root/Store reply-recovery PocketIC proof also passes (four
+targeted simulator cases total). Embedded allocation-peer verification passes
+without changing the checked-in artifact. Logs use
+`target/review-validation/canic-no-icydb-*`.
+Previous IcyDB qualification/override blockers below are superseded by this cut.
+The IcyDB-removal batch and its .52 changelog are complete; FR1 whole-Fleet
+execution remains unfinished. This session has finished its builds. No broad
+suite, version bump, commit, push or deployment was performed.
+
+## .52 release error review and changelog consolidation — 2026-10-04
+
+The latest retained release run (20261003T185713Z-55976) passed Clippy but
+failed six native Cargo-fixture tests across `canic/build_cfg_surface` and Host.
+Their manually written lockfiles omitted inherited unused local patches; Cargo
+refused the locked operations when scratch lived beneath the workstation IcyDB
+override. The build-macro failure reproduces under the real scratch runner.
+All six fixtures now generate their initial lockfiles offline before exercising
+unchanged locked operations. Reuse mutation coverage modifies the resolved lock
+instead of discarding its patch records. No dependency selection, sibling source,
+production behavior or paid operation changed.
+
+All six failed tests now pass under that same scratch runner and local override,
+along with the companion build-cfg check and changelog structure test. Scoped
+formatting, whitespace and document semantics pass. Warning-denied Host
+library/test Clippy with all features and focused build-cfg/changelog Clippy pass.
+Evidence is retained under `target/review-validation/canic052-*.log`.
+The .52 root summary and detailed notes now own all pending changelog content,
+including clear limitations for unfinished FR1 execution and receiver-local
+authorization. Earlier published entries and package versions are unchanged.
+
+This is targeted qualification of the reported failures. The release run stopped
+at its native-test barrier before PocketIC; no new full-suite result is claimed.
+The .52 changelog is prepared for the selected checkpoint, while complete FR1
+remains unfinished. Prior optional-composition qualification limits remain as
+recorded below and do not establish a production dependency defect. No commit,
+version bump, push or deployment was performed. This session has finished its builds.
 
 ## ic-query 0.45.4 catalog fixture correction — 2026-10-03
 

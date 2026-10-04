@@ -54,7 +54,7 @@ pub fn history(limit: u64) -> HistoryCost {
 }
 
 fn metric_name(index: u16) -> String {
-    format!("icydb.entity.synthetic_qualified_entity_path_{index:04}.instructions_total")
+    format!("application.entity.synthetic_qualified_entity_path_{index:04}.instructions_total")
 }
 
 #[expect(

@@ -172,23 +172,11 @@ boundary.
 
 `make test` executes the release-lane integration tests recorded in the guarded
 workspace test inventory. New integration targets must declare their release
-lane, execution class and suite before the gate accepts them. External consumer
-composition uses the explicit `integration` lane and is reported as unselected
-by normal release/PocketIC runs. Run the IcyDB composition qualification with
-`make test-pocketic-case CASE=icydb_lifecycle_composition` when its published
-dependencies share Canic's memory runtime. This includes the IcyDB-backed
-provisioning journeys within that target. It is a test consumer, not a deployed
-Canic dependency. Its independent upstream dependency schedule never requires
-alignment with Canic or blocks Canic upgrades, push readiness or publication.
-Do not chase or wait for matching IcyDB releases, or change dependency versions
-solely to align this optional local test consumer. Record unavailable composition
-qualification separately and continue Canic-owned validation.
-Default workspace build, check, Clippy and test commands exclude the optional
-IcyDB schema/probe packages. The integration package's `external-composition`
-feature gates its IcyDB dependency and test target; the explicit composition
-command enables it. Clippy checks all targets/features in other maintained
-packages and all default targets in this integration package. Full Canic-owned
-validation does not require the optional consumer to compile.
+lane, execution class and suite before the gate accepts them. All workspace
+packages and their maintained features participate in default checks. Lifecycle
+and admission proofs use Canic-owned fixtures; database-specific composition
+belongs to the consuming application's repository and is not a Canic dependency
+or release requirement.
 The production Wasm dependency graph still requires exactly one memory runtime.
 Complete and PocketIC-only runs first verify the checked-in embedded allocation
 peer against its current producer inputs, before test suites or server startup.

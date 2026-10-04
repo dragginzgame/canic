@@ -440,13 +440,13 @@ fn declaration_workspace() -> PathBuf {
         "[workspace]\nmembers=[\"left\",\"right\"]\nresolver=\"3\"\n",
     )
     .unwrap();
-    fs::write(root.join("Cargo.lock"), "version=4\n[[package]]\nname=\"left\"\nversion=\"0.1.0\"\n[[package]]\nname=\"right\"\nversion=\"0.1.0\"\n").unwrap();
     fs::write(root.join("shared.did"), "shared: () -> (); ").unwrap();
     for name in ["left", "right"] {
         fs::create_dir_all(root.join(name).join("src")).unwrap();
         fs::write(root.join(name).join("Cargo.toml"), format!("[package]\nname=\"{name}\"\nversion=\"0.1.0\"\nedition=\"2024\"\n[lib]\ncrate-type=[\"cdylib\"]\n")).unwrap();
         write_role(&root, name, name);
     }
+    crate::test_support::generate_fixture_lockfile(&root);
     root
 }
 

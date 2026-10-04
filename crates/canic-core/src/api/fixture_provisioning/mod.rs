@@ -11,13 +11,6 @@ pub use crate::ops::fixture_importer::FixtureImporter;
 pub struct FixtureProvisioningApi;
 
 impl FixtureProvisioningApi {
-    /// Observe the existing fetch lease in an internal qualification canister.
-    #[cfg(feature = "internal-test-fixtures")]
-    #[must_use]
-    pub fn fetch_in_flight() -> bool {
-        crate::workflow::fixture_provisioning::fetch_in_flight()
-    }
-
     /// Register one application participant after database restoration on each fresh heap.
     pub fn register(importer: &'static dyn FixtureImporter) -> Result<(), FixtureImportError> {
         crate::workflow::fixture_provisioning::register(importer)

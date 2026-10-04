@@ -59,6 +59,24 @@ pub fn temp_dir(prefix: &str) -> PathBuf {
     std::env::temp_dir().join(format!("{prefix}-{}-{unique}", std::process::id()))
 }
 
+/// Resolve a temporary fixture before testing locked Cargo operations.
+///
+/// Cargo records inherited unused patches too, so hand-written package lists
+/// are not a complete lockfile when workstation overrides are configured.
+#[track_caller]
+pub fn generate_fixture_lockfile(root: &Path) {
+    let output = crate::cargo_command()
+        .current_dir(root)
+        .args(["generate-lockfile", "--offline"])
+        .output()
+        .expect("generate fixture lockfile");
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+}
+
 #[cfg(unix)]
 pub fn create_fifo(path: &Path) {
     let status = std::process::Command::new("mkfifo")

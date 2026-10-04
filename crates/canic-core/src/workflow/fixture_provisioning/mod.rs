@@ -118,9 +118,3 @@ pub(super) async fn advance_owned(
     fixture_importer::apply_chunk(importer, &assignment, before.next_chunk, &bytes);
     fixture_importer::status(&assignment, importer)
 }
-
-/// Read-only lease observation for controlled interruption qualification.
-#[cfg(feature = "internal-test-fixtures")]
-pub fn fetch_in_flight() -> bool {
-    fixture_importer::fetch_in_flight()
-}

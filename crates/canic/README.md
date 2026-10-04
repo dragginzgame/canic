@@ -176,7 +176,7 @@ Authority snapshots currently reject any timer claim outside Canic custody.
 See the maintained
 [native timer adoption guide](../../docs/features/runtime/native-timers.md)
 for exact dependency, custody, lifecycle reconstruction and qualification
-rules. Combined Canic/IcyDB qualification remains a separate 0.104 proof.
+rules. Applications own qualification of their combined runtime.
 
 This crate lives in the Canic workspace. See the workspace guide at
 `../../README.md` for full setup, topology, and example canisters.

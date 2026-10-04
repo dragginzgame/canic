@@ -552,7 +552,7 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
         "--format",
         "{p}",
     ]);
-    // External test composition may retain another timer version; deployed Canic must not.
+    // Resolve the deployed graph, independently of host-only test dependencies.
     for package in ["canic", "canic-core", "canic-control-plane", "canic-macros"] {
         command.args(["-p", package]);
     }
@@ -573,19 +573,8 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
         1,
         "Canic's deployed runtime must resolve one shared timer provider identity"
     );
-    // Cargo's locked resolution validates dependency requirements. IcyDB's
-    // test-only version requirement does not own Canic's runtime timer custody.
-    assert_eq!(
-        workspace_dependencies["icydb"]
-            .as_table()
-            .and_then(|dependency| dependency.get("default-features"))
-            .and_then(toml::Value::as_bool),
-        Some(false)
-    );
-    assert!(!workspace_dependencies.contains_key("icydb-model"));
     assert!(!workspace_dependencies.contains_key("ic-cdk-timers"));
 
-    let mut direct_icydb_model_consumers = BTreeSet::new();
     let mut timer_consumers = BTreeSet::from(["Cargo.toml".to_string()]);
     let mut raw_provider_consumers = BTreeSet::new();
     for source_root in PRODUCTION_SOURCE_ROOTS {
@@ -601,14 +590,10 @@ fn timer_provider_graph_and_manifest_consumers_are_closed() {
                 if dependencies.contains("ic-cdk-timers") {
                     raw_provider_consumers.insert(path.to_string());
                 }
-                if dependencies.contains("icydb-model") {
-                    direct_icydb_model_consumers.insert(path.to_string());
-                }
             },
         );
     }
 
-    assert!(direct_icydb_model_consumers.is_empty());
     assert_eq!(timer_consumers, expected_timer_manifest_consumers());
     assert!(raw_provider_consumers.is_empty());
 }
@@ -811,7 +796,6 @@ fn expected_timer_manifest_consumers() -> BTreeSet<String> {
     [
         "Cargo.toml",
         "apps/test/test/Cargo.toml",
-        "canisters/test/canic_icydb_lifecycle_probe/Cargo.toml",
         "canisters/test/runtime_probe/Cargo.toml",
         "crates/canic-control-plane/Cargo.toml",
         "crates/canic-core/Cargo.toml",

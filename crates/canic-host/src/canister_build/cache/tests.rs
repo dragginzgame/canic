@@ -94,7 +94,7 @@ fn declaration_and_runtime_preserve_cfg_with_distinct_final_outputs() {
         "fn main() { println!(\"{} {}\", env!(\"MODE\"), cfg!(debug_assertions)); }\n",
     )
     .unwrap();
-    fs::write(root.join("Cargo.lock"), "version=4\n[[package]]\nname=\"cache_helper\"\nversion=\"0.1.0\"\n[[package]]\nname=\"cache_probe\"\nversion=\"0.1.0\"\ndependencies=[\"cache_helper\"]\n").unwrap();
+    crate::test_support::generate_fixture_lockfile(&root);
     let context = crate::canister_build::WorkspaceBuildContext {
         role: "app".into(),
         profile: crate::canister_build::CanisterBuildProfile::Release,

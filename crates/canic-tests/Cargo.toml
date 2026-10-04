@@ -8,16 +8,12 @@ description = "Workspace-only integration tests for Canic"
 readme = false
 publish = false
 
-[features]
-external-composition = ["dep:icydb"]
-
 [dependencies]
 candid = { workspace = true }
 canic = { workspace = true, features = ["blob-storage-billing"] }
 canic-testing-internal = { workspace = true }
 ic-testkit = { workspace = true }
 ic-timers = { workspace = true }
-icydb = { workspace = true, optional = true }
 serde = { workspace = true }
 
 [dev-dependencies]
@@ -33,10 +29,6 @@ ic-memory = { workspace = true }
 serde_json = { workspace = true }
 sha2 = { workspace = true }
 tokio = { workspace = true }
-
-[[test]]
-name = "icydb_lifecycle_composition"
-required-features = ["external-composition"]
 
 [lints]
 workspace = true

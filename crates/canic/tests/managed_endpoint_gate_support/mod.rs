@@ -11,9 +11,6 @@ use std::{
 };
 use syn::{Attribute, Expr, ItemFn, Lit, Meta, Token, punctuated::Punctuated, visit::Visit};
 
-const PROBE: &str = "canisters/test/canic_icydb_lifecycle_probe/src";
-const CONTROLLER: &str = "crate::require_test_controller";
-
 /// Exact test endpoint admission, including the complete allowed CDK options.
 struct ReviewedEndpoint {
     path: String,
@@ -23,7 +20,7 @@ struct ReviewedEndpoint {
 }
 
 fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
-    let mut reviewed = vec![
+    vec![
         ReviewedEndpoint {
             path: "apps/test/user_hub/src/fixture_importer/mod.rs".into(),
             name: "test_release_fixture",
@@ -38,66 +35,7 @@ fn reviewed_endpoints() -> Vec<ReviewedEndpoint> {
             kind: "update",
             guard: None,
         },
-    ];
-    for (file, name, kind, guard) in [
-        (
-            "lib.rs",
-            "lifecycle_composition_snapshot",
-            "query",
-            Some(CONTROLLER),
-        ),
-        (
-            "fixture_provisioning/mod.rs",
-            "fixture_progress",
-            "query",
-            Some(CONTROLLER),
-        ),
-        (
-            "fixture_provisioning/mod.rs",
-            "fixture_first_row",
-            "query",
-            Some(CONTROLLER),
-        ),
-        (
-            "fixture_provisioning/consumer/mod.rs",
-            "fixture_consumer_status",
-            "query",
-            Some(CONTROLLER),
-        ),
-        (
-            "fixture_provisioning/consumer/mod.rs",
-            "fixture_consumer_fault",
-            "update",
-            Some(CONTROLLER),
-        ),
-        (
-            "fixture_provisioning/consumer/mod.rs",
-            "fixture_consumer_fetch_pending",
-            "query",
-            Some(CONTROLLER),
-        ),
-        (
-            "fixture_provisioning/transport/mod.rs",
-            "fixture_malformed_reads",
-            "query",
-            Some(CONTROLLER),
-        ),
-        // This isolated peer must accept the consumer canister as its caller.
-        (
-            "fixture_provisioning/transport/mod.rs",
-            "canic_wasm_store_fixture_chunk",
-            "update",
-            None,
-        ),
-    ] {
-        reviewed.push(ReviewedEndpoint {
-            path: format!("{PROBE}/{file}"),
-            name,
-            kind,
-            guard,
-        });
-    }
-    reviewed
+    ]
 }
 
 fn raw_kind(attribute: &Attribute) -> Option<&'static str> {
@@ -241,20 +179,22 @@ mod tests {
 
     #[test]
     fn reviewed_instrumentation_requires_exact_guard_and_export_options() {
-        let path = format!("{PROBE}/fixture_provisioning/consumer/mod.rs");
-        assert!(check(r#"#[ic_cdk::query(guard = "crate::require_test_controller")] fn fixture_consumer_status() {}"#, &path).is_empty());
+        let path = "apps/test/user_hub/src/fixture_importer/mod.rs";
+        assert!(
+            check(
+                r#"#[ic_cdk::update(guard = "require_controller")] fn test_release_fixture() {}"#,
+                path
+            )
+            .is_empty()
+        );
         for attribute in [
-            "#[ic_cdk::query]",
-            r#"#[ic_cdk::query(guard = "different_guard")]"#,
-            r#"#[ic_cdk::query(guard = "crate::require_test_controller", name = "application_method")]"#,
-            r#"#[ic_cdk::update(guard = "crate::require_test_controller")]"#,
+            "#[ic_cdk::update]",
+            r#"#[ic_cdk::update(guard = "different_guard")]"#,
+            r#"#[ic_cdk::update(guard = "require_controller", name = "application_method")]"#,
+            r#"#[ic_cdk::query(guard = "require_controller")]"#,
         ] {
             assert!(
-                !check(
-                    &format!("{attribute} fn fixture_consumer_status() {{}}"),
-                    &path
-                )
-                .is_empty()
+                !check(&format!("{attribute} fn test_release_fixture() {{}}"), path).is_empty()
             );
         }
     }
@@ -280,20 +220,11 @@ mod tests {
     fn raw_application_endpoints_and_additions_to_reviewed_files_are_rejected() {
         let source = "#[::ic_cdk::update] fn application_write() {}";
         assert!(!check(source, "apps/production/src/lib.rs").is_empty());
-        let peer = "#[ic_cdk::update] fn canic_wasm_store_fixture_chunk() -> u8 { 0 }";
-        assert!(
-            check(
-                peer,
-                &format!("{PROBE}/fixture_provisioning/transport/mod.rs")
-            )
-            .is_empty()
-        );
-        assert!(!check(peer, "apps/production/src/lib.rs").is_empty());
-        assert!(!check(source, &format!("{PROBE}/lib.rs")).is_empty());
+        assert!(!check(source, "apps/test/user_hub/src/fixture_importer/mod.rs").is_empty());
         assert!(
             !check(
                 "mod nested { #[query] fn application_read() {} }",
-                &format!("{PROBE}/lib.rs")
+                "apps/test/user_hub/src/fixture_importer/mod.rs"
             )
             .is_empty()
         );

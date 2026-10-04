@@ -46,12 +46,6 @@ impl<I: Copy> FixtureImporterRegistry<I> {
         }
     }
 
-    /// Read the real heap lease for controlled interruption qualification.
-    #[cfg(feature = "internal-test-fixtures")]
-    pub const fn fetch_in_flight(&self) -> bool {
-        self.active.is_some()
-    }
-
     /// Reject replacement of a participant until the heap is reconstructed.
     pub const fn register(&mut self, importer: I) -> Result<(), FixtureImporterRegistryError> {
         if self.importer.is_some() {
