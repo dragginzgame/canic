@@ -3,6 +3,23 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Embedded allocation-peer refresh — 2026-10-04
+
+The release test preflight stopped before ordinary tests or PocketIC because
+its freshly built allocation peer differed from the checked-in Wasm. Refresh
+and the exact `verify_embedded_root` command now both pass on the selected
+memory 0.24.2, query 0.45.6, timers 0.10.6 and testkit 0.14.1 graph. The Wasm and
+`scripts/dev/managed-root-fixture.json` are updated together. Artifact SHA-256:
+`89303d639958976cdffd9685d330f14d4b970b4df0c0a3319e6bb7dc6c8284d6`.
+The manifest and lockfile stayed byte-identical throughout the repair. Release
+and Cargo build artifacts are retained. The .52 changelog reflects the refresh
+and current memory minor.
+
+This fixes the reported preflight blocker; the maintainer can retry the release
+flow. It is not a full-suite result or FR1 completion. No broad gate, version
+bump, commit, push or deployment ran. This session has finished its builds.
+Logs: `target/review-validation/canic-embedded-{refresh,verify}-20261004.log`.
+
 ## Cargo workspace inheritance — 2026-10-04
 
 All 49 checked-in Cargo manifests now source package versions and dependency
