@@ -38,7 +38,7 @@ while IFS=$'\t' read -r package target release_lane execution suite extra; do
         fast)
             fast_count=$((fast_count + 1))
             ;;
-        full | integration) ;;
+        full) ;;
         *) fail "line $line_number has invalid release lane: $release_lane" ;;
     esac
 
@@ -46,7 +46,7 @@ while IFS=$'\t' read -r package target release_lane execution suite extra; do
         parallel/ordinary)
             parallel_count=$((parallel_count + 1))
             ;;
-        pocketic-serial/runtime | pocketic-serial/blob-storage | pocketic-serial/payload-limits | pocketic-serial/external-composition)
+        pocketic-serial/runtime | pocketic-serial/blob-storage | pocketic-serial/payload-limits)
             [ "$package" = "canic-tests" ] ||
                 fail "PocketIC target must belong to canic-tests: $key"
             pocketic_count=$((pocketic_count + 1))
@@ -60,11 +60,6 @@ while IFS=$'\t' read -r package target release_lane execution suite extra; do
     [[ -z "${target_classes[$target]:-}" || "${target_classes[$target]}" = "$target_class" ]] ||
         fail "test target name crosses selection classes: $target"
     target_classes["$target"]="$target_class"
-
-    if [[ "$release_lane" = "integration" || "$suite" = "external-composition" ]]; then
-        [[ "$release_lane/$execution/$suite" = "integration/pocketic-serial/external-composition" ]] ||
-            fail "external composition must use the explicit integration lane: $key"
-    fi
 
     if [ "$release_lane" = "fast" ] && [ "$execution" != "parallel" ]; then
         fail "fast-lane target must be parallel-safe: $key"

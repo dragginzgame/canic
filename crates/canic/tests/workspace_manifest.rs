@@ -274,31 +274,6 @@ fn uses_generated_standalone_config(
     })
 }
 
-// Allow the one intentional local-only dev-dependency edge for unpublished
-// internal self-test support.
-fn allow_local_path_dependency(
-    root: &Path,
-    manifest_path: &Path,
-    section_path: &str,
-    name: &str,
-) -> bool {
-    let manifest = relative_display(root, manifest_path);
-    if manifest == "crates/canic-core/Cargo.toml"
-        && section_path == "dev-dependencies"
-        && name == "canic-testing-internal"
-    {
-        return true;
-    }
-
-    matches!(
-        manifest.as_str(),
-        "canisters/audit/minimal/Cargo.toml"
-            | "canisters/audit/minimal_metrics/Cargo.toml"
-            | "canisters/sandbox/blank/Cargo.toml"
-    ) && matches!(section_path, "dependencies" | "build-dependencies")
-        && name == "canic"
-}
-
 // Records dependency tables that pin versions or local paths in member manifests.
 fn collect_dependency_failures(
     root: &Path,
@@ -387,9 +362,6 @@ fn check_dependency_table(
                 }
 
                 if table.contains_key("path") {
-                    if allow_local_path_dependency(root, manifest_path, &section_path, name) {
-                        continue;
-                    }
                     failures.push(format!(
                         "{}: [{section_path}] {name} uses a local `path`; use the workspace root declaration instead",
                         relative_display(root, manifest_path),
@@ -420,7 +392,7 @@ fn check_dependency_table(
     }
 }
 
-// Verifies Canic-owned workspace members inherit package and dependency versions from the root.
+// Verifies every workspace member inherits package and dependency versions from the root.
 #[test]
 fn workspace_members_inherit_versions_from_root() {
     let root = workspace_root();
@@ -438,10 +410,6 @@ fn workspace_members_inherit_versions_from_root() {
 
     // Validate each workspace member against the root manifest contract.
     for manifest_path in member_manifests {
-        if !is_canic_owned_workspace_member(&root, &manifest_path) {
-            continue;
-        }
-
         let manifest = read_manifest(&manifest_path);
         let Some(package) = manifest.get("package").and_then(Value::as_table) else {
             continue;
@@ -654,64 +622,4 @@ fn blob_storage_billing_feature_is_opt_in_and_implies_blob_storage() {
         BTreeSet::from(["blob-storage", "canic-core/blob-storage-billing"]),
         "canic blob-storage-billing feature must imply facade and core blob storage"
     );
-}
-
-#[test]
-fn external_composition_qualification_is_explicit() {
-    let manifest = read_manifest(&workspace_root().join("crates/canic-tests/Cargo.toml"));
-    assert_eq!(
-        manifest["dependencies"]["icydb"]["optional"].as_bool(),
-        Some(true)
-    );
-    if manifest["features"].get("default").is_some() {
-        assert!(!feature_entries(&manifest, "default").contains("external-composition"));
-    }
-    assert_eq!(
-        feature_entries(&manifest, "external-composition"),
-        BTreeSet::from(["dep:icydb"])
-    );
-    let target = manifest["test"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|target| target["name"].as_str() == Some("icydb_lifecycle_composition"))
-        .unwrap();
-    assert_eq!(
-        target["required-features"].as_array().unwrap(),
-        &[Value::String("external-composition".into())]
-    );
-    let plan = |mode: &str, target: Option<&str>| {
-        let mut command = std::process::Command::new("bash");
-        command
-            .current_dir(workspace_root())
-            .env("CANIC_TEST_PLAN_ONLY", "1")
-            .arg("scripts/ci/run-workspace-tests.sh")
-            .arg(mode);
-        if let Some(target) = target {
-            command.arg(target);
-        }
-        let output = command.output().expect("resolve test execution plan");
-        assert!(
-            output.status.success(),
-            "{}",
-            String::from_utf8_lossy(&output.stderr)
-        );
-        String::from_utf8(output.stdout)
-            .expect("test plan is UTF-8")
-            .lines()
-            .filter(|line| line.starts_with("==> plan: cargo test "))
-            .collect::<Vec<_>>()
-            .join("\n")
-    };
-    for mode in ["full", "pocketic"] {
-        let release = plan(mode, None);
-        assert!(release.contains("--test lifecycle_boundary"));
-        assert!(release.contains("--test pic_root_funding_recovery"));
-        assert!(!release.contains("--test icydb_lifecycle_composition"));
-        assert!(!release.contains("--features external-composition"));
-    }
-    let integration = plan("targeted-pocketic", Some("icydb_lifecycle_composition"));
-    assert!(integration.contains("--test icydb_lifecycle_composition"));
-    assert!(integration.contains("--features external-composition"));
-    assert!(!integration.contains("--test pic_root_funding_recovery"));
 }

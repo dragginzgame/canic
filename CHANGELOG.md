@@ -8,24 +8,14 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 ## Unreleased
 
-- Develop receiver-local managed-caller authorization with recoverable publication
-  progress in an isolated draft; production publication and startup ordering
-  remain unfinished.
-
-- Complete FR1's whole-Fleet release-to-capacity command: integrate remaining
-  obligations and continuation quiescence, custody handoff, account recovery,
-  journaled execution/resume, CLI and whole-Fleet conservation/recovery proof.
-  The .52 checkpoint includes the implemented discovery and assessment APIs;
-  it does not expose the unfinished release command.
-
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.52` adds Fleet release discovery, hardens operator workflows and test
-  reliability, adapts the current memory, query and testkit APIs, and
-  refreshes the documentation with clearer models, navigation and deployment
-  guidance.
+- `0.110.52` adds Fleet release discovery and assessment, improves operator and
+  test reliability, removes IcyDB from Canic validation, centralizes Cargo version
+  declarations, adopts current upstream APIs, and consolidates onboarding,
+  deployment and authorization guidance.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

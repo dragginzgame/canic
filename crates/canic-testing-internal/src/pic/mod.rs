@@ -76,11 +76,10 @@ pub use fleet_registry::{
     setup_fresh_active_component_registry,
 };
 pub use lifecycle::{
-    CanicIcydbLifecycleFixture, InstalledFixtureConsumer, LifecycleBoundaryFixture,
-    UninstalledCanicFixture, held_fixture_store_wasm, icydb_participant_trap_wasm,
-    install_canic_icydb_lifecycle_fixture, install_canic_icydb_lifecycle_fixture_with_builder,
-    install_lifecycle_boundary_fixture, invalid_init_args, lifecycle_participant_init_trap_wasm,
-    lifecycle_participant_trap_wasm, retained_fixture_store_wasm, upgrade_args,
+    LifecycleBoundaryFixture, ManagedLifecycleFixture, UninstalledCanicFixture,
+    held_fixture_store_wasm, install_lifecycle_boundary_fixture, install_managed_lifecycle_fixture,
+    invalid_init_args, lifecycle_participant_init_trap_wasm, lifecycle_participant_trap_wasm,
+    upgrade_args,
 };
 pub use root::{
     RootBaselineMetadata, RootBaselineRecipe, RootBaselineRecipeError, RootBaselineSpec,

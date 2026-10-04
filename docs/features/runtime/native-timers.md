@@ -37,13 +37,9 @@ therefore two inventories. Do not combine a direct `ic-cdk-timers` consumer
 with this design without separately inventorying and qualifying that second
 provider path.
 
-IcyDB is an optional test consumer with an independent dependency schedule.
-Before attempting its explicit composition qualification, inspect the selected
-graph and confirm that every timer owner resolves the same `ic-timers` package
-identity. Upstream skew may leave this optional composition unqualified without
-changing or blocking Canic's production runtime. When the graph is compatible,
-qualify composed lifecycle and timer custody with `make test-pocketic-case
-CASE=icydb_lifecycle_composition`.
+Applications that compose other timer owners must qualify their complete selected
+graph and shared lifecycle in their own repository. Canic's fixture suite qualifies
+Canic's timer custody without depending on a database consumer.
 
 ## Replace the Removed Canic Facade
 

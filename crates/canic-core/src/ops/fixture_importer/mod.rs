@@ -264,9 +264,3 @@ pub fn permanent_failure(error: FixtureImportError) -> Option<FixtureImportFailu
         },
     })
 }
-
-/// Observe the existing lease without changing transport or application progress.
-#[cfg(feature = "internal-test-fixtures")]
-pub fn fetch_in_flight() -> bool {
-    REGISTRY.with_borrow(FixtureImporterRegistry::fetch_in_flight)
-}

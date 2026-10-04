@@ -1,29 +1,27 @@
 [app]
-name = "composed_audit"
+name = "managed_lifecycle_probe"
 init_mode = "enabled"
 
 [roles.root]
 kind = "root"
 
-[roles.probe]
+[roles.test]
 kind = "canister"
 package = "."
+fleet_admission = true
 
 [auth.delegated_tokens]
 enabled = false
 
-[component_specs.probe]
-component_role = "probe"
+[component_specs.test]
+component_role = "test"
 maximum_instances = 1
 
-[component_specs.probe.metrics]
-profile = "leaf"
+[component_groups.test.components.test]
+component_spec = "test"
 
-[component_groups.probe.components.probe]
-component_spec = "probe"
-
-[component_group_deployments.probe]
-component_group = "probe"
+[component_group_deployments.test]
+component_group = "test"
 initial_placements = 1
 maximum_placements = 1
 placement.maximum_per_root = 1

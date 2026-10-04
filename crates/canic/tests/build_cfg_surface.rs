@@ -40,16 +40,22 @@ role = "minimal"
     )
     .unwrap();
     fs::write(
-        root.join("Cargo.lock"),
-        "version = 4\n[[package]]\nname = \"canic_freshness_probe\"\nversion = \"0.0.0\"\n",
-    )
-    .unwrap();
-    fs::write(
         root.join("src/lib.rs"),
         "pub const ROLE: &str = env!(\"CANIC_CANISTER_ROLE\");\n",
     )
     .unwrap();
     fs::write(root.join("build.rs"), BUILD_MACRO_PROBE).unwrap();
+    // Include inherited Cargo overrides before exercising locked builds.
+    let lock = Command::new(env::var_os("CARGO").unwrap_or_else(|| "cargo".into()))
+        .current_dir(&root)
+        .args(["generate-lockfile", "--offline"])
+        .output()
+        .unwrap();
+    assert!(
+        lock.status.success(),
+        "{}",
+        String::from_utf8_lossy(&lock.stderr)
+    );
     let config = root.join("config/canic.toml");
     let source = "[app]\nname = \"standalone\"\ninit_mode = \"enabled\"\n[roles.minimal]\nkind = \"canister\"\npackage = \".\"\n[auth.delegated_tokens]\nenabled = false\n";
     fs::write(&config, source).unwrap();

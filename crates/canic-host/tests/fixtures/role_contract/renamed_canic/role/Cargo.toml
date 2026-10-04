@@ -1,7 +1,7 @@
 [package]
 name = "fixture_renamed_canic_role"
-version = "0.0.0"
-edition = "2024"
+version = { workspace = true }
+edition = { workspace = true }
 publish = false
 build = "build.rs"
 
@@ -17,7 +17,7 @@ crate-type = ["cdylib"]
 path = "src/lib.rs"
 
 [dependencies]
-framework = { package = "canic", path = "../../../../../../canic", default-features = false, features = [] }
+framework = { workspace = true, features = [] }
 
 [build-dependencies]
 canic = { workspace = true, features = [] }

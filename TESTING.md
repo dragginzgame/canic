@@ -56,14 +56,10 @@ maintainer selects broad gates such as `make test`, `make test-ordinary` and
 `make test-pocketic`; see [CI governance](docs/governance/ci-deployment.md).
 Check for an active build using the shared `target/` before starting another.
 
-Default build, check, Clippy and test selection covers Canic-owned code and
-maintained tests. Optional IcyDB schema/probe packages and their external
-composition target are excluded. Qualify that local consumer explicitly with
-`make test-pocketic-case CASE=icydb_lifecycle_composition`; independent upstream
-API or dependency drift may leave it unqualified without blocking Canic.
-The integration target and its dependency require the `external-composition`
-feature, which the explicit command selects automatically. Default Clippy checks
-all targets in that package without enabling external composition.
+Default build, check, Clippy and test selection covers the complete Canic-owned
+workspace. Lifecycle, admission and shared runtime checks use Canic-only fixtures.
+Database-specific composition belongs to consuming applications; Canic has no
+IcyDB package, local source override or external-composition test lane.
 
 The runner prints progress and results while retaining complete output under
 `target/test-runs/`. High-volume `CANIC-REQUEST`, `CANIC-OBSERVATION`,

@@ -14,14 +14,7 @@ case "$command" in
         exec cargo "$command" --locked "${workspace_args[@]}" "$@"
         ;;
     clippy)
-        # The integration package's only opt-in feature is external composition.
-        # Its ordinary all-targets selection still includes every maintained test.
-        status=0
-        cargo clippy --locked "${workspace_args[@]}" --exclude canic-tests \
-            --all-targets --all-features -- "$@" || status=$?
-        cargo clippy --locked -p canic-tests --all-targets -- "$@" || status=$?
-        echo 'Optional external composition is not selected; qualify it explicitly when needed.'
-        exit "$status"
+        exec cargo clippy --locked "${workspace_args[@]}" --all-targets --all-features -- "$@"
         ;;
     *)
         echo 'usage: run-workspace-cargo.sh <build|check> [cargo options] | clippy [lint options]' >&2

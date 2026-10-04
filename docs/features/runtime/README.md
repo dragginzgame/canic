@@ -73,8 +73,7 @@ Authority snapshots currently fail closed when the shared registry contains a
 timer claim outside Canic custody. Combined-framework snapshot composition is
 not inferred from shared observation. The paired synchronous lifecycle
 participant lets each application reconstruct its own volatile claims after
-Canic restoration; combined Canic/IcyDB qualification remains a separate
-0.104 proof. Auth renewal, automatic cycle top-up and placement acknowledgement
+Canic restoration; applications own qualification of their combined runtime. Auth renewal, automatic cycle top-up and placement acknowledgement
 contribute their exact domain-owned native claims directly to Canic's current
 snapshot fence rather than through a central timer selector.
 

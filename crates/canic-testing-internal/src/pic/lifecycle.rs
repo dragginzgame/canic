@@ -8,7 +8,6 @@ use canic::{
             ComponentDirectoryHead, ComponentDirectoryProvenance,
             ComponentRuntimeDirectoryAuthority, ComponentRuntimeDirectoryPreparationRequest,
         },
-        fixture_provisioning::{FixtureAssignment, FixtureGrant, FixtureTargetBinding},
         fleet_registry::{
             FleetDirectoryProvenance, FleetDirectorySnapshot, FleetRegistryVersion,
             FleetSubnetRootDirectoryEntry, FleetSubnetRootStatus,
@@ -48,11 +47,10 @@ const INSTALL_CYCLES: u128 = 1_000_000_000_000;
 const CANISTERS: [&str; 3] = ["canister_test", "intent_authority", "runtime_probe"];
 const LIFECYCLE_CANISTER_CONFIG_PATH: &str = "apps/test/test-configs/root-sharding.toml";
 const AUTOMATIC_TOPUP_CONFIG_PATH: &str = "apps/test/canic.toml";
-const COMBINED_LIFECYCLE_CONFIG_PATH: &str =
-    "canisters/test/canic_icydb_lifecycle_probe/canic.toml";
+const MANAGED_LIFECYCLE_CONFIG_PATH: &str = "canisters/test/managed_lifecycle_probe/canic.toml";
 static BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 static AUTOMATIC_TOPUP_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
-static COMBINED_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
+static MANAGED_LIFECYCLE_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 static MANAGED_COMPONENT_GROUP_BUILD_ONCE: OnceLock<InternalTestWasms> = OnceLock::new();
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
@@ -70,14 +68,13 @@ const MANAGED_COMPONENT_GROUP_PACKAGES: [&str; 6] = [
 const LIFECYCLE_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_LIFECYCLE_PARTICIPANT_TRAP", "1");
 const LIFECYCLE_PARTICIPANT_INIT_TRAP_ENV: (&str, &str) =
     ("CANIC_TEST_LIFECYCLE_PARTICIPANT_INIT_TRAP", "1");
-const ICYDB_PARTICIPANT_TRAP_ENV: (&str, &str) = ("CANIC_TEST_ICYDB_PARTICIPANT_TRAP", "1");
 
 /// Build only the canonical Store for the retained fixture transport proof.
 ///
 /// # Panics
 /// Panics if the canonical local Store artifact cannot be built or read.
 #[must_use]
-pub fn retained_fixture_store_wasm() -> Vec<u8> {
+fn retained_fixture_store_wasm() -> Vec<u8> {
     static WASM: OnceLock<Vec<u8>> = OnceLock::new();
     WASM.get_or_init(|| {
         let workspace_root = workspace_root();
@@ -90,7 +87,7 @@ pub fn retained_fixture_store_wasm() -> Vec<u8> {
                 "local",
             )
             .expect("local Store build network"),
-            config_path: workspace_root.join(COMBINED_LIFECYCLE_CONFIG_PATH),
+            config_path: workspace_root.join(MANAGED_LIFECYCLE_CONFIG_PATH),
             icp_root: workspace_root.clone(),
             workspace_root,
             local_replica: None,
@@ -123,7 +120,7 @@ pub fn held_fixture_store_wasm() -> Vec<u8> {
         // Materialize and qualify the ordinary host-owned package first.
         let _ = retained_fixture_store_wasm();
         let workspace = workspace_root();
-        let config = workspace.join(COMBINED_LIFECYCLE_CONFIG_PATH);
+        let config = workspace.join(MANAGED_LIFECYCLE_CONFIG_PATH);
         let manifest = config
             .parent()
             .unwrap()
@@ -198,151 +195,25 @@ pub struct UninstalledCanicFixture {
 }
 
 ///
-/// CanicIcydbLifecycleFixture
+/// ManagedLifecycleFixture
 ///
 
-pub struct CanicIcydbLifecycleFixture {
+pub struct ManagedLifecycleFixture {
     pub pic: PocketIc,
     pub root: Principal,
     pub wasm: Vec<u8>,
 }
 
-/// Exact source and runtime authority of one disposable importer target.
-pub struct InstalledFixtureConsumer {
-    pub canister_id: Principal,
-    pub directory: ComponentRuntimeDirectoryPreparationRequest,
-    pub assignment: canic::dto::fixture_provisioning::FixtureAssignment,
-}
-
-impl CanicIcydbLifecycleFixture {
-    /// Reinstall a disposable composed target under a new exact install identity.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the disposable target rejects reinstall after the caller's cooldown.
+impl ManagedLifecycleFixture {
+    /// Install the managed lifecycle probe while it remains Prepared.
     #[must_use]
-    pub fn reinstall_composed_canister(
-        &self,
-        canister_id: Principal,
-        install_id: [u8; 32],
-    ) -> ComponentRuntimeDirectoryPreparationRequest {
-        let mut payload =
-            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
-        payload.install_id = install_id;
-        let directory = directory_request(&payload);
-        self.pic
-            .reinstall_canister(
-                canister_id,
-                self.wasm.clone(),
-                encode_init_args(payload),
-                None,
-            )
-            .expect("reinstall disposable composed target");
-        directory
-    }
-
-    /// Install a composed consumer with protected source selection before any data delivery.
-    ///
-    /// # Panics
-    ///
-    /// Panics if fixture content or the disposable target installation is invalid.
-    #[must_use]
-    pub fn install_fixture_consumer(
-        &self,
-        store: Principal,
-        descriptor: canic::dto::fixture_provisioning::FixtureDescriptor,
-    ) -> InstalledFixtureConsumer {
-        let canister_id = self.pic.create_canister();
-        self.pic.add_cycles(canister_id, INSTALL_CYCLES);
-        let mut payload =
-            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
-        let target = match &payload.authority {
-            CanisterInitAuthority::Component { binding, .. } => {
-                canic::ids::ManagedCanisterBinding::Component(binding.clone())
-            }
-            CanisterInitAuthority::ComponentChild { .. } => {
-                unreachable!("composed fixture is top-level")
-            }
-        };
-        let content_id =
-            canic_core::api::fixture_content::FixtureContentApi::content_id(&descriptor)
-                .expect("fixture descriptor");
-        let assignment = FixtureAssignment {
-            store,
-            grant: FixtureGrant {
-                revision: 1,
-                enabled: true,
-                binding: FixtureTargetBinding {
-                    target,
-                    installation: payload.install_id,
-                    release_build_id: payload.release_build_id,
-                    content_id,
-                },
-            },
-            descriptor,
-        };
-        payload.fixture = Some(Box::new(assignment.clone()));
-        let directory = directory_request(&payload);
-        self.pic.install_canister(
-            canister_id,
-            self.wasm.clone(),
-            encode_init_args(payload),
-            None,
-        );
-        InstalledFixtureConsumer {
-            canister_id,
-            directory,
-            assignment,
-        }
-    }
-
-    /// Reinstall a disposable fixture target with a new protected installation and grant.
-    ///
-    /// # Panics
-    ///
-    /// Panics if identities are reused or the disposable target rejects reinstall.
-    #[must_use]
-    pub fn reinstall_fixture_consumer(
-        &self,
-        previous: &InstalledFixtureConsumer,
-        install_id: [u8; 32],
-        revision: u64,
-    ) -> InstalledFixtureConsumer {
-        assert_ne!(install_id, previous.assignment.grant.binding.installation);
-        assert!(revision > previous.assignment.grant.revision);
-        let canister_id = previous.canister_id;
-        let mut payload =
-            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
-        payload.install_id = install_id;
-        let mut assignment = previous.assignment.clone();
-        assignment.grant.revision = revision;
-        assignment.grant.binding.installation = install_id;
-        payload.fixture = Some(Box::new(assignment.clone()));
-        let directory = directory_request(&payload);
-        self.pic
-            .reinstall_canister(
-                canister_id,
-                self.wasm.clone(),
-                encode_init_args(payload),
-                None,
-            )
-            .expect("reinstall disposable fixture consumer");
-        InstalledFixtureConsumer {
-            canister_id,
-            directory,
-            assignment,
-        }
-    }
-
-    /// Install the exact managed Canic/IcyDB composition probe while it remains Prepared.
-    #[must_use]
-    pub fn install_composed_canister(
+    pub fn install_managed_canister(
         &self,
     ) -> (Principal, ComponentRuntimeDirectoryPreparationRequest) {
         let canister_id = self.pic.create_canister();
         self.pic.add_cycles(canister_id, INSTALL_CYCLES);
         let payload =
-            init_payload_for_config(canister_id, self.root, COMBINED_LIFECYCLE_CONFIG_PATH);
+            init_payload_for_config(canister_id, self.root, MANAGED_LIFECYCLE_CONFIG_PATH);
         let directory_request = directory_request(&payload);
         self.pic.install_canister(
             canister_id,
@@ -467,30 +338,20 @@ pub fn install_lifecycle_boundary_fixture() -> LifecycleBoundaryFixture {
     }
 }
 
-/// Build the exact published-IcyDB composition probe and start one fresh PocketIC.
-#[must_use]
-pub fn install_canic_icydb_lifecycle_fixture() -> CanicIcydbLifecycleFixture {
-    install_canic_icydb_lifecycle_fixture_with_builder(
-        PocketIcBuilder::new().with_application_subnet(),
-    )
-}
-
-/// Build the composition probe with caller-selected disposable subnet topology.
+/// Build the Canic-owned managed lifecycle probe and start one fresh PocketIC.
 ///
 /// # Panics
 /// Panics if the probe cannot be built or PocketIC cannot start.
 #[must_use]
-pub fn install_canic_icydb_lifecycle_fixture_with_builder(
-    builder: PocketIcBuilder,
-) -> CanicIcydbLifecycleFixture {
+pub fn install_managed_lifecycle_fixture() -> ManagedLifecycleFixture {
     let workspace_root = workspace_root();
 
-    let wasms = build_combined_canister_once(&workspace_root);
+    let wasms = build_managed_lifecycle_canister_once(&workspace_root);
 
-    CanicIcydbLifecycleFixture {
+    ManagedLifecycleFixture {
         root: Fake::principal(1),
-        wasm: wasms.wasm("canic_icydb_lifecycle_probe"),
-        pic: start_pocket_ic(builder),
+        wasm: wasms.wasm("managed_lifecycle_probe"),
+        pic: start_pocket_ic(PocketIcBuilder::new().with_application_subnet()),
     }
 }
 
@@ -565,25 +426,6 @@ pub fn lifecycle_participant_init_trap_wasm() -> Vec<u8> {
     .clone()
 }
 
-/// Build the combined lifecycle fixture whose IcyDB participant path traps after restoration.
-#[must_use]
-pub fn icydb_participant_trap_wasm() -> Vec<u8> {
-    static WASM: OnceLock<Vec<u8>> = OnceLock::new();
-    WASM.get_or_init(|| {
-        let workspace_root = workspace_root();
-        let target_dir = test_target_dir(&workspace_root, "pic-icydb-participant-trap-wasm");
-        build_internal_test_wasm_canisters_with_env(
-            &workspace_root,
-            &target_dir,
-            &["canic_icydb_lifecycle_probe"],
-            CanicWasmBuildProfile::Fast,
-            &[ICYDB_PARTICIPANT_TRAP_ENV],
-        )
-        .wasm("canic_icydb_lifecycle_probe")
-    })
-    .clone()
-}
-
 // Build the dedicated lifecycle-boundary canisters once into the shared test target dir.
 fn build_canisters_once(workspace_root: &Path) -> &'static InternalTestWasms {
     BUILD_ONCE.get_or_init(|| {
@@ -633,14 +475,14 @@ fn build_automatic_topup_canister_once(workspace_root: &Path) -> &'static Intern
     })
 }
 
-// Build the combined framework lifecycle probe once into its dedicated test target dir.
-fn build_combined_canister_once(workspace_root: &Path) -> &'static InternalTestWasms {
-    COMBINED_BUILD_ONCE.get_or_init(|| {
-        let target_dir = test_target_dir(workspace_root, "pic-canic-icydb-lifecycle-wasm");
+// Build the managed lifecycle probe once into its dedicated test target dir.
+fn build_managed_lifecycle_canister_once(workspace_root: &Path) -> &'static InternalTestWasms {
+    MANAGED_LIFECYCLE_BUILD_ONCE.get_or_init(|| {
+        let target_dir = test_target_dir(workspace_root, "pic-managed-lifecycle-wasm");
         build_internal_test_wasm_canisters(
             workspace_root,
             &target_dir,
-            &["canic_icydb_lifecycle_probe"],
+            &["managed_lifecycle_probe"],
             CanicWasmBuildProfile::Fast,
         )
     })
@@ -1010,51 +852,9 @@ mod tests {
     }
 
     #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
-    enum ProbeEvidence {
-        Missing,
-        Observed,
-    }
-
-    #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
-    struct ComposedFrameworkAdmissionReceipt {
+    struct ManagedGuardReceipt {
         caller: Principal,
         workflow_runs: u32,
-        icydb_request_session: ProbeEvidence,
-    }
-
-    #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
-    enum ProbeDatabaseStartup {
-        Failed,
-        Ready,
-        Recovering,
-    }
-
-    #[derive(candid::CandidType, Debug, candid::Deserialize)]
-    struct ComposedDatabaseStatus {
-        database_startup: ProbeDatabaseStartup,
-        database_access: ProbeEvidence,
-    }
-
-    fn wait_for_composed_database(pic: &PocketIc, canister: Principal) {
-        for completed_steps in 0..=8 {
-            let status: ComposedDatabaseStatus =
-                pic.query_candid_or_panic(canister, "lifecycle_composition_snapshot", ());
-            match status.database_startup {
-                ProbeDatabaseStartup::Ready => {
-                    assert_eq!(status.database_access, ProbeEvidence::Observed);
-                    return;
-                }
-                ProbeDatabaseStartup::Failed => panic!("IcyDB startup failed: {status:?}"),
-                ProbeDatabaseStartup::Recovering => {}
-            }
-            assert!(
-                completed_steps < 8,
-                "IcyDB startup did not settle: {status:?}"
-            );
-            pic.advance_time(Duration::from_secs(1));
-            pic.tick();
-            pic.tick();
-        }
     }
 
     #[test]
@@ -1124,43 +924,40 @@ mod tests {
         clippy::too_many_lines,
         reason = "one direct-ingress journey proves public, fenced, denied and admitted framework paths"
     )]
-    fn composed_framework_guard_matches_canic_endpoint_on_direct_ingress() {
-        let fixture = install_canic_icydb_lifecycle_fixture();
-        let (canister, directory) = fixture.install_composed_canister();
+    fn explicit_guard_matches_canic_endpoint_on_direct_ingress() {
+        let fixture = install_managed_lifecycle_fixture();
+        let (canister, directory) = fixture.install_managed_canister();
         let admitted = Fake::principal(15);
         let unlisted = Fake::principal(16);
 
-        let prepared_call: Result<Result<ComposedFrameworkAdmissionReceipt, Error>, _> = fixture
+        let prepared_call: Result<Result<ManagedGuardReceipt, Error>, _> = fixture
             .pic
-            .update_candid_as(canister, admitted, "composed_framework_admission_probe", ());
+            .update_candid_as(canister, admitted, "managed_guard_admission_probe", ());
         assert!(prepared_call.is_err());
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
-        wait_for_composed_database(&fixture.pic, canister);
 
         let public_caller: Result<Principal, Error> = fixture.pic.query_candid_as_or_panic(
             canister,
             unlisted,
-            "composed_framework_public_probe",
+            "managed_guard_public_probe",
             (),
         );
         assert_eq!(public_caller, Ok(unlisted));
 
-        let composed: Result<ComposedFrameworkAdmissionReceipt, Error> =
-            fixture.pic.update_candid_as_or_panic(
-                canister,
-                admitted,
-                "composed_framework_admission_probe",
-                (),
-            );
+        let guarded: Result<ManagedGuardReceipt, Error> = fixture.pic.update_candid_as_or_panic(
+            canister,
+            admitted,
+            "managed_guard_admission_probe",
+            (),
+        );
         assert_eq!(
-            composed.expect("admitted composed-framework caller"),
-            ComposedFrameworkAdmissionReceipt {
+            guarded.expect("admitted explicit admission guard caller"),
+            ManagedGuardReceipt {
                 caller: admitted,
                 workflow_runs: 1,
-                icydb_request_session: ProbeEvidence::Observed,
             }
         );
-        assert_eq!(composed_framework_workflow_runs(&fixture.pic, canister), 1);
+        assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
 
         let canic: Result<Principal, Error> = fixture.pic.query_candid_as_or_panic(
             canister,
@@ -1173,7 +970,7 @@ mod tests {
         let application_owned: Result<Principal, Error> = fixture.pic.update_candid_as_or_panic(
             canister,
             admitted,
-            "composed_framework_owned_probe",
+            "managed_guard_owned_probe",
             (),
         );
         assert_eq!(
@@ -1183,15 +980,14 @@ mod tests {
             canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
         );
 
-        let denied: Result<ComposedFrameworkAdmissionReceipt, Error> =
-            fixture.pic.update_candid_as_or_panic(
-                canister,
-                unlisted,
-                "composed_framework_admission_probe",
-                (),
-            );
+        let denied: Result<ManagedGuardReceipt, Error> = fixture.pic.update_candid_as_or_panic(
+            canister,
+            unlisted,
+            "managed_guard_admission_probe",
+            (),
+        );
         assert!(denied.is_err());
-        assert_eq!(composed_framework_workflow_runs(&fixture.pic, canister), 1);
+        assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
 
         let canic_denied: Result<Result<Principal, Error>, _> = fixture.pic.query_candid_as(
             canister,
@@ -1226,19 +1022,18 @@ mod tests {
         let fenced_public: Result<Principal, Error> = fixture.pic.query_candid_as_or_panic(
             canister,
             unlisted,
-            "composed_framework_public_probe",
+            "managed_guard_public_probe",
             (),
         );
         assert_eq!(fenced_public, Ok(unlisted));
-        let fenced: Result<ComposedFrameworkAdmissionReceipt, Error> =
-            fixture.pic.update_candid_as_or_panic(
-                canister,
-                admitted,
-                "composed_framework_admission_probe",
-                (),
-            );
+        let fenced: Result<ManagedGuardReceipt, Error> = fixture.pic.update_candid_as_or_panic(
+            canister,
+            admitted,
+            "managed_guard_admission_probe",
+            (),
+        );
         assert!(fenced.is_err());
-        assert_eq!(composed_framework_workflow_runs(&fixture.pic, canister), 1);
+        assert_eq!(managed_guard_workflow_runs(&fixture.pic, canister), 1);
     }
 
     #[test]
@@ -1247,8 +1042,8 @@ mod tests {
         reason = "target transition replay exercises every durable phase"
     )]
     fn managed_admission_target_transition_replays_and_recovers_forward() {
-        let fixture = install_canic_icydb_lifecycle_fixture();
-        let (canister, directory) = fixture.install_composed_canister();
+        let fixture = install_managed_lifecycle_fixture();
+        let (canister, directory) = fixture.install_managed_canister();
         activate_projection(&fixture.pic, canister, fixture.root, &directory);
 
         let initial = admission_status(&fixture.pic, canister, fixture.root);
@@ -1396,7 +1191,7 @@ mod tests {
         let fenced = admission_status(&fixture.pic, canister, fixture.root);
         assert_eq!(fenced.phase, FleetAdmissionProjectionPhase::Fenced);
         assert!(fenced.prepared.is_some());
-        assert!(combined_admission_probe(&fixture.pic, canister, Fake::principal(15)).is_err());
+        assert!(managed_admission_probe(&fixture.pic, canister, Fake::principal(15)).is_err());
 
         let activate = FleetAdmissionActivateTargetRequest {
             operation_id,
@@ -1473,7 +1268,7 @@ mod tests {
             ManagedCommandResponse::OpenFleetAdmission(open_receipt.clone())
         );
         assert_eq!(
-            combined_admission_probe(&fixture.pic, canister, Fake::principal(16)),
+            managed_admission_probe(&fixture.pic, canister, Fake::principal(16)),
             Ok(Fake::principal(16))
         );
 
@@ -1496,14 +1291,14 @@ mod tests {
     }
 
     #[test]
-    fn published_managed_app_support_drives_composed_lifecycle() {
+    fn published_managed_app_support_drives_managed_lifecycle() {
         let workspace_root = workspace_root();
 
-        let wasms = build_combined_canister_once(&workspace_root);
-        let wasm = wasms.wasm("canic_icydb_lifecycle_probe");
+        let wasms = build_managed_lifecycle_canister_once(&workspace_root);
+        let wasm = wasms.wasm("managed_lifecycle_probe");
         let admitted = Fake::principal(15);
         let input = canic::testing::ManagedAppQualificationInput::new(
-            include_str!("../../../../canisters/test/canic_icydb_lifecycle_probe/canic.toml"),
+            include_str!("../../../../canisters/test/managed_lifecycle_probe/canic.toml"),
             "test",
             "test",
             super::super::artifacts::INTERNAL_TEST_RELEASE_BUILD_ID.1,
@@ -1520,19 +1315,14 @@ mod tests {
                 .phase,
             FleetAdmissionProjectionPhase::Fenced
         );
-        let prepared: Result<Result<ComposedFrameworkAdmissionReceipt, Error>, _> =
-            fixture.pic().update_candid_as(
-                fixture.app(),
-                admitted,
-                "composed_framework_admission_probe",
-                (),
-            );
+        let prepared: Result<Result<ManagedGuardReceipt, Error>, _> = fixture
+            .pic()
+            .update_candid_as(fixture.app(), admitted, "managed_guard_admission_probe", ());
         assert!(prepared.is_err());
 
         fixture
             .configure_and_wait_until_active(30)
             .expect("activate through published managed-App support");
-        wait_for_composed_database(fixture.pic(), fixture.app());
         assert_eq!(
             fixture
                 .admission_status()
@@ -1540,19 +1330,18 @@ mod tests {
                 .phase,
             FleetAdmissionProjectionPhase::Open
         );
-        let admitted_result: Result<ComposedFrameworkAdmissionReceipt, Error> =
+        let admitted_result: Result<ManagedGuardReceipt, Error> =
             fixture.pic().update_candid_as_or_panic(
                 fixture.app(),
                 admitted,
-                "composed_framework_admission_probe",
+                "managed_guard_admission_probe",
                 (),
             );
         assert_eq!(
-            admitted_result.expect("admitted composed-framework caller"),
-            ComposedFrameworkAdmissionReceipt {
+            admitted_result.expect("admitted explicit admission guard caller"),
+            ManagedGuardReceipt {
                 caller: admitted,
                 workflow_runs: 1,
-                icydb_request_session: ProbeEvidence::Observed,
             }
         );
 
@@ -1916,7 +1705,7 @@ mod tests {
         pic.query_candid_as_or_panic(canister, caller, "test_fleet_admission_probe", ())
     }
 
-    fn combined_admission_probe(
+    fn managed_admission_probe(
         pic: &PocketIc,
         canister: Principal,
         caller: Principal,
@@ -1944,9 +1733,9 @@ mod tests {
         pic.update_candid_as_or_panic(canister, root, CANIC_COMMAND, (command,))
     }
 
-    fn composed_framework_workflow_runs(pic: &PocketIc, canister: Principal) -> u32 {
+    fn managed_guard_workflow_runs(pic: &PocketIc, canister: Principal) -> u32 {
         let result: Result<u32, Error> =
-            pic.query_candid_or_panic(canister, "composed_framework_workflow_runs", ());
+            pic.query_candid_or_panic(canister, "managed_guard_workflow_runs", ());
         result.expect("public workflow-run observation")
     }
 
@@ -1961,8 +1750,8 @@ mod tests {
                 managed_projection_fences_then_opens_and_restores,
             ),
             (
-                "composed-framework direct ingress",
-                composed_framework_guard_matches_canic_endpoint_on_direct_ingress,
+                "explicit admission guard direct ingress",
+                explicit_guard_matches_canic_endpoint_on_direct_ingress,
             ),
             (
                 "managed admission target transition",
@@ -1977,7 +1766,7 @@ mod tests {
         crate::pic::cases::registered![
             (
                 "published managed-App support",
-                published_managed_app_support_drives_composed_lifecycle,
+                published_managed_app_support_drives_managed_lifecycle,
             ),
             (
                 "published managed Component Group support",

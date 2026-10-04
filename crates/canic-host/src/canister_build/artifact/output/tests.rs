@@ -61,11 +61,7 @@ fn cargo_custom_lib_outputs_are_captured_before_another_workspace_overwrites_the
             format!("#[unsafe(no_mangle)] pub extern \"C\" fn marker() -> u32 {{ {marker} }}\n"),
         )
         .unwrap();
-        fs::write(
-            directory.join("Cargo.lock"),
-            "version=4\n[[package]]\nname='collision'\nversion='0.1.0'\n",
-        )
-        .unwrap();
+        crate::test_support::generate_fixture_lockfile(&directory);
         let built = crate::cargo_command()
             .current_dir(&directory)
             .args([

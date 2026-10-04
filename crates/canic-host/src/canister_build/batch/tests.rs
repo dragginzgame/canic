@@ -31,7 +31,7 @@ fn real_cargo_resolution_batches_peers_and_splits_feature_growth() {
         .unwrap();
         fs::write(package.join("src/lib.rs"), "pub fn fixture() {}\n").unwrap();
     }
-    fs::write(root.join("Cargo.lock"), "version=4\n[[package]]\nname=\"exclusive\"\nversion=\"0.1.0\"\n[[package]]\nname=\"left\"\nversion=\"0.1.0\"\ndependencies=[\"shared\"]\n[[package]]\nname=\"peer\"\nversion=\"0.1.0\"\ndependencies=[\"exclusive\",\"shared\"]\n[[package]]\nname=\"right\"\nversion=\"0.1.0\"\ndependencies=[\"shared\"]\n[[package]]\nname=\"shared\"\nversion=\"0.1.0\"\n").unwrap();
+    crate::test_support::generate_fixture_lockfile(&root);
     let context = WorkspaceBuildContext {
         role: "left".into(),
         profile: crate::canister_build::CanisterBuildProfile::Fast,

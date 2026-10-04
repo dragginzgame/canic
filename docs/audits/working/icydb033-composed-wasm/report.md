@@ -22,9 +22,9 @@ This identifies an investigation owner, not a proven removable byte budget.
 ## Controlled pair and exact measurements
 
 Both variants compile the same
-[audit package](../../../../canisters/audit/icydb_composed/Cargo.toml),
-[host source](../../../../canisters/audit/icydb_composed/src/lib.rs) and
-[Canic configuration](../../../../canisters/audit/icydb_composed/canic.toml).
+[audit package](https://github.com/dragginzgame/canic/blob/7c56c9b4889c439b7006e0a5ccf544bcf82e0c45/canisters/audit/icydb_composed/Cargo.toml),
+[host source](https://github.com/dragginzgame/canic/blob/7c56c9b4889c439b7006e0a5ccf544bcf82e0c45/canisters/audit/icydb_composed/src/lib.rs) and
+[Canic configuration](https://github.com/dragginzgame/canic/blob/7c56c9b4889c439b7006e0a5ccf544bcf82e0c45/canisters/audit/icydb_composed/canic.toml).
 Only the `participant` Cargo feature changes. The baseline does not select an
 IcyDB runtime dependency. The participant selects IcyDB's `metrics` feature,
 its metrics query and reset endpoints, and one journaled store with zero
@@ -68,7 +68,7 @@ The raw compiler inputs, before `ic-wasm` and Binaryen, are separately retained:
   All 1,654 recorded Rust/TOML/Candid/lock and measurement-tool inputs stayed
   unchanged across the final pair. [Source manifest](source-manifest.json)
   records every path/hash and the manifest's exact hashing convention.
-- The independent [audit lock](../../../../canisters/audit/icydb_composed/Cargo.lock)
+- The independent [audit lock](https://github.com/dragginzgame/canic/blob/7c56c9b4889c439b7006e0a5ccf544bcf82e0c45/canisters/audit/icydb_composed/Cargo.lock)
   selects published IcyDB 0.257.9 throughout its package family, one shared
   ic-memory 0.13.3, ic-timers 0.7.0, ic-cdk 0.20.2 and Candid 0.10.35. Every
   registry package identity/checksum in this lock matches the current Canic
@@ -145,7 +145,7 @@ subtrees are nested, and are not an additive savings estimate.
 
 ## Qualification, reproduction and limits
 
-The [audit runner](../../../../crates/canic-host/examples/icydb_composed_audit.rs)
+The [audit runner](https://github.com/dragginzgame/canic/blob/7c56c9b4889c439b7006e0a5ccf544bcf82e0c45/crates/canic-host/examples/icydb_composed_audit.rs)
 reuses `CanisterArtifactBuilder` and `read_wasm_artifact_metrics`. It does not
 install canisters, create a release plan or publish artifacts. The two synthetic
 artifact outputs are copied before the next variant overwrites the role output.

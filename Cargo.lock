@@ -484,7 +484,7 @@ dependencies = [
  "anyhow",
  "candid",
  "codespan-reporting",
- "convert_case 0.6.0",
+ "convert_case",
  "handlebars",
  "hex",
  "lalrpop",
@@ -623,13 +623,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "canic-icydb-lifecycle-schema"
-version = "0.110.51"
-dependencies = [
- "icydb",
-]
-
-[[package]]
 name = "canic-macros"
 version = "0.110.51"
 dependencies = [
@@ -675,26 +668,10 @@ dependencies = [
  "ic-memory",
  "ic-testkit",
  "ic-timers",
- "icydb",
  "serde",
  "serde_json",
  "sha2 0.10.9",
  "tokio",
-]
-
-[[package]]
-name = "canic_icydb_lifecycle_probe"
-version = "0.110.51"
-dependencies = [
- "candid",
- "canic",
- "canic-icydb-lifecycle-schema",
- "ic-cdk",
- "ic-memory",
- "ic-timers",
- "icydb",
- "serde",
- "sha2 0.10.9",
 ]
 
 [[package]]
@@ -1021,15 +998,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "convert_case"
-version = "0.12.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1af709f1f33454bf52eadfc8c78b3b9ef9cb26fb54d16dc9cd9a7299f899fd1b"
-dependencies = [
- "unicode-segmentation",
-]
-
-[[package]]
 name = "core-foundation"
 version = "0.10.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1275,16 +1243,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ed17f5901b6630b993ca003def43f2f8ef4014fc13b047b57aad617ff32bc2ec"
-dependencies = [
- "darling_core 0.24.1",
- "darling_macro 0.24.1",
-]
-
-[[package]]
 name = "darling_core"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1312,19 +1270,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "darling_core"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6837e2cf7485aaae18f86181d2f0e9a7ed297a025e220aeabf63fdebd3a2ddff"
-dependencies = [
- "ident_case",
- "proc-macro2",
- "quote",
- "strsim",
- "syn 3.0.6",
-]
-
-[[package]]
 name = "darling_macro"
 version = "0.20.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1344,17 +1289,6 @@ dependencies = [
  "darling_core 0.23.0",
  "quote",
  "syn 2.0.119",
-]
-
-[[package]]
-name = "darling_macro"
-version = "0.24.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2ac7135c3ef02b2f7833bbeb1be5ba7f966dcde8a87c6b87f65a778d71a02785"
-dependencies = [
- "darling_core 0.24.1",
- "quote",
- "syn 3.0.6",
 ]
 
 [[package]]
@@ -1454,27 +1388,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ab63b0e2bf4d5928aff72e83a7dace85d7bba5fe12dcc3c5a572d78caffd3f3c"
 dependencies = [
  "derive_builder_core",
- "syn 2.0.119",
-]
-
-[[package]]
-name = "derive_more"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d751e9e49156b02b44f9c1815bcb94b984cdcc4396ecc32521c739452808b134"
-dependencies = [
- "derive_more-impl",
-]
-
-[[package]]
-name = "derive_more-impl"
-version = "2.1.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "799a97264921d8623a957f6c3b9011f3b5492f557bbb7a5a19b7fa6d06ba8dcb"
-dependencies = [
- "proc-macro2",
- "quote",
- "rustc_version",
  "syn 2.0.119",
 ]
 
@@ -1693,12 +1606,6 @@ dependencies = [
  "libc",
  "windows-sys 0.61.2",
 ]
-
-[[package]]
-name = "ethnum"
-version = "1.5.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "40404c3f5f511ec4da6fe866ddf6a717c309fdbb69fbbad7b0f3edab8f2e835f"
 
 [[package]]
 name = "event-listener"
@@ -2364,9 +2271,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.23.0"
+version = "0.24.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "53f0f870e7a3defb1384000792f68c78969f6c8b3baed24f55f90eece617f81c"
+checksum = "3a7f2dde0d332dd167a7b59668ffa26e89c3d3f1acd8404f71f226b024d26b75"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2377,9 +2284,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.45.4"
+version = "0.45.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e817e348ea0d4f8c1dec48e52f3b16a10d21aacbf53c6ca63d5f447e4a50b82"
+checksum = "fe4386bc64e76f9674a0bd2b8ee5565efe549d9d7eb32e5de664c0a36971cfec"
 dependencies = [
  "candid",
  "cap-fs-ext",
@@ -2419,7 +2326,7 @@ dependencies = [
  "num-bigint",
  "pem 1.1.1",
  "rand 0.8.8",
- "rand_chacha 0.3.1",
+ "rand_chacha",
  "sha2 0.10.9",
  "simple_asn1",
  "zeroize",
@@ -2452,9 +2359,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.14.0"
+version = "0.14.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2d38d576ad401851212d2cabe273befd84ab98fea58f0291a5e5a6c4500fa8c"
+checksum = "d052dfa9ff04b1b052ad039ff82da5cbddb8086eca568782ab018c449168d9fa"
 dependencies = [
  "candid",
  "fs2",
@@ -2469,9 +2376,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.10.2"
+version = "0.10.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d65d547aeefb1550039da47796c824a52940e8443545391e18e2bebbe0405ff3"
+checksum = "5dba0f35083ea5df19f4c50ccad2f86cf544863399cb0b7631e7fc4c25049847"
 dependencies = [
  "ic-cdk-timers",
  "ic0",
@@ -2669,103 +2576,6 @@ dependencies = [
  "zerofrom",
  "zerotrie",
  "zerovec",
-]
-
-[[package]]
-name = "icydb"
-version = "0.264.7"
-dependencies = [
- "candid",
- "ic-cdk",
- "ic-memory",
- "ic-timers",
- "icydb-core",
- "icydb-diagnostic-code",
- "icydb-model",
- "icydb-model-macros",
- "icydb-schema",
- "serde",
-]
-
-[[package]]
-name = "icydb-core"
-version = "0.264.7"
-dependencies = [
- "base64 0.23.1",
- "candid",
- "getrandom 0.4.3",
- "ic-cdk",
- "ic-memory",
- "icydb-diagnostic-code",
- "icydb-schema",
- "num-bigint",
- "rand_chacha 0.10.0",
- "remain",
- "serde",
- "serde_bytes",
- "sha2 0.10.9",
- "thiserror 2.0.18",
- "ulid",
- "xxhash-rust",
-]
-
-[[package]]
-name = "icydb-diagnostic-code"
-version = "0.264.7"
-dependencies = [
- "remain",
-]
-
-[[package]]
-name = "icydb-model"
-version = "0.264.7"
-dependencies = [
- "candid",
- "convert_case 0.12.0",
- "ctor",
- "icydb-model-macros",
- "icydb-schema",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "remain",
- "serde",
- "serde_json",
- "sha2 0.10.9",
- "syn 3.0.6",
- "thiserror 2.0.18",
-]
-
-[[package]]
-name = "icydb-model-macros"
-version = "0.264.7"
-dependencies = [
- "convert_case 0.12.0",
- "darling 0.24.1",
- "icydb-schema",
- "proc-macro-crate",
- "proc-macro2",
- "quote",
- "remain",
- "serde",
- "syn 3.0.6",
-]
-
-[[package]]
-name = "icydb-schema"
-version = "0.264.7"
-dependencies = [
- "candid",
- "derive_more",
- "ethnum",
- "icrc-ledger-types",
- "num-bigint",
- "serde",
- "serde_bytes",
- "sha2 0.10.9",
- "thiserror 2.0.18",
- "time",
- "ulid",
 ]
 
 [[package]]
@@ -3137,6 +2947,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4050469837a6ff301cd14c1f8f24f88549e6d548f24f64e2148eb0f72cebc51f"
 
 [[package]]
+name = "managed_lifecycle_probe"
+version = "0.110.51"
+dependencies = [
+ "candid",
+ "canic",
+ "ic-cdk",
+ "serde",
+]
+
+[[package]]
 name = "matchers"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3217,9 +3037,9 @@ dependencies = [
 
 [[package]]
 name = "mio"
-version = "1.2.3"
+version = "1.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4b18443e9c262bfe8fa82f51666e2642c53393f7e5c27b3e1aeab922cff5b9d8"
+checksum = "1788edb87fdc09c7e26304471e2f5be8cdefb1b6930d6e3985fc02ff53bf86ee"
 dependencies = [
  "libc",
  "wasi",
@@ -3647,15 +3467,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "proc-macro-crate"
-version = "3.5.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e67ba7e9b2b56446f1d419b1d807906278ffa1a658a8a5d8a39dcb1f5a78614f"
-dependencies = [
- "toml_edit 0.25.15+spec-1.1.0",
-]
-
-[[package]]
 name = "proc-macro2"
 version = "1.0.107"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -3776,7 +3587,7 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e058c7de0b26af77780c769414d6257830bb240f3c38477dbc2c16e5f54d6d4c"
 dependencies = [
  "libc",
- "rand_chacha 0.3.1",
+ "rand_chacha",
  "rand_core 0.6.4",
 ]
 
@@ -3799,16 +3610,6 @@ checksum = "e6c10a63a0fa32252be49d21e7709d4d4baf8d231c2dbce1eaa8141b9b127d88"
 dependencies = [
  "ppv-lite86",
  "rand_core 0.6.4",
-]
-
-[[package]]
-name = "rand_chacha"
-version = "0.10.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3e6af7f3e25ded52c41df4e0b1af2d047e45896c2f3281792ed68a1c243daedb"
-dependencies = [
- "ppv-lite86",
- "rand_core 0.10.1",
 ]
 
 [[package]]
@@ -4900,7 +4701,7 @@ dependencies = [
  "serde",
  "serde_spanned 0.6.9",
  "toml_datetime 0.6.11",
- "toml_edit 0.22.27",
+ "toml_edit",
 ]
 
 [[package]]
@@ -4947,18 +4748,6 @@ dependencies = [
  "serde_spanned 0.6.9",
  "toml_datetime 0.6.11",
  "winnow 0.7.15",
-]
-
-[[package]]
-name = "toml_edit"
-version = "0.25.15+spec-1.1.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1340ea94a5856333492c9064b02c778b191dd2c853778d9609debdcdfea3a614"
-dependencies = [
- "indexmap",
- "toml_datetime 1.1.1+spec-1.1.0",
- "toml_parser",
- "winnow 1.0.4",
 ]
 
 [[package]]
@@ -5132,15 +4921,6 @@ name = "ucd-trie"
 version = "0.1.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2896d95c02a80c6d6a5d6e953d479f5ddf2dfdb6a244441010e373ac0fb88971"
-
-[[package]]
-name = "ulid"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "947dde63b6d514cc5e044edad4e0ca7261afd1099d16c83d942cb2b2f348689c"
-dependencies = [
- "web-time",
-]
 
 [[package]]
 name = "unicase"
@@ -5559,9 +5339,6 @@ name = "winnow"
 version = "1.0.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "23b97319f7b8343df12cc98938e5c3eb436064524c8d2b4e30a1d3a36eecdf81"
-dependencies = [
- "memchr",
-]
 
 [[package]]
 name = "winx"
@@ -5584,12 +5361,6 @@ name = "wslpath"
 version = "0.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "04a2ecdf2cc4d33a6a93d71bcfbc00bb1f635cdb8029a2cc0709204a045ec7a3"
-
-[[package]]
-name = "xxhash-rust"
-version = "0.8.19"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "550a2b930b62486a393c52d5c3b84bff264b28aa437ed64694d31e93b1757af7"
 
 [[package]]
 name = "yoke"

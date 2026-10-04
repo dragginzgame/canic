@@ -20,13 +20,12 @@ members = [
     "canisters/sandbox/blank",
     "canisters/test/blob_storage_cashier_mock",
     "canisters/test/blob_storage_probe",
-    "canisters/test/canic_icydb_lifecycle_probe",
-    "canisters/test/canic_icydb_lifecycle_probe/schema",
     "canisters/test/cycles_ledger_stub",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
     "canisters/test/icp_refill_stub",
     "canisters/test/intent_authority",
+    "canisters/test/managed_lifecycle_probe",
     "canisters/test/payload_limit_probe",
     "canisters/test/root_funding_probe",
     "canisters/test/runtime_probe",
@@ -66,7 +65,6 @@ canic-cli = { version = "0.110.51", path = "crates/canic-cli" }
 canic-control-plane = { version = "0.110.51", path = "crates/canic-control-plane", default-features = false }
 canic-core = { version = "0.110.51", path = "crates/canic-core" }
 canic-host = { version = "0.110.51", path = "crates/canic-host" }
-canic-icydb-lifecycle-schema = { version = "0.110.51", path = "canisters/test/canic_icydb_lifecycle_probe/schema" }
 canic-macros = { version = "0.110.51", path = "crates/canic-macros" }
 canic-testing-internal = { version = "0.110.51", path = "crates/canic-testing-internal" }
 ciborium = "0.2"
@@ -83,7 +81,7 @@ ic-agent = "=0.49.2"
 ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
-ic-memory = "0.23"
+ic-memory = "0.24"
 ic-query = { version = "0.45", default-features = false, features = [
     "subnet-catalog-host",
 ] }
@@ -96,7 +94,6 @@ ic-verify-bls-signature = { version = "0.6.0", default-features = false, feature
 ] }
 ic0 = "1.2.0"
 icrc-ledger-types = "0.2.0"
-icydb = { version = "0.264", default-features = false }
 k256 = { version = "0.13.4", default-features = false, features = ["ecdsa"] }
 proc-macro2 = "1.0"
 prost = "0.14.4"

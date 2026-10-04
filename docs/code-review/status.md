@@ -6,7 +6,7 @@ and its linked issues. The original export and the dated implementation and
 validation evidence below remain available as source evidence. Record new triage
 and completion decisions in GitHub.
 
-Last updated: **2026-10-03**. Scope: Canic implementation and qualification;
+Last updated: **2026-10-04**. Scope: Canic implementation and qualification;
 Toko Miner is downstream feedback and read-only context.
 
 The accepted FR1 Fleet release-to-capacity batch remains unfinished. Evidence
@@ -23,6 +23,31 @@ separate maintainer-selected actions. This page records implementation handoffs.
 - [0.110 release notes](../changelog/0.110.md) — included behavior changes, distinct from validation and publication status.
 
 ## Recent delivery status
+
+Cargo inheritance is now consistent across all 49 checked-in manifests. Main
+workspace members, including example Apps, inherit package/dependency versions;
+isolated fixtures use their own workspace tables. Exact historical audit pins
+are preserved. Five manifest tests and ten Host fixture regressions pass; .52
+and AGENTS record the change. No dependency upgrade is part of this cleanup.
+
+At the maintainer's request, IcyDB test dependencies, probes, audit runner and
+composition suite are removed. Canic-only lifecycle/admission fixtures replace
+the three mandatory cases that had still built the database. Dependency resolution
+is clean: 20 package identities removed, no IcyDB dependency or local override,
+and retained package versions unchanged. Runner checks, 31 focused native tests,
+warning-denied Clippy, the three replacement PocketIC journeys, the retained
+Root/Store reply-recovery proof and embedded allocation-peer verification pass.
+The removal batch is complete and recorded under .52. The current handoff
+supersedes the historical optional-IcyDB blockers below; FR1 remains unfinished.
+
+
+The latest release passed Clippy, then exposed six synthetic Cargo workspace
+lockfile failures under the local IcyDB override. Offline fixture resolution
+replaces hand-written locks while retaining locked build/metadata and reuse
+checks. All six regressions now pass under the release scratch runner, along with
+affected warning-denied Clippy. Pending changelog content is consolidated under .52, with
+unfinished FR1 and authorization work identified explicitly. See the
+[current handoff](../status/current.md) for evidence and qualification limits.
 
 The ic-query 0.45.4 constructor removal is now adopted by both synthetic catalog
 fixtures. Ten Host catalog tests and warning-denied Host/internal-testing Clippy
