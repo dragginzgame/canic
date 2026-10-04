@@ -14,8 +14,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.52` adds Fleet release discovery and assessment, improves operator and
   test reliability, removes IcyDB from Canic validation, centralizes Cargo version
-  declarations, adopts current upstream APIs, and consolidates onboarding,
-  deployment and authorization guidance.
+  declarations, adopts current upstream APIs, refreshes the embedded test fixture,
+  and consolidates onboarding, deployment and authorization guidance.
 
 - `0.110.51` restores automatic fresh-shard proof fetching, consolidates issuer
   setup, and retains pool-import HTTP timings across interruption and retries.

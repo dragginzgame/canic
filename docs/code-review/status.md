@@ -24,6 +24,11 @@ separate maintainer-selected actions. This page records implementation handoffs.
 
 ## Recent delivery status
 
+The latest release preflight failed on a stale embedded allocation peer after
+upstream dependency changes. The Wasm and provenance are refreshed and the exact
+verifier now passes, with unchanged manifest/lockfile and retained build artifacts.
+The reported blocker is fixed; no full-suite or FR1 completion is claimed.
+
 Cargo inheritance is now consistent across all 49 checked-in manifests. Main
 workspace members, including example Apps, inherit package/dependency versions;
 isolated fixtures use their own workspace tables. Exact historical audit pins
