@@ -1,0 +1,7 @@
+canisters:
+  - name: blob
+
+environments:
+  - name: local
+    network: local
+    canisters: [blob]

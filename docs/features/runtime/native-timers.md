@@ -202,7 +202,7 @@ must not be copied into a generic recovery record.
 
 ## Compose Synchronous Lifecycle Work
 
-Canonical managed and Root canisters declare one paired participant:
+Application-owned managed canisters declare one paired participant:
 
 ```rust
 canic::start!(
@@ -216,8 +216,9 @@ canic::start!(
 Both paths must be safe functions with the exact type `fn() -> ()`. Closures,
 async or unsafe functions, arguments, return values, partial pairs and
 duplicate pairs are rejected at compile time. `start_local!` accepts the same
-development-only declaration. `start_wasm_store!` and
-`start_fleet_coordinator!` do not.
+development-only declaration. Canonical Root, Store and Coordinator canisters
+have no application lifecycle participant; `start_fleet_root!`,
+`start_wasm_store!` and `start_fleet_coordinator!` accept no such declaration.
 
 Canic invokes the matching function exactly once after it has initialized the
 shared provider and restored its synchronous invariants and native claims, but

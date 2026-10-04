@@ -1,20 +1,58 @@
 use super::*;
 
 #[test]
+fn policy_gate_fingerprints_consumed_sources_after_files_change() {
+    use canic_core::cdk::utils::hash::sha256_hex;
+
+    let root = temp_dir("canic-policy-consumed-sources");
+    fs::create_dir_all(&root).expect("create root");
+    let policy_path = root.join("policy.toml");
+    let envelope_path = root.join("envelope.json");
+    let envelope_source = format!(" {}\n", serde_json::to_string(&sample_envelope()).unwrap());
+    fs::write(&policy_path, MINIMAL_POLICY).unwrap();
+    fs::write(&envelope_path, &envelope_source).unwrap();
+    let consumed_policy = fs::read_to_string(&policy_path).unwrap();
+    let consumed_envelope = fs::read_to_string(&envelope_path).unwrap();
+    fs::write(&policy_path, "[invalid policy").unwrap();
+    fs::write(&envelope_path, r#"{"changed":true}"#).unwrap();
+
+    let report = evaluate_policy_gate(PolicyGateRequest {
+        policy_source: &consumed_policy,
+        policy_path: &policy_path,
+        envelope_source: &consumed_envelope,
+        envelope_path: &envelope_path,
+        fingerprint_root: &root,
+    })
+    .expect("evaluate consumed inputs despite replacement files");
+    assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Passed);
+    assert_eq!(report.evaluated_envelope_exit_class, ExitClassV1::Success);
+    for (fingerprint, source) in [
+        (&report.policy_file_fingerprint, &consumed_policy),
+        (&report.evaluated_envelope_fingerprint, &consumed_envelope),
+    ] {
+        assert_eq!(fingerprint.sha256, Some(sha256_hex(source.as_bytes())));
+        assert_eq!(fingerprint.size_bytes, Some(source.len() as u64));
+        assert_eq!(fingerprint.modified_unix_secs, None);
+    }
+    fs::remove_dir_all(root).expect("clean consumed input fixture");
+}
+
+#[test]
 fn minimal_policy_passes_success_envelope() {
     let root = temp_dir("canic-policy-pass");
     fs::create_dir_all(&root).expect("create root");
     let policy_path = root.join("policy.toml");
     let envelope_path = root.join("envelope.json");
     fs::write(&policy_path, MINIMAL_POLICY).expect("write policy");
-    fs::write(&envelope_path, "{}").expect("write envelope placeholder");
+    let envelope_source = serde_json::to_string(&sample_envelope()).expect("encode envelope");
+    fs::write(&envelope_path, &envelope_source).expect("write envelope");
 
     let report = evaluate_policy_gate(PolicyGateRequest {
         policy_source: MINIMAL_POLICY,
         policy_path: &policy_path,
         envelope_path: &envelope_path,
         fingerprint_root: &root,
-        envelope: sample_envelope(),
+        envelope_source: &envelope_source,
     })
     .expect("evaluate policy");
 

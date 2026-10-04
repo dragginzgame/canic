@@ -5,8 +5,8 @@ use super::{
 };
 use crate::{
     build_provenance::{
-        ArtifactProvenanceKindV1, BUILD_PROVENANCE_SCHEMA_ID, BuildProvenanceV1,
-        SourceDirtyPolicyV1,
+        ArtifactProvenanceKindV1, BUILD_PROVENANCE_SCHEMA_ID, BuildProvenanceStatusV1,
+        BuildProvenanceV1, SourceDirtyPolicyV1,
     },
     evidence_envelope::{
         EvidenceEnvelopeV1, EvidenceMessageV1, EvidenceSummaryV1, EvidenceTargetV1, ExitClassV1,
@@ -320,6 +320,18 @@ impl PolicyReportBuilder {
                 return;
             }
         };
+
+        if provenance.build_status != BuildProvenanceStatusV1::Success {
+            self.fail_enabled_build_provenance_rules(
+                rules,
+                "policy.build_provenance.build_not_successful",
+                "build-provenance policy rules require a successful build",
+                ExitClassV1::BlockedByPolicy,
+                serde_json::json!(BuildProvenanceStatusV1::Success),
+                serde_json::json!(provenance.build_status),
+            );
+            return;
+        }
 
         if rules.is_enabled(PolicyBuildProvenanceRuleV1::CleanSource) {
             self.evaluate_clean_source(&provenance);

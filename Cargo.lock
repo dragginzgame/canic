@@ -359,24 +359,6 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "3ded4057c258ba199e2d26386d3af3780957ecaee6c4ef4041c6b4b8b97c0b06"
 
 [[package]]
-name = "blob_storage_cashier_mock"
-version = "0.110.52"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
-name = "blob_storage_probe"
-version = "0.110.52"
-dependencies = [
- "candid",
- "canic",
- "ic-cdk",
-]
-
-[[package]]
 name = "block-buffer"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2271,9 +2253,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.24.2"
+version = "0.24.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "bf5cbf96d1ee431ef7d2be4bcc18483d764a757a8c20b77fe4f40bd7491d32da"
+checksum = "c5dcf8430589b2984cb49eacff5bfa27cca5b9eef506d0a8fbac813f1886990e"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2284,9 +2266,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.45.6"
+version = "0.45.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fe4386bc64e76f9674a0bd2b8ee5565efe549d9d7eb32e5de664c0a36971cfec"
+checksum = "0a4e05373669d3ee5b8264833edd282c47bd2af5c75ceef70508e21cbf8cba7c"
 dependencies = [
  "candid",
  "cap-fs-ext",
@@ -2359,9 +2341,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.14.1"
+version = "0.14.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d052dfa9ff04b1b052ad039ff82da5cbddb8086eca568782ab018c449168d9fa"
+checksum = "5d6d2856ee5fbd6cc1169110816c42618ba685c1ecac222430a8c31694a37fd7"
 dependencies = [
  "candid",
  "fs2",
@@ -2376,9 +2358,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.10.6"
+version = "0.10.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3a2248f9541078c36c9649b3487ebaa9144267b2ed27a9ae1122bdcb3604a702"
+checksum = "ab5e0240df6345bf5b27c63c9285ed21d7814fbbfb8b83a463d93f54b291d227"
 dependencies = [
  "ic-cdk-timers",
  "ic0",

@@ -1,49 +1,47 @@
-# Blob Storage
+# Blob Service Composition
 
-Blob storage is for application data that is naturally handled as a large piece
-of content, such as an uploaded image, document, or media file. It is separate
-from snapshots used to back up an entire canister.
+Application blob storage belongs to [ic-blob-storage](https://github.com/dragginzgame/ic-blob-storage).
+It owns content, tenant authority, provider access, references and accounting.
+Canic owns Fleet lifecycle and deployment of ordinary application Components.
 
-Canic provides optional Rust and operator integrations for this storage. The
-base feature manages gateway state and administration; a separate billing
-feature adds payment status, funding, and readiness checks through Cashier.
+The Canic-owned adapter lives in a separate Cargo workspace at
+`integrations/blob-service`. Its service dependency and qualification are outside
+the main Canic workspace and ordinary release test lane. The upstream library has
+no Canic dependency. See the [extraction design](../../design/0.111-standalone-blob-service-extraction/0.111-design.md)
+and [current handoff](../../status/current.md) for implementation evidence.
 
-## What It Provides
+The adapter pins the published `ic-blob-storage` library and uses public Canic
+endpoints, bounded decoders and synchronous lifecycle participants. It registers
+its service memory grants before Canic bootstraps the sole memory runtime. Its
+managed lifecycle retains Fleet admission.
 
-- opt-in `blob-storage` runtime APIs and endpoint macros
-- controller-guarded gateway administration
-- stable local counters and root-hash state
-- opt-in `blob-storage-billing` Cashier integration
-- operator status, gateway synchronization, funding, and medic checks
-- separate Cargo features so ordinary canisters carry none of this surface
+Blob-specific tests live upstream. This workspace contains no blob test harness,
+PocketIC runner or standalone test mode. Canic retains its generic endpoint,
+Fleet, lifecycle and memory tests. The upstream service suite owns blob authority,
+certificate replies, restoration, provider behavior and accounting; those results
+do not establish deployment qualification for an arbitrary wrapper.
 
-Downstream canisters select the feature explicitly and choose the endpoint
-guard appropriate to their application authority.
+Build the adapter explicitly through the current Canic CLI, outside ordinary
+Canic release validation:
 
-Remote clients can import all passive request, response and billing value types
-from `canic::dto::blob_storage` with `default-features = false` and no blob
-features. Only canisters hosting local blob state or workflows should enable
-`blob-storage` or `blob-storage-billing`. Importing these DTOs does not select
-blob memory allocations, funding workflows or endpoint macros.
+```sh
+cargo build --locked -p canic-cli --bin canic
+cd integrations/blob-service
+../../target/debug/canic build blob-service blob --workspace . --config canic.toml --icp-root . --profile fast --json
+```
 
-This boundary prepares client-only consumers while `ic-blob-storage` is being
-qualified. Canic continues to own its existing embedded implementation and wire
-contract; this change does not replace it or introduce another service protocol.
+Installation supplies the library's Candid `ServiceInstallationInput` as Canic's
+nested application argument bytes. Its configured service Principal must be the
+actual canister ID. This source adapter has not yet completed managed Wasm build
+qualification; source removal alone does not qualify a live installation.
 
-## Boundary
+The source cut removes Canic's embedded blob runtime, feature flags, billing
+commands and passive Medic inspection. Use the service's own operator tools for
+its maintained API. Its status response does not promise the former readiness
+exit code, and there is no qualified replacement for Canic's direct funding
+command. Neither limitation requires retaining the old runtime.
 
-Blob storage is for application product data. It is not the canister-snapshot
-backup repository, and enabling it does not upload Canic backups. Non-billing
-gateway administration also does not imply Cashier authority or monetary
-automation.
-
-## Continue From Here
-
-- [Runtime feature selection](../../../crates/canic/README.md#feature-contract)
-- [Blob storage integration](../../operations/blob-storage-integration.md)
-- [Billing readiness](../../operations/blob-storage-billing-readiness.md)
-- [Blob storage inventory contract](../../contracts/BLOB_STORAGE_INVENTORY.md)
-- [Cashier inventory contract](../../contracts/BLOB_STORAGE_CASHIER_INVENTORY.md)
-- [Choose another feature](../README.md)
-- [Browse all documentation](../../README.md)
-- [Back to the main README](../../../README.md)
+Reinstalling or deleting a live service is a separate operation. Preserve records
+of outstanding provider liabilities; logical reference release does not prove
+physical deletion or billing cessation. The source extraction performs no paid
+upload, provider cleanup, deployment, or reset.

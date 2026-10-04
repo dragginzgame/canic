@@ -11,12 +11,6 @@ pub mod auth {
     pub use crate::__internal::core::api::auth::AuthApi;
 }
 
-/// Blob-storage protocol helpers.
-#[cfg(feature = "blob-storage")]
-pub mod blob_storage {
-    pub use crate::__internal::core::api::blob_storage::BlobStorageApi;
-}
-
 /// Local and receipt-backed reservation helpers.
 pub mod intent {
     pub use crate::__internal::core::api::intent::{
@@ -108,7 +102,7 @@ pub mod metrics {
 
 /// Low-level operational helpers
 pub mod ops {
-    pub use crate::__internal::core::{log, perf};
+    pub use crate::{__internal::core::log, perf};
 }
 
 /// Registered application fixture consumption and exact receipt observation.

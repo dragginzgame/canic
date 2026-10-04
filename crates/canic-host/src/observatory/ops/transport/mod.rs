@@ -3,7 +3,7 @@
 mod process;
 
 use crate::{
-    icp::{IcpCli, IcpJsonResponseError, response_bytes},
+    icp::{IcpCli, IcpJsonResponseError, cleanup_candid_argument_file, response_bytes},
     observatory::view::{
         CostSamplesView, CostWindowView, ObservationFailure, RoleFundingView, RoleOverviewView,
         RootEstateView, StoreInventoryView,
@@ -164,9 +164,8 @@ impl IcpObservatoryTransport<'_> {
                     remaining.min(self.query_timeout),
                 )
             });
-        let cleanup = std::fs::remove_file(argument);
+        cleanup_candid_argument_file(&argument);
         let envelope = result?;
-        cleanup.map_err(|_| ObservationFailure::TransportUnavailable)?;
         decode_reply(&envelope, self.maximum_response_bytes)
     }
 }

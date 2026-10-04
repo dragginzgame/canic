@@ -12,6 +12,5 @@ canonical_fleet_coordinator	canonical	apps/test/canic.toml	fleet_coordinator
 canonical_wasm_store	canonical	apps/test/canic.toml	wasm_store
 runtime_probe	fixture	canisters/test/runtime_probe/canic.toml	test
 payload_limit_probe	fixture	canisters/test/payload_limit_probe/canic.toml	test
-blob_storage_probe	fixture	canisters/test/blob_storage_probe/canic.toml	test
 leaf_probe	fixture	canisters/audit/leaf_probe/canic.toml	app
 historical_pool_ledger_recovery	historical	apps/test/canic.toml	pool_ledger_recovery

@@ -1,0 +1,51 @@
+[workspace]
+members = ["."]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.99"
+license = "MIT"
+
+[workspace.dependencies]
+candid = "0.10.36"
+canic = { path = "../../crates/canic", default-features = false }
+ic-blob-storage = "=0.14.1"
+ic-cdk = "0.20.3"
+ic-memory = "0.24"
+serde = { version = "1.0", features = ["derive"] }
+
+[package]
+name = "canic-blob-service"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+
+[package.metadata.canic]
+app = "blob-service"
+role = "blob"
+
+[lib]
+crate-type = ["cdylib"]
+test = false
+doctest = false
+
+[dependencies]
+candid.workspace = true
+canic = { workspace = true, features = [] }
+ic-blob-storage.workspace = true
+ic-cdk.workspace = true
+ic-memory.workspace = true
+serde.workspace = true
+
+[build-dependencies]
+canic = { workspace = true, features = [] }
+
+[profile.release]
+opt-level = "z"
+lto = true
+codegen-units = 1
+panic = "abort"

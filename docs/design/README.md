@@ -91,13 +91,12 @@ release-batch plan and explicit maintainer acceptance.
    B5's `.42` evidence remains a qualified checkpoint; the
    [closeout audit](../audits/release-lines/0.110-closeout-audit.md) must cover
    the final FI1 scope and receive human acceptance before the next minor.
-9. [0.111 standalone blob service extraction](0.111-standalone-blob-service-extraction/status.md)
-   is the maintainer's selected next major slice. An independently maintained
-   service owns blob semantics; Canic manages it as an ordinary Component and
-   removes its blob-specific production surfaces. Implementation follows
-   completion of the current 0.110 corrections and accepted final closeout. The external
-   `ic-blob-storage` repository is bootstrapped; maintainer/consumer assignments,
-   package publication and provider qualification remain explicit dependencies.
+9. [Standalone blob service extraction](0.111-standalone-blob-service-extraction/status.md)
+   was explicitly selected for implementation after 0.110.52. The independent
+   service owns blob semantics; Canic owns an isolated application adapter and
+   removes its embedded implementation. This reprioritization does not declare
+   FR1 complete, accept minor closeout, or assign the extraction's release.
+
 
 [Bounded multi-Fleet estates](ideas/bounded-multi-fleet-estates/design.md)
 is deferred and unnumbered. Its unproved Q0 capsule and indexed-estate work

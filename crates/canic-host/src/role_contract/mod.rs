@@ -10,6 +10,7 @@ mod package;
 mod tests;
 
 pub use crate::cargo_metadata::CargoFeatureSelection;
+pub(crate) use package::package_manifest_path;
 
 pub use descriptor::{
     StateDescriptorRegistry, materialize_state_manifest, validate_state_descriptor_registry,

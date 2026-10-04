@@ -4,8 +4,6 @@
 //! behavior that unfolds over time.
 
 pub mod auth;
-#[cfg(feature = "blob-storage-billing")]
-pub mod blob_storage;
 pub mod bootstrap;
 pub mod cascade;
 pub mod component_runtime;

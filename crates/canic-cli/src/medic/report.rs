@@ -255,8 +255,6 @@ pub(super) enum MedicCategory {
     Funding,
     #[serde(rename = "auth")]
     Auth,
-    #[serde(rename = "blob_storage")]
-    BlobStorage,
     #[serde(rename = "runtime")]
     Runtime,
 }
@@ -271,7 +269,6 @@ impl MedicCategory {
             Self::Topology => "topology",
             Self::Funding => "funding",
             Self::Auth => "auth",
-            Self::BlobStorage => "blob_storage",
             Self::Runtime => "runtime",
         }
     }
@@ -285,8 +282,7 @@ impl MedicCategory {
             Self::Topology => 4,
             Self::Funding => 5,
             Self::Auth => 6,
-            Self::BlobStorage => 7,
-            Self::Runtime => 8,
+            Self::Runtime => 7,
         }
     }
 }
@@ -309,8 +305,6 @@ pub(super) enum MedicSource {
     AppConfig,
     #[serde(rename = "current_ensure")]
     CurrentEnsure,
-    #[serde(rename = "blob_storage_readiness")]
-    BlobStorageReadiness,
     #[serde(rename = "auth_renewal")]
     AuthRenewal,
     #[serde(rename = "state_manifest")]
@@ -326,7 +320,6 @@ impl MedicSource {
             Self::IcpConfig => "icp_config",
             Self::AppConfig => "app_config",
             Self::CurrentEnsure => "current_ensure",
-            Self::BlobStorageReadiness => "blob_storage_readiness",
             Self::AuthRenewal => "auth_renewal",
             Self::StateManifest => "state_manifest",
         }

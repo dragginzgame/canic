@@ -5,11 +5,11 @@ use super::{
     evaluation::evaluate_policy, parse_ci_policy_v1, parse_workspace_evidence_manifest_v1,
 };
 use crate::evidence_envelope::{
-    EvidenceEnvelopeV1, ExitClassV1, InputFingerprintV1, combine_exit_classes,
-    evidence_envelope_schema, file_input_fingerprint, workspace_evidence_manifest_schema,
+    EvidenceEnvelopeV1, ExitClassV1, InputFingerprintV1, bytes_input_fingerprint,
+    combine_exit_classes, evidence_envelope_schema, workspace_evidence_manifest_schema,
 };
 use std::{
-    fs,
+    fs, io,
     path::{Path, PathBuf},
 };
 
@@ -18,20 +18,22 @@ pub fn evaluate_workspace_evidence_manifest_gate(
 ) -> Result<WorkspaceEvidenceGateReportV1, PolicyGateError> {
     let policy = parse_ci_policy_v1(request.policy_source)?;
     let manifest = parse_workspace_evidence_manifest_v1(request.manifest_source)?;
-    let policy_file_fingerprint = file_input_fingerprint(
+    let policy_file_fingerprint = bytes_input_fingerprint(
         "ci_policy",
         request.policy_path,
         request.fingerprint_root,
+        request.policy_source.as_bytes(),
         None,
         None,
-    )?;
-    let manifest_file_fingerprint = file_input_fingerprint(
+    );
+    let manifest_file_fingerprint = bytes_input_fingerprint(
         "workspace_evidence_manifest",
         request.manifest_path,
         request.fingerprint_root,
+        request.manifest_source.as_bytes(),
         Some(workspace_evidence_manifest_schema()),
         None,
-    )?;
+    );
     let workspace_root = manifest_workspace_root(request.manifest_path, &manifest.workspace.root);
     let mut evidence = Vec::new();
 
@@ -41,7 +43,7 @@ pub fn evaluate_workspace_evidence_manifest_gate(
             &policy_file_fingerprint,
             &workspace_root,
             entry,
-        )?);
+        ));
     }
 
     let has_failures = evidence
@@ -70,21 +72,35 @@ fn evaluate_manifest_entry(
     policy_file_fingerprint: &InputFingerprintV1,
     workspace_root: &Path,
     entry: &WorkspaceEvidenceManifestEntryV1,
-) -> Result<WorkspaceEvidenceGateEntryReportV1, PolicyGateError> {
+) -> WorkspaceEvidenceGateEntryReportV1 {
     let evidence_path = resolve_manifest_entry_path(workspace_root, &entry.path);
-    if !evidence_path.is_file() {
-        return Ok(missing_manifest_entry_report(entry));
-    }
-
-    let envelope_source = fs::read_to_string(&evidence_path)?;
-    let envelope = serde_json::from_str::<EvidenceEnvelopeV1>(&envelope_source)?;
-    let evaluated_envelope_fingerprint = file_input_fingerprint(
+    let envelope_bytes = match fs::read(&evidence_path) {
+        Ok(bytes) => bytes,
+        Err(error) if error.kind() == io::ErrorKind::NotFound => {
+            return missing_manifest_entry_report(entry);
+        }
+        Err(error) => {
+            return invalid_manifest_entry_report(entry, None, error.to_string());
+        }
+    };
+    let evaluated_envelope_fingerprint = bytes_input_fingerprint(
         "evidence_envelope",
         &evidence_path,
         workspace_root,
+        &envelope_bytes,
         Some(evidence_envelope_schema()),
         None,
-    )?;
+    );
+    let envelope = match serde_json::from_slice::<EvidenceEnvelopeV1>(&envelope_bytes) {
+        Ok(envelope) => envelope,
+        Err(error) => {
+            return invalid_manifest_entry_report(
+                entry,
+                Some(evaluated_envelope_fingerprint),
+                error.to_string(),
+            );
+        }
+    };
     let mut policy_report = evaluate_policy(
         policy,
         policy_file_fingerprint.clone(),
@@ -127,7 +143,7 @@ fn evaluate_manifest_entry(
         policy_report.policy_status = PolicyEvaluationStatusV1::Failed;
     }
 
-    Ok(WorkspaceEvidenceGateEntryReportV1 {
+    WorkspaceEvidenceGateEntryReportV1 {
         kind: entry.kind.clone(),
         path: entry.path.clone(),
         required: entry.required,
@@ -142,7 +158,52 @@ fn evaluate_manifest_entry(
         evaluated_envelope_fingerprint: Some(evaluated_envelope_fingerprint),
         policy_report: Some(policy_report),
         findings,
-    })
+    }
+}
+
+fn invalid_manifest_entry_report(
+    entry: &WorkspaceEvidenceManifestEntryV1,
+    fingerprint: Option<InputFingerprintV1>,
+    detail: String,
+) -> WorkspaceEvidenceGateEntryReportV1 {
+    let (status, gate_exit_class, finding) = if entry.required {
+        (
+            PolicyEvaluationStatusV1::Failed,
+            ExitClassV1::InvalidInput,
+            PolicyFindingV1::error(
+                "policy.manifest.invalid_input",
+                "required manifest evidence could not be read or decoded",
+                "manifest.evidence.path",
+                ExitClassV1::InvalidInput,
+            ),
+        )
+    } else {
+        (
+            PolicyEvaluationStatusV1::Passed,
+            ExitClassV1::SuccessWithWarnings,
+            PolicyFindingV1::warning(
+                "policy.manifest.invalid_input",
+                "optional manifest evidence could not be read or decoded",
+                "manifest.evidence.path",
+            ),
+        )
+    };
+    WorkspaceEvidenceGateEntryReportV1 {
+        kind: entry.kind.clone(),
+        path: entry.path.clone(),
+        required: entry.required,
+        expected_payload_schema: entry.payload_schema.clone(),
+        expected_target: entry.target.clone(),
+        status,
+        gate_exit_class,
+        evaluated_envelope_fingerprint: fingerprint,
+        policy_report: None,
+        findings: vec![
+            finding
+                .expected(serde_json::json!(entry.path))
+                .actual(serde_json::json!(detail)),
+        ],
+    }
 }
 
 fn missing_manifest_entry_report(

@@ -114,13 +114,6 @@ pub mod memory {
         pub const SHARDING_ASSIGNMENTS_ID: u8 = 53;
     }
 
-    pub mod blob_storage {
-        pub const BLOB_STORAGE_ROOTS_ID: u8 = 55;
-        pub const BLOB_STORAGE_PENDING_DELETIONS_ID: u8 = 56;
-        pub const BLOB_STORAGE_GATEWAY_PRINCIPALS_ID: u8 = 57;
-        pub const BLOB_STORAGE_BILLING_ID: u8 = 58;
-    }
-
     pub mod authority_restore {
         pub const AUTHORITY_RESTORE_FENCE_ID: u8 = 59;
     }
@@ -142,10 +135,6 @@ use memory::{
         ROOT_DELEGATION_STATE_ID,
     },
     authority_restore::AUTHORITY_RESTORE_FENCE_ID,
-    blob_storage::{
-        BLOB_STORAGE_BILLING_ID, BLOB_STORAGE_GATEWAY_PRINCIPALS_ID,
-        BLOB_STORAGE_PENDING_DELETIONS_ID, BLOB_STORAGE_ROOTS_ID,
-    },
     control_plane::{
         FIXTURE_STORE_ID, FLEET_COORDINATOR_ADMISSION_ID, FLEET_COORDINATOR_FUNDING_ID,
         FLEET_COORDINATOR_REGISTRY_ID, ROOT_ADMISSION_ID, ROOT_CANISTER_INVENTORY_ASSETS_ID,
@@ -249,12 +238,6 @@ const PLACEMENT_SCALING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_SC
 const PLACEMENT_INDEX_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(PLACEMENT_INDEX_REGISTRY_ID)];
 const SHARDING_REGISTRY_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_REGISTRY_ID)];
 const SHARDING_ASSIGNMENTS_IDS: &[MemoryId] = &[MemoryId::new(SHARDING_ASSIGNMENTS_ID)];
-const BLOB_STORAGE_ROOTS_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_ROOTS_ID)];
-const BLOB_STORAGE_PENDING_DELETIONS_IDS: &[MemoryId] =
-    &[MemoryId::new(BLOB_STORAGE_PENDING_DELETIONS_ID)];
-const BLOB_STORAGE_GATEWAY_PRINCIPALS_IDS: &[MemoryId] =
-    &[MemoryId::new(BLOB_STORAGE_GATEWAY_PRINCIPALS_ID)];
-const BLOB_STORAGE_BILLING_IDS: &[MemoryId] = &[MemoryId::new(BLOB_STORAGE_BILLING_ID)];
 
 const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
     definition(
@@ -426,26 +409,6 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::ShardingAssignments,
         AllocationOwner::CanicCore,
         SHARDING_ASSIGNMENTS_IDS,
-    ),
-    definition(
-        StateAllocationKey::BlobStorageRoots,
-        AllocationOwner::CanicCore,
-        BLOB_STORAGE_ROOTS_IDS,
-    ),
-    definition(
-        StateAllocationKey::BlobStoragePendingDeletions,
-        AllocationOwner::CanicCore,
-        BLOB_STORAGE_PENDING_DELETIONS_IDS,
-    ),
-    definition(
-        StateAllocationKey::BlobStorageGatewayPrincipals,
-        AllocationOwner::CanicCore,
-        BLOB_STORAGE_GATEWAY_PRINCIPALS_IDS,
-    ),
-    definition(
-        StateAllocationKey::BlobStorageBilling,
-        AllocationOwner::CanicCore,
-        BLOB_STORAGE_BILLING_IDS,
     ),
     definition(
         StateAllocationKey::CoreAuthorityRestoreFence,

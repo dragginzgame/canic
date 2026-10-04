@@ -34,6 +34,9 @@ impl AuthApi {
     }
 
     /// Verify a role attestation locally from its embedded root proof.
+    ///
+    /// `min_accepted_epoch` can tighten the configured per-role epoch floor;
+    /// the effective floor is the greater of the application and configured values.
     pub async fn verify_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,
@@ -44,6 +47,9 @@ impl AuthApi {
     }
 
     /// Verify a role attestation that explicitly binds the caller to this live Subnet.
+    ///
+    /// `min_accepted_epoch` can tighten the configured per-role epoch floor;
+    /// the effective floor is the greater of the application and configured values.
     pub async fn verify_local_subnet_role_attestation(
         attestation: &SignedRoleAttestation,
         min_accepted_epoch: u64,

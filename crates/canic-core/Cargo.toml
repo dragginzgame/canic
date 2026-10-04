@@ -33,8 +33,6 @@ auth-issuer-canister-sig-verify = ["dep:ic-signature-verification"]
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
 auth-local-application-authorization = ["auth-delegated-token-verify"]
 auth-root-delegation-state = []
-blob-storage = []
-blob-storage-billing = ["blob-storage"]
 internal-test-fixtures = []
 
 [dependencies]

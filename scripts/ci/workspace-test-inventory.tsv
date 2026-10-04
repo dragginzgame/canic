@@ -12,7 +12,6 @@ canic-core	timer_inventory_guard	full	parallel	ordinary
 canic-core	trap_guard	full	parallel	ordinary
 canic-host	ci_authority	full	parallel	ordinary
 canic-testing-internal	fixture_payloads	full	parallel	ordinary
-canic	blob_storage_endpoint_macro	full	parallel	ordinary
 canic	build_cfg_surface	full	parallel	ordinary
 canic	call_facade	full	parallel	ordinary
 canic	changelog_governance	full	parallel	ordinary
@@ -25,7 +24,6 @@ canic	install_script_surface	fast	parallel	ordinary
 canic	managed_endpoint_gate	full	parallel	ordinary
 canic	metrics_facade	full	parallel	ordinary
 canic	pre_1_0_hard_cut	full	parallel	ordinary
-canic	protocol_inventory_gate	full	parallel	ordinary
 canic	protocol_surface	fast	parallel	ordinary
 canic	reference_surface	fast	parallel	ordinary
 canic	reason_register	full	parallel	ordinary
@@ -39,6 +37,5 @@ canic-tests	timer_authority	full	pocketic-serial	runtime
 canic-tests	lifecycle_boundary	full	pocketic-serial	runtime
 canic-tests	issuer_proof_bootstrap	full	pocketic-serial	runtime
 canic-tests	native_agent_delegation	full	pocketic-serial	runtime
-canic-tests	pic_blob_storage	full	pocketic-serial	blob-storage
 canic-tests	pic_ingress_payload_limits	full	pocketic-serial	payload-limits
 canic-tests	instruction_audit	full	pocketic-serial	runtime

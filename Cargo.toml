@@ -18,8 +18,6 @@ members = [
     "canisters/audit/root_probe",
     "canisters/audit/scaling_probe",
     "canisters/sandbox/blank",
-    "canisters/test/blob_storage_cashier_mock",
-    "canisters/test/blob_storage_probe",
     "canisters/test/cycles_ledger_stub",
     "canisters/test/delegation_issuer_stub",
     "canisters/test/delegation_root_stub",
@@ -40,6 +38,7 @@ members = [
     "crates/canic-testing-internal",
     "crates/canic-tests",
 ]
+exclude = ["integrations/blob-service"]
 resolver = "3"
 
 [workspace.package]

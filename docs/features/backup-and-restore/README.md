@@ -122,7 +122,7 @@ nonterminal journal before any effect-owned state and publish validated terminal
 state before the matching `Converged` journal.
 
 Remote snapshot archival is outside the current local backup contract.
-Product blob storage is a separate feature.
+Application blob storage belongs to the independent service and its adapter.
 
 ## Continue From Here
 

@@ -16,7 +16,6 @@ admission
 app
 auth
 backup
-blob-storage
 build
 component
 cycles

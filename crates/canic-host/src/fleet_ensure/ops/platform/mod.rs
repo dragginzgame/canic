@@ -30,8 +30,8 @@ use crate::{
         policy::release::snapshots::{self, SnapshotRemovalError},
     },
     icp::{
-        IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError, IcpDiagnostic,
-        IcpManagementCallError, LocalReplicaTarget, run_status,
+        IcpBalanceError, IcpCandidCallError, IcpCanisterStatusReport, IcpCli, IcpCommandError,
+        IcpDiagnostic, IcpManagementCallError, LocalReplicaTarget, run_status,
     },
     icp_config::resolve_icp_build_network_from_root,
     subnet_catalog::load_cached_mainnet_subnet_catalog,
@@ -674,6 +674,9 @@ pub enum IcpEnsurePlatformError {
     #[error("ICP status has invalid cycle balance for {canister}: {value}")]
     InvalidStatusCycles { canister: String, value: String },
 
+    #[error("ICP status has an unknown runtime state for {canister}: {value}")]
+    InvalidCanisterStatus { canister: String, value: String },
+
     #[error("ICP status omitted exact {field} required for controlled canister {canister}")]
     IncompleteCanisterStatus {
         canister: String,
@@ -735,6 +738,9 @@ pub enum IcpEnsurePlatformError {
 
     #[error("Cycles Ledger withdraw failed: {0}")]
     LedgerWithdraw(String),
+
+    #[error("operator cycles balance observation failed: {0}")]
+    OperatorBalanceObservation(#[source] IcpBalanceError),
 
     #[error("completed withdrawal balance conflicts with reviewed funding bounds: {observation:?}")]
     NativeFundingBalanceDrift {
@@ -1284,6 +1290,12 @@ impl IcpEnsurePlatform {
                 ))
             })
             .collect()
+    }
+
+    fn operator_cycles_balance(&self) -> Result<u128, IcpEnsurePlatformError> {
+        self.icp
+            .identity_cycles_balance()
+            .map_err(IcpEnsurePlatformError::OperatorBalanceObservation)
     }
 
     fn cycles_ledger_balance(&self, owner: &str) -> Result<u128, IcpEnsurePlatformError> {
@@ -1838,9 +1850,15 @@ impl IcpEnsurePlatform {
             .controllers;
         controllers.sort();
         let status = match status_text.to_ascii_lowercase().as_str() {
+            "running" => CanisterRuntimeStatus::Running,
             "stopped" => CanisterRuntimeStatus::Stopped,
             "stopping" => CanisterRuntimeStatus::Stopping,
-            _ => CanisterRuntimeStatus::Running,
+            _ => {
+                return Err(IcpEnsurePlatformError::InvalidCanisterStatus {
+                    canister: principal.to_string(),
+                    value: status_text,
+                });
+            }
         };
         Ok(Some(LiveCanister {
             canister_version: report.canister_version,
@@ -3066,12 +3084,9 @@ impl IcpEnsurePlatform {
                     None,
                 )?)
             })?;
-        let operator_cycles =
-            self.timed_observation(FleetObservationStage::OperatorBalance, |platform| {
-                platform
-                    .icp
-                    .identity_cycles_balance()
-                    .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))
+        let operator_cycles = self
+            .timed_observation(FleetObservationStage::OperatorBalance, |platform| {
+                platform.operator_cycles_balance()
             })?;
         Ok(FleetObservation {
             additional_controlled_cycles,
@@ -4049,10 +4064,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                     ));
                 }
             }
-            let operator_cycles = platform
-                .icp
-                .identity_cycles_balance()
-                .map_err(|error| IcpEnsurePlatformError::LedgerWithdraw(error.to_string()))?;
+            let operator_cycles = platform.operator_cycles_balance()?;
             Ok(Some(RootManagementObservation {
                 operator_cycles,
                 roots,
@@ -4325,10 +4337,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
                 principal,
                 ..
             } => {
-                let source_cycles = platform
-                    .icp
-                    .identity_cycles_balance()
-                    .map_err(|error| IcpEnsurePlatformError::LedgerTransfer(error.to_string()))?;
+                let source_cycles = platform.operator_cycles_balance()?;
                 let target = Self::action_principal(state, principal)?;
                 let destination_cycles = platform.cycles_ledger_balance(target)?;
                 post_cycles = Some(source_cycles);
@@ -4880,11 +4889,7 @@ impl EnsurePlatform for IcpEnsurePlatform {
         state: &FleetEnsureStateRecord,
     ) -> Result<Option<u128>, Self::Error> {
         if matches!(action, EnsureAction::FundEstate { .. }) {
-            return self
-                .icp
-                .identity_cycles_balance()
-                .map(Some)
-                .map_err(|error| IcpEnsurePlatformError::LedgerTransfer(error.to_string()));
+            return self.operator_cycles_balance().map(Some);
         }
         if let EnsureAction::Fund {
             pool_funding: Some(authority),
@@ -5556,6 +5561,125 @@ mod tests {
     use canic_core::dto::pool::CanisterPoolAssetStatus;
     #[cfg(unix)]
     use std::sync::{Arc, Mutex};
+
+    #[cfg(unix)]
+    #[test]
+    fn status_observation_rejects_unknown_runtime_states() {
+        let fixture = ProtocolOwnersFixture::new();
+        for (text, expected) in [
+            ("Running", CanisterRuntimeStatus::Running),
+            ("running", CanisterRuntimeStatus::Running),
+            ("Stopped", CanisterRuntimeStatus::Stopped),
+            ("Stopping", CanisterRuntimeStatus::Stopping),
+        ] {
+            fixture.status("root", text, true);
+            assert_eq!(
+                fixture
+                    .platform
+                    .status_optional("root")
+                    .unwrap()
+                    .unwrap()
+                    .status,
+                expected,
+            );
+        }
+        for text in ["", "Stopped (frozen)", "unknown"] {
+            fixture.status("root", text, true);
+            assert!(matches!(
+                fixture.platform.status_optional("root"),
+                Err(IcpEnsurePlatformError::InvalidCanisterStatus { canister, value })
+                    if canister == "root" && value == text
+            ));
+        }
+        std::fs::remove_dir_all(fixture.root).unwrap();
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn estate_preparation_preserves_typed_balance_observation_failures() {
+        use std::fs;
+
+        let mut fixture = ProtocolOwnersFixture::new();
+        fs::write(
+            fixture.root.join("icp"),
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
+printf '%s\n' "$*" >> balance-commands
+while [ "$#" -gt 0 ] && [ "$1" != cycles ]; do shift; done
+[ "$1 $2" = 'cycles balance' ] || exit 90
+if [ -f invocation-failure ]; then echo 'balance unavailable' >&2; exit 91; fi
+cat balance-response
+"#,
+            ),
+        )
+        .unwrap();
+        let action = EnsureAction::FundEstate {
+            amount: 10,
+            created_at_time: 1,
+            expected_post_cycles: 10,
+            ledger: "ledger".into(),
+            ledger_fee_cycles: 1,
+            name: "root".into(),
+            principal: "root".into(),
+        };
+        fs::write(
+            fixture.root.join("balance-response"),
+            r#"{"balance":"42 cycles"}"#,
+        )
+        .unwrap();
+        assert_eq!(
+            fixture
+                .platform
+                .action_cycles(&action, &fixture.state)
+                .unwrap(),
+            Some(42),
+        );
+        for (case, response) in [
+            ("amount", r#"{"balance":"invalid cycles"}"#),
+            ("json", r#"{"balance":42}"#),
+            ("invocation", r#"{"balance":"42 cycles"}"#),
+        ] {
+            fs::write(fixture.root.join("balance-response"), response).unwrap();
+            if case == "invocation" {
+                fs::write(fixture.root.join("invocation-failure"), b"").unwrap();
+            }
+            let error = fixture
+                .platform
+                .action_cycles(&action, &fixture.state)
+                .unwrap_err();
+            match case {
+                "amount" => assert!(matches!(
+                    error,
+                    IcpEnsurePlatformError::OperatorBalanceObservation(
+                        IcpBalanceError::InvalidAmount { unit: "cycles", .. }
+                    )
+                )),
+                "json" => assert!(matches!(
+                    error,
+                    IcpEnsurePlatformError::OperatorBalanceObservation(IcpBalanceError::Icp(
+                        IcpCommandError::Json { .. }
+                    ))
+                )),
+                "invocation" => assert!(matches!(
+                    error,
+                    IcpEnsurePlatformError::OperatorBalanceObservation(IcpBalanceError::Icp(
+                        IcpCommandError::Failed { .. }
+                    ))
+                )),
+                _ => unreachable!(),
+            }
+        }
+        let commands = fs::read_to_string(fixture.root.join("balance-commands")).unwrap();
+        assert!(
+            commands
+                .lines()
+                .all(|line| line.contains("cycles balance --json"))
+        );
+        assert!(!commands.contains("withdraw"));
+        assert!(!commands.contains("transfer"));
+        fs::remove_dir_all(fixture.root).unwrap();
+    }
 
     #[test]
     fn identity_binding_keeps_operator_fence_before_effects() {

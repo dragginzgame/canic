@@ -317,11 +317,7 @@ fn role_attestation_verifier_subnet() -> Result<Principal, InternalError> {
 }
 
 fn resolve_min_accepted_epoch(explicit: u64, configured: Option<u64>) -> u64 {
-    if explicit > 0 {
-        explicit
-    } else {
-        configured.unwrap_or(0)
-    }
+    explicit.max(configured.unwrap_or(0))
 }
 
 fn record_attestation_verifier_rejection(err: &AuthOpsError) {
@@ -393,7 +389,8 @@ mod tests {
     use super::{
         RuntimeAuthWorkflow, nonroot_requires_delegated_token_issuer,
         nonroot_requires_issuer_proof_verifier_support,
-        nonroot_requires_root_proof_verifier_support, root_requires_role_attestation_proofs,
+        nonroot_requires_root_proof_verifier_support, resolve_min_accepted_epoch,
+        root_requires_role_attestation_proofs,
     };
     use crate::{
         cdk::types::Principal,
@@ -409,6 +406,22 @@ mod tests {
         },
         test::{config::ConfigTestBuilder, seams, support::fleet_key},
     };
+
+    #[test]
+    fn application_epoch_floor_can_only_tighten_configured_revocation() {
+        for (explicit, configured, expected) in [
+            (0, None, 0),
+            (0, Some(5), 5),
+            (1, Some(5), 5),
+            (5, Some(5), 5),
+            (6, Some(5), 6),
+            (6, None, 6),
+            (1, Some(u64::MAX), u64::MAX),
+            (u64::MAX, Some(5), u64::MAX),
+        ] {
+            assert_eq!(resolve_min_accepted_epoch(explicit, configured), expected);
+        }
+    }
 
     fn application_authority_binding(
         scopes: &[&str],

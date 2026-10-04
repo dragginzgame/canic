@@ -318,10 +318,6 @@ Their IDs are not renumbered into unrelated owners.
 | 51 | `canic.core.placement.index_registry.v1` | B-tree |
 | 52 | `canic.core.sharding.registry.v1` | B-tree, including activation |
 | 53 | `canic.core.sharding.assignments.v1` | B-tree |
-| 55 | `canic.core.blob_storage.roots.v1` | B-tree |
-| 56 | `canic.core.blob_storage.pending_deletions.v1` | B-tree |
-| 57 | `canic.core.blob_storage.gateway_principals.v1` | B-tree |
-| 58 | `canic.core.blob_storage.billing.v1` | Cell |
 | 59 | `canic.core.authority_restore.fence.v1` | Bounded optional cell |
 | 60 | `canic.core.async_job_recovery.v1` | Cell |
 | 61 | `canic.core.fleet_admission.projection.v1` | Bounded optional cell |

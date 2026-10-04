@@ -6,7 +6,6 @@
 
 mod admission;
 mod auth;
-mod blob_storage;
 mod command;
 mod fleet;
 mod package;
@@ -30,7 +29,6 @@ use canic_host::{
 
 use admission::check_fleet_admission;
 use auth::check_auth_renewal;
-use blob_storage::{check_blob_storage_billing, check_blob_storage_not_selected};
 use command::MedicOptions;
 pub use command::{MedicCommandError, run};
 use fleet::{FleetMedicContext, current_fleet_checks, ensure_plan_next, fleet_medic_context};
@@ -134,7 +132,7 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
             "run from a Canic workspace root",
             MedicSource::CurrentEnsure,
         ));
-        return finish_optional_fleet_checks(options, None, &context.environment, checks);
+        return finish_optional_fleet_checks(options, &context.environment, checks);
     };
 
     match resolve_current_fleet(root, &context.environment, options.fleet_name()) {
@@ -178,25 +176,14 @@ fn run_fleet_checks(options: &MedicOptions, context: &FleetMedicContext) -> Vec<
         )),
     }
 
-    finish_optional_fleet_checks(options, Some(root), &context.environment, checks)
+    finish_optional_fleet_checks(options, &context.environment, checks)
 }
 
 fn finish_optional_fleet_checks(
     options: &MedicOptions,
-    icp_root: Option<&Path>,
     environment: &str,
     mut checks: Vec<MedicCheck>,
 ) -> Vec<MedicCheck> {
-    if let Some(canister) = &options.blob_storage {
-        checks.push(check_blob_storage_billing(options, canister, environment));
-    } else {
-        checks.push(check_blob_storage_not_selected(
-            options,
-            icp_root,
-            environment,
-        ));
-    }
-
     if let Some(issuer) = &options.auth_renewal {
         checks.push(check_auth_renewal(options, issuer, environment));
     } else {

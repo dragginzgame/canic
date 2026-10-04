@@ -10,15 +10,15 @@ pub mod inspection;
 
 use crate::{
     icp::{
-        IcpCli, IcpCommandError, IcpJsonResponseError, decode_json_result_response,
-        write_candid_argument_file,
+        IcpCli, IcpCommandError, IcpJsonResponseError, cleanup_candid_argument_file,
+        decode_json_result_response, write_candid_argument_file,
     },
     protocol_binding::ResolvedProtocolBinding,
 };
 use candid::{CandidType, Principal};
 use canic_core::diagnostics::RegisteredDiagnosticCode;
 use serde::de::DeserializeOwned;
-use std::{fs, io};
+use std::io;
 use thiserror::Error as ThisError;
 
 const ICP_JSON_OUTPUT: &str = "json";
@@ -285,13 +285,8 @@ where
             candid_path,
         ),
     };
-    let cleanup = fs::remove_file(&args_path);
+    cleanup_candid_argument_file(&args_path);
     let output = output.map_err(|source| CanisterProtocolError::Invocation {
-        canister,
-        method,
-        source,
-    })?;
-    cleanup.map_err(|source| CanisterProtocolError::ArgumentFile {
         canister,
         method,
         source,
@@ -318,10 +313,86 @@ where
 mod tests {
     use super::*;
     use serde::Deserialize;
+    use std::fs;
 
     #[derive(CandidType, Debug, Deserialize, Eq, PartialEq)]
     struct EmptyVectorArgument {
         values: Vec<u64>,
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn cleanup_failure_preserves_typed_update_and_query_outcomes() {
+        use canic_core::cdk::utils::hash::hex_bytes;
+        use std::{os::unix::fs::PermissionsExt, path::PathBuf};
+
+        let root = crate::test_support::temp_dir("canister-protocol-cleanup");
+        fs::create_dir_all(&root).unwrap();
+        let executable = root.join("icp");
+        fs::write(
+            &executable,
+            crate::test_support::tool_script(
+                r#"#!/bin/sh
+if [ "$1" = --version ]; then echo 'icp @ICP_VERSION@'; exit 0; fi
+while [ "$#" -gt 0 ]; do
+  case "$1" in --args-file) shift; argument=$1 ;; esac
+  shift
+done
+printf '%s\n' "$argument" > argument-path
+rm "$argument"; mkdir "$argument"
+cat response
+exit "$(cat exit-code)"
+"#,
+            ),
+        )
+        .unwrap();
+        fs::set_permissions(&executable, fs::Permissions::from_mode(0o700)).unwrap();
+        let icp = IcpCli::new(executable.to_str().unwrap(), None).with_cwd(&root);
+        let reply: Result<u64, canic_core::dto::error::Error> = Ok(42);
+        let response = serde_json::json!({
+            "response_bytes": hex_bytes(candid::encode_one(reply).unwrap()),
+        });
+        for mode in [ProtocolCallMode::Update, ProtocolCallMode::Query] {
+            for outcome in 0..3 {
+                fs::write(root.join("exit-code"), if outcome == 1 { "1" } else { "0" }).unwrap();
+                fs::write(
+                    root.join("response"),
+                    if outcome == 2 {
+                        "{}".to_string()
+                    } else {
+                        response.to_string()
+                    },
+                )
+                .unwrap();
+                let result = invoke_with_candid::<_, u64>(
+                    &icp,
+                    &root.join("probe.did"),
+                    Principal::from_slice(&[1]),
+                    "probe",
+                    &(),
+                    mode,
+                );
+                match outcome {
+                    0 => assert_eq!(result.unwrap(), 42),
+                    1 => assert!(matches!(
+                        result,
+                        Err(CanisterProtocolError::Invocation { .. })
+                    )),
+                    _ => assert!(matches!(
+                        result,
+                        Err(CanisterProtocolError::Response { .. })
+                    )),
+                }
+                let argument_path = PathBuf::from(
+                    fs::read_to_string(root.join("argument-path"))
+                        .unwrap()
+                        .trim(),
+                );
+                assert!(argument_path.is_dir());
+                fs::remove_dir(argument_path).unwrap();
+            }
+        }
+        fs::remove_dir_all(root).unwrap();
     }
 
     #[test]

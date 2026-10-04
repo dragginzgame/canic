@@ -451,12 +451,6 @@ fn append_runtime_metadata_lines(lines: &mut Vec<String>, status: &CanicRuntimeS
             enabled_runtime_feature_rows(&auth.auth_features)
         ));
     }
-    if let Some(blob_storage) = &status.blob_storage {
-        lines.push(format!(
-            "blob_storage: enabled_features={}",
-            enabled_runtime_feature_rows(&blob_storage.blob_storage_features)
-        ));
-    }
     if let Some(capacity) = &status.receipt_capacity {
         lines.push(format!(
             "receipt_capacity: status={} receipts={}/{} receipt_headroom={} resource_totals={}/{} resource_headroom={} warning_headroom_threshold={}",
@@ -945,9 +939,9 @@ mod tests {
     fn sample_runtime_status(status: RuntimeStatus) -> CanicRuntimeStatus {
         use canic_core::dto::runtime::{
             CanicReadinessStatus, FailureSeverity, ReadinessStatus, RecentFailure,
-            RuntimeAuthStatusSummary, RuntimeBlobStorageStatusSummary, RuntimeBuildInfo,
-            RuntimeCheck, RuntimeCheckStatus, RuntimeFeatureStatus, RuntimeFieldVisibility,
-            RuntimeStateDomainStatus, RuntimeStateDomainSummary, RuntimeStateSummary,
+            RuntimeAuthStatusSummary, RuntimeBuildInfo, RuntimeCheck, RuntimeCheckStatus,
+            RuntimeFeatureStatus, RuntimeFieldVisibility, RuntimeStateDomainStatus,
+            RuntimeStateDomainSummary, RuntimeStateSummary,
         };
 
         CanicRuntimeStatus {
@@ -971,7 +965,7 @@ mod tests {
                     source: "compile_feature".to_string(),
                 },
                 RuntimeFeatureStatus {
-                    name: "blob-storage".to_string(),
+                    name: "sharding".to_string(),
                     enabled: false,
                     visibility: RuntimeFieldVisibility::OperatorOnly,
                     source: "compile_feature".to_string(),
@@ -1003,14 +997,6 @@ mod tests {
                 auth_features: vec![RuntimeFeatureStatus {
                     name: "auth-delegated-token-verify".to_string(),
                     enabled: true,
-                    visibility: RuntimeFieldVisibility::OperatorOnly,
-                    source: "compile_feature".to_string(),
-                }],
-            }),
-            blob_storage: Some(RuntimeBlobStorageStatusSummary {
-                blob_storage_features: vec![RuntimeFeatureStatus {
-                    name: "blob-storage".to_string(),
-                    enabled: false,
                     visibility: RuntimeFieldVisibility::OperatorOnly,
                     source: "compile_feature".to_string(),
                 }],

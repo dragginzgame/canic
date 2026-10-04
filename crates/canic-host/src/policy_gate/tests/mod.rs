@@ -31,14 +31,15 @@ fn evaluate_policy_for_test(
     let policy_path = root.join("policy.toml");
     let envelope_path = root.join("envelope.json");
     fs::write(&policy_path, policy_source).expect("write policy");
-    fs::write(&envelope_path, "{}").expect("write envelope placeholder");
+    let envelope_source = serde_json::to_string(&envelope).expect("encode envelope");
+    fs::write(&envelope_path, &envelope_source).expect("write envelope");
 
     let report = evaluate_policy_gate(PolicyGateRequest {
         policy_source,
         policy_path: &policy_path,
         envelope_path: &envelope_path,
         fingerprint_root: &root,
-        envelope,
+        envelope_source: &envelope_source,
     })
     .expect("evaluate policy");
 

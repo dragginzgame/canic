@@ -1,0 +1,27 @@
+[app]
+name = "blob-service"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+
+[roles.blob]
+kind = "canister"
+package = "."
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.blob]
+component_role = "blob"
+maximum_instances = 1
+
+[component_groups.blob.components.blob]
+component_spec = "blob"
+
+[component_group_deployments.blob]
+component_group = "blob"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

@@ -1,10 +1,6 @@
 use super::*;
 use super::{
     auth::{auth_renewal_medic_check_from_summary, auth_renewal_medic_error_check},
-    blob_storage::{
-        blob_storage_billing_roles_from_candid_dir, blob_storage_medic_check_from_summary,
-        blob_storage_medic_error_check, candid_declares_blob_storage_billing,
-    },
     command::{medic_subcommand_help_requested, usage},
     fleet::fleet_environment_selection,
     render::{MEDIC_REPORT_WIDTH, render_medic_ci_text, render_medic_json, render_medic_text},
@@ -15,7 +11,6 @@ use super::{
 use crate::{
     CliError,
     auth::{AuthCommandError, AuthRenewalMedicStatus, AuthRenewalMedicSummary},
-    blob_storage::{BlobStorageCommandError, BlobStorageMedicStatus, BlobStorageMedicSummary},
     cli_error_exit_code, render_cli_error,
     test_support::temp_dir,
 };
@@ -24,7 +19,6 @@ use std::{ffi::OsString, fs};
 use canic_core::ids::CanisterRole;
 use canic_host::{
     fleet_ensure::CurrentFleetInventoryError,
-    icp::local_canister_candid_path,
     state_manifest::{StateAuditStatus, build_state_audit_report},
 };
 use serde_json::Value as JsonValue;
@@ -63,21 +57,6 @@ fn parses_fleet_medic_options() {
     assert_eq!(options.environment.as_deref(), Some("local"));
     assert_eq!(options.icp, "/tmp/icp");
     assert!(!options.ci);
-}
-
-// Ensure targeted blob-storage medic diagnostics are Fleet-only.
-#[test]
-fn parses_fleet_blob_storage_medic_target() {
-    let options = MedicOptions::parse([
-        OsString::from("fleet"),
-        OsString::from("demo"),
-        OsString::from("--blob-storage"),
-        OsString::from("backend"),
-    ])
-    .expect("parse medic options");
-
-    assert_eq!(options.fleet.as_deref(), Some("demo"));
-    assert_eq!(options.blob_storage.as_deref(), Some("backend"));
 }
 
 // Ensure targeted auth-renewal medic diagnostics are Fleet-only.
@@ -412,7 +391,6 @@ fn fleet_report_includes_effective_environment() {
         &MedicOptions {
             scope: MedicScope::Fleet,
             fleet: Some("demo".to_string()),
-            blob_storage: None,
             auth_renewal: None,
             json: false,
             ci: false,
@@ -432,7 +410,6 @@ fn fleet_environment_selection_prefers_explicit_environment() {
     let options = MedicOptions {
         scope: MedicScope::Fleet,
         fleet: Some("demo".to_string()),
-        blob_storage: None,
         auth_renewal: None,
         json: false,
         ci: false,
@@ -455,7 +432,6 @@ fn fleet_missing_points_to_current_ensure_plan() {
     let options = MedicOptions {
         scope: MedicScope::Fleet,
         fleet: Some("demo".to_string()),
-        blob_storage: None,
         auth_renewal: None,
         json: false,
         ci: false,
@@ -498,7 +474,6 @@ fn workspace_environment_selection_check_is_workspace_only() {
     let fleet = MedicOptions {
         scope: MedicScope::Fleet,
         fleet: Some("demo".to_string()),
-        blob_storage: None,
         auth_renewal: None,
         json: false,
         ci: false,
@@ -932,7 +907,7 @@ maximum_instances = 1
         r#"
 [features]
 default = ["storage"]
-storage = ["canic/blob-storage"]
+storage = ["canic/sharding"]
 "#,
     );
     fs::write(&manifest, source).expect("write forwarded package feature");
@@ -958,9 +933,9 @@ fn orders_checks_by_category() {
         &MedicOptions::workspace(false, false, None, "icp".to_string()),
         vec![
             MedicCheck::pass(
-                MedicCategory::BlobStorage,
-                "blob_storage_not_selected",
-                "blob_storage",
+                MedicCategory::Runtime,
+                "runtime_check",
+                "runtime",
                 "none",
                 "none",
                 MedicSource::Command,
@@ -977,7 +952,7 @@ fn orders_checks_by_category() {
     );
 
     assert_eq!(report.checks[0].category, MedicCategory::Environment);
-    assert_eq!(report.checks[1].category, MedicCategory::BlobStorage);
+    assert_eq!(report.checks[1].category, MedicCategory::Runtime);
 }
 
 // Ensure ICP CLI availability failures keep distinct stable medic codes.
@@ -994,70 +969,6 @@ fn icp_cli_error_check_distinguishes_missing_cli() {
     assert_eq!(missing.status, MedicStatus::Fail);
     assert_eq!(missing.code, "icp_cli_missing");
     assert_eq!(incompatible.code, "icp_cli_incompatible");
-}
-
-// Ensure blob-storage medic uses the shared status summary without reinterpreting warnings.
-#[test]
-fn renders_blob_storage_medic_summary() {
-    let check = blob_storage_medic_check_from_summary(BlobStorageMedicSummary {
-        status: BlobStorageMedicStatus::Warning,
-        detail: "readiness=warning; configured=true; gateways=0; funding=funding_needed"
-            .to_string(),
-        next: "canic blob-storage sync-gateways demo backend".to_string(),
-    });
-    let report = render_medic_text(&MedicReport::new(
-        &MedicOptions::workspace(false, false, None, "icp".to_string()),
-        vec![check],
-    ));
-
-    assert!(report.contains("blob_storage [warn] blob_storage_billing_unready"));
-    assert!(report.contains("readiness=warning"));
-    assert!(report.contains("canic blob-storage sync-gateways demo backend"));
-}
-
-// Ensure targeted blob-storage medic errors keep stable target-resolution codes.
-#[test]
-fn blob_storage_medic_error_check_classifies_target_errors() {
-    let missing = blob_storage_medic_error_check(
-        BlobStorageCommandError::UnknownTarget {
-            fleet: "demo".to_string(),
-            target: "store".to_string(),
-        },
-        "demo",
-        "store",
-    );
-    let ambiguous = blob_storage_medic_error_check(
-        BlobStorageCommandError::AmbiguousRole {
-            fleet: "demo".to_string(),
-            role: "store".to_string(),
-        },
-        "demo",
-        "store",
-    );
-    let not_blob_storage = blob_storage_medic_error_check(
-        BlobStorageCommandError::CandidUnavailable {
-            fleet: "demo".to_string(),
-            target: "store".to_string(),
-        },
-        "demo",
-        "store",
-    );
-    let generic = blob_storage_medic_error_check(
-        BlobStorageCommandError::ResponseValueOutOfRange {
-            response_kind: "status",
-            field: "sample",
-        },
-        "demo",
-        "store",
-    );
-
-    assert_eq!(missing.code, "blob_storage_target_missing");
-    assert_eq!(ambiguous.code, "blob_storage_target_ambiguous");
-    assert_eq!(
-        not_blob_storage.code,
-        "blob_storage_target_not_blob_storage"
-    );
-    assert_eq!(generic.code, "blob_storage_billing_unready");
 }
 
 // Ensure auth-renewal medic uses the shared auth summary without mutating renewal state.
@@ -1102,86 +1013,6 @@ fn auth_renewal_medic_error_check_classifies_invalid_issuer() {
     assert_eq!(invalid.code, "auth_renewal_issuer_invalid");
     assert_eq!(invalid.source, MedicSource::Command);
     assert_eq!(generic.code, "auth_renewal_drift_fail");
-}
-
-// Ensure default Fleet medic can discover blob-storage-capable local Candid sidecars passively.
-#[test]
-fn passive_blob_storage_hint_uses_local_candid_only() {
-    let root = temp_dir("canic-cli-medic-blob-storage-passive");
-    write_candid(
-        &root,
-        "local",
-        "backend",
-        r#"
-            service : {
-                get_blob_storage_status : () -> () query;
-                "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
-                "_immutableObjectStorageFundFromProjectCycles" : (nat) -> ();
-            }
-        "#,
-    );
-    write_candid(
-        &root,
-        "local",
-        "other",
-        r"
-            service : {
-                get_blob_storage_status : () -> () query;
-            }
-        ",
-    );
-
-    let roles = blob_storage_billing_roles_from_candid_dir(&root, "local");
-    let options = MedicOptions {
-        scope: MedicScope::Fleet,
-        fleet: Some("demo".to_string()),
-        blob_storage: None,
-        auth_renewal: None,
-        json: false,
-        ci: false,
-        environment: Some("local".to_string()),
-        icp: "icp".to_string(),
-    };
-    let check = check_blob_storage_not_selected(&options, Some(&root), "local");
-
-    assert_eq!(roles, vec!["backend".to_string()]);
-    assert_eq!(check.status, MedicStatus::NotEvaluated);
-    assert_eq!(check.code, "blob_storage_not_selected");
-    assert_eq!(
-        check.next,
-        "run canic medic fleet demo --blob-storage backend"
-    );
-
-    fs::remove_dir_all(root).expect("remove temp root");
-}
-
-// Ensure passive Candid detection only accepts the full billing endpoint trio.
-#[test]
-fn blob_storage_passive_detection_rejects_partial_or_unrelated_candid() {
-    assert!(candid_declares_blob_storage_billing(
-        r#"
-            service : {
-                get_blob_storage_status : () -> () query;
-                "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
-                "_immutableObjectStorageFundFromProjectCycles" : (nat) -> ();
-            }
-        "#
-    ));
-    assert!(!candid_declares_blob_storage_billing(
-        r#"
-            service : {
-                get_blob_storage_status : () -> () query;
-                "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
-            }
-        "#
-    ));
-    assert!(!candid_declares_blob_storage_billing(
-        r"
-            service : {
-                canic_observability : (variant { Readiness }) -> (bool) query;
-            }
-        "
-    ));
 }
 
 // Ensure long medic details and next actions wrap to terminal-readable lines.
@@ -1259,12 +1090,6 @@ fn sample_check(status: MedicStatus) -> MedicCheck {
     )
 }
 
-fn write_candid(root: &std::path::Path, environment: &str, role: &str, candid: &str) {
-    let path = local_canister_candid_path(root, environment, role);
-    fs::create_dir_all(path.parent().expect("candid parent")).expect("create candid parent");
-    fs::write(path, candid).expect("write candid");
-}
-
 fn write_medic_config(root: &std::path::Path, source: &str) -> std::path::PathBuf {
     write_medic_role_contract_workspace(root, &[]);
     let path = root.join("apps").join("demo").join("canic.toml");
@@ -1320,8 +1145,6 @@ default = []
 control-plane = []
 fleet-coordinator-canister = []
 wasm-store-canister = []
-blob-storage = ["canic-core/blob-storage"]
-blob-storage-billing = ["blob-storage", "canic-core/blob-storage-billing"]
 sharding = ["canic-core/sharding"]
 auth-chain-key-ecdsa = ["canic-core/auth-chain-key-ecdsa"]
 auth-chain-key-root-sign = ["canic-core/auth-chain-key-root-sign"]
@@ -1359,8 +1182,6 @@ auth-issuer-canister-sig-create = []
 auth-issuer-canister-sig-verify = []
 auth-delegated-token-verify = ["auth-chain-key-ecdsa", "auth-issuer-canister-sig-verify"]
 auth-local-application-authorization = ["auth-delegated-token-verify"]
-blob-storage = []
-blob-storage-billing = ["blob-storage"]
 internal-test-fixtures = []
 "#,
             env!("CARGO_PKG_VERSION")

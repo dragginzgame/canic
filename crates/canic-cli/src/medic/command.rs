@@ -29,7 +29,6 @@ const FLEET_COMMAND: &str = "fleet";
 const FLEET_ARG: &str = "fleet";
 const JSON_ARG: &str = "json";
 const CI_ARG: &str = "ci";
-const BLOB_STORAGE_ARG: &str = "blob-storage";
 const AUTH_RENEWAL_ARG: &str = "auth-renewal";
 const MEDIC_HELP_AFTER: &str = "\
 Examples:
@@ -69,7 +68,6 @@ impl MedicCommandError {
 pub(super) struct MedicOptions {
     pub(super) scope: MedicScope,
     pub(super) fleet: Option<String>,
-    pub(super) blob_storage: Option<String>,
     pub(super) auth_renewal: Option<String>,
     pub(super) json: bool,
     pub(super) ci: bool,
@@ -93,7 +91,6 @@ impl MedicOptions {
             Some((FLEET_COMMAND, matches)) => Ok(Self {
                 scope: MedicScope::Fleet,
                 fleet: Some(required_string(matches, FLEET_ARG)),
-                blob_storage: string_option(matches, BLOB_STORAGE_ARG),
                 auth_renewal: string_option(matches, AUTH_RENEWAL_ARG),
                 json,
                 ci,
@@ -114,7 +111,6 @@ impl MedicOptions {
         Self {
             scope: MedicScope::Workspace,
             fleet: None,
-            blob_storage: None,
             auth_renewal: None,
             json,
             ci,
@@ -236,12 +232,6 @@ fn fleet_command() -> ClapCommand {
                 .value_name(FLEET_ARG)
                 .required(true)
                 .help("Current Fleet identity"),
-        )
-        .arg(
-            value_arg(BLOB_STORAGE_ARG)
-                .long(BLOB_STORAGE_ARG)
-                .value_name("canister-or-role")
-                .help("Run targeted blob-storage billing readiness diagnostics"),
         )
         .arg(
             value_arg(AUTH_RENEWAL_ARG)

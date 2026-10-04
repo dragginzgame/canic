@@ -487,33 +487,6 @@ mod tests {
     }
 
     #[test]
-    fn exact_blob_role_resolution_materializes_blob_allocations() {
-        let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
-        let config = workspace.join("canisters/test/blob_storage_probe/canic.toml");
-        let resolution = resolve_workspace_state_manifest(&workspace, &[config], Some("test"));
-        let StateManifestResolution::Resolved {
-            manifest,
-            contracts,
-        } = resolution
-        else {
-            panic!("blob role contract should resolve")
-        };
-
-        assert_eq!(contracts.len(), 1);
-        let role = manifest.roles.first().expect("blob role manifest");
-        assert_eq!(role.canister_role, "test");
-        assert_eq!(
-            role.state
-                .iter()
-                .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (55..=58).contains(memory_id))
-                .collect::<Vec<_>>(),
-            vec![58, 57, 56, 55]
-        );
-        assert!(role.state.iter().all(|domain| domain.owner == "canic-core"));
-    }
-
-    #[test]
     fn placement_roles_materialize_exact_placement_state() {
         let workspace = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("../..");
 

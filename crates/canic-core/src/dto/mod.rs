@@ -29,7 +29,6 @@
 pub mod abi;
 pub mod auth;
 pub mod authority_restore;
-pub mod blob_storage;
 pub mod canister;
 pub mod capability;
 pub mod cascade;

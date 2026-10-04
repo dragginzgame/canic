@@ -4,7 +4,6 @@
         test-packaged-downstream-wasm-store \
         test-packaged-downstream-cli test-installed-canic-cli \
         test test-wasm validate build check clippy fmt fmt-check clean clean-wasm \
-        blob-storage-protocol-evidence-gate \
         audit-method-catalog-gate check-invariants ci-checks ci-preflight ci-security \
         control-plane-feature-gate \
         current-document-semantics-gate dependency-risk-inventory-test layering-gate \
@@ -288,7 +287,6 @@ check-invariants:
 	+@$(VALIDATION_RUNNER) \
 		layering-gate \
 		current-document-semantics-gate \
-		blob-storage-protocol-evidence-gate \
 		dependency-risk-inventory-test \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
@@ -305,7 +303,6 @@ ci-preflight:
 		shellcheck \
 		layering-gate \
 		current-document-semantics-gate \
-		blob-storage-protocol-evidence-gate \
 		release-validation-matrix-gate \
 		release-integrity-contract-gate \
 		recovery-runbooks-gate \
@@ -384,8 +381,6 @@ control-plane-feature-gate:
 	bash scripts/ci/check-control-plane-feature-matrix.sh
 
 # Temporary product guards: remove with a promoted standalone blob-service hard cut.
-blob-storage-protocol-evidence-gate:
-	bash scripts/ci/check-blob-storage-protocol-evidence.sh
 
 # Keep ordinary Rust tests parallel. The workspace runner classifies every
 # integration target and serializes only PocketIC suites for deterministic
@@ -470,8 +465,6 @@ clean-wasm:
 	rm -rf -- target/pic-wasm-no-test-material
 	rm -rf -- target/fleet-coordinator
 	rm -rf -- target/fleet-registry-sync
-	rm -rf -- target/standalone-blob_storage_cashier_mock
-	rm -rf -- target/standalone-blob_storage_probe
 	rm -rf -- target/standalone-leaf_probe
 	rm -rf -- target/standalone-payload_limit_probe
 	rm -rf -- target/standalone-root-probe

@@ -1,6 +1,98 @@
 use super::*;
 
 #[test]
+fn manifest_gate_uses_consumed_sources_and_reports_each_invalid_entry() {
+    use canic_core::cdk::utils::hash::sha256_hex;
+
+    for required in [false, true] {
+        let root = temp_dir("canic-policy-manifest-invalid-entries");
+        fs::create_dir_all(&root).unwrap();
+        let policy_path = root.join("policy.toml");
+        let manifest_path = root.join("evidence.toml");
+        let mut manifest_source = sample_manifest_source("invalid.json", required);
+        for path in ["unreadable.json", "valid.json"] {
+            let entry_source = sample_manifest_source(path, required);
+            manifest_source.push_str(&entry_source[entry_source.find("[[evidence]]").unwrap()..]);
+        }
+        let invalid_bytes = b"{\"truncated\":";
+        fs::write(root.join("invalid.json"), invalid_bytes).unwrap();
+        fs::create_dir(root.join("unreadable.json")).unwrap();
+        let valid_bytes = serde_json::to_vec_pretty(&sample_envelope()).unwrap();
+        fs::write(root.join("valid.json"), &valid_bytes).unwrap();
+        // A replacement path must not change the policy/manifest source already consumed.
+        fs::write(&policy_path, "[replaced").unwrap();
+        fs::write(&manifest_path, "[replaced").unwrap();
+        let report =
+            evaluate_workspace_evidence_manifest_gate(WorkspaceEvidenceManifestGateRequest {
+                policy_source: BUILD_PROVENANCE_POLICY,
+                policy_path: &policy_path,
+                manifest_source: &manifest_source,
+                manifest_path: &manifest_path,
+                fingerprint_root: &root,
+            })
+            .expect("invalid entries must retain the complete report");
+
+        let expected_status = if required {
+            PolicyEvaluationStatusV1::Failed
+        } else {
+            PolicyEvaluationStatusV1::Passed
+        };
+        let expected_class = if required {
+            ExitClassV1::InvalidInput
+        } else {
+            ExitClassV1::SuccessWithWarnings
+        };
+        let expected_severity = if required {
+            PolicyFindingSeverityV1::Error
+        } else {
+            PolicyFindingSeverityV1::Warning
+        };
+        assert_eq!(report.policy_status, expected_status);
+        assert_eq!(report.gate_exit_class, expected_class);
+        assert_eq!(report.evidence.len(), 3);
+        for entry in &report.evidence[..2] {
+            assert_eq!(entry.status, expected_status);
+            assert_eq!(entry.gate_exit_class, expected_class);
+            assert_eq!(entry.findings[0].code, "policy.manifest.invalid_input");
+            assert_eq!(entry.findings[0].severity, expected_severity);
+            assert_eq!(entry.findings[0].subject_exit_class(), Some(expected_class));
+            assert!(entry.policy_report.is_none());
+        }
+        assert!(report.evidence[1].evaluated_envelope_fingerprint.is_none());
+        assert_eq!(report.evidence[2].status, PolicyEvaluationStatusV1::Passed);
+        assert!(report.evidence[2].policy_report.is_some());
+        for (fingerprint, bytes) in [
+            (
+                &report.policy_file_fingerprint,
+                BUILD_PROVENANCE_POLICY.as_bytes(),
+            ),
+            (
+                &report.manifest_file_fingerprint,
+                manifest_source.as_bytes(),
+            ),
+            (
+                report.evidence[0]
+                    .evaluated_envelope_fingerprint
+                    .as_ref()
+                    .unwrap(),
+                invalid_bytes.as_slice(),
+            ),
+            (
+                report.evidence[2]
+                    .evaluated_envelope_fingerprint
+                    .as_ref()
+                    .unwrap(),
+                valid_bytes.as_slice(),
+            ),
+        ] {
+            assert_eq!(fingerprint.sha256, Some(sha256_hex(bytes)));
+            assert_eq!(fingerprint.size_bytes, Some(bytes.len() as u64));
+        }
+        fs::remove_dir_all(root).expect("clean invalid entry fixture");
+    }
+}
+
+#[test]
 fn workspace_evidence_manifest_gate_evaluates_required_envelope() {
     let root = temp_dir("canic-policy-manifest-pass");
     fs::create_dir_all(&root).expect("create root");

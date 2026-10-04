@@ -2,9 +2,12 @@ use super::{
     RenamedAppRoleSource,
     support::{admit_canister_role_name, toml_assignment_key, toml_string_literal},
 };
-use crate::release_set::config::{
-    AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
-    AppConfigOperation, AppConfigPackageIssue, AppConfigTomlOperation, model::RenamedAppRole,
+use crate::{
+    release_set::config::{
+        AppConfigDeclaration, AppConfigError, AppConfigIoOperation, AppConfigMutationConflict,
+        AppConfigOperation, AppConfigPackageIssue, AppConfigTomlOperation, model::RenamedAppRole,
+    },
+    role_contract::package_manifest_path,
 };
 use canic_core::{bootstrap::parse_config_model, ids::CanisterRole};
 use std::{fs, path::Path};
@@ -73,27 +76,22 @@ pub(in crate::release_set) fn rename_app_role_source(
     })?;
 
     let (package_manifest, package_source, package_manifest_note) =
-        config_path.parent().map_or_else(
-            || (None, None, Some("config path has no parent".to_string())),
-            |parent| {
-                let Some(package) = declaration.package.as_deref() else {
-                    return (None, None, None);
-                };
-                let manifest = parent.join(package).join("Cargo.toml");
-                match update_package_manifest_role(&manifest, expected_app, old_role, new_role) {
-                    Ok(Some(updated)) => (Some(manifest), Some(updated), None),
-                    Ok(None) => (
-                        None,
-                        None,
-                        Some(format!(
-                            "{} did not contain matching [package.metadata.canic] app/role metadata",
-                            manifest.display()
-                        )),
-                    ),
-                    Err(err) => (None, None, Some(err.to_string())),
-                }
-            },
-        );
+        if let Some(package) = declaration.package.as_deref() {
+            let manifest = package_manifest_path(config_path, package);
+            match update_package_manifest_role(&manifest, expected_app, old_role, new_role)? {
+                Some(updated) => (Some(manifest), Some(updated), None),
+                None => (
+                    None,
+                    None,
+                    Some(format!(
+                        "{} did not contain matching [package.metadata.canic] app/role metadata",
+                        manifest.display()
+                    )),
+                ),
+            }
+        } else {
+            (None, None, None)
+        };
 
     Ok(RenamedAppRoleSource {
         source,
@@ -230,10 +228,6 @@ fn update_package_manifest_role(
     old_role: &str,
     new_role: &str,
 ) -> Result<Option<String>, AppConfigError> {
-    if !manifest.is_file() {
-        return Ok(None);
-    }
-
     let source = fs::read_to_string(manifest).map_err(|source| {
         AppConfigError::io(AppConfigIoOperation::ReadPackageManifest, manifest, source)
     })?;

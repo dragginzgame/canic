@@ -178,10 +178,6 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::PlacementIndexRegistry, vec![51]),
         (StateAllocationKey::ShardingRegistry, vec![52]),
         (StateAllocationKey::ShardingAssignments, vec![53]),
-        (StateAllocationKey::BlobStorageRoots, vec![55]),
-        (StateAllocationKey::BlobStoragePendingDeletions, vec![56]),
-        (StateAllocationKey::BlobStorageGatewayPrincipals, vec![57]),
-        (StateAllocationKey::BlobStorageBilling, vec![58]),
         (StateAllocationKey::CoreAuthorityRestoreFence, vec![59]),
         (StateAllocationKey::CoreAsyncJobRecovery, vec![60]),
         (StateAllocationKey::CoreFleetAdmissionProjection, vec![61]),
@@ -219,12 +215,12 @@ fn distinct_allocation_keys_cannot_share_a_memory_id() {
     const SECOND_IDS: &[MemoryId] = &[MemoryId::new(70)];
     let definitions = [
         AllocationDefinition {
-            key: StateAllocationKey::BlobStorageRoots,
+            key: StateAllocationKey::ShardingRegistry,
             owner: AllocationOwner::CanicCore,
             memory_ids: FIRST_IDS,
         },
         AllocationDefinition {
-            key: StateAllocationKey::BlobStoragePendingDeletions,
+            key: StateAllocationKey::ShardingAssignments,
             owner: AllocationOwner::CanicCore,
             memory_ids: SECOND_IDS,
         },
@@ -234,8 +230,8 @@ fn distinct_allocation_keys_cannot_share_a_memory_id() {
         allocation::validate_allocation_definitions(&definitions),
         Err(RoleContractFinding::MemoryIdCollision {
             memory_id: MemoryId::new(70),
-            first: StateAllocationKey::BlobStorageRoots,
-            second: StateAllocationKey::BlobStoragePendingDeletions,
+            first: StateAllocationKey::ShardingRegistry,
+            second: StateAllocationKey::ShardingAssignments,
         })
     );
 }
@@ -247,7 +243,7 @@ fn allocation_owners_cannot_claim_another_owner_range() {
 
     for definition in [
         AllocationDefinition {
-            key: StateAllocationKey::BlobStorageRoots,
+            key: StateAllocationKey::ShardingRegistry,
             owner: AllocationOwner::CanicCore,
             memory_ids: CONTROL_PLANE_ID,
         },
@@ -794,7 +790,7 @@ fn placement_capabilities_select_only_their_placement_state() {
 fn feature_implication_closure_is_idempotent() {
     let direct = BTreeSet::from([
         CanicFeatureKey::AuthDelegatedTokenVerify,
-        CanicFeatureKey::BlobStorageBilling,
+        CanicFeatureKey::Sharding,
     ]);
     let first = resolve_effective_features(direct, true);
     let second = resolve_effective_features(first.clone(), false);
@@ -802,7 +798,7 @@ fn feature_implication_closure_is_idempotent() {
     assert_eq!(first, second);
     assert!(first.contains(&CanicFeatureKey::AuthChainKeyEcdsa));
     assert!(first.contains(&CanicFeatureKey::AuthIssuerCanisterSigVerify));
-    assert!(first.contains(&CanicFeatureKey::BlobStorage));
+    assert!(first.contains(&CanicFeatureKey::Sharding));
 }
 
 #[test]
@@ -861,7 +857,7 @@ fn surplus_state_feature_allocates_normally() {
             config: &config,
             role: &role,
         },
-        declared_features: BTreeSet::from([CanicFeatureKey::BlobStorageBilling]),
+        declared_features: BTreeSet::from([CanicFeatureKey::Sharding]),
         default_features_enabled: true,
     });
     let RoleContractResolution::Resolved { contract } = resolution else {
@@ -871,7 +867,7 @@ fn surplus_state_feature_allocates_normally() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48, 49, 55, 56, 57, 58, 60,
+            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48, 49, 52, 53, 60,
         ]
     );
 }

@@ -15,6 +15,62 @@ fn build_provenance_policy_passes_matching_payload() {
 }
 
 #[test]
+fn each_build_provenance_rule_requires_a_successful_build() {
+    for rule in [
+        "require_clean_source",
+        "require_cargo_lock",
+        "require_wasm_gzip",
+        "require_sha256",
+        "require_package_identity_matches_target",
+    ] {
+        let policy = format!("{MINIMAL_POLICY}\n[build_provenance]\n{rule} = true\n");
+        let successful = evaluate_policy_for_test(&policy, sample_envelope());
+        assert_eq!(successful.policy_status, PolicyEvaluationStatusV1::Passed);
+
+        for status in [
+            BuildProvenanceStatusV1::Failed,
+            BuildProvenanceStatusV1::NotRecorded,
+        ] {
+            let mut payload = sample_build_provenance_payload();
+            payload.build_status = status;
+            let report = evaluate_policy_for_test(
+                &policy,
+                sample_envelope_with_payload(serde_json::to_value(payload).unwrap()),
+            );
+            assert_eq!(report.evaluated_envelope_exit_class, ExitClassV1::Success);
+            assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Failed);
+            assert_eq!(report.gate_exit_class, ExitClassV1::BlockedByPolicy);
+            let requirement = format!("build_provenance.{rule}");
+            let finding = report
+                .findings
+                .iter()
+                .find(|finding| finding.code == "policy.build_provenance.build_not_successful")
+                .expect("a successful envelope cannot conceal an unsuccessful build");
+            assert_eq!(
+                finding.requirement_id.as_deref(),
+                Some(requirement.as_str())
+            );
+            assert_eq!(
+                finding.expected,
+                Some(json!(BuildProvenanceStatusV1::Success))
+            );
+            assert_eq!(finding.actual, Some(json!(status)));
+        }
+    }
+}
+
+#[test]
+fn envelope_only_policy_does_not_require_build_provenance_status() {
+    let mut payload = sample_build_provenance_payload();
+    payload.build_status = BuildProvenanceStatusV1::NotRecorded;
+    let report = evaluate_policy_for_test(
+        MINIMAL_POLICY,
+        sample_envelope_with_payload(serde_json::to_value(payload).unwrap()),
+    );
+    assert_eq!(report.policy_status, PolicyEvaluationStatusV1::Passed);
+}
+
+#[test]
 fn build_provenance_policy_rejects_dirty_or_unknown_source() {
     let mut dirty = sample_build_provenance_payload();
     dirty.source.dirty = Some(true);

@@ -11,7 +11,6 @@ PROOF_TARGET_DIR="$TMP_ROOT/cargo-target"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
 DOWNSTREAM_ROOT="$TMP_ROOT/downstream-root"
 FAKE_ICP="$TMP_ROOT/fake-icp"
-FAKE_ICP_STATE="$TMP_ROOT/fake-icp-state"
 SMOKE_OUTPUT="$TMP_ROOT/v1-readiness-smoke.out"
 
 cleanup() {
@@ -20,7 +19,6 @@ cleanup() {
 
 trap cleanup EXIT
 
-. "$ROOT/scripts/ci/blob-storage-cli-proof-lib.sh"
 . "$ROOT/scripts/ci/auth-renewal-cli-proof-lib.sh"
 
 assert_installed_binary_path() {
@@ -54,42 +52,10 @@ run_installed_canic_in_workspace() {
             CARGO_HOME="$PROOF_CARGO_HOME" \
             CARGO_TARGET_DIR="$PROOF_TARGET_DIR" \
             TMPDIR="$PROOF_TMPDIR" \
-            FAKE_ICP_STATE="$FAKE_ICP_STATE" \
             "$BIN_ROOT/canic" "$@"
     )
 }
 
-prepare_blob_storage_workspace() {
-    mkdir -p \
-        "$DOWNSTREAM_ROOT/apps/downstream/app"
-
-    cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
-[workspace]
-members = []
-resolver = "3"
-
-[workspace.package]
-version = "0.0.0"
-EOF
-
-    cat > "$DOWNSTREAM_ROOT/apps/downstream/canic.toml" <<'EOF'
-[app]
-name = "downstream"
-
-[roles.root]
-kind = "root"
-
-[roles.app]
-kind = "canister"
-package = "app"
-
-[component_specs.app]
-component_role = "app"
-maximum_instances = 1
-EOF
-
-    prepare_blob_storage_cli_fixture "$DOWNSTREAM_ROOT"
-}
 
 main() {
     cargo install --offline --locked --path "$ROOT/crates/canic-cli" --root "$INSTALL_ROOT" >/dev/null
@@ -110,21 +76,19 @@ main() {
         exit 1
     }
 
-    run_installed_canic blob-storage --help > "$TMP_ROOT/blob-storage-help.out"
-    if run_installed_canic blob-storage status downstream app --json \
-        > "$TMP_ROOT/blob-storage-status-json.out" \
-        2> "$TMP_ROOT/blob-storage-status-json.err"
-    then
-        echo "expected installed blob-storage JSON status without workspace state to fail" >&2
-        exit 1
-    fi
-    prepare_blob_storage_workspace
+    mkdir -p "$DOWNSTREAM_ROOT"
+    cat > "$DOWNSTREAM_ROOT/Cargo.toml" <<'EOF'
+[workspace]
+members = []
+resolver = "3"
+[workspace.package]
+version = "0.0.0"
+EOF
+    prepare_auth_renewal_catalog_fixture "$DOWNSTREAM_ROOT"
+    prepare_auth_renewal_icp "$FAKE_ICP"
     prepare_auth_renewal_cli_surface_fixture "$DOWNSTREAM_ROOT"
-    prepare_fake_blob_storage_icp "$FAKE_ICP" "$FAKE_ICP_STATE"
-    run_blob_storage_cli_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
     run_auth_renewal_cli_surface_probe_commands run_installed_canic_in_workspace "$TMP_ROOT" "$FAKE_ICP"
 
-    assert_blob_storage_cli_probe_outputs "installed" "$TMP_ROOT"
     assert_auth_renewal_cli_surface_probe_outputs "installed" "$TMP_ROOT"
 
     echo "installed canic CLI probe passed"

@@ -1704,7 +1704,8 @@ fn cargo_public_implications(
     implications
 }
 
-fn package_manifest_path(config_path: &Path, package: &str) -> PathBuf {
+/// Resolve a package directory or explicit manifest relative to its App config.
+pub(crate) fn package_manifest_path(config_path: &Path, package: &str) -> PathBuf {
     let package_path = PathBuf::from(package);
     let path = if package_path.is_absolute() {
         package_path

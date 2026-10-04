@@ -115,7 +115,6 @@ fn current_read_only_commands_receive_global_target_options() {
     for (command, raw_tail) in [
         ("admission", &["status", "staging"][..]),
         ("auth", &["renewal", "status", "staging"][..]),
-        ("blob-storage", &["status", "staging", "root"]),
         ("cycles", &["balance"]),
         ("info", &["list", "staging"][..]),
         ("inspect", &["fleet", "staging", "--role", "root"]),

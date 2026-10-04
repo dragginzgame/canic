@@ -20,6 +20,89 @@ package = "store"
 "#;
 
 #[test]
+fn role_rename_updates_directory_and_manifest_package_selectors() {
+    let root = temp_root("rename-package-selectors");
+    let package_root = root.join("store");
+    fs::create_dir_all(&package_root).expect("create package root");
+    let config_path = root.join("canic.toml");
+    let manifest_path = package_root.join("Cargo.toml");
+    let original_manifest = r#"[package]
+name = "store"
+version = "0.1.0"
+
+[package.metadata.canic]
+app = "demo"
+role = "store"
+"#;
+    for package in [
+        "store".to_string(),
+        "store/Cargo.toml".to_string(),
+        package_root.to_str().unwrap().to_string(),
+        manifest_path.to_str().unwrap().to_string(),
+    ] {
+        let quoted_package = toml::Value::String(package).to_string();
+        let source = CONFIG.replace(
+            "package = \"store\"",
+            &format!("package = {quoted_package}"),
+        );
+        fs::write(&config_path, &source).expect("write config");
+        fs::write(&manifest_path, original_manifest).expect("write package");
+
+        let renamed = rename_app_role(&config_path, "demo", "store", "frontend")
+            .expect("rename role and package metadata");
+        assert_eq!(renamed.package_manifest.as_ref(), Some(&manifest_path));
+        assert_eq!(renamed.package_manifest_note, None);
+        let config = parse_config_model(&fs::read_to_string(&config_path).unwrap()).unwrap();
+        assert!(config.declares_role(&canic_core::ids::CanisterRole::new("frontend")));
+        assert!(!config.declares_role(&canic_core::ids::CanisterRole::new("store")));
+        let manifest: toml::Value =
+            toml::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+        assert_eq!(
+            manifest["package"]["metadata"]["canic"]["app"].as_str(),
+            Some("demo")
+        );
+        assert_eq!(
+            manifest["package"]["metadata"]["canic"]["role"].as_str(),
+            Some("frontend")
+        );
+    }
+    fs::remove_dir_all(root).expect("clean package selector fixture");
+}
+
+#[test]
+fn role_rename_rejects_unreadable_or_malformed_package_before_writing_config() {
+    let root = temp_root("rename-invalid-package");
+    let package_root = root.join("store");
+    fs::create_dir_all(&package_root).expect("create package root");
+    let config_path = root.join("canic.toml");
+    let manifest_path = package_root.join("Cargo.toml");
+    fs::write(&config_path, CONFIG).expect("write config");
+    let missing = rename_app_role(&config_path, "demo", "store", "frontend")
+        .expect_err("missing declared package must fail");
+    assert_io_error(
+        &missing,
+        AppConfigIoOperation::ReadPackageManifest,
+        &manifest_path,
+        io::ErrorKind::NotFound,
+    );
+    assert_eq!(fs::read_to_string(&config_path).unwrap(), CONFIG);
+
+    fs::write(&manifest_path, "[package").expect("write malformed package");
+    let malformed = rename_app_role(&config_path, "demo", "store", "frontend")
+        .expect_err("malformed declared package must fail");
+    assert!(matches!(
+        malformed,
+        AppConfigError::ConfigInvalid { path, source }
+            if path == manifest_path && matches!(*source, AppConfigError::Toml {
+                operation: AppConfigTomlOperation::ParsePackageManifest, ..
+            })
+    ));
+    assert_eq!(fs::read_to_string(&config_path).unwrap(), CONFIG);
+    assert_eq!(fs::read_to_string(&manifest_path).unwrap(), "[package");
+    fs::remove_dir_all(root).expect("clean invalid package fixture");
+}
+
+#[test]
 fn failed_package_manifest_write_restores_original_config() {
     let root = temp_root("rename-rollback");
     fs::create_dir_all(&root).expect("create temp root");

@@ -34,6 +34,21 @@ require_sha256 = true
 require_package_identity_matches_target = true
 ```
 
+Every enabled build-provenance rule also requires `payload.build_status` to be
+`success`. A successful envelope exit class cannot override a `failed` or
+`not_recorded` build status.
+
+Gate reports fingerprint the exact policy, manifest and envelope bytes consumed
+by the evaluation. Hashes and byte sizes remain bound to those inputs if a file
+is replaced after it was read. Their optional modification times are omitted
+when evaluation uses retained source bytes.
+
+Manifest entries that cannot be read or decoded produce individual
+`policy.manifest.invalid_input` findings while the other entries are evaluated.
+Required invalid evidence fails the gate with `invalid_input`; optional invalid
+evidence produces a warning. Invalid policy or manifest TOML still rejects the
+evaluation itself.
+
 A minimal current pipeline builds provenance and gates that saved envelope:
 
 ```bash

@@ -58,6 +58,68 @@ fn packaged_patch_table_never_uses_another_cached_version() {
     fs::remove_dir_all(root).expect("clean temp dir");
 }
 
+#[cfg(unix)]
+#[test]
+fn generated_packages_preserve_special_characters_in_dependency_patch_paths() {
+    let fixture = temp_dir("canic-generated-patch-paths");
+    let root = fixture.join("o\"brien\\source\nwith\ttabs");
+    let canic_manifest = root.join("crates/canic/Cargo.toml");
+    fs::create_dir_all(canic_manifest.parent().unwrap()).unwrap();
+    fs::write(
+        &canic_manifest,
+        "[package]\nname = 'canic'\nversion = '0.1.0'\n",
+    )
+    .unwrap();
+    fs::write(root.join("Cargo.lock"), "version = 4\n").unwrap();
+    for &name in CANIC_FAMILY_CRATES {
+        let sibling = root.join("crates").join(name);
+        fs::create_dir_all(&sibling).unwrap();
+        fs::write(
+            sibling.join("Cargo.toml"),
+            format!("[package]\nname = '{name}'\nversion = '0.1.0'\n"),
+        )
+        .unwrap();
+    }
+    let dependencies = GeneratedWrapperDependencies {
+        canic_version: "0.1.0".into(),
+        candid_version: "0.10.0".into(),
+        ic_cdk_version: "0.20.0".into(),
+    };
+    for role in ["root", "fleet_coordinator", "wasm_store"] {
+        let package = format!("canic-{role}-fixture");
+        let manifest = manifest_path(&root.join("canic.toml"), &package);
+        materialize(
+            &manifest,
+            &root,
+            &canic_manifest,
+            &dependencies,
+            &FleetPackageSpec {
+                package: &package,
+                crate_name: "fixture",
+                app: "demo",
+                role,
+                features: &[],
+                entrypoint: "// generated fixture\n",
+                build_script: None,
+            },
+        )
+        .unwrap();
+        let document: toml::Value = toml::from_str(&fs::read_to_string(manifest).unwrap()).unwrap();
+        assert_eq!(
+            document["dependencies"]["canic"]["path"].as_str(),
+            canic_manifest.parent().unwrap().to_str()
+        );
+        for &name in CANIC_FAMILY_CRATES {
+            let expected = root.join("crates").join(name);
+            assert_eq!(
+                document["patch"]["crates-io"][name]["path"].as_str(),
+                expected.to_str()
+            );
+        }
+    }
+    fs::remove_dir_all(fixture).unwrap();
+}
+
 fn cargo_metadata_fixture(packages: Vec<CargoMetadataPackage>) -> CargoMetadata {
     CargoMetadata {
         packages,

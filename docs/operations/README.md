@@ -78,13 +78,10 @@ validation procedures only.
   focused machine-readable symbol-attribution helper. It is supporting
   diagnostic evidence, not a deployment gate or replacement audit method.
 
-## Blob Storage Operations
+## Blob Service Integration
 
-- [Blob storage integration](blob-storage-integration.md) documents the 0.69
-  non-billing gateway endpoint wiring, lifecycle API contract, gateway
-  principal handling, and focused validation commands for downstream canisters.
-- [Blob storage source handoff](blob-storage-source-handoff.md) records the
-  source and inventory evidence used to unlock the 0.69 implementation line.
+- [Blob service composition](../features/blob-storage/README.md) describes the
+  independent service and Canic-owned adapter boundary.
 
 ## Intent Integration
 

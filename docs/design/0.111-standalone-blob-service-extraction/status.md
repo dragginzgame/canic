@@ -1,56 +1,36 @@
-# Canic 0.111 Implementation Status
+# Blob Extraction Implementation Status
 
-Date: 2026-09-25
+Date: 2026-10-04
 
-## Status
+The maintainer selected this extraction after publishing 0.110.52. The current
+scope is the [in-repository hard cut and isolated adapter](0.111-design.md).
+This selection does not close FR1 or certify the preceding minor. No release
+version has been assigned or changed.
 
-- Roadmap: standalone blob service extraction is the maintainer's accepted
-  next major slice, replacing the deferred bounded multi-Fleet estate proposal.
-- Design: [standalone blob service extraction](0.111-design.md).
-- Implementation: not started; follows the complete amended 0.110 scope,
-  including FI1 corrections and FR1 reuse/contraction, and human acceptance of
-  the final 0.110 closeout audit covering it.
-- Canic owners: runtime/facade, host/CLI and testing owners.
-- Managed deployment prerequisite: the operator establishes the Coordinator
-  first, then initializes Root/Store, registers and activates the Root before
-  allocating the blob Component. Root pool imports remain on that Root's subnet;
-  the Coordinator may be on another subnet. Missing infrastructure rejects
-  before workload effects. The independent service has no Canic prerequisite.
-- External repository: `/home/adam/projects/ic-blob-storage`, bootstrapped under
-  separate explicit maintainer authority. Named service owner, final package
-  split, concrete consuming application and publication plan remain B1 decisions.
-- B1 must freeze the [service contract and B2 entry conditions](0.111-design.md#b1-service-contract-and-b2-entry-conditions):
-  both deployments and adapter ownership, tenant authority, recovery identities
-  and restore fencing, provider suitability, quota/cost accounting and existing
-  installation retirement. Every guarantee needs an owner and acceptance
-  test or evidence source; those decisions remain open.
-- Scope: this tracker grants no additional external repository mutation,
-  application adoption, versioning or deployment authority. The separately
-  authorized repository bootstrap does not close B1 or begin B2.
+The embedded implementation, command group, billing Medic option, stable
+allocations and dedicated main-workspace test/CI lane are removed in the working
+tree. Generic feature/descriptor coverage now uses maintained Canic fixtures.
+Active guides point to the independent service. Published historical links to
+removed sources retain their immutable 0.110.52 snapshot.
 
-## Release-Batch Tracker
+The Canic-owned adapter lives in `integrations/blob-service`, outside the normal
+workspace. It selects published `ic-blob-storage = 0.14.1`, composes Canic's sole
+memory runtime and preserves the independent service's platform-version fence.
+The upstream repository source is unchanged. At the maintainer's request, the
+remaining Canic adapter composition tests, PocketIC runner, local test mode and
+test-only dependencies are removed. The unused generic fixture-helper addition
+was also withdrawn; the existing generic framework implementation/tests remain.
+Earlier native Clippy passed before this removal. Managed Wasm build qualification
+awaits a stable-tree CLI rebuild; the prior attempt crossed concurrent Host/CLI
+API edits. No build is active in this session.
 
-| Batch | Outcome | Status |
-| --- | --- | --- |
-| B1 | Frozen service contract, actual-provider suitability evidence, owner/consumer assignment, behavior classification and complete removal/obligation inventories | Planned after accepted 0.110 closeout; contract decisions must close before B2 |
-| B2 | Qualified and published shared service/client implementation and both adapters for the bounded B1 journey | External dependency; complete B1 contract, named maintainer and external implementation authority required |
-| B3 | Complete Canic hard cut and generic managed Component integration, evidence and propagation | Blocked on qualified service publication |
-| B4 | Final artifact/consumer qualification and human minor closeout | Blocked on complete B3 |
+The upstream service already owns certificate, authority, restoration, snapshot,
+expired-history and release-readback tests. The missing decoder-budget regression
+request is [ic-blob-storage#7](https://github.com/dragginzgame/ic-blob-storage/issues/7).
+No upstream framework dependency or duplicate issue is requested.
 
-## Next Action
-
-Complete the [current 0.110 plan](../0.110-fleet-runtime-contraction/status.md),
-including FI1 corrections and accepted FR1 after urgent deployment recovery,
-then obtain human acceptance of the final
-[0.110 closeout audit](../../audits/release-lines/0.110-closeout-audit.md)
-covering that scope before beginning implementation. The existing `.42` verdict
-is checkpoint evidence. Then resolve B1's concrete consumer, external owner,
-package/publication plan, provider evidence and all service-contract entry conditions.
-The acceptance journey is bounded upload/resume, verified read and authorized
-release through confirmed deletion/billing cessation in both deployments.
-Classify preserved behavior, required safety corrections and deferred new
-capabilities to bound B2. Source allocation removal and safe retirement of
-affected installations remain separately owned; no reset may erase the only
-records of external obligations. The multi-Fleet Q0 capsule proof and
-indexed-estate work are not prerequisites. Current blob features and commands
-remain maintained until the complete B3 extraction ships.
+The extraction still requires the remaining targeted source-cut checks, managed
+adapter build, dependency/document checks and embedded allocation-peer
+qualification. Provider physical deletion, billing cessation, paid uploads and
+live retirement are outside this source task. Keep their retained evidence and
+obligations intact. This is not yet a push-ready replacement.

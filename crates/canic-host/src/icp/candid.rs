@@ -99,10 +99,21 @@ impl IcpCli {
                 candid_path,
             )
         };
-        let cleanup = fs::remove_file(&path);
+        cleanup_candid_argument_file(&path);
         let output = output?;
-        cleanup.map_err(IcpCandidCallError::File)?;
         crate::icp::response::decode_json_response(&output).map_err(IcpCandidCallError::Response)
+    }
+}
+
+/// Remove invocation scratch without changing the observed remote-call outcome.
+pub fn cleanup_candid_argument_file(path: &Path) {
+    if let Err(error) = fs::remove_file(path)
+        && error.kind() != io::ErrorKind::NotFound
+    {
+        eprintln!(
+            "warning: could not remove Candid argument file {}: {error}",
+            path.display()
+        );
     }
 }
 
@@ -151,7 +162,7 @@ mod tests {
     use std::{collections::BTreeSet, os::unix::fs::PermissionsExt};
 
     #[test]
-    fn child_reads_complete_arguments_and_transport_always_removes_scratch() {
+    fn child_reads_complete_arguments_and_cleanup_preserves_transport_outcomes() {
         let root = crate::test_support::temp_dir("candid-child-arguments");
         fs::create_dir_all(&root).unwrap();
         let executable = root.join("icp");
@@ -171,6 +182,10 @@ done
 printf '%s\n' "$argument" > argument-path
 printf '%s\n' "$query" > query-mode
 cp "$argument" received || exit 91
+case "$(cat cleanup-mode)" in
+  missing) rm "$argument" ;;
+  directory) rm "$argument"; mkdir "$argument" ;;
+esac
 cat response
 exit "$(cat exit-code)"
 "#,
@@ -185,7 +200,15 @@ exit "$(cat exit-code)"
             "response_bytes": hex_bytes(candid::encode_one(42_u64).unwrap()),
         });
         let mut paths = BTreeSet::new();
-        for query in [false, true] {
+        for (query, cleanup_mode) in [
+            (false, "normal"),
+            (true, "normal"),
+            (false, "missing"),
+            (true, "missing"),
+            (false, "directory"),
+            (true, "directory"),
+        ] {
+            fs::write(root.join("cleanup-mode"), cleanup_mode).unwrap();
             for outcome in 0..3 {
                 fs::write(root.join("exit-code"), if outcome == 1 { "1" } else { "0" }).unwrap();
                 fs::write(
@@ -214,7 +237,12 @@ exit "$(cat exit-code)"
                         .unwrap()
                         .trim(),
                 );
-                assert!(!path.exists());
+                if cleanup_mode == "directory" {
+                    assert!(path.is_dir());
+                    fs::remove_dir(&path).unwrap();
+                } else {
+                    assert!(!path.exists());
+                }
                 assert!(paths.insert(path));
             }
         }

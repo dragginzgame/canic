@@ -6,8 +6,6 @@
 
 pub mod auth;
 pub mod authority_restore;
-#[cfg(feature = "blob-storage-billing")]
-pub mod blob_storage;
 pub mod component_allocation;
 pub mod component_child_allocation;
 pub mod cycles;

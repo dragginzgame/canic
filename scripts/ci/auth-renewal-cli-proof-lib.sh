@@ -2,6 +2,54 @@
 
 # Shared CLI surface proofing for the maintained auth renewal status command.
 
+prepare_auth_renewal_catalog_fixture() {
+    local downstream_root="$1"
+    local canonical_network_id="402b3681453fb9cfa356b6ea7abde2de53cc4c665caaf438535bddc1e1679f60"
+    local fleet_id="0707070707070707070707070707070707070707070707070707070707070707"
+
+    mkdir -p "$downstream_root/.canic/networks/$canonical_network_id/fleets"
+
+    cat > "$downstream_root/.canic/networks/$canonical_network_id/fleets/catalog.json" <<EOF
+{
+  "schema_version": 1,
+  "canonical_network_id": "$canonical_network_id",
+  "entries": [{
+    "canonical_network_id": "$canonical_network_id",
+    "fleet_id": "$fleet_id",
+    "fleet_name": "downstream",
+    "app": "downstream",
+    "environment": "fixture",
+    "deployed_at_unix_secs": 1,
+    "coordinator_principal": "ryjl3-tyaaa-aaaaa-aaaba-cai"
+  }]
+}
+EOF
+}
+
+prepare_auth_renewal_icp() {
+    local fake_icp="$1"
+
+    local repository_root
+    repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
+    # shellcheck source=/dev/null
+    source "$repository_root/tool-versions.env"
+    printf '#!/usr/bin/env bash\nfixture_icp_version=%q\n' "$CANIC_ICP_CLI_VERSION" > "$fake_icp"
+    cat >> "$fake_icp" <<'EOF'
+set -euo pipefail
+
+for arg in "$@"; do
+    if [ "$arg" = "--version" ]; then
+        echo "icp-cli $fixture_icp_version"
+        exit 0
+    fi
+done
+
+echo "unexpected fake icp invocation: $*" >&2
+exit 64
+EOF
+    chmod +x "$fake_icp"
+}
+
 AUTH_RENEWAL_PROOF_ISSUER="rrkah-fqaaa-aaaaa-aaaaq-cai"
 
 prepare_auth_renewal_cli_surface_fixture() {
@@ -63,9 +111,7 @@ EOF
 
     cat > "$downstream_root/.icp/fixture/canisters/app/app.did" <<'EOF'
 service : {
-  get_blob_storage_status : (record { sync_gateway_principals : bool }) -> () query;
-  "_immutableObjectStorageUpdateGatewayPrincipals" : () -> ();
-  "_immutableObjectStorageFundFromProjectCycles" : (nat) -> ();
+  application_status : (record { verbose : bool }) -> () query;
   canic_auth_status : (variant { ActiveDelegationProof }) -> () query;
 }
 EOF

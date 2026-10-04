@@ -6,7 +6,8 @@
 
 CI should validate:
 
-- clean or explicitly reviewed source state;
+- clean or explicitly reviewed source state, with untracked files and submodule
+  changes observed independently of Git status display preferences;
 - Cargo lock and package-manifest identities;
 - package metadata App/role equality with the envelope target;
 - Rust/Cargo toolchain and build profile;
@@ -18,7 +19,7 @@ CI should validate:
   required Binaryen 132 optimization and its before/after structural metrics
   for release profiles;
 - stable envelope and payload schema identities;
-- a successful exit class without conflicting evidence.
+- a successful exit class and build status without conflicting evidence.
 
 Example:
 

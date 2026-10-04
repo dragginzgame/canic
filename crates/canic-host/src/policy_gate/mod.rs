@@ -1,6 +1,6 @@
 //! Passive CI policy gates over stable evidence envelopes.
 
-use crate::evidence_envelope::{evidence_envelope_schema, file_input_fingerprint};
+use crate::evidence_envelope::{bytes_input_fingerprint, evidence_envelope_schema};
 
 mod evaluation;
 mod manifest_gate;
@@ -38,25 +38,28 @@ pub fn evaluate_policy_gate(
     request: PolicyGateRequest<'_>,
 ) -> Result<PolicyGateReportV1, PolicyGateError> {
     let policy = parse_ci_policy_v1(request.policy_source)?;
-    let policy_file_fingerprint = file_input_fingerprint(
+    let envelope = serde_json::from_str(request.envelope_source)?;
+    let policy_file_fingerprint = bytes_input_fingerprint(
         "ci_policy",
         request.policy_path,
         request.fingerprint_root,
+        request.policy_source.as_bytes(),
         None,
         None,
-    )?;
-    let evaluated_envelope_fingerprint = file_input_fingerprint(
+    );
+    let evaluated_envelope_fingerprint = bytes_input_fingerprint(
         "evidence_envelope",
         request.envelope_path,
         request.fingerprint_root,
+        request.envelope_source.as_bytes(),
         Some(evidence_envelope_schema()),
         None,
-    )?;
+    );
     Ok(evaluate_policy(
         &policy,
         policy_file_fingerprint,
         evaluated_envelope_fingerprint,
-        request.envelope,
+        envelope,
     ))
 }
 

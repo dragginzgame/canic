@@ -58,6 +58,12 @@ macro_rules! log {
 /// Notes:
 /// - On non-wasm targets, `perf_counter()` returns 0, so this becomes a no-op-ish
 ///   counter (still records 0 deltas); this keeps unit tests compiling cleanly.
+///
+/// ```
+/// canic::perf!("load_state");
+/// canic::prelude::perf!("loaded {} rows", 3);
+/// canic::api::ops::perf!("finish");
+/// ```
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
@@ -78,8 +84,8 @@ macro_rules! perf {
             $crate::__internal::core::perf::record_checkpoint(module_path!(), &label, delta);
 
             $crate::__internal::core::log!(
+                $crate::__internal::core::log::Topic::Perf,
                 Info,
-                Topic::Perf,
                 "{}: '{}' used {}i since last (total: {}i)",
                 module_path!(),
                 label,
@@ -88,4 +94,29 @@ macro_rules! perf {
             );
         });
     }};
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::__internal::core::perf::{PerfKey, entries};
+
+    #[test]
+    fn public_perf_paths_record_formatted_checkpoints() {
+        crate::perf!("loaded {} rows", 3);
+        crate::prelude::perf!("loaded {} rows", 3);
+        crate::api::ops::perf!("loaded {} rows", 3);
+
+        let checkpoint = entries()
+            .into_iter()
+            .find(|entry| {
+                matches!(
+                    &entry.key,
+                    PerfKey::Checkpoint { scope, label }
+                        if scope == module_path!() && label == "loaded 3 rows"
+                )
+            })
+            .expect("public perf macros record one shared checkpoint");
+        assert_eq!(checkpoint.count, 3);
+        assert_eq!(checkpoint.total_instructions, 0);
+    }
 }

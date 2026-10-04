@@ -59,7 +59,6 @@ pub struct CanicRuntimeStatus {
     pub timer_inventory: RuntimeCheck,
     pub state: Option<RuntimeStateSummary>,
     pub auth: Option<RuntimeAuthStatusSummary>,
-    pub blob_storage: Option<RuntimeBlobStorageStatusSummary>,
     pub receipt_capacity: Option<RuntimeReceiptCapacityStatus>,
     pub recent_failures: Vec<RecentFailure>,
     pub visibility: Vec<RuntimeVisibilityEntry>,
@@ -240,15 +239,6 @@ pub struct RuntimeStateDomainSummary {
 #[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct RuntimeAuthStatusSummary {
     pub auth_features: Vec<RuntimeFeatureStatus>,
-}
-
-//
-// RuntimeBlobStorageStatusSummary
-//
-
-#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
-pub struct RuntimeBlobStorageStatusSummary {
-    pub blob_storage_features: Vec<RuntimeFeatureStatus>,
 }
 
 //

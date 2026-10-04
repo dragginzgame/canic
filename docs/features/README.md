@@ -4,16 +4,15 @@ Canic is a toolbox, not a mandatory stack. An application uses only the
 capabilities it needs:
 
 - each canister role selects its own runtime features;
-- authentication, scaling, blob storage, and other optional capabilities are
+- authentication, scaling, and other optional runtime capabilities are
   enabled independently where their contracts permit;
 - standalone-local lifecycle supports local development and testing; and
 - build, diagnostic, backup, and recovery tools stay on the operator's computer
   rather than becoming canister permissions.
 
 Start with the problem you want to solve, then follow only that feature's guide.
-Some features deliberately depend on another feature—for example, blob-storage
-billing includes the base blob-storage capability—but unrelated features do not
-need to be enabled together. Managed lifecycle and endpoints still require
+Some authentication features deliberately depend on another cryptographic
+capability, but unrelated features do not need to be enabled together. Managed lifecycle and endpoints still require
 their Fleet bindings; feature selection does not bypass that authority.
 
 Each guide begins with a plain-language overview, explains what the feature can
@@ -33,7 +32,7 @@ architecture explains the design, and operations pages provide procedures.
 | Scaling and placement | Add canisters and control where they may run | [Scaling and placement](scaling-and-placement/README.md) |
 | Builds and evidence | Build Wasm and record evidence about how it was produced | [Builds and evidence](build-and-evidence/README.md) |
 | Backup and restore | Verify snapshots and recover a deployment within one release | [Backup and restore](backup-and-restore/README.md) |
-| Blob storage | Store large application data, optionally with billing | [Blob storage](blob-storage/README.md) |
+| Blob storage | Compose an independent application service | [Blob storage](blob-storage/README.md) |
 | Operations and diagnostics | Set up, inspect, troubleshoot, and operate Canic | [Operations and diagnostics](operations/README.md) |
 
 For the exact delivery boundary of work in progress, see

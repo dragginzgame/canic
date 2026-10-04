@@ -3,6 +3,144 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Blob extraction — 2026-10-04
+
+The maintainer explicitly selected blob removal after publishing 0.110.52.
+The embedded runtime, provider client, CLI group, Medic billing option, stable
+allocations, two fixture canisters and dedicated default test/CI lane are removed
+from the working tree. The independent published service is composed only under
+`integrations/blob-service`, with its own Cargo workspace, lockfile and target.
+No sibling repository, live service, retained operation or release artifact was
+modified. This selection supersedes the earlier future-work ordering below;
+it does not close FR1, accept minor closeout or assign a release version.
+
+At the maintainer's request, all remaining blob-specific adapter tests and their
+runner, standalone test mode and test-only dependencies are removed. The unused
+managed-fixture argument helper added solely for that suite is withdrawn; existing
+Canic-owned generic tests remain. Upstream already covers service authority,
+certificate replies, restoration, snapshots, expired history and release readback.
+The missing decoder-budget regression request is
+[ic-blob-storage#7](https://github.com/dragginzgame/ic-blob-storage/issues/7).
+The published service dependency remains exactly `ic-blob-storage = 0.14.1`.
+After removal, formatting, whitespace, test inventory and locked offline adapter
+metadata checks pass. The adapter has no test targets, development dependencies
+or test features; its refreshed lockfile no longer includes PocketIC or ic-testkit.
+No compilation or simulator was started for this removal.
+
+Earlier targeted Core/facade/Host/CLI Clippy, 30 Core role-contract tests and 48
+Host role-contract tests passed. Host fixture subprocesses needed
+`CARGO_NET_OFFLINE=true` in the sandbox. Runner barriers, test inventory, scoped
+shell lint and document semantics passed. Adapter native Clippy passed before
+its test scaffolding was removed. These are scoped results, not a full gate.
+Evidence is under `target/review-validation/blob-*`.
+
+A facade test compile was SIGKILLed under machine-wide build pressure. The CLI
+rebuild then crossed concurrent Host/CLI request-field edits: Host had compiled
+`PolicyGateRequest.envelope`, while CLI used the new `envelope_source`. The current
+files agree. The maintainer requested waiting for the other source-editing
+session before resuming compilation; this session has no active builds.
+
+Resume the current CLI rebuild on the stable tree with one Cargo job, then build
+the adapter's managed artifact through `canic build` as documented in the blob
+composition guide. There is no blob-specific test command to resume. The source
+cut still needs remaining targeted native checks and current embedded-peer
+qualification. It is not push-ready yet. Package versions and published .52 notes
+are unchanged; root Unreleased holds this deliberately unassigned extraction.
+
+## Independent issue-review implementation — 2026-10-04
+
+Additional independent repairs are implemented for
+[#217](https://github.com/dragginzgame/canic/issues/217),
+[#220](https://github.com/dragginzgame/canic/issues/220) and
+[#221](https://github.com/dragginzgame/canic/issues/221). Role rename shares the
+canonical package-path resolver and propagates read/parse failures before
+configuration publication. Policy requests carry exact envelope source;
+single-envelope and workspace-manifest gates fingerprint the consumed source
+bytes, with byte-derived sizes and no invented modification time. File-backed
+fingerprints obtain metadata from the opened file. Unreadable or malformed
+manifest evidence yields individual required failures or optional warnings,
+preserving every other entry's report.
+
+New Host regressions cover relative/absolute directory and Cargo.toml selectors,
+unchanged configuration after missing/malformed package failure, replacement
+files after input consumption, and complete mixed valid/invalid entry reports.
+Formatting and scoped whitespace checks pass; no builds or native tests ran.
+Required Host selectors: `release_set::config::tests::role_rename_`,
+`policy_gate::tests::envelope::` and `policy_gate::tests::manifest::`, plus existing
+`evidence_envelope::tests::` and CLI `evidence::tests::gate_` for the changed input
+boundary. The policy guide documents fingerprints and per-entry outcomes.
+The native-timers guide now restricts application lifecycle participants to the
+macros that support them; this documentation correction is verified against the
+current macro declarations without compilation.
+
+Further independent repairs are implemented for
+[#71](https://github.com/dragginzgame/canic/issues/71),
+[#239](https://github.com/dragginzgame/canic/issues/239) and
+[#242](https://github.com/dragginzgame/canic/issues/242). Application attestation
+arguments can only raise the configured role epoch floor. Fleet status accepts
+only the known Running, Stopped and Stopping states; unknown text retains its
+value in a typed refusal. All four operator balance observation paths share an
+observation error preserving the lower ICP balance failure.
+
+The new Core boundary-matrix regression and Host process fixtures cover epoch
+floor tightening, known/unknown status values, successful balance preparation,
+malformed balance/JSON and invocation failure without payment commands.
+Formatting and scoped whitespace checks pass; these regressions are unrun here
+under the maintainer's no-build instruction. Required selectors:
+`workflow::runtime::auth::tests::application_epoch_floor_can_only_tighten_configured_revocation`
+in Core, and
+`fleet_ensure::ops::platform::tests::status_observation_rejects_unknown_runtime_states`
+and
+`fleet_ensure::ops::platform::tests::estate_preparation_preserves_typed_balance_observation_failures`
+in Host. The API and configuration guide document the epoch-floor semantics.
+
+Additional Host repairs are implemented for
+[#215](https://github.com/dragginzgame/canic/issues/215),
+[#218](https://github.com/dragginzgame/canic/issues/218) and
+[#222](https://github.com/dragginzgame/canic/issues/222). Source provenance
+explicitly observes untracked files and submodules, disables filesystem-monitor
+shortcuts and removes injected Git configuration. Generated family patches use
+TOML serialization and reject non-UTF-8 paths rather than losing path bytes.
+Every enabled build-provenance rule rejects Failed and NotRecorded payloads even
+when the envelope reports Success. Envelope-only policies retain their scope.
+
+New regressions exercise actual Git status under a hiding local configuration,
+injected Git environment, all three generated infrastructure package manifests
+under a quoted/backslashed/control-character path, and each enabled policy rule's
+success and failure cases. Formatting and scoped whitespace checks pass. No build,
+Cargo check, Clippy or native regression was run for these additions; the other
+session owns compilation and targeted validation. Required Host selectors:
+`build_provenance::source::tests::`,
+`fleet_package::tests::generated_packages_preserve_special_characters_in_dependency_patch_paths`
+and `policy_gate::tests::build_provenance::`. These checks and the transport
+regressions below must pass before the combined issue-review batch is ready.
+Root Unreleased and the active provenance/policy guides reflect these changes.
+
+The public performance macro repair for [#320](https://github.com/dragginzgame/canic/issues/320)
+qualifies the Perf topic, corrects the log arguments and directs the prelude and
+operational macro paths to the facade implementation. Its exact native checkpoint
+regression and all 12 Canic doctests passed in an isolated copy of published
+0.110.52 plus this repair. Logs: `/tmp/canic-perf-review-{unit,doc}.log`.
+This evidence does not qualify the concurrently changing blob-removal graph.
+
+The transport repair for [#273](https://github.com/dragginzgame/canic/issues/273)
+makes Candid argument cleanup non-fatal in typed ICP, Canister Protocol and
+Observatory adapters. Non-missing cleanup failures emit a local warning; original
+replies, transport failures and response-validation failures retain their outcomes.
+The added real-process native regressions cover missing/replaced scratch with
+success, invocation failure and invalid responses. Their Host compilation was
+interrupted before execution when the maintainer assigned all builds and targeted
+checkout checks to the blob-removal session. Host verification remains required:
+`canister_protocol::tests::cleanup_failure_preserves_typed_update_and_query_outcomes`
+and `icp::candid::tests::child_reads_complete_arguments_and_cleanup_preserves_transport_outcomes`.
+Affected-package Clippy also remains unrun here. This session has no active build
+and will start no further builds or Cargo checks.
+
+Changes remain uncommitted and the root Unreleased notes include these repairs.
+The issue-review batch awaits its owning checks; no combined push-readiness or
+publication claim is made. Existing published changelog entries, dependency
+selection and concurrent blob-removal edits are preserved.
+
 ## Embedded allocation-peer refresh — 2026-10-04
 
 The release test preflight stopped before ordinary tests or PocketIC because

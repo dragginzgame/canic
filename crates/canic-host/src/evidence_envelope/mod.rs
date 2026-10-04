@@ -3,7 +3,8 @@
 use canic_core::cdk::utils::hash::sha256_hex;
 use serde::{Deserialize, Serialize};
 use std::{
-    fs, io,
+    fs,
+    io::{self, Read},
     path::{Component, Path},
     time::UNIX_EPOCH,
 };
@@ -332,25 +333,41 @@ pub fn file_input_fingerprint(
     schema: Option<PayloadSchemaRefV1>,
     note: Option<String>,
 ) -> io::Result<InputFingerprintV1> {
-    let bytes = fs::read(path)?;
-    let metadata = fs::metadata(path)?;
-    let modified_unix_secs = metadata
+    let mut file = fs::File::open(path)?;
+    let mut bytes = Vec::new();
+    file.read_to_end(&mut bytes)?;
+    let mut fingerprint = bytes_input_fingerprint(kind, path, root, &bytes, schema, note);
+    fingerprint.modified_unix_secs = file
+        .metadata()?
         .modified()
         .ok()
         .and_then(|modified| modified.duration_since(UNIX_EPOCH).ok())
         .map(|duration| duration.as_secs());
-    let path_summary = input_path_summary(path, root);
+    Ok(fingerprint)
+}
 
-    Ok(InputFingerprintV1 {
+/// Fingerprint the exact bytes consumed by a caller without re-reading the path.
+/// File modification time is unavailable for this in-memory observation.
+#[must_use]
+pub fn bytes_input_fingerprint(
+    kind: &str,
+    path: &Path,
+    root: &Path,
+    bytes: &[u8],
+    schema: Option<PayloadSchemaRefV1>,
+    note: Option<String>,
+) -> InputFingerprintV1 {
+    let path_summary = input_path_summary(path, root);
+    InputFingerprintV1 {
         kind: kind.to_string(),
         path: path_summary.path,
         path_display: path_summary.display,
-        sha256: Some(sha256_hex(&bytes)),
-        size_bytes: Some(metadata.len()),
-        modified_unix_secs,
+        sha256: Some(sha256_hex(bytes)),
+        size_bytes: Some(bytes.len() as u64),
+        modified_unix_secs: None,
         schema,
         note,
-    })
+    }
 }
 
 #[must_use]

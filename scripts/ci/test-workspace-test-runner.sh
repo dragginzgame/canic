@@ -125,7 +125,7 @@ fi
 SH
 chmod +x "$fixture/bin/"*
 
-serial_stages=(internal host runtime blob-storage payload-limits)
+serial_stages=(internal host runtime payload-limits)
 for mode in full pocketic; do
     stages=(preflight/embedded-root)
     if [[ "$mode" == full ]]; then

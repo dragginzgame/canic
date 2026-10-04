@@ -106,16 +106,6 @@ const FEATURE_DEFINITIONS: &[FeatureDefinition] = &[
         CanicFeatureEffect::NoState,
     ),
     feature(
-        CanicFeatureKey::BlobStorage,
-        "blob-storage",
-        CanicFeatureEffect::StateBearing,
-    ),
-    feature(
-        CanicFeatureKey::BlobStorageBilling,
-        "blob-storage-billing",
-        CanicFeatureEffect::StateBearing,
-    ),
-    feature(
         CanicFeatureKey::ControlPlane,
         "control-plane",
         CanicFeatureEffect::StateBearing,
@@ -165,10 +155,6 @@ const FEATURE_IMPLICATIONS: &[FeatureImplication] = &[
     FeatureImplication {
         from: CanicFeatureKey::AuthLocalApplicationAuthorization,
         to: CanicFeatureKey::AuthDelegatedTokenVerify,
-    },
-    FeatureImplication {
-        from: CanicFeatureKey::BlobStorageBilling,
-        to: CanicFeatureKey::BlobStorage,
     },
 ];
 
@@ -412,22 +398,6 @@ const FEATURE_ALLOCATIONS: &[FeatureAllocation] = &[
         StateAllocationKey::CoreLocalApplicationAuthorizationState,
     ),
     feature_allocation(
-        CanicFeatureKey::BlobStorage,
-        StateAllocationKey::BlobStorageRoots,
-    ),
-    feature_allocation(
-        CanicFeatureKey::BlobStorage,
-        StateAllocationKey::BlobStoragePendingDeletions,
-    ),
-    feature_allocation(
-        CanicFeatureKey::BlobStorage,
-        StateAllocationKey::BlobStorageGatewayPrincipals,
-    ),
-    feature_allocation(
-        CanicFeatureKey::BlobStorageBilling,
-        StateAllocationKey::BlobStorageBilling,
-    ),
-    feature_allocation(
         CanicFeatureKey::AuthChainKeyRootSign,
         StateAllocationKey::CoreRootDelegationState,
     ),
@@ -596,8 +566,6 @@ impl CanicFeatureKey {
         Self::AuthLocalApplicationAuthorization,
         Self::AuthRootCanisterSigCreate,
         Self::AuthRootCanisterSigVerify,
-        Self::BlobStorage,
-        Self::BlobStorageBilling,
         Self::ControlPlane,
         Self::FleetCoordinatorCanister,
         Self::InternalTestFixtures,

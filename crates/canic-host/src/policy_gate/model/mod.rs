@@ -1,6 +1,5 @@
 use crate::evidence_envelope::{
-    EvidenceEnvelopeV1, EvidenceTargetV1, ExitClassV1, InputFingerprintV1, PayloadSchemaRefV1,
-    PayloadSchemaStabilityV1,
+    EvidenceTargetV1, ExitClassV1, InputFingerprintV1, PayloadSchemaRefV1, PayloadSchemaStabilityV1,
 };
 use serde::{Deserialize, Serialize, de};
 use std::{collections::BTreeMap, path::Path};
@@ -150,7 +149,8 @@ pub struct PolicyGateRequest<'a> {
     pub policy_path: &'a Path,
     pub envelope_path: &'a Path,
     pub fingerprint_root: &'a Path,
-    pub envelope: EvidenceEnvelopeV1,
+    /// Exact JSON source to parse and fingerprint for this evaluation.
+    pub envelope_source: &'a str,
 }
 
 ///

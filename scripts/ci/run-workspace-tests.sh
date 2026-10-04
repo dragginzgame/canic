@@ -625,8 +625,6 @@ clear_pocketic_build_targets() {
         "target/pic-wasm-no-test-material"
         "target/fleet-coordinator"
         "target/fleet-registry-sync"
-        "target/standalone-blob_storage_cashier_mock"
-        "target/standalone-blob_storage_probe"
         "target/standalone-leaf_probe"
         "target/standalone-payload_limit_probe"
         "target/standalone-root-probe"
@@ -712,7 +710,6 @@ run_pocketic_suites() {
     # Clear transient Wasm targets once before integration execution. The
     # ignored instruction audit retains compile coverage through the inventory.
     run_pic_inventory_tests "canic-tests runtime PocketIC suite" runtime
-    run_pic_inventory_tests "canic-tests blob-storage PocketIC suite" blob-storage
     run_pic_inventory_tests "canic-tests payload-limit PocketIC suite" payload-limits
 }
 

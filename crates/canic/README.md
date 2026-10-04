@@ -44,8 +44,6 @@ not selected through a facade feature.
 | `control-plane` | No | Root control-plane bootstrap and Wasm publication APIs without Store-canister endpoints. |
 | `fleet-coordinator-canister` | No | The dedicated canonical Fleet Coordinator lifecycle and Fleet Registry API. Configured application roles should not enable it. |
 | `wasm-store-canister` | No | The canonical `wasm_store` canister API used by generated/bootstrap store packages. Ordinary application roles should not enable it. |
-| `blob-storage` | No | Non-billing blob-storage status and gateway-administration runtime APIs/endpoints. |
-| `blob-storage-billing` | No | Cashier-backed blob-storage billing, funding, and readiness support; also enables `blob-storage`. |
 | `sharding` | No | Sharding placement, storage, metrics, and lifecycle support from `canic-core`. |
 | `auth-chain-key-ecdsa` | No | Chain-key ECDSA validation and cryptographic support used by delegated-auth proof flows. |
 | `auth-chain-key-root-sign` | No | Root-managed chain-key delegation-batch signing; also enables `auth-chain-key-ecdsa`. |

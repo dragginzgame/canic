@@ -566,7 +566,7 @@ fn package_feature_forwarding_is_rejected() {
     let mut package = package("role", "role@1", "/tmp/role/Cargo.toml");
     package.features.insert(
         "storage".to_string(),
-        vec!["framework/blob-storage".to_string()],
+        vec!["framework/sharding".to_string()],
     );
 
     assert!(matches!(
@@ -612,10 +612,10 @@ fn selected_canic_features_accept_only_public_cargo_implications() {
         package(CANIC_PACKAGE, "canic@1", "/tmp/canic/Cargo.toml"),
     ];
     packages[1].features.insert(
-        "blob-storage-billing".to_string(),
+        "auth-chain-key-root-sign".to_string(),
         vec![
-            "blob-storage".to_string(),
-            "canic-core/blob-storage-billing".to_string(),
+            "auth-chain-key-ecdsa".to_string(),
+            "canic-core/auth-chain-key-root-sign".to_string(),
         ],
     );
     let nodes = [
@@ -628,14 +628,14 @@ fn selected_canic_features_accept_only_public_cargo_implications() {
         .get_mut("canic@1")
         .expect("Canic graph package")
         .enabled_features = BTreeSet::from([
-        "blob-storage".to_string(),
-        "blob-storage-billing".to_string(),
+        "auth-chain-key-ecdsa".to_string(),
+        "auth-chain-key-root-sign".to_string(),
     ]);
     let direct_edge = &graph.edges["role@1"][0];
-    let declared = BTreeSet::from([CanicFeatureKey::BlobStorageBilling]);
+    let declared = BTreeSet::from([CanicFeatureKey::AuthChainKeyRootSign]);
 
     validate_selected_canic_features(&graph, direct_edge, &packages[1], &declared)
-        .expect("public Cargo-implied blob storage feature");
+        .expect("public Cargo-implied signing feature");
 
     graph
         .packages

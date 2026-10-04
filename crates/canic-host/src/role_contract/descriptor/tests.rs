@@ -35,18 +35,18 @@ fn descriptor_id_drift_is_blocking() {
         .into_iter()
         .chain(canic_control_plane_state_descriptors())
         .collect::<Vec<_>>();
-    let stored_blobs = descriptors
+    let registry = descriptors
         .iter_mut()
-        .find(|descriptor| descriptor.allocation == StateAllocationKey::BlobStorageRoots)
-        .expect("stored blobs descriptor");
-    stored_blobs.state[0].memory_id = Some(61);
+        .find(|descriptor| descriptor.allocation == StateAllocationKey::ShardingRegistry)
+        .expect("sharding registry descriptor");
+    registry.state[0].memory_id = Some(61);
 
     assert!(matches!(
         validate_descriptors(descriptors),
         Err(errors) if errors.iter().any(|finding| matches!(
             finding,
             RoleContractFinding::AllocationDescriptorIdMismatch {
-                key: StateAllocationKey::BlobStorageRoots,
+                key: StateAllocationKey::ShardingRegistry,
                 ..
             }
         ))
@@ -56,26 +56,26 @@ fn descriptor_id_drift_is_blocking() {
 #[test]
 fn materialization_joins_only_selected_allocations() {
     let contract = ResolvedRoleContract {
-        role: canic_core::ids::CanisterRole::owned("blobber".to_string()),
+        role: canic_core::ids::CanisterRole::owned("shard".to_string()),
         built_in: None,
         capabilities: BTreeSet::new(),
         required_features: BTreeSet::new(),
         effective_features: BTreeSet::new(),
         allocations: vec![ResolvedStateAllocation {
-            key: StateAllocationKey::BlobStorageRoots,
+            key: StateAllocationKey::ShardingRegistry,
             owner: AllocationOwner::CanicCore,
-            memory_ids: vec![MemoryId::new(55)],
+            memory_ids: vec![MemoryId::new(52)],
             selected_by: BTreeSet::from([SelectionProvenance::EffectiveFeature(
-                canic_core::role_contract::CanicFeatureKey::BlobStorage,
+                canic_core::role_contract::CanicFeatureKey::Sharding,
             )]),
         }],
     };
 
     let manifest = materialize_state_manifest(&[contract]).expect("manifest");
     let role = manifest.roles.first().expect("role");
-    assert_eq!(role.canister_role, "blobber");
+    assert_eq!(role.canister_role, "shard");
     assert_eq!(role.state.len(), 1);
-    assert_eq!(role.state[0].domain, "blob_storage_roots");
+    assert_eq!(role.state[0].domain, "sharding_registry");
 }
 
 #[test]

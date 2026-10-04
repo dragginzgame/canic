@@ -213,7 +213,7 @@ the build path fills the derived key and path hash before final validation.
 Root canister-signature role-attestation settings.
 
 - `max_ttl_secs: u64` – maximum role-attestation lifetime in seconds (default `900`, must be > 0).
-- `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations.
+- `min_accepted_epoch_by_role.<role>: u64` – optional per-role epoch floor for rejecting older attestations. Application verification arguments may raise this floor but cannot lower it.
 
 ### `[standards]`
 

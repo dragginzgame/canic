@@ -4,7 +4,6 @@
 //! not perform storage access or orchestration.
 
 pub mod auth;
-pub mod blob_storage;
 pub mod canister;
 pub mod cycles;
 pub mod icp_refill;

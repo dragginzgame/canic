@@ -19,7 +19,7 @@ pub use timing::{IcpRequestKind, IcpRequestTiming};
 
 pub use balance::IcpBalanceError;
 pub use candid::IcpCandidCallError;
-pub(crate) use candid::write_candid_argument_file;
+pub(crate) use candid::{cleanup_candid_argument_file, write_candid_argument_file};
 pub use command::{
     CANIC_ICP_IDENTITY_PASSWORD_FILE_ENV, add_target_args, command_display,
     existing_local_canister_candid_path, local_canister_candid_path,

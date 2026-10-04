@@ -40,10 +40,6 @@ pub(super) const COMMAND_SPECS: &[CommandSpec] = &[
         about: "Create, inspect, and verify backups",
     },
     CommandSpec {
-        name: "blob-storage",
-        about: "Inspect and manage blob-storage billing",
-    },
-    CommandSpec {
         name: "build",
         about: "Build Canic App and infrastructure artifacts",
     },

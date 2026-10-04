@@ -9,7 +9,7 @@ mod render;
 
 use crate::output;
 use canic_host::{
-    evidence_envelope::{EvidenceEnvelopeV1, ExitClassV1},
+    evidence_envelope::ExitClassV1,
     policy_gate::{
         PolicyGateReportV1, PolicyGateRequest, WorkspaceEvidenceGateReportV1,
         WorkspaceEvidenceManifestGateRequest, evaluate_policy_gate,
@@ -51,14 +51,13 @@ pub(super) fn evaluate_gate_files(
     let root = std::env::current_dir()?;
     match &options.input {
         EvidenceGateInput::Envelope(envelope_path) => {
-            let envelope =
-                output::read_json_file::<EvidenceEnvelopeV1, EvidenceCommandError>(envelope_path)?;
+            let envelope_source = fs::read_to_string(envelope_path)?;
             evaluate_policy_gate(PolicyGateRequest {
                 policy_source: &policy_source,
                 policy_path: &options.policy,
                 envelope_path,
                 fingerprint_root: &root,
-                envelope,
+                envelope_source: &envelope_source,
             })
             .map(Box::new)
             .map(EvidenceGateReport::Envelope)

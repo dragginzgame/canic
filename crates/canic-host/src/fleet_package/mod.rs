@@ -225,15 +225,30 @@ pub fn dependency_patch_table(
     canic_manifest_path: &Path,
     canic_version: &str,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    let mut rendered = String::new();
+    let mut patches = toml::Table::new();
     for (name, root) in resolved_family_roots(canic_manifest_path, canic_version)? {
-        let _ = writeln!(rendered, "{name} = {{ path = \"{}\" }}", root.display());
+        let path = root
+            .to_str()
+            .ok_or("Canic family patch path must be valid UTF-8")?;
+        patches.insert(
+            name.to_string(),
+            toml::Value::Table(toml::Table::from_iter([(
+                "path".to_string(),
+                toml::Value::String(path.to_string()),
+            )])),
+        );
     }
-    if rendered.is_empty() {
-        Ok(String::new())
-    } else {
-        Ok(format!("[patch.crates-io]\n{rendered}"))
+    if patches.is_empty() {
+        return Ok(String::new());
     }
+    let document = toml::Table::from_iter([(
+        "patch".to_string(),
+        toml::Value::Table(toml::Table::from_iter([(
+            "crates-io".to_string(),
+            toml::Value::Table(patches),
+        )])),
+    )]);
+    Ok(toml::to_string(&document)?)
 }
 
 /// Exact source roots selected for the generated infrastructure's family patches.
