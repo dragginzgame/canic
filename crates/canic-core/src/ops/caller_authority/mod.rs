@@ -14,18 +14,16 @@ use mapper::publication_from_dto;
 use crate::{
     cdk::serialize::serialize,
     config::caller_authority::CompiledCallerPolicy,
-    domain::policy::pure::caller_authority::{
-        self, CallerAdmissionError, CallerAdmissionTicket, CallerAdmissionView, CallerTargetTicket,
-    },
     ids::{CallerReceiverAuthority, ComponentInstanceId},
     model::caller_authority::{
-        CallerChangeRecord, CallerPublicationError, CallerPublicationRecord, CallerReceiptPhase,
-        CallerReceiptRecord, CallerReceiverRecord, CallerReservation, CallerRowKey,
-        CallerSourceRecord,
+        CallerAdmissionError, CallerChangeRecord, CallerPublicationError, CallerPublicationRecord,
+        CallerReceiptPhase, CallerReceiptRecord, CallerReceiverRecord, CallerReservation,
+        CallerRowKey, CallerSourceRecord,
     },
     storage::stable::caller_authority::{
         CallerReceiverStore, CallerRowRecord, CallerRowStore, MAX_CALLER_ROW_BYTES,
     },
+    view::caller_authority::CallerAdmissionView,
 };
 use candid::Principal;
 use sha2::{Digest, Sha256};
@@ -238,9 +236,10 @@ impl CallerAuthorityOps {
     }
 
     /// Reserve every row and byte before writing any denial fence.
-    pub fn prepare(
+    pub(crate) fn prepare(
         publication: CallerPublicationRecord,
         policy: &CompiledCallerPolicy,
+        source_permitted: bool,
     ) -> Result<CallerReceiptRecord, CallerPublicationError> {
         validate_hash(&publication)?;
         if let Some(receipt) = Self::receipt(publication.operation_id) {
@@ -252,7 +251,7 @@ impl CallerAuthorityOps {
         {
             return Err(CallerPublicationError::AuthorityConflict);
         }
-        let changed = prepare_row(&publication, policy)?;
+        let changed = prepare_row(&publication, source_permitted)?;
         let receipt = CallerReceiptRecord {
             publication: publication.clone(),
             phase: CallerReceiptPhase::Prepared,
@@ -340,63 +339,39 @@ impl CallerAuthorityOps {
         Ok(receipt)
     }
 
-    /// Local transport-caller admission with constant indexed source and Component-fence lookups.
-    pub fn require_permission(
+    /// Borrow an indexed admission projection for the workflow-selected pure decision.
+    pub(crate) fn with_admission<T>(
         caller: Principal,
-        permission: &str,
-        policy: &CompiledCallerPolicy,
-    ) -> Result<(), CallerAdmissionError> {
-        with_admission(caller, |view| {
-            caller_authority::require_permission(caller, permission, policy, view)
-        })
-    }
-
-    /// Retain exact local authority when the application will continue across an await.
-    pub fn admit(
-        caller: Principal,
-        permission: &str,
-        policy: &CompiledCallerPolicy,
-    ) -> Result<CallerAdmissionTicket, CallerAdmissionError> {
-        with_admission(caller, |view| {
-            caller_authority::admit(caller, permission, policy, view)
-        })
-    }
-
-    /// Revalidate retained endpoint authority before issuing a new effect after an await.
-    pub fn revalidate(
-        ticket: &CallerAdmissionTicket,
-        policy: &CompiledCallerPolicy,
-    ) -> Result<(), CallerAdmissionError> {
-        with_admission(ticket.caller(), |view| {
-            caller_authority::revalidate(ticket, policy, view)
-        })
-    }
-
-    /// Select only a locally projected target under a target-direction permission.
-    pub fn select_target(
-        target: Principal,
-        permission: &str,
-        policy: &CompiledCallerPolicy,
-    ) -> Result<CallerTargetTicket, CallerAdmissionError> {
-        with_admission(target, |view| {
-            caller_authority::select_target(target, permission, policy, view)
-        })
-    }
-
-    /// Preserve target direction when revalidating a retained proxy destination.
-    pub fn revalidate_target(
-        ticket: &CallerTargetTicket,
-        policy: &CompiledCallerPolicy,
-    ) -> Result<(), CallerAdmissionError> {
-        with_admission(ticket.target(), |view| {
-            caller_authority::revalidate_target(ticket, policy, view)
+        check: impl FnOnce(&CallerAdmissionView<'_>) -> Result<T, CallerAdmissionError>,
+    ) -> Result<T, CallerAdmissionError> {
+        let header =
+            CallerReceiverStore::get().ok_or(CallerAdmissionError::AuthorityUnavailable)?;
+        let source = match CallerRowStore::get(&CallerRowKey::source(caller)) {
+            Some(CallerRowRecord::Source(source)) => Some(source),
+            _ => None,
+        };
+        let component_fenced = source.as_ref().is_some_and(|source| {
+            component_fenced(
+                source.installation.component().component,
+                source.installation.component_install_id,
+            )
+        });
+        check(&CallerAdmissionView {
+            receiver: &header.authority,
+            generation: header.generation,
+            receiver_open: header.open && !header.retired,
+            source: source.as_ref().map(|source| &source.installation),
+            source_open: source
+                .as_ref()
+                .is_some_and(|source| source.open && !source.denied),
+            component_fenced,
         })
     }
 }
 
 fn prepare_row(
     publication: &CallerPublicationRecord,
-    policy: &CompiledCallerPolicy,
+    source_permitted: bool,
 ) -> Result<Option<(CallerRowKey, CallerRowRecord)>, CallerPublicationError> {
     match &publication.change {
         CallerChangeRecord::StageSource(source)
@@ -404,18 +379,7 @@ fn prepare_row(
         | CallerChangeRecord::DenySource(source) => {
             let grant = !matches!(publication.change, CallerChangeRecord::DenySource(_));
             validate_source_installation(source, &publication.authority.issuer)?;
-            if grant
-                && !policy.configuration.as_ref().is_some_and(|config| {
-                    config.permissions.keys().any(|permission| {
-                        caller_authority::matches_permission(
-                            policy,
-                            permission,
-                            &publication.authority.receiver,
-                            source,
-                        )
-                    })
-                })
-            {
+            if grant && !source_permitted {
                 return Err(CallerPublicationError::AuthorityConflict);
             }
             let key = CallerRowKey::source(source.canister());
@@ -517,33 +481,6 @@ fn validate_source_generation(
 
 fn component_fenced(component: ComponentInstanceId, installation: [u8; 32]) -> bool {
     matches!(CallerRowStore::get(&CallerRowKey::component(component, installation)), Some(CallerRowRecord::ComponentFence(fence)) if fence.install_id == installation)
-}
-
-fn with_admission<T>(
-    caller: Principal,
-    check: impl FnOnce(&CallerAdmissionView<'_>) -> Result<T, CallerAdmissionError>,
-) -> Result<T, CallerAdmissionError> {
-    let header = CallerReceiverStore::get().ok_or(CallerAdmissionError::AuthorityUnavailable)?;
-    let source = match CallerRowStore::get(&CallerRowKey::source(caller)) {
-        Some(CallerRowRecord::Source(source)) => Some(source),
-        _ => None,
-    };
-    let component_fenced = source.as_ref().is_some_and(|source| {
-        component_fenced(
-            source.installation.component().component,
-            source.installation.component_install_id,
-        )
-    });
-    check(&CallerAdmissionView {
-        receiver: &header.authority,
-        generation: header.generation,
-        receiver_open: header.open && !header.retired,
-        source: source.as_ref().map(|source| &source.installation),
-        source_open: source
-            .as_ref()
-            .is_some_and(|source| source.open && !source.denied),
-        component_fenced,
-    })
 }
 
 fn row_reservation(

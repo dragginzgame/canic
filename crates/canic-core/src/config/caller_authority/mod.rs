@@ -140,7 +140,7 @@ pub struct CompiledCallerPolicy {
 /// Typed build-time policy refusal; malformed declarations never produce artifacts.
 ///
 
-#[derive(Clone, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Debug, Eq, Error, PartialEq)]
 pub enum CallerPolicyError {
     #[error("caller-authority capacity is zero or exceeds its physical bound")]
     Capacity,

@@ -3,6 +3,7 @@
 //! Receiver publication, strict revocation and retained local admission evidence.
 
 use super::*;
+use crate::workflow::caller_authority::admission::CallerAdmissionWorkflow;
 use crate::{
     config::caller_authority::{
         CallerAuthorityConfig, CallerPermission, CallerScope, CallerSourceSelector,
@@ -82,7 +83,7 @@ fn publication(
 }
 
 fn apply(publication: &CallerPublicationRecord, policy: &CompiledCallerPolicy) {
-    CallerAuthorityOps::prepare(publication.clone(), policy).unwrap();
+    crate::workflow::caller_authority::prepare(publication.clone(), policy).unwrap();
     CallerAuthorityOps::commit(publication).unwrap();
     CallerAuthorityOps::complete(publication).unwrap();
 }
@@ -100,23 +101,23 @@ fn publication_replays_and_denial_survive_lost_replies_and_restore() {
     let open = publication(&authority, 10, CallerChangeRecord::OpenReceiver);
     apply(&open, &policy);
     let grant = publication(&authority, 11, CallerChangeRecord::Grant(source.clone()));
-    CallerAuthorityOps::prepare(grant.clone(), &policy).unwrap();
+    crate::workflow::caller_authority::prepare(grant.clone(), &policy).unwrap();
     assert_eq!(
-        CallerAuthorityOps::admit(source.canister(), "notify", &policy),
+        CallerAdmissionWorkflow::admit(source.canister(), "notify", &policy),
         Err(CallerAdmissionError::Fenced)
     );
     restore_serialized(&authority, &policy);
     CallerAuthorityOps::commit(&grant).unwrap();
     CallerAuthorityOps::commit(&grant).unwrap();
     CallerAuthorityOps::complete(&grant).unwrap();
-    let ticket = CallerAuthorityOps::admit(source.canister(), "notify", &policy).unwrap();
-    CallerAuthorityOps::revalidate(&ticket, &policy).unwrap();
+    let ticket = CallerAdmissionWorkflow::admit(source.canister(), "notify", &policy).unwrap();
+    CallerAdmissionWorkflow::revalidate(&ticket, &policy).unwrap();
     assert_eq!(
-        CallerAuthorityOps::admit(source.canister(), "different", &policy),
+        CallerAdmissionWorkflow::admit(source.canister(), "different", &policy),
         Err(CallerAdmissionError::PermissionDenied)
     );
     assert_eq!(
-        CallerAuthorityOps::admit(authority.receiver.canister(), "notify", &policy),
+        CallerAdmissionWorkflow::admit(authority.receiver.canister(), "notify", &policy),
         Err(CallerAdmissionError::PermissionDenied)
     );
     let deny = publication(
@@ -124,27 +125,29 @@ fn publication_replays_and_denial_survive_lost_replies_and_restore() {
         12,
         CallerChangeRecord::DenySource(source.clone()),
     );
-    CallerAuthorityOps::prepare(deny.clone(), &policy).unwrap();
+    crate::workflow::caller_authority::prepare(deny.clone(), &policy).unwrap();
     assert_eq!(
-        CallerAuthorityOps::revalidate(&ticket, &policy),
+        CallerAdmissionWorkflow::revalidate(&ticket, &policy),
         Err(CallerAdmissionError::Fenced)
     );
     restore_serialized(&authority, &policy);
     let retained = CallerAuthorityOps::receiver().unwrap();
     assert_eq!(
-        CallerAuthorityOps::prepare(grant, &policy).unwrap().phase,
+        crate::workflow::caller_authority::prepare(grant, &policy)
+            .unwrap()
+            .phase,
         CallerReceiptPhase::Complete
     );
     assert_eq!(CallerAuthorityOps::receiver().unwrap(), retained);
     assert_eq!(
-        CallerAuthorityOps::admit(source.canister(), "notify", &policy),
+        CallerAdmissionWorkflow::admit(source.canister(), "notify", &policy),
         Err(CallerAdmissionError::Fenced)
     );
     CallerAuthorityOps::commit(&deny).unwrap();
     CallerAuthorityOps::complete(&deny).unwrap();
     let reopen = publication(&authority, 13, CallerChangeRecord::Grant(source));
     assert_eq!(
-        CallerAuthorityOps::prepare(reopen, &policy),
+        crate::workflow::caller_authority::prepare(reopen, &policy),
         Err(CallerPublicationError::Retired)
     );
     CallerAuthorityOps::restore(&authority, &policy).unwrap();
@@ -161,7 +164,7 @@ fn component_fence_covers_descendant_only_permissions_and_existing_tickets() {
         &publication(&authority, 21, CallerChangeRecord::Grant(source.clone())),
         &policy,
     );
-    let ticket = CallerAuthorityOps::admit(source.canister(), "notify", &policy).unwrap();
+    let ticket = CallerAdmissionWorkflow::admit(source.canister(), "notify", &policy).unwrap();
     let deny = publication(
         &authority,
         22,
@@ -170,16 +173,16 @@ fn component_fence_covers_descendant_only_permissions_and_existing_tickets() {
             install_id: source.component_install_id,
         }),
     );
-    CallerAuthorityOps::prepare(deny.clone(), &policy).unwrap();
+    crate::workflow::caller_authority::prepare(deny.clone(), &policy).unwrap();
     assert_eq!(
-        CallerAuthorityOps::revalidate(&ticket, &policy),
+        CallerAdmissionWorkflow::revalidate(&ticket, &policy),
         Err(CallerAdmissionError::Fenced)
     );
     CallerAuthorityOps::restore(&authority, &policy).unwrap();
     CallerAuthorityOps::commit(&deny).unwrap();
     CallerAuthorityOps::complete(&deny).unwrap();
     assert_eq!(
-        CallerAuthorityOps::prepare(
+        crate::workflow::caller_authority::prepare(
             publication(&authority, 23, CallerChangeRecord::Grant(source)),
             &policy
         ),
@@ -198,11 +201,11 @@ fn a_recycled_principal_requires_fencing_the_previous_installation() {
         &publication(&authority, 71, CallerChangeRecord::Grant(source.clone())),
         &policy,
     );
-    let old_ticket = CallerAuthorityOps::admit(source.canister(), "notify", &policy).unwrap();
+    let old_ticket = CallerAdmissionWorkflow::admit(source.canister(), "notify", &policy).unwrap();
     let mut replacement = source.clone();
     replacement.install_id = [72; 32];
     assert_eq!(
-        CallerAuthorityOps::prepare(
+        crate::workflow::caller_authority::prepare(
             publication(
                 &authority,
                 72,
@@ -225,7 +228,7 @@ fn a_recycled_principal_requires_fencing_the_previous_installation() {
         &policy,
     );
     assert_eq!(
-        CallerAuthorityOps::admit(replacement.canister(), "notify", &policy),
+        CallerAdmissionWorkflow::admit(replacement.canister(), "notify", &policy),
         Err(CallerAdmissionError::Fenced)
     );
     apply(
@@ -237,18 +240,18 @@ fn a_recycled_principal_requires_fencing_the_previous_installation() {
         &policy,
     );
     assert_eq!(
-        CallerAuthorityOps::revalidate(&old_ticket, &policy),
+        CallerAdmissionWorkflow::revalidate(&old_ticket, &policy),
         Err(CallerAdmissionError::TicketExpired)
     );
     restore_serialized(&authority, &policy);
-    CallerAuthorityOps::admit(replacement.canister(), "notify", &policy).unwrap();
+    CallerAdmissionWorkflow::admit(replacement.canister(), "notify", &policy).unwrap();
 }
 
 #[test]
 fn changed_authority_or_census_identity_cannot_replace_a_retained_operation() {
     let (authority, policy, source) = setup();
     let grant = publication(&authority, 30, CallerChangeRecord::Grant(source));
-    CallerAuthorityOps::prepare(grant.clone(), &policy).unwrap();
+    crate::workflow::caller_authority::prepare(grant.clone(), &policy).unwrap();
     let mut changed_authority = authority.clone();
     changed_authority.issuer.install_id = [99; 32];
     let altered = CallerAuthorityOps::publication(
@@ -259,7 +262,7 @@ fn changed_authority_or_census_identity_cannot_replace_a_retained_operation() {
     )
     .unwrap();
     assert_eq!(
-        CallerAuthorityOps::prepare(altered, &policy),
+        crate::workflow::caller_authority::prepare(altered, &policy),
         Err(CallerPublicationError::ReplayConflict)
     );
     assert_eq!(
@@ -268,7 +271,7 @@ fn changed_authority_or_census_identity_cannot_replace_a_retained_operation() {
     );
     let next = publication(&authority, 31, CallerChangeRecord::OpenReceiver);
     assert_eq!(
-        CallerAuthorityOps::prepare(next, &policy),
+        crate::workflow::caller_authority::prepare(next, &policy),
         Err(CallerPublicationError::InProgress)
     );
     assert_eq!(
@@ -295,7 +298,7 @@ fn insufficient_capacity_does_not_write_a_denial_or_consume_generation() {
     let before = CallerAuthorityOps::receiver().unwrap();
     let deny = publication(&authority, 40, CallerChangeRecord::DenySource(source));
     assert_eq!(
-        CallerAuthorityOps::prepare(deny.clone(), &policy),
+        crate::workflow::caller_authority::prepare(deny.clone(), &policy),
         Err(CallerPublicationError::Capacity)
     );
     assert_eq!(CallerAuthorityOps::receiver().unwrap(), before);
@@ -327,18 +330,19 @@ fn target_selection_does_not_authenticate_a_proxy_caller_or_expand_across_roots(
         &policy,
     );
     let target =
-        CallerAuthorityOps::select_target(source.canister(), "metrics_target", &policy).unwrap();
+        CallerAdmissionWorkflow::select_target(source.canister(), "metrics_target", &policy)
+            .unwrap();
     assert_eq!(target.target(), source.canister());
     assert_eq!(
-        CallerAuthorityOps::admit(source.canister(), "metrics_target", &policy),
+        CallerAdmissionWorkflow::admit(source.canister(), "metrics_target", &policy),
         Err(CallerAdmissionError::PermissionDenied)
     );
     assert_eq!(
-        CallerAuthorityOps::select_target(source.canister(), "notify", &policy),
+        CallerAdmissionWorkflow::select_target(source.canister(), "notify", &policy),
         Err(CallerAdmissionError::PermissionDenied)
     );
     assert_eq!(
-        CallerAuthorityOps::select_target(Principal::anonymous(), "metrics_target", &policy),
+        CallerAdmissionWorkflow::select_target(Principal::anonymous(), "metrics_target", &policy),
         Err(CallerAdmissionError::PermissionDenied)
     );
     let mut foreign = source.clone();
@@ -346,7 +350,7 @@ fn target_selection_does_not_authenticate_a_proxy_caller_or_expand_across_roots(
         child.component.fleet_subnet_root = Principal::from_slice(&[89; 29]);
     }
     assert_eq!(
-        CallerAuthorityOps::prepare(
+        crate::workflow::caller_authority::prepare(
             publication(&authority, 82, CallerChangeRecord::Grant(foreign)),
             &policy
         ),
@@ -357,7 +361,7 @@ fn target_selection_does_not_authenticate_a_proxy_caller_or_expand_across_roots(
         &policy,
     );
     assert_eq!(
-        CallerAuthorityOps::revalidate_target(&target, &policy),
+        CallerAdmissionWorkflow::revalidate_target(&target, &policy),
         Err(CallerAdmissionError::TicketExpired)
     );
     restore_serialized(&authority, &policy);
@@ -404,7 +408,7 @@ fn component_source_cleanup_is_bounded_and_retains_the_installation_fence() {
             install_id: source.component_install_id,
         }),
     );
-    CallerAuthorityOps::prepare(deny.clone(), &policy).unwrap();
+    crate::workflow::caller_authority::prepare(deny.clone(), &policy).unwrap();
     CallerAuthorityOps::commit(&deny).unwrap();
     let before = CallerAuthorityOps::receiver().unwrap().entries;
     assert_eq!(
@@ -422,12 +426,15 @@ fn component_source_cleanup_is_bounded_and_retains_the_installation_fence() {
     );
     assert_eq!(CallerRowStore::source_page(None, 1).len(), 0);
     let original = original.unwrap();
-    CallerAuthorityOps::prepare(original.clone(), &policy).unwrap();
+    crate::workflow::caller_authority::prepare(original.clone(), &policy).unwrap();
     CallerAuthorityOps::commit(&original).unwrap();
     CallerAuthorityOps::complete(&original).unwrap();
     assert_eq!(CallerRowStore::source_page(None, 1).len(), 0);
     assert_eq!(
-        CallerAuthorityOps::prepare(publication(&authority, 93, original.change), &policy),
+        crate::workflow::caller_authority::prepare(
+            publication(&authority, 93, original.change),
+            &policy
+        ),
         Err(CallerPublicationError::Retired)
     );
     restore_serialized(&authority, &policy);
@@ -469,4 +476,28 @@ fn cold_restore_rejects_source_installation_and_generation_corruption() {
         CallerAuthorityOps::restore(&authority, &policy),
         Err(CallerPublicationError::AuthorityConflict)
     );
+}
+
+#[test]
+fn undeclared_source_cannot_reserve_publication_authority() {
+    let (authority, policy, mut source) = setup();
+    let ManagedCanisterBinding::ComponentChild(child) = &mut source.binding else {
+        panic!("child fixture");
+    };
+    child.role = CanisterRole::from("unselected");
+    let before = CallerAuthorityOps::receiver().unwrap();
+    for change in [
+        CallerChangeRecord::StageSource(source.clone()),
+        CallerChangeRecord::Grant(source),
+    ] {
+        let publication = publication(&authority, 101, change);
+        let operation = publication.operation_id;
+        assert_eq!(
+            crate::workflow::caller_authority::prepare(publication, &policy),
+            Err(CallerPublicationError::AuthorityConflict)
+        );
+        assert_eq!(CallerAuthorityOps::receiver().unwrap(), before);
+        assert!(CallerAuthorityOps::receipt(operation).is_none());
+        assert!(CallerRowStore::rows().is_empty());
+    }
 }

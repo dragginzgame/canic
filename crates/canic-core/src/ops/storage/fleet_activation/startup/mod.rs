@@ -6,7 +6,7 @@
 
 use super::{FleetActivation, FleetActivationOps, FleetActivationOpsError, replace_record};
 use crate::{
-    domain::policy::pure::caller_authority::CallerAdmissionError,
+    model::caller_authority::CallerAdmissionError,
     model::caller_authority::{CallerChangeRecord, CallerPublicationRecord, CallerReceiptPhase},
     ops::caller_authority::CallerAuthorityOps,
     storage::stable::fleet_activation::{ApplicationStartupRecord, FleetActivationStateRecord},
@@ -258,7 +258,7 @@ pub(super) mod tests {
             FleetActivationOps::release_application_startup(release.clone()),
             Err(FleetActivationOpsError::EvidenceMismatch)
         );
-        CallerAuthorityOps::prepare(release.clone(), &policy).unwrap();
+        crate::workflow::caller_authority::prepare(release.clone(), &policy).unwrap();
         CallerAuthorityOps::commit(&release).unwrap();
         assert_eq!(
             FleetActivationOps::release_application_startup(release.clone()),
@@ -298,7 +298,7 @@ pub(super) mod tests {
             CallerChangeRecord::RetireReceiver,
         )
         .unwrap();
-        CallerAuthorityOps::prepare(retire.clone(), &policy).unwrap();
+        crate::workflow::caller_authority::prepare(retire.clone(), &policy).unwrap();
         assert_eq!(
             FleetActivationOps::require_application_started(),
             Err(CallerAdmissionError::Fenced)

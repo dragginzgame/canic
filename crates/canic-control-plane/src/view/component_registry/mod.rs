@@ -4,6 +4,8 @@
 //! Does not own: persisted records, validation, allocation, or lifecycle mutation.
 //! Boundary: Component Registry ops construct these values for workflow consumption.
 
+pub mod caller_authority;
+
 use crate::ids::WasmStoreBinding;
 use canic_core::{
     cdk::types::{Cycles, Principal},

@@ -12,7 +12,7 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
   adds per-canister application usage reporting, and repairs operator commands,
-  repository hygiene and build evidence,
+  repository hygiene, validation and build evidence,
   memory registration and public framework APIs, including guarded Root membership
   discovery, compiled receiver permissions and publication-bound application
   startup. It also adopts ic-memory’s

@@ -2,19 +2,25 @@
 //!
 //! Protected receiver publication orchestration after endpoint authentication.
 
+pub mod admission;
+
 use crate::{
     InternalError,
+    config::caller_authority::CompiledCallerPolicy,
+    domain::policy::pure::caller_authority::matches_permission,
     dto::caller_authority::{
         CallerAuthorityCommand, CallerAuthorityReceipt, CallerAuthorityStatus,
     },
-    model::caller_authority::CallerPublicationError,
+    model::caller_authority::{
+        CallerChangeRecord, CallerPublicationError, CallerPublicationRecord, CallerReceiptRecord,
+    },
     ops::{caller_authority::CallerAuthorityOps, config::ConfigOps},
 };
 
 pub fn apply(command: CallerAuthorityCommand) -> Result<CallerAuthorityReceipt, InternalError> {
     let receipt = match command {
         CallerAuthorityCommand::Prepare(publication) => ConfigOps::with_caller_policy(|policy| {
-            CallerAuthorityOps::prepare(
+            prepare(
                 CallerAuthorityOps::publication_from_dto(publication),
                 policy,
             )
@@ -28,6 +34,24 @@ pub fn apply(command: CallerAuthorityCommand) -> Result<CallerAuthorityReceipt, 
     }
     .map_err(publication_error)?;
     Ok(CallerAuthorityOps::receipt_to_dto(receipt))
+}
+
+/// Decide source eligibility before the storage owner reserves and persists a publication.
+pub fn prepare(
+    publication: CallerPublicationRecord,
+    policy: &CompiledCallerPolicy,
+) -> Result<CallerReceiptRecord, CallerPublicationError> {
+    let source_permitted = match &publication.change {
+        CallerChangeRecord::StageSource(source) | CallerChangeRecord::Grant(source) => {
+            policy.configuration.as_ref().is_some_and(|config| {
+                config.permissions.keys().any(|permission| {
+                    matches_permission(policy, permission, &publication.authority.receiver, source)
+                })
+            })
+        }
+        _ => true,
+    };
+    CallerAuthorityOps::prepare(publication, policy, source_permitted)
 }
 
 pub fn publication(

@@ -73,7 +73,7 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
         BuiltinPredicate::Fleet(FleetPredicate::IsQueryable) => access::fleet::guard_fleet_query(),
         BuiltinPredicate::CallerPermission { permission } => {
             crate::ops::config::ConfigOps::with_caller_policy(|policy| {
-                crate::ops::caller_authority::CallerAuthorityOps::require_permission(
+                crate::workflow::caller_authority::admission::CallerAdmissionWorkflow::require_permission(
                     ctx.caller, permission, policy,
                 )
             })

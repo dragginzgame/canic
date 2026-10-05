@@ -36,6 +36,7 @@ auth-root-delegation-state = []
 internal-test-fixtures = []
 
 [dependencies]
+ic-metrics.workspace = true
 async-trait = { workspace = true }
 candid = { workspace = true }
 ciborium = { workspace = true }

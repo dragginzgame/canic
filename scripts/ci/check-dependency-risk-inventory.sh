@@ -18,7 +18,9 @@ warn() {
 [ -f "$TOOLS" ] || fail "missing tool-version authority: $TOOLS"
 command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable"
 command -v git >/dev/null 2>&1 || fail "git is unavailable"
-command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
+# Honor an explicit executable and the normal PATH before the user-local install.
+JQ_BIN="${JQ_BIN:-$(command -v jq || printf '%s/.local/bin/jq' "$HOME")}"
+[ -x "$JQ_BIN" ] || fail "jq is unavailable; install jq or set JQ_BIN to its executable"
 
 # shellcheck source=/dev/null
 source "$TOOLS"
@@ -64,8 +66,8 @@ case "$#" in
 *) fail "usage: $0 [--audit-json <path>]" ;;
 esac
 
-jq -e 'type == "object"' "$audit_json" >/dev/null || fail "cargo-audit JSON is invalid"
-vulnerability_count="$(jq -r '.vulnerabilities.count // (.vulnerabilities.list | length) // 0' "$audit_json")"
+"$JQ_BIN" -e 'type == "object"' "$audit_json" >/dev/null || fail "cargo-audit JSON is invalid"
+vulnerability_count="$("$JQ_BIN" -r '.vulnerabilities.count // (.vulnerabilities.list | length) // 0' "$audit_json")"
 [[ "$vulnerability_count" =~ ^[0-9]+$ ]] || fail "cargo-audit vulnerability count is invalid"
 [ "$vulnerability_count" -eq 0 ] || fail "$vulnerability_count known vulnerabilities found"
 
@@ -75,7 +77,7 @@ awk -F '\t' 'NF && $1 !~ /^#/ { print $1 "\t" $2 "\t" $3 "\t" $4 "\t" $5 }' "$IN
     LC_ALL=C sort >"$expected"
 # Yanked warnings have no RustSec advisory ID. Keep a nonempty field so Bash's
 # whitespace IFS handling cannot shift the warning kind, package and version.
-jq -r '
+"$JQ_BIN" -r '
     (.warnings // {})
     | to_entries[]
     | .value[]
@@ -99,7 +101,7 @@ direct_dependencies="$tmp_dir/direct-dependencies.txt"
 (
     cd "$ROOT"
     cargo metadata --locked --offline --format-version 1 --no-deps
-) | jq -r '.packages[].dependencies[].name' | LC_ALL=C sort -u >"$direct_dependencies"
+) | "$JQ_BIN" -r '.packages[].dependencies[].name' | LC_ALL=C sort -u >"$direct_dependencies"
 
 if ! diff -u "$expected" "$actual" >/dev/null; then
     diff -u "$expected" "$actual" >&2 || true
@@ -120,7 +122,7 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; 
     '' | \#*) continue ;;
     esac
     [ "$kind" = "unmaintained" ] || fail "$advisory_id is not classified as unmaintained"
-    package_id="$(jq -r --arg package "$package" --arg version "$version" '
+    package_id="$("$JQ_BIN" -r --arg package "$package" --arg version "$version" '
         [.packages[] | select(.name == $package and .version == $version) | .id]
         | if length == 1 then .[0] else empty end
     ' "$metadata")"
@@ -137,7 +139,7 @@ while IFS=$'\t' read -r advisory_id kind package version _checksum introducers; 
         [ -n "$introducer" ] || fail "$advisory_id has an empty introducer"
         printf '%s\n' "$introducer"
     done | LC_ALL=C sort -u >"$expected_introducers_path"
-    jq -r --arg package_id "$package_id" '
+    "$JQ_BIN" -r --arg package_id "$package_id" '
         [.resolve.nodes[] | select(any(.deps[]?; .pkg == $package_id)) | .id] as $parent_ids
         | .packages[]
         | select(.id as $id | $parent_ids | index($id))

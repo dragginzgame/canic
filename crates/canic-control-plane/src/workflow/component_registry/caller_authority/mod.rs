@@ -9,7 +9,7 @@ use super::{
 };
 use crate::{
     ops::component_registry::caller_authority::{CallerReceiverPlan, RootCallerOps},
-    storage::stable::component_registry::caller_authority::{
+    view::component_registry::caller_authority::{
         CallerJournalPhase, CallerLifecycleScope, CallerRecipientKind,
     },
 };
@@ -104,7 +104,7 @@ pub(super) async fn prepare_activation(
         CallerLifecycleScope::ActivateChild(source.clone())
     };
     let issuer = issuer()?;
-    if let Some(original) = RootCallerOps::operation(operation) {
+    if let Some(original) = RootCallerOps::operation_view(operation) {
         if original.scope != scope || original.issuer != issuer {
             return Err(InternalError::conflict());
         }
@@ -123,7 +123,7 @@ pub(super) async fn prepare_activation(
             vec![source]
         };
         let plans = activation_plans(&issuer, &new_sources, &current)?;
-        RootCallerOps::begin(operation, issuer, scope, plans)?;
+        RootCallerOps::begin_publication(operation, issuer, scope, plans)?;
     }
     drive(operation, false).await
 }
@@ -175,7 +175,7 @@ fn activation_plans(
     }
     for source in sources {
         for role in ConfigOps::caller_receiver_roles(source)? {
-            for receiver in RootCallerOps::receivers(&role)? {
+            for receiver in RootCallerOps::receiver_views(&role)? {
                 if accepts(&receiver.authority, source)? {
                     plans
                         .entry(receiver.authority.receiver.canister())
@@ -218,7 +218,7 @@ pub(super) async fn publish_activation(operation: [u8; 32]) -> Result<(), Intern
 
 /// Release every original enrollment only after the entire immutable census is published.
 pub(super) async fn release_startup(operation: [u8; 32]) -> Result<(), InternalError> {
-    let current = RootCallerOps::operation(operation).ok_or_else(InternalError::invariant)?;
+    let current = RootCallerOps::operation_view(operation).ok_or_else(InternalError::invariant)?;
     if current.phase == CallerJournalPhase::Compacted {
         return Ok(());
     }
@@ -233,7 +233,7 @@ pub(super) async fn release_startup(operation: [u8; 32]) -> Result<(), InternalE
         return Err(InternalError::unavailable());
     }
     for ordinal in 0..current.recipient_count {
-        let recipient = RootCallerOps::recipient(operation, ordinal)?;
+        let recipient = RootCallerOps::recipient_view(operation, ordinal)?;
         if recipient.startup_released {
             continue;
         }
@@ -258,9 +258,9 @@ pub(super) async fn release_startup(operation: [u8; 32]) -> Result<(), InternalE
 }
 
 async fn require_applications_ready(operation: [u8; 32]) -> Result<(), InternalError> {
-    let current = RootCallerOps::operation(operation).ok_or_else(InternalError::invariant)?;
+    let current = RootCallerOps::operation_view(operation).ok_or_else(InternalError::invariant)?;
     for ordinal in 0..current.recipient_count {
-        let recipient = RootCallerOps::recipient(operation, ordinal)?;
+        let recipient = RootCallerOps::recipient_view(operation, ordinal)?;
         if recipient.kind != CallerRecipientKind::Enrollment {
             continue;
         }
@@ -292,7 +292,7 @@ async fn require_applications_ready(operation: [u8; 32]) -> Result<(), InternalE
 
 async fn drive(operation: [u8; 32], publish: bool) -> Result<(), InternalError> {
     for _ in 0..48 {
-        let current = RootCallerOps::next_phase(operation)?;
+        let current = RootCallerOps::next_phase_view(operation)?;
         match current.phase {
             CallerJournalPhase::Complete
             | CallerJournalPhase::Compacting
@@ -301,7 +301,7 @@ async fn drive(operation: [u8; 32], publish: bool) -> Result<(), InternalError> 
             CallerJournalPhase::Prepared if !publish => return Ok(()),
             CallerJournalPhase::Prepared => return Err(InternalError::conflict()),
             CallerJournalPhase::Reserving => {
-                let recipient = RootCallerOps::recipient(operation, current.cursor)?;
+                let recipient = RootCallerOps::recipient_view(operation, current.cursor)?;
                 let policy = ConfigOps::caller_policy(recipient.authority.receiver.role())?;
                 let (entries, bytes) = policy.configuration.map_or((8, 65_536), |config| {
                     (config.maximum_entries, config.maximum_bytes)
@@ -310,7 +310,7 @@ async fn drive(operation: [u8; 32], publish: bool) -> Result<(), InternalError> 
                 RootCallerOps::reserve(operation, &observed, entries, bytes)?;
             }
             CallerJournalPhase::Preparing | CallerJournalPhase::Publishing => {
-                let recipient = RootCallerOps::recipient(operation, current.cursor)?;
+                let recipient = RootCallerOps::recipient_view(operation, current.cursor)?;
                 let through = if current.phase == CallerJournalPhase::Preparing {
                     recipient.before_count
                 } else {
@@ -321,7 +321,7 @@ async fn drive(operation: [u8; 32], publish: bool) -> Result<(), InternalError> 
                     continue;
                 }
                 let step =
-                    RootCallerOps::step(operation, current.cursor, recipient.completed_steps)?;
+                    RootCallerOps::step_view(operation, current.cursor, recipient.completed_steps)?;
                 let publication = CallerAuthorityOps::publication_to_dto(step.publication);
                 let request = match step.phase {
                     None => CallerAuthorityCommand::Prepare(publication),
@@ -393,7 +393,7 @@ pub(super) async fn prepare_denial(
         CallerLifecycleScope::DenySubtree(source.clone())
     };
     let issuer = issuer()?;
-    if let Some(original) = RootCallerOps::operation(operation) {
+    if let Some(original) = RootCallerOps::operation_view(operation) {
         if original.scope != scope || original.issuer != issuer {
             return Err(InternalError::conflict());
         }
@@ -402,7 +402,7 @@ pub(super) async fn prepare_denial(
         let current = ComponentRegistryOps::caller_sources(Some(source.component().component))?;
         let sources = select_denied_sources(&source, whole_component, current)?;
         let plans = denial_plans(&source, whole_component, &sources)?;
-        RootCallerOps::begin(operation, issuer, scope, plans)?;
+        RootCallerOps::begin_publication(operation, issuer, scope, plans)?;
     }
     drive(operation, false).await
 }
@@ -450,8 +450,8 @@ fn denial_plans(
 ) -> Result<Vec<CallerReceiverPlan>, InternalError> {
     let mut plans = BTreeMap::new();
     for source in sources {
-        let receiver =
-            RootCallerOps::receiver(source.canister()).ok_or_else(InternalError::unavailable)?;
+        let receiver = RootCallerOps::receiver_view(source.canister())
+            .ok_or_else(InternalError::unavailable)?;
         if receiver.retired {
             continue;
         }
@@ -468,7 +468,7 @@ fn denial_plans(
         );
     }
     for source in sources {
-        for receiver in RootCallerOps::source_receivers(source)? {
+        for receiver in RootCallerOps::source_receiver_views(source)? {
             plans
                 .entry(receiver.authority.receiver.canister())
                 .or_insert(CallerReceiverPlan {
@@ -517,7 +517,7 @@ pub(super) async fn finish_removal(
     component: canic_core::ids::ComponentInstanceId,
     operation: [u8; 32],
 ) -> Result<(), InternalError> {
-    if let Some(journal) = RootCallerOps::operation(operation) {
+    if let Some(journal) = RootCallerOps::operation_view(operation) {
         if !matches!(journal.scope, CallerLifecycleScope::DenySubtree(source) if source.component().component == component)
         {
             return Err(InternalError::conflict());
@@ -526,8 +526,8 @@ pub(super) async fn finish_removal(
     }
     let draining = ComponentRegistryOps::component_draining(component)?
         .ok_or_else(InternalError::unavailable)?;
-    let journal =
-        RootCallerOps::operation(draining.operation_id).ok_or_else(InternalError::unavailable)?;
+    let journal = RootCallerOps::operation_view(draining.operation_id)
+        .ok_or_else(InternalError::unavailable)?;
     if !matches!(journal.scope, CallerLifecycleScope::DenyComponent(source) if source.component().component == component)
     {
         return Err(InternalError::conflict());

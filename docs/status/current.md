@@ -3,6 +3,44 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Validation preflight corrections — 2026-10-05
+
+The maintainer requested correction of the 15:00 UTC validation failure following
+[Canic#38](https://github.com/dragginzgame/canic/issues/38). Caller admission now
+composes indexed ops projections with pure policy in workflow; startup errors
+belong to the model, and Root publication workflow consumes read-only journal
+views. The three derive-order failures are corrected without weakening the guards.
+Dependency-risk checks resolve an explicit `JQ_BIN`, then PATH, then the existing
+user-local executable. The maintainer's terminal PATH omitted `.local/bin`.
+
+Focused qualification passes 20 caller-authority and 48 activation tests, including
+refusal of undeclared sources before any reservation or row write. Warning-denied
+Core/Control Plane/facade library-and-test Clippy passes. Layering, scoped formatting,
+derive ordering, ShellCheck and validation-runner checks pass. The actual dependency
+risk gate passes with the maintainer's PATH and current advisory data: zero
+vulnerabilities and two reviewed transitive warnings. The original silent ShellCheck
+failure did not reproduce through the host validation runner. Evidence is under
+`target/review-validation/caller-authority-layering-*`, `dependency-risk-*-path*`,
+`dependency-risk-path-regression.log` and `shellcheck-host-path.log`.
+
+The embedded allocation peer and provenance were refreshed for these corrections.
+The exact installed bootstrap/recovery rerun then encountered concurrent local
+`ic-metrics` integration changes in the workspace and Core manifests and `perf.rs`.
+Its post-build locked metadata check refused the changed dependency graph:
+`target/test-runs/20261005T151415Z-1579004.GuGUzz/2.log`. Those concurrent edits are
+preserved; further builds await their manifest/lockfile completion. The refreshed
+fixture evidence predates that integration and needs requalification with it.
+The earlier native, lint and dependency results also predate those concurrent edits.
+
+The original preflight corrections are ready for review; complete-worktree push
+readiness remains pending the concurrent integration and installed regression.
+The existing .53 notes include these fixes; versions remain .52. Changes remain
+uncommitted, and no broad validation, version transaction or deployment ran.
+For agent follow-up, use dependency-risk fixtures' `--classification-only` mode:
+their default mode and the release-tool fixture include temporary Git commits.
+Those fixture modes were initially invoked during diagnosis before this was noticed;
+Canic's repository history was not changed.
+
 ## Caller-authority integration — 2026-10-05
 
 The maintainer explicitly requested [Canic#38](https://github.com/dragginzgame/canic/issues/38).

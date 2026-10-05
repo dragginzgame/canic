@@ -101,13 +101,6 @@ struct PerfSlot {
     total_instructions: u64,
 }
 
-impl PerfSlot {
-    const fn increment(&mut self, delta: u64) {
-        self.count = self.count.saturating_add(1);
-        self.total_instructions = self.total_instructions.saturating_add(delta);
-    }
-}
-
 ///
 /// PerfEntry
 /// Aggregated perf counters keyed by kind (endpoint vs timer) and label.
@@ -124,7 +117,8 @@ pub struct PerfEntry {
 pub fn record(key: PerfKey, delta: u64) {
     PERF_TABLE.with(|table| {
         let mut table = table.borrow_mut();
-        table.entry(key).or_default().increment(delta);
+        let slot = table.entry(key).or_default();
+        ic_metrics::record_sample(&mut slot.count, &mut slot.total_instructions, delta);
     });
 }
 
@@ -300,6 +294,16 @@ mod tests {
                 )
             })
             .expect("expected checkpoint perf entry to exist")
+    }
+
+    #[test]
+    fn zero_sample_is_distinct_from_missing_endpoint() {
+        reset();
+        assert!(entries().is_empty());
+        record_endpoint_call(call("measured", EndpointCallKind::Update), 0);
+        let observed = entry_for(EndpointCallKind::Update, "measured");
+        assert_eq!(observed.count, 1);
+        assert_eq!(observed.total_instructions, 0);
     }
 
     #[test]

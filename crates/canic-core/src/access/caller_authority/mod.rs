@@ -4,17 +4,19 @@
 
 use crate::{
     access::AccessError,
-    ops::{caller_authority::CallerAuthorityOps, config::ConfigOps, ic::IcOps},
+    ops::{config::ConfigOps, ic::IcOps},
+    workflow::caller_authority::admission::CallerAdmissionWorkflow,
 };
 
 pub use crate::domain::policy::pure::caller_authority::{
-    CallerAdmissionError, CallerAdmissionTicket, CallerTargetTicket,
+    CallerAdmissionTicket, CallerTargetTicket,
 };
+pub use crate::model::caller_authority::CallerAdmissionError;
 
 /// Admit the IC transport caller for a named compiled permission without a remote lookup.
 pub fn admit(permission: &str) -> Result<CallerAdmissionTicket, AccessError> {
     ConfigOps::with_caller_policy(|policy| {
-        CallerAuthorityOps::admit(IcOps::msg_caller(), permission, policy)
+        CallerAdmissionWorkflow::admit(IcOps::msg_caller(), permission, policy)
     })
     .map_err(AccessError::Internal)?
     .map_err(AccessError::CallerAuthority)
@@ -22,7 +24,7 @@ pub fn admit(permission: &str) -> Result<CallerAdmissionTicket, AccessError> {
 
 /// Require the original ticket to remain valid before issuing the next new protected effect.
 pub fn revalidate(ticket: &CallerAdmissionTicket) -> Result<(), AccessError> {
-    ConfigOps::with_caller_policy(|policy| CallerAuthorityOps::revalidate(ticket, policy))
+    ConfigOps::with_caller_policy(|policy| CallerAdmissionWorkflow::revalidate(ticket, policy))
         .map_err(AccessError::Internal)?
         .map_err(AccessError::CallerAuthority)
 }
@@ -33,7 +35,7 @@ pub fn select_target(
     permission: &str,
 ) -> Result<CallerTargetTicket, AccessError> {
     ConfigOps::with_caller_policy(|policy| {
-        CallerAuthorityOps::select_target(target, permission, policy)
+        CallerAdmissionWorkflow::select_target(target, permission, policy)
     })
     .map_err(AccessError::Internal)?
     .map_err(AccessError::CallerAuthority)
@@ -41,7 +43,9 @@ pub fn select_target(
 
 /// Recheck the retained destination before issuing a new remote effect after an await.
 pub fn revalidate_target(ticket: &CallerTargetTicket) -> Result<(), AccessError> {
-    ConfigOps::with_caller_policy(|policy| CallerAuthorityOps::revalidate_target(ticket, policy))
-        .map_err(AccessError::Internal)?
-        .map_err(AccessError::CallerAuthority)
+    ConfigOps::with_caller_policy(|policy| {
+        CallerAdmissionWorkflow::revalidate_target(ticket, policy)
+    })
+    .map_err(AccessError::Internal)?
+    .map_err(AccessError::CallerAuthority)
 }

@@ -5,6 +5,7 @@
 //! Boundary: ops and workflow use views internally before endpoint DTO shaping.
 
 pub mod authority_restore;
+pub mod caller_authority;
 pub mod fleet_activation;
 pub mod icp_refill;
 pub mod intent;

@@ -5,6 +5,7 @@
 //! Workflow supplies a frozen receiver plan; this module never performs remote calls.
 
 mod cleanup;
+mod projection;
 mod restore;
 
 use crate::storage::stable::component_registry::{

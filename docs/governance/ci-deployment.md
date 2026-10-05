@@ -91,6 +91,10 @@ and drift in transitive informational advisory inventories are warnings. Missing
 required authority documents, known vulnerabilities, yanked dependencies and
 unmaintained direct dependencies remain blocking.
 
+Dependency-risk checks use `JQ_BIN` when explicitly set to an executable path;
+otherwise they resolve `jq` on `PATH`, then `$HOME/.local/bin/jq`. A missing
+executable fails before the audit begins.
+
 The ordinary CI job also installs the internal Rust toolchain's
 `wasm32-unknown-unknown` target and checksum-bound `ic-wasm`. Host build-cache
 tests fingerprint that sysroot and compile small declaration fixtures; artifact

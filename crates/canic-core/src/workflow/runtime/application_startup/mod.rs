@@ -49,7 +49,7 @@ pub fn require_initialization_effect() -> Result<(), InternalError> {
 /// This mandatory boundary is independent of the application's Boolean access expression.
 pub fn require_endpoint_started(call: crate::ids::EndpointCall) -> Result<(), AccessError> {
     use crate::{
-        domain::policy::pure::caller_authority::CallerAdmissionError,
+        model::caller_authority::CallerAdmissionError,
         ops::runtime::{env::EnvOps, fleet_activation::FleetActivationRuntimeOps},
     };
     if EnvOps::is_root()

@@ -554,6 +554,7 @@ dependencies = [
  "ic-cdk",
  "ic-certification",
  "ic-memory",
+ "ic-metrics",
  "ic-secp256k1",
  "ic-signature-verification",
  "ic-timers",
@@ -2263,6 +2264,10 @@ dependencies = [
  "serde",
  "thiserror 2.0.18",
 ]
+
+[[package]]
+name = "ic-metrics"
+version = "0.1.0"
 
 [[package]]
 name = "ic-query"

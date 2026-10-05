@@ -7,43 +7,10 @@
 use crate::{
     config::caller_authority::{CallerPermissionDirection, CallerScope, CompiledCallerPolicy},
     ids::{CallerInstallation, CallerReceiverAuthority},
+    model::caller_authority::CallerAdmissionError,
+    view::caller_authority::CallerAdmissionView,
 };
 use candid::Principal;
-use thiserror::Error;
-
-///
-/// CallerAdmissionError
-///
-/// Admission failures distinguish unavailable authority from ordinary permission denial.
-///
-
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
-pub enum CallerAdmissionError {
-    #[error("managed caller authority is unavailable")]
-    AuthorityUnavailable,
-
-    #[error("managed caller authority is inconsistent with this installation")]
-    AuthorityConflict,
-
-    #[error("managed caller authority is fenced")]
-    Fenced,
-
-    #[error("managed caller permission is not granted")]
-    PermissionDenied,
-
-    #[error("managed caller admission ticket no longer covers the current authority")]
-    TicketExpired,
-}
-
-/// Borrowed evidence for one local admission; Component fencing is an indexed lookup.
-pub struct CallerAdmissionView<'a> {
-    pub receiver: &'a CallerReceiverAuthority,
-    pub generation: u64,
-    pub receiver_open: bool,
-    pub source: Option<&'a CallerInstallation>,
-    pub source_open: bool,
-    pub component_fenced: bool,
-}
 
 ///
 /// CallerAdmissionTicket

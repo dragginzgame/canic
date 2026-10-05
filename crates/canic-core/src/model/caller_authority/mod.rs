@@ -12,6 +12,30 @@ use serde::{Deserialize, Serialize};
 use thiserror::Error;
 
 ///
+/// CallerAdmissionError
+///
+/// Admission failures distinguish unavailable authority from ordinary permission denial.
+///
+
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
+pub enum CallerAdmissionError {
+    #[error("managed caller authority is unavailable")]
+    AuthorityUnavailable,
+
+    #[error("managed caller authority is inconsistent with this installation")]
+    AuthorityConflict,
+
+    #[error("managed caller authority is fenced")]
+    Fenced,
+
+    #[error("managed caller permission is not granted")]
+    PermissionDenied,
+
+    #[error("managed caller admission ticket no longer covers the current authority")]
+    TicketExpired,
+}
+
+///
 /// CallerChangeRecord
 ///
 /// One source grant or irrevocable installation-bound denial.
@@ -112,7 +136,7 @@ pub struct CallerSourceRecord {
 /// Refusals preserve publication identity, ordering and pre-effect capacity reservation.
 ///
 
-#[derive(Clone, Copy, Debug, Eq, PartialEq, Error)]
+#[derive(Clone, Copy, Debug, Eq, Error, PartialEq)]
 pub enum CallerPublicationError {
     #[error("caller publication authority does not match this installation")]
     AuthorityConflict,

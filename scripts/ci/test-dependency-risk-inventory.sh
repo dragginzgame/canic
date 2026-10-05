@@ -17,7 +17,9 @@ case "$#:${1:-}" in
 esac
 
 command -v git >/dev/null 2>&1 || fail "git is unavailable"
-command -v jq >/dev/null 2>&1 || fail "jq is unavailable"
+# Honor an explicit executable and the normal PATH before the user-local install.
+JQ_BIN="${JQ_BIN:-$(command -v jq || printf '%s/.local/bin/jq' "$HOME")}"
+[ -x "$JQ_BIN" ] || fail "jq is unavailable; install jq or set JQ_BIN to its executable"
 mkdir -p "$ROOT/.tmp"
 tmp_dir="$(mktemp -d "$ROOT/.tmp/dependency-risk-test.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -66,7 +68,7 @@ cargo generate-lockfile --offline --manifest-path "$fixture/Cargo.toml"
 checksum="$(sha256sum "$fixture/transitive/Cargo.toml" | cut -d ' ' -f1)"
 printf 'RUSTSEC-2099-0001\tunmaintained\tcanic-risk-transitive-fixture\t1.0.0\t%s\tserde\n' \
     "$checksum" >"$fixture/scripts/ci/dependency-risk-inventory.tsv"
-jq -n --arg checksum "$checksum" '{
+"$JQ_BIN" -n --arg checksum "$checksum" '{
     vulnerabilities: { found: false, count: 0, list: [] },
     warnings: { unmaintained: [{
         kind: "unmaintained",
@@ -125,14 +127,14 @@ if [ "$classification_only" -eq 0 ]; then
 fi
 
 vulnerability="$tmp_dir/vulnerability.json"
-jq '.vulnerabilities.found = true | .vulnerabilities.count = 1 | .vulnerabilities.list = [{}]' \
+"$JQ_BIN" '.vulnerabilities.found = true | .vulnerabilities.count = 1 | .vulnerabilities.list = [{}]' \
     "$base" >"$vulnerability"
 if bash "$GATE" --audit-json "$vulnerability" >/dev/null 2>&1; then
     fail "known vulnerability fixture was accepted"
 fi
 
 new_warning="$tmp_dir/new-warning.json"
-jq '.warnings.unmaintained += [(.warnings.unmaintained[0]
+"$JQ_BIN" '.warnings.unmaintained += [(.warnings.unmaintained[0]
     | .advisory.id = "RUSTSEC-2099-0002"
     | .package.name = "unexpected-package"
     | .package.version = "1.0.0"
@@ -142,17 +144,17 @@ bash "$GATE" --audit-json "$new_warning" >/dev/null 2>&1 ||
     fail "new transitive informational advisory fixture was rejected"
 
 missing_warning="$tmp_dir/missing-warning.json"
-jq '.warnings.unmaintained |= .[1:]' "$base" >"$missing_warning"
+"$JQ_BIN" '.warnings.unmaintained |= .[1:]' "$base" >"$missing_warning"
 bash "$GATE" --audit-json "$missing_warning" >/dev/null 2>&1 ||
     fail "removed transitive informational advisory fixture was rejected"
 
 identity_drift="$tmp_dir/identity-drift.json"
-jq '.warnings.unmaintained[0].package.version = "9.9.9"' "$base" >"$identity_drift"
+"$JQ_BIN" '.warnings.unmaintained[0].package.version = "9.9.9"' "$base" >"$identity_drift"
 bash "$GATE" --audit-json "$identity_drift" >/dev/null 2>&1 ||
     fail "transitive informational package identity drift fixture was rejected"
 
 direct_warning="$tmp_dir/direct-warning.json"
-jq '.warnings.unmaintained += [(.warnings.unmaintained[0]
+"$JQ_BIN" '.warnings.unmaintained += [(.warnings.unmaintained[0]
     | .advisory.id = "RUSTSEC-2099-0003"
     | .package.name = "serde"
     | .package.version = "1.0.0")]' \
@@ -162,7 +164,7 @@ if bash "$GATE" --audit-json "$direct_warning" >/dev/null 2>&1; then
 fi
 
 yanked_warning="$tmp_dir/yanked-warning.json"
-jq '.warnings.yanked = [(.warnings.unmaintained[0]
+"$JQ_BIN" '.warnings.yanked = [(.warnings.unmaintained[0]
     | del(.advisory)
     | .kind = "yanked"
     | .package.name = "transitive-yanked-package")]' \
@@ -172,7 +174,7 @@ if bash "$GATE" --audit-json "$yanked_warning" >/dev/null 2>&1; then
 fi
 
 missing_advisory="$tmp_dir/missing-advisory.json"
-jq 'del(.warnings.unmaintained[0].advisory)' "$base" >"$missing_advisory"
+"$JQ_BIN" 'del(.warnings.unmaintained[0].advisory)' "$base" >"$missing_advisory"
 bash "$GATE" --audit-json "$missing_advisory" >/dev/null 2>&1 ||
     fail "missing optional advisory shifted warning kind and package fields"
 
