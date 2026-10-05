@@ -1,3 +1,5 @@
+use std::num::NonZeroUsize;
+
 use candid::{CandidType, Deserialize, Principal, encode_args, encode_one};
 use canic::{Error, ids::CanisterRole};
 use canic_host::candid_endpoints::{
@@ -321,10 +323,11 @@ fn lifecycle_bounds_run_before_init_and_post_upgrade_participants() {
 }
 
 // Cases observe only the restored target; the relay created by one case is unrelated state.
-static PROBE_FIXTURES: CachedStandaloneCanisterFixturePool<1> =
-    CachedStandaloneCanisterFixturePool::<1>::new(|| {
-        install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast)
-    })
+static PROBE_FIXTURES: CachedStandaloneCanisterFixturePool =
+    <CachedStandaloneCanisterFixturePool>::new(
+        NonZeroUsize::new(1).expect("one is nonzero"),
+        || install_standalone_canister(PROBE_CRATE, PROBE_ROLE, CanicWasmBuildProfile::Fast),
+    )
     .with_restore_funding(SnapshotRestoreFunding::TopUpTo {
         minimum_cycles: SNAPSHOT_RESTORE_MINIMUM_CYCLES,
     });

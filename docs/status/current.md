@@ -3,6 +3,23 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Ingress fixture testkit API alignment — 2026-10-05
+
+The maintainer's 17:28 UTC Clippy run found the ingress probe still using the
+removed const-generic standalone fixture pool API. The
+[correction](https://github.com/dragginzgame/canic/issues/449) uses the selected
+registry `ic-testkit 0.17.3` constructor with a nonzero runtime capacity of one
+and its function-pointer builder type. The snapshot restore funding policy is
+preserved. Other baseline pool callers already use runtime capacities; no
+dependency, lockfile or production runtime source changed.
+
+Locked offline, warning-denied Clippy passes for the exact
+`canic-tests/pic_ingress_payload_limits` integration target with all features.
+Scoped formatting and whitespace checks pass. This constructor-only adaptation
+did not rerun PocketIC or broad validation. The repair and existing .53 notes
+are ready for review, uncommitted; whole-batch push/publication readiness was
+not reassessed. No version transaction, Git publication or artifact cleanup ran.
+
 ## Release-note and crypto gate repair — 2026-10-05
 
 The maintainer's 17:20 UTC validation at `abeb37ad9` reported missing release-note
