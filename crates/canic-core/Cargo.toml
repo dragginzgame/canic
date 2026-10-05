@@ -35,8 +35,14 @@ auth-local-application-authorization = ["auth-delegated-token-verify"]
 auth-root-delegation-state = []
 internal-test-fixtures = []
 
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+ic-secp256k1 = { workspace = true }
+proc-macro2 = { workspace = true }
+quote = { workspace = true }
+serde_path_to_error = { workspace = true }
+toml = { workspace = true }
+
 [dependencies]
-ic-metrics.workspace = true
 async-trait = { workspace = true }
 candid = { workspace = true }
 ciborium = { workspace = true }
@@ -44,6 +50,7 @@ ic-canister-sig-creation = { workspace = true, optional = true }
 ic-cdk = { workspace = true }
 ic-certification = { workspace = true, optional = true }
 ic-memory = { workspace = true }
+ic-metrics.workspace = true
 ic-signature-verification = { workspace = true, optional = true }
 ic-timers = { workspace = true }
 k256 = { workspace = true, optional = true }
@@ -52,13 +59,6 @@ serde = { workspace = true }
 serde_bytes = { workspace = true }
 sha2 = { workspace = true }
 thiserror = { workspace = true }
-
-[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-ic-secp256k1 = { workspace = true }
-proc-macro2 = { workspace = true }
-quote = { workspace = true }
-serde_path_to_error = { workspace = true }
-toml = { workspace = true }
 
 [build-dependencies]
 candid = { workspace = true }

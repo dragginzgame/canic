@@ -32,6 +32,15 @@ preserved; further builds await their manifest/lockfile completion. The refreshe
 fixture evidence predates that integration and needs requalification with it.
 The earlier native, lint and dependency results also predate those concurrent edits.
 
+The maintainer subsequently committed the corrections and `ic-metrics` lockfile
+in `481e94d0e`. The next formatting check found the new dependency at the start of
+both dependency tables. Cargo sorting now passes for the workspace and Core
+manifests, with identical parsed TOML contents. The formatting-only pre-commit hook
+was present but inactive: local `core.hooksPath` was unset and no conventional hook
+was installed. The existing hook installer restored `core.hooksPath = .githooks`.
+These formatting corrections remain uncommitted; current-graph installed
+qualification is still outstanding.
+
 The original preflight corrections are ready for review; complete-worktree push
 readiness remains pending the concurrent integration and installed regression.
 The existing .53 notes include these fixes; versions remain .52. Changes remain
