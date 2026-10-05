@@ -3,6 +3,17 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## IC Metrics tagged-package alignment — 2026-10-05
+
+The maintainer tagged ic-metrics 0.1.1 while the consumer still required local
+0.1.0. The workspace dependency and only its lock entry now select 0.1.1; Canic
+package versions and other dependency selections are preserved. Locked offline
+metadata resolves one local ic-metrics package, and the selected Core library
+build passes. This qualifies the extraction dependency graph, not the complete
+concurrent release batch. The path remains temporary pending registry publication
+and [adoption](https://github.com/dragginzgame/canic/issues/447). No broad gate,
+Git effects, publication or native macOS qualification ran here.
+
 ## Release-recipe ShellCheck correction — 2026-10-05
 
 The maintainer committed the preceding validation and release-tooling work in

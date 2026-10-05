@@ -19,7 +19,7 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   policy-specific callback results, and aligns the independent blob consumer on
   one memory runtime.
 
-- Share measurement arithmetic through `ic-metrics` while preserving endpoint
+- Share measurement arithmetic through local `ic-metrics 0.1.1` while preserving endpoint
   attribution and report shapes; standardize SemVer release commands with exact
   resume, atomic branch/tag pushes and retained artifacts.
 
