@@ -11,7 +11,8 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
-  adds per-canister application usage reporting, and repairs operator commands, build evidence,
+  adds per-canister application usage reporting, and repairs operator commands,
+  repository hygiene and build evidence,
   memory registration and public framework APIs, including guarded Root membership
   discovery. It also adopts ic-memory’s
   checked allocation-slot API and aligns the independent blob consumer on one

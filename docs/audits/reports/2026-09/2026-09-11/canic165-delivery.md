@@ -49,9 +49,10 @@ the same 1,633 unchanged source inputs and inventory. The consumer cases take
 130.45s (202s runner); the final Fleet case takes 467.42s (497s runner), including
 uncached artifact builds. No broad gate ran.
 
-Source snapshots are members of `source-snapshots.tar.gz`; the command record
-identifies the archive, each run's member and the member hashes. Consolidation
-preserves the earlier snapshot bytes and qualification boundaries.
+The redundant source-snapshot archive was removed on 2026-10-05 after later
+qualification superseded this checkpoint. The command record retains its
+historical identity, each run's member hash and the removal status; the snapshot
+bytes are no longer retained for checkpoint reconstruction.
 
 The neutral eight-row probe measured 21,643,079 validation instructions. This is
 measurement evidence only; it does not establish a production fixture ceiling.

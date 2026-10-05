@@ -22,11 +22,11 @@ names. These runs make no build-time, resource or clean-repeat claim.
 
 The [structured measurements](b2-canonical-measurements.json) retain exact
 vectors, source/tool identities, selection/interface parity, frozen reserves,
-excluded attempts and evidence hashes. The
-[compressed records](b2-canonical-records.tar.gz) contain the method, source
-manifest, logs, interface/selection records and verified function mappings.
-Raw Wasm, full linker maps and source archives remain under
-`.tmp/b2-canonical-20260923/`.
+excluded attempts and evidence hashes. The raw method, source-manifest, log,
+interface/selection and function-mapping archive was removed on 2026-10-05
+after later qualification superseded this checkpoint. Its historical hash and
+removal status remain in the structured measurements. The report preserves
+measured results without promising reconstruction from retained raw artifacts.
 
 ## Completed pairs
 

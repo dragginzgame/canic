@@ -99,10 +99,12 @@ complete fixture qualification.
 
 ## Final canonical artifacts
 
-The [structured evidence](b2-storage-closeout.json) and
-[compressed records](b2-storage-closeout-records.tar.gz) retain all fifteen
-final artifacts, counters, exact interfaces, generated selections, source/tool
-identities, named generic bodies and complete canonical function mappings.
+The [structured evidence](b2-storage-closeout.json) retains all fifteen final
+artifact measurements, counters, interface and selection identities, source/tool
+identities and qualification results. The raw body/function-mapping archive was
+removed on 2026-10-05 after later qualification superseded this checkpoint;
+its historical hash and removal status remain in the structured evidence.
+The raw artifacts are no longer retained for checkpoint reconstruction.
 The previous checkpoint remains immutable: this final pair measures the last
 Root ownership cut against that checkpoint's `after` artifact. Cumulative B2
 values compare against its original `before` artifact, not the B1 ablation.

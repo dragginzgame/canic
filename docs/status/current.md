@@ -3,6 +3,24 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Repository payload cleanup — 2026-10-05
+
+The maintainer requested repository-size cleanup under
+[Canic#445](https://github.com/dragginzgame/canic/issues/445). Root ignores Cargo
+`target/` directories at every depth; 4,506 accidental consumer build files are
+removed from the index while their local bytes remain. Four superseded raw
+qualification archives are removed, alongside the redundant browser-review
+collection. Structured results retain their original measurements and hashes,
+with explicit removal metadata; GitHub retains every original review record.
+Reports link to retained summaries instead of removed payloads.
+
+Focused ignore, JSON-preservation, document-link and whitespace checks pass.
+The remaining tracked checkout payload is approximately 56 MiB. Existing commit
+history still retains the removed blobs; no history rewrite, commit, push,
+release transaction, build-cache deletion or recovery-evidence cleanup ran.
+History cleanup remains subject to the repository's agent commit and rewrite
+restrictions. The removals alone do not make the local history ready to push.
+
 ## Root membership discovery — 2026-10-05
 
 The maintainer prioritized [Canic#39](https://github.com/dragginzgame/canic/issues/39)
@@ -2160,7 +2178,7 @@ qualification record. No dependency or upstream repository edits ran here.
   No new runtime issue was found. Its handoff's claim that 0.8.1 is unpublished
   is stale relative to the release commit and registry selection.
 
-The [review status](../code-review/status.md#upstream-feedback-recheck--2026-10-02)
+The [GitHub review catalogue](https://github.com/dragginzgame/canic/issues/40)
 tracks these dispositions. This was source review plus the small memory probe,
 not combined Canic lifecycle qualification of the new dependency graph. Prior
 memory 0.15.2 / timers 0.8.1 lifecycle evidence remains correctly scoped below.

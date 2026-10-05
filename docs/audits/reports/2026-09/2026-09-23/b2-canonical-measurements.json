@@ -4864,6 +4864,9 @@
   ],
   "retained_records": {
     "file": "b2-canonical-records.tar.gz",
+    "retained": false,
+    "removed_on": "2026-10-05",
+    "removal_reason": "Superseded raw qualification payload; structured results and historical hashes remain.",
     "sha256": "a3b72138dec9b10073df9db4aab74bf2d629affa6623fe9826eb5d7906b78b0a",
     "members": 446
   },

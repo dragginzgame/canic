@@ -41,7 +41,7 @@ perf.data.old
 .tmp
 /artifacts/
 /backups/
-target/*
+target/
 .canic
 .backups
 node_modules/

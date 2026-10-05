@@ -4844,6 +4844,9 @@
   },
   "retained_records": {
     "file": "b2-storage-closeout-records.tar.gz",
+    "retained": false,
+    "removed_on": "2026-10-05",
+    "removal_reason": "Superseded raw qualification payload; structured results and historical hashes remain.",
     "sha256": "57c536b8318d5fd8edb99dac178c67ad667cf2ee61fb2a444dbc39fa4a0e6651",
     "members": 256
   },

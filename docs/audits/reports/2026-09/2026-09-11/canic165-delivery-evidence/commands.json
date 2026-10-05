@@ -582,6 +582,11 @@
   "revocation_interrupted_at_store_effect_qualified": true,
   "revocation_removal_admission_outage_qualified": true,
   "source_archive": "source-snapshots.tar.gz",
+  "source_archive_retention": {
+    "retained": false,
+    "removed_on": "2026-10-05",
+    "removal_reason": "Superseded source snapshots; command results and historical hashes remain."
+  },
   "source_snapshot_sha256": {
     "source.sha256": "a215942920a55700b56d4891eb57ca4bae7b28e067ad8277db4011875e57308f",
     "revocation-source.sha256": "cc73f4d4883eea1b9d5b2aba59427406b1dfb27ce3d2c204d07ab88a4cac434f",

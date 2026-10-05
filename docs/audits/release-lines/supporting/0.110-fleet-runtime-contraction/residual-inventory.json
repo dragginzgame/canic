@@ -5,7 +5,9 @@
     "base_commit": "4e7bd773714cb0c46eec9d440383f55c23901a10",
     "source_manifest_sha256": "c8beec66a4bf5dc8ff52109715eba6decb8063aa766f2e3427e5f6724c240d3b",
     "report": "b5-qualification.json",
-    "records": "b5-qualification-records.tar.gz"
+    "records": "b5-qualification-records.tar.gz",
+    "records_retained": false,
+    "records_removed_on": "2026-10-05"
   },
   "optimized_absence_claim": false,
   "qualification": "final_artifact_correlated",

@@ -1814,6 +1814,9 @@
   },
   "records": {
     "file": "b5-qualification-records.tar.gz",
+    "retained": false,
+    "removed_on": "2026-10-05",
+    "removal_reason": "Superseded raw qualification payload; structured results and historical hashes remain.",
     "sha256": "a7d198de0424a385b60bb65b294fd201198165cae8b7d6fd29453ed9ef33aaeb",
     "storage": "tar.gz with exact duplicate files represented as archive-local hard links; every member retains its original bytes"
   },
