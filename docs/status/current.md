@@ -3,6 +3,25 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Selected testkit lockfile alignment — 2026-10-05
+
+The maintainer's latest commit `2241e9896` selects `ic-testkit = "0.18"` but
+retains registry `0.17.3` in Cargo.lock. Standard release preflight correctly
+refused its locked offline fetch before validation or preparation. A targeted
+offline update now selects the already cached `0.18.0`; only that package's
+version and registry checksum changed. Every other lock entry and the testkit
+dependency list are preserved. The published .17.3 and .18.0 library source
+trees are byte-identical, so no further caller migration was needed.
+
+`cargo fetch --locked --offline` now passes. Locked offline, warning-denied
+Clippy also passes for the exact ingress-payload integration target with all
+features. Whitespace checks pass. The alignment extends the existing
+[testkit adoption](https://github.com/dragginzgame/canic/issues/449) and .53 notes;
+changes are uncommitted and ready for review. The maintainer must commit the
+lockfile correction before normal release preflight admits the source again.
+The full release batch was not reassessed for push/publication, and no broad
+gate, version preparation, Git publication, package publication or cleanup ran.
+
 ## Ingress fixture testkit API alignment — 2026-10-05
 
 The maintainer's 17:28 UTC Clippy run found the ingress probe still using the

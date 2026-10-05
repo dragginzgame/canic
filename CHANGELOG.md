@@ -26,6 +26,7 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 - Repair release-note fixture inputs and compare Wasm crypto package sets
   independently of host locale ([#448](https://github.com/dragginzgame/canic/issues/448)).
 - Restore ingress-payload test compilation against the current testkit pool API
+  and align its lockfile with the selected `0.18` dependency line
   ([#449](https://github.com/dragginzgame/canic/issues/449)).
 
 ## [0.110.x] - Fleet Runtime Contraction
