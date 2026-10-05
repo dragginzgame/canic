@@ -88,6 +88,15 @@ pub enum FleetCommandError {
     #[error("{0}")]
     Usage(String),
 
+    #[error(
+        "operator cycles balance {available_cycles} already covers the paused debit {required_cycles}; resume the retained Fleet funding with --apply {resume_sha256} and omit --operator-mint"
+    )]
+    OperatorBalanceCoversFunding {
+        available_cycles: u128,
+        required_cycles: u128,
+        resume_sha256: String,
+    },
+
     #[error("desired Fleet environment {desired} does not match selected environment {selected}")]
     EnvironmentMismatch { desired: String, selected: String },
 

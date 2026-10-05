@@ -1,5 +1,8 @@
+# Explicitly publish aggregate service accounting through Canic's cached metrics.
+public_metrics = ["application"]
+
 [app]
-name = "blob-service"
+name = "consumer-app"
 init_mode = "enabled"
 
 [roles.root]

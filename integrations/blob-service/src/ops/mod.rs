@@ -6,7 +6,8 @@
 
 pub(crate) mod account;
 pub(crate) mod gateways;
-mod memory;
+pub mod memory;
+pub(crate) mod metrics;
 
 use crate::ops::memory::{Grants, Memory};
 

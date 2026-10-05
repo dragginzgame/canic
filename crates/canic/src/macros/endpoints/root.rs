@@ -804,6 +804,18 @@ macro_rules! canic_emit_root_command_endpoint {
 #[macro_export]
 macro_rules! canic_emit_root_status_endpoint {
     () => {
+        // An update permits ordinary inter-canister discovery. It does not mutate
+        // membership or issue lasting authorization for effects at another receiver.
+        #[$crate::canic_update(requires(any(
+            caller::is_controller(),
+            custom(::canic::__internal::control_plane::api::component_auth::ActiveComponentMemberPredicate)
+        )))]
+        async fn canic_root_membership(
+            request: ::canic::dto::component_registry::RootMembershipRequest,
+        ) -> Result<::canic::dto::component_registry::RootMembershipResponse, ::canic::Error> {
+            $crate::__internal::control_plane::api::component_auth::RootComponentMembershipApi::lookup(request)
+        }
+
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
         #[serde(crate = "::canic::__internal::serde")]
         pub enum PublicStatusRequest {

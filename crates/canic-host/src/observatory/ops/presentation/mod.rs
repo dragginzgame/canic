@@ -1,7 +1,10 @@
 //! Curated public projection, escaped HTML and framework-neutral HTTP responses.
 
 use crate::observatory::{ObservatoryError, model::ObservatoryProfile, policy, view::*};
-use std::io::{self, Write};
+use std::{
+    collections::BTreeMap,
+    io::{self, Write},
+};
 
 /// Strip private Fleet authority before passing data to a downstream renderer.
 pub fn public_view(
@@ -30,9 +33,51 @@ pub fn public_view(
                 role: role.role.clone(),
                 overview: fresh(&role.overview, now_ms, snapshot.freshness_secs),
                 store: fresh(&role.store, now_ms, snapshot.freshness_secs),
+                application_metrics: public_metrics(role, now_ms, snapshot.freshness_secs),
             })
             .collect(),
     })
+}
+
+// Only undimensioned and reporting-canister rows belong in the public role view.
+// Never relabel another canister's usage as this role's own usage.
+fn public_metrics(
+    role: &ObservatoryRoleView,
+    now: u64,
+    ttl: u32,
+) -> Observation<MetricSamplesView> {
+    let mut observation = fresh(&role.application_metrics, now, ttl);
+    if let Observation::Observed { value, .. } = &mut observation {
+        let original_len = value.rows.len();
+        value.rows.retain(|row| {
+            row.canister_id
+                .as_ref()
+                .is_none_or(|id| id == &role.canister_id)
+        });
+        // Redacting dimensions must not create indistinguishable metric identities.
+        let mut name_counts = BTreeMap::new();
+        for row in &value.rows {
+            *name_counts.entry(row.name.clone()).or_insert(0_u32) += 1;
+        }
+        value.rows.retain(|row| name_counts[&row.name] == 1);
+        value.truncated |= value.rows.len() != original_len;
+        for row in &mut value.rows {
+            row.canister_id = None;
+        }
+        let now_ns = u128::from(now) * 1_000_000;
+        let expired = value.sampled_at_ns.is_none_or(|at| {
+            let at = u128::from(at);
+            now_ns < at || now_ns - at > u128::from(value.stale_after_ns)
+        });
+        let future_row = value
+            .rows
+            .iter()
+            .any(|row| u128::from(row.observed_at_ns) > now_ns);
+        if value.state == MetricSampleState::Fresh && (expired || future_row) {
+            value.state = MetricSampleState::Stale;
+        }
+    }
+    observation
 }
 
 fn fresh<T: Clone>(observation: &Observation<T>, now: u64, ttl: u32) -> Observation<T> {
@@ -131,12 +176,69 @@ fn html(public: &PublicObservatoryView, maximum: usize) -> Result<Vec<u8>, Obser
         }
         writer.write_all(b"</tr>").map_err(render_bound)?;
     }
-    writer.write_all(b"</table><details><summary>Sources, times and complete public observations</summary><pre>").map_err(render_bound)?;
+    writer.write_all(b"</table>").map_err(render_bound)?;
+    application_table(&mut writer, &public.roles)?;
+    writer
+        .write_all(
+            b"<details><summary>Sources, times and complete public observations</summary><pre>",
+        )
+        .map_err(render_bound)?;
     escaped(&mut writer, &json)?;
     writer
         .write_all(b"</pre></details></body></html>")
         .map_err(render_bound)?;
     Ok(writer.bytes)
+}
+
+fn application_table(
+    writer: &mut LimitedWriter,
+    roles: &[PublicObservatoryRoleView],
+) -> Result<(), ObservatoryError> {
+    writer.write_all(b"<table><caption>Application metrics by role instance</caption><tr><th>Instance</th><th>Label</th><th>Metric</th><th>Value</th><th>Unit</th><th>Source state</th></tr>").map_err(render_bound)?;
+    for role in roles {
+        let key = role.key.to_string();
+        match &role.application_metrics {
+            Observation::Observed { value, .. } => {
+                let state = match value.state {
+                    MetricSampleState::Disabled => "disabled",
+                    MetricSampleState::Unavailable => "unavailable",
+                    MetricSampleState::Fresh => "fresh",
+                    MetricSampleState::Stale => "stale",
+                };
+                let state = if value.truncated {
+                    format!("{state}; partial")
+                } else {
+                    state.into()
+                };
+                if value.rows.is_empty() {
+                    table_row(writer, &[&key, &role.label, "—", "unknown", "—", &state])?;
+                }
+                for row in &value.rows {
+                    table_row(
+                        writer,
+                        &[&key, &role.label, &row.name, &row.value, &row.unit, &state],
+                    )?;
+                }
+            }
+            Observation::Unavailable { .. } => {
+                table_row(
+                    writer,
+                    &[&key, &role.label, "—", "unknown", "—", "unavailable"],
+                )?;
+            }
+        }
+    }
+    writer.write_all(b"</table>").map_err(render_bound)
+}
+
+fn table_row(writer: &mut LimitedWriter, values: &[&str]) -> Result<(), ObservatoryError> {
+    writer.write_all(b"<tr>").map_err(render_bound)?;
+    for value in values {
+        writer.write_all(b"<td>").map_err(render_bound)?;
+        escaped(writer, value.as_bytes())?;
+        writer.write_all(b"</td>").map_err(render_bound)?;
+    }
+    writer.write_all(b"</tr>").map_err(render_bound)
 }
 
 fn escaped(writer: &mut LimitedWriter, bytes: &[u8]) -> Result<(), ObservatoryError> {

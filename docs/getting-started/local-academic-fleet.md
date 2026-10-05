@@ -12,13 +12,18 @@ env -u ICP_NETWORK icp --version
 canic --environment academic replica status
 ```
 
-Enroll the exact root key before Fleet observation:
+Enroll the exact root key before Fleet observation. Obtain its expected SHA-256
+fingerprint from the trusted replica operator through an authenticated or
+independent trusted channel. Copy that value below; compare the local digest
+with it. Deriving the expected value from the same untrusted key download does
+not authenticate the replica. Canic rejects a mismatch before enrollment.
 
 ```bash
+network_root_fingerprint='<64-lowercase-hex-from-the-replica-operator>'
 sha256sum ./academic-root-key.der
 canic network enroll academic \
   --root-key ./academic-root-key.der \
-  --fingerprint <64-lowercase-hex>
+  --fingerprint "$network_root_fingerprint"
 ```
 
 ## Build

@@ -73,6 +73,7 @@ not grant general diagnostic access:
 | `canic_admission_status` | Controller or bound Root |
 | `canic_control_status` | Bound Root |
 | `canic_root_auth_status` | Public role-attestation reads |
+| `canic_root_membership` | Root controller or active local managed member; read-only update for inter-canister discovery |
 | `canic_root_operation_status` | Existing operation owner |
 | `canic_root_status` | Controller |
 | `canic_coordinator_operation_status` | Existing operation owner |

@@ -23,7 +23,7 @@ impl ic_memory::AllocationPolicy for FixturePolicy {
     fn validate_slot(
         &self,
         _: &ic_memory::StableKey,
-        _: &ic_memory::AllocationSlotDescriptor,
+        _: &ic_memory::MemoryManagerSlot,
     ) -> Result<(), Infallible> {
         Ok(())
     }
@@ -31,7 +31,7 @@ impl ic_memory::AllocationPolicy for FixturePolicy {
     fn validate_reserved_slot(
         &self,
         _: &ic_memory::StableKey,
-        _: &ic_memory::AllocationSlotDescriptor,
+        _: &ic_memory::MemoryManagerSlot,
     ) -> Result<(), Infallible> {
         Ok(())
     }

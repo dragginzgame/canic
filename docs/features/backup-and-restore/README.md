@@ -20,21 +20,23 @@ releases.
 <img src="../../../assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
 
 **Creating a new backup is currently unavailable.** `canic backup create
-<fleet>` stops before taking snapshots because the live topology safety check is
-not yet implemented. `--dry-run` can prepare local planning files for a
+<fleet>` returns the typed `LiveCreateUnavailable` error before resolving the
+workspace, creating a layout or invoking ICP. The live topology and authority
+adapter is not yet implemented. `--dry-run` can prepare local planning files for a
 supported inventory, but it does not prove the live layout or permissions and
 does not create a backup. Current selection requires exactly one Fleet Subnet
 Root.
 
 <br clear="left" />
 
-This gap dates from the 0.100.80 removal of the public Subnet Registry query.
-It has no accepted implementation slice in the current 0.110 batch or scheduled
-0.111 blob extraction. The proposed
-[OC-5 inventory and backup work](../../design/ideas/openchat-scale-application-support/design.md)
-is an unscheduled idea, not a delivery commitment. Completion needs an accepted
-Host/CLI/Backup slice covering authoritative membership, controller/read authority,
-quiescence, topology changes, interruption and same-release recovery.
+This gap dates from the 0.100.80 removal of the public Subnet Registry query and
+is tracked in [Canic #394](https://github.com/dragginzgame/canic/issues/394).
+The accepted independent-package direction keeps Fleet coordination in Canic
+and moves generic backup/restore mechanisms to `ic-backup`. Completion needs
+authoritative live membership, controller/read authority, application consistency,
+topology-change handling and interruption recovery, together with usable upstream
+runners. The [adapter contract](../../architecture/independent-package-adapters.md#backup-adapter-contract)
+defines those boundaries; it does not establish live backup availability.
 
 Verification and restore of existing valid same-release backups retain their
 own artifact, identity and journal checks. Preserve the backup runner and its

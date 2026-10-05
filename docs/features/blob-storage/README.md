@@ -9,6 +9,8 @@ The Canic-owned adapter lives in a separate Cargo workspace at
 the main Canic workspace and ordinary release test lane. The upstream library has
 no Canic dependency. See the [extraction design](../../design/0.111-standalone-blob-service-extraction/0.111-design.md)
 and [current handoff](../../status/current.md) for implementation evidence.
+The shared [package-adapter boundary](../../architecture/independent-package-adapters.md)
+also covers backup.
 
 The adapter pins the published `ic-blob-storage` library and uses public Canic
 endpoints, bounded decoders and synchronous lifecycle participants. It registers
@@ -21,25 +23,226 @@ Fleet, lifecycle and memory tests. The upstream service suite owns blob authorit
 certificate replies, restoration, provider behavior and accounting; those results
 do not establish deployment qualification for an arbitrary wrapper.
 
-Build the adapter explicitly through the current Canic CLI, outside ordinary
-Canic release validation:
+The composition API below selects published ic-blob-storage 0.14.9 and
+ic-memory 0.25.0 in the isolated lockfiles. Each composed artifact shares one
+memory runtime between Canic and the service. See [Canic#444](https://github.com/dragginzgame/canic/issues/444)
+and the [current handoff](../../status/current.md#checked-memory-slots--2026-10-04)
+for scoped qualification. Building the shell does not establish live provider
+behavior. Do not bypass the single-runtime identity check.
+
+## Dependency version ownership
+
+The service pin has one source:
+[`integrations/blob-service/Cargo.toml`](../../../integrations/blob-service/Cargo.toml),
+under `[workspace.dependencies]`. Its package inherits that declaration with
+`ic-blob-storage.workspace = true`. The two consumer examples depend on the
+adapter and resolve that same pin through their own lockfiles.
+
+`canic.toml` configures Apps, roles, topology and runtime policy; it does not select
+Rust crate versions. The adapter is deliberately outside Canic's main Cargo
+workspace, so it cannot inherit that workspace's dependencies. Adding an unused
+second pin to the root manifest would not control this adapter. Keep the pin here
+and refresh the adapter and consumer lockfiles when adopting a published release.
+
+## Choose placement
+
+Blob management is optional and can run inside an existing application canister
+or in a dedicated Fleet Component. Both use the same upstream library and Canic
+adapter. A Rust package boundary does not require a separate canister.
+
+Embedding shares the application's identity, cycles, stable-memory budget,
+execution and lifecycle. A dedicated Component isolates those responsibilities
+and adds calls between the application and service. Choose placement from the
+workload and operational boundary, not just a byte total. Provider-managed blob
+bytes are not all stored in Canic stable memory; these options do not establish
+terabyte capacity or provider qualification.
+
+## Embed in an application
+
+Invoke `canic_blob_service::mount!(memory = 150..=166);` once at the application's
+crate root. This mounts the service endpoints and seventeen memory requests,
+with a host-selected inclusive range. Keep that range disjoint from all other
+owners and large enough for the requests. Canic's normal bootstrap rejects
+conflicting or insufficient grants. The stable service keys and authority remain
+owned by the adapter. One blob service instance is supported per canister.
+
+The application keeps its existing `canic::start!` and `canic::finish!` and its
+exact App/role metadata. Compose these synchronous functions in its lifecycle
+participant, after Canic restores the framework:
+
+```rust
+// After bounded decoding of the application's installation input:
+canic_blob_service::lifecycle::install(&input.blob);
+// In the same-release post-upgrade participant:
+canic_blob_service::lifecycle::restore();
+```
+
+The owning `start!` must bound the outer envelope before restoration. Decode
+application configuration once under explicit limits before dispatching it to
+participants; `lifecycle::ENVELOPE_LIMITS` and `CONFIGURATION_LIMITS` are available
+for the example's envelope and nested input. Blob installation receives the typed
+`ServiceInstallationInput` and verifies the actual hosting canister Principal.
+Restoration retains the service fence and must finish synchronously before async
+application work. Neither function installs a timer or replaces the application
+metrics sampler.
+
+The example's input schema is not mandatory. An application may construct the
+typed installation input from its own compiled configuration and actual canister
+Principal inside its synchronous participant. Externally supplied configuration
+must use bounded decoding. The adapter validates the supplied service identity;
+it does not silently rewrite it. Root's missing argument-delivery path described
+below affects deployments that require runtime-supplied installation arguments,
+including both checked-in examples.
+
+Compose `canic_blob_service::metrics::sample()?` with application rows in the
+host's one `ApplicationMetricsSampler`. Register that callback after installation
+and restoration. This preserves both families rather than replacing either
+sampler; Canic retains the timer, limits and cache. Export blob endpoints in the
+same Candid scope as application endpoints, and avoid duplicate method names.
+
+The complete [embedded example](../../../integrations/blob-service/embedded-consumer/src/lib.rs)
+has its own persistent counter, endpoints, combined installation input and metrics
+sampler. Its counter uses memory 120 while blob grants use 150–166. It has a
+separate workspace and can be built explicitly with:
+
+```sh
+cd integrations/blob-service/embedded-consumer
+../../../target/debug/canic build embedded-app backend --workspace . --config canic.toml --icp-root . --profile fast --json
+```
+
+## Dedicated consumer-owned canister
+
+The adapter is a Rust composition library, not a pre-bound App artifact. A
+consumer supplies a small canister package with its own exact
+`[package.metadata.canic]` App/role and a `build.rs` calling
+`canic::build!("path/to/canic.toml")` for that App. Keep versions and dependencies
+in the consumer's workspace declarations. Its canister source is:
+
+```rust
+canic_blob_service::canister!();
+```
+
+The shell depends on `canic-blob-service`, `canic`, `candid` and `ic-cdk`.
+The adapter is currently unpublished: use its local path and select the Canic
+facade from the same checkout in the consuming workspace. Mixing that adapter's
+local facade with a registry facade creates two package identities and is rejected.
+See the [consumer manifest](../../../integrations/blob-service/consumer/Cargo.toml)
+and [canister shell](../../../integrations/blob-service/consumer/src/lib.rs).
+It does not declare an `ic-blob-storage` dependency. The adapter selects that
+upstream library transitively and re-exports its typed boundary contracts as
+`canic_blob_service::dto`; no duplicate DTO schema is introduced. This convenience macro calls `mount!` with memory 120–136 and owns
+Canic start/finish, bounded endpoints, lifecycle participation and a blob-only
+metrics sampler. Do not add a
+second lifecycle or copy service dispatch into the consumer. Service memory
+registration is emitted by this macro; importing only the re-exported DTOs does
+not register blob memory in the calling application.
+
+Select the **consumer shell package** in the consuming App's `roles.blob.package`.
+Do not point it at the adapter library. The App/role metadata checks remain exact.
+A composition library may share the role's exact Canic facade package; alternate
+Canic identities, access to protected internals and undeclared feature activation
+remain rejected.
+
+The checked-in shell at `integrations/blob-service/consumer` demonstrates a
+separate `consumer-app` workspace and configuration. Build it explicitly:
 
 ```sh
 cargo build --locked -p canic-cli --bin canic
-cd integrations/blob-service
-../../target/debug/canic build blob-service blob --workspace . --config canic.toml --icp-root . --profile fast --json
+cd integrations/blob-service/consumer
+../../../target/debug/canic build consumer-app blob --workspace . --config canic.toml --icp-root . --profile fast --json
 ```
 
-Installation supplies the library's Candid `ServiceInstallationInput` as Canic's
-nested application argument bytes. Its configured service Principal must be the
-actual canister ID. This source adapter has not yet completed managed Wasm build
-qualification; source removal alone does not qualify a live installation.
+Installation requires `canic_blob_service::dto::configuration::ServiceInstallationInput`
+as Candid bytes nested after Canic's protected init payload. Its configured
+service Principal must equal the actual allocated canister ID; the adapter
+validates this before publishing the installed service. Construct these bytes
+after allocation, without rewriting that identity inside the adapter. The public
+[managed Component qualification fixture](../build-and-evidence/managed-app-qualification.md)
+supports `ManagedApplicationInit::ForCanister` for this purpose in PocketIC.
+
+**Production installation is not yet wired.** Root's top-level Component installer
+passes no application arguments, including for Component Group members. Its
+current install command carries only the operation ID. The fixture callback
+therefore qualifies the composed artifact but does not provide a production
+argument-delivery path. `app.init_mode` selects the initial Fleet operating mode and defaults to
+`enabled`; it does not enable argument delivery. Do not attempt Fleet deployment
+of this shell until bounded, durably bound application arguments can be supplied
+after allocation.
+[Canic#444](https://github.com/dragginzgame/canic/issues/444) tracks consumer readiness.
+
+Same-release restoration retains the upstream mutation fence. The configured
+operator uses `blob_resume_current_instance` to prove continuity from IC history
+before resuming mutation. Framework setup may also advance the platform version;
+a service update checks continuity through the existing upstream workflow.
+A conservative query fence or cached `blob.fenced` gauge is not by itself a
+provider-readiness verdict.
+
+The consuming App selects Fleet admission and public metrics in its own config.
+The library's normal dependency graph contains no App-specific compiled topology.
+The owning shell compiles its exact topology and emits endpoints into the same
+Candid declaration scope as Canic's framework endpoints.
 
 The source cut removes Canic's embedded blob runtime, feature flags, billing
 commands and passive Medic inspection. Use the service's own operator tools for
 its maintained API. Its status response does not promise the former readiness
 exit code, and there is no qualified replacement for Canic's direct funding
 command. Neither limitation requires retaining the old runtime.
+
+## Usage reporting
+
+The dedicated shell registers a synchronous `ApplicationMetricsSampler` after
+install and restore. Embedded applications compose the public `metrics::sample`
+function in their own sampler. It reads one maintained upstream upload-accounting record; it does
+not scan operations, call a provider, mutate continuity state or maintain a
+second ledger. Canic's existing sampling timer and public cache own scheduling,
+history and freshness. Failed accounting reads retain the previous sample with
+its original timestamp; they do not publish zeros.
+
+The example consumer's `canic.toml` explicitly enables public aggregate reporting:
+
+```toml
+public_metrics = ["application"]
+```
+
+Omit `application` to disable publication and sampling. This is a public opt-in:
+only canister-wide totals are published, without tenant, object or payment
+identities. All rows are gauges, attributed to the storage canister itself.
+
+| Metric | Meaning |
+| --- | --- |
+| `blob.logical_bytes` | Tenant logical bytes plus active reservations |
+| `blob.physical_bytes` | Confirmed physical bytes plus active reservations |
+| `blob.liability_bytes` | Unsettled confirmed bytes plus active reservations; not a currency amount |
+| `blob.reserved_bytes` | Active reservations, already included once in each byte total above |
+| `blob.active_reservations` | Active or possibly exposed operations, including zero-byte uploads |
+| `blob.operation_slots` | Lifetime retained operation slots, including cancelled and settled entries |
+| `blob.fenced` | Last observed upstream mutation fence: 1 fenced, 0 unfenced; not a provider-readiness proof |
+
+Do not sum the three byte totals or add reservations to them. Logical reference
+release does not establish physical deletion or extinguish provider liabilities.
+These are source accounting units, not measured stable-memory size or a bill.
+
+For Toko Miner, deploy its adapter-backed shell as an ordinary managed Component, configure
+the upstream service and use its client APIs for blob operations. Then collect
+the selected Fleet with the existing command:
+
+```sh
+canic --environment staging observatory snapshot toko-staging --out usage.json
+```
+
+Each private `roles[]` entry carries the storage canister ID and
+`application_metrics`; numeric values are exact decimal strings. Public
+JSON/HTML reports show these metrics under their role instance, including source
+state, time and truncation. See [Fleet Observatory](../operations/fleet-observatory.md#application-metrics).
+The collector reads the generic `canic_public_status` cache and has no blob
+dependency. It does not enumerate service canisters outside the retained Fleet
+inventory, enable metrics remotely, or make paid calls.
+
+This reports usage **per storage canister**. Usage attributed to a consuming
+canister or tenant remains a separate upstream-authorized disclosure; the
+adapter does not publish that breakdown or infer it from capacity headroom.
+No Toko installation, provider qualification or paid upload is implied by this
+reporting integration.
 
 Reinstalling or deleting a live service is a separate operation. Preserve records
 of outstanding provider liabilities; logical reference release does not prove

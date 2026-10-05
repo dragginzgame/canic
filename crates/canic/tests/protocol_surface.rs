@@ -9,6 +9,7 @@ use candid::types::{Type, TypeEnv, TypeInner};
 use candid::{Principal, decode_one, encode_one};
 use candid_parser::utils::CandidSource;
 use canic::dto::{component_provisioning, fleet_admission, fleet_funding, fleet_registry, role};
+use canic::ids;
 use canic::{
     api::protocol::icrc21::Icrc21Dispatcher,
     dto::auth::{
@@ -50,7 +51,6 @@ use canic::{
         ManagedCanisterBinding, SubnetId,
     },
 };
-use canic_core::ids;
 
 fn test_fleet() -> FleetKey {
     FleetKey {
@@ -73,7 +73,7 @@ fn maximum_admission_principal(index: usize) -> Principal {
 fn admission_target() -> ManagedCanisterBinding {
     let fleet = FleetBinding {
         fleet: test_fleet(),
-        app: canic_core::ids::AppId::from("test"),
+        app: ids::AppId::from("test"),
     };
     let placement_subnet = SubnetId::from_principal(Principal::from_slice(&[2; 29]));
     ManagedCanisterBinding::Component(ComponentBinding {
@@ -1397,7 +1397,7 @@ fn fleet_recovery_controller_binding_matches_canonical_candid() {
         let (mut env, _) = CandidSource::Text(&did).load().expect("canonical Candid");
         let canonical = env.find_type("FleetCoordinatorBinding").unwrap().clone();
         let mut rust = TypeContainer::new();
-        let ty = rust.add::<canic_core::ids::FleetCoordinatorBinding>();
+        let ty = rust.add::<ids::FleetCoordinatorBinding>();
         let ty = env.merge_type(rust.env, ty);
         candid::types::subtype::equal(&mut HashSet::default(), &env, &canonical, &ty)
             .expect("Fleet recovery controller binding matches canonical Candid");

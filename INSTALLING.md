@@ -115,13 +115,19 @@ For future shells, put `~/.cargo/bin` before the other `icp` location in your
 shell startup configuration.
 
 Custom connected networks must declare their exact root key. Enroll that trust
-through Canic before Fleet observation or mutation:
+through Canic before Fleet observation or mutation. Obtain the expected SHA-256
+fingerprint from the network operator through an authenticated publication or
+an independent trusted channel. Copy that value into `network_root_fingerprint`
+below and compare the local digest with it. A fingerprint computed from the
+same untrusted key download provides no authenticity check. Canic rejects a
+mismatch before writing network authority.
 
 ```bash
+network_root_fingerprint='<64-lowercase-hex-from-the-network-operator>'
 sha256sum ./root-key.der
 canic network enroll <environment> \
   --root-key ./root-key.der \
-  --fingerprint <64-lowercase-hex>
+  --fingerprint "$network_root_fingerprint"
 ```
 
 For password-protected identities, ICP CLI can cache a bounded session:

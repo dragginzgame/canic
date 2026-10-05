@@ -97,6 +97,9 @@ pub struct NonrootInstallIdentity {
 
 #[derive(Debug, Eq, PartialEq, ThisError)]
 pub enum PrepareFleetActivationError {
+    #[error("installation identity must be nonzero")]
+    InstallIdZero,
+
     #[error(
         "install release-build identity {supplied} does not match embedded Wasm identity {embedded}"
     )]
@@ -156,6 +159,9 @@ pub fn prepare_root_install(
         input.initial_release_set.release_build_id,
         embedded_release_build_id,
     )?;
+    if input.install_id == [0; 32] {
+        return Err(PrepareFleetActivationError::InstallIdZero);
+    }
     if input.binding.authority.epoch != 1 {
         return Err(PrepareFleetActivationError::AuthorityEpoch {
             observed: input.binding.authority.epoch,
@@ -253,6 +259,9 @@ pub fn prepare_nonroot_install(
     embedded_release_build_id: ReleaseBuildId,
 ) -> Result<PreparedFleetActivation, PrepareFleetActivationError> {
     require_release_build_match(input.release_build_id, embedded_release_build_id)?;
+    if input.install_id == [0; 32] {
+        return Err(PrepareFleetActivationError::InstallIdZero);
+    }
 
     Ok(PreparedFleetActivation {
         identity: FleetActivationIdentity {
@@ -503,6 +512,83 @@ mod tests {
             &topology(),
             root_canister,
         )
+    }
+
+    #[test]
+    fn installations_reject_zero_operation_ids_before_normalization() {
+        let release_build_id = release_build(17);
+        let mut root = input(release_build_id);
+        root.install_id = [0; 32];
+        assert_eq!(
+            prepare_root(root.clone(), release_build_id),
+            Err(PrepareFleetActivationError::InstallIdZero)
+        );
+
+        let mut nonroot = nonroot_input(release_build_id);
+        nonroot.install_id = [0; 32];
+        assert_eq!(
+            prepare_nonroot_install(nonroot, release_build_id),
+            Err(PrepareFleetActivationError::InstallIdZero)
+        );
+
+        let store = root.wasm_store_authority.wasm_store;
+        assert_eq!(
+            prepare_wasm_store_install(
+                WasmStoreInstallIdentity {
+                    authority: root.wasm_store_authority,
+                    install_id: [0; 32],
+                },
+                release_build_id,
+                store,
+            ),
+            Err(PrepareFleetActivationError::WasmStoreInstallIdInvalid)
+        );
+    }
+
+    #[test]
+    fn installations_preserve_minimally_nonzero_operation_ids() {
+        let release_build_id = release_build(18);
+        let mut first_byte = [0; 32];
+        first_byte[0] = 1;
+        let mut last_byte = [0; 32];
+        last_byte[31] = 1;
+        for install_id in [first_byte, last_byte, [u8::MAX; 32]] {
+            let mut root = input(release_build_id);
+            root.install_id = install_id;
+            assert_eq!(
+                prepare_root(root.clone(), release_build_id)
+                    .expect("prepare Root with nonzero identity")
+                    .identity
+                    .operation_id,
+                install_id
+            );
+
+            let mut nonroot = nonroot_input(release_build_id);
+            nonroot.install_id = install_id;
+            assert_eq!(
+                prepare_nonroot_install(nonroot, release_build_id)
+                    .expect("prepare application with nonzero identity")
+                    .identity
+                    .operation_id,
+                install_id
+            );
+
+            let store = root.wasm_store_authority.wasm_store;
+            assert_eq!(
+                prepare_wasm_store_install(
+                    WasmStoreInstallIdentity {
+                        authority: root.wasm_store_authority,
+                        install_id,
+                    },
+                    release_build_id,
+                    store,
+                )
+                .expect("prepare Store with nonzero identity")
+                .identity
+                .operation_id,
+                install_id
+            );
+        }
     }
 
     #[test]

@@ -9,11 +9,35 @@ use candid::Principal;
 
 use super::DEFAULT_INSTALL_CYCLES;
 
+/// Application-owned init bytes, optionally bound to the newly allocated canister.
+///
+/// This test input never changes Canic's protected payload or allocated identity.
+#[derive(Clone, Debug)]
+pub enum ManagedApplicationInit {
+    /// No nested application arguments.
+    None,
+    /// Already encoded application arguments shared by instances of this role.
+    Encoded(Vec<u8>),
+    /// Encode application arguments after the actual canister ID is known.
+    /// The encoder runs synchronously; its panic propagates to the fixture caller.
+    ForCanister(fn(Principal) -> Vec<u8>),
+}
+
+impl ManagedApplicationInit {
+    pub(super) fn for_canister(&self, canister: Principal) -> Option<Vec<u8>> {
+        match self {
+            Self::None => None,
+            Self::Encoded(bytes) => Some(bytes.clone()),
+            Self::ForCanister(encode) => Some(encode(canister)),
+        }
+    }
+}
+
 /// Exact built Wasm and optional application init bytes for one configured role.
 #[derive(Clone, Debug)]
 pub struct ManagedRoleQualificationArtifact {
     /// Application init bytes passed after Canic's protected init payload.
-    pub application_init_args: Option<Vec<u8>>,
+    pub application_init_args: ManagedApplicationInit,
     /// Cycles added to each fixture canister using this role.
     pub install_cycles: u128,
     /// Exact configured role implemented by the Wasm.
@@ -27,7 +51,7 @@ impl ManagedRoleQualificationArtifact {
     #[must_use]
     pub const fn new(role: CanisterRole, wasm: Vec<u8>) -> Self {
         Self {
-            application_init_args: None,
+            application_init_args: ManagedApplicationInit::None,
             install_cycles: DEFAULT_INSTALL_CYCLES,
             role,
             wasm,

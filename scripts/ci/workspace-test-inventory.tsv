@@ -20,6 +20,7 @@ canic	config_guide	full	parallel	ordinary
 canic	control_plane_facade	full	parallel	ordinary
 canic	endpoint_macro	full	parallel	ordinary
 canic	fleet_coordinator_surface	full	parallel	ordinary
+canic	ids_facade	full	parallel	ordinary
 canic	install_script_surface	fast	parallel	ordinary
 canic	managed_endpoint_gate	full	parallel	ordinary
 canic	metrics_facade	full	parallel	ordinary

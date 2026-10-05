@@ -146,7 +146,17 @@ success; failure prints at most the last 100 trace lines plus the full log path.
 - These canisters are not Canic fleets and must not use fleet install logic.
 - Their `build.rs` MUST embed static config via `canic::build!`.
 - Test canisters MUST NOT use `ConfigTestBuilder` or private `canic-core` config internals.
-- No test canister build script may rely on environment-based config overrides.
+- Fixture build scripts retain their static `canic::build!` path. The internal
+  artifact harness may select a build-time fixture variant through
+  `CANIC_INTERNAL_BUILD_CONFIG_PATH`; tests must not use it for runtime config.
+
+The harness passes this selection to the individual build command and includes
+the selected config file and build environment in the artifact-cache inputs.
+For example, the five-Component refill journey builds `delegation_root_stub`
+with `canisters/test/delegation_root_stub/canic.five-components.toml` instead of
+the crate's default `canic.toml`. The selected config is embedded in the Wasm;
+editing the default config does not change that variant. This remains a
+Category C embedded-config test, without a test-specific `build.rs` branch.
 
 ---
 

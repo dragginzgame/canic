@@ -57,6 +57,8 @@ mod tests {
     #[cfg(test)]
     mod replay_release;
     #[cfg(test)]
+    mod root_membership;
+    #[cfg(test)]
     mod root_public_key;
     #[cfg(test)]
     mod sibling_funding;
@@ -291,8 +293,8 @@ mod tests {
         CachedPocketIcBaselinePool, CachedPocketIcBaselinePoolGuard, CandidCallError,
         CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
         FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-        ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
-        ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
+        ReadinessReceipt, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
+        SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
         is_dead_pocket_ic_transport_error,
     };
     #[cfg(test)]
@@ -1490,7 +1492,7 @@ mod tests {
                 id: FixtureRecipeId::try_new("canic/active-component-registry/v1")?,
                 reset_requirements: ResetRequirements::try_new(
                     CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
-                    [ResetRequirement::PocketIcTime(
+                    [ResetDomainPolicy::PocketIcTime(
                         TimeResetPolicy::PreserveCurrent,
                     )],
                 )?,
@@ -1569,7 +1571,7 @@ mod tests {
             baseline: &CachedPocketIcBaseline<Self::Metadata>,
         ) -> Result<ResetReceipt, Self::Error> {
             reset_unclaimed_pool_assets(baseline)?;
-            ResetReceipt::try_new([ResetAchievement::PocketIcTime(
+            ResetReceipt::try_new([ResetDomainPolicy::PocketIcTime(
                 TimeResetPolicy::PreserveCurrent,
             )])
             .map_err(Into::into)
@@ -4582,6 +4584,7 @@ exec icp "$@"
         assert_eq!(child_binding.role.as_str(), "user_shard");
         assert_eq!(child_binding.parent_canister_id, *hub);
         assert_eq!(child_binding.component, *hub_binding);
+        root_membership::assert_child_discovery(&pic, fixture.root_id, hub_binding, child_binding);
         let store = fixture.response.wasm_store;
         let controller = fixture
             .init_args
@@ -14178,6 +14181,7 @@ cycles = "80T"
         for _ in 0..2 {
             let fixture = acquire_active_component_registry();
             root_public_key::assert_controller_key_discovery(fixture.pic(), fixture.root);
+            root_membership::assert_membership_discovery(&fixture);
             super::super::role_attestation::assert_registry_bound_role_attestation(
                 fixture.pic(),
                 fixture.root,

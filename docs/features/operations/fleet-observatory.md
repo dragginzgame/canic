@@ -3,8 +3,8 @@
 The host-owned observatory collects one terminal Fleet's retained identity and
 independent live role observations. `canic-host::observatory` supplies passive
 views, a data-only profile, escaped HTML and a framework-neutral HTTP adapter.
-The downstream application owns serving, collection scheduling and its own
-application sections. Canonical canisters do not contain a renderer or a new
+The downstream application owns serving, collection scheduling and the meaning
+of its published application metrics. Canonical canisters do not contain a renderer or a new
 polling service. These are current schema-version-1 contracts, subject to the
 pre-1.0 reinstall-only hard cut.
 
@@ -23,6 +23,7 @@ or a new polling service.
 | Interpret partial evidence | [Evidence And Partial Results](#evidence-and-partial-results) |
 | Investigate cost | [Cost Investigation](#cost-investigation) |
 | Inspect Store artifacts | [Store Inventory](#store-inventory) |
+| Inspect application usage | [Application Metrics](#application-metrics) |
 | Publish a bounded public view | [Public Publication And Freshness](#public-publication-and-freshness) |
 | Check resource ceilings | [Host Budgets](#host-budgets) |
 
@@ -79,6 +80,38 @@ controller bypass. Missing bindings, denial, malformed replies, timeouts and
 unsupported selectors remain explicit unavailable values. Funding balances are
 exact native cycle integers encoded as decimal strings; they are not Ledger
 balances or conservation receipts.
+
+## Application metrics
+
+Every role instance includes an independent `application_metrics` observation
+from `canic_public_status`'s cached `Application` family. Collection issues at
+most one additional query per instance, with no retries, inside the existing
+response and collection budgets. It reads at most 256 rows; pagination or source
+truncation remains explicit. A failure leaves other role observations intact.
+No application-specific library or endpoint is linked into the collector.
+
+The private JSON retains each row's name, optional canister dimension, unit,
+exact decimal-string value, measurement kind and original observation time.
+The family's `sampled_at_ns` is its oldest source observation, not the time the
+Host received a reply. Disabled, unavailable, stale and truncated pages are not
+zero usage. Application owners must explicitly select `application` in
+`public_metrics` and register a bounded sampler or record bounded samples.
+
+Public JSON and HTML include only undimensioned rows or rows attributed to the
+reporting canister. They strip that Principal and identify the role instance by
+its report key and label. Other canister dimensions are omitted and the page is
+marked partial, never combined with the reporting canister's totals. Names that
+would collide after dimension removal are also omitted from the public page;
+the private snapshot retains all original rows. Source
+age is checked in addition to Host observation age when rendering; an old sample
+cannot become fresh just because a new query succeeded. Names and units are
+escaped in HTML. Published names must themselves be safe for public disclosure.
+
+The collector does not infer application units, sum values, calculate billing,
+or discover additional service instances. For example, the isolated
+[blob adapter](../blob-storage/README.md#usage-reporting) supplies distinct
+logical, physical, liability and reserved byte gauges through this same generic
+surface. Ordinary Canic builds do not acquire a blob dependency.
 
 ## Cost investigation
 
@@ -208,7 +241,7 @@ counters and are not used to infer this inventory.
 `ops::presentation::public_view` removes exact Fleet identities, Principals,
 parents, subnets, release/module hashes, admission counts, local journal and
 funding. The public contract retains role labels, reporting/bootstrap facts and
-aggregate Store inventory. Free-form runtime errors and subprocess diagnostics
+aggregate Store inventory and explicitly public application metrics. Free-form runtime errors and subprocess diagnostics
 are excluded. The data-only profile cannot reintroduce private fields.
 
 `ops::presentation::http_response` serves `/` as escaped HTML and
@@ -221,7 +254,7 @@ artifacts: they do not acquire live freshness merely by being hosted.
 
 Downstream code should retain private snapshots only in its trusted collector,
 pass them through this public projection, and serve the returned public bytes.
-Application data needs its own explicit application-owned view.
+Other application data needs its own explicit application-owned view.
 
 ## Host budgets
 
@@ -240,9 +273,10 @@ truncating. The runner captures bounded streams before JSON/Candid decoding,
 kills and reaps its exact timed-out child, and excludes diagnostics from views.
 The collection deadline includes the bounded ICP version check and limits each
 remaining query. Local authority-file reads are outside the remote-query time
-budget. Each role ordinarily uses at most three queries; unsupported protected
+budget. Each role ordinarily uses at most four queries, including one application
+metrics query; unsupported protected
 selectors issue none. `--costs` adds at most four cached public queries per role
-within the same deadline, for a maximum of seven. It does not discover additional
+within the same deadline, for a maximum of eight. It does not discover additional
 canisters or create a periodic collector.
 Candid decoding also has finite work/skipping quotas. Report serialization uses a finite writer.
 

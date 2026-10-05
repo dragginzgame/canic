@@ -11,10 +11,9 @@ license = "MIT"
 [workspace.dependencies]
 candid = "0.10.36"
 canic = { path = "../../crates/canic", default-features = false }
-ic-blob-storage = "=0.14.1"
+ic-blob-storage = "=0.14.9"
 ic-cdk = "0.20.3"
-ic-memory = "0.24"
-serde = { version = "1.0", features = ["derive"] }
+ic-memory = "0.25"
 
 [package]
 name = "canic-blob-service"
@@ -24,12 +23,7 @@ rust-version.workspace = true
 license.workspace = true
 publish = false
 
-[package.metadata.canic]
-app = "blob-service"
-role = "blob"
-
 [lib]
-crate-type = ["cdylib"]
 test = false
 doctest = false
 
@@ -39,13 +33,3 @@ canic = { workspace = true, features = [] }
 ic-blob-storage.workspace = true
 ic-cdk.workspace = true
 ic-memory.workspace = true
-serde.workspace = true
-
-[build-dependencies]
-canic = { workspace = true, features = [] }
-
-[profile.release]
-opt-level = "z"
-lto = true
-codegen-units = 1
-panic = "abort"

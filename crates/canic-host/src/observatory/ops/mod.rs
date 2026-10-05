@@ -2,6 +2,7 @@
 
 pub mod comparison;
 mod cost;
+mod metrics;
 pub mod presentation;
 pub mod transport;
 
@@ -11,6 +12,7 @@ use crate::{
     observatory::{ObservatoryError, model::ObservatoryOptions, view::*},
     registry::RegistryEntry,
 };
+use canic_core::dto::public_status::PublicMetricFamily;
 use std::{
     path::Path,
     time::{Instant, SystemTime, UNIX_EPOCH},
@@ -122,6 +124,10 @@ pub(super) fn collect_role(
         funding: outcome(
             transport.funding(entry),
             ObservationSource::ProtectedRoleStatus,
+        ),
+        application_metrics: outcome(
+            transport.metric_samples(entry, PublicMetricFamily::Application),
+            ObservationSource::PublicMetricCache,
         ),
         costs: collect_costs.then(|| cost::collect(entry, transport)),
         estate: outcome(

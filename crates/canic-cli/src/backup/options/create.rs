@@ -53,7 +53,7 @@ impl BackupCreateOptions {
 pub(in crate::backup) fn backup_create_command() -> ClapCommand {
     ClapCommand::new("create")
         .bin_name("canic backup create")
-        .about("Create a topology-aware deployment backup")
+        .about("Plan a deployment backup (--dry-run only; live capture unavailable)")
         .disable_help_flag(true)
         .arg(
             value_arg("fleet")

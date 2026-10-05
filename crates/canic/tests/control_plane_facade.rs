@@ -4,6 +4,7 @@ use canic::{
     Error,
     access::{AccessContext, AccessError, AsyncAccessPredicate, async_trait},
     api::canister::component::RootComponentMembershipApi,
+    dto::component_registry::{RootMembershipRequest, RootMembershipResponse},
     ids::{ManagedCanisterBinding, TemplateChunkingMode, TemplateManifestState},
 };
 
@@ -33,5 +34,7 @@ fn control_plane_facade_reexports_template_manifest_enums() {
 fn control_plane_facade_exposes_root_membership_and_custom_async_access_contracts() {
     let _: fn(candid::Principal) -> Result<ManagedCanisterBinding, Error> =
         RootComponentMembershipApi::active_member;
+    let _: fn(RootMembershipRequest) -> Result<RootMembershipResponse, Error> =
+        RootComponentMembershipApi::lookup;
     require_async_predicate::<PublicAsyncPredicate>();
 }

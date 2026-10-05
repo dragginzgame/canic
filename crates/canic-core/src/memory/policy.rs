@@ -20,9 +20,8 @@ use crate::{
     },
 };
 use ic_memory::{
-    AllocationPolicy, AllocationSlotDescriptor, MemoryManagerAuthorityRecord, MemoryManagerIdRange,
-    MemoryManagerRangeMode, MemoryManagerSlotError, PolicyIdentity, PolicyIdentityError,
-    RuntimeBootstrapPolicy, StableKey,
+    AllocationPolicy, MemoryManagerAuthorityRecord, MemoryManagerIdRange, MemoryManagerRangeMode,
+    MemoryManagerSlot, PolicyIdentity, PolicyIdentityError, RuntimeBootstrapPolicy, StableKey,
 };
 
 use sha2::{Digest as _, Sha256};
@@ -67,25 +66,17 @@ impl AllocationPolicy for CanicMemoryManagerPolicy {
         Ok(())
     }
 
-    fn validate_slot(
-        &self,
-        key: &StableKey,
-        slot: &AllocationSlotDescriptor,
-    ) -> Result<(), Self::Error> {
-        let id = slot
-            .memory_manager_id()
-            .map_err(memory_slot_error_to_registry_error)?;
+    fn validate_slot(&self, key: &StableKey, slot: &MemoryManagerSlot) -> Result<(), Self::Error> {
+        let id = slot.id();
         validate_key_id_claim(id, key.as_str())
     }
 
     fn validate_reserved_slot(
         &self,
         key: &StableKey,
-        slot: &AllocationSlotDescriptor,
+        slot: &MemoryManagerSlot,
     ) -> Result<(), Self::Error> {
-        let id = slot
-            .memory_manager_id()
-            .map_err(memory_slot_error_to_registry_error)?;
+        let id = slot.id();
         if !ic_memory::is_ic_memory_stable_key(key.as_str()) && !key.as_str().starts_with("canic.")
         {
             return Err(MemoryRegistryError::RangeAuthorityViolation {
@@ -347,25 +338,6 @@ fn canic_control_plane_range() -> MemoryManagerIdRange {
         .expect("valid Canic control-plane range")
 }
 
-fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryRegistryError {
-    match err {
-        MemoryManagerSlotError::InvalidMemoryManagerId { id } => {
-            MemoryRegistryError::InvalidDeclaration {
-                stable_key: "<slot>".to_string(),
-                reason: if id == ic_memory::MEMORY_MANAGER_INVALID_ID {
-                    "MemoryManager ID 255 is not usable"
-                } else {
-                    "MemoryManager ID is not usable"
-                },
-            }
-        }
-        _ => MemoryRegistryError::InvalidDeclaration {
-            stable_key: "<slot>".to_string(),
-            reason: "unsupported MemoryManager slot error",
-        },
-    }
-}
-
 // -----------------------------------------------------------------------------
 // Tests
 // -----------------------------------------------------------------------------
@@ -373,6 +345,7 @@ fn memory_slot_error_to_registry_error(err: MemoryManagerSlotError) -> MemoryReg
 #[cfg(test)]
 mod tests {
     use super::*;
+    use ic_memory::MemoryManagerSlotError;
 
     fn policy() -> CanicMemoryManagerPolicy {
         CanicMemoryManagerPolicy::new()
@@ -393,13 +366,13 @@ mod tests {
         StableKey::parse(value).expect("stable key")
     }
 
-    fn slot(id: u8) -> AllocationSlotDescriptor {
-        AllocationSlotDescriptor::memory_manager(id).expect("usable MemoryManager id")
+    fn slot(id: u8) -> MemoryManagerSlot {
+        MemoryManagerSlot::new(id).expect("usable MemoryManager id")
     }
 
     #[test]
     fn rejects_memory_manager_sentinel_id_through_ic_memory() {
-        let err = AllocationSlotDescriptor::memory_manager(ic_memory::MEMORY_MANAGER_INVALID_ID)
+        let err = MemoryManagerSlot::new(ic_memory::MEMORY_MANAGER_INVALID_ID)
             .expect_err("ID 255 is the unallocated-bucket sentinel");
         std::assert_matches!(
             err,

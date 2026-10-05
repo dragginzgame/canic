@@ -1,0 +1,7 @@
+canisters:
+  - name: backend
+
+environments:
+  - name: local
+    network: local
+    canisters: [backend]

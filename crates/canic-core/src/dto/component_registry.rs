@@ -22,6 +22,19 @@ use crate::{
 use candid::{CandidType, Principal};
 use serde::{Deserialize, Serialize};
 
+/// Subject of an authoritative, point-in-time Root membership lookup.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootMembershipRequest {
+    pub subject: Principal,
+}
+
+/// Active binding, including a descendant's own role, or an ordinary negative.
+/// Registry and runtime failures are returned separately as endpoint errors.
+#[derive(CandidType, Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+pub struct RootMembershipResponse {
+    pub member: Option<ManagedCanisterBinding>,
+}
+
 ///
 /// RootComponentRegistryPreparationRequest
 ///

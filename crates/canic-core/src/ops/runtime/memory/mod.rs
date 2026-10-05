@@ -249,7 +249,7 @@ fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocati
     let allocation = record.allocation;
     let allocation_state = allocation.state();
     MemoryAllocationRecordEntry {
-        memory_manager_id: allocation.slot().memory_manager_id().ok(),
+        memory_manager_id: Some(allocation.slot().id()),
         stable_key: allocation.stable_key().as_str().to_string(),
         state: memory_allocation_state_response(allocation_state),
         memory_size,

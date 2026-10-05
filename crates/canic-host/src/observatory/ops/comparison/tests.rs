@@ -19,23 +19,23 @@ fn unavailable<T>() -> Observation<T> {
     }
 }
 
-fn row(name: &str, principal: Option<String>, amount: u128, at: u64) -> CostMetricView {
-    CostMetricView {
+fn row(name: &str, principal: Option<String>, amount: u128, at: u64) -> MetricView {
+    MetricView {
         name: name.into(),
         canister_id: principal,
         value: amount.to_string(),
         unit: "cycles".into(),
         observed_at_ns: at,
-        measurement: CostMetricKind::Counter {
+        measurement: MetricKind::Counter {
             window_id: 0,
             saturated: false,
         },
     }
 }
 
-fn frame(at: u64, rows: Vec<CostMetricView>) -> Observation<CostSamplesView> {
-    observed(CostSamplesView {
-        state: CostSampleState::Fresh,
+fn frame(at: u64, rows: Vec<MetricView>) -> Observation<MetricSamplesView> {
+    observed(MetricSamplesView {
+        state: MetricSampleState::Fresh,
         sampled_at_ns: Some(at),
         stale_after_ns: 500,
         truncated: false,
@@ -45,7 +45,7 @@ fn frame(at: u64, rows: Vec<CostMetricView>) -> Observation<CostSamplesView> {
 
 fn role(id: u8, at: u64, balance: u128, grants: u128) -> ObservatoryRoleView {
     let mut balance = row("balance", Some(pid(id)), balance, at);
-    balance.measurement = CostMetricKind::Gauge;
+    balance.measurement = MetricKind::Gauge;
     let mut funding = vec![row("cycles_funding.cycles_granted_total", None, grants, at)];
     if id == 1 {
         funding.push(row(
@@ -66,6 +66,7 @@ fn role(id: u8, at: u64, balance: u128, grants: u128) -> ObservatoryRoleView {
         funding: unavailable(),
         estate: unavailable(),
         store: unavailable(),
+        application_metrics: unavailable(),
         costs: Some(RoleCostEvidenceView {
             balance: frame(at, vec![balance]),
             funding_and_callbacks: frame(at, funding),
@@ -146,13 +147,13 @@ fn with_timers() -> (ObservatorySnapshotView, ObservatorySnapshotView) {
             ("perf.timer.app.jobs.tick.work.calls", "count", amount / 10),
         ]
         .into_iter()
-        .map(|(name, unit, amount)| CostMetricView {
+        .map(|(name, unit, amount)| MetricView {
             name: name.into(),
             canister_id: None,
             value: amount.to_string(),
             unit: unit.into(),
             observed_at_ns: at,
-            measurement: CostMetricKind::TimerCounter {
+            measurement: MetricKind::TimerCounter {
                 registration: TimerRegistrationView {
                     canister_version: 1,
                     started_at_ns: 40,
@@ -208,7 +209,7 @@ fn timer_comparison_preserves_registration_units_and_independent_source_interval
 fn timer_reset_and_regrowth_reject_even_when_values_increase() {
     let (before, mut after) = with_timers();
     let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[0];
-    let CostMetricKind::TimerCounter { registration, .. } = &mut row.measurement else {
+    let MetricKind::TimerCounter { registration, .. } = &mut row.measurement else {
         panic!();
     };
     registration.sequence += 1;
@@ -224,7 +225,7 @@ fn timer_reset_and_regrowth_reject_even_when_values_increase() {
         CostComparisonResult::Available { .. }
     ));
     let row = &mut data(&mut costs(&mut after, 1).timer_instructions).rows[0];
-    let CostMetricKind::TimerCounter { registration, .. } = &mut row.measurement else {
+    let MetricKind::TimerCounter { registration, .. } = &mut row.measurement else {
         panic!();
     };
     registration.sequence = 3;
@@ -261,7 +262,7 @@ fn timer_saturation_decreases_and_malformed_values_never_become_deltas() {
     for opening in [false, true] {
         let (mut before, mut after) = with_timers();
         let snapshot = if opening { &mut before } else { &mut after };
-        let CostMetricKind::TimerCounter { saturated, .. } =
+        let MetricKind::TimerCounter { saturated, .. } =
             &mut data(&mut costs(snapshot, 1).timer_instructions).rows[0].measurement
         else {
             panic!();
@@ -317,10 +318,10 @@ fn timer_missing_rows_and_repeated_source_samples_remain_unavailable() {
 
 #[test]
 fn timer_invalid_pages_fail_without_hiding_independent_balances() {
-    type Mutation = fn(&mut CostSamplesView);
+    type Mutation = fn(&mut MetricSamplesView);
     let cases: &[(Mutation, CostComparisonFailure)] = &[
         (
-            |page| page.state = CostSampleState::Stale,
+            |page| page.state = MetricSampleState::Stale,
             CostComparisonFailure::StaleSample,
         ),
         (
@@ -340,13 +341,12 @@ fn timer_invalid_pages_fail_without_hiding_independent_balances() {
             CostComparisonFailure::InvalidMetric,
         ),
         (
-            |page| page.rows[0].measurement = CostMetricKind::Gauge,
+            |page| page.rows[0].measurement = MetricKind::Gauge,
             CostComparisonFailure::InvalidMetric,
         ),
         (
             |page| {
-                let CostMetricKind::TimerCounter { registration, .. } =
-                    &mut page.rows[0].measurement
+                let MetricKind::TimerCounter { registration, .. } = &mut page.rows[0].measurement
                 else {
                     panic!();
                 };
@@ -356,8 +356,7 @@ fn timer_invalid_pages_fail_without_hiding_independent_balances() {
         ),
         (
             |page| {
-                let CostMetricKind::TimerCounter { registration, .. } =
-                    &mut page.rows[0].measurement
+                let MetricKind::TimerCounter { registration, .. } = &mut page.rows[0].measurement
                 else {
                     panic!();
                 };
@@ -476,25 +475,25 @@ fn unqualified_counters_do_not_erase_valid_balance_movement() {
     let (before, after) = snapshots();
     for (change, expected) in [
         (
-            (|s: &mut CostSamplesView| s.state = CostSampleState::Stale)
-                as fn(&mut CostSamplesView),
+            (|s: &mut MetricSamplesView| s.state = MetricSampleState::Stale)
+                as fn(&mut MetricSamplesView),
             CostComparisonFailure::StaleSample,
         ),
         (
-            |s: &mut CostSamplesView| s.truncated = true,
+            |s: &mut MetricSamplesView| s.truncated = true,
             CostComparisonFailure::TruncatedSample,
         ),
         (
-            |s: &mut CostSamplesView| s.rows.clear(),
+            |s: &mut MetricSamplesView| s.rows.clear(),
             CostComparisonFailure::MissingMetric,
         ),
         (
-            |s: &mut CostSamplesView| s.rows[0].value = "19".into(),
+            |s: &mut MetricSamplesView| s.rows[0].value = "19".into(),
             CostComparisonFailure::CounterDecreased,
         ),
         (
-            |s: &mut CostSamplesView| {
-                s.rows[0].measurement = CostMetricKind::Counter {
+            |s: &mut MetricSamplesView| {
+                s.rows[0].measurement = MetricKind::Counter {
                     window_id: 1,
                     saturated: false,
                 }
@@ -502,8 +501,8 @@ fn unqualified_counters_do_not_erase_valid_balance_movement() {
             CostComparisonFailure::CounterWindowChanged,
         ),
         (
-            |s: &mut CostSamplesView| {
-                s.rows[0].measurement = CostMetricKind::Counter {
+            |s: &mut MetricSamplesView| {
+                s.rows[0].measurement = MetricKind::Counter {
                     window_id: 0,
                     saturated: true,
                 }
@@ -511,19 +510,19 @@ fn unqualified_counters_do_not_erase_valid_balance_movement() {
             CostComparisonFailure::SaturatedCounter,
         ),
         (
-            |s: &mut CostSamplesView| s.rows[0].value = "-1".into(),
+            |s: &mut MetricSamplesView| s.rows[0].value = "-1".into(),
             CostComparisonFailure::InvalidMetric,
         ),
         (
-            |s: &mut CostSamplesView| s.rows[0].value = "0520".into(),
+            |s: &mut MetricSamplesView| s.rows[0].value = "0520".into(),
             CostComparisonFailure::InvalidMetric,
         ),
         (
-            |s: &mut CostSamplesView| s.rows[0].unit = "instructions".into(),
+            |s: &mut MetricSamplesView| s.rows[0].unit = "instructions".into(),
             CostComparisonFailure::InvalidMetric,
         ),
         (
-            |s: &mut CostSamplesView| s.rows.push(s.rows[0].clone()),
+            |s: &mut MetricSamplesView| s.rows.push(s.rows[0].clone()),
             CostComparisonFailure::InvalidMetric,
         ),
     ] {

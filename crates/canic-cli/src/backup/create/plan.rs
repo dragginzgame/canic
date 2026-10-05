@@ -8,7 +8,6 @@ use super::super::BackupCommandError;
 use crate::support::path_stamp::{current_backup_directory_stamp, file_safe_component};
 use candid::Principal;
 use canic_backup::{
-    plan::{AuthorityEvidence, ControlAuthority, SnapshotReadAuthority},
     registry::RegistryEntry as BackupRegistryEntry,
     topology::{TopologyHasher, TopologyRecord},
 };
@@ -71,32 +70,6 @@ pub(super) fn default_backup_output_path(fleet: &str) -> PathBuf {
         file_safe_component(fleet),
         current_backup_directory_stamp()
     ))
-}
-
-pub(super) const fn backup_control_authority(dry_run: bool) -> ControlAuthority {
-    if dry_run {
-        ControlAuthority::root_controller(AuthorityEvidence::Declared)
-    } else {
-        ControlAuthority::operator_controller(AuthorityEvidence::Proven)
-    }
-}
-
-pub(super) const fn backup_snapshot_read_authority(dry_run: bool) -> SnapshotReadAuthority {
-    if dry_run {
-        SnapshotReadAuthority::root_configured_read(AuthorityEvidence::Declared)
-    } else {
-        SnapshotReadAuthority::operator_controller(AuthorityEvidence::Proven)
-    }
-}
-
-pub(super) const fn backup_quiescence_policy(
-    dry_run: bool,
-) -> canic_backup::plan::QuiescencePolicy {
-    if dry_run {
-        canic_backup::plan::QuiescencePolicy::RootCoordinated
-    } else {
-        canic_backup::plan::QuiescencePolicy::CrashConsistent
-    }
 }
 
 #[cfg(test)]

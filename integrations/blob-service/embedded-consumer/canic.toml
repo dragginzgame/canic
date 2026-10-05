@@ -1,0 +1,30 @@
+# Explicitly publish aggregate service accounting through Canic's cached metrics.
+public_metrics = ["application"]
+
+[app]
+name = "embedded-app"
+init_mode = "enabled"
+
+[roles.root]
+kind = "root"
+
+[roles.backend]
+kind = "canister"
+package = "."
+
+[auth.delegated_tokens]
+enabled = false
+
+[component_specs.backend]
+component_role = "backend"
+maximum_instances = 1
+
+[component_groups.backend.components.backend]
+component_spec = "backend"
+
+[component_group_deployments.backend]
+component_group = "backend"
+initial_placements = 1
+maximum_placements = 1
+placement.maximum_per_root = 1
+placement.minimum_distinct_roots = 1

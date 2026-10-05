@@ -2,11 +2,13 @@
 
 mod comparison;
 mod cost;
+mod metrics;
 
 use serde::{Deserialize, Serialize};
 
 pub use comparison::*;
 pub use cost::*;
+pub use metrics::*;
 
 /// Stable failure classes never carry private tool output or free-form runtime errors.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -120,6 +122,7 @@ pub struct ObservatoryRoleView {
     pub costs: Option<RoleCostEvidenceView>,
     pub estate: Observation<RootEstateView>,
     pub store: Observation<StoreInventoryView>,
+    pub application_metrics: Observation<MetricSamplesView>,
 }
 
 /// Private terminal provenance without controller lists, admission users or mutation proofs.
@@ -181,6 +184,7 @@ pub struct PublicObservatoryRoleView {
     pub role: String,
     pub overview: Observation<RoleOverviewView>,
     pub store: Observation<StoreInventoryView>,
+    pub application_metrics: Observation<MetricSamplesView>,
 }
 
 /// Publishable JSON/HTML input; profiles cannot reintroduce private fields.

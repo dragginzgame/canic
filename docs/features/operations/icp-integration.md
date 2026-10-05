@@ -81,7 +81,7 @@ visibility and cumulative query counters when available. `AllowedViewers` and
 keeps unavailable cycles/settings/status fields absent rather than fabricating
 zero balances or control authority. The command never changes visibility settings.
 ICP obtains management status through an update, which can incur network charges.
-Role-specific `inspect canister` and Observatory queries retain their existing purpose.
+Role-specific `inspect fleet` and Observatory queries retain their existing purpose.
 
 Successful version qualification is shared by one `IcpCli` context and its clones
 for typed calls. A new context or changed working directory checks again; failures

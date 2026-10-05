@@ -29,14 +29,12 @@ pub struct BackupCreateReport {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackupCreateMode {
     DryRun,
-    Execute,
 }
 
 impl BackupCreateMode {
     pub const fn label(self) -> &'static str {
         match self {
             Self::DryRun => "dry-run",
-            Self::Execute => "execute",
         }
     }
 }
@@ -66,19 +64,13 @@ impl BackupCreateLayout {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 pub enum BackupRunStatus {
-    Complete,
-    Paused,
     Planned,
-    Running,
 }
 
 impl BackupRunStatus {
     pub const fn label(self) -> &'static str {
         match self {
-            Self::Complete => "complete",
-            Self::Paused => "paused",
             Self::Planned => "planned",
-            Self::Running => "running",
         }
     }
 }

@@ -15,7 +15,7 @@ pub use managed_app::{
     StandaloneAppFixture, install_managed_app, install_standalone_app,
 };
 pub use managed_component_group::{
-    ManagedComponentGroupFixture, ManagedComponentGroupQualificationError,
+    ManagedApplicationInit, ManagedComponentGroupFixture, ManagedComponentGroupQualificationError,
     ManagedComponentGroupQualificationInput, ManagedComponentNode,
     ManagedRoleQualificationArtifact, install_managed_component_group,
 };

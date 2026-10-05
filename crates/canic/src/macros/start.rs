@@ -574,6 +574,16 @@ macro_rules! finish {
 /// Fleet infrastructure uses its canonical entrypoints. This macro configures
 /// application canisters only.
 ///
+/// Define async `canic_setup()`, `canic_install(args: Option<Vec<u8>>)` and
+/// `canic_upgrade()` hooks returning `()`, and place [`finish!`] after all
+/// endpoint definitions.
+///
+/// The optional `init = { ... }` block runs on initial activation and active
+/// same-release post-upgrade. It executes in a zero-delay timer after Canic
+/// restoration, before deferred setup and phase hooks. Keep it idempotent;
+/// put install-only work in `canic_install`. A paired lifecycle participant
+/// instead runs synchronously after restoration and before deferred work.
+///
 /// This macro defines the IC-required `init` and `post_upgrade` entry points
 /// at the crate root and immediately delegates lifecycle semantics to runtime
 /// adapters after performing minimal bootstrap.
@@ -666,6 +676,9 @@ macro_rules! start {
 /// canisters, release-set members, or test fixtures that need real topology
 /// metadata. Those should use [`start!`] and receive explicit lifecycle args.
 /// Accepts the same `argument_limits` and participant options as [`start!`].
+/// The optional `init = { ... }` block runs in a zero-delay timer after both
+/// installation and active same-release post-upgrade, before deferred setup
+/// and phase hooks. Keep it idempotent; use `canic_install` for install-only work.
 #[macro_export]
 macro_rules! start_local {
     (
@@ -705,6 +718,10 @@ macro_rules! start_local {
 /// generic observability and topology-view queries that are not part of the
 /// canonical `wasm_store` contract. It still exposes the standard cycle tracker
 /// so fleet metrics can treat the store like every other managed canister.
+///
+/// The optional `init = { ... }` block runs in a zero-delay timer after initial
+/// activation and active same-release post-upgrade, before deferred lifecycle
+/// hooks. Keep it idempotent.
 #[macro_export]
 macro_rules! start_wasm_store {
     ($(argument_limits = $argument_limits:expr,)? $(init = $init:block)? $(,)?) => {

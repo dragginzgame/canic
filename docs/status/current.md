@@ -1,7 +1,267 @@
-# Current handoff — 2026-10-04
+# Current handoff — 2026-10-05
 
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
+
+## Root membership discovery — 2026-10-05
+
+The maintainer prioritized [Canic#39](https://github.com/dragginzgame/canic/issues/39)
+and [Canic#38](https://github.com/dragginzgame/canic/issues/38). The independent
+lookup is implemented in this checkout: `canic_root_membership` is a read-only
+update admitting Root controllers or active local managed members through normal
+Fleet guards. Public request/response DTOs and the protocol constant are exposed
+through Canic. The existing Root owner resolves the exact binding, preserves
+descendants' own roles, returns `None` for ordinary negative membership, and
+retains typed authority failures. It grants no lasting application permission.
+
+Two targeted native error/negative tests pass on the current locked graph.
+Simulator qualification is underway; the generated Root Wasm compiles. The run
+also corrected missing inventory registration for the existing public-ID facade
+test and updated two fixture reset-policy imports to the selected testkit API.
+The open .53 notes and authentication documentation describe the lookup.
+
+The caller-authority implementation remains an isolated, unpropagated draft at
+`.canic/local-work/caller-authority-20261003/source`. Its implementation manifest
+records the old memory graph and incomplete canonical orchestration, capacity
+reservation, retention/cleanup and actual Root simulator qualification. Preserve
+that work; it is not a completed runtime fix and must not be applied wholesale
+over the current lifecycle and memory owners. Neither issue is being claimed as
+published, and this handoff is not whole-worktree push readiness.
+
+## Published blob dependency update — 2026-10-05
+
+The adapter now pins `ic-blob-storage = "=0.14.9"`, confirmed as the latest stable,
+non-yanked release through crates.io metadata. The adapter and both consumer
+lockfiles select that published crate; unrelated selected versions are retained.
+The sole declaration is in `integrations/blob-service/Cargo.toml` under
+`workspace.dependencies`. The separate adapter workspace owns this dependency;
+neither the main Canic Cargo workspace nor `canic.toml` controls its version.
+The composition guide explains this boundary and the .53 draft records the pin.
+
+Strict library Clippy passes for the adapter and both consumer examples. Both
+managed Fast Wasm builds and dedicated/embedded PocketIC proofs pass with 0.14.9:
+exact certificate replies, refusal without unwanted effects, application/blob
+state separation, combined metrics, same-release restoration and operator-only
+recovery. Evidence: `target/review-validation/blob-0149-*.log` and
+`blob-0149-results.jsonl`. Final artifact SHA-256 values are
+`bf58243855c5f461102beb431eadeed75f48fb45f5da8354ffca39c01a54d542`
+(dedicated) and
+`e27583684607b12cba9d0a445966e5aae5e26df83bc42806602f71afddff3be3`
+(embedded). These supersede the preceding 0.14.6 artifact results below.
+
+This dependency adoption is qualified. The broader runtime-argument delivery
+work under [Canic#444](https://github.com/dragginzgame/canic/issues/444) remains
+open; no live deployment or whole-worktree release qualification is claimed.
+Package versions, sibling repositories and release authority are unchanged.
+
+## Optional embedded blob management — 2026-10-05
+
+The maintainer selected both embedded and dedicated placement under
+[Canic#444](https://github.com/dragginzgame/canic/issues/444). The adapter exposes
+`mount!(memory = 150..=166)`, synchronous `lifecycle::install` / `restore` and
+`metrics::sample`. The application retains its single lifecycle, Candid export,
+memory bootstrap and sampler. Mounting contributes endpoints and seventeen
+memory requests in a host-selected range; typed installation and restoration
+do not replace the host's sampler. The dedicated `canister!` macro assembles
+these same parts with its existing default range and blob-only sampler.
+
+The new isolated `integrations/blob-service/embedded-consumer` example has its
+own durable counter, endpoints and combined metrics. Its counter occupies memory
+120, with blob grants at 150–166. Both examples remain outside Canic's default
+test graph. No service dependency or production blob mechanism was added to Core.
+The [composition guide](../features/blob-storage/README.md) explains both choices
+and the shared pattern for other optional adapters; those other adapters are not
+implemented by these blob-specific macros.
+
+Adapter and both consumer libraries pass warning-denied Clippy. Both managed
+Fast Wasm builds pass after the concurrent timer adoption: the isolated graphs
+select service 0.14.6, memory 0.25.0 and timers 0.11.4. Dedicated artifact SHA-256:
+`85924410e8d7631a260dd633953f9ab1069ee2cd10d7c30a69afe4b070a01a1a`;
+embedded artifact SHA-256:
+`64db8896b6f14c68536d86576110e9650d54a23c667d339e7055c8787141e517`.
+Both focused PocketIC cases pass with the native driver using query 0.46.1,
+testkit 0.15.4, timers 0.11.4 and memory 0.25.1. The embedded case additionally
+proves independent application state and endpoints, both metric families,
+noninterference from refused and accepted blob mutations, and restoration of
+both owners before subsequent application and service updates. Both forms retain
+exact plain certificate replies, access/decoder refusal and operator-only recovery.
+
+Qualification corrected an invalid hyphenated stable key in the new example;
+the native bootstrap probe exposed the typed key-validation failure behind
+`init: E137`. The corrected `embedded_app.counter.v1` commits separately at 120,
+with blob grants at 150–166. Final Clippy, managed build and PocketIC checks pass.
+Evidence is under `target/review-validation/blob-embedding-*`; the results JSONL
+retains command outcomes and timings. Earlier native results below retain their
+original dependency scope. The embedding implementation and its focused
+qualification are complete; this is not a whole-worktree push-readiness claim.
+
+Applications may construct typed blob configuration from their compiled settings
+and actual hosting Principal, or decode bounded external installation input.
+Root's production argument-delivery gap remains for runtime-supplied arguments,
+including the contracts chosen by both examples. This work does not qualify a
+Toko deployment, paid uploads, provider capacity or arbitrary terabyte workloads.
+The .53 draft includes the composition change; package versions remain .52.
+No broad suite, sibling edit, release transaction, deployment or Git publication ran.
+
+## Combined .53 qualification and production delivery boundary — 2026-10-04
+
+The current combined checkout passes 112 selected native regressions and all
+12 facade doctests: Core activation/attestation, Host configuration/evidence/
+provenance/transport, CLI inspection/configuration/funding/help, and public
+identifier/protocol/performance surfaces. Warning-denied Clippy passes for Core,
+Host, CLI and facade library/test targets. This supersedes the pending native
+qualification statements in the independent issue-review checkpoint below.
+One stale CLI text assertion still expected the removed explicit-input source;
+it now checks the maintained current-inventory source, matching the existing
+fixture and JSON contract. Logs are `target/review-validation/053-*.log`;
+`053-targeted-results.jsonl` records commands, outcomes and timings. Compilation
+used one Cargo job and command-local Host profile overrides; repository build
+profiles were unchanged. The embedded peer was stale after the dependency patch;
+the governed refresh and final read-only verification now pass on memory 0.25.1.
+Its artifact SHA-256 is
+`9a17edf8b847f749a8b48603c91d21de8c720baab72465030a0703391585d47d`.
+Evidence: `053-fixture-refresh.log` and `053-fixture-final-verify.log`.
+
+The focused blob consumer PocketIC proof also passes on the rebuilt service
+0.14.6 / memory 0.25.0 Wasm, with memory 0.25.1 in the native driver. It covers
+actual-Principal-bound installation, exact plain certificate replies, access
+and decoding refusal without tenant effects, usage metrics, same-release restore
+and operator-only recovery. Evidence:
+`target/review-validation/blob-consumer-pocketic-025.log` and the successful
+post-refresh rerun `blob-consumer-pocketic-025-final.log`. The final simulator
+run needed local loopback networking after the sandbox refused PocketIC's port.
+This supersedes the earlier absence of installed evidence on the new dependency
+graph. Targeted qualification of the existing repairs and extraction is complete;
+the full production blob integration remains incomplete for the reason below.
+
+The production trace nevertheless found a real integration gap, tracked in
+[Canic#444](https://github.com/dragginzgame/canic/issues/444): Root's top-level
+Component installer, including Component Group members, passes no application
+arguments. `ManagedApplicationInit::ForCanister` is fixture injection only.
+Production needs bounded post-allocation argument delivery, exact operation and
+canister binding, durable bytes before installation, immutable retries and
+Root/Host integration. Changing `app.init_mode` does not supply arguments; it
+selects the initial Fleet operating mode and defaults to Enabled. The blob and
+qualification guides now expose this limitation. Do not treat the fixture proof
+as a successful production Toko deployment or the complete blob rollout as ready.
+
+The 0.110.53 changelog remains the accumulated draft; package versions remain
+0.110.52. No broad suite, sibling edit, paid provider call, deployment, version
+transaction, commit or Git publication ran.
+
+## Checked memory slots — 2026-10-04
+
+Core adopts published ic-memory 0.25.0: allocation policies consume
+`MemoryManagerSlot`, diagnostic projection reads its infallible ID, and the
+slot-error adapter is removed. The main manifest and lockfile already selected
+this release before the source adoption. Canic retains namespace, range,
+reservation and admission decisions; a checked ID is not allocation authority.
+
+The exact source adoption passes 32 focused policy, runtime-memory, public
+memory-metrics and stable-memory ABI tests against the published crate, strict
+Core library/test Clippy and default-feature Wasm compilation with Rust 1.99.0.
+Checks ran sequentially in an isolated source snapshot with an isolated target;
+the live adopted Rust files and main manifest/lockfile match the qualified inputs.
+Logs are `/tmp/canic-published-0.25-{policy,runtime,metrics,abi,clippy,wasm}.log`.
+The producer retains the qualification record in
+`docs/consumer-qualification-0.25.0-canic.md`. The generated allocation peer was
+refused as stale, then refreshed through its governed helper. Final read-only
+verification passes; its artifact SHA-256 is
+`24cd00206abf8c5249e9ea9aa905fe8d34883d7c6d3ff53743281a25bf1f28bf`.
+Logs are `/tmp/canic-0.25-embedded-{verify,refresh,final-verify}.log`.
+
+The independent blob adapter now selects published ic-blob-storage 0.14.6 and
+ic-memory 0.25.0. Both isolated lockfiles are aligned, and the consumer's Wasm
+normal-dependency graph contains one ic-memory package identity. Earlier
+installed/PocketIC and Toko-copy evidence retains its original 0.24 graph;
+dependency alignment alone does not requalify installed or provider behavior.
+
+On the current graph, the adapter and consumer libraries pass Rust 1.99.0
+Clippy with `--locked --offline --lib -- -D warnings`. The consumer also passes
+the governed Fast-profile `canic build consumer-app blob`: declaration
+extraction, role admission, runtime compilation and artifact finalization all
+complete. Its Wasm SHA-256 is
+`d9be333370c94a07bf60fd4f3fab5dc68968c1ad4dc1341dcb3daf1e02104666`.
+This uses the existing CLI reporting 0.110.52, not a freshly rebuilt CLI.
+Logs are `/tmp/canic-blob-0.25-{library-clippy,consumer-clippy,managed-build}.log`;
+the completed build result is `/tmp/canic-blob-0.25-managed-build.json`.
+At that checkpoint no installed lifecycle proof, live deployment or paid provider
+effect ran; the combined qualification above adds the subsequent simulator proof.
+
+## Reusable blob composition — 2026-10-04
+
+The reusable-library portion of
+[Canic#444](https://github.com/dragginzgame/canic/issues/444) is implemented in
+this working tree; production argument delivery remains open as described above.
+`integrations/blob-service` is a reusable library;
+`canic_blob_service::canister!()` emits the managed endpoints, sole lifecycle and
+service memory registration into a consumer-owned shell. The shell owns exact
+App/role metadata and compiled topology. Upstream DTO imports alone register no
+service memory. Host admits sharing the exact selected public Canic facade while
+retaining App/role, feature-closure, protected-internal and memory-identity checks.
+The adapter remains unpublished and must select the same checkout's Canic facade
+as the consumer. Its upstream dependency stays outside the main workspace.
+
+Before the concurrent 0.25 adoption, targeted evidence passed: 36 Host
+package-contract tests, four generic managed
+Component fixture tests, warning-denied Host/facade and isolated library/consumer
+Clippy, and managed Fast-profile builds for the checked-in consumer and a
+Canic-owned copy of Toko's actual topology with a blob Component. The final Toko
+copy reports 4.38 MiB of Wasm code. Toko's repository was not modified or deployed.
+The generic fixture now accepts `ManagedApplicationInit::ForCanister` to encode
+nested arguments after the actual Principal is allocated; Root-provided child
+arguments retain precedence and protected framework payloads remain unchanged.
+
+On that 0.24 graph, a focused PocketIC consumer proof passed actual-Principal
+installation, exact
+plain certificate Candid reply shape, authorized/denied reads and mutation,
+oversized/malformed input refusal without tenant effects, aggregate per-canister
+metrics, same-release restoration and authenticated current-instance recovery.
+Restoration preserves configuration/enrollment, keeps the upstream fence, and
+rebuilds sampling; only the operator can resume before a subsequent mutation.
+Framework setup can advance the platform version: the next service mutation
+proves continuity through the existing upstream path. No service fence was
+weakened. This temporary proof remains under `target/review-validation/`; no blob
+suite, runner or development dependency was restored to the default test graph.
+
+Evidence logs are `blob-consumer-pocketic.log`,
+`blob-composition-{graph-tests,fixture-tests,framework-clippy}.log`,
+`blob-consumer-{clippy,managed-build}.log` and `blob-toko-managed-build.log` under
+`target/review-validation/`. Embedded-peer refresh passed on the earlier graph.
+At that checkpoint, read-only verification failed after its source snapshot
+caught the concurrent 0.25 manifest change before the Core API adaptation.
+Published service 0.14.5 still required 0.24. The checked-slot handoff above
+records the later Core adoption, fixture refresh and published 0.14.6 alignment.
+The earlier installed/PocketIC and Toko-copy results retain their preceding
+0.24 graph and do not qualify the new combined tree.
+
+The maintainer selected 0.110.53 for the accumulated changelog draft; package
+versions remain unchanged. Toko adoption, live provider behavior and paid uploads
+remain unqualified. Independent issue-review work elsewhere in this handoff is
+outside this blob batch. No broad suite, live deployment, release transaction,
+commit or Git publication ran.
+
+## Allocation registration cleanup — 2026-10-04
+
+Canic's key and range macros now delegate registration to ic-memory. The two
+hidden registration constructors are removed; Canic retains its authority
+constants, per-thread native readiness hook and separate admission registration.
+Admission policy selection still precedes ic-memory declaration sealing. Invalid
+registrations now surface as bootstrap errors before allocation authority is
+published. The stable-memory guide reflects the current 0.24 dependency line.
+Root Unreleased records this change without assigning a release version.
+
+With the locked ic-memory 0.24.7 graph, all 14 Core runtime-memory tests, the
+control-plane lazy-store bootstrap regression and all four stable-memory ABI
+guards pass. Validation used an isolated target at
+`/tmp/canic-memory-consolidation-target` to avoid the concurrent shared build.
+An isolated macro probe also verifies the declaration snapshot, literal and
+constant authority forms, range modes, nested type labels, per-thread readiness,
+invalid-range refusal without committed authority and Wasm compilation.
+Evidence logs are `/tmp/canic-memory-consolidation-*.log`. These are scoped memory
+results; the remaining blob and independent issue-review qualification below
+still belongs to those batches. No dependency, package version or generated
+binding changed in this cleanup.
 
 ## Blob extraction — 2026-10-04
 
@@ -21,7 +281,8 @@ Canic-owned generic tests remain. Upstream already covers service authority,
 certificate replies, restoration, snapshots, expired history and release readback.
 The missing decoder-budget regression request is
 [ic-blob-storage#7](https://github.com/dragginzgame/ic-blob-storage/issues/7).
-The published service dependency remains exactly `ic-blob-storage = 0.14.1`.
+At that extraction checkpoint the service dependency was exactly
+`ic-blob-storage = 0.14.1`.
 After removal, formatting, whitespace, test inventory and locked offline adapter
 metadata checks pass. The adapter has no test targets, development dependencies
 or test features; its refreshed lockfile no longer includes PocketIC or ic-testkit.
@@ -34,20 +295,204 @@ shell lint and document semantics passed. Adapter native Clippy passed before
 its test scaffolding was removed. These are scoped results, not a full gate.
 Evidence is under `target/review-validation/blob-*`.
 
-A facade test compile was SIGKILLed under machine-wide build pressure. The CLI
-rebuild then crossed concurrent Host/CLI request-field edits: Host had compiled
-`PolicyGateRequest.envelope`, while CLI used the new `envelope_source`. The current
-files agree. The maintainer requested waiting for the other source-editing
-session before resuming compilation; this session has no active builds.
+The preceding standalone CLI rebuild passed with one Cargo job (10m 41s). That adapter
+also passes the documented managed Fast-profile build, including declaration,
+runtime, Candid extraction and finalization. Qualification caught and fixed the
+isolated workspace's missing `profile.fast.inherits` declaration. The resulting
+artifact reports 4.36 MiB of Wasm code, with 5.64 MiB of headroom beneath the
+10 MiB limit. Logs and the structured build result are
+`target/review-validation/blob-cli-build.log` and `blob-managed-build.{log,json}`.
+Artifacts remain under `integrations/blob-service/.icp/local/canisters/blob/`.
+No canister was installed and no service/provider transaction ran.
 
-Resume the current CLI rebuild on the stable tree with one Cargo job, then build
-the adapter's managed artifact through `canic build` as documented in the blob
-composition guide. There is no blob-specific test command to resume. The source
-cut still needs remaining targeted native checks and current embedded-peer
-qualification. It is not push-ready yet. Package versions and published .52 notes
-are unchanged; root Unreleased holds this deliberately unassigned extraction.
+There is no blob-specific test command to resume. All 12 selected facade
+regressions now pass: workspace/package metadata, current exports, metrics and
+control-plane APIs. Evidence:
+`target/review-validation/blob-facade-targeted-tests.log`. This replaces the earlier
+SIGKILLed facade compile; the concurrent Host/CLI request-field mismatch is also
+resolved. Embedded-peer refresh and read-only verification now both pass. The
+checked-in Wasm and `scripts/dev/managed-root-fixture.json` bind the current
+source; the artifact SHA-256 is
+`c6cb76063412c09787f9bc9bddd4ba5b7218ce4c7349be1a526befd0dee6fe29`.
+
+The initial refresh attempt received SIGKILL while compiling Host, without a
+Rust diagnostic. The successful helper build used one Cargo job and command-local
+`profile.dev.package.canic-host` overrides: `opt-level=0`, `codegen-units=64`,
+`debug=0`. The fixture itself still used the ordinary Fast Wasm profile. Logs:
+`target/review-validation/blob-embedded-root-refresh-low-memory.log` and
+`blob-embedded-root-verify.log`; the failed attempt is retained separately.
+No repository profile or dependency changed for that workaround.
+
+The preceding extraction/reporting batch's targeted qualification was complete. The combined
+checkout still has the independent issue-review validation described below; this
+is not a whole-worktree push-readiness claim. Package versions and published .52
+notes are unchanged; the current 0.110.53 draft now includes the extraction.
+No full suite, deployment, release transaction or Git publication ran.
+
+## Application usage reporting — 2026-10-04
+
+The maintainer selected usage reporting after blob extraction. The isolated
+adapter now registers a bounded synchronous application sampler after install
+and restore, reading upstream-maintained global upload counters. Its config
+explicitly publishes the application family. Byte gauges distinguish logical,
+physical, liability and reserved accounting; reservation bytes are already
+included in the first three. No scans, paid calls, shadow ledger, new timer or
+blob-specific tests are added. This is per-storage-canister reporting, not a
+public tenant breakdown or provider qualification.
+
+Observatory collects one bounded application-cache page per retained role and
+includes generic application metrics in private JSON and public JSON/HTML.
+Public views remove Principal dimensions and omit rows attributed to another
+canister, marking that page partial. Names that collide after dimension redaction
+are also omitted publicly; the private source rows remain intact.
+Source age, disabled/unavailable states,
+exact values and truncation survive projection. Shared metric views replace
+cost-only names without changing cost JSON fields. Source timestamp validation
+now accepts rows newer than the family's oldest sample, matching Core's cache.
+
+Validation passes: all 34 Host `observatory::` tests, Host library/test Clippy and
+isolated adapter library Clippy, both with warnings denied. Scoped formatting,
+whitespace, documentation links and document semantics also pass with zero
+advisory warnings. Logs are retained at
+`target/review-validation/application-metrics-{host-tests,host-clippy,adapter-clippy}.log`.
+The adapter check also removed an obsolete lint expectation; Host lint corrected
+redundant visibility in the existing package-path helper without widening its
+effective crate-only exposure. No dependencies or lockfiles changed in this slice.
+
+The reporting slice and remaining extraction qualification above are complete.
+Independent issue-review work still needs its recorded validation. No full suite,
+simulator, deployment,
+paid call, version transaction or Git publication ran. The blob composition and
+Observatory guides and root Unreleased are updated; package versions and
+published .52 notes are unchanged.
+
+## Backup package direction — 2026-10-04
+
+Delegated authentication uses the existing Canic implementation. No delegated-auth
+extraction or external dependency adoption is pending.
+
+Generic backup artifacts, manifests, execution journals, capture/restore runners
+and retention belong upstream. Canic supplies Fleet inventory, release/controller
+authority, application quiescence and operator command/report integration on the
+host. The current upstream package covers local artifacts, persistence, locks,
+restore references and command custody; runners, transport and terminal release/
+prune remain incomplete. Canic's live Component Registry preflight also still
+rejects. Extraction must resolve that integration gap rather than copy it.
+
+Replace backup mechanisms only as the upstream executor contracts become usable
+and qualified; each replacement removes the corresponding duplicate
+implementation. Upstream owns product tests, while Canic retains focused Fleet
+authority, lifecycle and recovery integration evidence. Remaining blob
+qualification and existing release/minor boundaries are unchanged.
+
+The backup contract covers live membership paging, controller/read evidence,
+capture consistency, fresh nonterminal preflight, bounded execution, custody and
+same-release restore. The current upstream runners remain unavailable. A scoped
+CLI correction for [#394](https://github.com/dragginzgame/canic/issues/394)
+now returns `LiveCreateUnavailable` before workspace discovery, layout creation
+or ICP invocation. It removes the unusable executor branch and the unobserved
+`Proven` authority constructors; dry-run plans retain declared authority.
+All 62 focused CLI backup tests pass, including refusal before new output or
+retained evidence can change. Log:
+`target/review-validation/backup-create-boundary-tests.log`. CLI library/test
+Clippy also passes with warnings denied; evidence is in
+`target/review-validation/backup-create-boundary-clippy.log`. This correction
+does not implement live preflight or close the underlying backup availability
+issue.
 
 ## Independent issue-review implementation — 2026-10-04
+
+The independent CLI repair for
+[#299](https://github.com/dragginzgame/canic/issues/299) deletes the nonfunctional
+explicit Canic-inspection command, its options/parser/target and help branches,
+and obsolete fixtures. Existing JSON assertions now use the maintained Fleet
+identity, replacing the duplicate Fleet fixture test. Fleet and management
+inspection remain the maintained surface; no replacement path or helper was
+added. The inspection module shrinks by 112 lines, including 58 production
+lines. The active ICP guide and root Unreleased reflect this hard cut.
+Source review, scoped formatting and whitespace checks pass; no build or native
+test ran. Required qualification: existing CLI `inspect::tests::`, management
+inspection tests and the recursive help ordering test. This repair remains open
+pending the build owner's targeted checks with the issue-review batch.
+
+The independent documentation correction for
+[#373](https://github.com/dragginzgame/canic/issues/373) makes all four network
+enrollment guides obtain the expected fingerprint from an authenticated operator
+publication or independent trusted channel. Examples retain that trusted value
+separately from the local file's comparison digest and pass it to enrollment.
+Current enrollment validates the supplied digest before writing trust authority;
+the guides now describe this boundary accurately. Documentation links, example
+shell syntax with substituted placeholders and scoped whitespace checks pass.
+No runtime source changed and no build or enrollment command ran.
+Root Unreleased includes the guidance correction.
+
+The independent facade repair for
+[#324](https://github.com/dragginzgame/canic/issues/324) exposes the Core identifier
+types needed by public fields and constructors, including App/release identities,
+admission authority, funding policy and typed parsing failures. The new
+`ids_facade` integration target constructs and Candid-roundtrips a managed init
+payload using supported facade paths only and checks typed release-ID failures.
+Existing protocol ID contracts now use `canic::ids` instead of Core imports.
+Required facade targets: `ids_facade` and the existing `protocol_surface` ID/wire
+regressions. Formatting and scoped whitespace checks pass; no build or native
+test ran. Targeted native qualification remains required before the combined
+issue-review batch is ready. Root Unreleased records this public API repair.
+
+The independent Core repair for
+[#134](https://github.com/dragginzgame/canic/issues/134) rejects an all-zero
+installation operation ID in Root and ordinary application preparation with a
+typed `InstallIdZero` error, before activation state is constructed or persisted.
+New boundary regressions cover zero refusal for all three installation owners
+and exact preservation of first-byte, last-byte and all-one nonzero IDs. Required
+Core selector: `model::fleet_activation::tests::`; existing storage activation
+regressions remain relevant to the caller boundary. Formatting and scoped
+whitespace checks pass; no build or native test ran. This repair still requires
+targeted native qualification with the independent issue-review batch.
+Root Unreleased records the behavior without assigning a release version.
+
+Documentation corrections for
+[#326](https://github.com/dragginzgame/canic/issues/326) and
+[#328](https://github.com/dragginzgame/canic/issues/328) complete the facade's
+application lifecycle example with all three async hooks and `finish!`, and
+describe optional init-block execution on initial activation/local installation
+and active same-release upgrades. The application auth-feature table now leaves
+Root feature derivation to the host; existing attestation and local-authorization
+requirements match the capability catalogue. README, crate and macro docs were
+verified against current macro expansion and role requirements; formatting,
+local links and scoped whitespace checks pass. No build or doctest ran, and
+executable behavior is unchanged. Root Unreleased includes this guidance.
+
+Documentation corrections for
+[#343](https://github.com/dragginzgame/canic/issues/343) and
+[#370](https://github.com/dragginzgame/canic/issues/370) align TESTING.md with the
+internal artifact harness's command-scoped, cache-bound build configuration
+selection and make the onboarding and macro README endpoints explicitly public.
+The README uses the facade and a fallible reply under the default Fleet guard.
+Current parser/expansion, fixture builders, cache inputs and documentation links
+were checked from source; no build or doctest ran. Root Unreleased records these
+documentation corrections; runtime and fixture source are unchanged.
+
+The independent CLI repair for
+[#296](https://github.com/dragginzgame/canic/issues/296) resolves missing-role
+diagnostics from the verified Fleet Registry's App identity instead of the Fleet
+name. Configuration discovery, selection and loading failures now emit a warning
+while preserving the inventory table. New regressions cover differently named
+Fleet/App identities, multiple App configs, missing roles, unknown Apps and invalid
+selected configuration. Required CLI selector: `list::config::tests::`.
+Formatting and scoped whitespace checks pass; no build or native test ran.
+The combined issue-review batch still requires its targeted native qualification;
+root Unreleased includes the repaired diagnostic without assigning a version.
+
+The independent CLI repair for
+[#305](https://github.com/dragginzgame/canic/issues/305) checks the observed operator
+balance before requesting a retained-operation conversion quote. Covered debits
+return a typed outcome carrying the original plan or supplementary funding
+resume digest. No conversion review is retained on this path. New boundary
+regressions cover equal/excess balances, exact resume identity, positive
+shortfalls and zero-rate/overflow quote arithmetic. Required CLI selector:
+`fleet::operator_mint::tests::`. Formatting and scoped whitespace checks pass;
+no build, Cargo check or native test ran. The operating guide and root Unreleased
+describe the corrected outcome.
 
 Additional independent repairs are implemented for
 [#217](https://github.com/dragginzgame/canic/issues/217),

@@ -1,35 +1,26 @@
-//! Module: blob_service
+//! Compose the independent blob service in a consumer-owned Canic canister.
 //!
-//! Responsibility: compose the independent service with Canic lifecycle and endpoints.
-//! Does not own: blob semantics, provider policy or a second memory runtime.
-//! Boundary: the owning artifact opts into all endpoints and lifecycle participants.
+//! The consumer owns App configuration and the canister artifact. This library
+//! owns only endpoint/lifecycle integration and aggregate metrics; the upstream
+//! service owns storage behavior. Use [`mount!`] in an existing application or
+//! [`canister!`] for a dedicated service canister.
 
 mod endpoints;
-mod lifecycle;
 mod ops;
-mod workflow;
 
-// Candid collects signatures across modules; its final declaration pass needs
-// the same imported type names as the endpoint module.
-#[cfg(canic_export_candid)]
-use endpoints::*;
+pub mod lifecycle;
+pub mod metrics;
+#[doc(hidden)]
+pub mod workflow;
 
-canic::start!(
-    argument_limits = lifecycle::ENVELOPE_LIMITS,
-    lifecycle_participant(init = lifecycle::install, post_upgrade = workflow::restore),
-);
+/// Upstream typed service contracts, shared without a second DTO schema.
+pub use ic_blob_storage::dto;
 
-#[expect(clippy::unused_async, reason = "Canic deferred lifecycle signature")]
-async fn canic_setup() {}
-#[expect(
-    clippy::unused_async,
-    reason = "installation is synchronous in the lifecycle participant"
-)]
-async fn canic_install(_: Option<Vec<u8>>) {}
-#[expect(
-    clippy::unused_async,
-    reason = "restoration is synchronous in the lifecycle participant"
-)]
-async fn canic_upgrade() {}
-
-canic::finish!();
+/// Dependencies used by the canister composition macro.
+#[doc(hidden)]
+pub mod __private {
+    pub use crate::ops::memory;
+    pub use ic_blob_storage;
+    pub use ic_cdk;
+    pub use ic_memory;
+}

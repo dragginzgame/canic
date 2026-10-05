@@ -576,7 +576,7 @@ fn package_feature_forwarding_is_rejected() {
 }
 
 #[test]
-fn transitive_runtime_canic_path_is_rejected() {
+fn composition_library_shares_the_exact_selected_canic_facade() {
     let packages = [
         package("role", "role@1", "/tmp/role/Cargo.toml"),
         package("helper", "helper@1", "/tmp/helper/Cargo.toml"),
@@ -599,10 +599,7 @@ fn transitive_runtime_canic_path_is_rejected() {
         .find(|edge| edge.alias == "canic")
         .expect("direct Canic edge");
 
-    assert!(matches!(
-        validate_runtime_graph(&graph, direct_edge),
-        Err(RoleContractFinding::DependencyShapeUnsupported { .. })
-    ));
+    validate_runtime_graph(&graph, direct_edge).expect("shared public facade");
 }
 
 #[test]

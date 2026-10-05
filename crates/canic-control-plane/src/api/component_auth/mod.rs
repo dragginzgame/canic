@@ -17,6 +17,7 @@ use canic_core::{
             RoleAttestationGetRequest, RoleAttestationPrepareResponse, RoleAttestationRequest,
             SignedRoleAttestation,
         },
+        component_registry::{RootMembershipRequest, RootMembershipResponse},
         error::Error,
     },
     ids::ManagedCanisterBinding,
@@ -60,6 +61,12 @@ impl AsyncAccessPredicate for ActiveComponentMemberPredicate {
 pub struct RootComponentMembershipApi;
 
 impl RootComponentMembershipApi {
+    /// Inspect a subject after endpoint authorization, preserving authority failures.
+    pub fn lookup(request: RootMembershipRequest) -> Result<RootMembershipResponse, Error> {
+        crate::workflow::component_auth::lookup_active_member(request.subject)
+            .map(|member| RootMembershipResponse { member })
+    }
+
     /// Resolve an exact active local Component Registry member by Canister principal.
     ///
     /// Root application endpoints may use this to derive local topology authority for a

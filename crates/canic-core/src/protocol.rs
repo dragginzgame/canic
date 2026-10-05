@@ -10,6 +10,7 @@ pub const CANIC_WASM_STORE_CATALOG: &str = "canic_wasm_store_catalog";
 pub const CANIC_ROOT_COMMAND: &str = "canic_root_command";
 pub const CANIC_ROOT_FIXTURE_STATUS: &str = "canic_root_fixture_status";
 pub const CANIC_ROOT_STATUS: &str = "canic_root_status";
+pub const CANIC_ROOT_MEMBERSHIP: &str = "canic_root_membership";
 pub const CANIC_PUBLIC_STATUS: &str = "canic_public_status";
 pub const CANIC_OBSERVABILITY: &str = "canic_observability";
 pub const CANIC_AUTH_STATUS: &str = "canic_auth_status";

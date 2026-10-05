@@ -1350,7 +1350,7 @@ fn validate_runtime_graph(
                 "the role package has more than one normal runtime path to Canic",
             ));
         }
-        if let Some(path) = shortest_protected_path(graph, dependency) {
+        if let Some(path) = shortest_protected_path(graph, dependency, &direct_edge.package_id) {
             protected_paths.push(path);
         }
     }
@@ -1423,12 +1423,20 @@ struct DependencyPathEvidence {
 fn shortest_protected_path(
     graph: &CargoGraphEvidence,
     first_edge: &CargoGraphEdge,
+    selected_facade: &str,
 ) -> Option<DependencyPathEvidence> {
     let mut queue = VecDeque::from([(first_edge.clone(), vec![first_edge.clone()])]);
     let mut visited = BTreeSet::new();
 
     while let Some((edge, path)) = queue.pop_front() {
         if !visited.insert(edge.package_id.clone()) {
+            continue;
+        }
+        // A composition library may use the exact public facade selected by the
+        // role. Its internals remain behind that boundary; alternate edges to
+        // protected packages are still traversed and rejected. Resolved feature
+        // closure and memory identity are checked independently.
+        if edge.package_id == selected_facade {
             continue;
         }
         let package = graph.packages.get(&edge.package_id)?;
@@ -1705,7 +1713,7 @@ fn cargo_public_implications(
 }
 
 /// Resolve a package directory or explicit manifest relative to its App config.
-pub(crate) fn package_manifest_path(config_path: &Path, package: &str) -> PathBuf {
+pub fn package_manifest_path(config_path: &Path, package: &str) -> PathBuf {
     let package_path = PathBuf::from(package);
     let path = if package_path.is_absolute() {
         package_path

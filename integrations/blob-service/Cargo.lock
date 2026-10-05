@@ -174,7 +174,6 @@ dependencies = [
  "ic-blob-storage",
  "ic-cdk",
  "ic-memory",
- "serde",
 ]
 
 [[package]]
@@ -327,7 +326,6 @@ version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
 dependencies = [
- "link-section",
  "linktime-proc-macro",
 ]
 
@@ -560,9 +558,9 @@ dependencies = [
 
 [[package]]
 name = "ic-blob-storage"
-version = "0.14.1"
+version = "0.14.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1207217ac5dd9be18ce7b92940aef2fcd75953a122f04c0e7a6190fe0a4908c2"
+checksum = "09f6d6b112a4d8a2029065f3be26ab48b1d9adb1ccc780c6d5a5db671eeb61cb"
 dependencies = [
  "candid",
  "ic-cdk",
@@ -649,9 +647,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.24.6"
+version = "0.25.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "6426832538fb787872d4fd48e299001948eea543994c729b6a8a4ff880e481be"
+checksum = "843a6128daaf0b3b81edeb71fb3386e0a333a4ceb5388d140c5d5ddfcd350fa2"
 dependencies = [
  "ciborium",
  "ctor",
@@ -690,9 +688,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.10.11"
+version = "0.11.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5e0240df6345bf5b27c63c9285ed21d7814fbbfb8b83a463d93f54b291d227"
+checksum = "dff620c85ccbbf607fae17651e570559e67dc3d66686aaa7d357054b2b8e5bc4"
 dependencies = [
  "ic-cdk-timers",
  "ic0",
@@ -771,12 +769,6 @@ name = "libc"
 version = "0.2.190"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
-
-[[package]]
-name = "link-section"
-version = "0.19.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39c29a617ce3df32c08497bdc1ab6e2376e0b17948ac166a2fbe5977c5954cd9"
 
 [[package]]
 name = "linktime-proc-macro"

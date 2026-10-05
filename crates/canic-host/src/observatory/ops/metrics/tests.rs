@@ -5,7 +5,7 @@ fn snapshot(family: PublicMetricFamily, names: &[&str]) -> PublicMetricsSnapshot
     PublicMetricsSnapshot {
         family,
         state: PublicSnapshotState::Fresh,
-        sampled_at_ns: Some(100),
+        sampled_at_ns: Some(90),
         stale_after_ns: 500,
         truncated: false,
         metrics: Page {
@@ -43,19 +43,19 @@ fn grants_keep_precision_source_time_and_saturation_without_inventing_consumptio
     reply.state = PublicSnapshotState::Stale;
     reply.metrics.entries[1].canister_id = Some(candid::Principal::anonymous());
     let view = samples(reply, family).unwrap();
-    assert_eq!(view.state, CostSampleState::Stale);
+    assert_eq!(view.state, MetricSampleState::Stale);
     assert_eq!(view.rows.len(), 3);
     assert_eq!(view.rows[0].value, u128::MAX.to_string());
     assert_eq!(view.rows[0].observed_at_ns, 90);
     assert_eq!(
         view.rows[0].measurement,
-        CostMetricKind::Counter {
+        MetricKind::Counter {
             window_id: 7,
             saturated: true
         }
     );
     assert_eq!(view.rows[1].canister_id.as_deref(), Some("2vxsx-fae"));
-    assert_eq!(view.sampled_at_ns, Some(100));
+    assert_eq!(view.sampled_at_ns, Some(90));
 }
 
 #[test]
@@ -84,7 +84,7 @@ fn timer_measurements_keep_source_registration_and_both_phases() {
     let view = samples(reply, family).unwrap();
     assert_eq!(view.rows.len(), 4);
     assert!(view.rows.iter().all(|row| row.measurement
-        == CostMetricKind::TimerCounter {
+        == MetricKind::TimerCounter {
             registration: TimerRegistrationView {
                 canister_version: 3,
                 started_at_ns: 10,
@@ -94,7 +94,7 @@ fn timer_measurements_keep_source_registration_and_both_phases() {
         }));
     let json = serde_json::to_vec(&view).unwrap();
     assert_eq!(
-        serde_json::from_slice::<CostSamplesView>(&json).unwrap(),
+        serde_json::from_slice::<MetricSamplesView>(&json).unwrap(),
         view
     );
 }
@@ -127,7 +127,7 @@ fn malformed_pages_reject_before_projection() {
         Err(ObservationFailure::InvalidResponse)
     );
     let mut reply = snapshot(family, &["balance"]);
-    reply.metrics.entries[0].observed_at_ns = 101;
+    reply.metrics.entries[0].observed_at_ns = 89;
     assert_eq!(
         samples(reply, family),
         Err(ObservationFailure::InvalidResponse)
@@ -152,7 +152,49 @@ fn disabled_empty_family_remains_disabled() {
     reply.state = PublicSnapshotState::Disabled;
     reply.sampled_at_ns = None;
     let view = samples(reply, family).unwrap();
-    assert_eq!(view.state, CostSampleState::Disabled);
+    assert_eq!(view.state, MetricSampleState::Disabled);
     assert_eq!(view.sampled_at_ns, None);
     assert!(view.rows.is_empty());
+}
+
+#[test]
+fn application_metrics_preserve_arbitrary_names_units_and_mixed_source_times() {
+    let family = PublicMetricFamily::Application;
+    let mut reply = snapshot(family, &["app.queue_depth", "app.accounted_bytes"]);
+    reply.metrics.entries[0].kind = PublicMetricKind::Gauge;
+    reply.metrics.entries[0].unit = "count".into();
+    reply.metrics.entries[1].observed_at_ns = 95;
+    reply.metrics.entries[1].unit = "bytes".into();
+    reply.metrics.total = 3;
+    let view = samples(reply, family).unwrap();
+    assert_eq!(view.rows[0].name, "app.queue_depth");
+    assert_eq!(view.rows[0].unit, "count");
+    assert_eq!(view.rows[0].measurement, MetricKind::Gauge);
+    assert_eq!(view.rows[1].name, "app.accounted_bytes");
+    assert_eq!(view.rows[1].unit, "bytes");
+    assert_eq!(view.rows[1].value, u128::MAX.to_string());
+    assert_eq!(view.rows[1].observed_at_ns, 95);
+    assert_eq!(view.sampled_at_ns, Some(90));
+    assert!(view.truncated);
+}
+
+#[test]
+fn application_metrics_reject_ambiguous_or_unbounded_rows() {
+    let family = PublicMetricFamily::Application;
+    for name in [String::new(), "x".repeat(129), "line\nbreak".into()] {
+        assert_eq!(
+            samples(snapshot(family, &[&name]), family),
+            Err(ObservationFailure::InvalidResponse)
+        );
+    }
+    let mut reply = snapshot(family, &["app.queue_depth"]);
+    reply.sampled_at_ns = None;
+    assert_eq!(
+        samples(reply, family),
+        Err(ObservationFailure::InvalidResponse)
+    );
+    assert_eq!(
+        samples(snapshot(family, &["same", "same"]), family),
+        Err(ObservationFailure::InvalidResponse)
+    );
 }

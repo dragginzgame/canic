@@ -520,6 +520,13 @@ fixed timestamp. `--mint-icp-ledger` and `--mint-cmc` override their canonical
 canister identities when a different selected network requires them. Review
 those identities and the maximum ICP debit before applying.
 
+When preparing a new conversion review, an operator balance that already covers
+the paused debit needs no conversion. Ensure reports the matching resume digest
+before requesting a conversion quote or retaining a conversion review. Repeat
+the same Fleet ensure invocation with that `--apply` digest and omit
+`--operator-mint`; original withdrawals use the original plan digest, while
+supplementary funding uses its reviewed funding digest.
+
 Apply the conversion with `--operator-mint --apply <operator_mint_review_sha256>`.
 This authorizes one ICP transfer and its CMC notification, not Fleet withdrawals.
 Retries use the identical transfer and notification arguments. Canic authenticates

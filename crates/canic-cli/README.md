@@ -52,8 +52,9 @@ restores, including external journals. Its report includes skipped layouts and
 partial deletion failures; see [local retention](../../docs/features/backup-and-restore/README.md#local-retention).
 
 Fresh `backup create` execution is unavailable until Component Registry topology
-preflight is implemented. Dry-run planning does not create a backup or qualify
-live authority. This gap is unscheduled; see the
+preflight is implemented. It rejects before creating a layout or invoking ICP.
+Dry-run planning does not create a backup or qualify
+live authority. The accepted package-adapter work retains this limitation; see the
 [backup availability boundary](../../docs/features/backup-and-restore/README.md#current-availability).
 
 ## Install
@@ -227,13 +228,19 @@ treasury credit.
 
 ## Network, Replica, Evidence And State
 
-Enroll exact network trust before connected operation:
+Enroll exact network trust before connected operation. Obtain the expected
+root-key SHA-256 fingerprint from the network operator through an authenticated
+publication or independent trusted channel. Copy that value below and compare
+the local digest with it. A fingerprint derived from the same untrusted key
+download does not authenticate the network; Canic rejects a mismatch before
+enrollment.
 
 ```bash
+network_root_fingerprint='<64-lowercase-hex-from-the-network-operator>'
 sha256sum ./root-key.der
 canic network enroll local \
   --root-key ./root-key.der \
-  --fingerprint <64-lowercase-hex>
+  --fingerprint "$network_root_fingerprint"
 ```
 
 The `replica` group owns local launcher lifecycle. `evidence` validates and

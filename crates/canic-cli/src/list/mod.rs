@@ -90,7 +90,16 @@ fn run_list_options(options: ListOptions) -> Result<(), ListCommandError> {
     let module_hashes = list_module_hashes(registry, anchor.as_deref())?;
     let wasm_sizes = resolve_wasm_sizes(&options, registry)?;
     let cycles = list_cycle_balances(&options, &fleet, anchor.as_deref())?;
-    let missing_roles = missing_config_roles(&options, registry);
+    let missing_roles = match missing_config_roles(&options, &fleet) {
+        Ok(roles) => roles,
+        Err(error) => {
+            eprintln!(
+                "Warning: could not check missing roles for Fleet {}: {error}",
+                options.target
+            );
+            Vec::new()
+        }
+    };
     let title = list_title(&options);
     let columns = RegistryColumnData {
         readiness: &readiness,

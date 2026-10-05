@@ -10,6 +10,34 @@ use crate::test_support::temp_dir;
 use canic_backup::persistence::BackupLayout;
 use std::fs;
 
+#[test]
+fn live_create_refuses_before_creating_or_modifying_a_layout() {
+    let root = temp_dir("canic-cli-backup-create-unavailable");
+    let existing = root.join("existing");
+    fs::create_dir_all(&existing).expect("create retained output");
+    fs::write(existing.join("retained"), b"evidence").expect("retain evidence");
+
+    for out in [root.join("new"), existing.clone()] {
+        let options = BackupCreateOptions {
+            fleet: "unavailable-live-backup".to_string(),
+            subtree: None,
+            out: Some(out),
+            dry_run: false,
+            environment: "local".to_string(),
+            icp: root.join("nonexistent-icp").display().to_string(),
+        };
+        std::assert_matches!(
+            create::backup_create(&options),
+            Err(BackupCommandError::LiveCreateUnavailable)
+        );
+    }
+    assert!(!root.join("new").exists());
+    assert_eq!(fs::read_dir(&root).unwrap().count(), 1);
+    assert_eq!(fs::read_dir(&existing).unwrap().count(), 1);
+    assert_eq!(fs::read(existing.join("retained")).unwrap(), b"evidence");
+    fs::remove_dir_all(root).expect("remove test output");
+}
+
 // Ensure backup create does not reuse an output layout for a different request.
 #[test]
 fn backup_create_persistence_rejects_incompatible_existing_layout() {

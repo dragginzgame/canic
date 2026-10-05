@@ -31,9 +31,7 @@ pub(super) fn compare(
         .collect())
 }
 
-fn rows(
-    role: &ObservatoryRoleView,
-) -> Result<BTreeMap<&str, &CostMetricView>, CostComparisonFailure> {
+fn rows(role: &ObservatoryRoleView) -> Result<BTreeMap<&str, &MetricView>, CostComparisonFailure> {
     let Observation::Observed {
         source: ObservationSource::PublicMetricCache,
         value,
@@ -43,8 +41,8 @@ fn rows(
         return Err(CostComparisonFailure::SnapshotUnavailable);
     };
     match value.state {
-        CostSampleState::Fresh => (),
-        CostSampleState::Stale => return Err(CostComparisonFailure::StaleSample),
+        MetricSampleState::Fresh => (),
+        MetricSampleState::Stale => return Err(CostComparisonFailure::StaleSample),
         _ => return Err(CostComparisonFailure::SnapshotUnavailable),
     }
     if value.truncated {
@@ -77,7 +75,7 @@ fn rows(
         {
             return Err(CostComparisonFailure::SourceWindowChanged);
         }
-        let CostMetricKind::TimerCounter { registration, .. } = row.measurement else {
+        let MetricKind::TimerCounter { registration, .. } = row.measurement else {
             return Err(CostComparisonFailure::InvalidMetric);
         };
         if registration.sequence == 0 || registration.started_at_ns > row.observed_at_ns {
@@ -94,8 +92,8 @@ fn rows(
 }
 
 fn movement(
-    before: Option<&CostMetricView>,
-    after: Option<&CostMetricView>,
+    before: Option<&MetricView>,
+    after: Option<&MetricView>,
 ) -> Result<TimerMetricMovementView, CostComparisonFailure> {
     let before = before.ok_or(CostComparisonFailure::MissingMetric)?;
     let after = after.ok_or(CostComparisonFailure::MissingMetric)?;
@@ -116,9 +114,9 @@ fn movement(
 }
 
 fn reading(
-    row: &CostMetricView,
+    row: &MetricView,
 ) -> Result<(TimerRegistrationView, CostCounterReading), CostComparisonFailure> {
-    let CostMetricKind::TimerCounter {
+    let MetricKind::TimerCounter {
         registration,
         saturated,
     } = row.measurement

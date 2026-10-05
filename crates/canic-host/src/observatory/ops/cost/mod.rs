@@ -3,9 +3,6 @@
 //! Responsibility: bounded projection of existing metric owners into private cost evidence.
 //! Boundary: read cached measurements; never schedule work or infer cycle consumption.
 
-#[cfg(test)]
-mod tests;
-
 use crate::{
     observatory::{
         ops::{outcome, transport::ObservatoryTransport},
@@ -13,10 +10,7 @@ use crate::{
     },
     registry::RegistryEntry,
 };
-use canic_core::dto::public_status::{
-    PublicMetricFamily, PublicMetricKind, PublicMetricsSnapshot, PublicSnapshotState,
-};
-use std::collections::BTreeSet;
+use canic_core::dto::public_status::PublicMetricFamily;
 
 pub(super) fn collect(
     entry: &RegistryEntry,
@@ -25,15 +19,15 @@ pub(super) fn collect(
     let source = ObservationSource::PublicMetricCache;
     let mut evidence = RoleCostEvidenceView {
         balance: outcome(
-            transport.cost_samples(entry, PublicMetricFamily::Cycles),
+            transport.metric_samples(entry, PublicMetricFamily::Cycles),
             source,
         ),
         funding_and_callbacks: outcome(
-            transport.cost_samples(entry, PublicMetricFamily::Operations),
+            transport.metric_samples(entry, PublicMetricFamily::Operations),
             source,
         ),
         timer_instructions: outcome(
-            transport.cost_samples(entry, PublicMetricFamily::Performance),
+            transport.metric_samples(entry, PublicMetricFamily::Performance),
             source,
         ),
         // Read after the families: a restart between reads invalidates samples older than this heap.
@@ -82,87 +76,4 @@ fn check_window(evidence: &mut RoleCostEvidenceView) {
             .limitations
             .push(CostEvidenceLimitation::SourceWindowChanged);
     }
-}
-
-pub(super) fn samples(
-    snapshot: PublicMetricsSnapshot,
-    family: PublicMetricFamily,
-) -> Result<CostSamplesView, ObservationFailure> {
-    if snapshot.family != family
-        || snapshot.metrics.entries.len() > 256
-        || snapshot.metrics.total < snapshot.metrics.entries.len() as u64
-    {
-        return Err(ObservationFailure::InvalidResponse);
-    }
-    let mut identities = BTreeSet::new();
-    for row in &snapshot.metrics.entries {
-        let valid_text = [&row.name, &row.unit].into_iter().all(|text| {
-            !text.is_empty() && text.len() <= 128 && !text.chars().any(char::is_control)
-        });
-        if !valid_text
-            || !identities.insert((&row.name, row.canister_id))
-            || snapshot
-                .sampled_at_ns
-                .is_none_or(|at| row.observed_at_ns > at)
-        {
-            return Err(ObservationFailure::InvalidResponse);
-        }
-    }
-    let truncated =
-        snapshot.truncated || snapshot.metrics.total > snapshot.metrics.entries.len() as u64;
-    let rows = snapshot
-        .metrics
-        .entries
-        .into_iter()
-        .filter(|row| match family {
-            PublicMetricFamily::Cycles => row.name == "balance",
-            PublicMetricFamily::Operations => {
-                row.name.starts_with("timer.events.")
-                    || row.name == "cycles_funding.cycles_granted_total"
-                    || row.name == "cycles_funding.cycles_granted_to_child"
-            }
-            PublicMetricFamily::Performance => row.name.starts_with("perf.timer."),
-            _ => false,
-        })
-        .map(|row| CostMetricView {
-            name: row.name,
-            canister_id: row.canister_id.map(|id| id.to_text()),
-            value: row.value.to_string(),
-            unit: row.unit,
-            observed_at_ns: row.observed_at_ns,
-            measurement: match row.kind {
-                PublicMetricKind::Gauge => CostMetricKind::Gauge,
-                PublicMetricKind::Counter {
-                    window_id,
-                    saturated,
-                } => CostMetricKind::Counter {
-                    window_id,
-                    saturated,
-                },
-                PublicMetricKind::TimerCounter {
-                    registration,
-                    saturated,
-                } => CostMetricKind::TimerCounter {
-                    registration: TimerRegistrationView {
-                        canister_version: registration.canister_version,
-                        started_at_ns: registration.started_at_ns,
-                        sequence: registration.sequence,
-                    },
-                    saturated,
-                },
-            },
-        })
-        .collect();
-    Ok(CostSamplesView {
-        state: match snapshot.state {
-            PublicSnapshotState::Disabled => CostSampleState::Disabled,
-            PublicSnapshotState::Unavailable => CostSampleState::Unavailable,
-            PublicSnapshotState::Fresh => CostSampleState::Fresh,
-            PublicSnapshotState::Stale => CostSampleState::Stale,
-        },
-        sampled_at_ns: snapshot.sampled_at_ns,
-        stale_after_ns: snapshot.stale_after_ns,
-        truncated,
-        rows,
-    })
 }

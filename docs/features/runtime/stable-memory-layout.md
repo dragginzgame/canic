@@ -1,12 +1,18 @@
 # Stable-memory layout
 
-Canic uses published ic-memory 0.15.3 and a single MemoryManager per canister.
+Canic uses ic-memory 0.25 and a single MemoryManager per canister.
 The default allocation bucket is **16 Wasm pages (1 MiB)**. A bucket belongs to
 one virtual memory; it cannot be shared between IDs. The manager's own metadata
 page is separate. This setting reduces the minimum physical allocation of a
 small populated store from 8 MiB to 1 MiB.
 
 ## Bootstrap and store access
+
+Canic’s declaration and range macros delegate registration to ic-memory. Static
+initialization queues registration hooks; ic-memory validates the declarations
+when sealing the registry for bootstrap. Invalid registrations return a bootstrap
+error before allocation authority is published. Canic retains its authority
+constants, store-readiness checks and separate admission registration.
 
 Canic commits the allocation declarations and runs composed admission before
 stable-memory access. This reserves and validates the declared slots without
@@ -363,6 +369,11 @@ runner setup. All 1,643 source/lock inputs stayed unchanged. These results
 qualify the fresh-layout default; they do not measure the current Toko Miner
 estate or establish worst-case instruction cost for every maximum-sized record.
 Large provisioning records still traverse overflow pages when loaded.
+
+Allocation policies receive a checked `ic_memory::MemoryManagerSlot`. Its
+constructor and decoder reject ID 255, and `.id()` returns a usable ID directly.
+Canic retains its namespace, range, reservation and admission decisions; the
+upstream slot type does not grant allocation authority.
 
 ## Continue From Here
 

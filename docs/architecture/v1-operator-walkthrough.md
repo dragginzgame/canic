@@ -16,13 +16,18 @@ canic app --help
 canic fleet ensure --help
 ```
 
-Enroll exact network trust before using a connected environment:
+Enroll exact network trust before using a connected environment. Obtain the
+expected root-key SHA-256 fingerprint from the network operator through an
+authenticated publication or independent trusted channel. Copy that value below
+and compare the local digest with it; hashing the same untrusted key download
+does not authenticate the network. Canic rejects a mismatch before enrollment.
 
 ```bash
+network_root_fingerprint='<64-lowercase-hex-from-the-network-operator>'
 sha256sum ./root-key.der
 canic network enroll local \
   --root-key ./root-key.der \
-  --fingerprint <64-lowercase-hex>
+  --fingerprint "$network_root_fingerprint"
 ```
 
 ## Configure And Build An App

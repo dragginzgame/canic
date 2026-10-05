@@ -40,8 +40,8 @@ const RUNTIME_OBSERVED_SOURCE: &str = "runtime_observed";
 const CANDID_RESPONSE_FORMAT: &str = "candid";
 const INSPECT_HELP_AFTER: &str = "\
 Examples:
-  canic inspect canister aaaaa-aa
   canic inspect fleet demo-local --role root
+  canic inspect management <principal> --json
 
 Runtime inspection queries the guarded role-owned Runtime selector for
 one explicit target. Management inspection reports visibility and query counters. Use
@@ -110,12 +110,6 @@ impl InspectCommandError {
 
 #[derive(Clone, Debug, Eq, PartialEq)]
 enum InspectOptions {
-    Canister {
-        canister: String,
-        environment: String,
-        icp: String,
-        json: bool,
-    },
     Fleet {
         fleet: String,
         role: String,
@@ -146,8 +140,6 @@ enum RoleStatusResponse {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 enum InspectCommandKind {
-    #[serde(rename = "canic inspect canister")]
-    Canister,
     #[serde(rename = "canic inspect fleet")]
     Fleet,
 }
@@ -155,7 +147,6 @@ enum InspectCommandKind {
 impl InspectCommandKind {
     const fn label(self) -> &'static str {
         match self {
-            Self::Canister => "canic inspect canister",
             Self::Fleet => "canic inspect fleet",
         }
     }
@@ -163,8 +154,6 @@ impl InspectCommandKind {
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq, Serialize)]
 enum InspectSource {
-    #[serde(rename = "cli_arg")]
-    CliArg,
     #[serde(rename = "current_ensure_inventory")]
     CurrentEnsureInventory,
 }
@@ -172,7 +161,6 @@ enum InspectSource {
 impl InspectSource {
     const fn label(self) -> &'static str {
         match self {
-            Self::CliArg => "cli_arg",
             Self::CurrentEnsureInventory => "current_ensure_inventory",
         }
     }
@@ -240,16 +228,6 @@ impl InspectOptions {
         let matches =
             parse_matches(command(), args).map_err(|_| InspectCommandError::Usage(usage()))?;
         match matches.subcommand() {
-            Some(("canister", matches)) => {
-                let canister = required_string(matches, "canister");
-                validate_principal(&canister)?;
-                Ok(Self::Canister {
-                    canister,
-                    environment: string_option_or_else(matches, "environment", local_environment),
-                    icp: string_option_or_else(matches, "icp", default_icp),
-                    json: matches.get_flag("json"),
-                })
-            }
             Some(("fleet", matches)) => Ok(Self::Fleet {
                 fleet: required_string(matches, "fleet"),
                 role: required_string(matches, "role"),
@@ -264,20 +242,6 @@ impl InspectOptions {
 
 fn resolve_target(options: &InspectOptions) -> Result<ResolvedInspectTarget, InspectCommandError> {
     match options {
-        InspectOptions::Canister {
-            canister,
-            environment,
-            icp,
-            json,
-        } => {
-            let command = InspectCommandKind::Canister;
-            let source = InspectSource::CliArg;
-            Err(InspectCommandError::Target(format!(
-                "{} cannot select an exact protected protocol binding from source {}; use `canic inspect fleet <fleet> --role <role>` before querying Canister {canister} (environment {environment}, ICP executable {icp}, json={json})",
-                command.label(),
-                source.label(),
-            )))
-        }
         InspectOptions::Fleet {
             fleet,
             role,
@@ -537,26 +501,9 @@ fn command() -> ClapCommand {
         .about("Inspect Canic runtime or management status for one canister")
         .disable_help_flag(true)
         .subcommand_required(true)
-        .subcommand(canister_command())
         .subcommand(fleet_command())
         .subcommand(management::command())
         .after_help(INSPECT_HELP_AFTER)
-}
-
-fn canister_command() -> ClapCommand {
-    ClapCommand::new("canister")
-        .bin_name("canic inspect canister")
-        .about("Inspect one explicit canister principal")
-        .disable_help_flag(true)
-        .arg(
-            Arg::new("canister")
-                .value_name("principal")
-                .num_args(1)
-                .required(true),
-        )
-        .arg(internal_environment_arg())
-        .arg(internal_icp_arg())
-        .arg(flag_arg("json").long("json").help("Print JSON output"))
 }
 
 fn fleet_command() -> ClapCommand {
@@ -586,10 +533,6 @@ fn usage() -> String {
     render_usage(command)
 }
 
-fn canister_usage() -> String {
-    render_usage(canister_command)
-}
-
 fn fleet_usage() -> String {
     render_usage(fleet_command)
 }
@@ -599,7 +542,6 @@ fn print_leaf_help_or_version(args: &[OsString]) -> bool {
         .first()
         .and_then(|arg| arg.to_str())
         .and_then(|leaf| match leaf {
-            "canister" => Some(canister_usage as fn() -> String),
             "fleet" => Some(fleet_usage as fn() -> String),
             "management" => Some(management::usage as fn() -> String),
             _ => None,
@@ -628,26 +570,6 @@ mod tests {
     use super::*;
     use candid::Encode;
     use canic_core::cdk::utils::hash::hex_bytes;
-
-    #[test]
-    fn parses_direct_canister_target() {
-        let options = InspectOptions::parse([
-            OsString::from("canister"),
-            OsString::from("aaaaa-aa"),
-            OsString::from("--json"),
-        ])
-        .expect("parse canister inspect");
-
-        assert_eq!(
-            options,
-            InspectOptions::Canister {
-                canister: "aaaaa-aa".to_string(),
-                environment: local_environment(),
-                icp: default_icp(),
-                json: true,
-            }
-        );
-    }
 
     #[test]
     fn parses_fleet_role_target() {
@@ -690,26 +612,6 @@ mod tests {
                 OsString::from("fleet"),
                 OsString::from("demo-local"),
                 OsString::from("--all"),
-            ])
-            .is_err()
-        );
-    }
-
-    #[test]
-    fn rejects_endpoint_mode_flags_in_first_slice() {
-        assert!(
-            InspectOptions::parse([
-                OsString::from("canister"),
-                OsString::from("aaaaa-aa"),
-                OsString::from("--health"),
-            ])
-            .is_err()
-        );
-        assert!(
-            InspectOptions::parse([
-                OsString::from("canister"),
-                OsString::from("aaaaa-aa"),
-                OsString::from("--readiness"),
             ])
             .is_err()
         );
@@ -806,7 +708,11 @@ mod tests {
 
         let rendered = render_text_report(&report);
 
-        assert!(rendered.contains("source: cli_arg"));
+        assert!(
+            rendered
+                .lines()
+                .any(|line| line == "source: current_ensure_inventory")
+        );
         assert!(rendered.contains("source: runtime_observed"));
         assert!(rendered.contains("endpoint: canic_observability"));
         assert!(rendered.contains("response_format: candid"));
@@ -841,8 +747,13 @@ mod tests {
         let value = serde_json::to_value(sample_inspect_report()).expect("serialize report");
 
         assert_eq!(value["schema_version"], INSPECT_SCHEMA_VERSION);
-        assert_eq!(value["command"], "canic inspect canister");
-        assert_eq!(value["target_resolution"]["source"], "cli_arg");
+        assert_eq!(value["command"], "canic inspect fleet");
+        assert_eq!(value["target_resolution"]["fleet"], "demo");
+        assert_eq!(value["target_resolution"]["role"], "root");
+        assert_eq!(
+            value["target_resolution"]["source"],
+            "current_ensure_inventory"
+        );
         assert_eq!(value["endpoint"], CANIC_OBSERVABILITY);
         assert_eq!(value["status"], "ok");
         assert_eq!(value["runtime_status"]["source"], "runtime_observed");
@@ -884,25 +795,6 @@ mod tests {
     }
 
     #[test]
-    fn fleet_json_report_uses_fleet_identity() {
-        let mut report = sample_inspect_report();
-        report.command = InspectCommandKind::Fleet;
-        report.target_resolution.fleet = Some("demo".to_string());
-        report.target_resolution.role = Some("root".to_string());
-        report.target_resolution.source = InspectSource::CurrentEnsureInventory;
-
-        let value = serde_json::to_value(report).expect("serialize Fleet report");
-
-        assert_eq!(value["command"], "canic inspect fleet");
-        assert_eq!(value["target_resolution"]["fleet"], "demo");
-        assert_eq!(value["target_resolution"]["role"], "root");
-        assert_eq!(
-            value["target_resolution"]["source"],
-            "current_ensure_inventory"
-        );
-    }
-
-    #[test]
     fn failing_runtime_status_maps_to_status_exit() {
         let mut report = sample_inspect_report();
         report.runtime_status.status = sample_runtime_status(RuntimeStatus::Failing);
@@ -918,13 +810,13 @@ mod tests {
     fn sample_inspect_report() -> InspectReport {
         InspectReport {
             schema_version: INSPECT_SCHEMA_VERSION,
-            command: InspectCommandKind::Canister,
+            command: InspectCommandKind::Fleet,
             target_resolution: TargetResolution {
-                fleet: None,
-                role: None,
+                fleet: Some("demo".to_string()),
+                role: Some("root".to_string()),
                 canister_id: "aaaaa-aa".to_string(),
                 environment: "local".to_string(),
-                source: InspectSource::CliArg,
+                source: InspectSource::CurrentEnsureInventory,
             },
             endpoint: CANIC_OBSERVABILITY,
             status: RuntimeStatus::Ok,

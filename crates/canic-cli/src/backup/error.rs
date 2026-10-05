@@ -20,6 +20,11 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum BackupCommandError {
+    #[error(
+        "live backup creation is unavailable: current Fleet membership, controller/read authority and capture consistency are not implemented; --dry-run writes planning files only and does not create a backup"
+    )]
+    LiveCreateUnavailable,
+
     #[error("backup prune could not fully remove {failed} selected layouts; see the prune report")]
     PruneIncomplete { failed: usize },
 

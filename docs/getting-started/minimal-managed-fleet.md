@@ -263,12 +263,12 @@ async fn canic_setup() {}
 async fn canic_install(_: Option<Vec<u8>>) {}
 async fn canic_upgrade() {}
 
-#[canic_query]
+#[canic_query(public)]
 fn whoami_query() -> Result<Principal, Error> {
     Ok(msg_caller())
 }
 
-#[canic_update]
+#[canic_update(public)]
 fn whoami_update() -> Result<Principal, Error> {
     Ok(msg_caller())
 }

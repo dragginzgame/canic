@@ -90,6 +90,21 @@ let input = ManagedComponentGroupQualificationInput::new(
 let mut fixture = install_managed_component_group(input)?;
 ```
 
+For application contracts that bind their installation to the actual canister ID,
+set `artifact.application_init_args` to
+`ManagedApplicationInit::ForCanister(encode_application)`, where the deterministic
+encoder has signature `fn(Principal) -> Vec<u8>`. The fixture calls it after
+allocation and nests its bytes after the unchanged protected Canic payload.
+Do not guess simulator IDs or rewrite Canic authority to construct these inputs.
+An encoder panic propagates to the fixture caller. Use
+`ManagedApplicationInit::Encoded(bytes)` for fixed application arguments or
+`ManagedApplicationInit::None` to omit them. Explicit child arguments supplied by
+the Root allocation request take precedence over this per-role fallback.
+This is fixture injection, not a production deployment option. Root's current
+top-level Component and Component Group installation paths supply no application
+arguments; a consumer needing them must separately qualify a production delivery
+path before deployment.
+
 Configured initial sharding and scaling children are installed before the
 constructor returns. Submit an on-demand indexed, sharded or scaled child request
 with `fixture.pic().submit_call(...)`, then call

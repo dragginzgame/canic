@@ -1,14 +1,25 @@
-use super::{
+//! Module: backup::create
+//!
+//! Responsibility: prepare local backup plans from retained Fleet inventory.
+//! Does not own: live membership discovery or snapshot execution.
+//! Boundary: refuses unavailable execution before resolving or creating local state.
+
+mod persistence;
+mod plan;
+
+use crate::backup::labels::backup_scope_label;
+use crate::backup::{
     BackupCommandError, BackupCreateLayout, BackupCreateMode, BackupCreateOptions,
     BackupCreateReport, BackupRunStatus,
 };
-use crate::backup::labels::backup_scope_label;
 #[cfg(test)]
 use canic_backup::plan::BackupPlan;
 use canic_backup::{
     manifest::IdentityMode,
-    plan::{BackupPlanBuildInput, BackupScopeKind, build_backup_plan, resolve_backup_selector},
-    runner::{BackupRunResponse, BackupRunnerConfig, backup_run_execute_with_executor},
+    plan::{
+        AuthorityEvidence, BackupPlanBuildInput, BackupScopeKind, ControlAuthority,
+        QuiescencePolicy, SnapshotReadAuthority, build_backup_plan, resolve_backup_selector,
+    },
 };
 use canic_host::{
     fleet_ensure::read_last_converged_fleet_inventory, icp_config::resolve_current_canic_icp_root,
@@ -16,20 +27,17 @@ use canic_host::{
 #[cfg(test)]
 use std::path::Path;
 
-mod executor;
-mod persistence;
-mod plan;
-
-use executor::BackupIcpRunnerExecutor;
 use persistence::persist_backup_create_layout;
 use plan::{
-    backup_control_authority, backup_plan_id, backup_quiescence_policy, backup_registry_entries,
-    backup_snapshot_read_authority, default_backup_output_path, registry_topology_hash,
+    backup_plan_id, backup_registry_entries, default_backup_output_path, registry_topology_hash,
 };
 
 pub(super) fn backup_create(
     options: &BackupCreateOptions,
 ) -> Result<BackupCreateReport, BackupCommandError> {
+    if !options.dry_run {
+        return Err(BackupCommandError::LiveCreateUnavailable);
+    }
     let icp_root = resolve_current_canic_icp_root().map_err(BackupCommandError::IcpRoot)?;
     let inventory =
         read_last_converged_fleet_inventory(&icp_root, &options.environment, &options.fleet)?;
@@ -68,9 +76,11 @@ pub(super) fn backup_create(
         include_descendants: true,
         topology_hash_before_quiesce: topology_hash,
         registry: &registry,
-        control_authority: backup_control_authority(options.dry_run),
-        snapshot_read_authority: backup_snapshot_read_authority(options.dry_run),
-        quiescence_policy: backup_quiescence_policy(options.dry_run),
+        control_authority: ControlAuthority::root_controller(AuthorityEvidence::Declared),
+        snapshot_read_authority: SnapshotReadAuthority::root_configured_read(
+            AuthorityEvidence::Declared,
+        ),
+        quiescence_policy: QuiescencePolicy::RootCoordinated,
         identity_mode: IdentityMode::Relocatable,
     })?;
     let persisted = persist_backup_create_layout(&out, &planned)?;
@@ -81,41 +91,19 @@ pub(super) fn backup_create(
     };
     let plan = persisted.plan;
 
-    let run = if options.dry_run {
-        None
-    } else {
-        let mut executor = BackupIcpRunnerExecutor::new(options, icp_root);
-        Some(backup_run_execute_with_executor(
-            &BackupRunnerConfig {
-                out: out.clone(),
-                max_steps: None,
-                updated_at: None,
-                tool_name: "canic".to_string(),
-                tool_version: env!("CARGO_PKG_VERSION").to_string(),
-            },
-            &mut executor,
-        )?)
-    };
-
     Ok(BackupCreateReport {
         fleet: plan.fleet.clone(),
         environment: plan.environment.clone(),
         out,
         plan_id: plan.plan_id.clone(),
         run_id: plan.run_id.clone(),
-        mode: if options.dry_run {
-            BackupCreateMode::DryRun
-        } else {
-            BackupCreateMode::Execute
-        },
+        mode: BackupCreateMode::DryRun,
         layout,
-        status: run
-            .as_ref()
-            .map_or(BackupRunStatus::Planned, backup_run_status),
+        status: BackupRunStatus::Planned,
         scope: backup_scope_label(&plan),
         targets: plan.targets.len(),
         operations: plan.phases.len(),
-        executed_operations: run.as_ref().map_or(0, |run| run.executed_operation_count),
+        executed_operations: 0,
     })
 }
 
@@ -133,14 +121,4 @@ pub(super) fn persist_backup_create_dry_run_with_layout(
     plan: &BackupPlan,
 ) -> Result<(BackupPlan, bool), BackupCommandError> {
     persist_backup_create_layout(out, plan).map(|layout| (layout.plan, layout.reused_existing))
-}
-
-const fn backup_run_status(run: &BackupRunResponse) -> BackupRunStatus {
-    if run.complete {
-        BackupRunStatus::Complete
-    } else if run.max_steps_reached {
-        BackupRunStatus::Paused
-    } else {
-        BackupRunStatus::Running
-    }
 }

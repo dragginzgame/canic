@@ -1140,7 +1140,6 @@ version = "1.0.13"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "914a755b7c2d4af2bdcff7ce1739e2db9a1b81a9b07123d8015786ae03c0980d"
 dependencies = [
- "link-section",
  "linktime-proc-macro",
 ]
 
@@ -2253,9 +2252,9 @@ dependencies = [
 
 [[package]]
 name = "ic-memory"
-version = "0.24.7"
+version = "0.25.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5dcf8430589b2984cb49eacff5bfa27cca5b9eef506d0a8fbac813f1886990e"
+checksum = "81241ee8a89172007cf5667a3c0db6aa6899f9ba3cd4116418399d5de00ea998"
 dependencies = [
  "ciborium",
  "ctor",
@@ -2266,9 +2265,9 @@ dependencies = [
 
 [[package]]
 name = "ic-query"
-version = "0.45.9"
+version = "0.46.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0a4e05373669d3ee5b8264833edd282c47bd2af5c75ceef70508e21cbf8cba7c"
+checksum = "26a976ad3c72150a14c37fb0f70dba181d6d983c46451788b983a10cb15ffbd5"
 dependencies = [
  "candid",
  "cap-fs-ext",
@@ -2341,9 +2340,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.14.5"
+version = "0.15.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5d6d2856ee5fbd6cc1169110816c42618ba685c1ecac222430a8c31694a37fd7"
+checksum = "589c8c0b754f45721b0a289d44cc01ed291d3f9d7302aab42e2cd35e458103bc"
 dependencies = [
  "candid",
  "fs2",
@@ -2358,9 +2357,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.10.11"
+version = "0.11.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ab5e0240df6345bf5b27c63c9285ed21d7814fbbfb8b83a463d93f54b291d227"
+checksum = "df0710079d6c5873ffec3124ef7a831322531cbaa3ee9f927928a3d4512680ba"
 dependencies = [
  "ic-cdk-timers",
  "ic0",
@@ -2840,12 +2839,6 @@ checksum = "61ff90caf6077a803a240f62fdbe88645a890bbca49ef8174c3cb0404362171d"
 dependencies = [
  "libc",
 ]
-
-[[package]]
-name = "link-section"
-version = "0.19.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "39c29a617ce3df32c08497bdc1ab6e2376e0b17948ac166a2fbe5977c5954cd9"
 
 [[package]]
 name = "linktime-proc-macro"

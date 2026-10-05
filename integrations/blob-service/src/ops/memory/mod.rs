@@ -11,18 +11,18 @@ use ic_blob_storage::ops::service::{
 use ic_memory::{RuntimeMemory, ic_stable_structures::DefaultMemoryImpl};
 
 pub(super) type Memory = RuntimeMemory<DefaultMemoryImpl>;
-const AUTHORITY: &str = "blob-service";
-ic_memory::ic_memory_range!(
-    authority = AUTHORITY,
-    start = 120,
-    end = 136,
-    mode = Allowed
-);
-ic_memory::eager_init!({
+/// Allocation authority selected by the owning canister macro.
+pub const AUTHORITY: &str = "blob-service";
+
+/// Register only in the artifact that explicitly mounts the service.
+///
+/// # Panics
+/// Panics if static service requests are invalid or registration is already sealed.
+pub fn register() {
     for request in installation::requests(AUTHORITY).expect("service memory requests") {
         ic_memory::register_memory_request(request).expect("register service request");
     }
-});
+}
 
 pub(super) struct Grants {
     pub(super) configuration: Memory,

@@ -37,6 +37,7 @@ runtime/wire contracts belong in `docs/contracts/`.
 - [CI Policy Gates](ci-policy-gates.md)
 - [Evidence Envelopes](evidence-envelopes.md)
 - [Fleet Ensure](../features/operations/fleet-ensure.md)
+- [Independent Package Adapters](independent-package-adapters.md)
 - [V1 Readiness Checklist](v1-readiness-checklist.md)
 - [V1 Operator Walkthrough](v1-operator-walkthrough.md)
 

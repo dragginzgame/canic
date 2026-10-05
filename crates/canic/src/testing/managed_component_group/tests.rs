@@ -1,5 +1,20 @@
 use super::*;
 
+#[test]
+fn application_init_binds_the_actual_canister_without_changing_static_bytes() {
+    fn encode(canister: Principal) -> Vec<u8> {
+        encode_one(canister).expect("Principal argument")
+    }
+    let first = Principal::self_authenticating([1]);
+    let second = Principal::self_authenticating([2]);
+    let bound = ManagedApplicationInit::ForCanister(encode);
+    assert_eq!(bound.for_canister(first), Some(encode(first)));
+    assert_eq!(bound.for_canister(second), Some(encode(second)));
+    let encoded = ManagedApplicationInit::Encoded(encode(first));
+    assert_eq!(encoded.for_canister(second), Some(encode(first)));
+    assert_eq!(ManagedApplicationInit::None.for_canister(first), None);
+}
+
 const GROUP_CONFIG: &str = r#"
 [app]
 name = "qualification"

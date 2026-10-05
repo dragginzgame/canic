@@ -632,13 +632,13 @@ registered descendant and preserves the distinction between negative active
 membership and Registry/runtime failure. It does not itself authorize access
 to a lookup or grant an application permission.
 
-Canonical 0.110.51 Root does not expose an equivalent cross-Component lookup
-endpoint. The public Directory query requires the caller to belong to the
-queried Component; it cannot be used to classify arbitrary sibling callers.
-The Root-local Rust helper is not a remote API. Cross-Root service calls retain
-the Fleet-service peer authority boundary.
+Canonical Root exposes `canic_root_membership` as a guarded read-only update
+for controllers and active local managed members. Its response contains an
+optional exact binding; authority failures remain endpoint errors. The public
+Directory query still requires the caller to belong to the queried Component.
+Cross-Root service calls retain the Fleet-service peer authority boundary.
 
-Adding an online membership endpoint would still observe Registry state only
+An online membership endpoint observes Registry state only
 at lookup time and introduce an await before receiver work. An operation
 requiring exact serialization with revocation needs an explicit lifecycle and
 effect boundary, rather than treating the lookup result as a lasting permit.
@@ -670,7 +670,7 @@ repurposed as that authority.
 
 | Approach | Ordinary call | Removal semantics | Assessment |
 | --- | --- | --- | --- |
-| Root membership lookup | Remote authorization lookup before work | Observes membership at lookup time; an await still separates lookup from effects | Would require an additional Root endpoint; not the proposed default |
+| Root membership lookup | Remote lookup before work | Observes membership at lookup time; an await still separates lookup from effects | The inspection endpoint is not the proposed default guard |
 | Root role attestation | Local proof verification | Issued material can survive membership removal until expiry or receiver fencing | Current issuance needs a caller-bound direct query certificate; it is not an autonomous canister update flow |
 | New update-delivered signed permit | Local proof verification | Expiry or explicit receiver fencing | Adds issuance, renewal and cryptographic work without removing the strict-revocation distribution requirement |
 | Periodically refreshed Directory | Local lookup | Stale entries remain usable until refresh | Insufficient for strict completion |
@@ -957,11 +957,19 @@ executable lifecycle integration or IC transaction rollback. The framework
 bootstrap/application-startup ordering change and PocketIC qualification remain
 required before the full batch is complete.
 
-The missing general Root membership lookup is tracked separately. A future
-inspection or discovery endpoint can return an authoritative point-in-time
-binding and preserve lookup failures without becoming the default endpoint
-guard. Membership changes still require protected inter-canister publication;
-ordinary application admission then uses receiver-local authority.
+The general Root membership lookup is tracked separately in
+[Canic#39](https://github.com/dragginzgame/canic/issues/39).
+`canic_root_membership(RootMembershipRequest { subject })` is a read-only update
+so an ordinary inter-canister call can obtain a point-in-time observation.
+It requires a Root controller or an active managed member of that Root, in
+addition to the normal Fleet update guard. `RootMembershipResponse.member` is
+the exact active `ManagedCanisterBinding`, including a descendant's own role,
+or `None` for inactive/unregistered subjects. Runtime and Registry failures
+remain typed errors. Cross-Root callers receive no implicit discovery access.
+This observation is not a permit for later effects. Membership changes still
+require protected inter-canister publication; ordinary application admission
+then uses receiver-local authority under
+[Canic#38](https://github.com/dragginzgame/canic/issues/38).
 
 ## 10. Configuration
 

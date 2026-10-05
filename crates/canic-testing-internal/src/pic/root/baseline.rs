@@ -6,9 +6,8 @@ use ic_testkit::pic::{
     BaselinePoolContractError, BaselinePreparationStage, CachedPocketIcBaseline,
     CanisterRestoreReceipt, CanisterSnapshotTarget, ControllerSnapshotError, CycleResetPolicy,
     FailureDisposition, FixtureRecipeId, PocketIcBaselineRecipe, PreparedBaseline,
-    ReadinessReceipt, RebuildReason, ResetAchievement, ResetReceipt, ResetRequirement,
-    ResetRequirements, SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt,
-    is_dead_pocket_ic_transport_error,
+    ReadinessReceipt, RebuildReason, ResetDomainPolicy, ResetReceipt, ResetRequirements,
+    SnapshotRestoreFunding, TimeResetPolicy, ValidationReceipt, is_dead_pocket_ic_transport_error,
 };
 use std::{collections::BTreeMap, error::Error as StdError, fmt, path::PathBuf, time::Instant};
 
@@ -46,7 +45,7 @@ impl RootBaselineRecipe {
             id: FixtureRecipeId::try_new(identity)?,
             reset_requirements: ResetRequirements::try_new(
                 CycleResetPolicy::TopUpTo(crate::pic::SNAPSHOT_RESTORE_MINIMUM_CYCLES),
-                [ResetRequirement::PocketIcTime(
+                [ResetDomainPolicy::PocketIcTime(
                     TimeResetPolicy::PreserveCurrent,
                 )],
             )?,
@@ -95,7 +94,7 @@ impl PocketIcBaselineRecipe for RootBaselineRecipe {
         &self,
         _baseline: &CachedPocketIcBaseline<Self::Metadata>,
     ) -> Result<ResetReceipt, Self::Error> {
-        ResetReceipt::try_new([ResetAchievement::PocketIcTime(
+        ResetReceipt::try_new([ResetDomainPolicy::PocketIcTime(
             TimeResetPolicy::PreserveCurrent,
         )])
         .map_err(Into::into)

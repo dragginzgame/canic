@@ -6,40 +6,16 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
-## Unreleased
-
-### 🩹 Fixed
-
-- Repair public performance checkpoints so direct, prelude and operational macro
-  calls compile without extra imports and share the same recording and logging.
-- Preserve canister-call replies and typed failures when local Candid argument
-  cleanup fails; report remaining scratch separately from the remote outcome.
-- Require successful builds for enabled provenance policies and include untracked
-  source and submodule changes despite Git display settings.
-- Escape generated Cargo dependency paths correctly, including quotes,
-  backslashes and control characters in checkout directory names.
-- Keep configured role-attestation epoch floors authoritative when applications
-  request a lower minimum epoch.
-- Reject unknown canister runtime status and preserve typed operator balance
-  observation failures without reporting them as payment failures.
-- Resolve role-rename package selectors consistently and reject unreadable or
-  malformed declared manifests before changing App configuration.
-- Bind policy-gate fingerprints to evaluated bytes and retain complete manifest
-  reports when individual evidence files are unreadable or malformed.
-- Correct timer lifecycle guidance to limit application participants to supported
-  application canisters.
-
-### 🔧 Changed
-
-- **Breaking:** remove embedded blob features, APIs, runtime status fields and
-  CLI commands. Applications select the independent service through the isolated
-  Canic adapter; existing blob state is not migrated. Blob qualification leaves
-  Canic’s default test graph. Remove blob-specific suites and adapter test
-  scaffolding; service tests belong upstream and generic framework tests remain.
-
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
+  adds per-canister application usage reporting, and repairs operator commands, build evidence,
+  memory registration and public framework APIs, including guarded Root membership
+  discovery. It also adopts ic-memory’s
+  checked allocation-slot API and aligns the independent blob consumer on one
+  memory runtime.
 
 - `0.110.52` adds Fleet release discovery and assessment, improves operator and
   test reliability, removes IcyDB from Canic validation, centralizes Cargo version

@@ -173,10 +173,10 @@ pub(super) fn same_window(
 
 fn metric<'a>(
     role: &ObservatoryRoleView,
-    observation: &'a Observation<CostSamplesView>,
+    observation: &'a Observation<MetricSamplesView>,
     name: &str,
     canister_id: Option<&str>,
-) -> Result<&'a CostMetricView, CostComparisonFailure> {
+) -> Result<&'a MetricView, CostComparisonFailure> {
     let Observation::Observed {
         source: ObservationSource::PublicMetricCache,
         value,
@@ -186,8 +186,8 @@ fn metric<'a>(
         return Err(CostComparisonFailure::SnapshotUnavailable);
     };
     match value.state {
-        CostSampleState::Fresh => (),
-        CostSampleState::Stale => return Err(CostComparisonFailure::StaleSample),
+        MetricSampleState::Fresh => (),
+        MetricSampleState::Stale => return Err(CostComparisonFailure::StaleSample),
         _ => return Err(CostComparisonFailure::SnapshotUnavailable),
     }
     if value.truncated {
@@ -214,7 +214,7 @@ fn metric<'a>(
     Ok(row)
 }
 
-pub(super) fn value(row: &CostMetricView) -> Result<u128, CostComparisonFailure> {
+pub(super) fn value(row: &MetricView) -> Result<u128, CostComparisonFailure> {
     if row.value.len() > 39 {
         return Err(CostComparisonFailure::InvalidMetric);
     }
@@ -245,7 +245,7 @@ pub(super) fn balances(
         "balance",
         Some(&after.canister_id),
     )?;
-    if old.measurement != CostMetricKind::Gauge || new.measurement != CostMetricKind::Gauge {
+    if old.measurement != MetricKind::Gauge || new.measurement != MetricKind::Gauge {
         return Err(CostComparisonFailure::InvalidMetric);
     }
     Ok(BalanceWindow {
@@ -277,8 +277,8 @@ pub(super) fn grants(
     cost::counter(counter_reading(old)?, counter_reading(new)?).map_err(numeric_failure)
 }
 
-fn counter_reading(row: &CostMetricView) -> Result<CostCounterReading, CostComparisonFailure> {
-    let CostMetricKind::Counter {
+fn counter_reading(row: &MetricView) -> Result<CostCounterReading, CostComparisonFailure> {
+    let MetricKind::Counter {
         window_id,
         saturated,
     } = row.measurement

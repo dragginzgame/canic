@@ -28,7 +28,6 @@ fn backup_create_usage_uses_fleet_target_wording() {
     let text = create_usage();
 
     assert!(text.contains("Usage: canic backup create [OPTIONS] <fleet>"));
-    assert!(text.contains("Create a topology-aware deployment backup"));
     assert!(text.contains("Converged Fleet name to back up"));
     assert!(text.contains("backups/deployment-<name>-YYYYMMDD-HHMMSS"));
     assert!(!text.contains("backups/fleet-<name>"));

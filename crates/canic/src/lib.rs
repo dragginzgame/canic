@@ -6,6 +6,11 @@
 //! - `build!` for configured canisters and generated local sandbox/probe config
 //! - `start!` for configured canister lifecycle hooks and endpoints
 //! - `start_fleet_coordinator!` for Canic's canonical Coordinator artifact source
+//! - `finish!` after all endpoint definitions to complete the canister module
+//!
+//! Application canisters using `start!` define async `canic_setup()`,
+//! `canic_install(args: Option<Vec<u8>>)` and `canic_upgrade()` hooks, each
+//! returning `()`. Canic defers these hooks until after restoration.
 //!
 //! For lower-level access, use the `api`, `dto`, and `memory` modules.
 //! These surfaces are for configured canister role packages. Shared runtime

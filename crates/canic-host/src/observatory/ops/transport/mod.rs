@@ -5,7 +5,7 @@ mod process;
 use crate::{
     icp::{IcpCli, IcpJsonResponseError, cleanup_candid_argument_file, response_bytes},
     observatory::view::{
-        CostSamplesView, CostWindowView, ObservationFailure, RoleFundingView, RoleOverviewView,
+        CostWindowView, MetricSamplesView, ObservationFailure, RoleFundingView, RoleOverviewView,
         RootEstateView, StoreInventoryView,
     },
     protocol_binding::resolve_registry_protocol_binding,
@@ -39,11 +39,11 @@ pub trait ObservatoryTransport {
     fn funding(&mut self, entry: &RegistryEntry) -> Result<RoleFundingView, ObservationFailure>;
     fn estate(&mut self, entry: &RegistryEntry) -> Result<RootEstateView, ObservationFailure>;
     fn store(&mut self, entry: &RegistryEntry) -> Result<StoreInventoryView, ObservationFailure>;
-    fn cost_samples(
+    fn metric_samples(
         &mut self,
         entry: &RegistryEntry,
         family: PublicMetricFamily,
-    ) -> Result<CostSamplesView, ObservationFailure>;
+    ) -> Result<MetricSamplesView, ObservationFailure>;
     fn cost_window(&mut self, entry: &RegistryEntry) -> Result<CostWindowView, ObservationFailure>;
     fn attempts(&self) -> u64;
 }
@@ -98,13 +98,13 @@ enum StoreResponse {
 }
 
 #[derive(CandidType)]
-enum CostRequest {
+enum MetricRequest {
     Metrics(PublicMetricsRequest),
     History(PublicHistoryRequest),
 }
 
 #[derive(CandidType, Deserialize)]
-enum CostResponse {
+enum MetricResponse {
     Metrics(PublicMetricsSnapshot),
     History(PublicHistorySnapshot),
 }
@@ -276,15 +276,15 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
         Ok(store_inventory(reply))
     }
 
-    fn cost_samples(
+    fn metric_samples(
         &mut self,
         entry: &RegistryEntry,
         family: PublicMetricFamily,
-    ) -> Result<CostSamplesView, ObservationFailure> {
-        let reply: CostResponse = self.query(
+    ) -> Result<MetricSamplesView, ObservationFailure> {
+        let reply: MetricResponse = self.query(
             entry,
             protocol::CANIC_PUBLIC_STATUS,
-            &CostRequest::Metrics(PublicMetricsRequest {
+            &MetricRequest::Metrics(PublicMetricsRequest {
                 family,
                 page: PageRequest {
                     limit: 256,
@@ -292,17 +292,17 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
                 },
             }),
         )?;
-        let CostResponse::Metrics(reply) = reply else {
+        let MetricResponse::Metrics(reply) = reply else {
             return Err(ObservationFailure::InvalidResponse);
         };
-        crate::observatory::ops::cost::samples(reply, family)
+        crate::observatory::ops::metrics::samples(reply, family)
     }
 
     fn cost_window(&mut self, entry: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
-        let reply: CostResponse = self.query(
+        let reply: MetricResponse = self.query(
             entry,
             protocol::CANIC_PUBLIC_STATUS,
-            &CostRequest::History(PublicHistoryRequest {
+            &MetricRequest::History(PublicHistoryRequest {
                 family: PublicMetricFamily::Cycles,
                 name: "balance".into(),
                 canister_id: Some(
@@ -315,7 +315,7 @@ impl ObservatoryTransport for IcpObservatoryTransport<'_> {
                 },
             }),
         )?;
-        let CostResponse::History(reply) = reply else {
+        let MetricResponse::History(reply) = reply else {
             return Err(ObservationFailure::InvalidResponse);
         };
         if reply.points.entries.len() > 1 {

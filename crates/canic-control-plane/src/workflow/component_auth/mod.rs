@@ -4,6 +4,9 @@
 //! Does not own: endpoint predicates, Component Registry persistence, or proof creation.
 //! Boundary: combines active root runtime authority with exact Registry membership.
 
+#[cfg(test)]
+mod tests;
+
 use canic_core::{
     control_plane_support::{
         error::InternalError, workflow::runtime::fleet_activation::FleetActivationWorkflow,
@@ -13,6 +16,23 @@ use canic_core::{
 };
 
 pub use super::component_registry::ActiveComponentMemberError;
+
+/// Inspect membership without converting an ordinary negative into access denial.
+pub fn lookup_active_member(
+    subject: candid::Principal,
+) -> Result<Option<ManagedCanisterBinding>, Error> {
+    membership_observation(active_component_member_for_access(subject))
+}
+
+fn membership_observation(
+    result: Result<ManagedCanisterBinding, ActiveComponentMemberError>,
+) -> Result<Option<ManagedCanisterBinding>, Error> {
+    match result {
+        Ok(member) => Ok(Some(member)),
+        Err(ActiveComponentMemberError::NotActive) => Ok(None),
+        Err(ActiveComponentMemberError::Internal(error)) => Err(error.into()),
+    }
+}
 
 /// Resolve one exact active member under an active Fleet Subnet Root.
 pub fn active_component_member(caller: candid::Principal) -> Result<ManagedCanisterBinding, Error> {

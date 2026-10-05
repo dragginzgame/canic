@@ -40,7 +40,7 @@ use ic_blob_storage::{
     model::service::upload::UploadContext,
 };
 
-pub(crate) async fn before_update() {
+pub async fn before_update() {
     if let Some(request) = ops::begin_update() {
         if let Ok(proof) = ic_blob_storage::ops::service::recovery::prove_current_instance(
             request.installation_version,
@@ -54,7 +54,7 @@ pub(crate) async fn before_update() {
         ops::observe_version();
     }
 }
-pub(crate) async fn resume_current_instance(
+pub async fn resume_current_instance(
     context: UploadContext,
 ) -> Result<(), ic_blob_storage::dto::recovery::CurrentInstanceRecoveryFailure> {
     let outcome = ic_blob_storage::workflow::installation::recovery::resume_current_instance(
@@ -66,7 +66,7 @@ pub(crate) async fn resume_current_instance(
     ops::observe_version();
     outcome
 }
-pub(crate) fn certificate_assessment(
+pub fn certificate_assessment(
     context: UploadContext,
     root: &str,
     now: u64,
@@ -92,7 +92,7 @@ pub(crate) fn certificate_assessment(
     })
 }
 
-pub(crate) fn certificate(
+pub fn certificate(
     context: UploadContext,
     root: &str,
     now: u64,
@@ -115,7 +115,7 @@ pub(crate) fn certificate(
         )
     })
 }
-pub(crate) fn reference_capacity(
+pub fn reference_capacity(
     context: UploadContext,
     input: ic_blob_storage::dto::reference::capacity::ReferenceCapacityRequest,
 ) -> Result<
@@ -126,7 +126,7 @@ pub(crate) fn reference_capacity(
         ic_blob_storage::workflow::references::capacity::inspect(&stores.uploads, context, input)
     })
 }
-pub(crate) fn upload_capacity(
+pub fn upload_capacity(
     context: UploadContext,
     input: ic_blob_storage::dto::tenant::TenantScope,
 ) -> Result<
@@ -137,7 +137,7 @@ pub(crate) fn upload_capacity(
         ic_blob_storage::workflow::uploads::capacity::inspect(&stores.uploads, context, input)
     })
 }
-pub(crate) fn revoke_gateway(
+pub fn revoke_gateway(
     context: UploadContext,
     input: ic_blob_storage::dto::gateway::GatewayRevocationRequest,
 ) -> Result<
@@ -152,7 +152,7 @@ pub(crate) fn revoke_gateway(
         )
     })
 }
-pub(crate) fn history(
+pub fn history(
     context: UploadContext,
     input: UploadHistoryRequest,
 ) -> Result<UploadHistoryPage, UploadHistoryFailure> {
@@ -170,10 +170,10 @@ pub(crate) fn history(
         )
     })
 }
-pub(crate) fn install(input: &ic_blob_storage::dto::configuration::ServiceInstallationInput) {
+pub fn install(input: &ic_blob_storage::dto::configuration::ServiceInstallationInput) {
     ops::install(input);
 }
-pub(crate) fn funding_history(
+pub fn funding_history(
     context: UploadContext,
     input: FundingHistoryRequest,
 ) -> Result<FundingHistoryPage, FundingHistoryFailure> {
@@ -186,10 +186,10 @@ pub(crate) fn funding_history(
         )
     })
 }
-pub(crate) fn restore() {
+pub fn restore() {
     ops::restore();
 }
-pub(crate) fn funding_outcome(
+pub fn funding_outcome(
     context: UploadContext,
     input: FundingOutcomeRequest,
 ) -> Result<Option<FundingOutcomeResponse>, FundingOutcomeFailure> {
@@ -197,7 +197,7 @@ pub(crate) fn funding_outcome(
         ic_blob_storage::workflow::funding::outcome::inspect(&stores.funding, context, input)
     })
 }
-pub(crate) fn funding_assessment(
+pub fn funding_assessment(
     context: UploadContext,
     input: ic_blob_storage::dto::funding::assessment::FundingPreparationRequest,
 ) -> Result<
@@ -208,7 +208,7 @@ pub(crate) fn funding_assessment(
         ic_blob_storage::workflow::funding::assessment::inspect(&stores.funding, context, input)
     })
 }
-pub(crate) fn local_status(
+pub fn local_status(
     context: UploadContext,
     input: OperatorScope,
 ) -> Result<LocalServiceStatus, LocalStatusFailure> {
@@ -216,9 +216,7 @@ pub(crate) fn local_status(
         ic_blob_storage::workflow::operator::inspect(OperatorStores::from(stores), context, input)
     })
 }
-pub(crate) fn configuration(
-    actor: candid::Principal,
-) -> Result<HostConfigurationView, HostFailure> {
+pub fn configuration(actor: candid::Principal) -> Result<HostConfigurationView, HostFailure> {
     ops::with_installation(|installation| {
         ic_blob_storage::workflow::installation::inspect(
             installation,
@@ -229,7 +227,7 @@ pub(crate) fn configuration(
         )
     })
 }
-pub(crate) fn update_tenant(
+pub fn update_tenant(
     context: UploadContext,
     input: TenantUpdateRequest,
 ) -> Result<TenantEnrollmentResponse, TenantFailure> {
@@ -237,13 +235,13 @@ pub(crate) fn update_tenant(
         ic_blob_storage::workflow::tenants::update(&mut stores.uploads, context, input)
     })
 }
-pub(crate) fn tenant(
+pub fn tenant(
     context: UploadContext,
     input: TenantScope,
 ) -> Result<TenantEnrollmentResponse, TenantFailure> {
     ops::read(|stores| ic_blob_storage::workflow::tenants::inspect(&stores.uploads, context, input))
 }
-pub(crate) fn admit(
+pub fn admit(
     context: UploadContext,
     input: UploadAdmissionRequest,
     now: u64,
@@ -257,7 +255,7 @@ pub(crate) fn admit(
         )
     })
 }
-pub(crate) fn admission(
+pub fn admission(
     context: UploadContext,
     input: UploadAdmissionRequest,
 ) -> Result<UploadAdmissionResponse, UploadAdmissionFailure> {
@@ -265,7 +263,7 @@ pub(crate) fn admission(
         ic_blob_storage::workflow::uploads::admission::inspect(&stores.uploads, context, input)
     })
 }
-pub(crate) fn upload_status(
+pub fn upload_status(
     context: UploadContext,
     input: ic_blob_storage::dto::reference::ReferenceUpload,
 ) -> Result<
@@ -274,7 +272,7 @@ pub(crate) fn upload_status(
 > {
     ops::read(|stores| ic_blob_storage::workflow::uploads::inspect(&stores.uploads, context, input))
 }
-pub(crate) fn revoke(
+pub fn revoke(
     context: UploadContext,
     input: UploadAdmissionRequest,
 ) -> Result<UploadRevocationResponse, UploadAdmissionFailure> {
@@ -282,7 +280,7 @@ pub(crate) fn revoke(
         ic_blob_storage::workflow::uploads::admission::revoke(&mut stores.uploads, context, input)
     })
 }
-pub(crate) fn prepare(
+pub fn prepare(
     context: UploadContext,
     input: &UploadManifestRequest,
     now: u64,
@@ -296,7 +294,7 @@ pub(crate) fn prepare(
         )
     })
 }
-pub(crate) fn manifest(
+pub fn manifest(
     context: UploadContext,
     input: UploadAdmissionRequest,
 ) -> Result<UploadManifestResponse, UploadManifestFailure> {
@@ -304,7 +302,7 @@ pub(crate) fn manifest(
         ic_blob_storage::workflow::uploads::manifests::inspect(&stores.uploads, context, input)
     })
 }
-pub(crate) fn reference(
+pub fn reference(
     context: UploadContext,
     input: ReferenceCommand,
 ) -> Result<ReferenceMutationResponse, ReferenceFailure> {
@@ -312,7 +310,7 @@ pub(crate) fn reference(
         ic_blob_storage::workflow::references::apply(&mut stores.uploads, context, input)
     })
 }
-pub(crate) fn receipt(
+pub fn receipt(
     context: UploadContext,
     input: ReferenceCommand,
 ) -> Result<ReferenceReceiptLookup, ReferenceFailure> {
@@ -321,7 +319,7 @@ pub(crate) fn receipt(
     })
 }
 
-pub(crate) async fn sync_gateways(
+pub async fn sync_gateways(
     context: UploadContext,
     input: OperatorScope,
 ) -> Result<
@@ -339,7 +337,7 @@ pub(crate) async fn sync_gateways(
     ops::observe_version();
     outcome
 }
-pub(crate) fn cancel_gateway_sync(
+pub fn cancel_gateway_sync(
     context: UploadContext,
     input: ic_blob_storage::dto::gateway::sync::GatewaySyncCancellation,
 ) -> Result<(), ic_blob_storage::dto::gateway::sync::GatewaySyncFailure> {
@@ -348,7 +346,7 @@ pub(crate) fn cancel_gateway_sync(
     })
 }
 
-pub(crate) fn discover(
+pub fn discover(
     context: UploadContext,
     input: ic_blob_storage::dto::upload::discovery::UploadDiscoveryRequest,
 ) -> Result<
@@ -360,7 +358,7 @@ pub(crate) fn discover(
     })
 }
 
-pub(crate) fn download(
+pub fn download(
     context: UploadContext,
     input: ic_blob_storage::dto::download::DownloadRequest,
 ) -> Result<
@@ -372,7 +370,7 @@ pub(crate) fn download(
     })
 }
 
-pub(crate) fn reference_status(
+pub fn reference_status(
     context: UploadContext,
     input: ic_blob_storage::dto::reference::status::ReferenceStatusRequest,
 ) -> Result<ic_blob_storage::dto::reference::status::ReferenceStatusResponse, ReferenceFailure> {
@@ -381,7 +379,7 @@ pub(crate) fn reference_status(
     })
 }
 
-pub(crate) async fn inspect_account(
+pub async fn inspect_account(
     context: UploadContext,
     input: ic_blob_storage::dto::account::AccountInspectionRequest,
 ) -> Result<
@@ -411,7 +409,7 @@ pub(crate) async fn inspect_account(
     outcome
 }
 
-pub(crate) fn attest(
+pub fn attest(
     context: UploadContext,
     input: &ic_blob_storage::dto::upload::completion::UploadAttestationRequest,
 ) -> Result<
@@ -428,7 +426,7 @@ pub(crate) fn attest(
         )
     })
 }
-pub(crate) fn attestation(
+pub fn attestation(
     context: UploadContext,
     input: UploadAdmissionRequest,
 ) -> Result<
@@ -445,7 +443,7 @@ pub(crate) fn attestation(
     })
 }
 
-pub(crate) fn verification_manifest(
+pub fn verification_manifest(
     context: UploadContext,
     input: UploadAdmissionRequest,
 ) -> Result<UploadManifestResponse, UploadManifestFailure> {
@@ -459,7 +457,7 @@ pub(crate) fn verification_manifest(
     })
 }
 
-pub(crate) fn verification_plan(
+pub fn verification_plan(
     context: UploadContext,
     input: UploadAdmissionRequest,
 ) -> Result<

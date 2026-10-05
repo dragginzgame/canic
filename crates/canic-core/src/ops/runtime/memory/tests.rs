@@ -3,8 +3,7 @@
 use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use ic_memory::{
-    AllocationDeclaration, AllocationHistory, AllocationLedger, AllocationSlotDescriptor,
-    SchemaMetadata,
+    AllocationDeclaration, AllocationHistory, AllocationLedger, MemoryManagerSlot, SchemaMetadata,
     ic_stable_structures::{
         Memory, VectorMemory,
         memory_manager::{MemoryId, MemoryManager},
@@ -228,7 +227,7 @@ fn commit_recovery_response_maps_invalid_slots_without_unknown_fallback() {
 fn memory_allocation_record_response_includes_live_backing_memory_size() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
-        AllocationSlotDescriptor::memory_manager(100).expect("usable slot"),
+        MemoryManagerSlot::new(100).expect("usable slot"),
         None,
         SchemaMetadata::default(),
     )
@@ -269,7 +268,7 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
 fn memory_allocation_record_response_omits_unmeasured_sizes() {
     let declaration = AllocationDeclaration::new(
         "app.users.v1",
-        AllocationSlotDescriptor::memory_manager(100).expect("usable slot"),
+        MemoryManagerSlot::new(100).expect("usable slot"),
         None,
         SchemaMetadata::default(),
     )

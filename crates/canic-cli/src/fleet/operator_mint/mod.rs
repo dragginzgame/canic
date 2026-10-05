@@ -277,17 +277,23 @@ fn prepare_review(
     let icp_ledger = principal(&options.mint_icp_ledger)?;
     let cmc = principal(&options.mint_cmc)?;
     let cycles_ledger = principal(funding.pause.cycles_ledger())?;
-    let quoted = transport.quote_blocking(icp_ledger, cmc, cycles_ledger)?;
-    let required = match &funding.pause {
-        FundingPauseRecord::Operator(pause) => pause.required_debit_cycles,
-        pause => pause
-            .shortfall_cycles()
-            .checked_add(pause.ledger_fee_cycles())
-            .ok_or_else(|| FleetCommandError::Usage("funding debit overflow".into()))?,
+    let (required, resume_sha256) = match &funding.pause {
+        FundingPauseRecord::Operator(pause) => {
+            (pause.required_debit_cycles, &report.plan.plan_sha256)
+        }
+        pause => (
+            pause
+                .shortfall_cycles()
+                .checked_add(pause.ledger_fee_cycles())
+                .ok_or_else(|| FleetCommandError::Usage("funding debit overflow".into()))?,
+            &funding.review_sha256,
+        ),
     };
     let available = transport.operator_balance(cycles_ledger)?;
+    let shortfall = conversion_shortfall(required, available, resume_sha256)?;
+    let quoted = transport.quote_blocking(icp_ledger, cmc, cycles_ledger)?;
     let amount = quote::amount_e8s(
-        required.saturating_sub(available),
+        shortfall,
         quoted.estimated_deposit_fee_cycles,
         quoted.xdr_permyriad_per_icp,
         quoted.transfer_fee_e8s,
@@ -315,4 +321,52 @@ fn prepare_review(
         now_nanoseconds()?,
     )?;
     Ok((retained, quoted))
+}
+
+fn conversion_shortfall(
+    required: u128,
+    available: u128,
+    resume_sha256: &str,
+) -> Result<u128, FleetCommandError> {
+    if available >= required {
+        return Err(FleetCommandError::OperatorBalanceCoversFunding {
+            available_cycles: available,
+            required_cycles: required,
+            resume_sha256: resume_sha256.to_string(),
+        });
+    }
+    Ok(required - available)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn covered_operator_balance_preserves_the_funding_resume_identity() {
+        for resume_sha256 in ["1".repeat(64), "2".repeat(64)] {
+            for (required, available) in [(10, 10), (10, 11), (0, 0), (u128::MAX, u128::MAX)] {
+                assert!(matches!(
+                    conversion_shortfall(required, available, &resume_sha256),
+                    Err(FleetCommandError::OperatorBalanceCoversFunding {
+                        required_cycles, available_cycles, resume_sha256: retained,
+                    }) if required_cycles == required && available_cycles == available
+                        && retained == resume_sha256
+                ));
+            }
+        }
+    }
+
+    #[test]
+    fn conversion_quotes_use_only_the_observed_positive_shortfall() {
+        let shortfall = conversion_shortfall(100, 99, &"1".repeat(64)).unwrap();
+        assert_eq!(shortfall, 1);
+        assert_eq!(quote::amount_e8s(shortfall, 4, 5, 1), Some(1));
+        assert_eq!(quote::amount_e8s(shortfall, 4, 0, 1), None);
+        assert_eq!(quote::amount_e8s(shortfall, u128::MAX, 5, 1), None);
+        assert_eq!(
+            conversion_shortfall(u128::MAX, u128::MAX - 1, "plan").unwrap(),
+            1
+        );
+    }
 }

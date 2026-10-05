@@ -71,6 +71,10 @@ fn snapshot() -> ObservatorySnapshotView {
                     pending_operations: 1,
                 },
             },
+            application_metrics: Observation::Unavailable {
+                observed_at_unix_ms: 1000,
+                failure: ObservationFailure::Unsupported,
+            },
             costs: None,
             estate: Observation::Unavailable {
                 observed_at_unix_ms: 1000,
@@ -175,11 +179,11 @@ fn options() -> ObservatoryOptions {
 
 struct NoTransport;
 impl ObservatoryTransport for NoTransport {
-    fn cost_samples(
+    fn metric_samples(
         &mut self,
         _: &RegistryEntry,
         _: PublicMetricFamily,
-    ) -> Result<CostSamplesView, ObservationFailure> {
+    ) -> Result<MetricSamplesView, ObservationFailure> {
         panic!("no authority, no calls")
     }
     fn cost_window(&mut self, _: &RegistryEntry) -> Result<CostWindowView, ObservationFailure> {
@@ -241,8 +245,8 @@ fn cost_collection_is_bounded_partial_private_and_marks_restarts() {
     assert!(matches!(
         costs.balance,
         Observation::Observed {
-            value: CostSamplesView {
-                state: CostSampleState::Stale,
+            value: MetricSamplesView {
+                state: MetricSampleState::Stale,
                 ..
             },
             ..
@@ -288,27 +292,34 @@ fn cost_collection_is_bounded_partial_private_and_marks_restarts() {
     }
 }
 impl ObservatoryTransport for PartialTransport {
-    fn cost_samples(
+    fn metric_samples(
         &mut self,
-        _: &RegistryEntry,
+        entry: &RegistryEntry,
         family: PublicMetricFamily,
-    ) -> Result<CostSamplesView, ObservationFailure> {
+    ) -> Result<MetricSamplesView, ObservationFailure> {
+        if family == PublicMetricFamily::Application {
+            return if entry.pid == "failed" {
+                Err(ObservationFailure::TimedOut)
+            } else {
+                Ok(application_samples(&entry.pid))
+            };
+        }
         self.cost_calls += 1;
         if family == PublicMetricFamily::Operations {
             return Err(ObservationFailure::TimedOut);
         }
-        Ok(CostSamplesView {
-            state: CostSampleState::Stale,
+        Ok(MetricSamplesView {
+            state: MetricSampleState::Stale,
             sampled_at_ns: Some(1),
             stale_after_ns: 2,
             truncated: false,
-            rows: vec![CostMetricView {
+            rows: vec![MetricView {
                 name: "balance".into(),
                 canister_id: Some("cost-private-canister".into()),
                 value: "123456789123456789123456789".into(),
                 unit: "cycles".into(),
                 observed_at_ns: 1,
-                measurement: CostMetricKind::Gauge,
+                measurement: MetricKind::Gauge,
             }],
         })
     }
@@ -359,6 +370,23 @@ fn role_failures_preserve_other_roles_and_independent_fields() {
     let healthy = ops::collect_role(&entry, &mut transport, false);
     assert_eq!(transport.cost_calls, 0);
     assert!(healthy.costs.is_none());
+    assert!(matches!(
+        failed.application_metrics,
+        Observation::Unavailable {
+            failure: ObservationFailure::TimedOut,
+            ..
+        }
+    ));
+    assert!(matches!(
+        healthy.application_metrics,
+        Observation::Observed {
+            value: MetricSamplesView {
+                state: MetricSampleState::Fresh,
+                ..
+            },
+            ..
+        }
+    ));
     assert!(matches!(
         failed.overview,
         Observation::Unavailable {
@@ -411,4 +439,138 @@ fn exhausted_collection_never_launches_a_query_or_version_probe() {
     );
     assert_eq!(transport.attempts(), 0);
     assert!(transport.compatibility.is_none());
+}
+
+fn application_samples(canister: &str) -> MetricSamplesView {
+    MetricSamplesView {
+        state: MetricSampleState::Fresh,
+        sampled_at_ns: Some(900_000_000),
+        stale_after_ns: 2_000_000_000,
+        truncated: false,
+        rows: vec![MetricView {
+            name: "app.<queue>".into(),
+            canister_id: Some(canister.into()),
+            value: u128::MAX.to_string(),
+            unit: "count".into(),
+            observed_at_ns: 900_000_000,
+            measurement: MetricKind::Gauge,
+        }],
+    }
+}
+
+fn snapshot_with_application() -> ObservatorySnapshotView {
+    let mut snapshot = snapshot();
+    snapshot.roles[0].application_metrics = Observation::Observed {
+        observed_at_unix_ms: 1000,
+        source: ObservationSource::PublicMetricCache,
+        value: application_samples("private-canister"),
+    };
+    snapshot
+}
+
+#[test]
+fn application_public_projection_keeps_exact_values_and_redacts_other_dimensions() {
+    let mut snapshot = snapshot_with_application();
+    let Observation::Observed { value, .. } = &mut snapshot.roles[0].application_metrics else {
+        unreachable!()
+    };
+    let mut other = value.rows[0].clone();
+    other.canister_id = Some("private-tenant".into());
+    other.value = "56789".into();
+    value.rows.push(other);
+    let public = public_view(&snapshot, &profile(), 2000).unwrap();
+    let Observation::Observed { value, .. } = &public.roles[0].application_metrics else {
+        unreachable!()
+    };
+    assert!(value.truncated);
+    assert_eq!(value.rows.len(), 1);
+    assert_eq!(value.rows[0].canister_id, None);
+    assert_eq!(value.rows[0].value, u128::MAX.to_string());
+    assert_eq!(value.sampled_at_ns, Some(900_000_000));
+    let html = http_response(&snapshot, &profile(), "/", 2000, 16384).unwrap();
+    let text = String::from_utf8(html.body).unwrap();
+    assert!(text.contains("app.&lt;queue&gt;"));
+    assert!(text.contains("fresh; partial"));
+    assert!(text.contains(&u128::MAX.to_string()));
+    for absent in ["<queue>", "private-tenant", "private-canister", "56789"] {
+        assert!(!text.contains(absent));
+    }
+    assert!(matches!(
+        http_response(&snapshot, &profile(), "/", 2000, 128),
+        Err(ObservatoryError::Bound("rendered bytes"))
+    ));
+}
+
+#[test]
+fn application_source_age_and_future_rows_cannot_be_hidden_by_a_fresh_reply() {
+    for (sampled_at, row_at, now) in [
+        (900_000_000, 900_000_000, 3000),
+        (4_000_000_000, 4_000_000_000, 2000),
+        (900_000_000, 4_000_000_000, 2000),
+    ] {
+        let mut snapshot = snapshot_with_application();
+        let Observation::Observed { value, .. } = &mut snapshot.roles[0].application_metrics else {
+            unreachable!()
+        };
+        value.sampled_at_ns = Some(sampled_at);
+        value.rows[0].observed_at_ns = row_at;
+        let public = public_view(&snapshot, &profile(), now).unwrap();
+        let Observation::Observed { value, .. } = &public.roles[0].application_metrics else {
+            unreachable!()
+        };
+        assert_eq!(value.state, MetricSampleState::Stale);
+        assert_eq!(value.rows[0].value, u128::MAX.to_string());
+    }
+}
+
+#[test]
+fn disabled_or_missing_application_data_is_not_reported_as_zero() {
+    for state in [MetricSampleState::Disabled, MetricSampleState::Unavailable] {
+        let mut snapshot = snapshot_with_application();
+        let Observation::Observed { value, .. } = &mut snapshot.roles[0].application_metrics else {
+            unreachable!()
+        };
+        value.state = state;
+        value.rows.clear();
+        value.sampled_at_ns = None;
+        let public = public_view(&snapshot, &profile(), 2000).unwrap();
+        let Observation::Observed { value, .. } = &public.roles[0].application_metrics else {
+            unreachable!()
+        };
+        assert_eq!(value.state, state);
+        assert!(value.rows.is_empty());
+        let html = http_response(&snapshot, &profile(), "/", 2000, 16384).unwrap();
+        assert!(
+            String::from_utf8(html.body)
+                .unwrap()
+                .contains("<td>unknown</td>")
+        );
+    }
+}
+
+#[test]
+fn application_public_redaction_does_not_merge_distinct_metric_identities() {
+    let mut snapshot = snapshot_with_application();
+    let Observation::Observed { value, .. } = &mut snapshot.roles[0].application_metrics else {
+        unreachable!()
+    };
+    let mut undimensioned = value.rows[0].clone();
+    undimensioned.canister_id = None;
+    undimensioned.value = "123".into();
+    value.rows.push(undimensioned);
+    let mut unique = value.rows[0].clone();
+    unique.name = "app.unique".into();
+    value.rows.push(unique);
+    let public = public_view(&snapshot, &profile(), 2000).unwrap();
+    let Observation::Observed { value, .. } = &public.roles[0].application_metrics else {
+        unreachable!()
+    };
+    assert!(value.truncated);
+    assert_eq!(value.rows.len(), 1);
+    assert_eq!(value.rows[0].name, "app.unique");
+    let Observation::Observed { value, .. } = &snapshot.roles[0].application_metrics else {
+        unreachable!()
+    };
+    assert_eq!(value.rows.len(), 3);
+    assert_eq!(value.rows[1].value, "123");
 }

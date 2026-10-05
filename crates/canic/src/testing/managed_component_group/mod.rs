@@ -9,7 +9,8 @@ mod model;
 mod tests;
 
 pub use model::{
-    ManagedComponentGroupQualificationInput, ManagedComponentNode, ManagedRoleQualificationArtifact,
+    ManagedApplicationInit, ManagedComponentGroupQualificationInput, ManagedComponentNode,
+    ManagedRoleQualificationArtifact,
 };
 
 use crate::{
@@ -472,10 +473,11 @@ impl ManagedComponentGroupFixture {
             install_id,
             release_build_id: component.release_build_id,
         };
-        let application_init_args = allocation
-            .extra_arg
-            .clone()
-            .or_else(|| artifact.application_init_args.clone());
+        let application_init_args = allocation.extra_arg.clone().or_else(|| {
+            artifact
+                .application_init_args
+                .for_canister(allocation.child)
+        });
         let init_args = encode_args((payload, application_init_args))
             .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
         self.pic.install_canister(
@@ -689,8 +691,8 @@ impl ManagedComponentGroupFixture {
 ///
 /// # Panics
 ///
-/// Panics only if PocketIC rejects primitive canister creation or installation before
-/// Canic can return typed fixture evidence.
+/// Panics if PocketIC rejects primitive canister creation or installation before
+/// Canic can return typed fixture evidence, or an application argument encoder panics.
 pub fn install_managed_component_group(
     input: ManagedComponentGroupQualificationInput<'_>,
 ) -> Result<ManagedComponentGroupFixture, ManagedComponentGroupQualificationError> {
@@ -961,8 +963,11 @@ impl TopLevelInstallContext<'_> {
                 plan.public.role
             ))
         })?;
-        let init_args = encode_args((plan.payload.clone(), artifact.application_init_args.clone()))
-            .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
+        let init_args = encode_args((
+            plan.payload.clone(),
+            artifact.application_init_args.for_canister(canister),
+        ))
+        .map_err(|error| ManagedComponentGroupQualificationError::Candid(error.to_string()))?;
         self.pic.add_cycles(canister, artifact.install_cycles);
         self.pic.install_canister(
             canister,
