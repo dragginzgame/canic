@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+require_jq
+
 # Read only the structured receipt frozen into an exact release tag.
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TAG="${1:?usage: read-release-validation.sh <tag> <version>}"
@@ -10,7 +14,7 @@ receipt="$(git -C "$ROOT" show "$TAG:release-validation.json")" || {
     echo "$TAG has no structured release validation receipt; use the complete lane" >&2
     exit 1
 }
-jq -ser --arg version "$VERSION" '
+"$JQ_BIN" -ser --arg version "$VERSION" '
     select(length == 1) | .[0]
     | select(type == "object")
     | select(keys == ["date", "gate", "schema", "source", "version"])

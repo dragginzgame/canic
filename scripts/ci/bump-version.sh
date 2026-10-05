@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 BUMP_TYPE=${1:-patch}
 
 if [[ "${CANIC_RELEASE_VALIDATED:-}" != "1" ]]; then
@@ -20,6 +23,7 @@ if ! cargo set-version --help >/dev/null 2>&1; then
   exit 1
 fi
 
+require_jq
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 VERSION_READER="$ROOT_DIR/scripts/ci/read-workspace-version.sh"
@@ -44,7 +48,7 @@ if [[ "$CANIC_RELEASE_VALIDATED_HEAD" != "$CURRENT_HEAD" ]]; then
   exit 1
 fi
 
-if [[ -n "$(git status --porcelain)" ]]; then
+if [[ -z "${RELEASE_VERSION:-}" && -n "$(git status --porcelain)" ]]; then
   echo "❌ Refusing to bump a dirty source candidate." >&2
   exit 1
 fi
@@ -52,22 +56,8 @@ fi
 # Current version (from [workspace.package]).
 PREV="$(bash "$VERSION_READER")"
 
-IFS=. read -r PREV_MAJOR PREV_MINOR PREV_PATCH <<<"${PREV%%[-+]*}"
-case "$BUMP_TYPE" in
-  patch)
-    PLANNED="$PREV_MAJOR.$PREV_MINOR.$((PREV_PATCH + 1))"
-    ;;
-  minor)
-    PLANNED="$PREV_MAJOR.$((PREV_MINOR + 1)).0"
-    ;;
-  major)
-    PLANNED="$((PREV_MAJOR + 1)).0.0"
-    ;;
-  *)
-    echo "❌ Unsupported version bump: $BUMP_TYPE" >&2
-    exit 2
-    ;;
-esac
+PLANNED="$(bash scripts/ci/next-release-version.sh "$PREV" "$BUMP_TYPE")"
+[[ -z "${RELEASE_VERSION:-}" || "$RELEASE_VERSION" == "$PLANNED" ]]
 PLANNED_MINOR_LINE="${PLANNED%.*}"
 DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 VALIDATION_RECEIPT="release-validation.json"
@@ -77,26 +67,34 @@ bash scripts/ci/check-release-draft-ready.sh "$BUMP_TYPE"
 # Refresh remote state after validation and immediately before any version file
 # changes. A stale source branch or occupied tag must not leave a local release
 # commit/tag that cannot be pushed normally.
-bash scripts/ci/check-release-remote-state.sh before-version "$PLANNED"
+if [[ -z "${RELEASE_VERSION:-}" ]]; then
+  bash scripts/ci/check-release-remote-state.sh before-version "$PLANNED"
+fi
 
 TRANSACTION_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-bump.XXXXXX")"
 BACKUP_ARCHIVE="$TRANSACTION_DIR/release-surfaces.tar"
+NOTES_EXISTED=0
+[[ ! -f "$DETAILED_CHANGELOG" ]] || NOTES_EXISTED=1
 RECEIPT_EXISTED=0
 [[ ! -f "$VALIDATION_RECEIPT" ]] || RECEIPT_EXISTED=1
-mapfile -t RELEASE_SURFACES < <(
+RELEASE_SURFACES=()
+while IFS= read -r path; do RELEASE_SURFACES[${#RELEASE_SURFACES[@]}]="$path"; done < <(
   {
     git ls-files -- 'Cargo.toml' ':(glob)**/Cargo.toml'
-    printf '%s\n' Cargo.lock scripts/dev/install_dev.sh \
-      "$DETAILED_CHANGELOG"
+    printf '%s\n' Cargo.lock CHANGELOG.md scripts/dev/install_dev.sh
+    if [[ "$NOTES_EXISTED" -eq 1 ]]; then printf '%s\n' "$DETAILED_CHANGELOG"; fi
     if [[ "$RECEIPT_EXISTED" -eq 1 ]]; then printf '%s\n' "$VALIDATION_RECEIPT"; fi
   } | sort -u
 )
 tar -cf "$BACKUP_ARCHIVE" "${RELEASE_SURFACES[@]}"
+cargo metadata --locked --offline --no-deps --format-version 1 > "$TRANSACTION_DIR/metadata.json"
+cp -p Cargo.lock "$TRANSACTION_DIR/Cargo.lock"
 
 rollback_release_surfaces() {
   local status="${1:-1}"
 
   trap - ERR INT TERM
+  if [[ "$NOTES_EXISTED" -eq 0 ]]; then rm -f -- "$DETAILED_CHANGELOG"; fi
   if [[ "$RECEIPT_EXISTED" -eq 0 ]]; then rm -f -- "$VALIDATION_RECEIPT"; fi
   tar -xf "$BACKUP_ARCHIVE" -C "$ROOT_DIR"
   rm -rf "$TRANSACTION_DIR"
@@ -114,7 +112,7 @@ trap 'rollback_release_surfaces 130' INT
 trap 'rollback_release_surfaces 143' TERM
 
 # Bump
-cargo set-version --workspace --bump "$BUMP_TYPE" >/dev/null
+cargo set-version --workspace --offline "$PLANNED" >/dev/null
 
 # New version.
 NEW="$(bash "$VERSION_READER")"
@@ -130,32 +128,30 @@ if [[ "$NEW" != "$PLANNED" ]]; then
   rollback_release_surfaces 1
 fi
 
-[[ -f Cargo.lock ]] && cargo update --workspace --offline >/dev/null
+perl scripts/release/retain-lock-selection.pl "$TRANSACTION_DIR/metadata.json" "$TRANSACTION_DIR/Cargo.lock" "$PREV" "$NEW" > Cargo.lock
+cargo metadata --locked --offline --no-deps --format-version 1 >/dev/null
 
 scripts/ci/sync-release-surface-version.sh "$NEW"
 
-release_header="$(rg -m1 "^## ${NEW//./\\.} - (Unreleased|[0-9]{4}-[0-9]{2}-[0-9]{2})$" "$DETAILED_CHANGELOG")"
-recorded_release_state="${release_header#"## $NEW - "}"
-if [[ "$recorded_release_state" == "Unreleased" ]]; then
-  RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
-else
-  RELEASE_DATE="$recorded_release_state"
-fi
-[[ "$RELEASE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || {
-  echo "❌ Invalid release date: $RELEASE_DATE" >&2
-  rollback_release_surfaces 1
-}
-sed -i \
-  "s/^## $NEW - Unreleased$/## $NEW - $RELEASE_DATE/" \
-  "$DETAILED_CHANGELOG"
+RELEASE_DATE="${CANIC_RELEASE_DATE:-$(date -u +%F)}"
+[[ "$RELEASE_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || rollback_release_surfaces 1
+mkdir -p "$(dirname "$DETAILED_CHANGELOG")"
+if [[ "$NOTES_EXISTED" -eq 0 ]]; then printf '# %s\n\n' "$PLANNED_MINOR_LINE" > "$DETAILED_CHANGELOG"; fi
+for notes in CHANGELOG.md "$DETAILED_CHANGELOG"; do
+  awk -v version="$NEW" -v date="$RELEASE_DATE" \
+    -f scripts/ci/finalize-release-changelog.awk "$notes" > "$TRANSACTION_DIR/notes"
+  cat "$TRANSACTION_DIR/notes" > "$notes"
+done
 # Keep validation provenance separate from the editable developer handoff.
-jq -n --arg version "$NEW" --arg source "$CURRENT_HEAD" \
+# jq owns these literal variable names.
+# shellcheck disable=SC2016
+"$JQ_BIN" -n --arg version "$NEW" --arg source "$CURRENT_HEAD" \
   --arg date "$RELEASE_DATE" --arg gate "$VALIDATION_KIND" \
   '{schema: 1, version: $version, source: $source, date: $date, gate: $gate}' \
   >"$TRANSACTION_DIR/validation.json"
 mv "$TRANSACTION_DIR/validation.json" "$VALIDATION_RECEIPT"
 
-[[ "$(rg -c -F "## $NEW - $RELEASE_DATE" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
+[[ "$(rg -c -F "## [$NEW] - $RELEASE_DATE" "$DETAILED_CHANGELOG")" -eq 1 ]] || {
   echo "❌ Failed to seal $DETAILED_CHANGELOG for $NEW." >&2
   rollback_release_surfaces 1
 }

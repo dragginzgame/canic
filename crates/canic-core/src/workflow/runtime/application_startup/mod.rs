@@ -15,8 +15,8 @@ use crate::{
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceRegistration, TimerCompletion, TimerDirective, TimerIdentity,
-    TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
+    TimerIdentity, TimerSchedule, register_once,
 };
 use std::{cell::RefCell, future::Future, time::Duration};
 
@@ -96,20 +96,17 @@ pub fn schedule<F: Future<Output = ()> + 'static>(
     Ok(())
 }
 
-async fn run<F: Future<Output = ()>>(hook: fn(Option<Vec<u8>>) -> F) -> TimerRunResult {
+async fn run<F: Future<Output = ()>>(hook: fn(Option<Vec<u8>>) -> F) -> OnceRunResult {
     let work = match FleetActivationOps::application_startup_work() {
         Ok(Some(work)) => work,
-        Ok(None) => return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop),
+        Ok(None) => return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop),
         Err(_) => {
-            return TimerRunResult::new(
-                TimerCompletion::invariant_failure(0),
-                TimerDirective::Stop,
-            );
+            return OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop);
         }
     };
     hook(work.arguments).await;
     match FleetActivationOps::complete_application_startup(&work.release) {
-        Ok(()) => TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop),
-        Err(_) => TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop),
+        Ok(()) => OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop),
+        Err(_) => OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop),
     }
 }

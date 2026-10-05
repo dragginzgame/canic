@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLASSIFIER="$ROOT/scripts/ci/wasm-capability-size-report.jq"
 
@@ -106,7 +109,7 @@ if [[ "$BUILD_NETWORK" != "local" && "$BUILD_NETWORK" != "ic" ]]; then
     exit 2
 fi
 
-require_command jq
+require_jq
 require_command sha256sum
 require_command twiggy
 
@@ -131,7 +134,7 @@ ARTIFACT_BYTES="$(wc -c <"$WASM_PATH" | tr -d ' ')"
 ARTIFACT_SHA256="$(sha256sum "$WASM_PATH" | awk '{print $1}')"
 TWIGGY_VERSION="$(twiggy --version 2>&1 | head -n 1)"
 
-jq -n \
+"$JQ_BIN" -n \
     --slurpfile items "$ITEMS_PATH" \
     --arg file_name "$(basename "$WASM_PATH")" \
     --arg sha256 "$ARTIFACT_SHA256" \
@@ -161,9 +164,9 @@ jq -n \
       },
       tool: $twiggy_version,
       items: $items[0]
-    }' | jq -f "$CLASSIFIER" >"$OUTPUT_TEMP"
+    }' | "$JQ_BIN" -f "$CLASSIFIER" >"$OUTPUT_TEMP"
 
-if ! jq -e '.analysis.artifact_bytes_match == true' "$OUTPUT_TEMP" >/dev/null; then
+if ! "$JQ_BIN" -e '.analysis.artifact_bytes_match == true' "$OUTPUT_TEMP" >/dev/null; then
     echo "twiggy shallow-byte total does not match the Wasm artifact size" >&2
     exit 1
 fi

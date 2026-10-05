@@ -40,10 +40,10 @@ use canic_core::{
     ids::{BuildNetwork, FleetSubnetCanisterPoolConfig, SubnetId},
 };
 use ic_timers::{
-    AfterCompletionRegistration, TimerCadence, TimerCompletion, TimerCompletionOutcome,
-    TimerDirective, TimerIdentity, TimerReconcileState, TimerRunResult, WatchdogDecision,
-    WatchdogReconcileState, WatchdogRegistration, WatchdogRunResult, reconcile_after_completion,
-    reconcile_watchdog,
+    AfterCompletionDecision, AfterCompletionRegistration, AfterCompletionRunResult, OnceDecision,
+    OnceRunResult, TimerCadence, TimerCompletion, TimerCompletionOutcome, TimerIdentity,
+    TimerReconcileState, WatchdogDecision, WatchdogReconcileState, WatchdogRegistration,
+    WatchdogRunResult, reconcile_after_completion, reconcile_watchdog,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -293,20 +293,17 @@ async fn maintain_once_inner_for_target(
     refill::start(&config).await
 }
 
-async fn run_maintenance_timer() -> TimerRunResult {
+async fn run_maintenance_timer() -> OnceRunResult {
     let attempt = match claim_maintenance() {
         Ok(AsyncJobClaim::Acquired(attempt)) => attempt,
         Ok(AsyncJobClaim::Busy { retry_at_ns }) => {
-            return TimerRunResult::new(
+            return OnceRunResult::new(
                 TimerCompletion::retryable_failure(0),
-                TimerDirective::ScheduleAt(retry_at_ns),
+                OnceDecision::ScheduleAt(retry_at_ns),
             );
         }
         Err(_) => {
-            return TimerRunResult::new(
-                TimerCompletion::invariant_failure(0),
-                TimerDirective::Stop,
-            );
+            return OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop);
         }
     };
     finish_maintenance_timer(attempt, maintain_once_inner().await)
@@ -371,7 +368,10 @@ fn reconcile_maintenance_timer(desired: TimerReconcileState) -> Result<(), Autho
                 desired,
                 |_context| async {
                     let result = run_maintenance_timer().await;
-                    TimerRunResult::new(result.completion(), TimerDirective::RecurAfterCompletion)
+                    AfterCompletionRunResult::new(
+                        result.completion(),
+                        AfterCompletionDecision::RecurAfterCompletion,
+                    )
                 },
             )
             .map_err(AuthorityTimerError::from)
@@ -445,11 +445,11 @@ fn claim_maintenance() -> Result<AsyncJobClaim, InternalError> {
 fn finish_maintenance_timer(
     attempt: AsyncJobAttempt,
     result: Result<PoolAdminResponse, InternalError>,
-) -> TimerRunResult {
+) -> OnceRunResult {
     let timer_result = maintenance_timer_result(result);
     let completion = timer_result_completion(timer_result.completion().outcome());
     let Ok(exact) = AsyncJobRecoveryOps::finish(attempt, completion, IcOps::now_nanos()) else {
-        return TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop);
+        return OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop);
     };
     if exact && completion == AsyncJobCompletion::InvariantFailure {
         MAINTENANCE_ENABLED.set(false);
@@ -458,7 +458,7 @@ fn finish_maintenance_timer(
     if exact {
         timer_result
     } else {
-        TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
+        OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
     }
 }
 
@@ -482,16 +482,16 @@ const fn timer_result_completion(outcome: TimerCompletionOutcome) -> AsyncJobCom
     }
 }
 
-fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> TimerRunResult {
+fn maintenance_timer_result(result: Result<PoolAdminResponse, InternalError>) -> OnceRunResult {
     match result {
         Ok(PoolAdminResponse::MaintenancePaused { .. }) => {
-            TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
+            OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
         }
-        Ok(_) => TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop),
+        Ok(_) => OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop),
         Err(error) if is_retryable_maintenance_error(&error) => {
-            TimerRunResult::new(TimerCompletion::retryable_failure(0), TimerDirective::Stop)
+            OnceRunResult::new(TimerCompletion::retryable_failure(0), OnceDecision::Stop)
         }
-        Err(_) => TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop),
+        Err(_) => OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop),
     }
 }
 

@@ -33,8 +33,8 @@ use crate::{
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::cell::RefCell;
 
@@ -336,11 +336,11 @@ impl IntentCleanupWorkflow {
         Self::reconcile()
     }
 
-    pub(crate) fn run_due_batch() -> TimerRunResult {
+    pub(crate) fn run_due_batch() -> OnceRunResult {
         Self::run_due_batch_at(IcOps::now_nanos())
     }
 
-    fn run_due_batch_at(now_ns: u64) -> TimerRunResult {
+    fn run_due_batch_at(now_ns: u64) -> OnceRunResult {
         let result = Self::cleanup_due_batch(now_ns);
         let batch = match result {
             Ok(batch) => batch,
@@ -352,9 +352,9 @@ impl IntentCleanupWorkflow {
                     IntentMetricReason::StorageFailed,
                 );
                 log!(Topic::Memory, Warn, "intent cleanup batch failed: {err}");
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -368,9 +368,9 @@ impl IntentCleanupWorkflow {
                     Warn,
                     "intent cleanup deadline reconciliation failed: {err}"
                 );
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(batch.work_count().unwrap_or(u64::MAX)),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -380,9 +380,9 @@ impl IntentCleanupWorkflow {
             Err(err) => {
                 record_cleanup_failure(&err);
                 log!(Topic::Memory, Warn, "intent cleanup count failed: {err}");
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -392,7 +392,7 @@ impl IntentCleanupWorkflow {
                 IntentMetricOutcome::Completed,
                 IntentMetricReason::NoExpired,
             );
-            TimerRunResult::new(TimerCompletion::no_work(), directive)
+            OnceRunResult::new(TimerCompletion::no_work(), directive)
         } else {
             record_cleanup_intent(
                 IntentMetricOperation::Cleanup,
@@ -407,7 +407,7 @@ impl IntentCleanupWorkflow {
                 batch.application_sessions_removed,
                 batch.local_intents_aborted,
             );
-            TimerRunResult::new(TimerCompletion::success(work_count), directive)
+            OnceRunResult::new(TimerCompletion::success(work_count), directive)
         }
     }
 
@@ -528,11 +528,11 @@ impl IntentCleanupWorkflow {
         retain_owned_once(&INTENT_CLEANUP_TIMER, registration)
     }
 
-    fn next_directive(now_ns: u64) -> Result<TimerDirective, InternalError> {
+    fn next_directive(now_ns: u64) -> Result<OnceDecision, InternalError> {
         match Self::next_cleanup_deadline_ns()? {
-            None => Ok(TimerDirective::Stop),
-            Some(deadline_ns) if deadline_ns <= now_ns => Ok(TimerDirective::ContinueImmediately),
-            Some(deadline_ns) => Ok(TimerDirective::ScheduleAt(deadline_ns)),
+            None => Ok(OnceDecision::Stop),
+            Some(deadline_ns) if deadline_ns <= now_ns => Ok(OnceDecision::ContinueImmediately),
+            Some(deadline_ns) => Ok(OnceDecision::ScheduleAt(deadline_ns)),
         }
     }
 
@@ -769,7 +769,7 @@ mod tests {
         assert!(matches!(
             IntentCleanupWorkflow::next_directive(11 * NANOS_PER_SECOND)
                 .expect("continuation directive"),
-            TimerDirective::ContinueImmediately
+            OnceDecision::ContinueImmediately
         ));
         assert_eq!(
             IntentCleanupWorkflow::cleanup_due_batch(11 * NANOS_PER_SECOND)
@@ -783,7 +783,7 @@ mod tests {
         assert!(matches!(
             IntentCleanupWorkflow::next_directive(11 * NANOS_PER_SECOND)
                 .expect("terminal directive"),
-            TimerDirective::Stop
+            OnceDecision::Stop
         ));
         assert_eq!(IntentStoreOps::pending_total().expect("pending total"), 1);
         assert_eq!(IntentStoreOps::expiry_index_total_for_tests(), 0);
@@ -837,7 +837,7 @@ mod tests {
         );
         assert!(matches!(
             IntentCleanupWorkflow::next_directive(due_at_ns).expect("continue shared cleanup"),
-            TimerDirective::ContinueImmediately
+            OnceDecision::ContinueImmediately
         ));
         assert!(IntentStoreOps::is_pending_for_tests(IntentId(50)).expect("local intent remains"));
 
@@ -851,7 +851,7 @@ mod tests {
         );
         assert!(matches!(
             IntentCleanupWorkflow::next_directive(due_at_ns).expect("finish shared cleanup"),
-            TimerDirective::Stop
+            OnceDecision::Stop
         ));
         assert_eq!(
             ReceiptBackedIntentOps::receipt_capacity()
@@ -884,7 +884,7 @@ mod tests {
         );
         assert_eq!(
             IntentCleanupWorkflow::next_directive(77).unwrap(),
-            TimerDirective::Stop
+            OnceDecision::Stop
         );
     }
 
@@ -920,7 +920,7 @@ mod tests {
             result.completion().outcome(),
             ic_timers::TimerCompletionOutcome::InvariantFailure
         );
-        assert_eq!(result.directive(), TimerDirective::Stop);
+        assert_eq!(result.decision(), OnceDecision::Stop);
         let failure = RecentFailureOps::snapshot()
             .into_iter()
             .next()

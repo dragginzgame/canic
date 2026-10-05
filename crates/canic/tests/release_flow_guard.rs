@@ -79,6 +79,9 @@ fn install_fast_patch_guard(root: &Path) {
     let reader = fs::read_to_string(workspace_root().join("scripts/ci/read-release-validation.sh"))
         .expect("validation receipt reader should be readable");
     write_executable(root, "scripts/ci/read-release-validation.sh", &reader);
+    let jq_resolver = fs::read_to_string(workspace_root().join("scripts/ci/require-jq.sh"))
+        .expect("jq resolver should be readable");
+    write_executable(root, "scripts/ci/require-jq.sh", &jq_resolver);
 }
 
 fn commit_all(root: &Path, message: &str) {
@@ -356,8 +359,13 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         assert_eq!(receipt.as_deref(), previous_receipt);
         assert!(git_output(&root, &["status", "--porcelain"]).is_empty());
     } else {
-        let parsed = Command::new("jq")
-            .args(["-er", "[.schema, .version, .source, .date, .gate] | @tsv"])
+        let parsed = Command::new("bash")
+            .args([
+                "-c",
+                r#"source "$1"; require_jq || exit; exec "$JQ_BIN" -er '[.schema, .version, .source, .date, .gate] | @tsv' "$2""#,
+                "receipt",
+            ])
+            .arg(workspace_root().join("scripts/ci/require-jq.sh"))
             .arg(root.join("release-validation.json"))
             .output()
             .expect("structured receipt should parse");

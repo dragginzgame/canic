@@ -5,7 +5,7 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-fast-eligibility.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/bin" "$fixture/scripts/ci"
-cp "$ROOT/scripts/ci/check-fast-patch-eligibility.sh" "$ROOT/scripts/ci/read-release-validation.sh" "$fixture/scripts/ci/"
+cp "$ROOT/scripts/ci/check-fast-patch-eligibility.sh" "$ROOT/scripts/ci/read-release-validation.sh" "$ROOT/scripts/ci/require-jq.sh" "$fixture/scripts/ci/"
 printf '#!/usr/bin/env bash\necho 1.2.3\n' >"$fixture/scripts/ci/read-workspace-version.sh"
 cat >"$fixture/bin/git" <<'SH'
 #!/usr/bin/env bash

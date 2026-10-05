@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+require_jq
+
 # Reproduce only Cargo's governed version transaction from the validated source.
 # Comparing Cargo's own output checks every manifest field and the full lock
 # graph without maintaining a second TOML parser or a path-only exception.
@@ -11,7 +15,9 @@ release_date="${3:?release date required}"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-content.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
 
-jq -se --arg source "$source" --arg version "$version" --arg date "$release_date" '
+# jq expressions use literal variable names.
+# shellcheck disable=SC2016
+"$JQ_BIN" -se --arg source "$source" --arg version "$version" --arg date "$release_date" '
     length == 1 and (.[0] |
     keys == ["date", "gate", "schema", "source", "version"] and
     .schema == 1 and .source == $source and .version == $version and .date == $date and
@@ -21,8 +27,11 @@ jq -se --arg source "$source" --arg version "$version" --arg date "$release_date
 git -C "$ROOT" archive "$source" | tar -xf - -C "$scratch"
 (
     cd "$scratch"
+    cargo metadata --locked --offline --no-deps --format-version 1 > "$scratch/metadata.json"
+    cp -p Cargo.lock "$scratch/source.lock"
+    previous="$(cargo get workspace.package.version)"
     cargo set-version --workspace --offline "$version" >/dev/null
-    cargo update --workspace --offline >/dev/null
+    perl "$ROOT/scripts/release/retain-lock-selection.pl" "$scratch/metadata.json" "$scratch/source.lock" "$previous" "$version" > Cargo.lock
 )
 while IFS= read -r -d '' manifest; do
     relative="${manifest#"$scratch/"}"

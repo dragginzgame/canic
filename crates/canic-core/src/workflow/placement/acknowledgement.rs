@@ -24,8 +24,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -132,7 +132,7 @@ impl PlacementAcknowledgementWorkflow {
         Ok(())
     }
 
-    async fn run_registered() -> TimerRunResult {
+    async fn run_registered() -> OnceRunResult {
         let attempt = match AsyncJobWorkflow::claim(AsyncJobOwner::PlacementReceiptAcknowledgement)
         {
             Ok(attempt) => attempt,
@@ -142,7 +142,7 @@ impl PlacementAcknowledgementWorkflow {
         AsyncJobWorkflow::finish(attempt, result)
     }
 
-    async fn run_scheduled() -> TimerRunResult {
+    async fn run_scheduled() -> OnceRunResult {
         let result = match Self::drain_batch().await {
             Ok(result) => result,
             Err(err) => {
@@ -152,9 +152,9 @@ impl PlacementAcknowledgementWorkflow {
                     Warn,
                     "placement receipt acknowledgement stopped after invariant failure: {err}"
                 );
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -164,28 +164,28 @@ impl PlacementAcknowledgementWorkflow {
         }
 
         match result.directive {
-            DrainDirective::Continue => TimerRunResult::new(
+            DrainDirective::Continue => OnceRunResult::new(
                 TimerCompletion::success(result.work_count),
-                TimerDirective::ContinueImmediately,
+                OnceDecision::ContinueImmediately,
             ),
             DrainDirective::Retry => {
                 let streak = RETRY_STREAK.get();
                 let delay = retry_delay(streak);
                 RETRY_STREAK.set(streak.saturating_add(1));
-                TimerRunResult::new(
+                OnceRunResult::new(
                     TimerCompletion::retryable_failure(result.work_count),
-                    TimerDirective::RetryAfter(delay),
+                    OnceDecision::RetryAfter(delay),
                 )
             }
             DrainDirective::Stop if result.work_count == 0 => {
                 RETRY_STREAK.set(0);
-                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
+                OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
             }
             DrainDirective::Stop => {
                 RETRY_STREAK.set(0);
-                TimerRunResult::new(
+                OnceRunResult::new(
                     TimerCompletion::success(result.work_count),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 )
             }
         }

@@ -62,9 +62,42 @@ impl FixtureSource {
                 fs::copy(source, destination)?;
             }
         }
+        bind_dependency_paths(&snapshot.root, workspace)?;
         normalize(&snapshot.root)?;
         Ok(snapshot)
     }
+}
+
+// Keep in-workspace dependencies in the snapshot and external dependencies at
+// their original read-only locations when the workspace moves under target/.
+pub(super) fn bind_dependency_paths(root: &Path, workspace: &Path) -> io::Result<()> {
+    let path = root.join("Cargo.toml");
+    let mut manifest: toml::Value =
+        toml::from_str(&fs::read_to_string(&path)?).map_err(io::Error::other)?;
+    let dependencies = manifest
+        .get_mut("workspace")
+        .and_then(|workspace| workspace.get_mut("dependencies"))
+        .and_then(toml::Value::as_table_mut)
+        .ok_or_else(|| io::Error::other("fixture requires workspace dependencies"))?;
+    for dependency in dependencies
+        .iter_mut()
+        .map(|(_, value)| value)
+        .filter_map(toml::Value::as_table_mut)
+    {
+        let Some(selected) = dependency.get("path") else {
+            continue;
+        };
+        let selected = selected
+            .as_str()
+            .ok_or_else(|| io::Error::other("dependency path must be a string"))?;
+        let resolved = workspace.join(selected).canonicalize()?;
+        let bound = resolved.strip_prefix(workspace).unwrap_or(&resolved);
+        let bound = bound
+            .to_str()
+            .ok_or_else(|| io::Error::other("dependency path must be UTF-8"))?;
+        dependency.insert("path".into(), bound.into());
+    }
+    fs::write(path, toml::to_string(&manifest).map_err(io::Error::other)?)
 }
 
 pub(super) fn normalize(root: &Path) -> io::Result<()> {

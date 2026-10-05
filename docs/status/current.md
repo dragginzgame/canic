@@ -3,6 +3,46 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Shared jq discovery and timer-provider integration — 2026-10-05
+
+The reported publish-manifest guard now shares `jq` discovery with validation,
+release and reporting helpers: explicit `JQ_BIN`, PATH, then the user-local
+installation. The resolver exports an absolute executable path, preserves the
+calling shell's PATH and refuses invalid explicit selections. Fixture copies
+carry the resolver alongside their consuming scripts.
+
+At the maintainer's request, framework jobs, lifecycle adapters, pool maintenance
+and the runtime probe now use the selected ic-timers 0.12 policy-specific callback
+results. Active examples match that API. The embedded peer's temporary workspace
+now preserves external local dependency locations, including the selected
+ic-metrics extraction, without changing those repositories. The peer Wasm and
+structured provenance are refreshed and verification passes.
+
+Qualification passes 37 Core timer/domain regressions, one pool outcome test,
+three embedded-fixture tests, all ten timer-authority PocketIC cases and the exact
+[Canic#38](https://github.com/dragginzgame/canic/issues/38) initial-Shard bootstrap
+and recovery journey. This completes the previously interrupted installed rerun
+on the current metrics/timer graph. Scoped all-target/all-feature warning-denied
+Clippy passes for Core, Control Plane, facade, runtime probe and internal testing.
+Evidence is under `target/review-validation/timer-api-*`; installed logs are
+`target/test-runs/20261005T154734Z-1860318.Ac85TZ/1.log` and
+`target/test-runs/20261005T155727Z-2012475.kzkp2H/2.log`.
+
+The actual publish-manifest guard and focused jq, manifest-boundary,
+dependency-classification, release-candidate, fast-patch and Wasm-classifier
+fixtures pass with user-local tools absent from PATH. The optional historical
+ablation inventory check still reports missing experiment rows; its inventory
+was not changed here. Release fixtures that create Git commits were not run.
+Release-fixture evidence predates the concurrent release-tooling edits below;
+the actual publish-manifest guard and scoped ShellCheck were rechecked afterward.
+
+These corrections are ready for review and included in the existing .53 notes.
+Whole-worktree push/publication readiness still requires completion of the
+concurrent shared release-tooling adoption and its qualification. Its edits and
+the maintainer's ic-testkit 0.17.1 lock selection are preserved. Package versions
+remain .52; this work performed no broad gate, version transaction, commit, push,
+publication, live deployment or sibling-repository edit. Changes are uncommitted.
+
 ## Development-tool path correction — 2026-10-05
 
 The maintainer's `update-dev` completed tool installation but failed at the final

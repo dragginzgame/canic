@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 if repo_root="$(git -C "${script_dir}" rev-parse --show-toplevel 2>/dev/null)"; then
     :
@@ -15,10 +18,7 @@ if ! command -v cloc >/dev/null 2>&1; then
     exit 1
 fi
 
-if ! command -v jq >/dev/null 2>&1; then
-    echo "error: jq not found in PATH (required for JSON parsing)" >&2
-    exit 1
-fi
+require_jq
 
 tests_pattern='(^|/)(tests/|[^/]*tests\.rs$)'
 test_attr_pattern='^[[:space:]]*#\[(tokio::)?test'
@@ -77,7 +77,7 @@ for crate_path in "${crates_dir}"/canic*; do
         --match-f="${tests_pattern}" \
         --include-lang=Rust \
         --json 2>/dev/null \
-        | jq '.Rust.code // 0')
+        | "$JQ_BIN" '.Rust.code // 0')
 
     # Runtime LOC (Rust only, path-based and intentionally delegated to cloc)
     runtime_loc=$(cloc "${crate_path}" \
@@ -85,7 +85,7 @@ for crate_path in "${crates_dir}"/canic*; do
         --not-match-f="${tests_pattern}" \
         --include-lang=Rust \
         --json 2>/dev/null \
-        | jq '.Rust.code // 0')
+        | "$JQ_BIN" '.Rust.code // 0')
 
     read -r test_fns inline_test_fns < <(count_test_fns "${crate_path}")
     total=$((runtime_loc + test_loc))

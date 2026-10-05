@@ -13,8 +13,8 @@ use crate::{
     workflow::runtime::timer::{TimerError, require_active, retain_owned_once, with_owned_once},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::cell::RefCell;
 
@@ -100,19 +100,19 @@ impl LogRetentionWorkflow {
         retain_owned_once(&LOG_RETENTION_TIMER, registration)
     }
 
-    pub(crate) fn run_due_batch() -> TimerRunResult {
+    pub(crate) fn run_due_batch() -> OnceRunResult {
         let config = match ConfigOps::log_config() {
             Ok(config) => config,
             Err(err) => {
                 IcOps::println(&format!("log retention stopped: {err}"));
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
         let Some(max_age_secs) = config.max_age_secs else {
-            return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
+            return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
         };
 
         let now_secs = IcOps::now_secs();
@@ -126,35 +126,35 @@ impl LogRetentionWorkflow {
         }
 
         let directive = if batch.more_due {
-            TimerDirective::ContinueImmediately
+            OnceDecision::ContinueImmediately
         } else {
             match Self::next_directive(max_age_secs, now_secs) {
                 Ok(directive) => directive,
                 Err(err) => {
                     IcOps::println(&format!("log retention stopped: {err}"));
-                    return TimerRunResult::new(
+                    return OnceRunResult::new(
                         TimerCompletion::invariant_failure(0),
-                        TimerDirective::Stop,
+                        OnceDecision::Stop,
                     );
                 }
             }
         };
         if batch.dropped == 0 {
-            TimerRunResult::new(TimerCompletion::no_work(), directive)
+            OnceRunResult::new(TimerCompletion::no_work(), directive)
         } else {
-            TimerRunResult::new(TimerCompletion::success(batch.dropped), directive)
+            OnceRunResult::new(TimerCompletion::success(batch.dropped), directive)
         }
     }
 
-    fn next_directive(max_age_secs: u64, now_secs: u64) -> Result<TimerDirective, InternalError> {
+    fn next_directive(max_age_secs: u64, now_secs: u64) -> Result<OnceDecision, InternalError> {
         let Some(deadline_ns) = Self::next_deadline_ns(max_age_secs)? else {
-            return Ok(TimerDirective::Stop);
+            return Ok(OnceDecision::Stop);
         };
         let now_ns = seconds_to_nanos(now_secs)?;
         if deadline_ns <= now_ns {
-            Ok(TimerDirective::ContinueImmediately)
+            Ok(OnceDecision::ContinueImmediately)
         } else {
-            Ok(TimerDirective::ScheduleAt(deadline_ns))
+            Ok(OnceDecision::ScheduleAt(deadline_ns))
         }
     }
 
@@ -188,17 +188,17 @@ mod tests {
         LogOps::reset_for_tests();
         assert_eq!(
             LogRetentionWorkflow::next_directive(10, 100).expect("empty state must be valid"),
-            TimerDirective::Stop
+            OnceDecision::Stop
         );
 
         append(100);
         assert_eq!(
             LogRetentionWorkflow::next_directive(10, 110).expect("deadline must fit"),
-            TimerDirective::ScheduleAt(111 * NANOS_PER_SECOND)
+            OnceDecision::ScheduleAt(111 * NANOS_PER_SECOND)
         );
         assert_eq!(
             LogRetentionWorkflow::next_directive(10, 111).expect("deadline must fit"),
-            TimerDirective::ContinueImmediately
+            OnceDecision::ContinueImmediately
         );
     }
 

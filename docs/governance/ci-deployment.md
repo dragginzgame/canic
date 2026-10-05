@@ -91,9 +91,11 @@ and drift in transitive informational advisory inventories are warnings. Missing
 required authority documents, known vulnerabilities, yanked dependencies and
 unmaintained direct dependencies remain blocking.
 
-Dependency-risk checks use `JQ_BIN` when explicitly set to an executable path;
-otherwise they resolve `jq` on `PATH`, then `$HOME/.local/bin/jq`. A missing
-executable fails before the audit begins.
+Shell validation, release and reporting tools share `scripts/ci/require-jq.sh`.
+They use `JQ_BIN` when explicitly set to an executable path; otherwise they
+resolve `jq` on `PATH`, then `$HOME/.local/bin/jq`. Missing or invalid explicit
+executables fail before JSON processing. The selected absolute path is exported
+to child scripts and survives working-directory changes without modifying PATH.
 
 `install-dev` and `update-dev` pass `BINARYEN_INSTALL_DIR` and
 `IC_WASM_INSTALL_DIR` to their installers; both default to `$HOME/.local/bin`.

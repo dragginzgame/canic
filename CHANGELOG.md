@@ -6,18 +6,27 @@ documented in this file.
 The format is based on [Keep a Changelog](http://keepachangelog.com/)
 and this project adheres to [Semantic Versioning](http://semver.org/).
 
+## [0.110.53]
+
+Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
+
+- `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
+  adds per-canister application usage reporting, and repairs operator commands,
+  repository hygiene, development-tool discovery, validation and build evidence,
+  memory registration and public framework APIs, including guarded Root membership
+  discovery, compiled receiver permissions and publication-bound application
+  startup. It also adopts ic-memory’s checked allocation-slot API and ic-timers’
+  policy-specific callback results, and aligns the independent blob consumer on
+  one memory runtime.
+
+- Share measurement arithmetic through `ic-metrics` while preserving endpoint
+  attribution and report shapes; standardize SemVer release commands with exact
+  resume, atomic branch/tag pushes and retained artifacts.
+
 ## [0.110.x] - Fleet Runtime Contraction
 
 Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
-- `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
-  adds per-canister application usage reporting, and repairs operator commands,
-  repository hygiene, development tooling, validation and build evidence,
-  memory registration and public framework APIs, including guarded Root membership
-  discovery, compiled receiver permissions and publication-bound application
-  startup. It also adopts ic-memory’s
-  checked allocation-slot API and aligns the independent blob consumer on one
-  memory runtime.
 
 - `0.110.52` adds Fleet release discovery and assessment, improves operator and
   test reliability, removes IcyDB from Canic validation, centralizes Cargo version

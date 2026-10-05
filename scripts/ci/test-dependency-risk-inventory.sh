@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 
 fail() {
@@ -17,9 +20,7 @@ case "$#:${1:-}" in
 esac
 
 command -v git >/dev/null 2>&1 || fail "git is unavailable"
-# Honor an explicit executable and the normal PATH before the user-local install.
-JQ_BIN="${JQ_BIN:-$(command -v jq || printf '%s/.local/bin/jq' "$HOME")}"
-[ -x "$JQ_BIN" ] || fail "jq is unavailable; install jq or set JQ_BIN to its executable"
+require_jq
 mkdir -p "$ROOT/.tmp"
 tmp_dir="$(mktemp -d "$ROOT/.tmp/dependency-risk-test.XXXXXX")"
 trap 'rm -rf "$tmp_dir"' EXIT
@@ -34,6 +35,7 @@ GATE="$fixture/scripts/ci/check-dependency-risk-inventory.sh"
 mkdir -p "$fixture/scripts/ci" "$fixture/app/src" \
     "$fixture/direct/src" "$fixture/transitive/src"
 cp "$ROOT/scripts/ci/check-dependency-risk-inventory.sh" "$GATE"
+cp "$ROOT/scripts/ci/require-jq.sh" "$fixture/scripts/ci/"
 cp "$ROOT/tool-versions.env" "$fixture/tool-versions.env"
 cat >"$fixture/Cargo.toml" <<'TOML'
 [workspace]

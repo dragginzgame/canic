@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+require_jq
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-packaged-cli.XXXXXX")"
 HOST_CARGO_HOME="${CARGO_HOME:-$HOME/.cargo}"
@@ -15,7 +19,7 @@ PROOF_TMPDIR="$TMP_ROOT/tmp"
 INSTALLED_CLI="$TMP_ROOT/install/bin/canic"
 VERSION="$(
     cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
-        jq -r '.packages[] | select(.name == "canic") | .version'
+        "$JQ_BIN" -r '.packages[] | select(.name == "canic") | .version'
 )"
 
 cleanup() {
@@ -273,7 +277,7 @@ main() {
         --root "$TMP_ROOT/install" --bin canic
     cargo generate-lockfile --offline --manifest-path "$DOWNSTREAM_ROOT/Cargo.toml"
     metadata="$(cargo metadata --locked --offline --format-version 1 --manifest-path "$DOWNSTREAM_ROOT/Cargo.toml")"
-    jq -e --arg root "$PACKAGE_ROOT/" '
+    "$JQ_BIN" -e --arg root "$PACKAGE_ROOT/" '
         [.packages[] | select(.name == "canic" or (.name | startswith("canic-")))]
         | length > 0 and all(.[]; .manifest_path | startswith($root))
     ' <<<"$metadata" >/dev/null

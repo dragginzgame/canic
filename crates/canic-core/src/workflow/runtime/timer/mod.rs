@@ -14,11 +14,11 @@ use crate::{
     workflow::{placement::acknowledgement::PlacementAcknowledgementWorkflow, runtime},
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceRegistration, ScheduleError, TimerCadence,
-    TimerCompletion, TimerDirective, TimerError as ProviderError, TimerIdentity,
-    TimerIdentityError, TimerRegistrationStatus, TimerRunResult, TimerSchedule, TimerSnapshot,
-    WatchdogReconcileState, WatchdogRegistration, WatchdogRunResult, initialize_runtime,
-    reconcile_watchdog, register_once, timer_inventory,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult, ScheduleError,
+    TimerCadence, TimerCompletion, TimerError as ProviderError, TimerIdentity, TimerIdentityError,
+    TimerRegistrationStatus, TimerSchedule, TimerSnapshot, WatchdogReconcileState,
+    WatchdogRegistration, WatchdogRunResult, initialize_runtime, reconcile_watchdog, register_once,
+    timer_inventory,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -214,7 +214,7 @@ impl TimerAuthorityWorkflow {
     ) -> Result<(), TimerError> {
         register_lifecycle_once(delay, label.into(), async move {
             task.await;
-            TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop)
+            OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop)
         })
     }
 
@@ -222,7 +222,7 @@ impl TimerAuthorityWorkflow {
     pub(crate) fn defer_lifecycle_result_once(
         delay: Duration,
         label: impl Into<String>,
-        task: impl Future<Output = TimerRunResult> + 'static,
+        task: impl Future<Output = OnceRunResult> + 'static,
     ) -> Result<(), TimerError> {
         register_lifecycle_once(delay, label.into(), task)
     }
@@ -335,7 +335,7 @@ fn canister_pool_timer_identity() -> Result<TimerIdentity, TimerError> {
 fn register_lifecycle_once(
     delay: Duration,
     label: String,
-    task: impl Future<Output = TimerRunResult> + 'static,
+    task: impl Future<Output = OnceRunResult> + 'static,
 ) -> Result<(), TimerError> {
     require_active()?;
     let identity = next_lifecycle_identity(label)?;
@@ -348,9 +348,9 @@ fn register_lifecycle_once(
             async move {
                 match task {
                     Some(task) => task.await,
-                    None => TimerRunResult::new(
+                    None => OnceRunResult::new(
                         TimerCompletion::invariant_failure(0),
-                        TimerDirective::Stop,
+                        OnceDecision::Stop,
                     ),
                 }
             }

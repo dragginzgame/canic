@@ -191,26 +191,8 @@ minor:
 major:
 	+@$(RELEASE_VALIDATION_LANE) complete major
 
-release-patch:
-	@$(MAKE) patch
-	@$(MAKE) release-stage
-	@$(MAKE) release-commit
-	@$(MAKE) release-push
-
 release-patch-fast:
 	@$(MAKE) patch-fast
-	@$(MAKE) release-stage
-	@$(MAKE) release-commit
-	@$(MAKE) release-push
-
-release-minor:
-	@$(MAKE) minor
-	@$(MAKE) release-stage
-	@$(MAKE) release-commit
-	@$(MAKE) release-push
-
-release-major:
-	@$(MAKE) major
 	@$(MAKE) release-stage
 	@$(MAKE) release-commit
 	@$(MAKE) release-push
@@ -218,7 +200,7 @@ release-major:
 release-stage:
 	@version="$$(bash scripts/ci/read-workspace-version.sh)"; \
 		minor_line="$${version%.*}"; \
-		git add Cargo.toml Cargo.lock scripts/dev/install_dev.sh \
+		git add Cargo.toml Cargo.lock CHANGELOG.md scripts/dev/install_dev.sh \
 			release-validation.json \
 			"docs/changelog/$$minor_line.md" \
 			$$(git ls-files -m -- '*/Cargo.toml' || true)
@@ -349,7 +331,10 @@ recovery-runbooks-gate:
 	bash scripts/ci/check-recovery-runbooks.sh
 
 release-integrity-contract-gate:
+	bash scripts/ci/verify-shared-tooling-snapshot.sh
+	bash scripts/ci/test-release-runner.sh
 	bash scripts/ci/check-release-integrity-contract.sh
+	bash scripts/ci/test-require-jq.sh
 	bash scripts/ci/test-binaryen-install.sh
 	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
@@ -479,3 +464,36 @@ clean-wasm:
 
 cloc:
 	bash scripts/dev/cloc.sh
+
+# Shared Tooling owns the standard release order and Git effects.
+RELEASE_REMOTE ?= origin
+RELEASE_BRANCH ?= main
+ifneq ($(word 2,$(filter release-patch release-minor release-major release-resume,$(MAKECMDGOALS))),)
+$(error Select exactly one release target)
+endif
+.PHONY: release-resume release-version release-preflight release-prepare-version release-prepared-check release-files release-commit-check release-committed-check release-tagged-check release-push-check
+
+release-patch release-minor release-major:
+	+@bash scripts/ci/run-release.sh "$(@:release-%=%)" "$(RELEASE_REMOTE)" "$(RELEASE_BRANCH)"
+
+release-resume:
+	+@bash scripts/ci/run-release.sh resume "$(VERSION)" "$(RELEASE_REMOTE)" "$(RELEASE_BRANCH)"
+
+.PHONY: release-verify
+release-version:
+	@bash scripts/ci/read-workspace-version.sh
+release-preflight:
+	@bash scripts/release/adapter.sh preflight
+release-verify:
+	+CARGO_NET_OFFLINE=true $(MAKE) --no-print-directory validate
+release-prepare-version:
+	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND=complete CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
+release-prepared-check release-committed-check release-tagged-check:
+	@bash scripts/ci/check-release-candidate.sh
+release-files:
+	@bash scripts/release/adapter.sh files
+release-commit-check:
+	@bash scripts/ci/check-release-index.sh
+	@bash scripts/ci/check-release-candidate.sh
+release-push-check:
+	@bash scripts/release/adapter.sh tagged

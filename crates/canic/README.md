@@ -171,8 +171,8 @@ provides no timer macro, handle or cancellation facade:
 
 ```rust
 use ic_timers::{
-    DeclarationLifetime, OnceContext, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::time::Duration;
 
@@ -181,7 +181,7 @@ let timer = register_once(
     DeclarationLifetime::RemoveWhenStopped,
     |_context: OnceContext| async {
         refresh_cache().await;
-        TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop)
+        OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop)
     },
 )?;
 timer.ensure_scheduled(TimerSchedule::After(Duration::from_secs(30)))?;

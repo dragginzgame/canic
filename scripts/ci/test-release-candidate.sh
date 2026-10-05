@@ -31,11 +31,12 @@ extra = []
 TOML
 printf 'pub fn fixture() {}\n' >"$fixture/base/member/src/lib.rs"
 printf 'CANIC_CLI_VERSION="%s"\n' '${CANIC_CLI_VERSION:-1.2.3}' >"$fixture/base/scripts/dev/install_dev.sh"
-printf '## 1.2.4 - Unreleased\n' >"$fixture/base/docs/changelog/1.2.md"
+printf '## [1.2.4]\n' >"$fixture/base/docs/changelog/1.2.md"
 cargo generate-lockfile --offline --manifest-path "$fixture/base/Cargo.toml" >"$fixture/output.log" 2>&1
 cp -R "$fixture/base" "$fixture/candidate"
-mkdir -p "$fixture/candidate/scripts/ci"
-for script in check-release-candidate check-release-surface-content read-workspace-version; do
+mkdir -p "$fixture/candidate/scripts/ci" "$fixture/candidate/scripts/release"
+cp "$ROOT/scripts/release/retain-lock-selection.pl" "$fixture/candidate/scripts/release/"
+for script in check-release-candidate check-release-surface-content read-workspace-version require-jq; do
     cp "$ROOT/scripts/ci/$script.sh" "$fixture/candidate/scripts/ci/"
 done
 cat >"$fixture/bin/git" <<'SH'
@@ -61,7 +62,7 @@ cd "$fixture/candidate"
 cargo set-version --workspace --offline 1.2.4 >>"$fixture/output.log" 2>&1
 cargo update --workspace --offline >>"$fixture/output.log" 2>&1
 printf 'CANIC_CLI_VERSION="%s"\n' '${CANIC_CLI_VERSION:-1.2.4}' >scripts/dev/install_dev.sh
-printf '## 1.2.4 - 2026-10-01\n' >docs/changelog/1.2.md
+printf '## [1.2.4] - 2026-10-01\n' >docs/changelog/1.2.md
 printf '{"schema":1,"version":"1.2.4","source":"1111111111111111111111111111111111111111","date":"2026-10-01","gate":"complete"}\n' >release-validation.json
 cp Cargo.toml "$fixture/accepted-manifest"
 cp Cargo.lock "$fixture/accepted-lock"
@@ -94,9 +95,9 @@ EXTRA_CHANGE=new/Cargo.toml run_case 1
 EXTRA_CHANGE=member/src/lib.rs run_case 1
 printf '\nReworded explanatory text is not executable release authority.\n' >>docs/changelog/1.2.md
 run_case 0
-printf '## 1.2.4 - Unreleased\n' >docs/changelog/1.2.md
+printf '## [1.2.4]\n' >docs/changelog/1.2.md
 run_case 1
-printf '## 1.2.4 - 2026-10-01\n' >docs/changelog/1.2.md
+printf '## [1.2.4] - 2026-10-01\n' >docs/changelog/1.2.md
 sed 's/1111111111111111111111111111111111111111/2222222222222222222222222222222222222222/' release-validation.json >"$fixture/receipt"
 cp "$fixture/receipt" release-validation.json
 run_case 1

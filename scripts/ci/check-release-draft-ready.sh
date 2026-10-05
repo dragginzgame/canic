@@ -12,35 +12,19 @@ fi
 
 cd "$ROOT"
 current="$(bash scripts/ci/read-workspace-version.sh)"
-IFS=. read -r major minor patch <<<"${current%%[-+]*}"
-case "$BUMP_TYPE" in
-    patch)
-        planned="$major.$minor.$((patch + 1))"
-        ;;
-    minor)
-        planned="$major.$((minor + 1)).0"
-        ;;
-    major)
-        planned="$((major + 1)).0.0"
-        ;;
-    *)
-        echo "❌ Unsupported version bump: $BUMP_TYPE" >&2
-        exit 2
-        ;;
-esac
+planned="$(bash scripts/ci/next-release-version.sh "$current" "$BUMP_TYPE")"
 
 detailed_changelog="docs/changelog/${planned%.*}.md"
 
-[[ -f "$detailed_changelog" ]] || {
-    echo "❌ Missing detailed changelog for planned release $planned: $detailed_changelog" >&2
-    exit 1
-}
 
-release_entry_count="$(rg -c "^## ${planned//./\\.} - (Unreleased|[0-9]{4}-[0-9]{2}-[0-9]{2})$" "$detailed_changelog" || true)"
-[[ "$release_entry_count" -eq 1 ]] || {
-    echo "❌ $detailed_changelog must contain one $planned release entry (Unreleased or YYYY-MM-DD)." >&2
-    exit 1
-}
+scratch="$(mktemp "${TMPDIR:-/tmp}/canic-release-notes.XXXXXX")"
+trap 'rm -f "$scratch"' EXIT
+if [[ -f "$detailed_changelog" ]]; then
+    awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
+        -f scripts/ci/finalize-release-changelog.awk "$detailed_changelog" > "$scratch"
+fi
+awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
+  -f scripts/ci/finalize-release-changelog.awk CHANGELOG.md > "$scratch"
 
 if [[ "$CHECK_REMOTE" == --check-remote ]]; then
     bash scripts/ci/check-release-remote-state.sh before-version "$planned"

@@ -14,8 +14,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceRegistration, TimerCompletion, TimerDirective, TimerIdentity,
-    TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
+    TimerIdentity, TimerSchedule, register_once,
 };
 use std::cell::RefCell;
 
@@ -69,9 +69,9 @@ impl PublicSamplingTimer {
         Ok(())
     }
 
-    fn run() -> TimerRunResult {
+    fn run() -> OnceRunResult {
         if require_active().is_err() || PublicMetricsOps::enabled().is_empty() {
-            return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
+            return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
         }
         let result = PublicMetricsWorkflow::sample();
         let completion = if result.is_ok() {
@@ -80,9 +80,9 @@ impl PublicSamplingTimer {
             // A rejected optional producer must not terminate future family sampling.
             TimerCompletion::retryable_failure(0)
         };
-        let directive = next_deadline(IcOps::now_nanos())
-            .map_or(TimerDirective::Stop, TimerDirective::ScheduleAt);
-        TimerRunResult::new(completion, directive)
+        let directive =
+            next_deadline(IcOps::now_nanos()).map_or(OnceDecision::Stop, OnceDecision::ScheduleAt);
+        OnceRunResult::new(completion, directive)
     }
 }
 

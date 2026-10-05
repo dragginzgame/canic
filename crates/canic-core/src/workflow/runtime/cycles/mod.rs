@@ -51,8 +51,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::{
     cell::{Cell, RefCell},
@@ -211,7 +211,7 @@ impl CycleWorkflow {
         Ok(())
     }
 
-    async fn run_registered() -> TimerRunResult {
+    async fn run_registered() -> OnceRunResult {
         let attempt = match AsyncJobWorkflow::claim(AsyncJobOwner::CycleTopup) {
             Ok(attempt) => attempt,
             Err(result) => return result,
@@ -222,28 +222,25 @@ impl CycleWorkflow {
 
     async fn run_attempt(
         attempt: crate::ops::storage::async_job_recovery::AsyncJobAttempt,
-    ) -> TimerRunResult {
+    ) -> OnceRunResult {
         let Some(operation_id) = attempt.operation_id(IcOps::canister_self()) else {
-            return TimerRunResult::new(
-                TimerCompletion::invariant_failure(0),
-                TimerDirective::Stop,
-            );
+            return OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop);
         };
         Self::run_topup(operation_id).await
     }
 
-    async fn run_topup(operation_id: OperationId) -> TimerRunResult {
+    async fn run_topup(operation_id: OperationId) -> OnceRunResult {
         let config = match Self::automatic_topup_config() {
             Ok(Some(config)) => config,
             Ok(None) => {
-                return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
+                return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
             }
             Err(err) => {
                 CyclesTopupMetrics::record_config_error();
                 log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -270,9 +267,9 @@ impl CycleWorkflow {
             Ok(current) => current,
             Err(err) => {
                 log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -292,17 +289,17 @@ impl CycleWorkflow {
             timing,
         ) {
             AutomaticTopupDemand::Stop => {
-                return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
+                return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
             }
             AutomaticTopupDemand::Wait(timing) => {
                 CyclesTopupMetrics::record_above_threshold();
                 return match Self::directive(IcOps::now_nanos(), timing) {
-                    Ok(directive) => TimerRunResult::new(TimerCompletion::no_work(), directive),
+                    Ok(directive) => OnceRunResult::new(TimerCompletion::no_work(), directive),
                     Err(err) => {
                         log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                        TimerRunResult::new(
+                        OnceRunResult::new(
                             TimerCompletion::invariant_failure(0),
-                            TimerDirective::Stop,
+                            OnceDecision::Stop,
                         )
                     }
                 };
@@ -330,7 +327,7 @@ impl CycleWorkflow {
         Self::finish_topup(&config, &sample, &after, result)
     }
 
-    async fn resume_automatic_refill(config: &AutomaticTopupConfig) -> TimerRunResult {
+    async fn resume_automatic_refill(config: &AutomaticTopupConfig) -> OnceRunResult {
         let before = Self::read_sample();
         Self::record_observation(&before);
         let result = IcpRefillWorkflow::resume_automatic_refill().await;
@@ -375,7 +372,7 @@ impl CycleWorkflow {
         before: &CycleBalanceSample,
         after: &CycleBalanceSample,
         result: Result<ParentFundingOutcome, InternalError>,
-    ) -> TimerRunResult {
+    ) -> OnceRunResult {
         match result {
             Ok(ParentFundingOutcome::AutomaticRefill(response)) => {
                 Self::finish_automatic_refill(config, before, after, Ok(response))
@@ -398,7 +395,7 @@ impl CycleWorkflow {
         before: &CycleBalanceSample,
         after: &CycleBalanceSample,
         result: Result<IcpRefillResponse, InternalError>,
-    ) -> TimerRunResult {
+    ) -> OnceRunResult {
         match result {
             Ok(response) if response.status == IcpRefillStatus::Completed => {
                 log!(
@@ -436,13 +433,13 @@ impl CycleWorkflow {
                     response.status,
                     response.error_code
                 );
-                TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
+                OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
             }
             Err(err) => Self::finish_automatic_refill_failure(err),
         }
     }
 
-    fn finish_automatic_refill_failure(failure: InternalError) -> TimerRunResult {
+    fn finish_automatic_refill_failure(failure: InternalError) -> OnceRunResult {
         if automatic_refill_failure_disposition(&failure)
             == AutomaticRefillFailureDisposition::BackOff
         {
@@ -462,10 +459,10 @@ impl CycleWorkflow {
         config: &AutomaticTopupConfig,
         before: &CycleBalanceSample,
         after: &CycleBalanceSample,
-    ) -> TimerRunResult {
+    ) -> OnceRunResult {
         reset_resource_exhaustion_recovery();
         if !config.new_requests_enabled {
-            return TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop);
+            return OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop);
         }
         let timing = policy::cycles::cycle_topup_timing(
             after.timestamp_secs,
@@ -478,20 +475,20 @@ impl CycleWorkflow {
         );
         let directive = if matches!(timing, policy::cycles::CycleTopupTiming::Due) {
             Self::deadline_after_secs(IcOps::now_nanos(), config.minimum_funding_spacing_secs)
-                .map(TimerDirective::ScheduleAt)
+                .map(OnceDecision::ScheduleAt)
         } else {
             Self::directive(IcOps::now_nanos(), timing)
         };
         match directive {
-            Ok(directive) => TimerRunResult::new(TimerCompletion::success(1), directive),
+            Ok(directive) => OnceRunResult::new(TimerCompletion::success(1), directive),
             Err(err) => {
                 log!(Topic::Cycles, Error, "automatic top-up stopped: {err}");
-                TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
+                OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
             }
         }
     }
 
-    fn finish_preflight_rejection(preflight: CyclesFundingPreflightResponse) -> TimerRunResult {
+    fn finish_preflight_rejection(preflight: CyclesFundingPreflightResponse) -> OnceRunResult {
         match preflight {
             CyclesFundingPreflightResponse::CooldownActive { retry_after_secs } => {
                 log!(
@@ -519,7 +516,7 @@ impl CycleWorkflow {
                     Warn,
                     "automatic top-up stopped at the parent child-budget limit (remaining_child_budget={remaining_child_budget}, max_per_child={max_per_child})"
                 );
-                TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop)
+                OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop)
             }
         }
     }
@@ -527,9 +524,9 @@ impl CycleWorkflow {
     fn finish_root_no_grant(
         config: &AutomaticTopupConfig,
         reason: FleetRootFundingNoGrantReason,
-    ) -> TimerRunResult {
+    ) -> OnceRunResult {
         if !config.new_requests_enabled {
-            return TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop);
+            return OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop);
         }
         match classify_root_no_grant(reason) {
             RootNoGrantDisposition::Wait => {
@@ -548,7 +545,7 @@ impl CycleWorkflow {
                     Error,
                     "automatic Root top-up stopped after a terminal rejection ({reason:?})"
                 );
-                TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
+                OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
             }
         }
     }
@@ -557,10 +554,10 @@ impl CycleWorkflow {
         amount: &Cycles,
         operation_id: OperationId,
         failure: &InternalError,
-    ) -> TimerRunResult {
+    ) -> OnceRunResult {
         let outcome = Self::finish_funding_failure(failure);
         if let Ok(parent) = EnvOps::parent_pid() {
-            let disposition = if matches!(outcome.directive(), TimerDirective::Stop) {
+            let disposition = if matches!(outcome.decision(), OnceDecision::Stop) {
                 CycleTopupFailureDisposition::Terminal
             } else {
                 CycleTopupFailureDisposition::Retry
@@ -579,7 +576,7 @@ impl CycleWorkflow {
         outcome
     }
 
-    fn finish_funding_failure(failure: &InternalError) -> TimerRunResult {
+    fn finish_funding_failure(failure: &InternalError) -> OnceRunResult {
         if is_retryable_funding_error(failure) {
             log!(
                 Topic::Cycles,
@@ -605,7 +602,7 @@ impl CycleWorkflow {
             "automatic top-up stopped: {}",
             failure
         );
-        TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
+        OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
     }
 
     async fn request_parent_funding(
@@ -810,14 +807,14 @@ impl CycleWorkflow {
     fn directive(
         now_ns: u64,
         timing: policy::cycles::CycleTopupTiming,
-    ) -> Result<TimerDirective, InternalError> {
+    ) -> Result<OnceDecision, InternalError> {
         match timing {
             policy::cycles::CycleTopupTiming::Due => {
                 Self::deadline_after_secs(now_ns, policy::cycles::CYCLE_TOPUP_MIN_CHECK_SECS)
-                    .map(TimerDirective::ScheduleAt)
+                    .map(OnceDecision::ScheduleAt)
             }
             policy::cycles::CycleTopupTiming::CheckAfter { .. } => {
-                Self::deadline_ns(now_ns, timing).map(TimerDirective::ScheduleAt)
+                Self::deadline_ns(now_ns, timing).map(OnceDecision::ScheduleAt)
             }
         }
     }
@@ -982,10 +979,10 @@ fn reset_resource_exhaustion_recovery() {
     RESOURCE_EXHAUSTION_RECOVERY_CONSUMED.with(|consumed| consumed.set(false));
 }
 
-const fn retryable_topup_after(delay: Duration) -> TimerRunResult {
-    TimerRunResult::new(
+const fn retryable_topup_after(delay: Duration) -> OnceRunResult {
+    OnceRunResult::new(
         TimerCompletion::retryable_failure(0),
-        TimerDirective::RetryAfter(delay),
+        OnceDecision::RetryAfter(delay),
     )
 }
 
@@ -1018,9 +1015,7 @@ mod tests {
             ic_cdk::call::CallFailed::CallRejected(rejection),
         ));
         let retry = CycleWorkflow::finish_funding_failure(&failure);
-        assert!(
-            matches!(retry.directive(), TimerDirective::RetryAfter(delay) if delay <= RETRY_MAX)
-        );
+        assert!(matches!(retry.decision(), OnceDecision::RetryAfter(delay) if delay <= RETRY_MAX));
         assert!(is_retryable_funding_error(&InternalError::state_failure()));
         assert!(is_retryable_funding_error(&InternalError::public(
             crate::diagnostics::codes::STATE_CONFLICT

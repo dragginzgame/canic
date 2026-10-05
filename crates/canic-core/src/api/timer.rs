@@ -7,7 +7,7 @@
 use crate::workflow::runtime::timer::{
     TimerAuthorityWorkflow, recovery_watchdog_identity, require_active,
 };
-use ic_timers::TimerRunResult;
+use ic_timers::OnceRunResult;
 use std::{future::Future, time::Duration};
 
 pub use crate::workflow::runtime::timer::TimerError;
@@ -92,7 +92,7 @@ impl TimerApi {
     pub fn defer_lifecycle_result_required(
         delay: Duration,
         label: impl Into<String>,
-        task: impl Future<Output = TimerRunResult> + 'static,
+        task: impl Future<Output = OnceRunResult> + 'static,
     ) {
         TimerAuthorityWorkflow::defer_lifecycle_result_once(delay, label, task)
             .unwrap_or_else(|error| ic_cdk::trap(format!("lifecycle timer rejected: {error}")));

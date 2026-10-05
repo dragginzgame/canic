@@ -4,14 +4,16 @@ set -euo pipefail
 ROOT_DIR="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 cd "$ROOT_DIR"
 
-mapfile -t STAGED_FILES < <(git diff --cached --name-only --diff-filter=ACMRD)
+STAGED_FILES=()
+while IFS= read -r value; do STAGED_FILES[${#STAGED_FILES[@]}]="$value"; done < <(git diff --cached --name-only --diff-filter=ACMRD)
 
 if [[ ${#STAGED_FILES[@]} -eq 0 ]]; then
   echo "No staged release files; run make release-stage first." >&2
   exit 1
 fi
 
-mapfile -t DELETED_FILES < <(git diff --cached --name-only --diff-filter=D)
+DELETED_FILES=()
+while IFS= read -r value; do DELETED_FILES[${#DELETED_FILES[@]}]="$value"; done < <(git diff --cached --name-only --diff-filter=D)
 
 if [[ ${#DELETED_FILES[@]} -ne 0 ]]; then
   echo "Release commit index contains staged deletions:" >&2
@@ -22,7 +24,8 @@ fi
 
 is_release_file() {
   case "$1" in
-    Cargo.toml | \
+    CHANGELOG.md | \
+      Cargo.toml | \
       Cargo.lock | \
       release-validation.json | \
       scripts/dev/install_dev.sh)
@@ -54,7 +57,8 @@ if [[ ${#INVALID_FILES[@]} -ne 0 ]]; then
   exit 1
 fi
 
-mapfile -t DIRTY_FILES < <(git diff --name-only)
+DIRTY_FILES=()
+while IFS= read -r value; do DIRTY_FILES[${#DIRTY_FILES[@]}]="$value"; done < <(git diff --name-only)
 PARTIAL_FILES=()
 for staged in "${STAGED_FILES[@]}"; do
   for dirty in "${DIRTY_FILES[@]}"; do

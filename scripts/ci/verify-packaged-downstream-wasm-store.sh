@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+require_jq
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 MSRV="$(cargo get --entry "$ROOT" workspace.package.rust_version)"
 TMP_ROOT="$(mktemp -d "${TMPDIR:-/tmp}/canic-packaged-downstream-wasm-store.XXXXXX")"
@@ -16,7 +20,7 @@ PROOF_HOME="$TMP_ROOT/home"
 PROOF_TMPDIR="$TMP_ROOT/tmp"
 VERSION="$(
     cargo metadata --locked --no-deps --format-version=1 --manifest-path "$ROOT/Cargo.toml" |
-        jq -r '.packages[] | select(.name == "canic") | .version'
+        "$JQ_BIN" -r '.packages[] | select(.name == "canic") | .version'
 )"
 
 cleanup() {
@@ -418,7 +422,7 @@ assert_fleet_probe_outputs() {
         test -s "$artifacts/$role.$extension"
     done
     cargo metadata --locked --offline --no-deps --format-version=1 --manifest-path "$manifest" |
-        jq -e --arg path "$package_root/canic-$VERSION" --arg package "$package" \
+        "$JQ_BIN" -e --arg path "$package_root/canic-$VERSION" --arg package "$package" \
             --arg version "$VERSION" --arg feature "$feature" '
             .packages[] | select(.name == $package) |
             .version == $version and .publish == [] and

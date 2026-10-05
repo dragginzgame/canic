@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 METHOD_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 RUNNER_SOURCE="$METHOD_ROOT/scripts/ci/wasm-ablation-report.sh"
 BUILD_HARNESS_SOURCE="$METHOD_ROOT/scripts/ci/wasm-ablation-build-artifact.rs"
@@ -395,7 +398,7 @@ require_command didc
 require_command git
 require_command gzip
 require_command ic-wasm
-require_command jq
+require_jq
 require_command rg
 require_command rustc
 require_command sha256sum
@@ -611,7 +614,7 @@ capture_artifact() {
     ic-wasm "$wasm_path" info >"$analysis_prefix.ic-wasm-info.txt"
     wasm-objdump -x "$wasm_path" >"$analysis_prefix.objdump.txt"
 
-    optimizer_metrics="$(jq -er --arg role "$canister" '
+    optimizer_metrics="$("$JQ_BIN" -er --arg role "$canister" '
         if .schema_version != 1 or .role != $role
         then error("unexpected transform metrics identity")
         else

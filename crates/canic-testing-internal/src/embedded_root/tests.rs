@@ -3,6 +3,62 @@
 use super::*;
 
 #[test]
+fn relocated_fixture_preserves_internal_and_external_dependency_owners() {
+    let nonce = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_nanos();
+    let fixture = source::FixtureSource {
+        root: Path::new(env!("CARGO_MANIFEST_DIR"))
+            .join("../../target/embedded-root")
+            .join(format!("dependency-paths-{}-{nonce}", std::process::id())),
+    };
+    let workspace = fixture.root.join("workspace");
+    let external = fixture.root.join("external library");
+    let snapshot = fixture.root.join("snapshot");
+    fs::create_dir_all(workspace.join("crates/internal")).unwrap();
+    fs::create_dir_all(&external).unwrap();
+    fs::create_dir_all(&snapshot).unwrap();
+    let workspace = workspace.canonicalize().unwrap();
+    let external = external.canonicalize().unwrap();
+    let manifest = r#"
+        [workspace.dependencies]
+        internal = { version = "1.2.3", path = "crates/internal" }
+        external = { version = "=0.1.0", path = "../external library", features = ["sample"] }
+        registry = "2.3.4"
+    "#;
+    fs::write(workspace.join("Cargo.toml"), manifest).unwrap();
+    fs::write(snapshot.join("Cargo.toml"), manifest).unwrap();
+    source::bind_dependency_paths(&snapshot, &workspace).unwrap();
+    let relocated: toml::Value =
+        toml::from_str(&fs::read_to_string(snapshot.join("Cargo.toml")).unwrap()).unwrap();
+    let dependencies = &relocated["workspace"]["dependencies"];
+    assert_eq!(
+        dependencies["internal"]["path"].as_str(),
+        Some("crates/internal")
+    );
+    assert_eq!(dependencies["external"]["path"].as_str(), external.to_str());
+    assert_eq!(dependencies["external"]["version"].as_str(), Some("=0.1.0"));
+    assert_eq!(
+        dependencies["external"]["features"][0].as_str(),
+        Some("sample")
+    );
+    assert_eq!(dependencies["registry"].as_str(), Some("2.3.4"));
+    assert_eq!(
+        fs::read_to_string(workspace.join("Cargo.toml")).unwrap(),
+        manifest
+    );
+
+    fs::remove_dir(&external).unwrap();
+    assert_eq!(
+        source::bind_dependency_paths(&snapshot, &workspace)
+            .unwrap_err()
+            .kind(),
+        io::ErrorKind::NotFound
+    );
+}
+
+#[test]
 fn fixture_version_normalization_preserves_dependency_requirements_and_profiles() {
     let manifest = r#"
         [workspace.package]

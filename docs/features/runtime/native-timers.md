@@ -50,8 +50,8 @@ with native declarations whose identity names the actual owner rather than
 
 ```rust
 use ic_timers::{
-    DeclarationLifetime, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceDecision, OnceRegistration, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -65,7 +65,7 @@ fn declare_refresh_timer() -> Result<(), Box<dyn std::error::Error>> {
         DeclarationLifetime::RemoveWhenStopped,
         |_context| async {
             refresh_cache().await;
-            TimerRunResult::new(TimerCompletion::success(1), TimerDirective::Stop)
+            OnceRunResult::new(TimerCompletion::success(1), OnceDecision::Stop)
         },
     )?;
     registration.ensure_scheduled(TimerSchedule::After(Duration::from_secs(30)))?;
@@ -74,15 +74,15 @@ fn declare_refresh_timer() -> Result<(), Box<dyn std::error::Error>> {
 }
 ```
 
-`Once` callbacks return `TimerRunResult`. An after-completion callback uses
-`TimerDirective::RecurAfterCompletion` when normal completion should schedule
+`Once` callbacks return `OnceRunResult` with a `OnceDecision`. After-completion
+callbacks return `AfterCompletionRunResult` with an `AfterCompletionDecision`, using
+`AfterCompletionDecision::RecurAfterCompletion` when normal completion should schedule
 the next cadence:
 
 ```rust
 use ic_timers::{
-    AfterCompletionRegistration, DeclarationLifetime, TimerCadence,
-    TimerCompletion, TimerDirective, TimerIdentity, TimerRunResult,
-    register_after_completion,
+    AfterCompletionDecision, AfterCompletionRegistration, AfterCompletionRunResult,
+    DeclarationLifetime, TimerCadence, TimerCompletion, TimerIdentity, register_after_completion,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -97,9 +97,9 @@ fn declare_sweep_timer() -> Result<(), Box<dyn std::error::Error>> {
         DeclarationLifetime::Retained,
         |_context| async {
             let processed = sweep_one_batch().await;
-            TimerRunResult::new(
+            AfterCompletionRunResult::new(
                 TimerCompletion::success(processed),
-                TimerDirective::RecurAfterCompletion,
+                AfterCompletionDecision::RecurAfterCompletion,
             )
         },
     )?;
@@ -164,8 +164,8 @@ Fixed declarations should use the native reconciliation helpers during both
 
 ```rust
 use ic_timers::{
-    OnceRegistration, TimerCompletion, TimerDirective, TimerIdentity,
-    TimerRunResult, TimerSchedule, reconcile_once,
+    OnceDecision, OnceRegistration, OnceRunResult, TimerCompletion,
+    TimerIdentity, TimerSchedule, reconcile_once,
 };
 use std::cell::RefCell;
 
@@ -179,7 +179,7 @@ fn reconstruct_application_timers() -> Result<(), Box<dyn std::error::Error>> {
     EXPIRY_TIMER.with_borrow_mut(|registration| {
         reconcile_once(registration, &identity, desired, |_context| async {
             let processed = expire_due_jobs().await;
-            TimerRunResult::new(
+            OnceRunResult::new(
                 TimerCompletion::success(processed),
                 next_expiry_directive(),
             )

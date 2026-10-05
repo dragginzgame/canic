@@ -86,9 +86,9 @@ fn reconstruct_application_timers() {
                     identity,
                     ic_timers::DeclarationLifetime::Retained,
                     |_context: ic_timers::OnceContext| async {
-                        ic_timers::TimerRunResult::new(
+                        ic_timers::OnceRunResult::new(
                             ic_timers::TimerCompletion::no_work(),
-                            ic_timers::TimerDirective::Stop,
+                            ic_timers::OnceDecision::Stop,
                         )
                     },
                 )
@@ -102,9 +102,9 @@ fn reconstruct_application_timers() {
         ic_timers::DeclarationLifetime::RemoveWhenStopped,
         |_context: ic_timers::OnceContext| async {
             timer_once().await;
-            ic_timers::TimerRunResult::new(
+            ic_timers::OnceRunResult::new(
                 ic_timers::TimerCompletion::success(1),
-                ic_timers::TimerDirective::Stop,
+                ic_timers::OnceDecision::Stop,
             )
         },
     )
@@ -122,9 +122,9 @@ fn reconstruct_application_timers() {
             ic_timers::DeclarationLifetime::RemoveWhenStopped,
             |_context: ic_timers::AfterCompletionContext| async {
                 timer_interval().await;
-                ic_timers::TimerRunResult::new(
+                ic_timers::AfterCompletionRunResult::new(
                     ic_timers::TimerCompletion::success(1),
-                    ic_timers::TimerDirective::RecurAfterCompletion,
+                    ic_timers::AfterCompletionDecision::RecurAfterCompletion,
                 )
             },
         )
@@ -140,9 +140,9 @@ fn reconstruct_application_timers() {
         ic_timers::DeclarationLifetime::RemoveWhenStopped,
         |_context: ic_timers::OnceContext| async {
             timer_cancelled().await;
-            ic_timers::TimerRunResult::new(
+            ic_timers::OnceRunResult::new(
                 ic_timers::TimerCompletion::success(1),
-                ic_timers::TimerDirective::Stop,
+                ic_timers::OnceDecision::Stop,
             )
         },
     )
@@ -273,9 +273,9 @@ async fn fill_timer_registry() -> Result<(u64, bool), Error> {
             identity,
             ic_timers::DeclarationLifetime::RemoveWhenStopped,
             |_context: ic_timers::OnceContext| async {
-                ic_timers::TimerRunResult::new(
+                ic_timers::OnceRunResult::new(
                     ic_timers::TimerCompletion::no_work(),
-                    ic_timers::TimerDirective::Stop,
+                    ic_timers::OnceDecision::Stop,
                 )
             },
         ) {

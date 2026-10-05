@@ -30,8 +30,8 @@ use crate::{
     },
 };
 use ic_timers::{
-    DeclarationLifetime, OnceContext, OnceRegistration, TimerCompletion, TimerDirective,
-    TimerIdentity, TimerRunResult, TimerSchedule, register_once,
+    DeclarationLifetime, OnceContext, OnceDecision, OnceRegistration, OnceRunResult,
+    TimerCompletion, TimerIdentity, TimerSchedule, register_once,
 };
 use std::{cell::RefCell, time::Duration};
 
@@ -117,7 +117,7 @@ impl RootIssuerRenewalWorkflow {
         Self::reconcile_deadline(timing.next_deadline_ns)
     }
 
-    pub(super) async fn run_scheduled() -> TimerRunResult {
+    pub(super) async fn run_scheduled() -> OnceRunResult {
         let now_ns = IcOps::now_nanos();
         match Self::sweep().await {
             Ok(work_count) => Self::completed_result(now_ns, work_count),
@@ -125,7 +125,7 @@ impl RootIssuerRenewalWorkflow {
         }
     }
 
-    async fn run_registered() -> TimerRunResult {
+    async fn run_registered() -> OnceRunResult {
         let attempt = match AsyncJobWorkflow::claim(AsyncJobOwner::AuthRenewal) {
             Ok(attempt) => attempt,
             Err(result) => return result,
@@ -205,44 +205,44 @@ impl RootIssuerRenewalWorkflow {
         Ok(work_count)
     }
 
-    fn completed_result(now_ns: u64, work_count: u64) -> TimerRunResult {
+    fn completed_result(now_ns: u64, work_count: u64) -> OnceRunResult {
         let timing = match AuthOps::root_issuer_renewal_timing(now_ns) {
             Ok(timing) => timing,
             Err(err) => {
                 Self::record_timer_failure(&err);
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(work_count),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
         let directive = match timing.next_deadline_ns {
-            None => TimerDirective::Stop,
-            Some(deadline_ns) if deadline_ns > now_ns => TimerDirective::ScheduleAt(deadline_ns),
-            Some(_) if work_count > 0 => TimerDirective::ContinueImmediately,
+            None => OnceDecision::Stop,
+            Some(deadline_ns) if deadline_ns > now_ns => OnceDecision::ScheduleAt(deadline_ns),
+            Some(_) if work_count > 0 => OnceDecision::ContinueImmediately,
             Some(_) => {
                 let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(0),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
 
         if work_count == 0 {
-            TimerRunResult::new(TimerCompletion::no_work(), directive)
+            OnceRunResult::new(TimerCompletion::no_work(), directive)
         } else {
-            TimerRunResult::new(TimerCompletion::success(work_count), directive)
+            OnceRunResult::new(TimerCompletion::success(work_count), directive)
         }
     }
 
-    fn failed_result(now_ns: u64, failure: RenewalSweepFailure) -> TimerRunResult {
+    fn failed_result(now_ns: u64, failure: RenewalSweepFailure) -> OnceRunResult {
         Self::record_timer_failure(&failure.cause);
         if !is_retryable_renewal_error(&failure.cause) {
-            return TimerRunResult::new(
+            return OnceRunResult::new(
                 TimerCompletion::invariant_failure(failure.work_count),
-                TimerDirective::Stop,
+                OnceDecision::Stop,
             );
         }
 
@@ -250,9 +250,9 @@ impl RootIssuerRenewalWorkflow {
             Ok(timing) => timing.earliest_active_proof_expires_at_ns,
             Err(err) => {
                 Self::record_timer_failure(&err);
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(failure.work_count),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -261,9 +261,9 @@ impl RootIssuerRenewalWorkflow {
         let Some(retry_after_ns) = retry_deadline_ns(now_ns, delay) else {
             let err = InternalError::invariant();
             Self::record_timer_failure(&err);
-            return TimerRunResult::new(
+            return OnceRunResult::new(
                 TimerCompletion::invariant_failure(failure.work_count),
-                TimerDirective::Stop,
+                OnceDecision::Stop,
             );
         };
         let deferred = match AuthOps::defer_retryable_chain_key_root_delegation_batch(
@@ -273,9 +273,9 @@ impl RootIssuerRenewalWorkflow {
             Ok(deferred) => deferred,
             Err(err) => {
                 Self::record_timer_failure(&err);
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(failure.work_count),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             }
         };
@@ -284,33 +284,33 @@ impl RootIssuerRenewalWorkflow {
                 Ok(timing) => timing,
                 Err(err) => {
                     Self::record_timer_failure(&err);
-                    return TimerRunResult::new(
+                    return OnceRunResult::new(
                         TimerCompletion::invariant_failure(failure.work_count),
-                        TimerDirective::Stop,
+                        OnceDecision::Stop,
                     );
                 }
             };
             let Some(exact_deadline_ns) = exact_timing.next_deadline_ns else {
                 let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(failure.work_count),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             };
             let Some(exact_delay_ns) = exact_deadline_ns.checked_sub(now_ns) else {
                 let err = InternalError::invariant();
                 Self::record_timer_failure(&err);
-                return TimerRunResult::new(
+                return OnceRunResult::new(
                     TimerCompletion::invariant_failure(failure.work_count),
-                    TimerDirective::Stop,
+                    OnceDecision::Stop,
                 );
             };
             delay = Duration::from_nanos(exact_delay_ns);
         }
-        TimerRunResult::new(
+        OnceRunResult::new(
             TimerCompletion::retryable_failure(failure.work_count),
-            TimerDirective::RetryAfter(delay),
+            OnceDecision::RetryAfter(delay),
         )
     }
 

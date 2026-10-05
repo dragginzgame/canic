@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INVENTORY="$ROOT/scripts/ci/dependency-risk-inventory.tsv"
 TOOLS="$ROOT/tool-versions.env"
@@ -18,9 +21,7 @@ warn() {
 [ -f "$TOOLS" ] || fail "missing tool-version authority: $TOOLS"
 command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable"
 command -v git >/dev/null 2>&1 || fail "git is unavailable"
-# Honor an explicit executable and the normal PATH before the user-local install.
-JQ_BIN="${JQ_BIN:-$(command -v jq || printf '%s/.local/bin/jq' "$HOME")}"
-[ -x "$JQ_BIN" ] || fail "jq is unavailable; install jq or set JQ_BIN to its executable"
+require_jq
 
 # shellcheck source=/dev/null
 source "$TOOLS"

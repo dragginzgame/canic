@@ -1,13 +1,17 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+require_jq
+
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 MANIFEST="${1:-$ROOT/Cargo.toml}"
 
 # Cargo resolves workspace inheritance, renames, optional dependencies and
 # target-specific tables without compiling a crate or contacting the registry.
 metadata="$(cargo metadata --manifest-path "$MANIFEST" --locked --offline --no-deps --format-version 1)"
-violations="$(jq -r '
+violations="$("$JQ_BIN" -r '
     .workspace_members as $ids
     | [.packages[] | select(.id as $id | $ids | index($id))] as $members
     | if ($members | length) == 0 then error("empty workspace metadata") else

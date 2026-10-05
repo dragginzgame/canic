@@ -10,7 +10,7 @@ use crate::ops::{
         AsyncJobAttempt, AsyncJobClaim, AsyncJobCompletion, AsyncJobOwner, AsyncJobRecoveryOps,
     },
 };
-use ic_timers::{TimerCompletion, TimerCompletionOutcome, TimerDirective, TimerRunResult};
+use ic_timers::{OnceDecision, OnceRunResult, TimerCompletion, TimerCompletionOutcome};
 
 const ASYNC_JOB_LEASE_NS: u64 = 5 * 60 * 1_000_000_000;
 
@@ -31,16 +31,16 @@ impl AsyncJobWorkflow {
     }
 
     /// Claim one ordinary callback attempt or return its exact provider disposition.
-    pub fn claim(owner: AsyncJobOwner) -> Result<AsyncJobAttempt, TimerRunResult> {
+    pub fn claim(owner: AsyncJobOwner) -> Result<AsyncJobAttempt, OnceRunResult> {
         let now_ns = IcOps::now_nanos();
         let Some(lease_expires_at_ns) = now_ns.checked_add(ASYNC_JOB_LEASE_NS) else {
             return Err(invariant_failure());
         };
         match AsyncJobRecoveryOps::claim(owner, now_ns, lease_expires_at_ns) {
             Ok(AsyncJobClaim::Acquired(attempt)) => Ok(attempt),
-            Ok(AsyncJobClaim::Busy { retry_at_ns }) => Err(TimerRunResult::new(
+            Ok(AsyncJobClaim::Busy { retry_at_ns }) => Err(OnceRunResult::new(
                 TimerCompletion::retryable_failure(0),
-                TimerDirective::ScheduleAt(retry_at_ns),
+                OnceDecision::ScheduleAt(retry_at_ns),
             )),
             Err(_) => Err(invariant_failure()),
         }
@@ -68,11 +68,11 @@ impl AsyncJobWorkflow {
     }
 
     /// Finish only the exact active attempt and preserve the provider result when current.
-    pub fn finish(attempt: AsyncJobAttempt, result: TimerRunResult) -> TimerRunResult {
+    pub fn finish(attempt: AsyncJobAttempt, result: OnceRunResult) -> OnceRunResult {
         let completion = async_job_completion(result.completion().outcome());
         match AsyncJobRecoveryOps::finish(attempt, completion, IcOps::now_nanos()) {
             Ok(true) => result,
-            Ok(false) => TimerRunResult::new(TimerCompletion::no_work(), TimerDirective::Stop),
+            Ok(false) => OnceRunResult::new(TimerCompletion::no_work(), OnceDecision::Stop),
             Err(_) => invariant_failure(),
         }
     }
@@ -88,8 +88,8 @@ const fn async_job_completion(outcome: TimerCompletionOutcome) -> AsyncJobComple
     }
 }
 
-const fn invariant_failure() -> TimerRunResult {
-    TimerRunResult::new(TimerCompletion::invariant_failure(0), TimerDirective::Stop)
+const fn invariant_failure() -> OnceRunResult {
+    OnceRunResult::new(TimerCompletion::invariant_failure(0), OnceDecision::Stop)
 }
 
 #[cfg(test)]

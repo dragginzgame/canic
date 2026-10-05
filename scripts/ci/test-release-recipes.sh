@@ -40,7 +40,9 @@ run_case() {
         MAKE="$fixture/bin/make" "$target" >"$fixture/output" 2>&1 || status=$?
     if [[ "$expected" == success ]]; then [[ "$status" == 0 ]]; else [[ "$status" != 0 ]]; fi
 }
-for lane in patch patch-fast minor major; do
+# The canonical runner fixtures own phase ordering for the standard commands.
+bash "$ROOT/scripts/release/test-standard-release.sh"
+for lane in patch-fast; do
     run_case "release-$lane" success
     printf '%s\n' "$lane" release-stage release-commit release-push >"$fixture/expected"
     cmp "$fixture/expected" "$EVENTS"

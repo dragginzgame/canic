@@ -2,16 +2,16 @@
 
 set -euo pipefail
 
+# shellcheck source=scripts/ci/require-jq.sh
+source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CLASSIFIER="$ROOT/scripts/ci/wasm-capability-size-report.jq"
-if ! command -v jq >/dev/null 2>&1; then
-    echo "missing required Wasm capability size test tool: jq" >&2
-    exit 2
-fi
+require_jq
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-wasm-capability-size-test.XXXXXX")"
 trap 'rm -rf "$FIXTURE"' EXIT
 
-jq -n '{
+"$JQ_BIN" -n '{
   artifact: {file_name: "diagnostic.wasm", sha256: "fixture", bytes: 425},
   context: {
     role: "project_instance",
@@ -35,9 +35,9 @@ jq -n '{
     {name: "type[1]: (i32) -> nil", shallow_size: 5},
     {name: "export \"canister_update endpoint\"", shallow_size: 10}
   ]
-}' | jq -f "$CLASSIFIER" >"$FIXTURE/partial.json"
+}' | "$JQ_BIN" -f "$CLASSIFIER" >"$FIXTURE/partial.json"
 
-jq -e '
+"$JQ_BIN" -e '
   .schema == "canic.wasm_capability_size.v1"
   and .analysis.artifact_bytes_match == true
   and .analysis.symbol_attribution == "partial"
@@ -55,7 +55,7 @@ jq -e '
   }
 ' "$FIXTURE/partial.json" >/dev/null
 
-jq -n '{
+"$JQ_BIN" -n '{
   artifact: {file_name: "stripped.wasm", sha256: "fixture", bytes: 80},
   context: {
     role: "project_instance",
@@ -71,9 +71,9 @@ jq -n '{
     {name: "code[7]", shallow_size: 60},
     {name: "data[0]", shallow_size: 20}
   ]
-}' | jq -f "$CLASSIFIER" >"$FIXTURE/stripped.json"
+}' | "$JQ_BIN" -f "$CLASSIFIER" >"$FIXTURE/stripped.json"
 
-jq -e '
+"$JQ_BIN" -e '
   .analysis.symbol_attribution == "unavailable"
   and .analysis.named_code_bytes == 0
   and .analysis.unattributed_code_bytes == 60
