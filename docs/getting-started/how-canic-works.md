@@ -8,13 +8,9 @@ the terms used throughout the rest of the documentation.
 
 ## Why Use Canic?
 
-<img src="../../assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic thinking about a canister" />
-
 An individual canister combines program code with persistent data. A real
 application often needs several of them: an API, user or data shards, indexes,
 workers, storage gateways, and management infrastructure.
-
-<br clear="left" />
 
 Without a shared application model, each canister may be easy to understand
 while the system as a whole becomes difficult to operate. The operator still
@@ -140,8 +136,6 @@ deployment and one Root for each occupied Subnet.
 
 ## When To Use Only Part Of Canic
 
-<img src="../../assets/256x256/mechanic-idea.png" align="left" width="110" alt="The Canic mechanic presenting an idea" />
-
 Canic is a pick-and-choose system rather than one mandatory stack. A canister
 role enables only the Rust runtime features it needs, while host-side tools stay
 on the operator's computer.
@@ -159,8 +153,6 @@ Managed lifecycle and endpoints require their Fleet bindings even when optional
 features are disabled. Some capabilities have deliberate dependencies.
 Delegated-token verification, for example, selects its cryptographic dependencies. Each feature guide states
 its own requirements and boundary.
-
-<br clear="left" />
 
 The complete model becomes most valuable as soon as several canisters must be
 built, funded, placed, changed, and recovered as one application.

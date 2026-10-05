@@ -6,13 +6,9 @@ boundaries.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-<img src="../../../assets/256x256/mechanic-attention.png" align="left" width="96" alt="The Canic mechanic raising a hand beside recovery safety rules" />
-
 **Recovery outcome:** interrupted or exceptional work reaches a reviewed,
 cycle-accounted terminal state without duplicating effects or reviving obsolete
 pre-1.0 state.
-
-<br clear="left" />
 
 ## At A Glance
 

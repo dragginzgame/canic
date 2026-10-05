@@ -6,13 +6,9 @@ apply, interruption recovery, and terminal replay.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-<img src="../../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside a clean-reinstall caution" />
-
 **Operator outcome:** a clean current-release installation using explicitly
 selected physical inventory, with controlled cycles and retained historical
 evidence accounted for before predecessor state is cleared.
-
-<br clear="left" />
 
 ## At A Glance
 

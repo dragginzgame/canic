@@ -5,14 +5,10 @@ desired-state document. It observes the current IC estate, prepares a no-effect
 plan, and changes canisters only after the operator approves that exact plan
 digest.
 
-<img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the Fleet Ensure paths" />
-
 Most operators need the normal workflow: write or generate desired state, review
 the plan, apply its digest, and run it again to verify that no mutations remain.
 Use the task table below when starting from supplied infrastructure, replacing a
 pre-1.0 release, recovering interrupted work, or integrating automation.
-
-<br clear="left" />
 
 ## Choose Your Starting Point
 
@@ -66,8 +62,6 @@ from `fleet_completed: true`.
 
 ## Safety Boundaries
 
-<img src="../../../assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside Fleet Ensure safety rules" />
-
 - Planning never grants permission for paid Fleet effects.
 - Apply authority is limited to the exact reviewed digest.
 - Interrupted operations reconcile live results before another effect is
@@ -78,8 +72,6 @@ from `fleet_completed: true`.
 - An immediate replay of a completed operation must be effect-free.
 - Every pre-1.0 release transition is a hard cut and clean reinstall; predecessor
   application state is not migrated forward.
-
-<br clear="left" />
 
 The detailed recovery guide defines the exact
 [cycle-conservation](fleet-ensure-recovery-and-cycle-safety.md#cycle-conservation),

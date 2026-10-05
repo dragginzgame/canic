@@ -1,24 +1,24 @@
 <p align="center">
-  <img src="assets/canic-logo-hero.jpg" alt="Canic — user-friendly multi-canister management" width="800" />
+  <img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/canic/canic-readme-header.svg" alt="Canic — user-friendly multi-canister management" width="100%">
 </p>
 
 <!-- helper-navigation:start -->
 <p align="center">
-  <a href="https://github.com/dragginzgame/canic"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/canic.svg" width="18" height="18" alt=""> <strong>canic</strong></a>
+  <a href="https://github.com/dragginzgame/canic"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/canic.svg" width="18" height="18" alt=""> <strong>canic</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/icydb"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/icydb.svg" width="18" height="18" alt=""> <strong>icydb</strong></a>
+  <a href="https://github.com/dragginzgame/icydb"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/icydb.svg" width="18" height="18" alt=""> <strong>icydb</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-timers"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/ic-timers.svg" width="18" height="18" alt=""> <strong>ic-timers</strong></a>
+  <a href="https://github.com/dragginzgame/ic-timers"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-timers.svg" width="18" height="18" alt=""> <strong>ic-timers</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-memory"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/ic-memory.svg" width="18" height="18" alt=""> <strong>ic-memory</strong></a>
+  <a href="https://github.com/dragginzgame/ic-memory"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-memory.svg" width="18" height="18" alt=""> <strong>ic-memory</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-query"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/ic-query.svg" width="18" height="18" alt=""> <strong>ic-query</strong></a>
+  <a href="https://github.com/dragginzgame/ic-query"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-query.svg" width="18" height="18" alt=""> <strong>ic-query</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-backup"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/ic-backup.svg" width="18" height="18" alt=""> <strong>ic-backup</strong></a>
+  <a href="https://github.com/dragginzgame/ic-backup"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-backup.svg" width="18" height="18" alt=""> <strong>ic-backup</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-blob-storage"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/ic-blob-storage.svg" width="18" height="18" alt=""> <strong>ic-blob-storage</strong></a>
+  <a href="https://github.com/dragginzgame/ic-blob-storage"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-blob-storage.svg" width="18" height="18" alt=""> <strong>ic-blob-storage</strong></a>
   &nbsp;&middot;&nbsp;
-  <a href="https://github.com/dragginzgame/ic-testkit"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/helper-icons/ic-testkit.svg" width="18" height="18" alt=""> <strong>ic-testkit</strong></a>
+  <a href="https://github.com/dragginzgame/ic-testkit"><img src="https://raw.githubusercontent.com/dragginzgame/shared-assets/main/icons/ic-testkit.svg" width="18" height="18" alt=""> <strong>ic-testkit</strong></a>
 </p>
 <!-- helper-navigation:end -->
 
@@ -41,14 +41,11 @@ application has several canisters, someone must build, connect, fund, place,
 observe, recover, and safely change them together. Canic provides one model and
 one toolchain for that work.
 
-<img src="assets/256x256/mechanic-idea.png" align="left" width="110" alt="The Canic mechanic presenting an idea" />
-
 Think of Canic as playing a Kubernetes-like role for IC applications: you
 describe the application, build versioned artifacts, review the intended
 changes, and operate the deployed system as a whole. Canic is designed around
 IC-specific concerns such as persistent state, cycles, canister authority, and
 uncertain network effects.
-<br clear="left" />
 
 ## How It Works
 
@@ -122,8 +119,6 @@ read [AGENTS.md](AGENTS.md) and [TESTING.md](TESTING.md).
 
 ## Status
 
-<img src="assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
-
 Canic is pre-1.0. Releases may make breaking changes, and moving between current
 releases requires a clean reinstall rather than an in-place upgrade. Same-release
 retry and recovery remain supported, and controlled cycles must still be
@@ -132,8 +127,6 @@ conserved.
 Read the [current implementation status](docs/status/current.md) for the exact
 completed boundary. Issues and pull requests are currently limited to the core
 team while the repository is prepared for wider use.
-
-<br clear="left" />
 
 ## License
 

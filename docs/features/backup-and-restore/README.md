@@ -17,8 +17,6 @@ releases.
 
 ## Current Availability
 
-<img src="../../../assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
-
 **Creating a new backup is currently unavailable.** `canic backup create
 <fleet>` returns the typed `LiveCreateUnavailable` error before resolving the
 workspace, creating a layout or invoking ICP. The live topology and authority
@@ -26,8 +24,6 @@ adapter is not yet implemented. `--dry-run` can prepare local planning files for
 supported inventory, but it does not prove the live layout or permissions and
 does not create a backup. Current selection requires exactly one Fleet Subnet
 Root.
-
-<br clear="left" />
 
 This gap dates from the 0.100.80 removal of the public Subnet Registry query and
 is tracked in [Canic #394](https://github.com/dragginzgame/canic/issues/394).

@@ -6,13 +6,9 @@ authentication and admission, metrics, child provisioning, remaining Canic
 runtime, application and upstream code, unattributed stripped code, and Wasm
 structure/ABI bytes.
 
-<img src="../../assets/256x256/mechanic-tip.png" align="left" width="96" alt="The Canic mechanic presenting a Wasm-size diagnostic tip" />
-
 **Diagnostic outcome:** one machine-readable attribution report for a named,
 symbol-preserving Wasm artifact. The result supports investigation; it is not a
 deployment gate or marginal-cost proof.
-
-<br clear="left" />
 
 Use a diagnostic artifact that retains function names:
 

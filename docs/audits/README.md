@@ -4,13 +4,9 @@ This directory separates current audit policy and reusable definitions from
 retained historical evidence. Start here instead of browsing dated report
 artifacts directly.
 
-<img src="../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding an audit checklist" />
-
 Audit methods define how to examine a property. Reports record what one audit
 found at a particular point in time. Historical reports remain evidence, but
 they do not define current product behavior or release readiness by themselves.
-
-<br clear="left" />
 
 ## Choose An Audit Path
 

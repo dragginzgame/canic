@@ -4,13 +4,9 @@ The `canic` command-line program runs on your computer. It creates local workspa
 files, builds canisters, inspects trusted IC networks, prepares deployment plans,
 applies approved changes, collects diagnostics, and helps recover interrupted work.
 
-<img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the operations guides" />
-
 Inspecting or planning never silently grants permission to change a Fleet.
 Canic first shows the exact actions and spending bounds, then requires the
 operator to approve that plan's digest.
-
-<br clear="left" />
 
 ## Choose A Task
 

@@ -5,13 +5,9 @@ harness for CANIC-017. It owns a foreground PocketIC process, persistent local
 state and one fixed browser gateway. Canic's normal artifact, initialization,
 Fleet Ensure and frontend handoff owners supply the deployment contracts.
 
-<img src="../../../assets/256x256/mechanic-help.png" align="left" width="96" alt="The Canic mechanic helping start a local development Fleet" />
-
 **Developer outcome:** run a persistent PocketIC-backed Fleet through the same
 artifact, desired-state, Fleet Ensure, and frontend-handoff contracts used by
 other Canic environments.
-
-<br clear="left" />
 
 ## At A Glance
 

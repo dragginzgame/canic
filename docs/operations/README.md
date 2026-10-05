@@ -4,14 +4,10 @@ These documents are for people operating Canic or preparing a Canic release.
 They cover deployment, recovery, funding, diagnostics, packaging, and release
 checks.
 
-<img src="../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding an operations checklist" />
-
 If you are deploying an application for the first time, begin with
 [Installing Canic](../../INSTALLING.md), then follow the
 [Fleet ensure guide](../features/operations/fleet-ensure.md). The remaining
 pages are references for a specific operational task or failure.
-
-<br clear="left" />
 
 ## Choose An Operations Path
 

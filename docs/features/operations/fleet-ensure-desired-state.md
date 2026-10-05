@@ -6,13 +6,9 @@ by Fleet Ensure.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-<img src="../../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a desired-state checklist" />
-
 **Operator outcome:** one reviewable document that binds the intended network,
 infrastructure, application canisters, placement, funding, artifacts, and
 spending limits for a Fleet.
-
-<br clear="left" />
 
 ## At A Glance
 

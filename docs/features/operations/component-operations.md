@@ -4,12 +4,8 @@
 active Root. Fleet Ensure owns initial Component Group deployment; Root owns
 allocation, installation, activation and Directory synchronization.
 
-<img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="96" alt="The Canic mechanic pointing toward Component operations" />
-
 **Operator outcome:** add one admitted top-level Component to a terminal Fleet
 through a no-effect review and exact-digest apply workflow.
-
-<br clear="left" />
 
 ## At A Glance
 

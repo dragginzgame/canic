@@ -10,16 +10,12 @@ Canic has two pieces that work together:
 <table>
   <thead>
     <tr>
-      <th aria-label="Guide"></th>
       <th>Goal</th>
       <th>Install</th>
     </tr>
   </thead>
   <tbody>
     <tr>
-      <td rowspan="3" width="120" valign="top">
-        <img src="assets/256x256/mechanic-point-right.png" width="110" alt="The Canic mechanic pointing toward the installation choices" />
-      </td>
       <td>Use a published Canic release</td>
       <td>Published CLI, governed Wasm tools, compatible <code>icp</code>, and the matching Rust crate</td>
     </tr>
@@ -139,8 +135,6 @@ icp identity reauth <identity-name> --duration 1h
 
 ## Canister Dependencies
 
-<img src="assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding a configuration checklist" />
-
 A Rust crate that builds one Canic-managed canister needs runtime dependencies,
 a build dependency, and a small metadata block that tells Canic which App and
 role it implements:
@@ -163,8 +157,6 @@ The **role** is the canister's job in the application. It must exist in the
 selected App configuration. Application developers provide their application
 canister packages. Canic generates its own Root, Coordinator, and Store
 management packages from the configuration.
-
-<br clear="left" />
 
 The build script remains small:
 
@@ -261,8 +253,6 @@ destructive effects.
 
 ## Cycle-Recovery Limitation
 
-<img src="assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
-
 The IC does not let a controller pull cycles from an arbitrary canister. A
 canister with a material cycle balance may be physically replaced or deleted
 only when it exposes the exact configured, idempotent treasury-drain contract.
@@ -271,8 +261,6 @@ Never bypass that blocker with
 a raw stop/delete command. ID-preserving clean reinstall retains native cycles
 on the selected canisters; it clears their application and framework state
 under a separate reviewed reset operation.
-
-<br clear="left" />
 
 ## Development Validation
 

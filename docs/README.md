@@ -56,8 +56,6 @@ for people who build, inspect, deploy, recover, or remove a Fleet.
 
 ## How To Read These Docs
 
-<img src="../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding a documentation checklist" />
-
 1. Start with a feature guide or task guide for an overview.
 2. Follow its configuration or operations links when you are ready to use it.
 3. Use contracts and architecture pages when you need exact implementation
@@ -65,8 +63,6 @@ for people who build, inspect, deploy, recover, or remove a Fleet.
 4. Check current status for work in progress and known limits.
 5. Treat archived designs, dated audits and older release notes as historical
    evidence, not current product support.
-
-<br clear="left" />
 
 Use current guides for commands and schemas. Archived designs, dated audits and
 older release notes describe their recorded checkpoints; they do not establish

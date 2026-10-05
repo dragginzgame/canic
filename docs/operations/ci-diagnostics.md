@@ -2,10 +2,6 @@
 
 Canic provides one offline workspace validation command for ordinary CI:
 
-<img src="../../assets/256x256/mechanic-help.png" align="left" width="96" alt="The Canic mechanic helping choose a CI diagnostic command" />
-
-<br clear="left" />
-
 | Need | Command |
 | --- | --- |
 | Validate the local workspace | `canic medic --ci` |

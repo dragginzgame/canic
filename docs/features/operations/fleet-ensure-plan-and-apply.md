@@ -5,12 +5,8 @@ approve its exact digest, apply it, and confirm immediate no-effect replay.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-<img src="../../../assets/256x256/mechanic-point-right.png" align="left" width="96" alt="The Canic mechanic pointing toward the plan and apply workflow" />
-
 **Operator outcome:** a Fleet that matches the approved desired state, followed
 by an immediate successor plan with no mutation actions.
-
-<br clear="left" />
 
 ## At A Glance
 

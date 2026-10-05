@@ -10,13 +10,9 @@ changelogs and status docs, not in the operational runbook entry point.
 Current release-line context comes from `docs/status/current.md`. This file is
 the canonical operator recovery reference for current release work.
 
-<img src="../../assets/256x256/mechanic-attention.png" align="left" width="96" alt="The Canic mechanic raising a hand beside recovery runbooks" />
-
 **Operator outcome:** classify the retained operation and typed failure, resume
 only under its existing authority, and preserve evidence until a terminal result
 or explicit operator decision is reached.
-
-<br clear="left" />
 
 ## At A Glance
 

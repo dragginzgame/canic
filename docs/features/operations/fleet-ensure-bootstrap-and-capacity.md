@@ -6,13 +6,9 @@ authority before ordinary Fleet convergence continues.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-<img src="../../../assets/256x256/mechanic-help.png" align="left" width="96" alt="The Canic mechanic helping choose a bootstrap or capacity path" />
-
 **Operator outcome:** reviewed current authority over explicitly supplied
 infrastructure or additional pool canisters before ordinary Fleet convergence
 uses them.
-
-<br clear="left" />
 
 ## At A Glance
 
@@ -176,7 +172,6 @@ through provisioning. It does not allocate replacement infrastructure. Completed
 bootstrap/import receipts remain available for local replay. Ordinary Ensure
 keeps its existing live convergence verification. Retain `.canic` receipts,
 referenced immutable phase/content files and the published policy/seed together.
-
 
 ## Add Supplied Capacity To A Current Fleet
 

@@ -10,13 +10,9 @@ changelogs and status docs, not in the operational validation entry point.
 Current release-line context comes from `docs/status/current.md`. This file is
 the canonical package/install validation reference for current release work.
 
-<img src="../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a package-validation checklist" />
-
 **Maintainer outcome:** account for package construction, installed and
 downstream smoke tests, artifact verification, and environment-owned gates
 without turning this checklist into release authority.
-
-<br clear="left" />
 
 ## At A Glance
 

@@ -9,15 +9,11 @@ top-ups. Concrete canister IDs, controllers, physical IC subnets and reviewed
 deployment funding belong to a separate desired Fleet file so the same App
 source can be installed in more than one environment.
 
-<img src="assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic thinking about application configuration" />
-
 This page is the complete field reference. New readers can begin with the
 [configuration map](#configuration-map), then follow only the sections needed
 for their App.
 
 Before adding a setting, decide which configuration layer owns it:
-
-<br clear="left" />
 
 <p align="center">
   <a href="assets/app-model-desired-fleet.jpg">
@@ -66,8 +62,6 @@ endpoint bundle.
 
 ## Configuration Map
 
-<img src="assets/256x256/mechanic-point-right.png" align="left" width="110" alt="The Canic mechanic pointing toward the configuration map" />
-
 | Concern | Owner in `canic.toml` |
 | --- | --- |
 | App identity and startup mode | [`[app]`](#app) |
@@ -77,8 +71,6 @@ endpoint bundle.
 | Reusable multi-Component composition | [Component Groups](#component-groups) |
 | Independent count, spread and reduction-only limits | [Component Group deployments](#component-group-deployments) |
 | Logical Fleet-wide target selection | [Fleet services](#fleet-services) |
-
-<br clear="left" />
 
 Physical Subnets, concrete canister identities, controllers, deployment funding, and
 decisions to replace or delete canisters belong to the separately reviewed
