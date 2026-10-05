@@ -4,13 +4,9 @@ Canic's host exports browser bindings from one terminal Fleet review. The
 frontend remains an independently built application. Its asset canister and
 Internet Identity provider remain outside Canic's managed topology.
 
-<img src="../../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside frontend handoff boundaries" />
-
 **Operator outcome:** export bounded browser bindings from one reviewed Fleet,
 upload them through the frontend's own delivery process, and verify the exact
 uploaded bytes without moving Fleet authority into the browser.
-
-<br clear="left" />
 
 ## At A Glance
 

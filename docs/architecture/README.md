@@ -4,8 +4,6 @@ Architecture pages explain how Canic's major parts fit together and why their
 security and ownership boundaries exist. They are intended for contributors,
 reviewers, and integrators who need more detail than a feature guide.
 
-<img src="../../assets/256x256/mechanic-help.png" align="left" width="110" alt="The Canic mechanic pointing readers toward the right architecture material" />
-
 If you are learning or using Canic, start with the
 [feature guides](../features/README.md). Return here when you need the design
 behind a feature. For exact machine-facing rules, use the linked contracts
@@ -15,8 +13,6 @@ Use these documents as the maintained architecture baseline for implementation,
 reviews, and developer handoff. Versioned WIP and release-line plans belong in
 `docs/design/`; point-in-time audit evidence belongs in `docs/audits/`; exact
 runtime/wire contracts belong in `docs/contracts/`.
-
-<br clear="left" />
 
 ## Choose The Right Level
 

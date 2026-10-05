@@ -3,8 +3,6 @@
 Design documents describe accepted or proposed implementation work. They do
 not replace current feature guides, operational procedures, or exact contracts.
 
-<img src="../../assets/256x256/mechanic-think.png" align="left" width="110" alt="The Canic mechanic considering where a design belongs" />
-
 Every new minor design must follow
 [delivery cadence governance](../governance/delivery-cadence.md) and include a
 release-batch plan before implementation begins.
@@ -12,8 +10,6 @@ release-batch plan before implementation begins.
 Before writing, decide whether the work is an unscheduled idea, an accepted
 release-line design, or historical material. That choice determines where the
 document belongs and whether it grants implementation authority.
-
-<br clear="left" />
 
 ## Choose A Destination
 
@@ -96,7 +92,6 @@ release-batch plan and explicit maintainer acceptance.
    service owns blob semantics; Canic owns an isolated application adapter and
    removes its embedded implementation. This reprioritization does not declare
    FR1 complete, accept minor closeout, or assign the extraction's release.
-
 
 [Bounded multi-Fleet estates](ideas/bounded-multi-fleet-estates/design.md)
 is deferred and unnumbered. Its unproved Q0 capsule and indexed-estate work

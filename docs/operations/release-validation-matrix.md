@@ -7,12 +7,8 @@ General command, git, versioning, network, and release authority remains in
 
 There is no standing RC-readiness audit or evergreen no-blocker conclusion.
 
-<img src="../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding the release-validation matrix" />
-
 **Maintainer outcome:** choose the narrowest valid gate for the current
 checkpoint and record every required result or externally owned limitation.
-
-<br clear="left" />
 
 ## Scope
 

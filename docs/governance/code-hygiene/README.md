@@ -7,13 +7,9 @@ Canic workspace, including `canic`, `canic-core`, `canic-macros`,
 `canic-control-plane`, `canic-cli`, `canic-host`, and
 `canic-backup`.
 
-<img src="../../../assets/256x256/mechanic-notes.png" align="left" width="110" alt="The Canic mechanic holding the code hygiene checklist" />
-
 Use this guide while adding or reviewing Rust code. It explains where code
 belongs, how modules should be arranged, what needs documentation, and which
 targeted checks to run before handing work back for review.
-
-<br clear="left" />
 
 The goal is to keep the codebase easy to navigate while preserving Canic's
 layering:

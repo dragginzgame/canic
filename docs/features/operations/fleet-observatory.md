@@ -8,13 +8,9 @@ of its published application metrics. Canonical canisters do not contain a rende
 polling service. These are current schema-version-1 contracts, subject to the
 pre-1.0 reinstall-only hard cut.
 
-<img src="../../../assets/256x256/mechanic-notes.png" align="left" width="96" alt="The Canic mechanic holding a Fleet observatory checklist" />
-
 **Operator outcome:** collect a bounded passive snapshot or escaped HTML report
 from one terminal Fleet without giving canisters a renderer, filesystem access,
 or a new polling service.
-
-<br clear="left" />
 
 ## At A Glance
 

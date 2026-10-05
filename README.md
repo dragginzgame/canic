@@ -41,14 +41,11 @@ application has several canisters, someone must build, connect, fund, place,
 observe, recover, and safely change them together. Canic provides one model and
 one toolchain for that work.
 
-<img src="assets/256x256/mechanic-idea.png" align="left" width="110" alt="The Canic mechanic presenting an idea" />
-
 Think of Canic as playing a Kubernetes-like role for IC applications: you
 describe the application, build versioned artifacts, review the intended
 changes, and operate the deployed system as a whole. Canic is designed around
 IC-specific concerns such as persistent state, cycles, canister authority, and
 uncertain network effects.
-<br clear="left" />
 
 ## How It Works
 
@@ -122,8 +119,6 @@ read [AGENTS.md](AGENTS.md) and [TESTING.md](TESTING.md).
 
 ## Status
 
-<img src="assets/256x256/mechanic-attention.png" align="left" width="110" alt="The Canic mechanic raising a hand beside a warning symbol" />
-
 Canic is pre-1.0. Releases may make breaking changes, and moving between current
 releases requires a clean reinstall rather than an in-place upgrade. Same-release
 retry and recovery remain supported, and controlled cycles must still be
@@ -132,8 +127,6 @@ conserved.
 Read the [current implementation status](docs/status/current.md) for the exact
 completed boundary. Issues and pull requests are currently limited to the core
 team while the repository is prepared for wider use.
-
-<br clear="left" />
 
 ## License
 

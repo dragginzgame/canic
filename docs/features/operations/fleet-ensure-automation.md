@@ -5,13 +5,9 @@ continuation commands, timing receipts, or completion evidence.
 
 [Back to the Fleet Ensure overview](fleet-ensure.md).
 
-<img src="../../../assets/256x256/mechanic-tip.png" align="left" width="96" alt="The Canic mechanic presenting an automation tip" />
-
 **Automation outcome:** a wrapper follows structured next actions and explicit
 approval boundaries until `fleet_completed: true`, without parsing display text
 or guessing from private journals.
-
-<br clear="left" />
 
 ## At A Glance
 

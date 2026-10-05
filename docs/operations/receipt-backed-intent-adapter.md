@@ -12,12 +12,8 @@ capacity accounting, and compare-and-set settlement. A downstream adapter
 owns request and identity derivation, authorization, the external call,
 receipt storage, receipt validation, and domain responses.
 
-<img src="../../assets/256x256/mechanic-caution.png" align="left" width="96" alt="The Canic mechanic beside receipt-backed integration boundaries" />
-
 **Integrator outcome:** one domain-owned external effect is bound to one durable
 Canic reservation and settles only from validated terminal evidence.
-
-<br clear="left" />
 
 ## At A Glance
 

@@ -4,13 +4,9 @@ This runbook covers the maintained funding paths for a terminal current Canic
 Fleet. The Fleet Coordinator normally funds current Fleet Subnet Roots. Direct
 cycle top-up and Root-owned ICP conversion are explicit recovery actions.
 
-<img src="../../assets/256x256/mechanic-attention.png" align="left" width="96" alt="The Canic mechanic raising a hand beside Fleet funding procedures" />
-
 **Operator outcome:** identify the current funding owner and any retained
 operation before selecting Coordinator funding, direct cycle top-up, or manual
 Root ICP conversion.
-
-<br clear="left" />
 
 ## At A Glance
 

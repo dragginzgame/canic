@@ -2,13 +2,9 @@
 
 Canic requires ICP CLI `>=1.5.0, <2.0.0`; maintainer installation pins 1.6.0.
 
-<img src="../../../assets/256x256/mechanic-note.png" align="left" width="96" alt="The Canic mechanic beside the ICP integration boundary" />
-
 **Integration outcome:** Canic uses ICP's selected environment, build metadata,
 management inspection, and YAML project boundary without introducing a second
 form of Canic configuration or a parser inside canister Wasm.
-
-<br clear="left" />
 
 ## At A Glance
 
