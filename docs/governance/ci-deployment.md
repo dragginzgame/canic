@@ -95,6 +95,12 @@ Dependency-risk checks use `JQ_BIN` when explicitly set to an executable path;
 otherwise they resolve `jq` on `PATH`, then `$HOME/.local/bin/jq`. A missing
 executable fails before the audit begins.
 
+`install-dev` and `update-dev` pass `BINARYEN_INSTALL_DIR` and
+`IC_WASM_INSTALL_DIR` to their installers; both default to `$HOME/.local/bin`.
+The final `update-dev` probes execute the installed tools by those paths, with
+ICP under the Cargo installation directory. They do not depend on child-shell
+PATH changes reaching Make or alter the user's shell profile.
+
 The ordinary CI job also installs the internal Rust toolchain's
 `wasm32-unknown-unknown` target and checksum-bound `ic-wasm`. Host build-cache
 tests fingerprint that sysroot and compile small declaration fixtures; artifact

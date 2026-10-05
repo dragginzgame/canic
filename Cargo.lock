@@ -2346,9 +2346,9 @@ dependencies = [
 
 [[package]]
 name = "ic-testkit"
-version = "0.16.0"
+version = "0.17.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "91ba3564c4bda4c04ff66e201dd2ff2523935ee0f75fa7f537c1d61b6244328e"
+checksum = "0fb560d941fb98e8079d84d3649cb50909057d5161bda6443d6b19b47c004df6"
 dependencies = [
  "candid",
  "fs2",
@@ -2363,9 +2363,9 @@ dependencies = [
 
 [[package]]
 name = "ic-timers"
-version = "0.11.8"
+version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "890cf797237fe38c503df843f08cb33f363f3b7ff895056dccaa639f4afcb020"
+checksum = "2d6a74d728fae66b9fd8f50c3a6de8f51c44cf62a7330eef3826bcc4c3bfc412"
 dependencies = [
  "ic-cdk-timers",
  "ic0",

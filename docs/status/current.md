@@ -3,6 +3,22 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Development-tool path correction — 2026-10-05
+
+The maintainer's `update-dev` completed tool installation but failed at the final
+bare `wasm-opt --version`: the installer changed only its child-shell PATH.
+Make now passes explicit Binaryen and IC Wasm installation directories to both
+setup routes and uses the installed paths for its ICP/IC Wasm/Binaryen probes.
+The existing installed binaries report ICP 1.6.0, ic-wasm 0.11.1 and Binaryen 132.
+The focused recipe fixture qualifies paths containing spaces, stale executables
+on PATH, directory propagation and stopping after a failed tool probe; ShellCheck
+and whitespace checks pass. The fixture invokes no installer, Git or network
+effect. Default probes also pass with user-local directories absent from PATH.
+The open .53 changelog includes this correction. Changes remain uncommitted;
+the complete updater, broad validation and deployment were not rerun. The
+installed caller-authority regression on the concurrent metrics graph remains
+outstanding as described below.
+
 ## Validation preflight corrections — 2026-10-05
 
 The maintainer requested correction of the 15:00 UTC validation failure following

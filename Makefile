@@ -19,6 +19,8 @@
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
+BINARYEN_INSTALL_DIR ?= $(HOME)/.local/bin
+IC_WASM_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 ACTIONLINT_BIN ?= $(ACTIONLINT_INSTALL_DIR)/actionlint
 SHELLCHECK_BIN ?= $(SHELLCHECK_INSTALL_DIR)/shellcheck
@@ -128,7 +130,9 @@ install:
 
 # Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain.
 install-dev:
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" \
+		BINARYEN_INSTALL_DIR="$(BINARYEN_INSTALL_DIR)" IC_WASM_INSTALL_DIR="$(IC_WASM_INSTALL_DIR)" \
+		bash scripts/dev/install_dev.sh
 
 # Configure the one repository-owned hook without installing the full toolchain.
 install-hooks:
@@ -138,7 +142,9 @@ install-hooks:
 update-dev:
 	bash scripts/dev/update-icp-cli-pin.sh
 	bash scripts/dev/check-binaryen-update.sh
-	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" bash scripts/dev/install_dev.sh --update-prereqs
+	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" \
+		BINARYEN_INSTALL_DIR="$(BINARYEN_INSTALL_DIR)" IC_WASM_INSTALL_DIR="$(IC_WASM_INSTALL_DIR)" \
+		bash scripts/dev/install_dev.sh --update-prereqs
 	cargo install --quiet \
 		"cargo-audit@$(CANIC_CARGO_AUDIT_VERSION)" \
 		"cargo-bloat@$(CANIC_CARGO_BLOAT_VERSION)" \
@@ -156,9 +162,9 @@ update-dev:
 	"$(CARGO_INSTALL_BIN_DIR)/rg" --version
 	"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version
 	"$(CARGO_INSTALL_BIN_DIR)/sccache" --version
-	icp --version
-	ic-wasm --version
-	wasm-opt --version
+	"$(CARGO_INSTALL_BIN_DIR)/icp" --version
+	"$(IC_WASM_INSTALL_DIR)/ic-wasm" --version
+	"$(BINARYEN_INSTALL_DIR)/wasm-opt" --version
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 #
@@ -345,6 +351,7 @@ recovery-runbooks-gate:
 release-integrity-contract-gate:
 	bash scripts/ci/check-release-integrity-contract.sh
 	bash scripts/ci/test-binaryen-install.sh
+	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
