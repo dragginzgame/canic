@@ -52,6 +52,7 @@ pub enum CanicFeatureEffect {
 #[derive(Clone, Copy, Debug, Deserialize, Eq, Ord, PartialEq, PartialOrd, Serialize)]
 pub enum RoleCapabilityKey {
     AutomaticTopup,
+    CallerAuthority,
     ChildProvisioning,
     DelegatedTokenIssuer,
     DelegatedTokenVerifier,
@@ -82,6 +83,7 @@ impl RoleCapabilityKey {
         match self {
             Self::AutomaticTopup => "AutomaticTopup",
             Self::ChildProvisioning => "ChildProvisioning",
+            Self::CallerAuthority => "CallerAuthority",
             Self::DelegatedTokenIssuer => "DelegatedTokenIssuer",
             Self::DelegatedTokenVerifier => "DelegatedTokenVerifier",
             Self::FleetAdmissionProjection => "FleetAdmissionProjection",
@@ -134,6 +136,7 @@ pub enum StateAllocationKey {
     CoreRuntimeBindings,
     CoreFleetState,
     CoreFleetActivation,
+    CoreCallerAuthority,
     CoreDelegatedTokenIssuerState,
     CoreLocalApplicationAuthorizationState,
     CoreRootDelegationState,

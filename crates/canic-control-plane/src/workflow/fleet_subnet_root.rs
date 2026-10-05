@@ -240,6 +240,7 @@ fn begin_draining_with_reservation(
     if let Some(existing) = ComponentRegistryOps::root_draining_if_present(request.operation_id)? {
         return exact_draining_retry(&request, existing);
     }
+    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
     if state.root_entry.status != FleetSubnetRootStatus::Active {
         return Err(InternalError::conflict());
     }

@@ -2,6 +2,7 @@
 //!
 //! Production operations remain in the parent and focused responsibility modules.
 
+mod caller_authority;
 mod child_failure;
 
 use super::*;
@@ -4137,6 +4138,7 @@ fn child_reservation_is_parent_indexed_idempotent_and_capacity_bounded() {
     )
     .expect("mark child membership synchronized");
     let terminal_snapshot = restart_component_registry();
+    caller_authority::assert_current_child_runtime_uses_registered_allocation(&terminal_snapshot);
     child_failure::assert_terminal_origin_excluded(&terminal_snapshot);
     let terminal_again = ComponentRegistryOps::mark_child_membership_synchronized(
         component,

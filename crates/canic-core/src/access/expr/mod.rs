@@ -87,6 +87,9 @@ pub enum AccessPredicate {
 
 #[derive(Clone, Debug)]
 pub enum BuiltinPredicate {
+    CallerPermission {
+        permission: &'static str,
+    },
     Fleet(FleetPredicate),
     Caller(CallerPredicate),
     Environment(EnvironmentPredicate),
@@ -231,6 +234,12 @@ pub mod fleet {
 pub mod caller {
     use super::{AccessExpr, BuiltinPredicate, CallerPredicate, builtin};
 
+    /// Select one receiver-compiled managed caller permission.
+    #[must_use]
+    pub const fn has_permission(permission: &'static str) -> AccessExpr {
+        builtin(BuiltinPredicate::CallerPermission { permission })
+    }
+
     #[must_use]
     pub const fn is_controller() -> AccessExpr {
         builtin(BuiltinPredicate::Caller(CallerPredicate::IsController))
@@ -339,6 +348,22 @@ pub mod deployment {
 
 /// eval_access
 ///
+/// Mandatory managed startup gate, evaluated once before any endpoint access expression.
+pub fn eval_application_startup(call: EndpointCall) -> Result<(), AccessError> {
+    crate::workflow::runtime::application_startup::require_endpoint_started(call).map_err(|error| {
+        record_access_failure(
+            call,
+            AccessFailure {
+                error,
+                metric_kind: AccessMetricKind::Auth,
+                predicate: "application_startup",
+                context: None,
+                terminal: true,
+            },
+        )
+    })
+}
+
 /// Evaluate an access expression and record a normalized denial on failure.
 pub async fn eval_access(expr: &AccessExpr, ctx: &AccessContext) -> Result<(), AccessError> {
     eval_access_selected::<true>(expr, ctx).await

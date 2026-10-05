@@ -106,6 +106,10 @@ impl<'a> ManagedAppQualificationInput<'a> {
 
 /// Installed managed App plus the exact synthetic Root authority that drives it.
 pub struct ManagedAppFixture {
+    caller: (
+        canic_core::ids::CallerReceiverAuthority,
+        canic_core::bootstrap::compiled::CompiledCallerPolicy,
+    ),
     app: Principal,
     directory: ComponentRuntimeDirectoryPreparationRequest,
     pic: PocketIc,
@@ -163,7 +167,13 @@ impl ManagedAppFixture {
         maximum_ticks: usize,
     ) -> Result<(), ManagedAppQualificationError> {
         for _ in 0..maximum_ticks {
-            if self.runtime_is_active()? {
+            if self.runtime_is_active()?
+                && super::caller_authority::publish(
+                    &self.pic,
+                    self.root,
+                    std::slice::from_ref(&self.caller),
+                )?
+            {
                 return Ok(());
             }
             self.pic.advance_time(Duration::from_secs(1));
@@ -341,6 +351,7 @@ pub fn install_managed_app(
     let compiled = compile_managed_app(&input, app)?;
     pic.install_canister(app, input.wasm.clone(), compiled.init_args, None);
     Ok(ManagedAppFixture {
+        caller: compiled.caller,
         app,
         directory: compiled.directory,
         pic,
@@ -370,6 +381,10 @@ pub fn install_standalone_app(wasm: Vec<u8>, install_cycles: u128) -> Standalone
 
 #[derive(Debug)]
 struct CompiledManagedApp {
+    caller: (
+        canic_core::ids::CallerReceiverAuthority,
+        canic_core::bootstrap::compiled::CompiledCallerPolicy,
+    ),
     directory: ComponentRuntimeDirectoryPreparationRequest,
     init_args: Vec<u8>,
     root: Principal,
@@ -521,7 +536,26 @@ fn compile_managed_app(
         deployment,
         member,
     );
+    let caller_policy =
+        canic_core::bootstrap::compiled::RoleRuntimeAuthority::compile(&config, &binding.role)
+            .map_err(|error| ManagedAppQualificationError::Config(error.to_string()))?
+            .caller_policy;
+    let caller_authority = canic_core::ids::CallerReceiverAuthority {
+        receiver: canic_core::ids::CallerInstallation {
+            binding: ManagedCanisterBinding::Component(binding.clone()),
+            install_id,
+            component_install_id: install_id,
+        },
+        issuer: canic_core::ids::CallerRootAuthority {
+            registry: root.authority.clone(),
+            root: root_principal,
+            install_id: [1; 32],
+        },
+        policy_digest: caller_policy.digest,
+    };
     let payload = CanisterInitPayload {
+        root_install_id: [1; 32],
+        component_install_id: install_id,
         fixture: None,
         admission: Some(admission),
         authority: CanisterInitAuthority::Component { binding, root },
@@ -532,6 +566,7 @@ fn compile_managed_app(
     let init_args = encode_args((payload, None::<Vec<u8>>))
         .map_err(|error| ManagedAppQualificationError::Candid(error.to_string()))?;
     Ok(CompiledManagedApp {
+        caller: (caller_authority, caller_policy),
         directory,
         init_args,
         root: root_principal,

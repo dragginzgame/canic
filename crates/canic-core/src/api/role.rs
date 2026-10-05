@@ -49,6 +49,7 @@ const fn capability_view(capability: RoleCapabilityKey) -> Option<RoleCapability
     Some(match capability {
         RoleCapabilityKey::AutomaticTopup => RoleCapability::AutomaticTopup,
         RoleCapabilityKey::ChildProvisioning => RoleCapability::ChildProvisioning,
+        RoleCapabilityKey::CallerAuthority => RoleCapability::CallerAuthority,
         RoleCapabilityKey::DelegatedTokenIssuer => RoleCapability::DelegatedTokenIssuer,
         RoleCapabilityKey::DelegatedTokenVerifier => RoleCapability::DelegatedTokenVerifier,
         RoleCapabilityKey::FleetAdmissionProjection => RoleCapability::FleetAdmissionProjection,

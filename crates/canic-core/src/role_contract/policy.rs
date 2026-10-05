@@ -140,6 +140,11 @@ pub fn derive_role_capabilities(
 
     let mut capabilities = BTreeSet::from([RoleCapabilityKey::Runtime]);
     capabilities.extend(observability_capabilities(declaration.observability));
+    if declaration.kind != RoleDeclarationKind::Root
+        && config.component_specs_for_role(role).next().is_some()
+    {
+        capabilities.insert(RoleCapabilityKey::CallerAuthority);
+    }
     if declaration.kind == RoleDeclarationKind::Root {
         capabilities.insert(RoleCapabilityKey::Root);
         capabilities.insert(RoleCapabilityKey::RootControlPlane);

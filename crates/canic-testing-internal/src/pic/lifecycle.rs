@@ -599,6 +599,8 @@ fn init_payload_for_config(
         .expect("lifecycle Fleet admission projection");
 
     CanisterInitPayload {
+        root_install_id: [1; 32],
+        component_install_id: identity.install_id,
         fixture: None,
         install_id: identity.install_id,
         release_build_id: identity.release_build_id,
@@ -1392,6 +1394,7 @@ mod tests {
     fn published_managed_component_group_support_drives_child_lifecycle() {
         let workspace_root = workspace_root();
         crate::embedded_root::verify(&workspace_root).expect("current embedded allocation peer");
+        super::super::caller_authority::qualify_candid(&workspace_root);
 
         let wasms = build_managed_component_group_canisters_once(&workspace_root);
         let admitted = Fake::principal(15);
@@ -1628,6 +1631,8 @@ mod tests {
                 .phase,
             canic::dto::component_registry::ComponentRuntimePhase::Active
         );
+
+        super::super::caller_authority::qualify_delivery(&fixture, user_hub, user_shard);
 
         fixture
             .prepare_admission_successor(

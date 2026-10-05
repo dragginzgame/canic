@@ -83,6 +83,8 @@ fn managed_init_payload_is_constructible_through_public_facade_paths() {
         canister_id: Principal::from_slice(&[10]),
     };
     let payload = CanisterInitPayload {
+        root_install_id: [7; 32],
+        component_install_id: [11; 32],
         fixture: None,
         install_id: [11; 32],
         release_build_id,
@@ -108,6 +110,42 @@ fn managed_init_payload_is_constructible_through_public_facade_paths() {
         decode_one::<CanisterInitPayload>(&encoded).expect("decode public managed payload");
 
     assert_eq!(decoded, payload);
+    assert_caller_authority_contract(&payload);
+}
+
+fn assert_caller_authority_contract(payload: &CanisterInitPayload) {
+    use canic::ids::{
+        CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority,
+        CallerRootAuthority,
+    };
+    let CanisterInitAuthority::Component { root, binding } = &payload.authority else {
+        unreachable!()
+    };
+    let receiver = CallerReceiverAuthority {
+        receiver: CallerInstallation {
+            binding: ManagedCanisterBinding::Component(binding.clone()),
+            install_id: payload.install_id,
+            component_install_id: payload.component_install_id,
+        },
+        issuer: CallerRootAuthority {
+            registry: root.authority.clone(),
+            root: root.fleet_subnet_root,
+            install_id: payload.root_install_id,
+        },
+        policy_digest: [29; 32],
+    };
+    let component = CallerComponentInstallation {
+        binding: binding.clone(),
+        install_id: payload.component_install_id,
+    };
+    assert_eq!(
+        decode_one::<CallerReceiverAuthority>(&encode_one(&receiver).unwrap()).unwrap(),
+        receiver
+    );
+    assert_eq!(
+        decode_one::<CallerComponentInstallation>(&encode_one(&component).unwrap()).unwrap(),
+        component
+    );
 }
 
 #[test]

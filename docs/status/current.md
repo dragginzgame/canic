@@ -3,6 +3,56 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Caller-authority integration — 2026-10-05
+
+The maintainer explicitly requested [Canic#38](https://github.com/dragginzgame/canic/issues/38).
+The deleted draft has been rebuilt in this checkout against the current owners.
+Compiled permission policy, receiver projections and tickets, protected delivery,
+installation bindings and publication-bound application startup are implemented.
+Root activation and denial use indexed original-operation evidence within the
+existing Component Registry store. Application endpoint startup admission is
+independent of the endpoint's Boolean access expression.
+
+Targeted qualification is complete. Native evidence includes 16 receiver/policy,
+three Root publication, 21 activation/startup and 52 endpoint-macro cases, plus
+the current-child allocation regression, role/memory manifests, public identifiers
+and explicit Fleet-service/peer authority checks. The current-child lookup now
+uses the registered allocation ID, so historical allocations retained for a
+recycled Principal do not obstruct its current runtime authority. Initial members
+retain their bounded bootstrap funding while Root remains Prepared.
+
+Four exact PocketIC journeys pass on the selected locked graph:
+
+- Initial-Shard bootstrap, Root-outage local admission, caller/target direction,
+  receiver upgrade, unavailable-recipient denial, Root restart with frozen progress,
+  competing enrollment, post-await effect fencing and two recycling/removal cycles:
+  `target/test-runs/20261005T142640Z-1154820.asBm32/2.log`.
+- Public Component Group fixture, generated protected Candid, discarded replies,
+  receipt replay, foreign-Root refusal, two upgrades during publication,
+  Component-wide denial and delayed-grant refusal:
+  `target/test-runs/20261005T143533Z-1244831.Q603Tl/2.log`.
+- Public Managed App and standalone fixture activation/upgrade:
+  `target/test-runs/20261005T144326Z-1316622.0kDEun/2.log`.
+- Fixture-bearing Root retirement, descendant cleanup and cycle conservation:
+  `target/test-runs/20261005T144437Z-1325177.kfPVG2/2.log`.
+
+The embedded allocation peer and structured provenance are refreshed. Warning-denied
+Clippy passes for Core, Control Plane, facade, macros, host, internal simulator,
+User Hub and runtime probe with all features and library/test targets. The actual
+governed simulator catalogue is included. Native and lint logs are under
+`target/review-validation/caller-authority-*`. The graph retains ic-memory 0.25.10,
+ic-timers 0.11.8 and the maintainer-selected ic-testkit 0.16.0, including concurrent
+lockfile updates. Retained-record budgets do not claim dense-graph performance or
+account for stable-tree overhead.
+
+The complete #38 implementation batch is ready for review and push through the
+maintainer's commit flow. Issue #38 owns acceptance tracking. The .53 changelog is
+ready for the release flow; package versions remain .52 and require the governed
+version transaction before publication. Changes remain uncommitted. No broad gate,
+release transaction, commit, push, deployment or sibling-repository edit ran.
+The maintainer-approved [implementation status comment](https://github.com/dragginzgame/canic/issues/38#issuecomment-5997008520)
+is posted to #38. The issue remains open for maintainer review.
+
 ## Repository payload cleanup — 2026-10-05
 
 The maintainer requested repository-size cleanup under
@@ -42,19 +92,36 @@ through Canic. The existing Root owner resolves the exact binding, preserves
 descendants' own roles, returns `None` for ordinary negative membership, and
 retains typed authority failures. It grants no lasting application permission.
 
-Two targeted native error/negative tests pass on the current locked graph.
-Simulator qualification is underway; the generated Root Wasm compiles. The run
-also corrected missing inventory registration for the existing public-ID facade
-test and updated two fixture reset-policy imports to the selected testkit API.
-The open .53 notes and authentication documentation describe the lookup.
+Focused qualification is complete on the current locked graph. Both native
+error/negative tests and both public control-plane facade tests pass. The exact
+active-Registry PocketIC journey passes through fresh and restored fixtures;
+the generated-Root initial-Shard journey passes exact descendant roles,
+removed-child negatives, loss of removed-caller access and pre-activation
+refusal. The latter also compares the generated Candid function structurally
+against the public request/result DTOs and update mode. A Prepared Root rejects
+through the normal Fleet fence before the handler; admitted lookup failures
+retain their typed application errors.
 
-The caller-authority implementation remains an isolated, unpropagated draft at
-`.canic/local-work/caller-authority-20261003/source`. Its implementation manifest
-records the old memory graph and incomplete canonical orchestration, capacity
-reservation, retention/cleanup and actual Root simulator qualification. Preserve
-that work; it is not a completed runtime fix and must not be applied wholesale
-over the current lifecycle and memory owners. Neither issue is being claimed as
-published, and this handoff is not whole-worktree push readiness.
+Warning-denied library/test Clippy passes for the internal simulator package
+and explicitly for Core, Control Plane and the facade with all features. Scoped
+formatting and whitespace checks pass. Final simulator logs are
+`target/test-runs/20261005T112409Z-272983.2bltO7/2.log` (36.70s) and
+`target/test-runs/20261005T111725Z-202163.94mUW6/2.log` (49.30s). Native/facade
+and lint evidence is under `target/review-validation/root-membership-*.log`.
+The test-only Candid parser dependency inherits the workspace declaration;
+the concurrent `powerfmt` lockfile update is preserved. The earlier public-ID
+inventory and testkit reset-policy corrections remain. The existing .53 notes
+and authentication documentation describe the lookup and its guard boundary.
+The lookup outcome is ready for review; no broad gate or release transaction ran.
+
+The maintainer confirmed on 2026-10-05 that the isolated caller-authority draft
+at `.canic/local-work/caller-authority-20261003/source` was deleted during file-count
+cleanup. Earlier draft and native-test descriptions below are historical; the
+source and its local validation artifacts are unavailable in this checkout.
+[Canic#38](https://github.com/dragginzgame/canic/issues/38) records the corrected
+implementation status. The subsequent rebuild and qualification are described
+in the current caller-authority section above. Neither issue is being claimed
+as published; this membership section alone is not whole-worktree push readiness.
 
 ## Published blob dependency update — 2026-10-05
 

@@ -288,11 +288,11 @@ impl FleetActivationWorkflow {
         if !is_root && FleetActivationRuntimeOps::is_standalone_local() {
             return Ok(());
         }
-        let status = FleetActivationOps::status(is_root)
+        let phase = FleetActivationOps::endpoint_phase(is_root)
             .map_err(StorageOpsError::from)
             .map_err(InternalError::from)?;
 
-        require_endpoint_for_phase(is_root, role.is_wasm_store(), status.phase, call)
+        require_endpoint_for_phase(is_root, role.is_wasm_store(), phase, call)
             .map_err(InternalError::from)?;
         // The exact infrastructure surface must remain available while application data loads.
         if !is_root

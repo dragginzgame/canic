@@ -97,6 +97,7 @@ pub struct RuntimeApplicationAuthorization {
 #[derive(Clone, Debug)]
 pub struct RoleRuntimeAuthority {
     pub role: CanisterRole,
+    pub caller_policy: crate::config::caller_authority::CompiledCallerPolicy,
     pub app_init_mode: FleetInitMode,
     pub log: LogConfig,
     pub auth: AuthConfig,
@@ -116,6 +117,9 @@ pub struct RoleRuntimeAuthority {
 #[cfg(any(not(target_arch = "wasm32"), test))]
 #[derive(Debug, ThisError)]
 pub enum RoleRuntimeAuthorityError {
+    #[error(transparent)]
+    CallerPolicy(#[from] crate::config::caller_authority::CallerPolicyError),
+
     #[error(transparent)]
     Configuration(Box<ComponentDeploymentConfigurationDigestError>),
 
@@ -141,6 +145,13 @@ impl RoleRuntimeAuthority {
             .roles
             .get(role)
             .ok_or_else(|| RoleRuntimeAuthorityError::UnknownRole(role.clone()))?;
+        if let Some(policy) = &declaration.caller_authority {
+            crate::config::caller_authority::validate_sources(config, policy)?;
+        }
+        let caller_policy = crate::config::caller_authority::CompiledCallerPolicy::compile(
+            role.clone(),
+            declaration.caller_authority.clone(),
+        )?;
         let configuration = config.compile_component_deployment_configuration()?;
         let configuration_digest = configuration.digest()?;
         let relevant_component_specs = config
@@ -200,6 +211,7 @@ impl RoleRuntimeAuthority {
 
         Ok(Self {
             role: role.clone(),
+            caller_policy,
             app_init_mode: config.app.init_mode,
             public_metrics: config.public_metrics.clone(),
             log: config.log.clone(),
@@ -225,6 +237,10 @@ impl RoleRuntimeAuthority {
         let configuration_digest = configuration.digest()?;
         Ok(Self {
             role: CanisterRole::WASM_STORE,
+            caller_policy: crate::config::caller_authority::CompiledCallerPolicy::compile(
+                CanisterRole::WASM_STORE,
+                None,
+            )?,
             app_init_mode: config.app.init_mode,
             public_metrics: config.public_metrics.clone(),
             log: config.log.clone(),
@@ -470,6 +486,10 @@ impl RoleRuntimeConfig {
     pub fn init(
         authority: RoleRuntimeAuthority,
     ) -> Result<Arc<RoleRuntimeAuthority>, InternalError> {
+        if authority.caller_policy.role != authority.role || !authority.caller_policy.is_canonical()
+        {
+            return Err(InternalError::invariant());
+        }
         authority
             .component_topology
             .canonical_bytes()

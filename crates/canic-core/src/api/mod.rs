@@ -4,9 +4,11 @@
 //! Does not own: orchestration, business logic, policy, or storage invariants.
 //! Boundary: maps endpoint calls into workflow calls and public errors.
 
+pub mod application_startup;
 pub mod auth;
 pub mod authority_restore;
 pub mod call;
+pub mod caller_authority;
 pub mod cascade;
 pub mod component_deployment;
 pub mod component_runtime;

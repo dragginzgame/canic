@@ -35,6 +35,20 @@ kind = "canister"
 package = "../user_shard"
 fleet_admission = true
 
+[roles.user_hub.caller_authority]
+maximum_entries = 1024
+maximum_bytes = 16777216
+
+[roles.user_hub.caller_authority.permissions.test_notify]
+direction = "caller"
+scope = "same_component"
+sources = [{ component_spec = "users", role = "user_shard" }]
+
+[roles.user_hub.caller_authority.permissions.test_metrics_target]
+direction = "target"
+scope = "same_component"
+sources = [{ component_spec = "users", role = "user_shard" }]
+
 [component_specs.scaling]
 component_role = "scale_hub"
 maximum_instances = 1

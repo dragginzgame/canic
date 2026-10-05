@@ -118,6 +118,7 @@ const fn role_capability_name(capability: RoleCapability) -> &'static str {
     match capability {
         RoleCapability::AutomaticTopup => "AutomaticTopup",
         RoleCapability::ChildProvisioning => "ChildProvisioning",
+        RoleCapability::CallerAuthority => "CallerAuthority",
         RoleCapability::DelegatedTokenIssuer => "DelegatedTokenIssuer",
         RoleCapability::DelegatedTokenVerifier => "DelegatedTokenVerifier",
         RoleCapability::FleetAdmissionProjection => "FleetAdmissionProjection",

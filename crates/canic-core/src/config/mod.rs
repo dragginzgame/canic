@@ -4,6 +4,7 @@
 //! Does not own: schema field definitions, validation rules, or endpoint DTOs.
 //! Boundary: bootstrap installs validated config here before ops/workflow reads it.
 
+pub mod caller_authority;
 mod canonical;
 mod component_deployment_configuration;
 mod component_group;

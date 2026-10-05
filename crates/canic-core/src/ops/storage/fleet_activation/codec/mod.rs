@@ -83,6 +83,10 @@ pub(super) struct FleetActivation;
 
 impl FleetActivation {
     pub(super) fn get() -> Option<FleetActivationView> {
+        Self::with(Clone::clone)
+    }
+
+    pub(super) fn with<T>(read: impl FnOnce(&Option<FleetActivationView>) -> T) -> T {
         SELECTED.with_borrow_mut(|selected| {
             if !selected.loaded {
                 selected.cached = DurableActivation::get().map(|record| {
@@ -94,7 +98,7 @@ impl FleetActivation {
                 });
                 selected.loaded = true;
             }
-            selected.cached.clone()
+            read(&selected.cached)
         })
     }
 

@@ -6,6 +6,7 @@
 
 pub mod auth;
 pub mod authority_restore;
+pub mod caller_authority;
 pub mod component_allocation;
 pub mod component_child_allocation;
 pub mod cycles;

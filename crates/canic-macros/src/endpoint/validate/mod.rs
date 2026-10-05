@@ -172,6 +172,7 @@ fn access_expr_contains_identity_predicate(expr: &AccessExprAst) -> bool {
             matches!(
                 builtin,
                 BuiltinPredicate::CallerIsController
+                    | BuiltinPredicate::CallerPermission { .. }
                     | BuiltinPredicate::CallerIsParent
                     | BuiltinPredicate::CallerIsChild
                     | BuiltinPredicate::CallerIsRoot

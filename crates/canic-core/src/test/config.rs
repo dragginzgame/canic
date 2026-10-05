@@ -76,6 +76,7 @@ impl ConfigTestBuilder {
                 kind: declaration_kind,
                 package: (!role.is_root()).then(|| role.as_ref().to_string()),
                 fleet_admission: false,
+                caller_authority: None,
                 observability: RoleObservabilityConfig::default(),
             },
         );

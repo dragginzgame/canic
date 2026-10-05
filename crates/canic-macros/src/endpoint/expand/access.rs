@@ -249,6 +249,15 @@ fn expr_from_builtin(pred: &BuiltinPredicate, decoded: Option<&syn::Ident>) -> T
         }
     }
     match pred {
+        BuiltinPredicate::CallerPermission { permission } => quote!({
+            const _: () = assert!(
+                ::canic::__internal::core::bootstrap::compiled::permission_is_declared(
+                    env!("CANIC_CALLER_PERMISSION_NAMES"), #permission,
+                ),
+                "endpoint caller permission is not declared for this receiver role",
+            );
+            ::canic::__internal::core::access::expr::caller::has_permission(#permission)
+        }),
         BuiltinPredicate::FleetAllowsUpdates => {
             quote!(::canic::__internal::core::access::expr::fleet::allows_updates())
         }

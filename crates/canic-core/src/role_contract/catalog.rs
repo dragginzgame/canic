@@ -229,6 +229,10 @@ const CAPABILITY_REQUIREMENTS: &[CapabilityRequirement] = &[
 
 const CAPABILITY_ALLOCATIONS: &[CapabilityAllocation] = &[
     capability_allocation(
+        RoleCapabilityKey::CallerAuthority,
+        StateAllocationKey::CoreCallerAuthority,
+    ),
+    capability_allocation(
         RoleCapabilityKey::WasmStore,
         StateAllocationKey::FixtureStore,
     ),

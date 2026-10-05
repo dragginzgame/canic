@@ -5,6 +5,7 @@
 //! Boundary: ops accesses model state; persisted records and views are passive projections.
 
 pub mod auth;
+pub mod caller_authority;
 pub mod cycles_funding;
 pub mod env;
 pub mod fixture_importer;

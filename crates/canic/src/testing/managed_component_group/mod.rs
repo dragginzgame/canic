@@ -92,6 +92,7 @@ const TEST_ROOT_WASM: &[u8] = include_bytes!("fixture/sharding_root_stub.wasm");
 
 /// Installed managed Component Group and every currently materialized descendant.
 pub struct ManagedComponentGroupFixture {
+    caller_policies: BTreeMap<CanisterRole, canic_core::bootstrap::compiled::CompiledCallerPolicy>,
     components: Vec<ComponentState>,
     nodes: Vec<NodeState>,
     pic: PocketIc,
@@ -192,8 +193,9 @@ impl ManagedComponentGroupFixture {
                 .iter()
                 .filter(|node| node.public.parent_canister_id.is_some())
                 .count();
+            let nodes_ready = self.all_nodes_ready()?;
             if request_finished(&self.pic)
-                && self.all_nodes_ready()?
+                && nodes_ready
                 && allocation_count == installed_child_count
             {
                 if last_allocation_count == Some(allocation_count) {
@@ -414,23 +416,7 @@ impl ManagedComponentGroupFixture {
                 )
             })?;
         let component = &self.components[component_index];
-        let component_spec = self
-            .topology
-            .get(&component.binding.component_spec)
-            .ok_or_else(|| {
-                ManagedComponentGroupQualificationError::Authority(
-                    "managed child Component Spec is absent from compiled topology".to_string(),
-                )
-            })?;
-        if component_spec
-            .spawn_grant(&parent.public.role, &allocation.canister_role)
-            .is_none()
-        {
-            return Err(ManagedComponentGroupQualificationError::Authority(format!(
-                "role {} cannot create child role {} in Component Spec {}",
-                parent.public.role, allocation.canister_role, component.binding.component_spec
-            )));
-        }
+        self.require_child_grant(&parent, component, &allocation.canister_role)?;
         let artifact = self
             .role_artifacts
             .get(&allocation.canister_role)
@@ -462,7 +448,10 @@ impl ManagedComponentGroupFixture {
                 ManagedComponentGroupQualificationError::Authority(error.to_string())
             })?;
         let install_id = allocation.request_id;
+        let component_install_id = self.component_installation(component.binding.canister_id)?;
         let payload = CanisterInitPayload {
+            root_install_id: [1; 32],
+            component_install_id,
             fixture: None,
             admission,
             authority: CanisterInitAuthority::ComponentChild {
@@ -504,6 +493,47 @@ impl ManagedComponentGroupFixture {
         });
         self.synchronize_component_tree(component_index)?;
         self.complete_child_allocation(allocation.request_id)
+    }
+
+    fn require_child_grant(
+        &self,
+        parent: &NodeState,
+        component: &ComponentState,
+        child_role: &CanisterRole,
+    ) -> Result<(), ManagedComponentGroupQualificationError> {
+        let component_spec = self
+            .topology
+            .get(&component.binding.component_spec)
+            .ok_or_else(|| {
+                ManagedComponentGroupQualificationError::Authority(
+                    "managed child Component Spec is absent from compiled topology".to_string(),
+                )
+            })?;
+        if component_spec
+            .spawn_grant(&parent.public.role, child_role)
+            .is_none()
+        {
+            return Err(ManagedComponentGroupQualificationError::Authority(format!(
+                "role {} cannot create child role {} in Component Spec {}",
+                parent.public.role, child_role, component.binding.component_spec
+            )));
+        }
+        Ok(())
+    }
+
+    fn component_installation(
+        &self,
+        component: Principal,
+    ) -> Result<[u8; 32], ManagedComponentGroupQualificationError> {
+        self.nodes
+            .iter()
+            .find(|node| node.public.canister_id == component)
+            .map(|node| node.directory.operation_id)
+            .ok_or_else(|| {
+                ManagedComponentGroupQualificationError::Authority(
+                    "owning Component installation missing".into(),
+                )
+            })
     }
 
     fn complete_child_allocation(
@@ -637,10 +667,45 @@ impl ManagedComponentGroupFixture {
     }
 
     fn all_nodes_ready(&self) -> Result<bool, ManagedComponentGroupQualificationError> {
-        self.nodes.iter().try_fold(true, |ready, node| {
-            overview(&self.pic, node.public.canister_id)
-                .map(|status| ready && status.bootstrap.ready)
-        })
+        let mut receivers = Vec::new();
+        for node in &self.nodes {
+            if !overview(&self.pic, node.public.canister_id)?
+                .bootstrap
+                .ready
+            {
+                return Ok(false);
+            }
+            let component = self
+                .components
+                .iter()
+                .find(|component| component.binding.component == node.component)
+                .ok_or_else(|| {
+                    ManagedComponentGroupQualificationError::Authority(
+                        "missing owning Component".into(),
+                    )
+                })?;
+            let policy = self.caller_policies.get(&node.public.role).ok_or_else(|| {
+                ManagedComponentGroupQualificationError::Config("missing receiver policy".into())
+            })?;
+            receivers.push((
+                canic_core::ids::CallerReceiverAuthority {
+                    receiver: canic_core::ids::CallerInstallation {
+                        binding: node.public.binding.clone(),
+                        install_id: node.directory.operation_id,
+                        component_install_id: self
+                            .component_installation(component.binding.canister_id)?,
+                    },
+                    issuer: canic_core::ids::CallerRootAuthority {
+                        registry: self.root.authority.clone(),
+                        root: self.root(),
+                        install_id: [1; 32],
+                    },
+                    policy_digest: policy.digest,
+                },
+                policy.clone(),
+            ));
+        }
+        super::caller_authority::publish(&self.pic, self.root(), &receivers).map_err(Into::into)
     }
 
     fn node(
@@ -768,6 +833,15 @@ pub fn install_managed_component_group(
     };
     let (components, nodes) = install_context.install_all(&top_level_principals)?;
     let mut fixture = ManagedComponentGroupFixture {
+        caller_policies: config
+            .roles
+            .keys()
+            .map(|role| {
+                canic_core::bootstrap::compiled::RoleRuntimeAuthority::compile(&config, role)
+                    .map(|authority| (role.clone(), authority.caller_policy))
+            })
+            .collect::<Result<_, _>>()
+            .map_err(|error| ManagedComponentGroupQualificationError::Config(error.to_string()))?,
         components,
         nodes,
         pic,
@@ -934,6 +1008,8 @@ impl TopLevelInstallContext<'_> {
                 ManagedComponentGroupQualificationError::Authority(error.to_string())
             })?;
         let payload = CanisterInitPayload {
+            root_install_id: [1; 32],
+            component_install_id: directory.operation_id,
             fixture: None,
             admission,
             authority: CanisterInitAuthority::Component {
@@ -1456,6 +1532,30 @@ pub enum ManagedComponentGroupQualificationError {
 impl From<CandidCallError> for ManagedComponentGroupQualificationError {
     fn from(value: CandidCallError) -> Self {
         Self::Transport(value)
+    }
+}
+
+impl From<super::managed_app::ManagedAppQualificationError>
+    for ManagedComponentGroupQualificationError
+{
+    fn from(value: super::managed_app::ManagedAppQualificationError) -> Self {
+        use super::managed_app::ManagedAppQualificationError as App;
+        match value {
+            App::Authority(reason) => Self::Authority(reason),
+            App::Candid(reason) => Self::Candid(reason),
+            App::Config(reason) => Self::Config(reason),
+            App::Canic(error) => Self::Canic(error),
+            App::Install(reason) => Self::Install(reason),
+            App::ProgressLimit {
+                operation,
+                maximum_ticks,
+            } => Self::ProgressLimit {
+                operation,
+                maximum_ticks,
+            },
+            App::Transport(error) => Self::Transport(error),
+            App::UnexpectedResponse(operation) => Self::UnexpectedResponse(operation),
+        }
     }
 }
 

@@ -56,6 +56,7 @@ pub fn role_runtime_authority(authority: &RoleRuntimeAuthority) -> String {
 
 fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStream {
     let role = render_canister_role(&authority.role);
+    let caller_policy = render_compiled_caller_policy(&authority.caller_policy);
     let app_init_mode = render_fleet_init_mode(authority.app_init_mode);
     let log = render_log_config(&authority.log);
     let auth = render_auth_config(&authority.auth);
@@ -87,6 +88,7 @@ fn render_role_runtime_authority(authority: &RoleRuntimeAuthority) -> TokenStrea
     quote! {
         ::canic::__internal::core::bootstrap::compiled::RoleRuntimeAuthority {
             role: #role,
+            caller_policy: #caller_policy,
             app_init_mode: #app_init_mode,
             log: #log,
             auth: #auth,
@@ -449,6 +451,10 @@ fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
         render_owned_string(package)
     });
     let fleet_admission = declaration.fleet_admission;
+    let caller_authority = render_option(
+        declaration.caller_authority.as_ref(),
+        render_caller_authority,
+    );
     let diagnostics = declaration.observability.diagnostics;
     let history = declaration.observability.history;
     let logs = declaration.observability.logs;
@@ -459,9 +465,70 @@ fn render_role_declaration(declaration: &RoleDeclaration) -> TokenStream {
             kind: #kind,
             package: #package,
             fleet_admission: #fleet_admission,
+            caller_authority: #caller_authority,
             observability: ::canic::__internal::core::bootstrap::compiled::RoleObservabilityConfig {
                 diagnostics: #diagnostics, history: #history, logs: #logs, metrics: #metrics,
             },
+        }
+    }
+}
+
+fn render_compiled_caller_policy(
+    policy: &crate::config::caller_authority::CompiledCallerPolicy,
+) -> TokenStream {
+    let role = render_canister_role(&policy.role);
+    let configuration = render_option(policy.configuration.as_ref(), render_caller_authority);
+    let digest = render_byte_array(&policy.digest);
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::CompiledCallerPolicy {
+            role: #role, configuration: #configuration, digest: #digest,
+        }
+    }
+}
+
+fn render_caller_authority(
+    config: &crate::config::caller_authority::CallerAuthorityConfig,
+) -> TokenStream {
+    let maximum_entries = config.maximum_entries;
+    let maximum_bytes = config.maximum_bytes;
+    let permissions = config.permissions.iter().map(|(name, permission)| {
+        let name = render_owned_string(name);
+        let direction = match permission.direction {
+            crate::config::caller_authority::CallerPermissionDirection::Caller => quote! {
+                ::canic::__internal::core::bootstrap::compiled::CallerPermissionDirection::Caller
+            },
+            crate::config::caller_authority::CallerPermissionDirection::Target => quote! {
+                ::canic::__internal::core::bootstrap::compiled::CallerPermissionDirection::Target
+            },
+        };
+        let scope = match permission.scope {
+            crate::config::caller_authority::CallerScope::SameComponent => quote! {
+                ::canic::__internal::core::bootstrap::compiled::CallerScope::SameComponent
+            },
+            crate::config::caller_authority::CallerScope::SameRoot => quote! {
+                ::canic::__internal::core::bootstrap::compiled::CallerScope::SameRoot
+            },
+        };
+        let sources = render_vec(permission.sources.iter(), |source| {
+            let component_spec = render_component_spec_id(&source.component_spec);
+            let role = render_canister_role(&source.role);
+            quote! {
+                ::canic::__internal::core::bootstrap::compiled::CallerSourceSelector {
+                    component_spec: #component_spec, role: #role,
+                }
+            }
+        });
+        quote! {
+            (#name, ::canic::__internal::core::bootstrap::compiled::CallerPermission {
+                direction: #direction, scope: #scope, sources: #sources,
+            })
+        }
+    });
+    quote! {
+        ::canic::__internal::core::bootstrap::compiled::CallerAuthorityConfig {
+            maximum_entries: #maximum_entries,
+            maximum_bytes: #maximum_bytes,
+            permissions: ::std::collections::BTreeMap::from([#(#permissions),*]),
         }
     }
 }

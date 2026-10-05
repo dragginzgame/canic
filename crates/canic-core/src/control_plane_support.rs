@@ -26,6 +26,11 @@ pub mod format {
 }
 
 pub mod model {
+    pub mod caller_authority {
+        pub use crate::model::caller_authority::{
+            CallerChangeRecord, CallerPublicationRecord, CallerReceiptPhase,
+        };
+    }
     pub mod fleet_funding_policy {
         pub use crate::model::fleet_funding_policy::{
             FleetFundingPolicyValidationError, validate_coordinator_root_funding_policy,
@@ -39,6 +44,7 @@ pub mod model {
 }
 
 pub mod policy {
+    pub use crate::domain::policy::pure::caller_authority;
     pub use crate::domain::policy::pure::pool_import;
     pub mod cycles_funding {
         pub use crate::domain::policy::pure::cycles_funding::{
@@ -81,6 +87,9 @@ pub mod policy {
 }
 
 pub mod ops {
+    pub mod caller_authority {
+        pub use crate::ops::caller_authority::CallerAuthorityOps;
+    }
     pub mod async_job_recovery {
         pub use crate::ops::storage::async_job_recovery::{
             AsyncJobAttempt, AsyncJobClaim, AsyncJobCompletion, AsyncJobOwner, AsyncJobRecoveryOps,

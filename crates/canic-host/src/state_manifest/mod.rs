@@ -506,8 +506,16 @@ mod tests {
             let mut actual_ids = manifest.roles[0]
                 .state
                 .iter()
+                .filter(|domain| {
+                    matches!(
+                        domain.domain.as_str(),
+                        "placement_scaling_registry"
+                            | "placement_index_registry"
+                            | "sharding_registry"
+                            | "sharding_assignments"
+                    )
+                })
                 .filter_map(|domain| domain.memory_id)
-                .filter(|memory_id| (50..=54).contains(memory_id))
                 .collect::<Vec<_>>();
             actual_ids.sort_unstable();
 

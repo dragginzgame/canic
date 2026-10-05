@@ -42,6 +42,9 @@ macro_rules! __canic_compiled_role_capabilities {
         compile_error!("configured Canic roles must include the Runtime capability");
         capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::Runtime);
 
+        #[cfg(canic_capability_caller_authority)]
+        capabilities.insert($crate::__internal::core::role_contract::RoleCapabilityKey::CallerAuthority);
+
         #[cfg(canic_capability_automatic_topup)]
         capabilities
             .insert($crate::__internal::core::role_contract::RoleCapabilityKey::AutomaticTopup);
@@ -348,6 +351,8 @@ macro_rules! __canic_emit_managed_status_endpoint {
         pub enum ControlStatusRequest {
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSessionAudit(::canic::dto::page::PageRequest),
+            #[cfg(canic_capability_caller_authority)]
+            CallerAuthority(::canic::dto::role::OperationStatusRequest),
             Operation(::canic::dto::role::OperationStatusRequest),
         }
         #[derive(::canic::__internal::candid::CandidType, ::canic::__internal::serde::Deserialize)]
@@ -355,6 +360,8 @@ macro_rules! __canic_emit_managed_status_endpoint {
         pub enum ControlStatusResponse {
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSessionAudit(::canic::dto::auth::ApplicationSessionAuditResponse),
+            #[cfg(canic_capability_caller_authority)]
+            CallerAuthority(::canic::dto::caller_authority::CallerAuthorityStatus),
             Operation(CanisterOperationStatusResponse),
         }
         #[$crate::canic_query(requires(caller::is_root()))]
@@ -366,6 +373,11 @@ macro_rules! __canic_emit_managed_status_endpoint {
                 ControlStatusRequest::ApplicationSessionAudit(page) => {
                     $crate::__internal::core::api::auth::AuthApi::application_session_audit(page)
                         .map(ControlStatusResponse::ApplicationSessionAudit)
+                }
+                #[cfg(canic_capability_caller_authority)]
+                ControlStatusRequest::CallerAuthority(request) => {
+                    $crate::__internal::core::api::caller_authority::CallerAuthorityApi::status(request.operation_id)
+                        .map(ControlStatusResponse::CallerAuthority)
                 }
                 ControlStatusRequest::Operation(request) => {
                     $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::operation_status(
@@ -598,6 +610,10 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ),
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSession(::canic::dto::auth::ApplicationSessionCommand),
+            #[cfg(canic_capability_caller_authority)]
+            CallerAuthority(::canic::dto::caller_authority::CallerAuthorityCommand),
+            #[cfg(canic_capability_caller_authority)]
+            ReleaseApplicationStartup(::canic::dto::caller_authority::CallerAuthorityPublication),
             ConfigureRuntime(
                 ::canic::dto::component_registry::ComponentRuntimeDirectoryPreparationRequest,
             ),
@@ -633,6 +649,8 @@ macro_rules! __canic_emit_managed_command_endpoint {
             ),
             #[cfg(canic_capability_local_application_authorization)]
             ApplicationSession(::canic::dto::auth::ApplicationSessionCommandResponse),
+            #[cfg(canic_capability_caller_authority)]
+            CallerAuthority(::canic::dto::caller_authority::CallerAuthorityReceipt),
             #[cfg(canic_capability_delegated_token_issuer)]
             InstallDelegationProof(
                 ::canic::dto::auth::InstallActiveDelegationProofResponse,
@@ -717,6 +735,26 @@ macro_rules! __canic_emit_managed_command_endpoint {
                     };
                     Ok(CanisterCommandResponse::ApplicationSession(response))
                 }
+                #[cfg(canic_capability_caller_authority)]
+                CanisterCommand::CallerAuthority(request) => {
+                    let caller = $crate::__internal::cdk::api::msg_caller();
+                    $crate::__internal::core::access::auth::is_root(caller)
+                        .await.map_err(::canic::Error::from)?;
+                    $crate::__internal::core::api::caller_authority::CallerAuthorityApi::apply(request)
+                        .map(CanisterCommandResponse::CallerAuthority)
+                }
+                #[cfg(canic_capability_caller_authority)]
+                CanisterCommand::ReleaseApplicationStartup(publication) => {
+                    let caller = $crate::__internal::cdk::api::msg_caller();
+                    $crate::__internal::core::access::auth::is_root(caller)
+                        .await.map_err(::canic::Error::from)?;
+                    let operation_id = publication.operation_id;
+                    $crate::__internal::core::api::application_startup::ApplicationStartupApi::release(publication)?;
+                    __canic_schedule_application_startup();
+                    Ok(CanisterCommandResponse::OperationAccepted(
+                        ::canic::dto::role::OperationReceipt { operation_id },
+                    ))
+                }
                 CanisterCommand::ConfigureRuntime(request) => {
                     let caller = $crate::__internal::cdk::api::msg_caller();
                     $crate::__internal::core::access::auth::is_root(caller)
@@ -727,14 +765,9 @@ macro_rules! __canic_emit_managed_command_endpoint {
                     let configure_runtime = $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::configure_component_runtime_with_automatic_topup;
                     #[cfg(not(canic_capability_automatic_topup))]
                     let configure_runtime = $crate::__internal::core::api::component_runtime::ComponentRuntimeApi::configure;
-                    let transition = configure_runtime(request)?;
+                    configure_runtime(request)?;
                     #[cfg(canic_capability_fleet_admission_projection)]
                     $crate::__internal::core::api::fleet_admission_projection::FleetAdmissionProjectionApi::open_fresh()?;
-                    if transition.transitioned {
-                        __canic_schedule_prepared_activation_init(
-                            transition.application_init_args,
-                        );
-                    }
                     $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
                     Ok(CanisterCommandResponse::OperationAccepted(
                         ::canic::dto::role::OperationReceipt { operation_id },

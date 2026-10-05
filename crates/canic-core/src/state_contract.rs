@@ -168,6 +168,11 @@ fn core_runtime_descriptors() -> Vec<StateAllocationDescriptor> {
             Vec::new(),
         ),
         descriptor(
+            StateAllocationKey::CoreCallerAuthority,
+            caller_authority_domains(),
+            Vec::new(),
+        ),
+        descriptor(
             StateAllocationKey::CoreLocalApplicationAuthorizationState,
             local_application_authorization_state_domains(),
             Vec::new(),
@@ -415,6 +420,32 @@ fn fleet_activation_domains() -> Vec<StateDomainManifest> {
         55,
         "fleet_activation_identity_and_phase_are_protected",
     )]
+}
+
+fn caller_authority_domains() -> Vec<StateDomainManifest> {
+    use crate::model::caller_authority::CallerReceiverRecord;
+    use crate::role_contract::allocation::memory::caller_authority::{
+        CALLER_AUTHORITY_HEADER_ID, CALLER_AUTHORITY_ROWS_ID,
+    };
+    use crate::storage::stable::caller_authority::{CallerAuthorityData, CallerRowRecord};
+    vec![
+        state_domain(
+            "caller_authority_header",
+            CALLER_AUTHORITY_HEADER_ID,
+            CallerReceiverRecord::STATE_CONTRACT_NAME,
+            CallerAuthorityData::STATE_CONTRACT_NAME,
+            63,
+            "exact_installation_bound_caller_publication",
+        ),
+        state_domain(
+            "caller_authority_rows",
+            CALLER_AUTHORITY_ROWS_ID,
+            CallerRowRecord::STATE_CONTRACT_NAME,
+            CallerAuthorityData::STATE_CONTRACT_NAME,
+            64,
+            "source_fences_and_original_operation_receipts",
+        ),
+    ]
 }
 
 fn authority_restore_fence_domains() -> Vec<StateDomainManifest> {

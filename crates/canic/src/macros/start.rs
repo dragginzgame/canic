@@ -45,11 +45,6 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         ))?
         $(, init = $init:block)?
     ) => {
-        ::std::thread_local! {
-            static __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED:
-                ::std::cell::Cell<bool> = const { ::std::cell::Cell::new(false) };
-        }
-
         // The activation adapter owns execution of this application hook.
         // Keep the contract bound without polling or scheduling it in Prepared.
         #[doc(hidden)]
@@ -63,25 +58,16 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
         );)?
 
         #[doc(hidden)]
-        fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>) {
-            if __CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true) {
-                return;
+        fn __canic_schedule_application_startup() {
+            async fn initialize(args: Option<Vec<u8>>) {
+                $crate::__internal::core::api::application_startup::ApplicationStartupApi::require_initialization_effect();
+                $($init)?
+                $crate::__internal::core::api::application_startup::ApplicationStartupApi::require_initialization_effect();
+                canic_setup().await;
+                $crate::__internal::core::api::application_startup::ApplicationStartupApi::require_initialization_effect();
+                canic_install(args).await;
             }
-            $crate::__canic_after_optional_start_init_hook!(
-                "canic:user:prepared_activation_block",
-                {
-                    $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_init_nonroot_bootstrap();
-                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
-                        ::core::time::Duration::ZERO,
-                        "canic:user:init",
-                        async move {
-                            canic_setup().await;
-                            canic_install(args).await;
-                        },
-                    );
-                }
-                $(, $init)?
-            );
+            $crate::__internal::core::api::application_startup::ApplicationStartupApi::schedule_required(initialize);
         }
 
         #[doc(hidden)]
@@ -151,21 +137,22 @@ macro_rules! __canic_start_nonroot_lifecycle_core {
             $(($lifecycle_post_upgrade)();)?
 
             if active {
-                $crate::__canic_after_optional_start_init_hook!(
-                    "canic:user:post_upgrade_block",
-                    {
-                        $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
-                        $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
-                            ::core::time::Duration::ZERO,
-                            "canic:user:post_upgrade",
-                            async move {
-                                canic_setup().await;
-                                canic_upgrade().await;
-                            },
-                        );
-                    }
-                    $(, $init)?
-                );
+                $crate::__internal::core::api::lifecycle::nonroot::LifecycleApi::schedule_post_upgrade_nonroot_bootstrap();
+                __canic_schedule_application_startup();
+                if $crate::__internal::core::api::application_startup::ApplicationStartupApi::is_started() {
+                    $crate::__internal::core::api::timer::TimerApi::defer_lifecycle_required(
+                        ::core::time::Duration::ZERO,
+                        "canic:user:post_upgrade",
+                        async move {
+                            $crate::__internal::core::api::application_startup::ApplicationStartupApi::require_upgrade_effect();
+                            $($init)?
+                            $crate::__internal::core::api::application_startup::ApplicationStartupApi::require_upgrade_effect();
+                            canic_setup().await;
+                            $crate::__internal::core::api::application_startup::ApplicationStartupApi::require_upgrade_effect();
+                            canic_upgrade().await;
+                        },
+                    );
+                }
             }
         }
     };

@@ -70,6 +70,8 @@ fn fixture_record(child: bool) -> FleetActivationView {
         cascade_manifest: None,
         credential_manifests: Vec::new(),
         component_runtime: Some(ComponentRuntimeRecord {
+            root_install_id: [7; 32],
+            component_install_id: [3; 32],
             fixture: Some(to_record(assignment)),
             binding: target,
             deployment: protected_component_deployment_dto_to_record(

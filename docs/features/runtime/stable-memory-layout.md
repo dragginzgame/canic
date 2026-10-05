@@ -275,9 +275,12 @@ None is assumed safe from empty-store measurements alone. The default remains
 The following inventory covers every maintained Canic-owned allocation. Role
 and feature selection determine which entries a canister actually opens. Bucket
 selection applies to the whole manager; individual record bounds do not reserve
-that amount in cells. ic-memory owns its ledger at ID 0. The two removed
-allocations are 47 (deadline metadata now in 45) and 54 (activation now in 52).
-Their IDs are not renumbered into unrelated owners.
+that amount in cells. ic-memory owns its ledger at ID 0. Managed receiver roles
+select caller-authority header ID 47 and indexed rows ID 54 under the Core owner.
+Root publication journals and recipient indexes share the existing Component
+Registry entries owner at ID 20. This maintained layout uses the pre-1.0
+reinstall-only boundary; same-release restoration validates current installation
+and publication authority before application hooks.
 
 | ID | Stable key | Representation |
 | ---: | --- | --- |
@@ -318,12 +321,14 @@ Their IDs are not renumbered into unrelated owners.
 | 44 | `canic.core.intent.pending.v1` | B-tree |
 | 45 | `canic.core.intent.receipt_backed_records.v1` | B-tree, including application retention |
 | 46 | `canic.core.intent.expiry_index.v1` | B-tree |
+| 47 | `canic.core.caller_authority.header.v1` | Bounded optional cell |
 | 48 | `canic.core.application_receipt.eligibility.v1` | B-tree plus reservation |
 | 49 | `canic.core.placement.acknowledgement_index.v1` | B-tree |
 | 50 | `canic.core.placement.scaling_registry.v1` | B-tree |
 | 51 | `canic.core.placement.index_registry.v1` | B-tree |
 | 52 | `canic.core.sharding.registry.v1` | B-tree, including activation |
 | 53 | `canic.core.sharding.assignments.v1` | B-tree |
+| 54 | `canic.core.caller_authority.rows.v1` | B-tree: sources, Component fences and original receipts |
 | 59 | `canic.core.authority_restore.fence.v1` | Bounded optional cell |
 | 60 | `canic.core.async_job_recovery.v1` | Cell |
 | 61 | `canic.core.fleet_admission.projection.v1` | Bounded optional cell |

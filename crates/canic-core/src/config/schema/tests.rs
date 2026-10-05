@@ -348,6 +348,7 @@ fn complete_config_validation_rejects_unadmitted_role_declarations() {
                 kind: RoleDeclarationKind::Canister,
                 package: Some("app".to_string()),
                 fleet_admission: false,
+                caller_authority: None,
                 observability: RoleObservabilityConfig::default(),
             },
         );
@@ -469,6 +470,7 @@ fn non_root_role_declaration_may_be_declared_only() {
             kind: RoleDeclarationKind::Canister,
             package: Some("crates/store".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -548,6 +550,7 @@ fn role_declaration_package_paths_must_not_be_empty() {
             kind: RoleDeclarationKind::Canister,
             package: Some(" ".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -566,6 +569,7 @@ fn topology_less_config_may_declare_only_non_root_roles() {
             kind: RoleDeclarationKind::Canister,
             package: Some("store".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -587,6 +591,7 @@ fn topology_less_config_may_declare_root_infrastructure() {
             kind: RoleDeclarationKind::Root,
             package: None,
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -612,6 +617,7 @@ fn component_spec_instance_ceilings_are_fleet_bounded() {
             kind: RoleDeclarationKind::Canister,
             package: Some("aux".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -662,6 +668,7 @@ fn provisioning_grant_graph_requires_existing_distinct_acyclic_specs() {
             kind: RoleDeclarationKind::Canister,
             package: Some("aux".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -731,6 +738,7 @@ fn potential_descendant_roles_may_be_reused_across_component_specs() {
                 kind: RoleDeclarationKind::Canister,
                 package: Some(role.to_string()),
                 fleet_admission: false,
+                caller_authority: None,
                 observability: RoleObservabilityConfig::default(),
             },
         );
@@ -779,6 +787,7 @@ fn a_component_role_may_also_be_a_potential_child_role() {
             kind: RoleDeclarationKind::Canister,
             package: Some("aux".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -828,6 +837,7 @@ fn attached_and_deployable_roles_follow_structural_ownership() {
             kind: RoleDeclarationKind::Canister,
             package: Some("user_hub".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -837,6 +847,7 @@ fn attached_and_deployable_roles_follow_structural_ownership() {
             kind: RoleDeclarationKind::Canister,
             package: Some("user_shard".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -871,6 +882,7 @@ fn app_cannot_declare_the_built_in_fleet_coordinator_role() {
             kind: RoleDeclarationKind::Canister,
             package: Some("coordinator".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );
@@ -888,6 +900,7 @@ fn several_component_specs_may_define_distinct_components() {
             kind: RoleDeclarationKind::Canister,
             package: Some("aux".to_string()),
             fleet_admission: false,
+            caller_authority: None,
             observability: RoleObservabilityConfig::default(),
         },
     );

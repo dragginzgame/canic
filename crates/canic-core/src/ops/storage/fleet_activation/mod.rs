@@ -7,6 +7,7 @@
 mod codec;
 mod fixture;
 mod mapper;
+mod startup;
 
 use self::codec::FleetActivation;
 
@@ -130,12 +131,56 @@ pub struct PreparedFleetActivationSnapshot(Option<FleetActivationView>);
 
 /// Exact managed-runtime identity validated before protected activation persistence.
 pub struct PreparedComponentRuntime {
+    pub root_install_id: [u8; 32],
+    pub component_install_id: [u8; 32],
     pub fixture: Option<Box<crate::dto::fixture_provisioning::FixtureAssignment>>,
     pub binding: ManagedCanisterBinding,
     pub deployment: ProtectedComponentDeployment,
 }
 
 impl FleetActivationOps {
+    /// Reconstruct the receiver audience from the protected installation record.
+    pub(crate) fn caller_receiver_authority()
+    -> Result<crate::ids::CallerReceiverAuthority, crate::InternalError> {
+        let record = FleetActivation::get().ok_or_else(crate::InternalError::unavailable)?;
+        let identity = match &record.state {
+            FleetActivationStateRecord::Prepared { identity, .. }
+            | FleetActivationStateRecord::Active { identity, .. } => identity,
+        };
+        let runtime = record
+            .component_runtime
+            .ok_or_else(crate::InternalError::invariant)?;
+        let receiver = crate::ids::CallerInstallation {
+            binding: runtime.binding,
+            install_id: identity.operation_id,
+            component_install_id: runtime.component_install_id,
+        };
+        let component_identity_matches = match &receiver.binding {
+            ManagedCanisterBinding::Component(_) => {
+                receiver.install_id == receiver.component_install_id
+            }
+            ManagedCanisterBinding::ComponentChild(_) => true,
+        };
+        if runtime.root_install_id == [0; 32]
+            || receiver.component_install_id == [0; 32]
+            || !component_identity_matches
+        {
+            return Err(crate::InternalError::invariant());
+        }
+        let issuer = crate::ids::CallerRootAuthority {
+            registry: receiver.component().authority.clone(),
+            root: receiver.component().fleet_subnet_root,
+            install_id: runtime.root_install_id,
+        };
+        crate::ops::config::ConfigOps::with_caller_policy(|policy| {
+            crate::ids::CallerReceiverAuthority {
+                receiver,
+                issuer,
+                policy_digest: policy.digest,
+            }
+        })
+    }
+
     pub(crate) fn select_ordinary_storage() {
         codec::select_ordinary();
     }
@@ -213,6 +258,30 @@ impl FleetActivationOps {
     #[must_use]
     fn snapshot() -> FleetActivationData {
         FleetActivation::export()
+    }
+
+    /// Borrow only the role and phase metadata on the endpoint hot path.
+    pub(crate) fn endpoint_phase(
+        is_root: bool,
+    ) -> Result<crate::dto::fleet_activation::FleetActivationPhase, FleetActivationOpsError> {
+        FleetActivation::with(|record| {
+            let record = record
+                .as_ref()
+                .ok_or(FleetActivationOpsError::NotInitialized)?;
+            if is_root != record.root_authority.is_some() {
+                return Err(FleetActivationOpsError::InvalidRecord {
+                    reason: "runtime role and activation owner disagree".into(),
+                });
+            }
+            Ok(match record.state {
+                FleetActivationStateRecord::Prepared { .. } => {
+                    crate::dto::fleet_activation::FleetActivationPhase::Prepared
+                }
+                FleetActivationStateRecord::Active { .. } => {
+                    crate::dto::fleet_activation::FleetActivationPhase::Active
+                }
+            })
+        })
     }
 
     pub(crate) fn status(
@@ -488,12 +557,16 @@ impl FleetActivationOps {
         component_runtime.activation = Some(ComponentRuntimeActivationRecord {
             directory: activation_directory,
             activated_at_ns,
+            startup: crate::storage::stable::fleet_activation::ApplicationStartupRecord {
+                arguments: application_init_args,
+                release: None,
+                initialized: false,
+            },
         });
         replace_record(record.clone())?;
         Ok(ComponentRuntimeActivationTransition {
             status: component_runtime_status(record)?,
             transitioned: true,
-            application_init_args,
         })
     }
 
@@ -840,6 +913,8 @@ fn initialize_prepared(
         cascade_manifest: None,
         credential_manifests: Vec::new(),
         component_runtime: component_runtime.map(|runtime| ComponentRuntimeRecord {
+            root_install_id: runtime.root_install_id,
+            component_install_id: runtime.component_install_id,
             fixture: runtime
                 .fixture
                 .map(|assignment| fixture::to_record(*assignment)),
@@ -1104,7 +1179,6 @@ fn replay_component_runtime_activation(
     Ok(ComponentRuntimeActivationTransition {
         status: component_runtime_activation_status(record)?,
         transitioned: false,
-        application_init_args: None,
     })
 }
 
@@ -1917,6 +1991,8 @@ mod tests {
             release_build_id,
             release_build_id,
             Some(PreparedComponentRuntime {
+                root_install_id: root_input.install_id,
+                component_install_id: root_input.install_id,
                 fixture: None,
                 binding: ManagedCanisterBinding::Component(binding.clone()),
                 deployment: deployment.clone(),
@@ -2068,6 +2144,8 @@ mod tests {
             release_build_id,
             release_build_id,
             Some(PreparedComponentRuntime {
+                root_install_id: root_input.install_id,
+                component_install_id: root_input.install_id,
                 fixture: None,
                 binding: ManagedCanisterBinding::Component(binding.clone()),
                 deployment: ProtectedComponentDeployment::UngroupedOrdinary {
@@ -2145,6 +2223,7 @@ mod tests {
             &activated.status,
         );
 
+        startup::tests::assert_startup_release();
         assert_component_runtime_directory_corruption_fails_closed(FleetActivationOps::snapshot());
 
         FleetActivationOps::reset_for_tests();
@@ -2157,9 +2236,7 @@ mod tests {
         request: ComponentRuntimeActivationRequest,
     ) {
         assert!(activated.transitioned);
-        assert_eq!(activated.application_init_args, Some(vec![45, 46]));
         assert!(!repeated.transitioned);
-        assert_eq!(repeated.application_init_args, None);
         assert_eq!(repeated.status, activated.status);
         assert_eq!(activated.status.phase, ComponentRuntimePhase::Active);
         assert_eq!(

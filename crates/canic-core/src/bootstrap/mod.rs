@@ -25,6 +25,10 @@ pub use crate::config::{ConfigError, ConfigTomlIssue};
 
 #[doc(hidden)]
 pub mod compiled {
+    pub use crate::config::caller_authority::{
+        CallerAuthorityConfig, CallerPermission, CallerPermissionDirection, CallerScope,
+        CallerSourceSelector, CompiledCallerPolicy, permission_is_declared,
+    };
     pub use crate::config::{
         ComponentChildFundingPolicy, ComponentChildSpec, ComponentDeploymentConfiguration,
         ComponentDeploymentConfigurationDigestError, ComponentDeploymentLabel,

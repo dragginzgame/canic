@@ -375,10 +375,14 @@ async fn qualify_public_metrics_sampling(
     reject_family: bool,
 ) -> Result<PublicSamplingProbe, canic::Error> {
     for index in 0..checkpoints.min(4096) {
-        canic::api::ops::perf::record_checkpoint("zz_sample", &format!("checkpoint_{index:04}"), 7);
+        canic::__internal::core::perf::record_checkpoint(
+            "zz_sample",
+            &format!("checkpoint_{index:04}"),
+            7,
+        );
     }
     if reject_family {
-        canic::api::ops::perf::record_checkpoint(&"a".repeat(128), "accepted_label", 7);
+        canic::__internal::core::perf::record_checkpoint(&"a".repeat(128), "accepted_label", 7);
     }
     process_fixture::record();
     let before = canic::__internal::core::api::memory::MemoryQuery::allocations()?;

@@ -408,6 +408,8 @@ pub(super) async fn component_install_plan_with_deployment(
         None
     };
     let mut payload = CanisterInitPayload {
+        root_install_id: FleetActivationWorkflow::status()?.identity.operation_id,
+        component_install_id: allocation.operation_id,
         fixture: None,
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,
@@ -503,6 +505,8 @@ pub(super) async fn child_component_install_plan(
         None
     };
     let mut payload = CanisterInitPayload {
+        root_install_id: FleetActivationWorkflow::status()?.identity.operation_id,
+        component_install_id: ComponentRegistryOps::component_install_id(allocation.component)?,
         fixture: None,
         install_id: allocation.operation_id,
         release_build_id: allocation.release_set.release_build_id,

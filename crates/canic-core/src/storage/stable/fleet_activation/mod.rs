@@ -213,6 +213,8 @@ pub enum ProtectedComponentDeploymentRecord {
 
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
 pub struct ComponentRuntimeRecord {
+    pub root_install_id: [u8; 32],
+    pub component_install_id: [u8; 32],
     pub fixture: Option<fixture::FixtureAssignmentRecord>,
     pub binding: ManagedCanisterBinding,
     pub deployment: ProtectedComponentDeploymentRecord,
@@ -406,6 +408,18 @@ pub struct ComponentRuntimeDirectoryRecord {
 pub struct ComponentRuntimeActivationRecord {
     pub directory: ComponentRuntimeDirectoryRecord,
     pub activated_at_ns: u64,
+    pub startup: ApplicationStartupRecord,
+}
+
+/// Original initialization remains pending until its exact caller publication is released.
+#[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
+#[serde(deny_unknown_fields)]
+pub struct ApplicationStartupRecord {
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub arguments: Option<Vec<u8>>,
+    #[serde(deserialize_with = "crate::cdk::serialize::required_option")]
+    pub release: Option<crate::model::caller_authority::CallerPublicationRecord>,
+    pub initialized: bool,
 }
 
 ///

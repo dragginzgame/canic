@@ -5,6 +5,7 @@
 //! Boundary: every mutation follows exact Store and active Registry Mirror/Directory verification.
 
 mod authority_validation;
+pub mod caller_authority;
 mod component_installation;
 mod lifecycle_drivers;
 mod registry_response;
@@ -1292,9 +1293,21 @@ pub async fn begin_component_draining(
             Some(&request),
             Some(&fleet_directory),
         )?;
+        caller_authority::finish_denial(request.operation_id).await?;
         return Ok(component_draining_response(existing));
     }
-    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
+    crate::workflow::root_admission::require_catalog_mutation_for(Some(request.operation_id))?;
+    let component_install_id = ComponentRegistryOps::component_install_id(request.component)?;
+    caller_authority::prepare_denial(
+        request.operation_id,
+        canic_core::ids::CallerInstallation {
+            binding: ManagedCanisterBinding::Component(partition.binding.clone()),
+            install_id: component_install_id,
+            component_install_id,
+        },
+        true,
+    )
+    .await?;
     let maximum_registry_bytes = topology
         .get(&partition.binding.component_spec)
         .ok_or_else(InternalError::invariant)?
@@ -1317,6 +1330,7 @@ pub async fn begin_component_draining(
         &current,
     )?;
     validate_component_draining(&current, &draining, Some(&request), Some(&fleet_directory))?;
+    caller_authority::finish_denial(request.operation_id).await?;
     Ok(component_draining_response(draining))
 }
 
@@ -1663,9 +1677,10 @@ pub async fn begin_subtree_removal(
             &existing,
             Some(&request),
         )?;
+        caller_authority::finish_removal(request.component, request.operation_id).await?;
         return Ok(subtree_removal_response(existing));
     }
-    crate::workflow::root_admission::require_catalog_mutation_allowed()?;
+    crate::workflow::root_admission::require_catalog_mutation_for(Some(request.operation_id))?;
     let partition = ComponentRegistryOps::partition(request.component)?
         .ok_or_else(InternalError::unavailable)?;
     validate_partition(
@@ -1679,6 +1694,21 @@ pub async fn begin_subtree_removal(
         .ok_or_else(InternalError::invariant)?
         .limits
         .maximum_registry_bytes;
+    let (binding, _) =
+        ComponentRegistryOps::registered_parent(request.component, request.target_canister_id)?
+            .ok_or_else(InternalError::unavailable)?;
+    let install_id = ComponentRegistryOps::managed_runtime_operation_id(&binding)?;
+    let component_install_id = ComponentRegistryOps::component_install_id(request.component)?;
+    caller_authority::prepare_denial(
+        request.operation_id,
+        canic_core::ids::CallerInstallation {
+            binding,
+            install_id,
+            component_install_id,
+        },
+        false,
+    )
+    .await?;
     let removal = ComponentRegistryOps::begin_subtree_removal(
         request.component,
         request.operation_id,
@@ -1693,6 +1723,7 @@ pub async fn begin_subtree_removal(
         &removal,
         None,
     )?;
+    caller_authority::finish_removal(request.component, request.operation_id).await?;
     Ok(subtree_removal_response(removal))
 }
 
@@ -2601,14 +2632,30 @@ async fn activate_child_membership_for_parent(
     if observed.fixture != plan.fixture {
         return Err(InternalError::conflict());
     }
-    require_component_runtime_ready(
-        plan.child_canister,
-        managed_canister_role(&plan.child_binding),
-        plan.fixture.as_deref(),
+    let component_install_id = ComponentRegistryOps::component_install_id(request.component)?;
+    caller_authority::framework_ready(
+        &plan.child_binding,
+        request.operation_id,
+        component_install_id,
     )
     .await?;
+    let release_application = plan.committed_partition.status == ComponentLifecycleStatus::Active;
+    if release_application {
+        caller_authority::prepare_activation(
+            canic_core::ids::CallerInstallation {
+                binding: plan.child_binding.clone(),
+                install_id: request.operation_id,
+                component_install_id,
+            },
+            false,
+        )
+        .await?;
+    }
 
     let active = activate_and_validate_child_membership(&plan, request.operation_id)?;
+    if release_application {
+        caller_authority::publish_activation(request.operation_id).await?;
+    }
 
     let child = converge_active_membership_directory_for_deployment(
         plan.child_canister,
@@ -2632,6 +2679,15 @@ async fn activate_child_membership_for_parent(
         &plan.requesting_parent_binding,
         plan.allocation.initial_bootstrap,
     )?;
+    if release_application {
+        caller_authority::release_startup(request.operation_id).await?;
+        require_component_runtime_ready(
+            plan.child_canister,
+            managed_canister_role(&plan.child_binding),
+            plan.fixture.as_deref(),
+        )
+        .await?;
+    }
     let allocation = ComponentRegistryOps::mark_child_membership_synchronized(
         request.component,
         request.operation_id,
@@ -3038,10 +3094,19 @@ async fn activate_component_membership_with_plan(
     if observed.fixture != plan.fixture {
         return Err(InternalError::conflict());
     }
-    require_component_runtime_ready(
-        plan.target_canister,
-        managed_canister_role(&plan.target_binding),
-        plan.fixture.as_deref(),
+    caller_authority::framework_ready(
+        &plan.target_binding,
+        request.operation_id,
+        request.operation_id,
+    )
+    .await?;
+    caller_authority::prepare_activation(
+        canic_core::ids::CallerInstallation {
+            binding: plan.target_binding.clone(),
+            install_id: request.operation_id,
+            component_install_id: request.operation_id,
+        },
+        true,
     )
     .await?;
 
@@ -3062,6 +3127,8 @@ async fn activate_component_membership_with_plan(
         ),
     }?;
     let (activated_allocation, active_partition) = activated;
+    caller_authority::publish_activation(request.operation_id).await?;
+
     validate_partition(
         &plan.root_binding,
         activated_allocation.release_set,
@@ -3121,6 +3188,13 @@ async fn synchronize_active_membership(
         plan.activation_authority_hash,
         &synchronization_request,
         active_authority_hash,
+    )
+    .await?;
+    caller_authority::release_startup(synchronization_request.operation_id).await?;
+    require_component_runtime_ready(
+        plan.target_canister,
+        managed_canister_role(&plan.target_binding),
+        plan.fixture.as_deref(),
     )
     .await?;
     let allocation = ComponentRegistryOps::mark_membership_synchronized(

@@ -28,6 +28,8 @@ mod tests {
     #[cfg(test)]
     mod activation_reset;
     #[cfg(test)]
+    mod caller_authority;
+    #[cfg(test)]
     mod capacity_import;
     #[cfg(test)]
     mod child_reserve;
@@ -3630,10 +3632,10 @@ exec icp "$@"
             RootCommandFragment::RespondCapability(forbidden),
         )
         .err()
-        .expect("Prepared funding authority must not admit recycling");
+        .expect("membership publication must not enable recycling while Root remains Prepared");
         assert_eq!(
             error.code(),
-            canic::diagnostics::codes::AUTHORITY_UNAUTHORIZED.raw_code()
+            canic::diagnostics::codes::STATE_INACTIVE.raw_code()
         );
     }
 
@@ -3838,13 +3840,17 @@ exec icp "$@"
                 .is_some()
         );
         pic.start_canister(store, Some(root)).unwrap();
+        let hub = binding.component.canister_id;
+        let held_effect = caller_authority::hold_during_pending_denial(pic, binding, &request);
         root_command(
             pic,
             root,
             RootCommandFragment::RemoveSubtree(request.clone()),
         )
         .unwrap();
+        caller_authority::assert_effect_fenced(pic, root, hub, shard, held_effect);
         wait_for_fixture_subtree_removal(pic, root, request.operation_id);
+        root_membership::assert_removed_child_absent(pic, root, binding);
         assert!(
             pic.list_canister_snapshots(shard, Some(root))
                 .unwrap()
@@ -4328,6 +4334,7 @@ exec icp "$@"
     fn prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
         let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        root_membership::assert_candid_contract(&operator_cli_root_candid(&workspace_root));
         let config_path = initial_shard_root_canister_config_path(&workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load initial-Shard config");
         let pic = build_pic();
@@ -4339,6 +4346,7 @@ exec icp "$@"
             &config_path,
             &["user_hub", "user_shard"],
         );
+        root_membership::assert_prepared_root_refuses_discovery(&pic, fixture.root_id);
         let (joining_version, sync_request) =
             join_and_synchronize_root(&pic, coordinator, &fixture);
         let component_registry_request = activate_registry_and_prepare_component_registry(
@@ -4585,6 +4593,12 @@ exec icp "$@"
         assert_eq!(child_binding.parent_canister_id, *hub);
         assert_eq!(child_binding.component, *hub_binding);
         root_membership::assert_child_discovery(&pic, fixture.root_id, hub_binding, child_binding);
+        caller_authority::qualify_live_projection(
+            &pic,
+            fixture.root_id,
+            *hub,
+            child_binding.canister_id,
+        );
         let store = fixture.response.wasm_store;
         let controller = fixture
             .init_args

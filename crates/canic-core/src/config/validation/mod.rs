@@ -40,6 +40,22 @@ impl Validate for ConfigModel {
 
         validate_role_declarations(self)?;
 
+        for (role, declaration) in &self.roles {
+            if let Some(policy) = &declaration.caller_authority {
+                if !self
+                    .component_specs
+                    .values()
+                    .any(|spec| spec.get_canister(role).is_some())
+                {
+                    return Err(
+                        crate::config::caller_authority::CallerPolicyError::UnsupportedReceiver
+                            .into(),
+                    );
+                }
+                crate::config::caller_authority::validate_sources(self, policy)?;
+            }
+        }
+
         if self.component_specs.is_empty() {
             return Ok(());
         }

@@ -6,6 +6,7 @@
 
 mod app;
 mod build_network;
+mod caller_authority;
 mod canister;
 pub mod capability;
 mod component;
@@ -23,6 +24,9 @@ mod subnet;
 
 pub use app::AppId;
 pub use build_network::BuildNetwork;
+pub use caller_authority::{
+    CallerComponentInstallation, CallerInstallation, CallerReceiverAuthority, CallerRootAuthority,
+};
 pub use canister::CanisterRole;
 pub use capability as cap;
 pub use component::{

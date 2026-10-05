@@ -1,6 +1,7 @@
 pub mod async_job_recovery;
 pub mod auth;
 pub mod authority_restore;
+pub mod caller_authority;
 pub mod children;
 pub mod cycles;
 pub mod env;

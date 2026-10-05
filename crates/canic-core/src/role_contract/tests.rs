@@ -163,6 +163,7 @@ fn canonical_allocations_match_the_active_memory_map() {
         (StateAllocationKey::CoreRuntimeBindings, vec![31]),
         (StateAllocationKey::CoreFleetState, vec![32]),
         (StateAllocationKey::CoreFleetActivation, vec![33]),
+        (StateAllocationKey::CoreCallerAuthority, vec![47, 54]),
         (
             StateAllocationKey::CoreLocalApplicationAuthorizationState,
             vec![34],
@@ -282,6 +283,7 @@ fn capability_derivation_is_centralized_for_auth_and_sharding() {
     assert_eq!(
         first,
         BTreeSet::from([
+            RoleCapabilityKey::CallerAuthority,
             RoleCapabilityKey::DelegatedTokenVerifier,
             RoleCapabilityKey::FleetAdmissionProjection,
             RoleCapabilityKey::ObservabilityDiagnostics,
@@ -867,7 +869,7 @@ fn surplus_state_feature_allocates_normally() {
     assert_eq!(
         allocation_ids(&contract.allocations),
         vec![
-            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 48, 49, 52, 53, 60,
+            30, 31, 32, 33, 35, 36, 37, 38, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 52, 53, 54, 60,
         ]
     );
 }
@@ -982,10 +984,20 @@ fn allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
 }
 
 fn placement_allocation_ids(allocations: &[super::ResolvedStateAllocation]) -> Vec<u8> {
-    allocation_ids(allocations)
-        .into_iter()
-        .filter(|memory_id| (50..=54).contains(memory_id))
-        .collect()
+    let selected: Vec<_> = allocations
+        .iter()
+        .filter(|allocation| {
+            matches!(
+                allocation.key,
+                StateAllocationKey::PlacementScalingRegistry
+                    | StateAllocationKey::PlacementIndexRegistry
+                    | StateAllocationKey::ShardingRegistry
+                    | StateAllocationKey::ShardingAssignments
+            )
+        })
+        .cloned()
+        .collect();
+    allocation_ids(&selected)
 }
 
 fn resolved_service_contract(

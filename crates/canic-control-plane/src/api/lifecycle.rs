@@ -611,6 +611,9 @@ impl LifecycleApi {
                 config_source,
                 config_path,
             );
+        crate::workflow::component_registry::caller_authority::restore().unwrap_or_else(|error| {
+            ic_cdk::trap(format!("Root caller publication restore failed: {error}"))
+        });
         crate::workflow::canister_pool::declare();
         crate::workflow::component_provisioning::resume_after_restart().unwrap_or_else(|error| {
             ic_cdk::trap(format!(

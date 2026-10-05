@@ -67,5 +67,11 @@ pub struct FleetActivationTransition {
 pub struct ComponentRuntimeActivationTransition {
     pub status: ComponentRuntimeStatusResponse,
     pub transitioned: bool,
-    pub application_init_args: Option<Vec<u8>>,
+}
+
+/// Retained arguments and exact release for one application initialization attempt.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ApplicationStartupWork {
+    pub release: crate::model::caller_authority::CallerPublicationRecord,
+    pub arguments: Option<Vec<u8>>,
 }

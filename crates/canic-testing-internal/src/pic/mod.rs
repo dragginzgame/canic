@@ -25,6 +25,8 @@ use std::{collections::BTreeSet, io::Write, panic::AssertUnwindSafe, path::Path,
 
 mod artifacts;
 mod audit;
+#[cfg(all(test, feature = "governed-pocketic-tests"))]
+mod caller_authority;
 mod canic;
 #[cfg(all(test, feature = "governed-pocketic-tests"))]
 mod cases;

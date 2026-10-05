@@ -5,6 +5,7 @@
 //! Boundary: endpoint macros call access predicates before delegating to workflow.
 
 pub mod auth;
+pub mod caller_authority;
 pub mod deployment;
 pub mod env;
 #[doc(hidden)]
@@ -26,6 +27,8 @@ use thiserror::Error as ThisError;
 
 #[derive(Debug, ThisError)]
 pub enum AccessError {
+    #[error(transparent)]
+    CallerAuthority(#[from] caller_authority::CallerAdmissionError),
     #[error("access denied: an active Component member is required")]
     ActiveComponentRequired,
 
@@ -111,6 +114,21 @@ impl AccessError {
     #[must_use]
     pub(crate) const fn diagnostic_codes(&self) -> Option<AccessDiagnosticCodes> {
         let codes = match self {
+            Self::CallerAuthority(error) => AccessDiagnosticCodes::public(match error {
+                caller_authority::CallerAdmissionError::AuthorityUnavailable => {
+                    codes::AUTHORITY_UNAVAILABLE
+                }
+                caller_authority::CallerAdmissionError::AuthorityConflict => {
+                    codes::AUTHORITY_CONFLICT
+                }
+                caller_authority::CallerAdmissionError::PermissionDenied => {
+                    codes::AUTHORITY_UNAUTHORIZED
+                }
+                caller_authority::CallerAdmissionError::Fenced
+                | caller_authority::CallerAdmissionError::TicketExpired => {
+                    codes::AUTHORITY_INACTIVE
+                }
+            }),
             Self::ActiveComponentRequired
             | Self::ControllerRequired
             | Self::DirectChildRequired

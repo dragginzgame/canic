@@ -35,6 +35,9 @@ pub(super) enum AuthScopeArg {
 
 #[derive(Clone, Debug)]
 pub(super) enum BuiltinPredicate {
+    CallerPermission {
+        permission: String,
+    },
     AttestedLocalSubnet,
     FleetAllowsUpdates,
     FleetIsQueryable,
@@ -481,6 +484,30 @@ fn parse_call_expr(call: syn::ExprCall) -> syn::Result<AccessExprAst> {
                 };
                 return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
                     BuiltinPredicate::Authenticated { required_scope },
+                )));
+            }
+
+            if short_path_is(&path, "caller", "has_permission") {
+                let Some(Expr::Lit(syn::ExprLit {
+                    lit: syn::Lit::Str(permission),
+                    ..
+                })) = args.next()
+                else {
+                    return Err(syn::Error::new_spanned(
+                        &path,
+                        "caller::has_permission requires one declared permission string literal",
+                    ));
+                };
+                if args.next().is_some() || permission.value().is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        &path,
+                        "caller::has_permission requires exactly one nonempty permission",
+                    ));
+                }
+                return Ok(AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                    BuiltinPredicate::CallerPermission {
+                        permission: permission.value(),
+                    },
                 )));
             }
 

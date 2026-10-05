@@ -140,7 +140,6 @@ fn configure_with_runtime(
                 crate::view::fleet_activation::ComponentRuntimeActivationTransition {
                     status,
                     transitioned: false,
-                    application_init_args: None,
                 },
             )
         }

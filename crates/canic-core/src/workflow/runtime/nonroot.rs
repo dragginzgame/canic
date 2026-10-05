@@ -17,7 +17,9 @@ use crate::{
     ops::{
         config::ConfigOps,
         ic::{IcOps, release_build::ReleaseBuildOps},
-        runtime::{fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps},
+        runtime::{
+            env::EnvOps, fleet_activation::FleetActivationRuntimeOps, memory::MemoryRegistryOps,
+        },
         storage::{
             fleet_activation::{FleetActivationOps, PreparedComponentRuntime},
             state::fleet::FleetStateOps,
@@ -82,6 +84,8 @@ fn prepare_managed_nonroot(
     selected_admission: bool,
 ) -> Result<Option<crate::ids::FleetAdmissionProjection>, InternalError> {
     let CanisterInitPayload {
+        root_install_id,
+        component_install_id,
         fixture,
         install_id,
         release_build_id,
@@ -122,6 +126,8 @@ fn prepare_managed_nonroot(
         owning_component(&managed_binding),
     )?;
     let component_runtime = PreparedComponentRuntime {
+        root_install_id,
+        component_install_id,
         fixture,
         binding: managed_binding,
         deployment: *component_deployment,
@@ -144,6 +150,9 @@ fn prepare_managed_nonroot(
 
     // --- Phase 2: Payload registration ---
     register_managed_nonroot_authority(canister_role, authority)?;
+    let caller_authority = FleetActivationOps::caller_receiver_authority()?;
+    crate::ops::caller_authority::CallerAuthorityOps::initialize(caller_authority)
+        .map_err(crate::workflow::caller_authority::publication_error)?;
 
     // Prepared managed Canisters do not start timers or application hooks.
     Ok(admission)
@@ -333,6 +342,15 @@ fn restore_managed_nonroot(
     };
     validate_fleet_admission_selection(selected_admission, enrolled)?;
     restore_nonroot_after_upgrade(canister_role)?;
+    if !EnvOps::canister_role()?.is_wasm_store() {
+        let expected = FleetActivationOps::caller_receiver_authority()?;
+        ConfigOps::with_caller_policy(|policy| {
+            crate::ops::caller_authority::CallerAuthorityOps::restore(&expected, policy)
+        })?
+        .map_err(crate::workflow::caller_authority::publication_error)?;
+        FleetActivationOps::restore_application_startup()
+            .map_err(crate::access::AccessError::from)?;
+    }
     let active = FleetActivationOps::status(false)
         .map_err(crate::ops::storage::StorageOpsError::from)?
         .phase

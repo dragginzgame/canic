@@ -110,19 +110,18 @@ fn caller_authority(
     let registered = super::component_registry::registered_component_member_authority(caller)
         .map_err(InternalError::from)
         .map_err(Error::from)?;
+    // Membership publication can complete while the enclosing Root bootstrap still
+    // waits for application initialization. Keep that interval on bounded bootstrap authority.
+    let root_prepared = canic_core::control_plane_support::workflow::runtime::fleet_activation::FleetActivationWorkflow::status()?
+        .phase == canic_core::dto::fleet_activation::FleetActivationPhase::Prepared;
     let member = match registered.lifecycle {
-        canic_core::dto::component_registry::ComponentLifecycleStatus::Active => {
-            super::component_auth::require_active_fleet_subnet_root()?;
-            RootCapabilityMemberAuthority::try_from_active_member(
-                registered.binding,
-                registered.registry,
-            )
-        }
         canic_core::dto::component_registry::ComponentLifecycleStatus::Prepared
-            if matches!(
-                request,
-                Request::AllocatePlacementChild(_) | Request::Cycles(_)
-            ) =>
+        | canic_core::dto::component_registry::ComponentLifecycleStatus::Active
+            if root_prepared
+                && matches!(
+                    request,
+                    Request::AllocatePlacementChild(_) | Request::Cycles(_)
+                ) =>
         {
             super::component_auth::require_prepared_fleet_subnet_root()?;
             RootCapabilityMemberAuthority::try_from_prepared_member(
@@ -130,9 +129,14 @@ fn caller_authority(
                 registered.registry,
             )
         }
-        _ => Err(InternalError::public(
-            canic_core::diagnostics::codes::AUTHORITY_UNAUTHORIZED,
-        )),
+        canic_core::dto::component_registry::ComponentLifecycleStatus::Active => {
+            super::component_auth::require_active_fleet_subnet_root()?;
+            RootCapabilityMemberAuthority::try_from_active_member(
+                registered.binding,
+                registered.registry,
+            )
+        }
+        _ => Err(InternalError::public(codes::AUTHORITY_UNAUTHORIZED)),
     }
     .map_err(Error::from)?;
     Ok(RootCapabilityCallerAuthority::ComponentMember(member))

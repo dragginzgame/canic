@@ -181,6 +181,9 @@ macro_rules! __canic_build_internal {
                 $crate::__internal::core::role_contract::RoleCapabilityKey::ChildProvisioning => {
                     println!("cargo:rustc-cfg=canic_capability_child_provisioning");
                 }
+                $crate::__internal::core::role_contract::RoleCapabilityKey::CallerAuthority => {
+                    println!("cargo:rustc-cfg=canic_capability_caller_authority");
+                }
                 $crate::__internal::core::role_contract::RoleCapabilityKey::DelegatedTokenIssuer => {
                     println!("cargo:rustc-cfg=canic_capability_delegated_token_issuer");
                 }
@@ -292,6 +295,13 @@ macro_rules! __canic_build_internal {
             .expect("canonicalize compiled role runtime authority path");
 
         println!("cargo:rustc-env=CANIC_CANISTER_ROLE={role_name}");
+        let caller_permissions = $cfg.roles.get(&role_id)
+            .and_then(|role| role.caller_authority.as_ref())
+            .map(|policy| policy.permissions.iter()
+                .filter(|(_, permission)| permission.direction == $crate::__internal::core::bootstrap::compiled::CallerPermissionDirection::Caller)
+                .map(|(name, _)| name.clone()).collect::<Vec<_>>().join(","))
+            .unwrap_or_default();
+        println!("cargo:rustc-env=CANIC_CALLER_PERMISSION_NAMES={caller_permissions}");
         println!(
             "cargo:rustc-env=CANIC_ROLE_RUNTIME_AUTHORITY_PATH={}",
             role_runtime_authority_abs.display()

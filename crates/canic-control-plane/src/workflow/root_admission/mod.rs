@@ -65,6 +65,9 @@ pub fn authorize_coordinator(caller: Principal) -> Result<(), InternalError> {
 pub fn prepare(
     request: FleetAdmissionPrepareRootRequest,
 ) -> Result<FleetAdmissionRootReceipt, InternalError> {
+    crate::ops::component_registry::caller_authority::RootCallerOps::require_mutation_allowed(
+        None,
+    )?;
     let (protected, _) = validated_root_authority()?;
     let root = protected.binding;
     let active = FleetRegistryMirrorOps::active_admission(&root)?;
@@ -132,6 +135,16 @@ pub fn current_policy() -> Result<FleetAdmissionPolicy, InternalError> {
 
 /// Fence any Root operation that would change the transition participant catalog.
 pub fn require_catalog_mutation_allowed() -> Result<(), InternalError> {
+    require_catalog_mutation_for(None)
+}
+
+/// Resume the same membership publication while excluding all other catalog writers.
+pub(super) fn require_catalog_mutation_for(
+    operation: Option<[u8; 32]>,
+) -> Result<(), InternalError> {
+    crate::ops::component_registry::caller_authority::RootCallerOps::require_mutation_allowed(
+        operation,
+    )?;
     let (protected, _) = validated_root_authority()?;
     RootAdmissionOps::require_catalog_mutation_allowed(&protected.binding)
 }

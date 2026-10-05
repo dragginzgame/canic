@@ -384,6 +384,7 @@ pub(in crate::workflow) async fn advance_component_removal_once(
     if draining.operation_id != operation_id {
         return Err(InternalError::conflict());
     }
+    super::caller_authority::finish_denial(operation_id).await?;
     if !matches!(
         &draining.quiescence,
         Some(RootComponentQuiescenceProgressView::Quiescent(_))
@@ -529,6 +530,7 @@ pub(super) async fn prepared_component_draining_boundary(
 pub(super) async fn advance_subtree_removal_phase(
     removal: RootComponentSubtreeRemovalView,
 ) -> Result<RootComponentSubtreeRemovalView, InternalError> {
+    super::caller_authority::finish_removal(removal.component, removal.operation_id).await?;
     let action = subtree_removal_action(&removal)?;
     let response = match action {
         ComponentSubtreeRemovalAction::Advance(request) => advance_subtree_removal(request).await?,

@@ -159,6 +159,16 @@ fn negated_service_authority_predicate_is_rejected() {
 }
 
 #[test]
+fn managed_caller_permissions_cannot_be_negated() {
+    let sig: Signature = syn::parse_quote!(async fn notify() -> Result<(), ::canic::Error>);
+    let parsed = crate::endpoint::parse::parse_args(quote::quote!(requires(not(
+        caller::has_permission("notify")
+    ))))
+    .unwrap();
+    assert!(validate(EndpointKind::Update, parsed, &sig).is_err());
+}
+
+#[test]
 fn ungated_endpoint_without_public_marker_is_rejected() {
     let sig: Signature = syn::parse_quote!(fn hello() -> Result<(), ::canic::Error>);
     let parsed = ParsedArgs {

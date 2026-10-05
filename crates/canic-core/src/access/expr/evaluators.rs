@@ -14,6 +14,7 @@ use crate::{
 
 pub(super) const fn name(pred: &BuiltinPredicate) -> &'static str {
     match pred {
+        BuiltinPredicate::CallerPermission { .. } => "caller_permission",
         BuiltinPredicate::Fleet(FleetPredicate::AllowsUpdates) => "fleet_allows_updates",
         BuiltinPredicate::Fleet(FleetPredicate::IsQueryable) => "fleet_is_queryable",
         BuiltinPredicate::Caller(CallerPredicate::IsController) => "caller_is_controller",
@@ -40,6 +41,7 @@ pub(super) const fn metric_kind(pred: &BuiltinPredicate) -> AccessMetricKind {
     match pred {
         BuiltinPredicate::Fleet(_) => AccessMetricKind::Guard,
         BuiltinPredicate::Caller(_)
+        | BuiltinPredicate::CallerPermission { .. }
         | BuiltinPredicate::Authenticated { .. }
         | BuiltinPredicate::AttestedLocalSubnet
         | BuiltinPredicate::AuthenticatedArgument { .. }
@@ -69,6 +71,15 @@ pub(super) async fn evaluate<const FLEET_ADMISSION: bool>(
             access::fleet::guard_fleet_update()
         }
         BuiltinPredicate::Fleet(FleetPredicate::IsQueryable) => access::fleet::guard_fleet_query(),
+        BuiltinPredicate::CallerPermission { permission } => {
+            crate::ops::config::ConfigOps::with_caller_policy(|policy| {
+                crate::ops::caller_authority::CallerAuthorityOps::require_permission(
+                    ctx.caller, permission, policy,
+                )
+            })
+            .map_err(AccessError::Internal)
+            .and_then(|admission| admission.map_err(AccessError::CallerAuthority))
+        }
         BuiltinPredicate::Caller(CallerPredicate::IsController) => {
             access::auth::is_controller(ctx.caller).await
         }

@@ -1,5 +1,6 @@
 #![expect(clippy::unused_async)]
 
+mod caller_authority;
 mod fixture_importer;
 mod reinstall_fixture;
 

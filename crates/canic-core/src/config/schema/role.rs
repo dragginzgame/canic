@@ -102,6 +102,10 @@ pub struct RoleDeclaration {
     #[serde(default)]
     pub fleet_admission: bool,
 
+    /// Local managed-caller permissions; absence grants no application permission.
+    #[serde(default)]
+    pub caller_authority: Option<crate::config::caller_authority::CallerAuthorityConfig>,
+
     /// Optional observation surfaces compiled into this role's endpoints.
     #[serde(default)]
     pub observability: RoleObservabilityConfig,

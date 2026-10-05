@@ -5,6 +5,7 @@
 
 pub mod auth;
 pub mod bootstrap;
+pub mod caller_authority;
 pub mod cascade;
 pub mod component_runtime;
 pub mod config;

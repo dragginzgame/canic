@@ -14,7 +14,8 @@ Detailed patch breakdown: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   adds per-canister application usage reporting, and repairs operator commands,
   repository hygiene and build evidence,
   memory registration and public framework APIs, including guarded Root membership
-  discovery. It also adopts ic-memory’s
+  discovery, compiled receiver permissions and publication-bound application
+  startup. It also adopts ic-memory’s
   checked allocation-slot API and aligns the independent blob consumer on one
   memory runtime.
 

@@ -68,6 +68,18 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     let call_decl = call_decl(kind, args.query_mode, &call_ident, &exported_method);
     let preflight = preflight(&orig_name);
 
+    let startup_denial = if returns_fallible(&orig_sig) || args.reject_access {
+        quote!(return Err(err.into());)
+    } else {
+        quote!(::canic::__internal::cdk::trap(format!("application startup rejected: {err}"));)
+    };
+    let startup_stage = quote! {
+        #[cfg(target_arch = "wasm32")]
+        if let Err(err) = ::canic::__internal::core::access::expr::eval_application_startup(#call_ident) {
+            #startup_denial
+        }
+    };
+
     let access_stage = access_stage(&access_plan, &call_ident);
 
     let call_args = match extract_args(&orig_sig) {
@@ -105,6 +117,7 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
         #vis #wrapper_sig {
             #call_decl
             #preflight(#call_ident);
+            #startup_stage
             #access_stage
             #dispatch_call
         }

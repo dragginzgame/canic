@@ -634,24 +634,25 @@ to a lookup or grant an application permission.
 
 Canonical Root exposes `canic_root_membership` as a guarded read-only update
 for controllers and active local managed members. Its response contains an
-optional exact binding; authority failures remain endpoint errors. The public
+optional exact binding; admitted lookup failures remain endpoint errors. Normal
+Fleet lifecycle fences can reject the call before its handler runs. The public
 Directory query still requires the caller to belong to the queried Component.
 Cross-Root service calls retain the Fleet-service peer authority boundary.
 
 An online membership endpoint observes Registry state only
-at lookup time and introduce an await before receiver work. An operation
+at lookup time and introduces an await before receiver work. An operation
 requiring exact serialization with revocation needs an explicit lifecycle and
 effect boundary, rather than treating the lookup result as a lasting permit.
 
-### Receiver-local Caller Authority — Design Proposal, 2026-10-03
+### Receiver-local Caller Authority — Accepted Contract
 
-This is the maintainer-requested design assessment for cross-Component system
-calls. It is not implemented behavior, a scheduled later minor, or authority
-to mutate downstream repositories. The proposed default preserves strict
-revocation completion; bounded proof-expiry revocation requires an explicit
-product decision. The source baseline is Canic 0.110.51.
+This is the accepted contract for cross-Component system calls under
+[Canic#38](https://github.com/dragginzgame/canic/issues/38). Integration is underway
+in the current checkout; the issue owns complete-batch qualification. Strict
+revocation completion remains the default. Bounded proof-expiry revocation
+requires an explicit product decision.
 
-The missing capability is distribution of registered caller identity to the
+The capability distributes registered caller identity to the
 receivers that need it. The IC already authenticates the transport Principal.
 Root owns the corresponding managed binding and lifecycle; each receiver owns
 its application permissions. An ordinary system call should combine those facts
@@ -670,11 +671,11 @@ repurposed as that authority.
 
 | Approach | Ordinary call | Removal semantics | Assessment |
 | --- | --- | --- | --- |
-| Root membership lookup | Remote lookup before work | Observes membership at lookup time; an await still separates lookup from effects | The inspection endpoint is not the proposed default guard |
+| Root membership lookup | Remote lookup before work | Observes membership at lookup time; an await still separates lookup from effects | Inspection remains a separate point-in-time observation |
 | Root role attestation | Local proof verification | Issued material can survive membership removal until expiry or receiver fencing | Current issuance needs a caller-bound direct query certificate; it is not an autonomous canister update flow |
 | New update-delivered signed permit | Local proof verification | Expiry or explicit receiver fencing | Adds issuance, renewal and cryptographic work without removing the strict-revocation distribution requirement |
 | Periodically refreshed Directory | Local lookup | Stale entries remain usable until refresh | Insufficient for strict completion |
-| Receiver-specific binding projection | Local Principal-to-binding lookup and application policy | Removal commits only after all affected receivers deny new admission | Proposed default for controlled Fleet system calls |
+| Receiver-specific binding projection | Local Principal-to-binding lookup and application policy | Removal commits only after all affected receivers deny new admission | Default for declared same-Root system permissions |
 
 Portable credentials remain useful when the receiver is outside the controlled
 deployment graph or a bounded authorization lifetime is the selected contract.
@@ -691,13 +692,38 @@ flowchart LR
 #### Authority and state ownership
 
 The selected build declares receiver policies in Canic-owned TOML. A policy
-names the admitted source Component Specs/roles, relevant tree or Fleet scope,
-and receiver operation classes. Endpoint guards select the declared policy;
+names exact Component Spec/role pairs, same-Root or same-Component scope,
+permission direction and receiver operation classes. Endpoint guards select the declared policy;
 they never accept a claimed role, source binding or policy from the request.
 Unknown roles, ambiguous scopes and undeclared receiver policies reject during
 build admission. Preserve permitted Component Spec/role pairs per operation;
 independently unioning Specs and roles must not introduce undeclared pairings.
-Exact syntax remains an implementation decision.
+The compiled policy includes capacity and receiver role in its canonical digest.
+Selector ordering is normalized. Unknown selectors, unsupported receiver roles,
+duplicate selectors and invalid capacity refuse build admission.
+
+```toml
+[roles.user_hub.caller_authority]
+maximum_entries = 1024
+maximum_bytes = 16777216
+
+[roles.user_hub.caller_authority.permissions.notify]
+direction = "caller"
+scope = "same_root"
+sources = [{ component_spec = "users", role = "user_shard" }]
+
+[roles.user_hub.caller_authority.permissions.metrics_target]
+direction = "target"
+scope = "same_root"
+sources = [{ component_spec = "users", role = "user_shard" }]
+```
+
+`caller::has_permission("notify")` selects a declared caller-direction permission
+in the endpoint access expression. `canic::access::caller_authority::admit` retains
+an authenticated caller ticket; `revalidate` checks it before a new effect after
+an await. Proxy code uses `select_target` and `revalidate_target` separately from
+its incoming subject authentication. Target-direction names cannot be selected
+by the endpoint caller guard. Omitting caller authority grants no permission.
 
 Root derives each entry from protected Registry evidence. A projection retains
 the exact receiver binding and installation identity, issuing Root/Fleet
@@ -721,7 +747,7 @@ reachability. A Root outage therefore leaves already granted calls available
 while blocking new publication and revocation completion. This intentionally
 changes the availability contract of an online lookup that refused whenever
 Root could not answer. Local authority failures still fail closed. Planned
-Root/Component deactivation, reinstall or authority changes must fence affected
+Same-release Root/Component deactivation or identity replacement must fence affected
 receivers before invalidating the corresponding grant; an unfenced lifecycle
 change cannot be declared complete. A receiver cannot locally detect an
 unobserved remote lifecycle change or external controller intervention.
@@ -749,17 +775,12 @@ never admit an unregistered or inactive source. Root serializes conflicting
 activation/removal work until this operation is reconciled. A lost reply is
 resolved from the receiver's exact durable receipt; retry does not add another
 grant. Application readiness includes this publication outcome, including for
-dynamically created Project Instances. It cannot be a best-effort timer after
+dynamically created managed children. It cannot be a best-effort timer after
 the child has already been reported ready.
 
-The current implementation releases application hooks when the runtime is
-activated, then Root waits for framework readiness before activating membership
-(`canic-control-plane::workflow::component_registry::{activate_child_membership_for_parent,
-activate_component_membership_with_plan}`). The lifecycle adapter schedules
-framework bootstrap and application hooks together. Simply making the existing
-readiness query wait for caller publication would create a cycle: Root would
-wait for readiness while the receiver waited for Root to publish membership.
-This ordering needs a coherent change before production integration.
+Framework runtime activation and application release are separate. Waiting for
+application hooks or fixture import before membership publication would create
+a cycle: Root would wait for readiness while the receiver waited for Root.
 
 Separate the existing operation's framework-bootstrap observation from its
 application-startup release. Root may observe completed framework bootstrap
@@ -785,20 +806,19 @@ lifecycle owner or polling loop is introduced.
 The integration boundary is concrete and shared by top-level Components and
 dynamic children:
 
-| Owner | Required change | Evidence before integration |
+| Owner | Maintained behavior | Qualification boundary |
 | --- | --- | --- |
 | Core activation storage and ops | Retain init arguments after framework activation; persist the exact publication-bound startup release in the existing activation record | Cold restoration before/after release, typed conflict refusal and unchanged replay |
 | Facade lifecycle adapter | Schedule framework bootstrap at runtime activation; schedule application hooks only from the retained startup release | No application hook before release, including interrupted same-release upgrades |
 | Endpoint admission | Keep application admission closed until startup release, independently of runtime activation and Fleet admission projection | Public and guarded application endpoints refuse while framework status/recovery remain available |
 | Control Plane membership journal | Observe framework bootstrap without waiting for application readiness; publish and reconcile every original recipient; release startup and then report application readiness | Top-level and dynamic-child PocketIC journeys, missing receipts, lost replies and enrollment races |
 
-`ConfigureRuntime` currently also opens fresh Fleet admission and invokes the
-application init adapter. Moving only the hook timer is insufficient: the
-application endpoint gate must use the same retained startup decision, and the
-upgrade path must not infer startup permission from runtime `Active`. Preserve
-explicit framework recovery and protected bootstrap commands while that gate
-is closed. These are coordinated changes to the existing owners, not additional
-independent state machines or qualified runtime behavior in the native draft.
+`ConfigureRuntime` opens fresh Fleet admission and starts framework bootstrap.
+The separate application gate uses the retained startup decision; runtime
+`Active` alone cannot permit application hooks or endpoints. Protected framework
+recovery and bootstrap commands remain available under their existing guards.
+The reusable native timer claim serializes original initialization, while exact
+release retries and same-release restoration can resume interrupted hooks.
 
 Adding a receiver later requires the same complete initialization boundary.
 Removing a receiver removes its publication obligation only after its own
@@ -816,13 +836,13 @@ membership and report revocation complete. Successor activation retains the
 denial; a delayed grant or stale-generation replay cannot reopen it.
 
 Component draining and subtree removal also invalidate descendant authority.
-The current `begin_component_draining` changes the authoritative partition from
-Active to Draining in its synchronous commit. Production integration must first
-freeze the complete affected receiver census and reconcile durable denial,
-including receivers whose policies admit descendant roles but exclude the parent
-role. Preserve source membership while this publication is pending; the existing
-operation independently closes new lifecycle work. Commit the draining or removal
-Registry transition only after denial coverage is complete.
+Before `begin_component_draining` commits Active to Draining, its workflow freezes
+the complete affected receiver census and reconciles durable denial. Discovery
+uses source-installation/receiver indexes, including policies that admit descendant
+roles and exclude the parent role. Source membership remains active while this
+publication is pending; the retained operation closes conflicting lifecycle work.
+The draining or removal Registry transition commits only after denial coverage
+is complete. Removal drivers also finish the original denial journal on retry.
 
 For a whole Component, publish an installation-bound Component-wide denial
 fence. Local admission and retained tickets check that fence for every descendant,
@@ -831,9 +851,11 @@ rows in bounded pages while retaining the fence's original authority and replay
 ordering; clearing rows must not reopen delayed child grants. A nested subtree
 requires an exact bounded source census or an equally authoritative subtree
 fence. Do not infer affected receivers only from the removed parent role.
-The native draft's individual-source transitions do not yet qualify these group
-fences or their lifecycle ordering. Existing uncertain paid effects remain
-reconcilable under their issued operation authority throughout this change.
+Receiver cleanup visits at most 128 source rows per completion call and retains
+the Component installation fence. Root removes terminal recipient/step progress
+in pages of at most 64 rows, retaining the original operation scope and census
+commitment. Exact terminal replay performs no new publication. Existing uncertain
+paid effects remain reconcilable under their issued operation authority.
 
 During preparation the source is revocation-pending, not falsely reported as
 fully revoked. Receivers that have acknowledged already deny it; a receiver
@@ -883,10 +905,11 @@ Root-derived target view, scoped to its declared allowed target roles, alongside
 the target's own caller policy. Requesting an arbitrary Principal must not turn
 the proxy into an unrestricted remote-call facility.
 
-Cross-Root distribution requires exact source Root and receiver Root authority
-linked through the current Coordinator/Registry and Fleet-service peer model.
-A same-Root binding must not silently become a Fleet-wide permit. This is a
-required qualification boundary before declaring cross-Root support.
+Compiled caller permissions support `same_root` and `same_component`. They reject
+foreign-Root bindings even within the same Fleet. Existing cross-Root services
+continue to require their exact Coordinator/Registry and Fleet-service peer
+authority; a target permission cannot replace that authentication. Cross-Root
+caller-projection distribution is not an implicit extension of these scopes.
 
 #### Bounds and recovery evidence
 
@@ -941,21 +964,29 @@ product protocol generation or a lookup fallback during rollout.
 
 #### Implementation boundary
 
-The maintainer has authorized implementation alongside the separate FR1 work.
-Begin with the exact receiver state machine, pure local admission and ticket
-revalidation, and Root's frozen recipient/receipt census. Develop and validate
-that draft in an isolated Canic-owned source copy while FR1 changes the shared
-lifecycle seams. The isolated draft now includes bounded receiver headers,
-independently indexed source grants and Root progress indexed by original
-operation/receiver, with an immutable census commitment. Native recovery covers
-single-row acknowledgement isolation, retention of earlier operations, missing or
-altered census refusal and phase/byte bounds. Separate 20,000-source and
-20,000-recipient cases qualify those mechanisms only. They do not establish a
-production cardinality limit, dense-graph cost, physical capacity reservation,
-production allocation admission, protected transport, complete recipient discovery,
-executable lifecycle integration or IC transaction rollback. The framework
-bootstrap/application-startup ordering change and PocketIC qualification remain
-required before the full batch is complete.
+The maintainer authorized implementation alongside the separate FR1 work. The
+current checkout implements compiled policies, protected receiver publication,
+local caller/target tickets, Root membership orchestration, startup release and
+bounded cleanup under the existing owners. [Canic#38](https://github.com/dragginzgame/canic/issues/38)
+owns implementation acceptance tracking; the compact handoff records current-source
+qualification. The original isolated draft
+was deleted on 2026-10-05; its historical test counts are not current-source evidence.
+
+Receiver budgets count independently indexed source, fence and receipt records.
+Each record reserves an 8 KiB encoded-record ceiling plus one 8 KiB header;
+the configured entry and byte limits both apply. Root preflights every original
+recipient before the first staging or denial effect, under its serial publication
+boundary. The Root index has a 262,144-row ceiling with a 4 KiB encoded record
+limit. These are retained-record budgets, not a claim about stable-memory tree
+overhead or dense-graph performance. Original receiver receipts and denial fences
+remain within those limits; capacity refusal preserves the unfinished operation.
+
+Current-source qualification combines native receiver/journal and startup checks,
+endpoint macro checks, strict integration lint and targeted PocketIC journeys.
+The installed cases cover bootstrap, dynamic children, frozen denial recovery,
+enrollment races, lost replies, identical-Wasm upgrades, effect fencing and Root
+retirement. Generated Candid and both public managed fixture helpers are qualified.
+See the issue and compact handoff for the validation boundary and retained logs.
 
 The general Root membership lookup is tracked separately in
 [Canic#39](https://github.com/dragginzgame/canic/issues/39).
@@ -964,8 +995,10 @@ so an ordinary inter-canister call can obtain a point-in-time observation.
 It requires a Root controller or an active managed member of that Root, in
 addition to the normal Fleet update guard. `RootMembershipResponse.member` is
 the exact active `ManagedCanisterBinding`, including a descendant's own role,
-or `None` for inactive/unregistered subjects. Runtime and Registry failures
-remain typed errors. Cross-Root callers receive no implicit discovery access.
+or `None` for inactive/unregistered subjects. Once admitted, runtime and Registry
+failures remain typed errors. A Prepared Root rejects through the normal Fleet
+lifecycle fence before lookup admission. Cross-Root callers receive no implicit
+discovery access.
 This observation is not a permit for later effects. Membership changes still
 require protected inter-canister publication; ordinary application admission
 then uses receiver-local authority under

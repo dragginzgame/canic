@@ -103,6 +103,11 @@ pub mod memory {
         pub const APPLICATION_RECEIPT_ELIGIBILITY_ID: u8 = 48;
     }
 
+    pub mod caller_authority {
+        pub const CALLER_AUTHORITY_HEADER_ID: u8 = 47;
+        pub const CALLER_AUTHORITY_ROWS_ID: u8 = 54;
+    }
+
     pub mod placement {
         pub const PLACEMENT_ACKNOWLEDGEMENT_INDEX_ID: u8 = 49;
         pub const PLACEMENT_SCALING_REGISTRY_ID: u8 = 50;
@@ -204,6 +209,10 @@ const CORE_RUNTIME_CHILDREN_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_CANISTER_
 const CORE_RUNTIME_BINDINGS_IDS: &[MemoryId] = &[MemoryId::new(RUNTIME_BINDINGS_ID)];
 const CORE_FLEET_STATE_IDS: &[MemoryId] = &[MemoryId::new(FLEET_STATE_ID)];
 const CORE_FLEET_ACTIVATION_IDS: &[MemoryId] = &[MemoryId::new(FLEET_ACTIVATION_ID)];
+const CORE_CALLER_AUTHORITY_IDS: &[MemoryId] = &[
+    MemoryId::new(memory::caller_authority::CALLER_AUTHORITY_HEADER_ID),
+    MemoryId::new(memory::caller_authority::CALLER_AUTHORITY_ROWS_ID),
+];
 const CORE_DELEGATED_TOKEN_ISSUER_STATE_IDS: &[MemoryId] =
     &[MemoryId::new(DELEGATED_TOKEN_ISSUER_STATE_ID)];
 const CORE_LOCAL_APPLICATION_AUTHORIZATION_STATE_IDS: &[MemoryId] =
@@ -339,6 +348,11 @@ const ALLOCATION_DEFINITIONS: &[AllocationDefinition] = &[
         StateAllocationKey::CoreFleetActivation,
         AllocationOwner::CanicCore,
         CORE_FLEET_ACTIVATION_IDS,
+    ),
+    definition(
+        StateAllocationKey::CoreCallerAuthority,
+        AllocationOwner::CanicCore,
+        CORE_CALLER_AUTHORITY_IDS,
     ),
     definition(
         StateAllocationKey::CoreLocalApplicationAuthorizationState,

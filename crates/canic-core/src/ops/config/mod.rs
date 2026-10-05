@@ -69,6 +69,46 @@ impl From<ConfigOpsError> for InternalError {
 pub struct RootConfigOps;
 
 impl RootConfigOps {
+    /// Receiver roles whose declared selectors include this exact source pair.
+    pub fn caller_receiver_roles(
+        source: &crate::ids::CallerInstallation,
+    ) -> Result<Vec<CanisterRole>, InternalError> {
+        Ok(Config::get()?
+            .roles
+            .iter()
+            .filter_map(|(role, declaration)| {
+                declaration
+                    .caller_authority
+                    .as_ref()
+                    .filter(|policy| {
+                        policy.permissions.values().any(|permission| {
+                            permission.sources.iter().any(|selector| {
+                                selector.component_spec == source.component().component_spec
+                                    && selector.role == *source.role()
+                            })
+                        })
+                    })
+                    .map(|_| role.clone())
+            })
+            .collect())
+    }
+
+    /// Compile one exact receiver policy from Root's retained typed build configuration.
+    pub fn caller_policy(
+        role: &CanisterRole,
+    ) -> Result<crate::config::caller_authority::CompiledCallerPolicy, InternalError> {
+        let config = Config::get()?;
+        let declaration = config
+            .roles
+            .get(role)
+            .ok_or_else(InternalError::invariant)?;
+        crate::config::caller_authority::CompiledCallerPolicy::compile(
+            role.clone(),
+            declaration.caller_authority.clone(),
+        )
+        .map_err(|_| InternalError::invariant())
+    }
+
     /// Export the full current configuration as TOML.
     /// Intended for diagnostics and tooling only.
     pub fn export_toml() -> Result<String, InternalError> {
@@ -208,6 +248,13 @@ impl RootConfigOps {
 pub struct ConfigOps;
 
 impl ConfigOps {
+    /// Borrow compiled caller policy without copying Directory or configuration payloads.
+    pub fn with_caller_policy<T>(
+        read: impl FnOnce(&crate::config::caller_authority::CompiledCallerPolicy) -> T,
+    ) -> Result<T, InternalError> {
+        let authority = Self::authority()?;
+        Ok(read(&authority.caller_policy))
+    }
     fn authority() -> Result<Arc<crate::config::RoleRuntimeAuthority>, InternalError> {
         RoleRuntimeConfig::try_get().ok_or_else(InternalError::invariant)
     }

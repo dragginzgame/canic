@@ -13,6 +13,7 @@
 //! abstraction; they are zero-cost namespaces over free functions.
 
 pub mod auth;
+pub mod caller_authority;
 pub mod cascade;
 pub mod cascade_report;
 pub mod component_provisioning_plan;

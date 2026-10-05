@@ -4,6 +4,7 @@
 //! Does not own: Store side effects, Fleet Registry, topology, admission, or orchestration.
 //! Boundary: converts stable records into read-only views before workflow use.
 
+pub mod caller_authority;
 mod child_activation;
 mod child_allocation;
 mod child_failure;
@@ -1468,22 +1469,24 @@ impl ComponentRegistryOps {
         {
             return Err(InternalError::conflict());
         }
-        let mut matches = RootComponentRegistryStore::child_allocations(component)
-            .into_iter()
-            .filter(|record| {
-                matches!(
-                    &record.progress,
-                    RootComponentChildAllocationProgressRecord::Committed {
-                        canister: committed,
-                        ..
-                    } if *committed == canister
-                )
-            });
-        let record = matches.next().ok_or_else(InternalError::invariant)?;
-        if matches.next().is_some() {
+        let operation = Self::child_allocation_operation_id(component, canister)?
+            .ok_or_else(InternalError::invariant)?;
+        let record = RootComponentRegistryStore::child_allocation(component, operation)
+            .ok_or_else(InternalError::invariant)?;
+        validate_child_allocation_record(&record)?;
+        let RootComponentChildAllocationProgressRecord::Committed {
+            canister: committed,
+            installation,
+            ..
+        } = &record.progress
+        else {
+            return Err(InternalError::invariant());
+        };
+        if *committed != canister
+            || binding != &ManagedCanisterBinding::ComponentChild(installation.binding.clone())
+        {
             return Err(InternalError::invariant());
         }
-        validate_child_allocation_record(&record)?;
         Ok(record.operation_id)
     }
 

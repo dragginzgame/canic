@@ -4,6 +4,7 @@
 //! in canister runtime state, admission decisions, lifecycle ownership, or Fleet
 //! control-plane authority.
 
+mod caller_authority;
 mod managed_app;
 mod managed_component_group;
 

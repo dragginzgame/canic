@@ -44,6 +44,9 @@ use thiserror::Error as ThisError;
 #[derive(Debug, ThisError)]
 pub enum ConfigSchemaError {
     #[error(transparent)]
+    CallerAuthority(#[from] crate::config::caller_authority::CallerPolicyError),
+
+    #[error(transparent)]
     ChainKeyDerivation(#[from] ChainKeyDerivationError),
 
     #[error("validation error: {context} '{role}' {issue}")]
@@ -388,6 +391,7 @@ impl ConfigModel {
                 kind: RoleDeclarationKind::Root,
                 package: None,
                 fleet_admission: false,
+                caller_authority: None,
                 observability: RoleObservabilityConfig::default(),
             },
         );
@@ -397,6 +401,7 @@ impl ConfigModel {
                 kind: RoleDeclarationKind::Canister,
                 package: Some("app".to_string()),
                 fleet_admission: false,
+                caller_authority: None,
                 observability: RoleObservabilityConfig::default(),
             },
         );

@@ -340,3 +340,36 @@ fn access_reader_selection_follows_nested_declared_predicates() {
         assert_eq!(reader.0, vec![expected]);
     }
 }
+
+#[test]
+fn application_startup_gate_precedes_boolean_guards_and_internal_dispatch() {
+    for internal in [false, true] {
+        let mut args = make_args(vec![AccessExprAst::Any(vec![
+            AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerIsController,
+            )),
+            AccessExprAst::Not(Box::new(AccessExprAst::Pred(AccessPredicateAst::Builtin(
+                BuiltinPredicate::CallerIsSameCanister,
+            )))),
+        ])]);
+        args.internal = internal;
+        let function: ItemFn = syn::parse_quote!(
+            fn guarded() -> Result<(), ::canic::Error> {
+                Ok(())
+            }
+        );
+        let expanded = expand(EndpointKind::Update, args, function).to_string();
+        let compact = expanded.split_whitespace().collect::<String>();
+        let mandatory = compact
+            .find("eval_application_startup")
+            .expect("mandatory startup admission");
+        let dispatch = compact
+            .rfind("__canic_impl_guarded(")
+            .expect("application dispatch");
+        assert!(mandatory < dispatch);
+        assert_eq!(compact.matches("eval_application_startup").count(), 1);
+        if let Some(predicate) = compact.find("caller::is_controller") {
+            assert!(mandatory < predicate);
+        }
+    }
+}

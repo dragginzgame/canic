@@ -2,6 +2,25 @@ use super::*;
 use quote::quote;
 
 #[test]
+fn managed_permission_requires_one_explicit_literal() {
+    let args = parse_args(quote!(requires(caller::has_permission("notify")))).unwrap();
+    let AccessExprAst::All(predicates) = &args.requires[0] else {
+        panic!("requires owns the outer conjunction");
+    };
+    assert!(
+        matches!(&predicates[0], AccessExprAst::Pred(AccessPredicateAst::Builtin(BuiltinPredicate::CallerPermission { permission })) if permission == "notify")
+    );
+    for input in [
+        quote!(requires(caller::has_permission())),
+        quote!(requires(caller::has_permission(""))),
+        quote!(requires(caller::has_permission("a", "b"))),
+        quote!(requires(caller::has_permission(requested_permission))),
+    ] {
+        assert!(parse_args(input).is_err());
+    }
+}
+
+#[test]
 fn decoder_and_rejection_options_are_explicit_and_unique() {
     let args = parse_args(quote!(public, decode = LIMITS, on_access_denied = "reject")).unwrap();
     assert!(args.decode.is_some());

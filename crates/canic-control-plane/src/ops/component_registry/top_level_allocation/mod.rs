@@ -31,6 +31,24 @@ use canic_core::{
 };
 
 impl ComponentRegistryOps {
+    /// Resolve the exact original installation for a registered Component tree.
+    pub(crate) fn component_install_id(
+        component: canic_core::ids::ComponentInstanceId,
+    ) -> Result<[u8; 32], InternalError> {
+        let partition = RootComponentRegistryStore::partition(component)
+            .ok_or_else(InternalError::unavailable)?;
+        let mut allocations = RootComponentRegistryStore::allocations()
+            .into_iter()
+            .filter(|allocation| allocation.component == component);
+        let allocation = allocations.next().ok_or_else(InternalError::invariant)?;
+        if allocations.next().is_some()
+            || super::ComponentAllocationPartitionAuthority::from_committed_allocation(&allocation)
+                != Some(super::ComponentAllocationPartitionAuthority::from_partition(&partition))
+        {
+            return Err(InternalError::invariant());
+        }
+        Ok(allocation.operation_id)
+    }
     pub(crate) fn allocation(operation_id: [u8; 32]) -> Option<RootComponentAllocationView> {
         RootComponentRegistryStore::allocation(operation_id).map(allocation_record_to_view)
     }
