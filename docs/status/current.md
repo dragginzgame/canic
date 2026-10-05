@@ -3,6 +3,28 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Release-note and crypto gate repair — 2026-10-05
+
+The maintainer's 17:20 UTC validation at `abeb37ad9` reported missing release-note
+fixture helpers and a false crypto-closure mismatch under English collation.
+The [repair](https://github.com/dragginzgame/canic/issues/448) carries both common
+helpers and current numbered ledgers into the isolated fixture. The production
+preflight again refuses a missing required detailed-note file before validation
+or version mutation. Crypto identities use C collation and normalized sets;
+exact profile membership, distinct-version refusal and SHA-256 remain enforced.
+
+The release-lane fixture passes its rejection, source-drift and receipt-recovery
+cases. The actual locked offline Wasm crypto gate passes for all twelve canonical
+roles under `en_US.UTF-8`, alongside new Cargo-stub fixtures covering unordered
+and repeated inputs, missing/extra signature providers, duplicate versions and
+missing SHA-256. Actual .53 notes preflight, scoped ShellCheck, Bash syntax,
+snapshot integrity and whitespace checks pass. No broad validation was rerun.
+
+These reported gate repairs are complete and ready for review, uncommitted, with
+notes in the existing .53 draft. They do not establish the entire concurrent
+release batch's push or publication readiness; package versions remain .52.
+No version transaction, commit, tag, push, publication or artifact cleanup ran.
+
 ## Standard release validation retry — 2026-10-05
 
 The maintainer's `release-patch` refused the retained `0.110.53` plan because

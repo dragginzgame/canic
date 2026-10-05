@@ -15,14 +15,14 @@ current="$(bash scripts/ci/read-workspace-version.sh)"
 planned="$(bash scripts/ci/next-release-version.sh "$current" "$BUMP_TYPE")"
 
 detailed_changelog="docs/changelog/${planned%.*}.md"
-
-
+if [[ ! -f "$detailed_changelog" ]]; then
+    echo "release-notes preflight requires $detailed_changelog" >&2
+    exit 1
+fi
 scratch="$(mktemp "${TMPDIR:-/tmp}/canic-release-notes.XXXXXX")"
 trap 'rm -f "$scratch"' EXIT
-if [[ -f "$detailed_changelog" ]]; then
-    awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
-        -f scripts/ci/finalize-release-changelog.awk "$detailed_changelog" > "$scratch"
-fi
+awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
+    -f scripts/ci/finalize-release-changelog.awk "$detailed_changelog" > "$scratch"
 awk -v version="$planned" -v date="${RELEASE_DATE:-$(date -u +%F)}" \
   -f scripts/ci/finalize-release-changelog.awk CHANGELOG.md > "$scratch"
 

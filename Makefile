@@ -360,6 +360,7 @@ wasm-capability-size-report-gate:
 	bash scripts/ci/test-wasm-capability-size-report.sh
 
 wasm-crypto-closure-gate:
+	bash scripts/ci/test-wasm-crypto-closure.sh
 	bash scripts/ci/check-wasm-crypto-closure.sh
 
 dependency-risk-gate:

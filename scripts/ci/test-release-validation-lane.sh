@@ -22,9 +22,11 @@ cp "$ROOT/scripts/ci/run-release-validation-lane.sh" \
     "$FIXTURE/scripts/ci/run-release-validation-lane.sh"
 cp "$ROOT/scripts/ci/check-release-draft-ready.sh" \
     "$FIXTURE/scripts/ci/check-release-draft-ready.sh"
-printf '## 1.2.4 - Unreleased\n' >"$FIXTURE/docs/changelog/1.2.md"
-printf '## 1.3.0 - Unreleased\n' >"$FIXTURE/docs/changelog/1.3.md"
-printf '## 2.0.0 - Unreleased\n' >"$FIXTURE/docs/changelog/2.0.md"
+cp "$ROOT/scripts/ci/next-release-version.sh" \
+    "$ROOT/scripts/ci/finalize-release-changelog.awk" "$FIXTURE/scripts/ci/"
+printf '## [1.2.4]\n' >"$FIXTURE/docs/changelog/1.2.md"
+printf '## [1.3.0]\n' >"$FIXTURE/docs/changelog/1.3.md"
+printf '## [2.0.0]\n' >"$FIXTURE/docs/changelog/2.0.md"
 
 printf '%s\n' \
     '#!/usr/bin/env bash' \
@@ -75,6 +77,9 @@ export PATH
 
 reset_fixture() {
     rm -f "$FIXTURE_EVENTS" "$FAKE_GIT_COUNT"
+    local candidate
+    candidate="$(bash "$FIXTURE/scripts/ci/next-release-version.sh" 1.2.3 "${1:-patch}")"
+    printf '## [%s]\n' "$candidate" >"$FIXTURE/CHANGELOG.md"
 }
 
 assert_no_bump() {
@@ -90,6 +95,17 @@ assert_no_validation() {
         exit 1
     fi
 }
+
+reset_fixture
+status=0
+printf '## [1.2.5]\n' >"$FIXTURE/CHANGELOG.md"
+bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete patch || status=$?
+[[ "$status" -eq 1 ]] || {
+    echo "release validation lane test failed: conflicting draft status was $status" >&2
+    exit 1
+}
+assert_no_validation
+assert_no_bump
 
 reset_fixture
 status=0
@@ -140,7 +156,7 @@ FAKE_FAST_STATUS=29 \
 }
 assert_no_bump
 
-reset_fixture
+reset_fixture minor
 status=0
 FAKE_SOURCE_DRIFT=1 \
     bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete minor \
@@ -152,7 +168,7 @@ FAKE_SOURCE_DRIFT=1 \
 }
 assert_no_bump
 
-reset_fixture
+reset_fixture major
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
 rg -Fx 'remote-preflight before-version 2.0.0' "$FIXTURE_EVENTS" >/dev/null || {
     echo "release validation lane test failed: remote preflight did not check the planned release" >&2
@@ -163,7 +179,7 @@ rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENT
     exit 1
 }
 
-reset_fixture
+reset_fixture major
 status=0
 FAKE_REMOTE_STATUS=37 \
     bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major || status=$?
@@ -178,7 +194,7 @@ assert_no_bump
     exit 1
 }
 
-reset_fixture
+reset_fixture major
 bash "$FIXTURE/scripts/ci/run-release-validation-lane.sh" complete major
 assert_no_validation
 rg -F 'bump=major validated=1 head=validated-head kind=complete' "$FIXTURE_EVENTS" >/dev/null || {

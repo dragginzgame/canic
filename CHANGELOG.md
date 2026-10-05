@@ -23,6 +23,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   attribution and report shapes; standardize SemVer release commands with exact
   resume, atomic branch/tag pushes and retained artifacts. Validation-only
   release failures restart through the same command after source corrections.
+- Repair release-note fixture inputs and compare Wasm crypto package sets
+  independently of host locale ([#448](https://github.com/dragginzgame/canic/issues/448)).
 
 ## [0.110.x] - Fleet Runtime Contraction
 

@@ -2,6 +2,9 @@
 
 set -euo pipefail
 
+# Package identities are compared as sets, independent of the host's collation.
+export LC_ALL=C
+
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 cd "$ROOT"
 
@@ -120,7 +123,7 @@ for package_profile in "${CANONICAL_PACKAGE_PROFILES[@]}"; do
         failures=$((failures + 1))
     fi
     actual_signature_names="$(printf '%s\n' "$identities" | signature_names)"
-    expected_signatures="$(expected_signature_packages "$profile")"
+    expected_signatures="$(expected_signature_packages "$profile" | sort -u)"
     if [[ "$actual_signature_names" != "$expected_signatures" ]]; then
         printf 'deployed Wasm package %s has crypto profile %s but resolves signature libraries [%s], expected [%s]\n' \
             "$package" \
