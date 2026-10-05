@@ -3,6 +3,18 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Release-recipe ShellCheck correction — 2026-10-05
+
+The maintainer committed the preceding validation and release-tooling work in
+`cb596fc72`. The next validation run reported SC2043 in the release-recipe fixture:
+its remaining `patch-fast` case was wrapped in a loop containing one literal.
+The fixture now invokes that case directly, preserving success ordering and
+failure-boundary coverage. Scoped ShellCheck, Bash syntax, the complete recording
+fixture and whitespace checks pass. The fixture executes command stubs and has
+no Git effects. This structural test correction changes no maintained release
+behavior and remains uncommitted. No broad validation or deployment ran; the
+single corrected gate does not establish whole-release push readiness.
+
 ## Shared jq discovery and timer-provider integration — 2026-10-05
 
 The reported publish-manifest guard now shares `jq` discovery with validation,

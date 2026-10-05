@@ -42,14 +42,12 @@ run_case() {
 }
 # The canonical runner fixtures own phase ordering for the standard commands.
 bash "$ROOT/scripts/release/test-standard-release.sh"
-for lane in patch-fast; do
-    run_case "release-$lane" success
-    printf '%s\n' "$lane" release-stage release-commit release-push >"$fixture/expected"
-    cmp "$fixture/expected" "$EVENTS"
-    FAIL_AT=release-commit run_case "release-$lane" failure
-    printf '%s\n' "$lane" release-stage release-commit >"$fixture/expected"
-    cmp "$fixture/expected" "$EVENTS"
-done
+run_case release-patch-fast success
+printf '%s\n' patch-fast release-stage release-commit release-push >"$fixture/expected"
+cmp "$fixture/expected" "$EVENTS"
+FAIL_AT=release-commit run_case release-patch-fast failure
+printf '%s\n' patch-fast release-stage release-commit >"$fixture/expected"
+cmp "$fixture/expected" "$EVENTS"
 run_case release-commit success
 printf '%s\n' index '--no-print-directory release-candidate' 'scripts/ci/commit-release.sh' >"$fixture/expected"
 cmp "$fixture/expected" "$EVENTS"
