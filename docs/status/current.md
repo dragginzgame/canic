@@ -15,11 +15,21 @@ with explicit removal metadata; GitHub retains every original review record.
 Reports link to retained summaries instead of removed payloads.
 
 Focused ignore, JSON-preservation, document-link and whitespace checks pass.
-The remaining tracked checkout payload is approximately 56 MiB. Existing commit
-history still retains the removed blobs; no history rewrite, commit, push,
-release transaction, build-cache deletion or recovery-evidence cleanup ran.
-History cleanup remains subject to the repository's agent commit and rewrite
-restrictions. The removals alone do not make the local history ready to push.
+The maintainer committed the checkout cleanup, then explicitly overrode the
+agent commit/history restrictions for removal from all local history and tags.
+All 291 local references were filtered; every other file at each reference tip
+retains its original Git object ID. The maintainer's cleanup commit and current
+working files are preserved. The selected payloads are absent from reachable
+history, and full Git integrity verification passes after object reclamation.
+
+The tracked tree is approximately 56 MiB; `.git` shrank from 534 MiB to 71 MiB,
+with packed objects falling from 514 MiB to 59.6 MiB. An external recovery copy
+and commit/ref maps are retained at `/tmp/canic-history-cleanup-20261005T083005Z`.
+No push, release transaction, build-cache deletion or recovery-evidence cleanup
+ran. Local commit IDs and tags have changed; GitHub still has the original
+history. Publishing this rewrite requires a coordinated forced branch/tag update;
+an ordinary fetch or pull can reintroduce the original historical objects.
+This storage cleanup does not qualify the complete runtime release batch.
 
 ## Root membership discovery — 2026-10-05
 
