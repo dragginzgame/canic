@@ -508,6 +508,13 @@ The normal complete patch path is `make patch`, followed by
 `make release-stage`, `make release-commit`, and `make release-push`; the
 one-shot form is `make release-patch`. Minor and major releases use their
 corresponding commands.
+The standard commands use the [Shared Tooling runner](shared-tooling.md).
+Preflight and validation-only failures restart through the same standard target
+against the current committed source, repeating both gates. Preparation-free
+plans retained by the earlier runner are archived unchanged after checking
+their base, destination and absence of preparation effects. Once preparation
+begins, use `make release-resume VERSION=X.Y.Z` to reconcile the exact saved
+release; never delete its intent or increment from its prepared version.
 Before patch validation and version mutation, `make patch` prints the
 read-only `make release-cadence` advisory. The advisory reports when the next
 release would exceed the soft 12-release minor-line guideline but never blocks

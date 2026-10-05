@@ -17,11 +17,20 @@ shift
 for argument in "$@"; do export "$argument"; done
 if [[ "$target" == release-version ]]; then cat version; exit; fi
 printf '%s\n' "$target" >> events
+if [[ "$target" == release-verify ]]; then
+    attempt="$(awk '$0 == "release-verify" { count++ } END { print count }' events)"
+    printf 'validation source: %s\n' "$RELEASE_SOURCE" > "validation.$attempt.log"
+    printf 'build source: %s\n' "$RELEASE_SOURCE" > "build.$attempt.evidence"
+fi
 [[ "${FIXTURE_FAIL_TARGET:-}" != "$target" ]] || exit 7
 case "$target" in
     release-preflight) [[ "$(cat version)" == "$RELEASE_PREVIOUS" ]] ;;
     release-verify) ;;
-    release-prepare-version) printf '%s\n' "$RELEASE_VERSION" > version ;;
+    release-prepare-version)
+        [[ "$(tail -n 1 ".release-state/$RELEASE_VERSION.plan")" == prepare ]]
+        [[ "$(sed -n '6p' ".release-state/$RELEASE_VERSION.plan")" == "$RELEASE_SOURCE" ]]
+        printf '%s\n' "$RELEASE_VERSION" > version
+        ;;
     release-prepared-check) [[ "$(cat version)" == "$RELEASE_VERSION" ]] ;;
     release-files) printf 'version\0release file.txt\0' ;;
     release-commit-check|release-committed-check|release-tagged-check|release-push-check) ;;
@@ -32,7 +41,6 @@ STUB
 cat > "$FIXTURE_ROOT/bin/git" <<'STUB'
 #!/usr/bin/env bash
 set -euo pipefail
-source_sha=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
 release_sha=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
 tag_sha=cccccccccccccccccccccccccccccccccccccccc
 case "$1" in
@@ -45,7 +53,7 @@ case "$1" in
             --show-toplevel) pwd ;;
             release-state) echo .release-state ;;
             HEAD) cat head ;;
-            HEAD^) [[ "$(cat head)" == "$release_sha" ]]; echo "$source_sha" ;;
+            HEAD^) [[ "$(cat head)" == "$release_sha" ]]; cat parent-head ;;
             'HEAD^{tree}') echo dddddddddddddddddddddddddddddddddddddddd ;;
             refs/tags/*'^{commit}') [[ -f tag ]]; echo "$release_sha" ;;
             refs/tags/*) [[ -f tag ]]; echo "$tag_sha" ;;
@@ -69,10 +77,11 @@ case "$1" in
         ;;
     cat-file) [[ -f tag ]]; echo tag ;;
     ls-remote)
+        [[ "${FIXTURE_REMOTE_FAIL:-}" != yes ]] || exit 9
         for ref in "$@"; do
             case "$ref" in
                 refs/heads/main) if [[ -f remote-head ]]; then printf '%s\t%s\n' "$(cat remote-head)" "$ref"; fi ;;
-                refs/tags/*) if [[ -f remote-tag ]]; then printf '%s\t%s\n' "$(cat remote-tag)" "$ref"; fi ;;
+                refs/tags/*) if [[ -f remote-tag && "$(cat remote-tag-name)" == "${ref#refs/tags/v}" ]]; then printf '%s\t%s\n' "$(cat remote-tag)" "$ref"; fi ;;
             esac
         done
         ;;
@@ -82,6 +91,7 @@ case "$1" in
         ;;
     commit)
         [[ "$#" == 3 && "$2" == -m && "$3" == "Release $(cat version)" ]]
+        cp head parent-head
         echo "$release_sha" > head
         echo commit >> events
         if [[ "${FIXTURE_FAIL_EFFECT:-}" == commit && ! -f lost-commit ]]; then touch lost-commit; exit 9; fi
@@ -92,6 +102,7 @@ case "$1" in
         [[ "${FIXTURE_FAIL_EFFECT:-}" != before-push ]] || exit 9
         echo "$release_sha" > remote-head
         echo "$tag_sha" > remote-tag
+        cat version > remote-tag-name
         if [[ "${FIXTURE_FAIL_EFFECT:-}" == push && ! -f lost-push ]]; then touch lost-push; exit 9; fi
         ;;
     *) exit 2 ;;
@@ -106,6 +117,15 @@ new_fixture() {
     printf '0.1.0\n' > version
     printf 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\n' > 'head'
     printf 'retained build artifact\n' > 'release file.txt'
+}
+# Persist a preparation-free record as produced by an interrupted early attempt.
+early_plan() {
+    local kind="$1" candidate phase="$2" destination
+    candidate="$(bash "$ROOT/scripts/ci/next-release-version.sh" "$(cat version)" "$kind")"
+    destination="$(git remote get-url --push --all origin | git hash-object --stdin)"
+    mkdir -p .release-state
+    printf '%s\n' release-plan-1 "$kind" "$(cat version)" "$candidate" 2026-10-05 \
+        "$(cat head)" origin main "$destination" '' "$phase" > ".release-state/$candidate.plan"
 }
 count_event() { awk -v event="$1" '$0 == event { count++ } END { print count+0 }' events; }
 expect_failure() {
@@ -129,13 +149,13 @@ for kind in patch minor major; do
     [[ ! -e .release-state/lock ]]
 done
 
-for target in release-preflight release-verify release-prepare-version release-prepared-check release-commit-check release-committed-check release-tagged-check release-push-check; do
+for target in release-prepare-version release-prepared-check release-commit-check release-committed-check release-tagged-check release-push-check; do
     new_fixture "$target"
     export FIXTURE_FAIL_TARGET="$target"
     expect_failure patch origin main
     [[ "$(count_event push)" == 0 && ! -e .release-state/lock ]]
     case "$target" in
-        release-preflight|release-verify|release-prepare-version) [[ "$(cat version)" == 0.1.0 ]] ;;
+        release-prepare-version) [[ "$(cat version)" == 0.1.0 ]] ;;
     esac
     unset FIXTURE_FAIL_TARGET
     bash "$ROOT/scripts/ci/run-release.sh" resume 0.1.1 origin main > output
@@ -143,11 +163,135 @@ for target in release-preflight release-verify release-prepare-version release-p
     [[ "$(cat version)" == 0.1.1 ]]
 done
 
+for kind in patch minor major; do
+    for target in release-preflight release-verify; do
+        new_fixture "restart-$kind-$target"
+        case "$kind" in patch) candidate=0.1.1 ;; minor) candidate=0.2.0 ;; major) candidate=1.0.0 ;; esac
+        export FIXTURE_FAIL_TARGET="$target"
+        expect_failure "$kind" origin main
+        [[ ! -e ".release-state/$candidate.plan" && ! -e .release-state/lock ]]
+        cp output failed-output
+        if [[ "$target" == release-verify ]]; then
+            cp validation.1.log failed-log
+            cp build.1.evidence failed-evidence
+        fi
+        unset FIXTURE_FAIL_TARGET
+        # Model a committed validation correction and different inputs.
+        printf 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n' > 'head'
+        printf 'corrected input\n' > corrected-input
+        bash "$ROOT/scripts/ci/run-release.sh" "$kind" origin main > output
+        [[ "$(sed -n '6p' ".release-state/$candidate.plan")" == eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee ]]
+        [[ "$(count_event release-preflight)" == 3 && "$(count_event release-prepare-version)" == 1 ]]
+        [[ "$(count_event commit)" == 1 && "$(count_event push)" == 1 ]]
+        if [[ "$target" == release-verify ]]; then
+            [[ "$(count_event release-verify)" == 2 ]]
+            cmp failed-log validation.1.log
+            cmp failed-evidence build.1.evidence
+            [[ "$(cat validation.2.log)" == 'validation source: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ]]
+        fi
+        [[ -s failed-output && "$(cat 'release file.txt')" == 'retained build artifact' && "$(cat corrected-input)" == 'corrected input' ]]
+        [[ ! -e .release-state/lock ]]
+    done
+done
+
+for phase in preflight validate; do
+    new_fixture "retained-$phase"
+    printf '0.12.0\n' > version
+    early_plan minor "$phase"
+    cp .release-state/0.13.0.plan earlier-plan
+    printf 'earlier failed log\n' > failed-log
+    printf 'earlier build evidence\n' > failed-evidence
+    printf 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n' > 'head'
+    expect_failure resume 0.13.0 origin main
+    bash "$ROOT/scripts/ci/run-release.sh" minor origin main > output
+    archives=(.release-state/0.13.0.attempt.*)
+    [[ "${#archives[@]}" == 1 ]]
+    cmp earlier-plan "${archives[0]}/0.13.0.plan"
+    [[ "$(cat version)" == 0.13.0 && "$(count_event release-verify)" == 1 ]]
+    [[ "$(cat validation.1.log)" == 'validation source: eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee' ]]
+    [[ "$(cat failed-log)" == 'earlier failed log' && "$(cat failed-evidence)" == 'earlier build evidence' ]]
+done
+
+new_fixture retained-retry-fails-validation
+early_plan patch validate
+cp .release-state/0.1.1.plan earlier-plan
+printf 'eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee\n' > 'head'
+export FIXTURE_FAIL_TARGET=release-verify
+expect_failure patch origin main
+[[ ! -e .release-state/0.1.1.plan && "$(cat version)" == 0.1.0 ]]
+archives=(.release-state/0.1.1.attempt.*)
+cmp earlier-plan "${archives[0]}/0.1.1.plan"
+cp validation.1.log failed-log
+cp build.1.evidence failed-evidence
+unset FIXTURE_FAIL_TARGET
+printf 'ffffffffffffffffffffffffffffffffffffffff\n' > 'head'
+bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output
+[[ "$(count_event release-verify)" == 2 && "$(count_event commit)" == 1 && "$(count_event push)" == 1 ]]
+cmp failed-log validation.1.log
+cmp failed-evidence build.1.evidence
+[[ "$(cat validation.2.log)" == 'validation source: ffffffffffffffffffffffffffffffffffffffff' ]]
+
+new_fixture early-exact-resume
+early_plan patch validate
+bash "$ROOT/scripts/ci/run-release.sh" resume 0.1.1 origin main > output
+[[ "$(count_event release-preflight)" == 2 && "$(count_event release-verify)" == 1 ]]
+
+new_fixture completed-history
+bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output
+cp .release-state/0.1.1.plan completed-plan
+bash "$ROOT/scripts/ci/run-release.sh" patch origin main > output
+cmp completed-plan .release-state/0.1.1.plan
+[[ "$(cat version)" == 0.1.2 && "$(count_event commit)" == 2 && "$(count_event push)" == 2 ]]
+
+new_fixture reselect-before-preparation
+early_plan patch validate
+cp .release-state/0.1.1.plan earlier-plan
+bash "$ROOT/scripts/ci/run-release.sh" minor origin main > output
+archives=(.release-state/0.1.1.attempt.*)
+cmp earlier-plan "${archives[0]}/0.1.1.plan"
+[[ "$(cat version)" == 0.2.0 && "$(count_event release-verify)" == 1 ]]
+
+for conflict in local-tag remote-tag prepared-files version destination remote-unavailable; do
+    new_fixture "restart-conflict-$conflict"
+    early_plan patch validate
+    cp .release-state/0.1.1.plan earlier-plan
+    case "$conflict" in
+        local-tag) echo 0.1.1 > tag ;;
+        remote-tag) echo cccccccccccccccccccccccccccccccccccccccc > remote-tag; echo 0.1.1 > remote-tag-name ;;
+        prepared-files) printf 'version\0' > .release-state/0.1.1.plan.files ;;
+        version) echo 0.1.1 > version ;;
+        destination) export FIXTURE_DESTINATION=https://example.invalid/other ;;
+        remote-unavailable) export FIXTURE_REMOTE_FAIL=yes ;;
+    esac
+    expect_failure patch origin main
+    cmp earlier-plan .release-state/0.1.1.plan
+    [[ ! -e events && ! -e .release-state/lock ]]
+    unset FIXTURE_DESTINATION
+    unset FIXTURE_REMOTE_FAIL
+done
+
+for target in release-prepare-version release-prepared-check; do
+    new_fixture "restart-after-$target"
+    export FIXTURE_FAIL_TARGET="$target"
+    expect_failure patch origin main
+    unset FIXTURE_FAIL_TARGET
+    cp events earlier-events
+    for kind in patch minor major; do expect_failure "$kind" origin main; done
+    cmp earlier-events events
+    [[ ! -e .release-state/0.1.2.plan ]]
+    bash "$ROOT/scripts/ci/run-release.sh" resume 0.1.1 origin main > output
+    [[ "$(count_event commit)" == 1 && "$(count_event push)" == 1 ]]
+done
+
 for effect in commit tag push before-push; do
     new_fixture "lost-$effect"
     export FIXTURE_FAIL_EFFECT="$effect"
     expect_failure patch origin main
     unset FIXTURE_FAIL_EFFECT
+    cp events earlier-events
+    expect_failure patch origin main
+    cmp earlier-events events
+    [[ ! -e .release-state/0.1.2.plan ]]
     bash "$ROOT/scripts/ci/run-release.sh" resume 0.1.1 origin main > output
     [[ "$(count_event release-prepare-version)" == 1 && "$(count_event commit)" == 1 ]]
     case "$effect" in before-push) [[ "$(count_event push)" == 2 ]] ;; *) [[ "$(count_event push)" == 1 ]] ;; esac
@@ -164,16 +308,18 @@ unset FIXTURE_DESTINATION
 
 new_fixture concurrent
 mkdir -p .release-state/lock
+early_plan patch validate
+cp .release-state/0.1.1.plan earlier-plan
 expect_failure patch origin main
+cmp earlier-plan .release-state/0.1.1.plan
 [[ ! -e events && ! -e tag ]]
 
 new_fixture corrupt-plan
-export FIXTURE_FAIL_TARGET=release-verify
-expect_failure patch origin main
-unset FIXTURE_FAIL_TARGET
+early_plan patch validate
 printf 'unexpected record\n' >> .release-state/0.1.1.plan
 expect_failure resume 0.1.1 origin main
-[[ "$(count_event commit)" == 0 && "$(count_event push)" == 0 ]]
+expect_failure patch origin main
+[[ ! -e events ]]
 
 new_fixture changelog
 cat > CHANGELOG.md <<'NOTES'

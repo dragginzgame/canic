@@ -76,7 +76,8 @@ Each repository retains authority over:
 
 - its planned outcomes and how they map to pull requests and releases;
 - exact focused-check commands and complete qualification gates;
-- explicitly selected release versions; and
+- explicit release execution and version overrides within the
+  [common compatibility and automatic changelog rules](../../rules/changelogs.md); and
 - closeout, publication, and deployment gates.
 
 Ordinary continuation completes the accepted coherent batch, including its direct

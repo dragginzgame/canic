@@ -21,7 +21,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
 - Share measurement arithmetic through local `ic-metrics 0.1.1` while preserving endpoint
   attribution and report shapes; standardize SemVer release commands with exact
-  resume, atomic branch/tag pushes and retained artifacts.
+  resume, atomic branch/tag pushes and retained artifacts. Validation-only
+  release failures restart through the same command after source corrections.
 
 ## [0.110.x] - Fleet Runtime Contraction
 

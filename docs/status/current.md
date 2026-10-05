@@ -3,6 +3,35 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Standard release validation retry — 2026-10-05
+
+The maintainer's `release-patch` refused the retained `0.110.53` plan because
+Canic still used Shared Tooling revision `b8537873`. That plan is at `validate`,
+with no saved index tree or preparation file set; package versions remain .52
+and neither local nor remote has the candidate tag. The snapshot now records
+eighteen files from committed upstream `c0206f1943238e21bd00fbe01658e6a0864c24fa`,
+exported through its distribution helper from a clean temporary checkout.
+Uncommitted sibling changes were excluded and the sibling was not modified.
+
+The common runner now permits a fresh normal-target retry after source fixes,
+retaining earlier preparation-free plans unchanged before repeating preflight
+and complete validation. Intent is persisted only before preparation. Exact
+resume remains required after preparation begins. Snapshot verification,
+command-stub runner recovery and the consumer's standard-entry/recipe fixtures
+pass. The real .53 plan and failed-validation artifacts remain untouched.
+
+The new upstream hook was evaluated but not installed: its regular-file-only
+index rule rejects Canic's historical audit symlinks. The existing hook and
+installer remain unchanged. Snapshot integrity does not qualify full baseline
+adoption or native macOS behavior. The GitHub description is currently empty;
+no external repository metadata or issue was written during this inspection.
+
+The release retry correction and .53 notes are ready for review, uncommitted.
+The complete concurrent release batch has not been reassessed for push or
+publication. No broad validation, version mutation, commit, tag, push,
+publication or cleanup ran. After the maintainer commits the correction, the
+same `make release-patch` can restart the validation-only attempt.
+
 ## IC Metrics tagged-package alignment — 2026-10-05
 
 The maintainer tagged ic-metrics 0.1.1 while the consumer still required local

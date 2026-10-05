@@ -46,28 +46,46 @@ hook() {
         "RELEASE_VERSION=$candidate" "RELEASE_DATE=$release_date" \
         "RELEASE_REMOTE=$remote" "RELEASE_BRANCH=$branch" "RELEASE_SOURCE=$source"
 }
+read_plan() {
+    [[ -f "$1" && ! -L "$1" ]] || fail 'release plan is missing or symlinked'
+    {
+        if ! {
+            IFS= read -r saved_schema &&
+            IFS= read -r saved_kind &&
+            IFS= read -r saved_previous &&
+            IFS= read -r saved_candidate &&
+            IFS= read -r saved_date &&
+            IFS= read -r saved_source &&
+            IFS= read -r saved_remote &&
+            IFS= read -r saved_branch &&
+            IFS= read -r saved_destination &&
+            IFS= read -r saved_tree &&
+            IFS= read -r saved_phase
+        }; then
+            fail 'release plan is truncated'
+        fi
+        extra=""
+        if IFS= read -r extra || [[ -n "$extra" ]]; then fail 'release plan has extra records'; fi
+    } < "$1"
+    [[ "$saved_schema" == release-plan-1 && "$saved_candidate" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ && "$1" == "$state_root/$saved_candidate.plan" ]] || fail 'release plan identity is invalid'
+    [[ "$saved_source" =~ ^[0-9a-f]{40,64}$ && "$saved_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ && "$saved_destination" =~ ^[0-9a-f]{40,64}$ ]] || fail 'release plan source/date/destination is invalid'
+    [[ "$(bash "$(dirname "${BASH_SOURCE[0]}")/next-release-version.sh" "$saved_previous" "$saved_kind")" == "$saved_candidate" ]] || fail 'release plan increment is invalid'
+    case "$saved_phase" in preflight|validate|prepare|stage|commit|tag|push|complete) ;; *) fail 'release plan phase is invalid' ;; esac
+}
 if [[ "$mode" == resume ]]; then
     [[ "$requested_version" =~ ^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]] || usage
     plan="$state_root/$requested_version.plan"
-    [[ -f "$plan" && ! -L "$plan" ]] || fail 'exact release plan is missing or symlinked'
-    {
-        IFS= read -r schema
-        IFS= read -r kind
-        IFS= read -r previous
-        IFS= read -r candidate
-        IFS= read -r release_date
-        IFS= read -r source
-        IFS= read -r planned_remote
-        IFS= read -r planned_branch
-        IFS= read -r planned_remote_identity
-        IFS= read -r index_tree
-        IFS= read -r phase
-        if IFS= read -r _extra; then fail 'release plan has extra records'; fi
-    } < "$plan"
-    [[ "$schema" == release-plan-1 && "$candidate" == "$requested_version" ]] || fail 'release plan identity is invalid'
-    [[ "$remote" == "$planned_remote" && "$branch" == "$planned_branch" && "$remote_identity" == "$planned_remote_identity" ]] || fail 'release destination changed'
-    [[ "$source" =~ ^[0-9a-f]{40,64}$ && "$release_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] || fail 'release plan source/date is invalid'
-    [[ "$(bash "$(dirname "${BASH_SOURCE[0]}")/next-release-version.sh" "$previous" "$kind")" == "$candidate" ]] || fail 'release plan increment is invalid'
+    read_plan "$plan"
+    [[ "$remote" == "$saved_remote" && "$branch" == "$saved_branch" && "$remote_identity" == "$saved_destination" ]] || fail 'release destination changed'
+    kind="$saved_kind"
+    previous="$saved_previous"
+    candidate="$saved_candidate"
+    release_date="$saved_date"
+    source="$saved_source"
+    index_tree="$saved_tree"
+    phase="$saved_phase"
+    # Early plans have no reusable validation: repeat preflight and the full gate.
+    case "$phase" in preflight|validate) phase=preflight ;; esac
 else
     kind="$mode"
     previous="$("$make_bin" --no-print-directory -s release-version)"
@@ -75,7 +93,30 @@ else
     release_date="$(date -u +%F)"
     source="$(git rev-parse --verify HEAD)"
     plan="$state_root/$candidate.plan"
-    [[ ! -e "$plan" && ! -L "$plan" ]] || fail "plan for $candidate already exists; resume that exact release"
+    # Validation has no release mutations to resume. Retain its old identity as
+    # evidence, then validate the current source afresh through the normal target.
+    # Once preparation starts, even a failed bump may have effects to reconcile.
+    for retained_plan in "$state_root"/*.plan; do
+        [[ -e "$retained_plan" || -L "$retained_plan" ]] || continue
+        read_plan "$retained_plan"
+        case "$saved_phase" in
+            complete)
+                [[ "$saved_candidate" != "$candidate" ]] || fail "release $candidate is already complete; inspect its metadata and tag"
+                ;;
+            preflight|validate)
+                [[ "$saved_previous" == "$previous" && -z "$saved_tree" && ! -e "$retained_plan.files" && ! -L "$retained_plan.files" ]] || fail "release $saved_candidate has possible preparation effects; reconcile its saved plan"
+                [[ "$remote" == "$saved_remote" && "$branch" == "$saved_branch" && "$remote_identity" == "$saved_destination" ]] || fail 'release destination changed'
+                retained_tags="$(git tag --list "v$saved_candidate")"
+                [[ -z "$retained_tags" ]] || fail 'preparation-free retry conflicts with a local release tag'
+                retained_tags="$(git ls-remote --refs -- "$destination" "refs/tags/v$saved_candidate")"
+                [[ -z "$retained_tags" ]] || fail 'preparation-free retry conflicts with a remote release tag'
+                archive="$(mktemp -d "$state_root/$saved_candidate.attempt.XXXXXX")"
+                mv "$retained_plan" "$archive/$saved_candidate.plan"
+                printf 'Restarting before preparation; retained earlier attempt: %s\n' "$archive/$saved_candidate.plan"
+                ;;
+            *) fail "unfinished release $saved_candidate is at $saved_phase; use make release-resume VERSION=$saved_candidate" ;;
+        esac
+    done
     index_tree=""
     phase=preflight
 fi
@@ -110,7 +151,6 @@ read_remote_refs() {
     done <<< "$refs"
 }
 printf 'Release %s -> %s on %s via %s: validate, prepare, stage, commit/tag, atomic push\n' "$previous" "$candidate" "$branch" "$remote"
-save_phase "$phase"
 while [[ "$phase" != complete ]]; do
     case "$phase" in
         preflight)
@@ -120,7 +160,7 @@ while [[ "$phase" != complete ]]; do
             [[ -z "$local_tags" ]] || fail 'candidate tag already exists'
             remote_tags="$(git ls-remote --refs -- "$destination" "refs/tags/v$candidate")"
             [[ -z "$remote_tags" ]] || fail 'remote candidate tag already exists'
-            save_phase validate
+            phase=validate
             ;;
         validate)
             assert_source
@@ -129,6 +169,8 @@ while [[ "$phase" != complete ]]; do
             assert_source
             after="$(git diff --binary HEAD | git hash-object --stdin)"
             [[ "$before" == "$after" ]] || fail 'source or metadata changed during validation'
+            # Persist exact intent before the first possible release mutation.
+            # Failed validation needs no recovery plan and can start afresh.
             save_phase prepare
             ;;
         prepare)

@@ -69,6 +69,11 @@ through its own qualified tooling.
 | Snapshot verification | A SHA-256 implementation |
 | Snapshot refresh | Git, a clean Shared Tooling checkout, and a SHA-256 implementation |
 | Release runner | GNU Make, Git, `date`, explicit consumer metadata/check targets, and Bash 3.2 |
+| Rust pre-commit hook and installer | Git, GNU Make, consumer-owned `fmt` prerequisites (Cargo/rustfmt and an exact `cargo-sort` version), Bash 3.2 and standard Unix file utilities |
+
+The hook regression fixture also requires `jq` and the `cargo-sort` version from
+`ci/tool-versions.env` (`2.1.4`). CI installs it before offline tests; local
+validation requires it to be prepared beforehand and never installs it implicitly.
 
 ## Installer-capable platforms
 

@@ -31,9 +31,10 @@ these commands must reject ambiguous or unsupported version inputs.
 3. **Prepare.** Apply the selected increment to the canonical version and all
    directly owned metadata and lockfile entries, without dependency upgrades.
    Finalize the one current changelog draft as `## [X.Y.Z] - YYYY-MM-DD`, using
-   the selected version and UTC release date. Reject a conflicting explicit
-   version selection. Verify resulting metadata consistency and run any checks
-   affected by the metadata change before staging.
+   the selected version and UTC release date. Reject a pending heading or
+   maintainer-selected version that conflicts with the computed release candidate.
+   Verify resulting metadata consistency and run any checks affected by the
+   metadata change before staging.
 4. **Stage.** Stage the explicit release file set. Do not use an indiscriminate
    `git add -A` or include unrelated work.
 5. **Commit and tag.** Create the maintainer-owned release commit with subject
@@ -47,7 +48,38 @@ These commands finish with the branch and tag on GitHub. They do not implicitly
 publish packages, create GitHub Release objects, deploy products, bump to another
 development version or clean build/evidence directories. Those actions require
 their own explicit commands and authority. Keep the finalized release at the
-top of the changelog until subsequent work needs a new undated `Draft`.
+top of the changelog until subsequent work needs a new numbered, undated pending
+entry under the [automatic next-version rules](../rules/changelogs.md).
+
+Agents maintain that proposed changelog version during ordinary development.
+The proposal does not bump package metadata or execute a release. Select the
+matching release kind when invoking the maintainer-owned command; its computed
+candidate must agree with the pending heading and the complete batch's
+compatibility impact before finalization.
+
+## Artifact retention and exact push scope
+
+Successful push does not authorize cleanup. Retain consumer-owned build outputs,
+validation logs, release receipts and recovery plans on success, failure and
+retry. Remove automatic post-push cleanup from consumer targets and adapters;
+keep consumer workspace cleanup as a separately invoked, explicitly scoped
+command. A helper may remove its own disposable scratch files when they contain
+no retained artifacts or evidence and are not needed for recovery. A directory
+being named `tmp` or `cache` does not establish that it is safe to delete.
+
+The common runner uses exactly this push shape with its saved selections:
+
+```bash
+git push --no-follow-tags --atomic "$remote" \
+  "HEAD:refs/heads/$branch" "refs/tags/v$candidate:refs/tags/v$candidate"
+```
+
+`--no-follow-tags` disables implicit annotated-tag publication, including a
+configured `push.followTags`. Both refspecs are explicit: push the selected branch
+and this release's tag, without publishing other local tags. `--atomic` requires
+the remote to accept both ref updates together or reject both; do not fall back
+to separate pushes. An interrupted reply still requires reconciliation against
+the saved release identities before retrying.
 
 ## Makefile example
 
@@ -78,9 +110,25 @@ release-resume:
 The runner owns ordering, version selection, Git effects, a directory lock and
 intent-before-effect plans in the repository's Git directory. The source SHA,
 previous/candidate versions, UTC date, branch and push destination are fixed
-across resume. A plan is retained on success and failure. A stale lock requires
+across resume. Durable intent begins only after validation succeeds, immediately
+before preparation may mutate release metadata. From that point, the plan is
+retained on success and failure. A stale lock requires
 inspection of its recorded owner before manual removal; never steal an active
 release lock.
+
+If preflight or validation fails, correct the inputs and rerun the same normal
+release target. There is no new recovery plan to resume; preflight and the complete
+validation gate run again against the current source. Consumer-owned failed logs
+and build/evidence artifacts remain in place, bound to their original attempt;
+adapters must retain them rather than overwrite them or reuse their validation.
+
+An already-retained plan stopped at `preflight` or `validate` also permits a fresh
+attempt. The runner checks that the base version and destination still agree and
+that no saved release index, preparation file set or local/remote candidate tag
+indicates possible preparation effects. It retains that plan unchanged in a unique
+`release-state/X.Y.Z.attempt.*/` directory before starting fresh preflight and
+validation. Exact resume of an early plan remains bound to its saved source and
+also repeats both gates; use the normal target after committing source fixes.
 
 Consumer Make targets provide these adapters:
 
@@ -110,11 +158,19 @@ push or version change has been authorized, because commits remain
 maintainer-owned under the [engineering baseline](../DRAGGINZGAME.md). Agents
 may use separate read-only or preparation phases within existing authorization.
 
-If preparation, tagging or a push is interrupted, retain the exact candidate,
+Once version preparation has started, the normal targets reject any unfinished
+release, including when the bumped metadata would otherwise select another
+candidate. If preparation, tagging or a push is interrupted, retain the exact candidate,
 source/commit identity, completed phases and evidence. Inspect local and remote
 state before `make release-resume VERSION=X.Y.Z` resumes that release. A missing push reply does not prove failure.
 Never rerun the increment from the already bumped version, recreate an existing
 release commit, overwrite a tag or discard artifacts to obtain a clean retry.
+
+`Release X.Y.Z completed; retained plan: ...` is a success message. The completed
+plan is retained evidence and does not block the next release. A later failure
+from a separately chained command does not undo that successful branch/tag push.
+Package publication requires a consumer-owned publication command and an eligible
+package; do not append `make publish` automatically to the standard release flow.
 
 ## Adoption and verification
 
@@ -126,8 +182,18 @@ changelog helper in the [governance snapshot](consuming-snapshots.md), and quali
 declared Linux and macOS hosts. Report upstream policy changes separately from
 verified consumer adoption.
 
+Snapshot verification establishes the declared files' integrity at the recorded
+revision. It does not establish that Make targets invoke the runner or that
+consumer adapters comply. During adoption, inspect all release entry points,
+adapters and their tests for automatic post-push cleanup, broad tag pushes and
+conflicting expectations. Align or retire those paths and update their local
+instructions and checks before reporting release-workflow adoption. Report
+snapshot integrity, consumer changes and workflow qualification separately;
+identify uncommitted adoption edits as working-tree changes.
+
 Use isolated fixtures or command stubs to verify all three increments, identical
 phase ordering, stop-on-failure behavior, explicit staging, tag identity, atomic
-push and interruption recovery. Qualification must not publish a real release
+push scope, artifact retention on success/failure/retry and interruption recovery.
+Qualification must not publish a real release
 as a side effect of testing. Documentation review or a stub pass is not evidence
 of live package publication or a native host release.
