@@ -3,6 +3,68 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Native validation contract propagation — 2026-10-05
+
+The retained ordinary/internal native run
+`target/test-runs/20261005T175731Z-3219217.QIQXvv` exposed stale fixtures and
+missing propagation from the current accepted release batch. The
+[repair](https://github.com/dragginzgame/canic/issues/450) aligns cache fixtures
+with Cargo's release profile, release fixtures with the shared helpers and
+numbered pending ledger, and Host/CLI inputs with current package/report/help
+contracts. Lifecycle guards select exact function identifiers and check
+restoration and synchronous participants before the current startup schedulers.
+Replay manifests now cover caller-authority publication, startup release and
+read-only Root membership; canonical capability Candid and timer custody match
+their Rust owners. The locked graph guards pass after the separately recorded
+registry metrics adoption below.
+
+Locked offline focused qualification passes:
+
+- Internal cache immutability: the exact reported unit test with
+  `governed-pocketic-tests`.
+- Canic: changelog, managed-endpoint and protocol-surface targets with all
+  features; four selected release-flow success/rollback cases use command stubs
+  and create no Git commits.
+- Core: lifecycle, memory ABI and timer inventory targets plus all 32 focused
+  replay-policy tests, with all features.
+- Host and CLI: the two affected unit tests per package with default features.
+
+Warning-denied Clippy passes for the changed Canic guard targets, Core library
+and tests with all features, Host/CLI libraries and tests with default features,
+and Internal library/tests with `governed-pocketic-tests`. Scoped formatting,
+whitespace and the embedded peer verifier pass; its checked-in Wasm and
+provenance remain unchanged. No PocketIC or broad suite ran for this repair.
+
+The existing pending 0.110.53 notes cover the corrected native contracts;
+package versions remain 0.110.52. The native repair is complete and review-ready,
+uncommitted. The entire concurrent release batch's push/publication readiness
+was not reassessed. No version transaction, Git publication or artifact cleanup
+ran.
+
+## IC Metrics registry adoption — 2026-10-05
+
+Canic now resolves published registry `ic-metrics 0.1.4` without a sibling
+checkout, retaining the maintainer's compatible `0.1` requirement, all other
+lock records and consumer package metadata. The previous local path changed
+its lock selection from 0.1.3 to 0.1.4 during maintainer validation; this adoption
+preserves that selection and adds the verified registry source/checksum.
+The primary release command stopped before the patch was applied. Source and
+lock identities were rechecked against the captured inputs before mutation.
+
+An isolated worktree first passed locked offline Linux metadata, manifest
+sorting, warning-denied Core library Clippy and all four endpoint tests, using
+its own target directory. Primary locked offline Linux metadata, manifest sorting, strict Core library
+Clippy and all four endpoint tests also pass using this checkout's target.
+A first primary test attempt was stopped after another validator acquired the
+build lock; the completed rerun followed active-process and free-lock checks. Attribution, measured-zero
+semantics and public reports are unchanged by adoption. Later concurrent Core
+replay-policy/guard, CLI and host fixture edits are outside these passing results;
+they require their owning validation rather than reusing the earlier evidence.
+The pending 0.110.53 notes include
+[registry adoption](https://github.com/dragginzgame/canic/issues/447); source edits
+are uncommitted. No broad gate, IC measurement, native macOS qualification,
+agent commit, tag, push, package publication or cleanup occurred.
+
 ## Selected testkit lockfile alignment — 2026-10-05
 
 The maintainer's latest commit `2241e9896` selects `ic-testkit = "0.18"` but

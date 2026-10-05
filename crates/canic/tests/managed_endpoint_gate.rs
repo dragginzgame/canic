@@ -139,7 +139,7 @@ fn prepared_managed_init_defers_application_work_while_standalone_local_starts_i
 }
 
 #[test]
-fn prepared_activation_schedules_each_current_application_install_hook_once() {
+fn application_startup_is_owned_by_the_release_bound_lifecycle_adapter() {
     let workspace = workspace_root();
     let macro_path = workspace.join("crates/canic/src/macros/start.rs");
     let source = fs::read_to_string(&macro_path)
@@ -161,9 +161,11 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         })
         .expect("Wasm Store lifecycle macro");
     assert!(
-        nonroot.contains("fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>)")
+        nonroot.contains("fn __canic_schedule_application_startup()")
+            && nonroot.contains("async fn initialize(args: Option<Vec<u8>>)")
+            && nonroot.contains("ApplicationStartupApi::schedule_required(initialize)")
             && nonroot.contains("canic_install(args).await;"),
-        "managed non-root activation must receive durable init bytes from its transition"
+        "managed startup must delegate durable arguments and scheduling to its release-bound owner"
     );
     assert!(
         wasm_store.contains("fn __canic_schedule_prepared_activation_init(args: Option<Vec<u8>>)")
@@ -171,20 +173,18 @@ fn prepared_activation_schedules_each_current_application_install_hook_once() {
         "Wasm Store activation must receive durable init bytes from its transition"
     );
     let duplicate_guard = "__CANIC_PREPARED_APPLICATION_INIT_SCHEDULED.replace(true)";
-    for (adapter, lifecycle) in [("managed non-root", nonroot), ("Wasm Store", wasm_store)] {
-        assert_eq!(
-            lifecycle.matches(duplicate_guard).count(),
-            1,
-            "{adapter} activation adapter must suppress duplicate hook scheduling"
-        );
-    }
+    assert_eq!(
+        wasm_store.matches(duplicate_guard).count(),
+        1,
+        "Wasm Store activation adapter must suppress duplicate hook scheduling"
+    );
     let nonroot_path = workspace.join("crates/canic/src/macros/endpoints/role.rs");
     let nonroot_endpoints = fs::read_to_string(&nonroot_path)
         .unwrap_or_else(|error| panic!("read {}: {error}", nonroot_path.display()));
     assert!(
-        nonroot_endpoints.contains("__canic_schedule_prepared_activation_init(")
-            && nonroot_endpoints.contains("transition.application_init_args,"),
-        "managed non-root activation must hand durable init bytes to the lifecycle adapter"
+        nonroot_endpoints.contains("ApplicationStartupApi::release(publication)?")
+            && nonroot_endpoints.contains("__canic_schedule_application_startup();"),
+        "managed startup must retain publication authority before requesting its lifecycle callback"
     );
 }
 
@@ -201,12 +201,9 @@ fn active_runtime_replay_offers_only_internal_bootstrap_recovery() {
                 .next()
         })
         .expect("managed ConfigureRuntime command arm");
-    let conditional = configure_runtime
-        .find("if transition.transitioned")
-        .expect("application-init transition guard");
-    let application_init = configure_runtime
-        .find("__canic_schedule_prepared_activation_init")
-        .expect("application install-hook scheduler");
+    let configuration = configure_runtime
+        .find("configure_runtime(request)?")
+        .expect("runtime configuration");
     let internal_bootstrap = configure_runtime
         .find("LifecycleApi::schedule_init_nonroot_bootstrap")
         .expect("internal bootstrap scheduler");
@@ -214,8 +211,7 @@ fn active_runtime_replay_offers_only_internal_bootstrap_recovery() {
         .find("CanisterCommandResponse::OperationAccepted")
         .expect("ConfigureRuntime operation receipt");
 
-    assert!(conditional < application_init);
-    assert!(application_init < internal_bootstrap);
+    assert!(configuration < internal_bootstrap);
     assert!(internal_bootstrap < operation_receipt);
     assert_eq!(
         configure_runtime
@@ -223,10 +219,6 @@ fn active_runtime_replay_offers_only_internal_bootstrap_recovery() {
             .count(),
         1,
         "an exact active replay must offer one internal bootstrap recovery"
-    );
-    assert!(
-        configure_runtime[application_init..internal_bootstrap].contains('}'),
-        "application init must remain transition-only while internal bootstrap recovery is replayable"
     );
 }
 

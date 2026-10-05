@@ -98,6 +98,30 @@ fn managed_observability_does_not_acquire_mutation_replay_policy() {
 }
 
 #[test]
+fn managed_publication_and_startup_retain_their_exact_replay_owners() {
+    let publication = command_entry(MANAGED_COMMAND_REPLAY_POLICY_MANIFEST, "CallerAuthority");
+    assert_eq!(
+        publication.replay_policy,
+        ReplayPolicy::ReplayProtected {
+            command_kind: replay_command_kind("caller_authority.publication.v1"),
+            requires_operation_id: true,
+        }
+    );
+    let startup = command_entry(
+        MANAGED_COMMAND_REPLAY_POLICY_MANIFEST,
+        "ReleaseApplicationStartup",
+    );
+    assert_eq!(
+        startup.replay_policy,
+        ReplayPolicy::ResponseIdempotent {
+            command_kind: replay_command_kind("application_startup.release.v1"),
+        }
+    );
+    assert_eq!(publication.cost_class, CostClass::None);
+    assert_eq!(startup.cost_class, CostClass::None);
+}
+
+#[test]
 fn root_capability_variant_delegates_to_its_nested_command_manifest() {
     let entry = command_entry(ROOT_COMMAND_REPLAY_POLICY_MANIFEST, "RespondCapability");
     assert_eq!(

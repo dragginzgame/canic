@@ -47,6 +47,7 @@ pub const ENDPOINT_REPLAY_POLICY_MANIFEST: &[EndpointReplayPolicy] = &[
         None,
     ),
     query_read_only(CANIC_ROOT_STATUS),
+    update_read_only(crate::protocol::CANIC_ROOT_MEMBERSHIP),
     query_read_only(crate::protocol::CANIC_ROOT_FIXTURE_STATUS),
     query_read_only(CANIC_CONTROL_STATUS),
     query_read_only(crate::protocol::CANIC_PUBLIC_STATUS),

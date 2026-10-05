@@ -62,6 +62,17 @@ fn install_version_reader(root: &Path) {
     let source = fs::read_to_string(workspace_root().join("scripts/ci/read-workspace-version.sh"))
         .expect("workspace-version reader should be readable");
     write_executable(root, "scripts/ci/read-workspace-version.sh", &source);
+    for path in [
+        "scripts/ci/next-release-version.sh",
+        "scripts/ci/finalize-release-changelog.awk",
+        "scripts/release/retain-lock-selection.pl",
+    ] {
+        write_file(
+            root,
+            path,
+            &fs::read_to_string(workspace_root().join(path)).unwrap(),
+        );
+    }
 }
 
 fn install_remote_state_guard(root: &Path) {
@@ -196,6 +207,7 @@ fn output_text(output: &Output) -> String {
 fn release_draft_preflight_accepts_release_notes_without_a_handoff() {
     let root = unique_temp_repo("draft-release-notes");
     fs::create_dir_all(&root).expect("temp repo should be created");
+    install_version_reader(&root);
     write_executable(
         &root,
         "scripts/ci/check-release-draft-ready.sh",
@@ -210,8 +222,9 @@ fn release_draft_preflight_accepts_release_notes_without_a_handoff() {
     write_file(
         &root,
         "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
+        "# Fixture changelog\n\n## [0.92.8]\n",
     );
+    write_file(&root, "CHANGELOG.md", "## [0.92.8]\n");
     let output = Command::new("bash")
         .arg("scripts/ci/check-release-draft-ready.sh")
         .arg("patch")
@@ -252,7 +265,6 @@ fn failed_bump_restores_receipt_presence_and_contents() {
 fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf {
     let root = unique_temp_repo("bump-receipt");
     fs::create_dir_all(&root).expect("temp repo should be created");
-    run_git(&root, &["init"]);
     write_file(
         &root,
         "Cargo.toml",
@@ -262,8 +274,9 @@ fn create_receipt_repo(previous_receipt: Option<&str>, handoff: &str) -> PathBuf
     write_file(
         &root,
         "docs/changelog/0.92.md",
-        "# Fixture changelog\n\n## 0.92.8 - Unreleased\n",
+        "# Fixture changelog\n\n## [0.92.8]\n",
     );
+    write_file(&root, "CHANGELOG.md", "## [0.92.8]\n");
     write_file(&root, "docs/status/current.md", handoff);
     if let Some(receipt) = previous_receipt {
         write_file(&root, "release-validation.json", receipt);
@@ -302,11 +315,11 @@ case "$*" in
     get\ --entry\ *\ workspace.package.version)
         awk '/^version = / { gsub(/"/, "", $3); print $3; exit }' "$3/Cargo.toml"
         ;;
-    "set-version --workspace --bump patch")
+    "set-version --workspace --offline 0.92.8")
         sed -i 's/0.92.7/0.92.8/' Cargo.toml
         ;;
-    "update --workspace --offline")
-        printf '# regenerated lock\n' >Cargo.lock
+    "metadata --locked --offline --no-deps --format-version 1")
+        printf '%s\n' '{"workspace_members":[],"packages":[]}'
         ;;
     *)
         echo "unexpected cargo arguments: $*" >&2
@@ -315,16 +328,30 @@ case "$*" in
 esac
 "#,
     );
-    commit_all(&root, "validated source");
+    write_executable(
+        &root,
+        "fake-bin/git",
+        r#"#!/usr/bin/env bash
+set -euo pipefail
+case "$*" in
+    'rev-parse --show-toplevel') pwd ;;
+    'rev-parse HEAD') printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;;
+    'status --porcelain') ;;
+    'ls-files -- Cargo.toml :(glob)**/Cargo.toml') printf 'Cargo.toml\n' ;;
+    'rev-parse v0.92.8') [[ -f occupied-tag ]] ;;
+    *) echo "unexpected fixture Git request: $*" >&2; exit 2 ;;
+esac
+"#,
+    );
     root
 }
 
 fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_after_receipt: bool) {
     let handoff = "Current source remains descriptive.\n";
     let root = create_receipt_repo(previous_receipt, handoff);
-    let validated_head = git_output(&root, &["rev-parse", "HEAD"]);
+    let validated_head = "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
     if fail_after_receipt {
-        run_git(&root, &["tag", "v0.92.8"]);
+        write_file(&root, "occupied-tag", "retained exact tag\n");
     }
     let path = format!(
         "{}:{}",
@@ -338,7 +365,7 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         .current_dir(&root)
         .env("CANIC_RELEASE_DATE", "2026-08-29")
         .env("CANIC_RELEASE_VALIDATED", "1")
-        .env("CANIC_RELEASE_VALIDATED_HEAD", &validated_head)
+        .env("CANIC_RELEASE_VALIDATED_HEAD", validated_head)
         .env("CANIC_RELEASE_VALIDATION_KIND", gate)
         .env("PATH", path)
         .output()
@@ -357,7 +384,15 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
     if fail_after_receipt {
         let receipt = fs::read_to_string(root.join("release-validation.json")).ok();
         assert_eq!(receipt.as_deref(), previous_receipt);
-        assert!(git_output(&root, &["status", "--porcelain"]).is_empty());
+        assert!(
+            fs::read_to_string(root.join("Cargo.toml"))
+                .unwrap()
+                .contains("version = \"0.92.7\"")
+        );
+        assert_eq!(
+            fs::read_to_string(root.join("Cargo.lock")).unwrap(),
+            "# original lock\n"
+        );
     } else {
         let parsed = Command::new("bash")
             .args([

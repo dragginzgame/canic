@@ -33,7 +33,8 @@ hook and installer until that integration is resolved; neither is declared in
 this snapshot. No historical evidence links were removed to accommodate the
 hook. Native macOS qualification remains separate from Linux command-stub checks.
 
-Canic uses explicit local `ic-metrics` integration pending package publication.
+Canic uses published registry `ic-metrics 0.1.4` in the current worktree,
+removing the sibling-checkout requirement while preserving consumer attribution.
 Four endpoint-accounting tests and strict selected core Clippy passed during
 extraction. Command stubs exercise standard entry points and runner recovery;
 Linux passes do not qualify native macOS or live IC measurements.

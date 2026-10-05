@@ -545,7 +545,7 @@ ordinary status and planning prose must not act as a parallel package-version
 source. Current and committed version queries must use the shared pinned
 `cargo-get` reader; release scripts must not maintain parallel manifest
 parsers. The governed bump is the one exception: after validating one exact
-clean source commit, it seals an `Unreleased` detailed changelog entry with the
+clean source commit, it seals the numbered pending detailed changelog entry with the
 release date or preserves its existing valid ISO date, then writes one generated
 `release-validation.json` containing schema `1`, exact release version, validated
 source commit, release date and `complete` or `fast` gate. The transaction restores

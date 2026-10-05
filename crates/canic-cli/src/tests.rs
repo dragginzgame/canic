@@ -66,8 +66,8 @@ fn current_command_help_and_versions_return_ok() {
         &["frontend", "capacity", "--help"],
         &["frontend", "export", "--help"],
         &["frontend", "verify", "--help"],
-        &["inspect", "canister", "--help"],
         &["inspect", "fleet", "--help"],
+        &["inspect", "management", "--help"],
         &["medic", "fleet", "--help"],
         &["toolchain", "install", "--help"],
     ] {

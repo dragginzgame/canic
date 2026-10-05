@@ -93,3 +93,14 @@ fn store_byte_lanes_keep_their_direct_replay_contracts() {
             if command_kind.as_str() == "wasm_store.publish_chunk.v1"
     ));
 }
+
+#[test]
+fn root_membership_update_has_read_only_replay_authority() {
+    let membership = ENDPOINT_REPLAY_POLICY_MANIFEST
+        .iter()
+        .find(|entry| entry.endpoint == crate::protocol::CANIC_ROOT_MEMBERSHIP)
+        .expect("Root membership policy entry");
+    assert_eq!(membership.endpoint_kind, EndpointKind::Update);
+    assert_eq!(membership.replay_policy, ReplayPolicy::QueryOrReadOnly);
+    assert_eq!(membership.cost_class, CostClass::None);
+}

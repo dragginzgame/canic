@@ -81,8 +81,7 @@ ic-canister-sig-creation = "1.3.1"
 ic-cdk = "0.20.3"
 ic-certification = "3.0"
 ic-memory = "0.25"
-# Explicit local extraction integration; use a released dependency before publication.
-ic-metrics = { version = "0.1", path = "../ic-metrics/crates/ic-metrics" }
+ic-metrics = "0.1"
 ic-query = { version = "0.46", default-features = false, features = [
     "subnet-catalog-host",
 ] }

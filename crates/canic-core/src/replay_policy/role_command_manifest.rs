@@ -329,6 +329,13 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         None,
     ),
     response_idempotent("ApplicationSession", "auth.application_session.v1"),
+    replay_protected(
+        "CallerAuthority",
+        "caller_authority.publication.v1",
+        CostClass::None,
+        None,
+        None,
+    ),
     response_idempotent("ConfigureRuntime", "component_runtime.configure.v1"),
     intentionally_non_idempotent(
         "InstallDelegationProof",
@@ -356,6 +363,10 @@ pub const MANAGED_COMMAND_REPLAY_POLICY_MANIFEST: &[CommandReplayPolicy] = &[
         CostClass::None,
         None,
         None,
+    ),
+    response_idempotent(
+        "ReleaseApplicationStartup",
+        "application_startup.release.v1",
     ),
     command_dispatch(
         "RespondCapability",

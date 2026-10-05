@@ -171,7 +171,8 @@ fn excluded_test_edits_still_abort_an_in_flight_cache_transaction() {
         "version = 4\n[[package]]\nname = \"native-producer\"\nversion = \"0.1.0\"\n",
     )
     .unwrap();
-    let build = WasmBuildSpec::new(&host, &root.join("target"), &["native-producer"], "release");
+    let build = WasmBuildSpec::new(&host, &root.join("target"), &["native-producer"], "release")
+        .with_cargo_profile_args(["--release"]);
     let inputs = resolve_cargo_build_inputs(&build).unwrap();
     let cache = FixtureArtifactCache::bind(
         ArtifactCacheSpec::new(&root.join("cache"), "host-guard", "canic/host-guard/v1")

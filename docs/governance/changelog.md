@@ -96,31 +96,25 @@ Within a detailed minor notes file, patch sections must also be ordered chronolo
 
 The root changelog must link to the detailed file when present.
 
-## 2.3 Unreleased Notes
+## 2.3 Pending Release Notes
 
-Only the root `CHANGELOG.md` may contain a top-level `## Unreleased` section.
-Detailed minor notes must start with versioned patch sections and must not
-carry their own `Unreleased` sections.
-This root-only rule is guarded by `cargo test -p canic --test changelog_governance`.
-
-Keep root `Unreleased` as a short holding area for incomplete work, work whose
-release target is intentionally undecided, or notes that a maintainer asks not
-to place in the open patch draft yet. It is not the default destination for a
-completed meaningful batch.
+Follow the [common changelog rules](../../rules/changelogs.md): keep one numbered,
+undated pending release at the top of the root ledger, with matching detailed
+minor-line notes. Compatible work extends that entry until release preparation
+finalizes it. The native `changelog_governance` check validates the structured
+pending version and its detailed-note presence; it does not freeze narrative.
 
 Rules:
 
 - Do not create a patch-numbered section for every small code slice. Complete a
   coherent batch first.
-- Group related incomplete slices into coherent bullets under `Unreleased`.
-- Keep notes concise enough that they can be collapsed into a release entry
-  without rewriting from scratch.
-- Do not use `Unreleased` for formatting-only churn, transient debugging notes,
+- Group related slices into coherent bullets in the current pending entry.
+- Keep notes concise as the release batch grows.
+- Omit formatting-only churn, transient debugging notes,
   or validation command inventories unless the validation surface itself
   changed.
-- When a coherent batch completes, move its relevant `Unreleased` content into
-  the open detailed patch section, delete or clear the consumed root bullets,
-  and create or update the single concise root patch bullet.
+- When a coherent batch completes, update its detailed patch section and the
+  concise root summary together.
 
 Terminology:
 
@@ -128,12 +122,9 @@ Terminology:
   validation. It does not imply a version.
 - Release batch: one substantive end-to-end outcome containing its compatible
   implementation slices, direct evidence, propagation and cleanup.
-- Unreleased batch: one or more related incomplete or deliberately unassigned
-  slices collected before they enter the current release batch or open patch
-  draft.
 - Open patch draft: the newest versioned changelog entry with no matching
-  immutable `v<version>` tag. Its heading may say `Unreleased` or already carry
-  an ISO release date; the tag, not heading prose, closes the draft. Compatible
+  immutable `v<version>` tag. Its numbered heading remains undated until release
+  preparation; the tag, not heading prose, closes the draft. Compatible
   work for the complete release batch is added to this entry until the tag
   exists.
 - Published patch release: a versioned release prepared by the human-owned
@@ -225,16 +216,15 @@ During ordinary development:
 3. When a meaningful code or behavior batch is complete, update its changelog
    by default without waiting for a separate maintainer request.
 4. Treat the newest versioned entry without a matching immutable `v<version>`
-   tag as the open patch draft, whether its heading says `Unreleased` or carries
-   an ISO date. Update both its single root bullet and detailed section when
+   tag as the open patch draft. Keep its heading undated until release
+   preparation. Update both its root summary and detailed section when
    more compatible work is added.
 5. If no open draft exists, use the current workspace version when it is not
    tagged; otherwise open the next patch version in the active minor line.
    An explicitly requested minor, major, or exact target takes precedence.
 6. Do not advance to another patch number while an open draft exists. The tag,
    not the number of completed slices or commits, closes the draft.
-7. Use root `Unreleased` only for incomplete or deliberately unassigned work.
-   Do not add `## Unreleased` to detailed minor notes.
+7. Keep one numbered pending release in both views instead of a separate notes queue.
 8. Do not change Cargo versions, release-script defaults, install URLs, or lock
    file package versions while maintaining changelog drafts.
 9. If the work is changelog-policy/governance-only, do not add or update
@@ -254,7 +244,7 @@ When preparing a release:
    - Test-only changes (unless behaviorally significant)
    - Internal renames without surface impact
 5. Confirm the open patch draft covers every relevant completed change and
-   move any remaining in-scope `Unreleased` notes into it.
+   include any remaining in-scope changes.
 6. Update its concise root summary to describe the complete release batch.
 7. Generate or update `docs/changelog/<major>.<minor>.md` with full detail.
 8. Insert clickable Markdown link from root file to detailed file.
@@ -361,7 +351,7 @@ Testing section rules:
 
 - Do not add a `Testing` section for routine validation runs (`make check`, `make test`, `cargo test`).
 - Add `Testing` only when the release adds or changes tests, coverage, or test tooling.
-- For `Unreleased` notes, omit routine validation command lists. Validation
+- For pending notes, omit routine validation command lists. Validation
   commands belong in agent handoff/final responses, not in changelog notes,
   unless the validation tooling or coverage changed.
 
@@ -374,7 +364,7 @@ For each release:
 1. Keep the open versioned changelog draft current as meaningful batches
    complete.
 2. Before release, compare the draft with all changes since the previous tag
-   and consume any remaining in-scope `Unreleased` notes.
+  and include any remaining in-scope changes.
 3. Confirm the root bullet and detailed minor-line section agree.
 4. The maintainer commits the completed implementation and changelog batch.
 5. The maintainer runs the governed version target, which performs the explicit
@@ -383,8 +373,8 @@ For each release:
    malformed draft therefore fails before compilation or PocketIC begins.
    Immediately before that mutation, it refreshes the current `origin` branch
    and rejects non-fast-forward ancestry or an occupied target release tag.
-   The same transaction replaces the exact target patch's `Unreleased` suffix
-   with the release date and writes the structured validation receipt for that
+   The same transaction adds the release date to the exact pending patch
+   heading and writes the structured validation receipt for that
    exact source commit, without editing the current handoff. The bump transaction repeats the cheap draft preflight before
    version mutation so direct or changed invocation paths retain the same
    boundary. A successful complete gate retains an exact-source local receipt;

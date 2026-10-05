@@ -1435,6 +1435,7 @@ type RoleCapability = variant {
   RoleAttestationSigner;
   WasmStore;
   DelegatedTokenVerifier;
+  CallerAuthority;
   RoleAttestationVerifier;
   RootControlPlane;
   Runtime;

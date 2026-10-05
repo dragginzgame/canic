@@ -57,16 +57,38 @@ fn async_lifecycle_bootstrap_stays_in_zero_delay_schedule_helpers() {
 fn nonroot_init_arguments_reach_only_the_application_hook() {
     let source = read_source("crates/canic/src/macros/start.rs");
 
-    assert_eq!(
-        source.matches("schedule_init_nonroot_bootstrap();").count(),
-        3,
-        "all three non-root start paths must schedule argument-free internal bootstrap"
-    );
-    assert_eq!(
-        source.matches("canic_install(args).await;").count(),
-        3,
-        "all three non-root start paths must preserve application init arguments"
-    );
+    for (start, end) in [
+        (
+            "macro_rules! __canic_start_nonroot_lifecycle_core",
+            "macro_rules! __canic_start_wasm_store_lifecycle_core",
+        ),
+        (
+            "macro_rules! __canic_start_wasm_store_lifecycle_core",
+            "macro_rules! __canic_start_local_lifecycle_core",
+        ),
+        (
+            "macro_rules! __canic_start_local_lifecycle_core",
+            "macro_rules! start_fleet_root",
+        ),
+    ] {
+        let lifecycle = macro_section(&source, start, end);
+        assert!(
+            lifecycle.contains("canic_install(args).await;"),
+            "{start} must preserve application arguments"
+        );
+    }
+    for path in [
+        "crates/canic/src/macros/start.rs",
+        "crates/canic/src/macros/endpoints/role.rs",
+    ] {
+        let source = read_source(path);
+        for call in source.match_indices("schedule_init_nonroot_bootstrap(") {
+            assert!(
+                source[call.0 + call.1.len()..].starts_with(')'),
+                "internal bootstrap must be argument-free"
+            );
+        }
+    }
 }
 
 #[test]
@@ -387,7 +409,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
                 "init_nonroot_canister_with_fleet_admission_before_bootstrap",
             ],
             "lifecycle_init",
-            None,
+            vec![],
         ),
         (
             nonroot,
@@ -399,7 +421,11 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
                 "post_upgrade_nonroot_canister_with_automatic_topup_and_fleet_admission_before_bootstrap",
             ],
             "lifecycle_post_upgrade",
-            Some("__canic_after_optional_start_init_hook"),
+            vec![
+                "schedule_post_upgrade_nonroot_bootstrap",
+                "__canic_schedule_application_startup",
+                "defer_lifecycle_required",
+            ],
         ),
         (
             local,
@@ -409,7 +435,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
                 "init_local_nonroot_canister_before_bootstrap",
             ],
             "lifecycle_init",
-            Some("__canic_after_optional_start_init_hook"),
+            vec!["__canic_after_optional_start_init_hook"],
         ),
         (
             local,
@@ -419,7 +445,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
                 "post_upgrade_local_nonroot_canister_before_bootstrap",
             ],
             "lifecycle_post_upgrade",
-            Some("__canic_after_optional_start_init_hook"),
+            vec!["__canic_after_optional_start_init_hook"],
         ),
     ] {
         let calls = invocation_names(function_body(section, function).parse().unwrap());
@@ -436,7 +462,7 @@ fn assert_lifecycle_participant_ordering(nonroot: &str, local: &str) {
                 "{owner} must finish before {participant}"
             );
         }
-        if let Some(deferred) = deferred {
+        for deferred in deferred {
             assert!(
                 participant_position < position(deferred),
                 "{participant} must finish before deferred work"
@@ -521,6 +547,15 @@ fn lifecycle_call_observation_ignores_presentation_and_binding_names() {
     assert_eq!(
         calls,
         ["restore_owner", "lifecycle_post_upgrade", "schedule_work"]
+    );
+}
+
+#[test]
+fn lifecycle_function_selection_uses_the_complete_identifier() {
+    let source = "fn initialize() { wrong_owner(); } fn init () { correct_owner(); }";
+    assert_eq!(
+        invocation_names(function_body(source, "init").parse().unwrap()),
+        ["correct_owner"]
     );
 }
 
@@ -642,8 +677,15 @@ fn read_source(relative_path: &str) -> String {
 fn function_body<'a>(source: &'a str, function: &str) -> &'a str {
     let signature = format!("fn {function}");
     let start = source
-        .find(&signature)
-        .unwrap_or_else(|| panic!("source should contain `{signature}`"));
+        .match_indices(&signature)
+        .find(|(offset, _)| {
+            let suffix = source[offset + signature.len()..].trim_start();
+            suffix.starts_with('(') || suffix.starts_with('<')
+        })
+        .map_or_else(
+            || panic!("source should contain `{signature}`"),
+            |(offset, _)| offset,
+        );
     let body_start = source[start..].find('{').map_or_else(
         || panic!("`{signature}` should have a body"),
         |offset| start + offset,

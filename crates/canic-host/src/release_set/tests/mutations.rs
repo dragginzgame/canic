@@ -421,8 +421,16 @@ kind = "shard"
 [component_specs.hub.spawn_grants.hub.worker]
 maximum_instances_per_parent = 4
 "#;
-    let config_path = Path::new("canic.toml");
-    let updated = rename_app_role_source(config, config_path, "demo", "worker", "worker_v2")
+    let temp = TempWorkspace::new();
+    let config_path = temp.path().join("canic.toml");
+    let package_dir = temp.path().join("worker");
+    fs::create_dir_all(&package_dir).expect("create package");
+    fs::write(
+        package_dir.join("Cargo.toml"),
+        "[package]\nname = \"demo_worker\"\n\n[package.metadata.canic]\napp = \"demo\"\nrole = \"worker\"\n",
+    )
+    .expect("write manifest");
+    let updated = rename_app_role_source(config, &config_path, "demo", "worker", "worker_v2")
         .expect("rename role");
 
     assert!(updated.source.contains("canister_role = \"worker_v2\""));
