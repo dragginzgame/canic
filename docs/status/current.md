@@ -1,7 +1,41 @@
-# Current handoff — 2026-10-05
+# Current handoff — 2026-10-06
 
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
+
+## Embedded allocation peer refresh — 2026-10-06
+
+The maintainer's retained run
+`target/test-runs/20261006T064250Z-592136.6UP0Yt/1.log` failed embedded-peer
+preflight because the checked-in allocation Wasm differed from a fresh build.
+No ordinary tests or PocketIC cases started in that run. The
+[repair](https://github.com/dragginzgame/canic/issues/450) regenerates the peer
+and structured provenance using the maintained `refresh_embedded_root` owner.
+Its second build reproduces the exact bytes after embedding them.
+
+The maintainer-selected lock graph now contains `ic-memory 0.26.2`,
+`ic-timers 0.13.2`, `ic-testkit 0.18.2` and `ic-metrics 0.1.5`. Missing locked
+packages were fetched without changing selections. Testkit changed during the
+first qualification attempt; refresh and independent verification then passed
+against the final unchanged lockfile. The generated receipt binds lock SHA-256
+`f0d49d1b6fc8c370322cb0661fa88ec677351098fc24e7dc61c668660dc7a052`
+and artifact SHA-256
+`52f7b413539024b13ac5f3e751942f0d658745b243a1d62b1ca37689544d7f33`.
+
+The exact owning PocketIC case
+`pic::lifecycle::tests::published_managed_component_group_support_drives_child_lifecycle`
+passes, including peer installation, child allocation, admission and same-release
+recovery. Its inventory preflight also passes. Complete evidence is retained in
+`target/test-runs/20261006T071135Z-907379.TPz9b7/`; the governed runner exits 0
+and clears only its invocation-owned scratch. An earlier sandbox attempt could
+not bind the local simulation server; the same focused command passed with
+localhost access.
+
+The peer repair and pending 0.110.53 notes are complete, review-ready and
+uncommitted. Package versions remain 0.110.52 and the concurrent lock selection
+is preserved. Entire-batch push/publication readiness was not reassessed. No
+broad gate, version transaction, Git publication, live deployment or retained
+release-artifact cleanup ran.
 
 ## IC Metrics reader adoption — 2026-10-05
 

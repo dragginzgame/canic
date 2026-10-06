@@ -33,6 +33,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   align canonical interfaces and cache, release and operator fixtures with
   current contracts, bind release fixtures to their own identity and explain
   release version mismatches ([#450](https://github.com/dragginzgame/canic/issues/450)).
+- Refresh the embedded allocation peer and its provenance for the selected
+  dependency graph ([#450](https://github.com/dragginzgame/canic/issues/450)).
 
 ## [0.110.x] - Fleet Runtime Contraction
 
