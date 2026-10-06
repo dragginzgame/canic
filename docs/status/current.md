@@ -3,6 +3,55 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## IC Metrics reader adoption — 2026-10-05
+
+The current 0.110.53 batch selects published registry `ic-metrics 0.1.5` with
+feature `ic` and delegates `perf_counter`'s Wasm read to the shared call-context
+reader. Native zero, exclusive nesting, measured-zero semantics and public
+reports remain unchanged. Only the metrics lock record changed; all other
+dependency selections and package versions are preserved.
+
+Locked offline native and Wasm Core library Clippy pass with warnings denied,
+and all four selected endpoint-accounting tests pass. `make fmt` ran before
+validation and preserved the concurrent release-flow fixture bytes. These are
+focused Linux compilation/contract results, not new consumer IC instruction
+measurements, native macOS qualification or complete-batch release evidence.
+The pending root and detailed notes extend
+[the metrics adoption](https://github.com/dragginzgame/canic/issues/447); no agent
+commit, package-version bump or broad gate ran. Concurrent release-script,
+fixture and handoff edits remain preserved.
+
+## Release-fixture identity isolation — 2026-10-05
+
+The maintainer's retained ordinary run
+`target/test-runs/20261005T201157Z-3909842.t1bwSD/2.log` reports only the two
+receipt success cases failing. The standard runner passes the real candidate
+`RELEASE_VERSION=0.110.53` through Make into validation; the fixtures inherited
+it while their temporary workspace derives `0.92.8`. The previous focused
+qualification omitted that inherited environment. Both failures reproduce with
+the outer candidate present and disappear without it.
+
+The [correction](https://github.com/dragginzgame/canic/issues/450) binds the
+fixtures' version/date explicitly. Existing rollback cases now retain the newly
+written receipt at the injected tag observation and verify its structured fields
+after rollback, preventing an earlier refusal from satisfying that proof.
+The production bump still rejects mismatched identity before mutation and now
+reports requested/planned versions.
+
+All four selected draft/receipt success/rollback cases pass together with default
+features through the governed scratch wrapper under the outer release version
+and date. The changed integration target passes locked offline warning-denied
+Clippy. Scoped ShellCheck, Bash syntax, formatting and whitespace pass; a command
+stub check confirms version mismatch exits 1 without changing fixture files.
+Only command-stub release fixtures were executed; they create no Git commits.
+Concurrent metrics dependency/performance edits are preserved and remain outside
+this correction's behavior qualification.
+
+The existing 0.110.53 notes include this test-tooling and diagnostic correction;
+package versions remain 0.110.52. These fixes are review-ready and uncommitted.
+Complete-batch push/publication readiness was not reassessed. No broad gate,
+version transaction, Git publication or artifact cleanup ran for this correction.
+
 ## Native validation contract propagation — 2026-10-05
 
 The retained ordinary/internal native run

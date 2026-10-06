@@ -57,7 +57,10 @@ fi
 PREV="$(bash "$VERSION_READER")"
 
 PLANNED="$(bash scripts/ci/next-release-version.sh "$PREV" "$BUMP_TYPE")"
-[[ -z "${RELEASE_VERSION:-}" || "$RELEASE_VERSION" == "$PLANNED" ]]
+if [[ -n "${RELEASE_VERSION:-}" && "$RELEASE_VERSION" != "$PLANNED" ]]; then
+  echo "❌ Release identity mismatch: requested $RELEASE_VERSION, but $PREV with $BUMP_TYPE plans $PLANNED." >&2
+  exit 1
+fi
 PLANNED_MINOR_LINE="${PLANNED%.*}"
 DETAILED_CHANGELOG="docs/changelog/$PLANNED_MINOR_LINE.md"
 VALIDATION_RECEIPT="release-validation.json"

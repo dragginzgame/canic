@@ -338,7 +338,10 @@ case "$*" in
     'rev-parse HEAD') printf '%s\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa ;;
     'status --porcelain') ;;
     'ls-files -- Cargo.toml :(glob)**/Cargo.toml') printf 'Cargo.toml\n' ;;
-    'rev-parse v0.92.8') [[ -f occupied-tag ]] ;;
+    'rev-parse v0.92.8')
+        [[ -f occupied-tag ]] || exit 1
+        cp release-validation.json observed-validation.json
+        ;;
     *) echo "unexpected fixture Git request: $*" >&2; exit 2 ;;
 esac
 "#,
@@ -363,6 +366,9 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
         .arg(workspace_root().join("scripts/ci/bump-version.sh"))
         .arg("patch")
         .current_dir(&root)
+        // Validation inherits the outer release identity; this workspace owns its own.
+        .env("RELEASE_VERSION", "0.92.8")
+        .env("RELEASE_DATE", "2026-08-29")
         .env("CANIC_RELEASE_DATE", "2026-08-29")
         .env("CANIC_RELEASE_VALIDATED", "1")
         .env("CANIC_RELEASE_VALIDATED_HEAD", validated_head)
@@ -393,23 +399,27 @@ fn assert_governed_receipt(previous_receipt: Option<&str>, gate: &str, fail_afte
             fs::read_to_string(root.join("Cargo.lock")).unwrap(),
             "# original lock\n"
         );
+    }
+    let receipt_path = if fail_after_receipt {
+        root.join("observed-validation.json")
     } else {
-        let parsed = Command::new("bash")
+        root.join("release-validation.json")
+    };
+    let parsed = Command::new("bash")
             .args([
                 "-c",
                 r#"source "$1"; require_jq || exit; exec "$JQ_BIN" -er '[.schema, .version, .source, .date, .gate] | @tsv' "$2""#,
                 "receipt",
             ])
             .arg(workspace_root().join("scripts/ci/require-jq.sh"))
-            .arg(root.join("release-validation.json"))
+            .arg(receipt_path)
             .output()
             .expect("structured receipt should parse");
-        assert!(parsed.status.success());
-        assert_eq!(
-            String::from_utf8(parsed.stdout).unwrap().trim(),
-            format!("1\t0.92.8\t{validated_head}\t2026-08-29\t{gate}")
-        );
-    }
+    assert!(parsed.status.success());
+    assert_eq!(
+        String::from_utf8(parsed.stdout).unwrap().trim(),
+        format!("1\t0.92.8\t{validated_head}\t2026-08-29\t{gate}")
+    );
     let _ = fs::remove_dir_all(root);
 }
 

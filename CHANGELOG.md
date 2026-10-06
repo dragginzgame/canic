@@ -19,7 +19,7 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   policy-specific callback results, and aligns the independent blob consumer on
   one memory runtime.
 
-- Use published `ic-metrics 0.1.4` without a sibling checkout, preserving endpoint
+- Use published `ic-metrics 0.1.5` arithmetic and the shared Wasm reader, preserving endpoint
   attribution and report shapes ([#447](https://github.com/dragginzgame/canic/issues/447));
   standardize SemVer release commands with exact
   resume, atomic branch/tag pushes and retained artifacts. Validation-only
@@ -31,7 +31,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   ([#449](https://github.com/dragginzgame/canic/issues/449)).
 - Complete native coverage for caller-authority startup and Root membership;
   align canonical interfaces and cache, release and operator fixtures with
-  current contracts ([#450](https://github.com/dragginzgame/canic/issues/450)).
+  current contracts, bind release fixtures to their own identity and explain
+  release version mismatches ([#450](https://github.com/dragginzgame/canic/issues/450)).
 
 ## [0.110.x] - Fleet Runtime Contraction
 
