@@ -114,6 +114,10 @@ Consumer choices described in those guides remain subject to this baseline.
 
 ## Validation and evidence
 
+- Use the [shared audit methods](audits/README.md) for reusable code-hygiene,
+  structural and module reviews. Keep product invariants and validation commands
+  in consumer overlays. Audit adoption adds no automatic broad gate or schedule;
+  findings do not supply repair authority. Preserve historical reports locally.
 - Run the smallest relevant checks automatically during authorized development.
   Broad workspace, full CI and release gates run only when explicitly requested
   or in their configured CI pipeline. Local command lists must distinguish focused
@@ -161,8 +165,14 @@ Consumer choices described in those guides remain subject to this baseline.
   validation-only failures restart through the normal target against current
   source with fresh preflight and complete validation; retain earlier evidence.
   Persist exact release intent before preparation may begin, then reconcile an
-  interrupted release at its exact version and commit before retrying. Do not
-  force-push, overwrite tags, silently bump again or add implicit package
+  interrupted release automatically when a normal target is rerun, at its saved
+  version and commit. If that release is already committed and HEAD has newer
+  fixes or a different increment is requested, reconcile it first, then run fresh
+  preflight and complete validation for the requested increment from the actual
+  local version. Late evidence checks use the selected `RELEASE_COMMIT`, which
+  may precede HEAD. Select unfinished intent before computing another increment;
+  stop for identity, payload, destination or concurrency conflicts.
+  Do not force-push, overwrite tags, silently bump again or add implicit package
   publication, deployment or post-release cleanup.
 
 ## Changelogs and artifact preservation
@@ -177,6 +187,20 @@ Consumer choices described in those guides remain subject to this baseline.
 
 ## Rust workspaces and portable tooling
 
+- Provide [local developer setup](docs/local-setup.md) through explicit
+  `make install-tools` and offline `make tools-check`, including pinned jq and
+  Mike Farah yq under `.tools/host/bin`. Make/CI callers select the local tools;
+  document system bootstrap packages and product toolchains separately.
+- Provide the [common local IC executable setup](docs/ic-tools.md) through
+  `make install-ic-tools` and offline `make ic-tools-check`. Keep the common tool
+  names available under the checkout's `.tools/ic/bin`, with one reviewed pin
+  matrix and explicit installation. Consumers own version qualification and
+  scoped pin exceptions; ordinary validation never downloads tools implicitly.
+- Apply the [dependency pinning rules](rules/dependency-pinning.md): immutable
+  Git/action identities, compatible registry requirements with locked builds,
+  verified tool downloads, and explicitly qualified sibling or moving inputs.
+  Run the declaration checker in CI and release gates; consumers own the chosen
+  versions, approved exceptions and runtime qualification evidence.
 - Cargo workspace members inherit package versions from the root. Apply the
   [Cargo dependency rules](rules/cargo-dependencies.md): every direct dependency
   is declared in root `[workspace.dependencies]`, and every child manifest uses
@@ -229,6 +253,10 @@ Consumer choices described in those guides remain subject to this baseline.
 
 ## Feedback and handoff
 
+- Follow the [user-triggered agent maintenance rules](rules/agent-maintenance.md)
+  when asked to check CI, review issues or inspect for work after completing a
+  task. Session activation carries forward within its scope; inspection and
+  repair requests retain their distinct authority.
 - GitHub issues in the owning repository are the sole tracker for bugs, feature
   requests, review findings, reusable gaps and follow-up work. Search existing
   issues before filing; update matching evidence rather than creating duplicates.

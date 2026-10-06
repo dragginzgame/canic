@@ -728,6 +728,9 @@ mod tests {
         protocol::CANIC_COMMAND,
     };
     use ic_testkit::pic::{CandidCallExt, CanisterInstallExt};
+    use ic_testkit::pocket_ic::common::rest::{
+        CanisterHttpReply, CanisterHttpResponse, MockCanisterHttpResponse,
+    };
     use std::time::Duration;
 
     fn standalone_memory_allocations(
@@ -737,6 +740,168 @@ mod tests {
         let result: Result<canic::dto::memory::MemoryAllocationsResponse, Error> =
             pic.query_candid_or_panic(canister, "memory_allocations_probe", ());
         result.expect("admitted memory observation")
+    }
+
+    /// Counter brackets decoded independently from the fixture's real IC reads.
+    #[derive(candid::CandidType, candid::Deserialize)]
+    struct PerfProbeObservation {
+        before_enter: u64,
+        after_enter: u64,
+        before_first: u64,
+        after_first: u64,
+        before_resumed: u64,
+        after_resumed: u64,
+        before_exit: u64,
+        after_exit: u64,
+    }
+
+    /// Production sample projection, including measured-zero versus absent evidence.
+    #[derive(candid::CandidType, candid::Deserialize)]
+    struct PerfProbeMetric {
+        name: String,
+        count: u64,
+        instructions: u64,
+    }
+
+    fn assert_perf_interval(sample: &PerfProbeMetric, lower: u64, upper: u64) {
+        assert_eq!(sample.count, 1);
+        assert!(lower > 0);
+        assert!(
+            (lower..=upper).contains(&sample.instructions),
+            "{} observed {}, independently bracketed {}..={}",
+            sample.name,
+            sample.instructions,
+            lower,
+            upper
+        );
+    }
+
+    fn assert_perf_observation(
+        metrics: &[PerfProbeMetric],
+        which: u8,
+        observed: &PerfProbeObservation,
+    ) {
+        let sample = |name: &str| {
+            metrics
+                .iter()
+                .find(|row| row.name == name)
+                .expect("exact sample")
+        };
+        assert_perf_interval(
+            sample(if which == 0 {
+                "perf_context_a"
+            } else {
+                "perf_context_b"
+            }),
+            observed.before_exit - observed.after_enter,
+            observed.after_exit - observed.before_enter,
+        );
+        assert_perf_interval(
+            sample(&format!("first_{which}")),
+            observed.before_first - observed.after_enter,
+            observed.after_first - observed.before_enter,
+        );
+        assert_perf_interval(
+            sample(&format!("resumed_{which}")),
+            observed.before_resumed - observed.after_first,
+            observed.after_resumed - observed.before_first,
+        );
+    }
+
+    #[test]
+    fn interleaved_endpoint_and_checkpoint_metrics_preserve_call_contexts() {
+        let fixture = install_lifecycle_boundary_fixture();
+        for order in [[0_u8, 1_u8], [1_u8, 0_u8]] {
+            let canister = fixture.install_runtime_probe_canister();
+            fixture.pic.wait_for_ready(
+                canister,
+                Principal::anonymous(),
+                120,
+                "perf context install",
+            );
+            let requests: Vec<_> = (0_u8..2)
+                .map(|which| {
+                    fixture
+                        .pic
+                        .submit_call(
+                            canister,
+                            Principal::anonymous(),
+                            "perf_context_probe",
+                            encode_args((which,)).expect("probe arguments"),
+                        )
+                        .expect("submit probe")
+                })
+                .collect();
+            let mut held = Vec::new();
+            for _ in 0..60 {
+                fixture.pic.tick();
+                held = fixture.pic.get_canister_http();
+                if held.len() == 2 {
+                    break;
+                }
+            }
+            assert_eq!(held.len(), 2);
+            let entered: Vec<bool> =
+                fixture
+                    .pic
+                    .query_candid_or_panic(canister, "perf_context_entered", ());
+            assert_eq!(entered, [true, true]);
+            let completed: Vec<u8> =
+                fixture
+                    .pic
+                    .query_candid_or_panic(canister, "perf_context_completed", ());
+            assert!(
+                completed.is_empty(),
+                "both updates must overlap at their awaits"
+            );
+            for (position, which) in order.into_iter().enumerate() {
+                let pending = held
+                    .iter()
+                    .find(|request| request.url == format!("https://perf-context.invalid/{which}"))
+                    .expect("exact held request");
+                fixture
+                    .pic
+                    .mock_canister_http_response(MockCanisterHttpResponse {
+                        subnet_id: pending.subnet_id,
+                        request_id: pending.request_id,
+                        response: CanisterHttpResponse::CanisterHttpReply(CanisterHttpReply {
+                            status: 200,
+                            headers: Vec::new(),
+                            body: Vec::new(),
+                        }),
+                        additional_responses: Vec::new(),
+                    });
+                let reply = fixture
+                    .pic
+                    .await_call(requests[usize::from(which)].clone())
+                    .expect("probe reply");
+                let observed: Result<PerfProbeObservation, Error> =
+                    candid::decode_one(&reply).expect("probe observation");
+                let observed = observed.expect("admitted generated endpoint");
+                let metrics: Vec<PerfProbeMetric> =
+                    fixture
+                        .pic
+                        .query_candid_or_panic(canister, "perf_context_metrics", ());
+                assert_perf_observation(&metrics, which, &observed);
+                let completed: Vec<u8> =
+                    fixture
+                        .pic
+                        .query_candid_or_panic(canister, "perf_context_completed", ());
+                assert_eq!(completed, order[..=position]);
+            }
+            let metrics: Vec<PerfProbeMetric> =
+                fixture
+                    .pic
+                    .query_candid_or_panic(canister, "perf_context_metrics", ());
+            assert_eq!(
+                metrics
+                    .iter()
+                    .find(|row| row.name == "perf_context_probe")
+                    .expect("generated wrapper sample")
+                    .count,
+                2
+            );
+        }
     }
 
     #[test]
@@ -830,14 +995,17 @@ mod tests {
     #[derive(candid::CandidType)]
     enum ManagedCommand {
         ActivateFleetAdmission(FleetAdmissionActivateTargetRequest),
+        CallerAuthority(canic::dto::caller_authority::CallerAuthorityCommand),
         ConfigureRuntime(Box<ComponentRuntimeDirectoryPreparationRequest>),
         OpenFleetAdmission(FleetAdmissionOpenTargetRequest),
         PrepareFleetAdmission(Box<FleetAdmissionPrepareTargetRequest>),
+        ReleaseApplicationStartup(canic::dto::caller_authority::CallerAuthorityPublication),
     }
 
     #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
     enum ManagedCommandResponse {
         ActivateFleetAdmission(FleetAdmissionTargetReceipt),
+        CallerAuthority(Box<canic::dto::caller_authority::CallerAuthorityReceipt>),
         OpenFleetAdmission(FleetAdmissionTargetReceipt),
         OperationAccepted(OperationReceipt),
         PrepareFleetAdmission(FleetAdmissionTargetReceipt),
@@ -851,6 +1019,16 @@ mod tests {
     #[derive(candid::CandidType, candid::Deserialize)]
     enum ManagedStatusResponse {
         Admission(FleetAdmissionProjectionStatusResponse),
+    }
+
+    #[derive(candid::CandidType)]
+    enum ManagedControlStatusRequest {
+        CallerAuthority(canic::dto::role::OperationStatusRequest),
+    }
+
+    #[derive(candid::CandidType, candid::Deserialize)]
+    enum ManagedControlStatusResponse {
+        CallerAuthority(canic::dto::caller_authority::CallerAuthorityStatus),
     }
 
     #[derive(candid::CandidType, Debug, candid::Deserialize, Eq, PartialEq)]
@@ -1681,6 +1859,94 @@ mod tests {
             panic!("runtime activation receipt");
         };
         assert_eq!(receipt.operation_id, directory.operation_id);
+        release_application_startup(pic, canister, root);
+    }
+
+    fn caller_status(
+        pic: &PocketIc,
+        canister: Principal,
+        root: Principal,
+    ) -> canic::dto::caller_authority::CallerAuthorityStatus {
+        let response: Result<ManagedControlStatusResponse, Error> = pic.query_candid_as_or_panic(
+            canister,
+            root,
+            canic_core::protocol::CANIC_CONTROL_STATUS,
+            (ManagedControlStatusRequest::CallerAuthority(
+                canic::dto::role::OperationStatusRequest {
+                    operation_id: [0xa1; 32],
+                },
+            ),),
+        );
+        let ManagedControlStatusResponse::CallerAuthority(status) =
+            response.expect("protected managed caller status");
+        status
+    }
+
+    fn release_application_startup(pic: &PocketIc, canister: Principal, root: Principal) {
+        use canic::dto::caller_authority::{
+            CallerAuthorityChange, CallerAuthorityCommand, CallerAuthorityPhase,
+            CallerAuthorityReadiness,
+        };
+
+        let initial = caller_status(pic, canister, root);
+        assert!(!initial.open);
+        let publication = canic_core::api::caller_authority::CallerAuthorityApi::publication(
+            initial.authority,
+            [0xa1; 32],
+            initial.generation,
+            CallerAuthorityChange::OpenReceiver,
+        )
+        .expect("bind startup release to the installed receiver");
+        for (command, phase) in [
+            (
+                CallerAuthorityCommand::Prepare(publication.clone()),
+                CallerAuthorityPhase::Prepared,
+            ),
+            (
+                CallerAuthorityCommand::Commit(publication.clone()),
+                CallerAuthorityPhase::Committed,
+            ),
+            (
+                CallerAuthorityCommand::Complete(publication.clone()),
+                CallerAuthorityPhase::Complete,
+            ),
+        ] {
+            let response = transition_target(
+                pic,
+                canister,
+                root,
+                ManagedCommand::CallerAuthority(command),
+            );
+            let ManagedCommandResponse::CallerAuthority(receipt) = response else {
+                panic!("caller publication receipt");
+            };
+            assert_eq!(receipt.publication, publication);
+            assert_eq!(receipt.phase, phase);
+        }
+        let response = transition_target(
+            pic,
+            canister,
+            root,
+            ManagedCommand::ReleaseApplicationStartup(publication),
+        );
+        assert_eq!(
+            response,
+            ManagedCommandResponse::OperationAccepted(OperationReceipt {
+                operation_id: [0xa1; 32],
+            })
+        );
+        for _ in 0..60 {
+            let status = caller_status(pic, canister, root);
+            if status.readiness == CallerAuthorityReadiness::ApplicationReady {
+                assert!(status.open);
+                return;
+            }
+            pic.tick();
+        }
+        panic!(
+            "managed application startup did not complete: {:?}",
+            caller_status(pic, canister, root)
+        );
     }
 
     fn admission_status(
@@ -1746,6 +2012,10 @@ mod tests {
 
     pub fn governed_runtime_cases() -> Vec<crate::pic::GovernedTestCase> {
         crate::pic::cases::registered![
+            (
+                "interleaved endpoint and checkpoint instruction contexts",
+                interleaved_endpoint_and_checkpoint_metrics_preserve_call_contexts,
+            ),
             (
                 "standalone memory restoration across identical Wasm upgrades",
                 standalone_memory_registry_survives_two_identical_wasm_upgrades,

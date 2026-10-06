@@ -4,6 +4,8 @@ _CANIC_REQUIRE_ICP_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 _CANIC_REQUIRE_ICP_ROOT_DIR="$(cd "$_CANIC_REQUIRE_ICP_SCRIPT_DIR/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$_CANIC_REQUIRE_ICP_ROOT_DIR/tool-versions.env"
+# shellcheck source=/dev/null
+source "$_CANIC_REQUIRE_ICP_ROOT_DIR/scripts/ci/ic-tool-pins.sh"
 
 require_icp_tools() {
     local icp_version_output=""
@@ -12,12 +14,12 @@ require_icp_tools() {
     local required_ic_wasm_version="${CANIC_IC_WASM_VERSION:-}"
 
     if [ -z "$required_icp_version" ]; then
-        echo "missing CANIC_ICP_CLI_VERSION in tool-versions.env" >&2
+        echo "missing CANIC_ICP_CLI_VERSION in ci/ic-tools.tsv" >&2
         exit 1
     fi
 
     if [ -z "$required_ic_wasm_version" ]; then
-        echo "missing CANIC_IC_WASM_VERSION in tool-versions.env" >&2
+        echo "missing CANIC_IC_WASM_VERSION in ci/ic-tools.tsv" >&2
         exit 1
     fi
 

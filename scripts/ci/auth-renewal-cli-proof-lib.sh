@@ -33,6 +33,8 @@ prepare_auth_renewal_icp() {
     repository_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
     # shellcheck source=/dev/null
     source "$repository_root/tool-versions.env"
+    # shellcheck source=/dev/null
+    source "$repository_root/scripts/ci/ic-tool-pins.sh"
     printf '#!/usr/bin/env bash\nfixture_icp_version=%q\n' "$CANIC_ICP_CLI_VERSION" > "$fake_icp"
     cat >> "$fake_icp" <<'EOF'
 set -euo pipefail

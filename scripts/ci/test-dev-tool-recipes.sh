@@ -7,8 +7,11 @@ fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-dev-tool-recipes.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 real_bash="$(command -v bash)"
 real_make="$(command -v make)"
-mkdir -p "$fixture/bin" "$fixture/cargo tools" "$fixture/wasm tools" "$fixture/binaryen tools"
+mkdir -p "$fixture/bin" "$fixture/cargo tools" "$fixture/.tools/ic/bin"
 cp "$ROOT/tool-versions.env" "$fixture/"
+mkdir -p "$fixture/ci" "$fixture/scripts/ci"
+cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
+cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 export EVENTS="$fixture/events" INSTALL_SELECTION="$fixture/install-selection"
 
 cat >"$fixture/record" <<'SH'
@@ -17,13 +20,13 @@ name="${0##*/}"
 printf '%s\t%s\n' "$0" "$*" >>"$EVENTS"
 case "$name:$*" in
     'bash:scripts/dev/install_dev.sh' | 'bash:scripts/dev/install_dev.sh --update-prereqs')
-        printf '%s\n' "$BINARYEN_INSTALL_DIR" "$IC_WASM_INSTALL_DIR" >"$INSTALL_SELECTION"
+        printf '%s\n' "$PWD/.tools/ic/bin" >"$INSTALL_SELECTION"
         ;;
     'wasm-opt:--version') exit "${FAIL_WASM_OPT:-0}" ;;
 esac
 SH
 for executable in bin/bash bin/cargo 'cargo tools/rg' 'cargo tools/sccache' \
-    'cargo tools/icp' 'wasm tools/ic-wasm' 'binaryen tools/wasm-opt'; do
+    '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt'; do
     { printf '#!%s\n' "$real_bash"; cat "$fixture/record"; } >"$fixture/$executable"
     chmod +x "$fixture/$executable"
 done
@@ -39,12 +42,10 @@ run_recipe() {
     rm -f "$INSTALL_SELECTION"
     PATH="$fixture/bin:$PATH" "$real_make" --no-print-directory -f "$ROOT/Makefile" \
         CARGO_INSTALL_BIN_DIR="$fixture/cargo tools" \
-        BINARYEN_INSTALL_DIR="$fixture/binaryen tools" \
-        IC_WASM_INSTALL_DIR="$fixture/wasm tools" \
         "$@" >"$fixture/output" 2>&1
 }
 
-printf '%s\n' "$fixture/binaryen tools" "$fixture/wasm tools" >"$fixture/expected-selection"
+printf '%s\n' "$fixture/.tools/ic/bin" >"$fixture/expected-selection"
 for target in install-dev update-dev; do
     if ! run_recipe "$target"; then
         cat "$fixture/output" >&2
@@ -52,7 +53,7 @@ for target in install-dev update-dev; do
     fi
     cmp "$fixture/expected-selection" "$INSTALL_SELECTION"
 done
-for executable in 'cargo tools/icp' 'wasm tools/ic-wasm' 'binaryen tools/wasm-opt'; do
+for executable in '.tools/ic/bin/icp' '.tools/ic/bin/ic-wasm' '.tools/ic/bin/wasm-opt'; do
     grep -Fxq "$fixture/$executable"$'\t--version' "$EVENTS"
 done
 

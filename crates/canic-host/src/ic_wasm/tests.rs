@@ -7,50 +7,47 @@ use std::os::unix::fs::PermissionsExt;
 
 #[test]
 fn repository_ic_wasm_authority_matches_every_install_projection() {
-    let pins = include_str!(concat!(
-        env!("CARGO_MANIFEST_DIR"),
-        "/../../tool-versions.env"
-    ));
     assert_eq!(
         IC_WASM_VERSION,
-        repository_pin(pins, "CANIC_IC_WASM_VERSION")
+        crate::test_support::ic_tool_pin("ic-wasm", "linux-x86_64", 1)
     );
 
     let expected_projections = [
         ("macos", "aarch64", "aarch64-apple-darwin", "DARWIN_ARM64"),
         ("macos", "x86_64", "x86_64-apple-darwin", "DARWIN_X64"),
-        (
-            "linux",
-            "aarch64",
-            "aarch64-unknown-linux-gnu",
-            "LINUX_ARM64",
-        ),
         ("linux", "x86_64", "x86_64-unknown-linux-gnu", "LINUX_X64"),
     ];
 
-    assert_eq!(
-        SUPPORTED_IC_WASM_AUTHORITIES.len(),
-        expected_projections.len()
-    );
     for (os, arch, archive_platform, pin_suffix) in expected_projections {
         let authority = ic_wasm_authority_for(os, arch).expect("install-capable projection");
         assert_eq!(authority.archive_platform(), archive_platform);
         assert_eq!(
             authority.archive_sha256(),
-            repository_pin(pins, &format!("CANIC_IC_WASM_SHA256_{pin_suffix}"))
+            crate::test_support::ic_tool_pin(
+                "ic-wasm",
+                match pin_suffix {
+                    "DARWIN_ARM64" => "darwin-arm64",
+                    "DARWIN_X64" => "darwin-x86_64",
+                    _ => "linux-x86_64",
+                },
+                3
+            )
         );
     }
-}
-
-fn repository_pin<'a>(pins: &'a str, variable: &str) -> &'a str {
-    let prefix = format!("export {variable}=");
-    let mut values = pins.lines().filter_map(|line| line.strip_prefix(&prefix));
-    let value = values.next().expect("repository ic-wasm pin");
-    assert!(
-        values.next().is_none(),
-        "duplicate repository pin {variable}"
+    let standalone = ic_wasm_authority_for("linux", "aarch64").unwrap();
+    assert_eq!(standalone.archive_platform(), "aarch64-unknown-linux-gnu");
+    let standalone_pins: Vec<_> = include_str!(concat!(
+        env!("CARGO_MANIFEST_DIR"),
+        "/../../tool-versions.env"
+    ))
+    .lines()
+    .filter_map(|line| line.strip_prefix("export CANIC_IC_WASM_SHA256_LINUX_ARM64="))
+    .collect();
+    assert_eq!(standalone_pins, [standalone.archive_sha256()]);
+    assert_eq!(
+        SUPPORTED_IC_WASM_AUTHORITIES.len(),
+        expected_projections.len() + 1
     );
-    value
 }
 
 #[cfg(unix)]

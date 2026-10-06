@@ -16,6 +16,9 @@ for name in run-pocketic-workers run-pocketic-worker run-workspace-tests workspa
     cp "$ROOT/scripts/ci/$name.sh" "$fixture/scripts/ci/"
 done
 cp "$ROOT/tool-versions.env" "$fixture/"
+mkdir -p "$fixture/ci" "$fixture/scripts/ci"
+cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
+cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 printf 'use_native_test_icp() { :; }\n' > "$fixture/scripts/ci/native-icp-lib.sh"
 cat > "$fixture/bin/pocket-ic" <<'FAKE'
 #!/usr/bin/env bash

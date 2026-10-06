@@ -56,3 +56,16 @@ fn decoded_difference_and_expansion_beyond_raw_size_are_rejected() {
         );
     }
 }
+
+#[test]
+fn exact_raw_match_does_not_admit_trailing_data_or_an_extra_member() {
+    let wasm = b"\0asm\x01\0\0\0";
+    for trailing in [b"trailing".to_vec(), gzip(&[])] {
+        let mut compressed = gzip(wasm);
+        compressed.extend(trailing);
+        std::assert_matches!(
+            qualify_representation(wasm, &compressed),
+            Err(RepresentationError::InvalidGzip { .. })
+        );
+    }
+}

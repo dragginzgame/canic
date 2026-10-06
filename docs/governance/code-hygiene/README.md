@@ -1,5 +1,13 @@
 # Codebase Hygiene Standard
 
+Use the reviewed [shared code-hygiene method](../../../audits/code-hygiene.md)
+for a requested audit, with this document supplying Canic style and ownership
+rules. Scope includes the selected source, tests, generators and maintained
+artifacts; AGENTS.md owns execution authority and targeted checks. Findings use
+shared severity and verdicts, not a numeric health score. Reports remain under
+Canic's existing audit hierarchy. Style conformance does not prove runtime,
+security, deployment or performance correctness.
+
 ## Purpose
 
 This directory defines source consistency and readability standards for the

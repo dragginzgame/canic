@@ -7,6 +7,21 @@ source "$(dirname "${BASH_SOURCE[0]}")/../ci/require-jq.sh"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 INSTALL_DEV="$ROOT/scripts/dev/install_dev.sh"
 VERSION_READER="$ROOT/scripts/ci/read-workspace-version.sh"
+release_commit=""
+view="$ROOT"
+view_scratch=""
+trap '[[ -z "$view_scratch" ]] || rm -rf "$view_scratch"' EXIT
+if [[ $# != 0 ]]; then
+    [[ $# == 2 && "$1" == --commit && "$2" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || {
+        echo 'usage: check-release-candidate.sh [--commit <exact-sha>]' >&2; exit 2;
+    }
+    release_commit="$2"
+    [[ "$(git -C "$ROOT" rev-parse --verify "$release_commit^{commit}")" == "$release_commit" ]]
+    view_scratch="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-view.XXXXXX")"
+    git -C "$ROOT" archive "$release_commit" | tar -xf - -C "$view_scratch"
+    view="$view_scratch"
+    INSTALL_DEV="$view/scripts/dev/install_dev.sh"
+fi
 
 fail() {
     echo "release candidate guard failed: $1" >&2
@@ -17,10 +32,20 @@ command -v cargo >/dev/null 2>&1 || fail "cargo is unavailable"
 require_jq
 command -v rg >/dev/null 2>&1 || fail "rg is unavailable"
 
-workspace_version="$(bash "$VERSION_READER")" ||
+workspace_version="$(
+    if [[ -n "$release_commit" ]]; then
+        cargo get --entry "$view" workspace.package.version
+    else
+        bash "$VERSION_READER"
+    fi
+)" ||
     fail "cargo-get could not read the root workspace version"
+if [[ -n "$release_commit" && -n "${RELEASE_VERSION:-}" ]]; then
+    [[ "$workspace_version" == "$RELEASE_VERSION" ]] ||
+        fail "selected commit version differs from release intent"
+fi
 minor_line="${workspace_version%.*}"
-detailed_changelog="$ROOT/docs/changelog/$minor_line.md"
+detailed_changelog="$view/docs/changelog/$minor_line.md"
 
 [ -f "$detailed_changelog" ] ||
     fail "detailed changelog is missing for $workspace_version"
@@ -28,15 +53,20 @@ release_header="$(rg -m1 -F "## [$workspace_version] - " "$detailed_changelog" |
 release_date="${release_header#"## [$workspace_version] - "}"
 [[ "$release_date" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]] ||
     fail "$workspace_version changelog is not sealed with a release date"
+if [[ -n "$release_commit" && -n "${RELEASE_DATE:-}" ]]; then
+    [[ "$release_date" == "$RELEASE_DATE" ]] ||
+        fail "selected commit date differs from release intent"
+fi
 [ "$(rg -c -F "## [$workspace_version] - $release_date" "$detailed_changelog")" -eq 1 ] ||
     fail "$workspace_version changelog header is duplicated"
 if rg -F "## $workspace_version - Unreleased" "$detailed_changelog" >/dev/null; then
     fail "$workspace_version changelog still says Unreleased"
 fi
-head_subject="$(git -C "$ROOT" log -1 --format=%s HEAD)"
+head_subject="$(git -C "$ROOT" log -1 --format=%s "${release_commit:-HEAD}")"
 if [ "$head_subject" = "Release $workspace_version" ]; then
-    validated_source="$(git -C "$ROOT" rev-parse HEAD^)"
+    validated_source="$(git -C "$ROOT" rev-parse "${release_commit:-HEAD}^")"
 else
+    [[ -z "$release_commit" ]] || fail "selected commit is not the Release $workspace_version commit"
     validated_source="$(git -C "$ROOT" rev-parse HEAD)"
 fi
 # Source validation belongs to the release lane. The editable handoff is not
@@ -57,7 +87,11 @@ is_release_only_path() {
 
 candidate_changes=()
 while IFS= read -r value; do candidate_changes[${#candidate_changes[@]}]="$value"; done < <(
-    git -C "$ROOT" diff --name-only "$validated_source" --
+    if [[ -n "$release_commit" ]]; then
+        git -C "$ROOT" diff --name-only "$validated_source" "$release_commit" --
+    else
+        git -C "$ROOT" diff --name-only "$validated_source" --
+    fi
 )
 for changed_path in "${candidate_changes[@]}"; do
     is_release_only_path "$changed_path" ||
@@ -69,14 +103,16 @@ for changed_path in "${candidate_changes[@]}"; do
             ;;
     esac
 done
-while IFS= read -r untracked_path; do
-    [ -z "$untracked_path" ] ||
-        fail "release candidate contains untracked state: $untracked_path"
-done < <(git -C "$ROOT" ls-files --others --exclude-standard)
+if [[ -z "$release_commit" ]]; then
+    while IFS= read -r untracked_path; do
+        [ -z "$untracked_path" ] ||
+            fail "release candidate contains untracked state: $untracked_path"
+    done < <(git -C "$ROOT" ls-files --others --exclude-standard)
+fi
 
-bash "$ROOT/scripts/ci/check-release-surface-content.sh" "$validated_source" "$workspace_version" "$release_date"
+bash "$ROOT/scripts/ci/check-release-surface-content.sh" "$validated_source" "$workspace_version" "$release_date" "$release_commit"
 
-metadata="$(cd "$ROOT" && cargo metadata --locked --offline --format-version 1 --no-deps)" ||
+metadata="$(cd "$view" && cargo metadata --locked --offline --format-version 1 --no-deps)" ||
     fail "locked offline Cargo metadata is unavailable"
 # jq expressions use literal variable names.
 # shellcheck disable=SC2016

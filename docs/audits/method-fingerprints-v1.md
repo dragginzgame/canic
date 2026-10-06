@@ -31,18 +31,18 @@ follow the defect/invalidation protocol in [AUDIT-HOWTO.md](AUDIT-HOWTO.md).
 | `CANIC-LIFECYCLE-001` | `4` | `1e5cf3dbc8efe09b69fb8a8722cae85b5cbcb40547c747388cbef6165a955b4f` | `docs/audits/recurring/system/bootstrap-lifecycle-symmetry.md` |
 | `CANIC-BUILD-INTEGRITY-001` | `2` | `e75c8fdc54f090bd901482f50c88e2b6272830d1425f24d7165904c1b206a94b` | `docs/audits/recurring/system/build-integrity.md` |
 | `CANIC-CAPABILITY-SURFACE-001` | `2` | `91e61f3385882d108b8541e31715b1ee1e126299f7ad64890c979043a9d7c759` | `docs/audits/recurring/system/capability-surface.md` |
-| `CANIC-CHANGE-FRICTION-001` | `3` | `c23af3f87879a3223893b11ef4568340789a291d4c98b33f83d7fab5efa67cda` | `docs/audits/recurring/system/change-friction.md` |
-| `CANIC-COMPLEXITY-001` | `3` | `4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a` | `docs/audits/recurring/system/complexity-accretion.md` |
+| `CANIC-CHANGE-FRICTION-001` | `4` | `72b063c432d9521bdbb565b3176dcb06909d7586b9a5dc7b578b22c437ec6725` | `docs/audits/recurring/system/change-friction.md` |
+| `CANIC-COMPLEXITY-001` | `4` | `e3ea1d265170a7cfffe185c135d7a8b7e36a1a268cdca4380258dfa5b9e854db` | `docs/audits/recurring/system/complexity-accretion.md` |
 | `CANIC-DEPENDENCY-001` | `3` | `e0e4474467664e46a56243ccf41c5b29b9786a0052a9ccf9117e499226384d40` | `docs/audits/recurring/system/dependency-hygiene.md` |
-| `CANIC-DUPLICATION-001` | `2` | `7d2369e2cafa2f10128c97044c0853d56dc9a58dd912277ba5dcdcc4e82169dc` | `docs/audits/recurring/system/dry-consolidation.md` |
+| `CANIC-DUPLICATION-001` | `3` | `5a417c934b44b2d1e3f31980aebcfa9c6b396cda5440ee64c4f917c964418021` | `docs/audits/recurring/system/dry-consolidation.md` |
 | `CANIC-INSTRUCTION-001` | `3` | `515dbe0d4957dd4705f3e21ce88cca1a34b8c4cc86ccd34483479abedf5c2ab8` | `docs/audits/recurring/system/instruction-footprint.md` |
 | `CANIC-LAYERING-001` | `2` | `a4c71532e85f3ea0c5f1802478b15f444d78eae3540dc35b96b77b04231503bc` | `docs/audits/recurring/system/layer-violations.md` |
-| `CANIC-STRUCTURE-001` | `2` | `d8ad8f06492d8a37e4f9b9632b83714b4a88125989d44ed7e825e93c2957dd49` | `docs/audits/recurring/system/module-structure.md` |
+| `CANIC-STRUCTURE-001` | `3` | `635df6921e39cb0a780252248f4d6961d4f33d2a72e5b60535a872c2aa9846e8` | `docs/audits/recurring/system/module-structure.md` |
 | `CANIC-PUBLISH-001` | `2` | `5c6f38395c02454e861115c6a06638944d7841b331f1758c247601b69675e341` | `docs/audits/recurring/system/publish-surface.md` |
 | `CANIC-RELEASE-INTEGRITY-001` | `2` | `4eb3d6f45df9ee9b64df901dc891ebfd37e8aaa1ede45a02eadbc3018b8a6609` | `docs/audits/recurring/system/release-integrity.md` |
 | `CANIC-AUTH-ORDERING-001` | `1` | `2619b50394d35381cb2be0d124868f8249218bf41591fad2713730e20f266b87` | `docs/audits/recurring/system/security-boundary-ordering.md` |
 | `CANIC-WASM-001` | `6` | `0c8487a989dadaae03cba0437545a2ea236274607622ff3d74623696c1ebe797` | `docs/audits/recurring/system/wasm-footprint.md` |
-| `CANIC-MODULE-SURFACE-001` | `2.3` | `b4b6e300b70ae8f2899b36b99b287aa2332ab1c8775514a99954f991c472a3f4` | `docs/audits/modular/module-surface-hardening.md` |
+| `CANIC-MODULE-SURFACE-001` | `2.4` | `55490f62bd93b81d93d60168c05ea8de9797d081e9dbf8f7154ba0787db4e422` | `docs/audits/modular/module-surface-hardening.md` |
 
 The [September 29 correction report](reports/2026-09/2026-09-29/audit-method-correction.md)
 records the DRY and module-hardening revision scope and affected-result limits.
@@ -53,8 +53,14 @@ evidence; revision 2 reviews credential handling without requiring a scanner.
 
 ## Superseded Definition Identities
 
+
 | Audit ID | Version | SHA-256 | Definition | Superseded by |
 | --- | --- | --- | --- | --- |
+| `CANIC-DUPLICATION-001` | `2` | `7d2369e2cafa2f10128c97044c0853d56dc9a58dd912277ba5dcdcc4e82169dc` | `docs/audits/historical/shared-adoption-20261006/dry-consolidation.md` | `CANIC-DUPLICATION-001/v3` |
+| `CANIC-COMPLEXITY-001` | `3` | `4e20ddfbf9b33e5cc9ca2b6535aaeab0b5f30ffbf053b06b55f4d9a3c0831a2a` | `docs/audits/historical/shared-adoption-20261006/complexity-accretion.md` | `CANIC-COMPLEXITY-001/v4` |
+| `CANIC-CHANGE-FRICTION-001` | `3` | `c23af3f87879a3223893b11ef4568340789a291d4c98b33f83d7fab5efa67cda` | `docs/audits/historical/shared-adoption-20261006/change-friction.md` | `CANIC-CHANGE-FRICTION-001/v4` |
+| `CANIC-STRUCTURE-001` | `2` | `d8ad8f06492d8a37e4f9b9632b83714b4a88125989d44ed7e825e93c2957dd49` | `docs/audits/historical/shared-adoption-20261006/module-structure.md` | `CANIC-STRUCTURE-001/v3` |
+| `CANIC-MODULE-SURFACE-001` | `2.3` | `b4b6e300b70ae8f2899b36b99b287aa2332ab1c8775514a99954f991c472a3f4` | `docs/audits/historical/shared-adoption-20261006/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.4` |
 | `CANIC-RELEASE-INTEGRITY-001` | `1` | `3f6b87b30a3c1f9c80803a8be5d45292e73217d260ea435a956bd05f10d63438` | `docs/audits/recurring/system/release-integrity.md` | `CANIC-RELEASE-INTEGRITY-001/v2` |
 | `CANIC-MODULE-SURFACE-001` | `2.2` | `982c79eeeb88f32002b47810280109bf273bf39a2d80b1cd5205010929b129ff` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.3` |
 | `CANIC-MODULE-SURFACE-001` | `2.1` | `e3cb15bba0909fff96075206d6a4780b2a74f31a98c95ebd143023d0e73e9835` | `docs/audits/modular/module-surface-hardening.md` | `CANIC-MODULE-SURFACE-001/v2.2` |
@@ -105,16 +111,16 @@ and executable fixture inputs and record the resulting value in each run.
 
 | SHA-256 | Input |
 | --- | --- |
-| `0767cd4548ff6f3c29afa410078699636dc6c6aabf330c2095ec5410b36c4f44` | `crates/canic-host/examples/build_artifact.rs` |
+| `c4a158532e59c17d16b0fe161eb30bc15c4bacd3a6f41561f6c8ae88b678682c` | `crates/canic-host/examples/build_artifact.rs` |
 | `9bde640ebb6f70c0649a2ef862d32e29b0af20fb0a4a52e3c6a0fc74fac488c2` | `crates/canic-tests/tests/instruction_audit.rs` |
-| `4b096319516ee6526ec4e97d2ccd58d6c36bc875cd9e4d91635ee9232dd2db5f` | `crates/canic-tests/tests/instruction_audit_support/estimates/mod.rs` |
-| `479f0659b838459661c6068ca2e9143bab9e5d8a53e3e0c4886f1f63ebf72478` | `crates/canic-tests/tests/instruction_audit_support/execution.rs` |
-| `59194c6c3029d402c0faae7421dbe6cb334b42e9b854f916995dffeeefd319f2` | `crates/canic-tests/tests/instruction_audit_support/mod.rs` |
-| `4b27a4c4cbbeec2097e690ae6c1c178c60317d92b1fee611bfd50967a2725add` | `crates/canic-tests/tests/instruction_audit_support/report.rs` |
-| `039e5910c1d3235c98852bd9893ece9d80ba2e2ebdf75c0b7ecfc933b3658f9c` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
-| `759301e30336b4c26fa4cffd20e3807d7710b05aa55c965ad159564342905422` | `docs/audits/AUDIT-HOWTO.md` |
-| `5cf490e6a2fe8075c6f09a6efb6c3fa7525abcf63b3b87d369cbe1623a859283` | `docs/audits/META-AUDIT.md` |
-| `06b5b1845d21c8cbfb32412e40637bf254c2d39cce0e4c9699826c415b1c7cb3` | `docs/audits/METHODS.md` |
+| `f5f307560315beed0afc1f4eabc7257bbbb1bc0e1d84dfb417565d2f893967fa` | `crates/canic-tests/tests/instruction_audit_support/estimates/mod.rs` |
+| `55c03bb123d4b6e85eb94f36ad8cad658199d1500ca6423ea27ad17943d23bf9` | `crates/canic-tests/tests/instruction_audit_support/execution.rs` |
+| `a52d4f1c1466c9705a5fee8bdc09317d3d06d4b25890bb4dd26e54d08de0fa66` | `crates/canic-tests/tests/instruction_audit_support/mod.rs` |
+| `9951d8bd46dcd151fb21462429c6874a1dbc2cce295df35aff2ed9838478fd71` | `crates/canic-tests/tests/instruction_audit_support/report.rs` |
+| `f831745b25e82adbe5a231ba622c17f4717ce79f427f94734b47fc9f421959a9` | `crates/canic-tests/tests/instruction_audit_support/scenarios.rs` |
+| `bff7fe8449b05cca312ce81e9628fdf6277c00f346a42573df426fc628e610ec` | `docs/audits/AUDIT-HOWTO.md` |
+| `140cf49f47755c7a036662e88fbbdc67e7de64feaf88ef548fd43a5ded100dea` | `docs/audits/META-AUDIT.md` |
+| `e9333a68cb8dd8eb19178249828348e0f38e057a7ef42add350697dec00b0257` | `docs/audits/METHODS.md` |
 | `ea2c06b003464d6be8f458e07090082ac39f611b1c1907ff2d48ee7f9702e3c7` | `docs/audits/mandatory-trace-protocol.md` |
 | `5fee9fc12be72d84a64137f4f3467833d895b611ea899dce91c34e89a56ee472` | `docs/audits/product-tree-scope-v1.md` |
 | `a5eee1b85b1d54bfc23285e58360690b3bc09c0c1aece7e9440a8b029ec00475` | `docs/audits/retired-methods.md` |
@@ -130,10 +136,10 @@ and executable fixture inputs and record the resulting value in each run.
 | `8f4a46a26e56b845290c3adc4994826b8a10084c97a2c68579ca60038f8e1be8` | `docs/audits/scripts/run-nonempty-cargo-test.sh` |
 | `ac7ab348d0e9a18df9def45f89f1c403f7c23e523eaf58da03b5099fb2634417` | `scripts/ci/audit-product-tree-hash.sh` |
 | `429d994c26a87ed9d0d8a2525ece3f265db37a4a73d7242f0cd0897d4fe63b74` | `scripts/ci/check-audit-method-catalog.sh` |
-| `b6890c680167d19bc7fb6ea59ec12ed7ae882f186535bab72f758579c2765508` | `scripts/ci/check-release-integrity-contract.sh` |
-| `eee02a45e2fd6512b2641209c12ad33e08b9d1659114bf9a828face730a044cc` | `scripts/ci/instruction-audit-report.sh` |
+| `f9bd2763e713d5805e9502163d4b8c963ebb5b9ad1659158cf495231c9af38da` | `scripts/ci/check-release-integrity-contract.sh` |
+| `934b2eff431db36626c5811cea77ad2f568c67920b50718495b54546bba7efea` | `scripts/ci/instruction-audit-report.sh` |
 | `93ac1f3c77d9d58009cae84c4570e51306a077a207262c9316aea6f2fdae122c` | `scripts/ci/run-layering-guards.sh` |
-| `839ee5608894b029fc466056e166a782f04d8f3c6e5f601d248a5b8e475e94ca` | `scripts/ci/list-config-canisters.sh` |
-| `089e5408ede48b45d95813d96ed7ad9bfa9814453a0630af7eff3fa80b5636b2` | `scripts/ci/require_icp.sh` |
+| `d4923f84ce221736e71619a148069f7e77b42e1270689224716fa28ede7e4542` | `scripts/ci/list-config-canisters.sh` |
+| `f2d37cdd60f85a3e7be5d4f57694cf62122f01c6576a3397e76c73b4f93cc216` | `scripts/ci/require_icp.sh` |
 | `68c3164708aab17a5a58217f9f9374c3505130e0b8eb36c3a435cc4f779366d0` | `scripts/ci/wasm-audit-report.sh` |
-| `9e320086c5118d965b8333be0af8682f6348674c8e388f9d737634854f05c4dd` | `tool-versions.env` |
+| `69fd5073c920a27eca8137d3131007a2dc5d112f5f4a9bf300558a8c8f551265` | `tool-versions.env` |

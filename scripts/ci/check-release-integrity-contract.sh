@@ -27,6 +27,7 @@ for owned_path in \
     /scripts/ci/ \
     /rust-toolchain.toml \
     /tool-versions.env \
+    /ci/ \
     /docs/governance/ci-deployment.md \
     /docs/governance/supported-platforms.md; do
     awk -v path="$owned_path" '
@@ -37,6 +38,8 @@ done
 
 # shellcheck source=/dev/null
 source "$TOOLS"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/ci/ic-tool-pins.sh"
 mapfile -t pin_vars < <(env -i PATH="$PATH" bash -c 'source "$1"; compgen -A variable CANIC_' _ "$TOOLS")
 version_count=0
 sha256_count=0

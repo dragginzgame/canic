@@ -66,12 +66,15 @@ fn fixture_version_normalization_preserves_dependency_requirements_and_profiles(
         [workspace.dependencies]
         canic = { version = "0.110.50", path = "crates/canic", default-features = false }
         external = "0.110.50"
+        external_path = { version = "0.110.50", path = "../external" }
+        alias = { package = "canic", version = "0.110.50", path = "crates/canic" }
         independently_versioned = { version = "1.2.3", path = "other" }
         [profile.fast]
         inherits = "release"
         lto = "thin"
     "#;
-    let normalized = source::normalize_manifest(manifest).unwrap();
+    let owned = std::collections::BTreeMap::from([("canic".into(), "0.110.50".into())]);
+    let normalized = source::normalize_manifest(manifest, &owned, source::FIXTURE_VERSION).unwrap();
     let document: toml::Value = toml::from_str(&normalized).unwrap();
     assert_eq!(
         document["workspace"]["package"]["version"].as_str(),
@@ -89,25 +92,105 @@ fn fixture_version_normalization_preserves_dependency_requirements_and_profiles(
         document["workspace"]["dependencies"]["independently_versioned"]["version"].as_str(),
         Some("1.2.3")
     );
+    assert_eq!(
+        document["workspace"]["dependencies"]["external_path"]["version"].as_str(),
+        Some("0.110.50")
+    );
+    assert_eq!(
+        document["workspace"]["dependencies"]["alias"]["version"].as_str(),
+        Some("0.0.0")
+    );
     assert_eq!(document["profile"]["fast"]["lto"].as_str(), Some("thin"));
-    assert_eq!(normalized, source::normalize_manifest(&normalized).unwrap());
+    assert_eq!(
+        normalized,
+        source::normalize_manifest(&normalized, &owned, source::FIXTURE_VERSION).unwrap()
+    );
     assert_eq!(
         normalized,
         source::normalize_manifest(
-            &manifest.replace("version = \"0.110.50\"", "version = \"0.110.51\"")
+            &manifest
+                .replace("version = \"0.110.50\"", "version = \"0.110.51\"")
+                .replace(
+                    "external_path = { version = \"0.110.51\"",
+                    "external_path = { version = \"0.110.50\""
+                ),
+            &owned,
+            source::FIXTURE_VERSION
         )
         .unwrap()
-    );
-    assert_ne!(
-        normalized,
-        source::normalize_manifest(&manifest.replace("lto = \"thin\"", "lto = false")).unwrap()
     );
     assert_ne!(
         normalized,
         source::normalize_manifest(
-            &manifest.replace("external = \"0.110.50\"", "external = \"0.110.51\"")
+            &manifest.replace("lto = \"thin\"", "lto = false"),
+            &owned,
+            source::FIXTURE_VERSION
         )
         .unwrap()
+    );
+    assert_ne!(
+        normalized,
+        source::normalize_manifest(
+            &manifest.replace("external = \"0.110.50\"", "external = \"0.110.51\""),
+            &owned,
+            source::FIXTURE_VERSION
+        )
+        .unwrap()
+    );
+}
+
+#[test]
+fn fixture_lock_normalization_preserves_external_selections_and_ambiguous_references() {
+    let lock = r#"
+        version = 4
+        [[package]]
+        name = "canic"
+        version = "0.110.52"
+        dependencies = ["canic-core 0.110.52", "canic-core 0.110.52 (registry+https://github.com/rust-lang/crates.io-index)", "external"]
+        [[package]]
+        name = "canic-core"
+        version = "0.110.52"
+        [[package]]
+        name = "canic-core"
+        version = "0.110.52"
+        source = "registry+https://github.com/rust-lang/crates.io-index"
+        checksum = "selected-registry-checksum"
+        [[package]]
+        name = "external"
+        version = "0.110.52"
+        [[package]]
+        name = "tar"
+        version = "0.4.46"
+        source = "registry+https://github.com/rust-lang/crates.io-index"
+        checksum = "patched-tar-checksum"
+    "#;
+    let owned = std::collections::BTreeMap::from([
+        ("canic".into(), "0.110.52".into()),
+        ("canic-core".into(), "0.110.52".into()),
+    ]);
+    let normalized = source::normalize_lock(lock, &owned, source::FIXTURE_VERSION).unwrap();
+    let before: toml::Value = toml::from_str(lock).unwrap();
+    let after: toml::Value = toml::from_str(&normalized).unwrap();
+    let packages = after["package"].as_array().unwrap();
+    assert_eq!(packages[0]["version"].as_str(), Some("0.0.0"));
+    assert_eq!(packages[1]["version"].as_str(), Some("0.0.0"));
+    assert_eq!(
+        packages[0]["dependencies"][0].as_str(),
+        Some("canic-core 0.0.0")
+    );
+    assert_eq!(
+        packages[0]["dependencies"][1],
+        before["package"][0]["dependencies"][1]
+    );
+    assert_eq!(packages[0]["dependencies"][2].as_str(), Some("external"));
+    assert_eq!(&packages[2..], &before["package"].as_array().unwrap()[2..]);
+    let owned = owned
+        .into_keys()
+        .map(|name| (name, source::FIXTURE_VERSION.into()))
+        .collect();
+    assert_eq!(
+        normalized,
+        source::normalize_lock(&normalized, &owned, source::FIXTURE_VERSION).unwrap()
     );
 }
 
@@ -122,19 +205,7 @@ fn embedded_peer_reproduces_across_paths_and_release_versions() {
     let lock_before = fs::read(workspace.join("Cargo.lock")).unwrap();
     let first = source::FixtureSource::prepare(&workspace).unwrap();
     let second = source::FixtureSource::prepare(&workspace).unwrap();
-    source::output(Command::new("cargo").current_dir(&second.root).args([
-        "set-version",
-        "--workspace",
-        "--offline",
-        "0.110.51",
-    ]))
-    .unwrap();
-    source::output(Command::new("cargo").current_dir(&second.root).args([
-        "update",
-        "--workspace",
-        "--offline",
-    ]))
-    .unwrap();
+    source::change_workspace_version(&second.root, "0.110.51").unwrap();
     source::normalize(&second.root).unwrap();
     let first_spec = build_spec(&workspace, &first.root).unwrap();
     let second_spec = build_spec(&workspace, &second.root).unwrap();

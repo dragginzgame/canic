@@ -12,13 +12,10 @@ use std::os::unix::fs::PermissionsExt;
 use std::{
     env,
     fs::{self, File, OpenOptions},
-    io::{self, Read},
+    io,
     path::{Path, PathBuf},
     sync::atomic::{AtomicU64, Ordering},
 };
-
-use canic_core::cdk::utils::hash::hex_bytes;
-use sha2_host::{Digest, Sha256};
 
 const TEMP_ATTEMPTS: usize = 64;
 static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
@@ -37,7 +34,7 @@ pub enum ArchiveFormat {
 ///
 /// InstallSpec
 ///
-/// Tool-owned archive identity and the one executable member to extract.
+/// Tool-owned archive identity, executable and optional relative runtime library.
 ///
 
 pub struct InstallSpec<'a> {
@@ -46,6 +43,7 @@ pub struct InstallSpec<'a> {
     pub archive_url: &'a str,
     pub archive_sha256: &'static str,
     pub member: &'a str,
+    pub runtime_library: Option<&'a str>,
     pub format: ArchiveFormat,
 }
 
@@ -103,9 +101,19 @@ pub fn install<T, E: From<InstallError>>(
     extract_archive(spec, &archive, &temp.path)?;
     let candidate = temp.path.join(spec.member);
     admit(&candidate)?;
-    publish_executable(spec.tool, &candidate, destination, |path| {
-        admit(path).map(|_| ())
-    })?;
+    if let Some(library) = spec.runtime_library {
+        publish_bundle(
+            spec.tool,
+            &candidate,
+            &temp.path.join(library),
+            destination,
+            |path| admit(path).map(|_| ()),
+        )?;
+    } else {
+        publish_executable(spec.tool, &candidate, destination, |path| {
+            admit(path).map(|_| ())
+        })?;
+    }
     admit(destination)
 }
 
@@ -162,6 +170,9 @@ fn extract_archive(
         .arg("-C")
         .arg(destination)
         .arg(spec.member);
+    if let Some(library) = spec.runtime_library {
+        command.arg(library);
+    }
     let output = output_with_executable_busy_retry(&mut command)
         .map_err(|source| io_error("extract tool archive", archive, source))?;
     if !output.status.success() {
@@ -238,21 +249,115 @@ fn stage_executable(candidate: &Path, stage: &Path) -> Result<(), InstallError> 
     Ok(())
 }
 
-pub fn sha256_file(path: &Path) -> Result<String, InstallError> {
-    let mut file =
-        File::open(path).map_err(|source| io_error("open file for SHA-256", path, source))?;
-    let mut hasher = Sha256::new();
-    let mut buffer = [0_u8; 16 * 1024];
-    loop {
-        let read = file
-            .read(&mut buffer)
-            .map_err(|source| io_error("read file for SHA-256", path, source))?;
-        if read == 0 {
-            break;
+/// Qualify a complete immutable bin/lib layout, then atomically select it.
+/// Failed admission leaves the previous installation intact. Published bundles
+/// remain available to processes holding their canonical executable paths.
+#[cfg(unix)]
+fn publish_bundle<E: From<InstallError>>(
+    tool: &str,
+    candidate: &Path,
+    library: &Path,
+    destination: &Path,
+    admit: impl Fn(&Path) -> Result<(), E>,
+) -> Result<(), E> {
+    let parent = destination.parent().ok_or_else(|| {
+        io_error(
+            "select tool installation directory",
+            destination,
+            io::Error::new(io::ErrorKind::InvalidInput, "destination has no parent"),
+        )
+    })?;
+    fs::create_dir_all(parent)
+        .map_err(|source| io_error("create tool installation directory", parent, source))?;
+    let parent = fs::canonicalize(parent)
+        .map_err(|source| io_error("resolve tool installation directory", parent, source))?;
+    let bundle = parent.join(format!(
+        ".canic-{tool}-bundle-{}-{}",
+        std::process::id(),
+        TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed)
+    ));
+    fs::create_dir(&bundle).map_err(|source| io_error("create tool bundle", &bundle, source))?;
+    let link = bundle.join("selected");
+    let mut published = false;
+    let result = (|| {
+        let bin = bundle.join("bin");
+        let lib = bundle.join("lib");
+        for directory in [&bin, &lib] {
+            fs::create_dir(directory)
+                .map_err(|source| io_error("create tool bundle directory", directory, source))?;
         }
-        hasher.update(&buffer[..read]);
+        let executable = bin.join(tool);
+        let staged_library = lib.join("libbinaryen.dylib");
+        stage_bundle_member(candidate, &executable)?;
+        stage_bundle_member(library, &staged_library)?;
+        admit(&executable)?;
+        for directory in [&bin, &lib, &bundle] {
+            File::open(directory)
+                .and_then(|file| file.sync_all())
+                .map_err(|source| io_error("sync tool bundle directory", directory, source))?;
+        }
+        std::os::unix::fs::symlink(&executable, &link)
+            .map_err(|source| io_error("stage tool bundle selection", &link, source))?;
+        File::open(&bundle)
+            .and_then(|file| file.sync_all())
+            .map_err(|source| io_error("sync tool bundle selection", &bundle, source))?;
+        fs::rename(&link, destination)
+            .map_err(|source| io_error("publish tool bundle", destination, source))?;
+        published = true;
+        File::open(&parent)
+            .and_then(|file| file.sync_all())
+            .map_err(|source| {
+                E::from(io_error(
+                    "sync tool installation directory",
+                    &parent,
+                    source,
+                ))
+            })
+    })();
+    if !published {
+        let _ = fs::remove_dir_all(&bundle);
     }
-    Ok(hex_bytes(hasher.finalize()))
+    result
+}
+
+fn stage_bundle_member(source: &Path, stage: &Path) -> Result<(), InstallError> {
+    let metadata = fs::symlink_metadata(source)
+        .map_err(|error| io_error("inspect tool bundle member", source, error))?;
+    if !metadata.is_file() {
+        return Err(io_error(
+            "inspect tool bundle member",
+            source,
+            io::Error::new(
+                io::ErrorKind::InvalidData,
+                "bundle member must be a regular file",
+            ),
+        ));
+    }
+    let expected = sha256_file(source)?;
+    stage_executable(source, stage)?;
+    let actual = sha256_file(stage)?;
+    if actual != expected {
+        return Err(InstallError::ExecutableHashMismatch {
+            path: stage.to_path_buf(),
+            actual,
+            expected,
+        });
+    }
+    Ok(())
+}
+
+pub fn sha256_file(path: &Path) -> Result<String, InstallError> {
+    // Distribution owners retain their exact digest pins. Hashing streams in
+    // constant space and accepts every representable file size.
+    ic_host_tools::artifact::hash_file(path, u64::MAX)
+        .map(|identity| identity.sha256.to_string())
+        .map_err(|source| {
+            let source = match source {
+                ic_host_tools::artifact::ArtifactError::Io(source) => source,
+                source => io::Error::other(source),
+            };
+            io_error("hash admitted tool file", path, source)
+        })
 }
 
 fn io_error(operation: &'static str, path: &Path, source: io::Error) -> InstallError {

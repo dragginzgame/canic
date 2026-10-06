@@ -1301,7 +1301,12 @@ fn copy_fixture_directory(source: &Path, destination: &Path) -> std::io::Result<
     for entry in fs::read_dir(source)? {
         let entry = entry?;
         let source_path = entry.path();
-        let destination_path = destination.join(entry.file_name());
+        let destination_name = if entry.file_name() == "Cargo.toml.fixture" {
+            std::ffi::OsString::from("Cargo.toml")
+        } else {
+            entry.file_name()
+        };
+        let destination_path = destination.join(destination_name);
         if entry.file_type()?.is_dir() {
             copy_fixture_directory(&source_path, &destination_path)?;
         } else {

@@ -2,7 +2,9 @@
 //!
 //! Normalize only the workspace's own version; external dependency requirements stay intact.
 
+use serde::Deserialize;
 use std::{
+    collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
     process::Command,
@@ -101,24 +103,111 @@ pub(super) fn bind_dependency_paths(root: &Path, workspace: &Path) -> io::Result
 }
 
 pub(super) fn normalize(root: &Path) -> io::Result<()> {
+    change_workspace_version(root, FIXTURE_VERSION)
+}
+
+/// Cargo's inventory identifies workspace-owned packages independently of their names.
+#[derive(Deserialize)]
+struct WorkspaceInventory {
+    packages: Vec<WorkspacePackage>,
+    workspace_members: Vec<String>,
+}
+
+/// Exact package identity selected before normalizing the private snapshot.
+#[derive(Deserialize)]
+struct WorkspacePackage {
+    id: String,
+    name: String,
+    version: String,
+}
+
+fn workspace_inventory(root: &Path) -> io::Result<WorkspaceInventory> {
+    serde_json::from_slice(&output(Command::new("cargo").current_dir(root).args([
+        "metadata",
+        "--format-version",
+        "1",
+        "--no-deps",
+        "--locked",
+        "--offline",
+    ]))?)
+    .map_err(io::Error::other)
+}
+
+// Rewrite local identities directly: Cargo update may select newer external
+// versions even with --workspace, invalidating the selected qualification graph.
+pub(super) fn change_workspace_version(root: &Path, version: &str) -> io::Result<()> {
+    let inventory = workspace_inventory(root)?;
+    let owned: BTreeMap<_, _> = inventory
+        .packages
+        .into_iter()
+        .filter(|package| inventory.workspace_members.contains(&package.id))
+        .map(|package| (package.name, package.version))
+        .collect();
+    if owned.is_empty() {
+        return Err(io::Error::other(
+            "fixture workspace package inventory empty",
+        ));
+    }
     let manifest = root.join("Cargo.toml");
     let lock = root.join("Cargo.lock");
-    let before = external_packages(&fs::read_to_string(&lock)?)?;
+    let contents = fs::read_to_string(&lock)?;
+    let before = external_packages(&contents)?;
+    let normalized_lock = normalize_lock(&contents, &owned, version)?;
     fs::write(
         &manifest,
-        normalize_manifest(&fs::read_to_string(&manifest)?)?,
+        normalize_manifest(&fs::read_to_string(&manifest)?, &owned, version)?,
     )?;
-    output(
-        Command::new("cargo")
-            .current_dir(root)
-            .args(["update", "--workspace", "--offline"]),
-    )?;
+    fs::write(&lock, normalized_lock)?;
+    workspace_inventory(root)?; // Cargo must accept the rewritten graph under --locked.
     if external_packages(&fs::read_to_string(lock)?)? != before {
         return Err(io::Error::other(
             "fixture normalization changed external dependencies",
         ));
     }
     Ok(())
+}
+
+/// Preserve every selected external record while rewriting exact local references.
+pub(super) fn normalize_lock(
+    contents: &str,
+    owned: &BTreeMap<String, String>,
+    version: &str,
+) -> io::Result<String> {
+    let mut lock: toml::Value = toml::from_str(contents).map_err(io::Error::other)?;
+    let packages = lock
+        .get_mut("package")
+        .and_then(toml::Value::as_array_mut)
+        .ok_or_else(|| io::Error::other("fixture lock package inventory missing"))?;
+    let references: BTreeMap<_, _> = owned
+        .iter()
+        .map(|(name, old)| (format!("{name} {old}"), format!("{name} {version}")))
+        .collect();
+    for package in packages {
+        let package = package
+            .as_table_mut()
+            .ok_or_else(|| io::Error::other("fixture lock package must be a table"))?;
+        if package.get("source").is_none() {
+            let name = package.get("name").and_then(toml::Value::as_str);
+            let old = package.get("version").and_then(toml::Value::as_str);
+            if name
+                .and_then(|name| owned.get(name))
+                .is_some_and(|version| Some(version.as_str()) == old)
+            {
+                package.insert("version".into(), version.into());
+            }
+        }
+        if let Some(dependencies) = package
+            .get_mut("dependencies")
+            .and_then(toml::Value::as_array_mut)
+        {
+            for dependency in dependencies {
+                if let Some(replacement) = dependency.as_str().and_then(|old| references.get(old)) {
+                    *dependency = replacement.clone().into();
+                }
+            }
+        }
+    }
+    toml::to_string(&lock).map_err(io::Error::other)
 }
 
 fn external_packages(contents: &str) -> io::Result<Vec<toml::Value>> {
@@ -134,7 +223,11 @@ fn external_packages(contents: &str) -> io::Result<Vec<toml::Value>> {
         .collect())
 }
 
-pub(super) fn normalize_manifest(contents: &str) -> io::Result<String> {
+pub(super) fn normalize_manifest(
+    contents: &str,
+    owned: &BTreeMap<String, String>,
+    selected: &str,
+) -> io::Result<String> {
     let mut manifest: toml::Value = toml::from_str(contents).map_err(io::Error::other)?;
     let workspace = manifest
         .get_mut("workspace")
@@ -149,20 +242,24 @@ pub(super) fn normalize_manifest(contents: &str) -> io::Result<String> {
         .and_then(toml::Value::as_str)
         .ok_or_else(|| io::Error::other("workspace package version missing"))?
         .to_owned();
-    package.insert("version".into(), FIXTURE_VERSION.into());
+    package.insert("version".into(), selected.into());
     if let Some(dependencies) = workspace
         .get_mut("dependencies")
         .and_then(toml::Value::as_table_mut)
     {
-        for dependency in dependencies
-            .iter_mut()
-            .map(|(_, value)| value)
-            .filter_map(toml::Value::as_table_mut)
-        {
-            if dependency.contains_key("path")
+        for (name, value) in dependencies {
+            let Some(dependency) = value.as_table_mut() else {
+                continue;
+            };
+            let package = dependency
+                .get("package")
+                .and_then(toml::Value::as_str)
+                .unwrap_or(name);
+            if owned.contains_key(package)
+                && dependency.contains_key("path")
                 && dependency.get("version").and_then(toml::Value::as_str) == Some(&version)
             {
-                dependency.insert("version".into(), FIXTURE_VERSION.into());
+                dependency.insert("version".into(), selected.into());
             }
         }
     }

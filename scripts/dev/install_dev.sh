@@ -9,8 +9,6 @@ CANIC_CLI_VERSION="${CANIC_CLI_VERSION:-0.110.52}"
 CANIC_RUST_TOOLCHAIN="${CANIC_RUST_TOOLCHAIN:-1.99.0}"
 ACTIONLINT_INSTALL_DIR="${ACTIONLINT_INSTALL_DIR:-$HOME/.local/bin}"
 SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
-IC_WASM_INSTALL_DIR="${IC_WASM_INSTALL_DIR:-$HOME/.local/bin}"
-BINARYEN_INSTALL_DIR="${BINARYEN_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
@@ -150,76 +148,12 @@ install_or_update_shellcheck() {
     fi
 }
 
-install_or_update_icp_cli() {
-    local cargo_bin_dir
-    local icp_path=""
-
-    cargo_bin_dir="$(resolved_cargo_bin_dir)"
-    yellow "ICP CLI:"
-    mkdir -p "$cargo_bin_dir"
-    export PATH="$cargo_bin_dir:$PATH"
+install_repository_tools() {
+    yellow "Repository JSON/YAML and IC tools:"
+    bash "$ROOT_DIR/scripts/dev/install-host-tools.sh"
+    bash "$ROOT_DIR/scripts/dev/install-ic-tools.sh"
+    export PATH="$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$PATH"
     hash -r 2>/dev/null || true
-    cyan_command "bash scripts/ci/install-icp-cli.sh"
-    bash "$ROOT_DIR/scripts/ci/install-icp-cli.sh"
-    hash -r 2>/dev/null || true
-    require_command icp
-    icp_path="$(command -v icp)"
-    green "icp ready: $(icp --version 2>&1) ($icp_path)"
-    if [ "$icp_path" != "$cargo_bin_dir/icp" ]; then
-        yellow "icp resolves to $icp_path; put $cargo_bin_dir before other bin directories in PATH."
-    fi
-}
-
-install_or_update_ic_wasm() {
-    local bin
-    local path_had_install_dir=0
-
-    if [[ ":$PATH:" == *":$IC_WASM_INSTALL_DIR:"* ]]; then
-        path_had_install_dir=1
-    fi
-
-    yellow "ic-wasm:"
-    require_command curl
-    require_command tar
-    mkdir -p "$IC_WASM_INSTALL_DIR"
-    PATH="$(resolved_cargo_bin_dir):$IC_WASM_INSTALL_DIR:$PATH"
-    export PATH
-    hash -r 2>/dev/null || true
-    cyan_command "IC_WASM_INSTALL_DIR=$IC_WASM_INSTALL_DIR bash scripts/ci/install-ic-wasm.sh"
-    bin="$(
-        IC_WASM_INSTALL_DIR="$IC_WASM_INSTALL_DIR" \
-            bash "$ROOT_DIR/scripts/ci/install-ic-wasm.sh"
-    )"
-    green "ic-wasm ready: $("$bin" --version 2>&1)"
-    if [ "$path_had_install_dir" -eq 0 ]; then
-        yellow "ic-wasm installed under $IC_WASM_INSTALL_DIR; add it to PATH to run it directly."
-    fi
-}
-
-install_or_update_binaryen() {
-    local bin
-    local path_had_install_dir=0
-
-    if [[ ":$PATH:" == *":$BINARYEN_INSTALL_DIR:"* ]]; then
-        path_had_install_dir=1
-    fi
-
-    yellow "Binaryen:"
-    require_command curl
-    require_command tar
-    mkdir -p "$BINARYEN_INSTALL_DIR"
-    PATH="$(resolved_cargo_bin_dir):$BINARYEN_INSTALL_DIR:$PATH"
-    export PATH
-    hash -r 2>/dev/null || true
-    cyan_command "BINARYEN_INSTALL_DIR=$BINARYEN_INSTALL_DIR bash scripts/ci/install-binaryen.sh"
-    bin="$(
-        BINARYEN_INSTALL_DIR="$BINARYEN_INSTALL_DIR" \
-            bash "$ROOT_DIR/scripts/ci/install-binaryen.sh"
-    )"
-    green "Binaryen ready: $("$bin" --version 2>&1)"
-    if [ "$path_had_install_dir" -eq 0 ]; then
-        yellow "wasm-opt installed under $BINARYEN_INSTALL_DIR; add it to PATH to run it directly."
-    fi
 }
 
 require_python() {
@@ -254,9 +188,7 @@ main() {
         require_python
         install_or_update_shellcheck
         install_or_update_actionlint
-        install_or_update_icp_cli
-        install_or_update_ic_wasm
-        install_or_update_binaryen
+        install_repository_tools
         green "Python, shell lint, workflow lint, ICP CLI, and Wasm prerequisites ready."
         return 0
     fi
@@ -288,9 +220,7 @@ main() {
     install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_shellcheck
     install_or_update_actionlint
-    install_or_update_icp_cli
-    install_or_update_ic_wasm
-    install_or_update_binaryen
+    install_repository_tools
 
     yellow "Canic CLI:"
     cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked canic-cli --version $CANIC_CLI_VERSION"

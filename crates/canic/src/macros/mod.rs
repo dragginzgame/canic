@@ -40,24 +40,13 @@ macro_rules! log {
 // Perf macro
 // -----------------------------------------------------------------------------
 
-/// Record and log elapsed instruction counts since the last `perf!` invocation
-/// in this thread.
+/// Record and log instructions since the preceding checkpoint in this invocation.
 ///
-/// - Uses a thread-local `PERF_LAST` snapshot.
-/// - Computes `delta = now - last`.
-/// - Records a structured checkpoint row in the shared perf table.
-/// - Prints a human-readable line for debugging.
-///
-/// Intended usage:
-/// - Long-running maintenance tasks where you want *checkpoints* in a single call.
-///
-/// Note: `perf!` is independent of endpoint perf scopes and does not touch the
-/// endpoint stack used by dispatch. It records checkpoint rows keyed by
-/// `module_path!()` plus the formatted label.
-///
-/// Notes:
-/// - On non-wasm targets, `perf_counter()` returns 0, so this becomes a no-op-ish
-///   counter (still records 0 deltas); this keeps unit tests compiling cleanly.
+/// Generated endpoints own their checkpoint baseline across awaits. Background
+/// futures can use `canic::api::ops::with_async_perf_context`. Unscoped calls
+/// produce no sample because they have no attributable interval.
+/// Checkpoint keys remain `module_path!()` plus the formatted label. Native
+/// counters measure zero while retaining sample counts inside an owned scope.
 ///
 /// ```
 /// canic::perf!("load_state");
@@ -67,32 +56,17 @@ macro_rules! log {
 #[macro_export]
 macro_rules! perf {
     ($($label:tt)*) => {{
-        $crate::__internal::core::perf::PERF_LAST.with(|last| {
-            // Use the wrapper so non-wasm builds compile.
-            let now = $crate::__internal::core::perf::perf_counter();
-            let then = *last.borrow();
-            let delta = now.saturating_sub(then);
-
-            // Update last checkpoint.
-            *last.borrow_mut() = now;
-
-            // Format label + pretty-print counters.
-            let label = format!($($label)*);
-            let delta_fmt = $crate::__internal::instructions::format_instructions(delta);
-            let now_fmt = $crate::__internal::instructions::format_instructions(now);
-
-            $crate::__internal::core::perf::record_checkpoint(module_path!(), &label, delta);
-
+        let label = format!($($label)*);
+        if let Some(sample) = $crate::__internal::core::perf::checkpoint(module_path!(), &label) {
+            let delta_fmt = $crate::__internal::instructions::format_instructions(sample.instructions);
+            let now_fmt = $crate::__internal::instructions::format_instructions(sample.call_context_instructions);
             $crate::__internal::core::log!(
                 $crate::__internal::core::log::Topic::Perf,
                 Info,
                 "{}: '{}' used {}i since last (total: {}i)",
-                module_path!(),
-                label,
-                delta_fmt,
-                now_fmt
+                module_path!(), label, delta_fmt, now_fmt
             );
-        });
+        }
     }};
 }
 
@@ -102,9 +76,15 @@ mod tests {
 
     #[test]
     fn public_perf_paths_record_formatted_checkpoints() {
-        crate::perf!("loaded {} rows", 3);
-        crate::prelude::perf!("loaded {} rows", 3);
-        crate::api::ops::perf!("loaded {} rows", 3);
+        let call = crate::__internal::core::ids::EndpointCall {
+            endpoint: crate::__internal::core::ids::EndpointId::new("perf_macro_probe"),
+            kind: crate::__internal::core::ids::EndpointCallKind::Query,
+        };
+        crate::__internal::core::dispatch::measure_endpoint(call, || {
+            crate::perf!("loaded {} rows", 3);
+            crate::prelude::perf!("loaded {} rows", 3);
+            crate::api::ops::perf!("loaded {} rows", 3);
+        });
 
         let checkpoint = entries()
             .into_iter()

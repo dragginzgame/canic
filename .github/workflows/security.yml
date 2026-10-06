@@ -33,6 +33,9 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
+          bash scripts/dev/install-host-tools.sh
+          echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
           cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Check dependency risk inventory

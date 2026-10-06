@@ -11,18 +11,16 @@ mod tests;
 use crate::{
     output_with_executable_busy_retry,
     tool_install::{self, ArchiveFormat, InstallError, InstallSpec, sha256_file},
+    tool_resolution,
 };
 use std::{
     env,
     ffi::OsStr,
-    fs, io,
+    io,
     path::{Path, PathBuf},
 };
 
 use thiserror::Error as ThisError;
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 
 pub const BINARYEN_REPAIR_COMMAND: &str = "canic toolchain install";
 pub const BINARYEN_VERSION: &str = "132";
@@ -32,7 +30,7 @@ pub const WASM_OPT_TOOL: &str = "wasm-opt";
 ///
 /// BinaryenAuthority
 ///
-/// Immutable official archive and executable identities for one supported host platform.
+/// Official archive, executable and runtime-library identities for one supported host.
 ///
 
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
@@ -40,6 +38,7 @@ pub struct BinaryenAuthority {
     archive_platform: &'static str,
     archive_sha256: &'static str,
     executable_sha256: &'static str,
+    runtime_library_sha256: Option<&'static str>,
 }
 
 impl BinaryenAuthority {
@@ -88,6 +87,9 @@ const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
             archive_platform: "arm64-macos",
             archive_sha256: "98aad827847af7ef990ed7098d885725c8e5b5aae75073403635617ae4e259aa",
             executable_sha256: "a9c8d09d84186e4c8efe937f3de19b887404d24a96e2638f3bd3b476e17b7218",
+            runtime_library_sha256: Some(
+                "6627f4f3f3655bfc14b3cd4816b0e7b0cb62ce6a530bab00cdd26855d5f6359b",
+            ),
         },
     },
     BinaryenPlatformAuthority {
@@ -97,6 +99,9 @@ const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
             archive_platform: "x86_64-macos",
             archive_sha256: "40c3de90bb3766bd0282a895e139a6f50253dba49b4f5bb89e66faca162d832e",
             executable_sha256: "c3cbd288eef3402119d8183df1739887ff0e6430caba2e1c801406df725a2bd3",
+            runtime_library_sha256: Some(
+                "f6d540a50c12af1769c10e30775625f70b65327ff8ee438c7059bc076147000a",
+            ),
         },
     },
     BinaryenPlatformAuthority {
@@ -106,6 +111,7 @@ const SUPPORTED_BINARYEN_AUTHORITIES: [BinaryenPlatformAuthority; 3] = [
             archive_platform: "x86_64-linux",
             archive_sha256: "195ddc94f9bc89f45abdabb0b9eea86023d727ba90eac8b35b80f2544fc30572",
             executable_sha256: "1014958e6f20d412f1542320b43970214b0fb1ed780595e8f7c0d8761ed53725",
+            runtime_library_sha256: None,
         },
     },
 ];
@@ -204,6 +210,15 @@ pub enum BinaryenToolError {
     )]
     RequestedExecutableMissing { path: PathBuf },
 
+    #[error(
+        "selected Binaryen runtime library {path} has SHA-256 {actual}; required {expected}; run `{BINARYEN_REPAIR_COMMAND}`"
+    )]
+    RuntimeLibraryHashMismatch {
+        path: PathBuf,
+        actual: String,
+        expected: String,
+    },
+
     #[error("temporary Binaryen installation directory allocation was exhausted under {root}")]
     TempDirectoryExhausted { root: PathBuf },
 
@@ -291,7 +306,11 @@ fn binaryen_authority_for(
 pub fn resolve_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolError> {
     let authority = current_binaryen_authority()?;
     let path = resolve_executable(OsStr::new(WASM_OPT_TOOL))?;
-    admit_binaryen_executable(&path, authority.executable_sha256())
+    admit_binaryen_executable(
+        &path,
+        authority.executable_sha256(),
+        authority.runtime_library_sha256,
+    )
 }
 
 /// Install the official current-platform optimizer under `~/.local/bin`.
@@ -300,16 +319,25 @@ pub fn resolve_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolErr
 pub fn install_required_binaryen() -> Result<BinaryenExecutable, BinaryenToolError> {
     let authority = current_binaryen_authority()?;
     let install_path = default_binaryen_install_path()?;
+    let runtime_library = format!("binaryen-version_{BINARYEN_VERSION}/lib/libbinaryen.dylib");
     let spec = InstallSpec {
         tool: WASM_OPT_TOOL,
         archive_name: &authority.archive_name(),
         archive_url: &authority.archive_url(),
         archive_sha256: authority.archive_sha256(),
         member: &format!("binaryen-version_{BINARYEN_VERSION}/bin/wasm-opt"),
+        runtime_library: authority
+            .archive_platform()
+            .ends_with("-macos")
+            .then_some(runtime_library.as_str()),
         format: ArchiveFormat::Gzip,
     };
     tool_install::install(&spec, &install_path, |path| {
-        admit_binaryen_executable(path, authority.executable_sha256())
+        admit_binaryen_executable(
+            path,
+            authority.executable_sha256(),
+            authority.runtime_library_sha256,
+        )
     })
 }
 
@@ -323,75 +351,52 @@ pub fn default_binaryen_install_path() -> Result<PathBuf, BinaryenToolError> {
 
 fn resolve_executable(command: &OsStr) -> Result<PathBuf, BinaryenToolError> {
     let requested = Path::new(command);
-    if requested.components().count() > 1 {
-        return canonical_executable(requested);
-    }
-    match default_binaryen_install_path() {
-        Ok(path) if is_executable(&path) => return canonical_executable(&path),
-        Ok(_) | Err(BinaryenToolError::MissingHome) => {}
-        Err(error) => return Err(error),
+    let canonical = default_binaryen_install_path().ok();
+    let mut directories = Vec::new();
+    if let Some(parent) = canonical.as_ref().and_then(|path| path.parent()) {
+        directories.push(parent.to_path_buf());
     }
     if let Some(path) = env::var_os("PATH") {
-        for directory in env::split_paths(&path) {
-            let candidate = directory.join(requested);
-            if is_executable(&candidate) {
-                return canonical_executable(&candidate);
-            }
-        }
+        directories.extend(env::split_paths(&path));
     }
-    match default_binaryen_install_path() {
-        Ok(path) if is_executable(&path) => canonical_executable(&path),
-        Ok(canonical_path) if home_is_root() => {
-            Err(BinaryenToolError::MissingOptimizerWithRootHome { canonical_path })
+    let selected = tool_resolution::resolve(requested, &directories).map_err(|source| {
+        BinaryenToolError::Io {
+            operation: "resolve Binaryen executable",
+            path: requested.to_path_buf(),
+            source,
         }
-        Ok(canonical_path) => Err(BinaryenToolError::MissingOptimizer { canonical_path }),
-        Err(BinaryenToolError::MissingHome) => Err(BinaryenToolError::MissingOptimizerWithoutHome),
-        Err(error) => Err(error),
+    })?;
+    if let Some(path) = selected {
+        return Ok(path);
     }
-}
-
-fn canonical_executable(path: &Path) -> Result<PathBuf, BinaryenToolError> {
-    if !is_executable(path) {
+    if command.as_encoded_bytes().contains(&b'/') {
         return Err(BinaryenToolError::RequestedExecutableMissing {
-            path: path.to_path_buf(),
+            path: requested.to_path_buf(),
         });
     }
-    fs::canonicalize(path).map_err(|source| BinaryenToolError::Io {
-        operation: "resolve Binaryen executable",
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-fn is_executable(path: &Path) -> bool {
-    let Ok(metadata) = fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        false
+    match canonical {
+        Some(canonical_path) if home_is_root() => {
+            Err(BinaryenToolError::MissingOptimizerWithRootHome { canonical_path })
+        }
+        Some(canonical_path) => Err(BinaryenToolError::MissingOptimizer { canonical_path }),
+        None => Err(BinaryenToolError::MissingOptimizerWithoutHome),
     }
 }
 
 fn admit_binaryen_executable(
     path: &Path,
     expected_sha256: &str,
+    expected_runtime_sha256: Option<&str>,
 ) -> Result<BinaryenExecutable, BinaryenToolError> {
-    let path = fs::canonicalize(path).map_err(|source| BinaryenToolError::Io {
-        operation: "resolve Binaryen executable",
-        path: path.to_path_buf(),
-        source,
-    })?;
-    if !is_executable(&path) {
-        return Err(BinaryenToolError::NotExecutable { path });
-    }
+    let path = tool_resolution::resolve(path, &[])
+        .map_err(|source| BinaryenToolError::Io {
+            operation: "resolve Binaryen executable",
+            path: path.to_path_buf(),
+            source,
+        })?
+        .ok_or_else(|| BinaryenToolError::NotExecutable {
+            path: path.to_path_buf(),
+        })?;
     let sha256 = sha256_file(&path)?;
     if sha256 != expected_sha256 {
         return Err(BinaryenToolError::ExecutableHashMismatch {
@@ -399,6 +404,9 @@ fn admit_binaryen_executable(
             actual: sha256,
             expected: expected_sha256.to_string(),
         });
+    }
+    if let Some(expected) = expected_runtime_sha256 {
+        admit_runtime_library(&path, expected)?;
     }
 
     let mut command = crate::build_environment::command(&path);
@@ -429,6 +437,34 @@ fn admit_binaryen_executable(
     })
 }
 
+fn admit_runtime_library(executable: &Path, expected: &str) -> Result<(), BinaryenToolError> {
+    let library = executable.with_file_name("../lib/libbinaryen.dylib");
+    let metadata = std::fs::symlink_metadata(&library).map_err(|source| BinaryenToolError::Io {
+        operation: "inspect Binaryen runtime library",
+        path: library.clone(),
+        source,
+    })?;
+    if !metadata.is_file() {
+        return Err(BinaryenToolError::Io {
+            operation: "inspect Binaryen runtime library",
+            path: library,
+            source: io::Error::new(
+                io::ErrorKind::InvalidData,
+                "runtime library must be a regular file",
+            ),
+        });
+    }
+    let actual = sha256_file(&library)?;
+    if actual != expected {
+        return Err(BinaryenToolError::RuntimeLibraryHashMismatch {
+            path: library,
+            actual,
+            expected: expected.to_string(),
+        });
+    }
+    Ok(())
+}
+
 fn home_is_root() -> bool {
     env::var_os("HOME").is_some_and(|home| Path::new(&home) == Path::new("/"))
 }
@@ -439,5 +475,5 @@ pub(crate) fn resolve_test_binaryen(
 ) -> Result<BinaryenExecutable, BinaryenToolError> {
     let path = resolve_executable(OsStr::new(command))?;
     let expected = sha256_file(&path)?;
-    admit_binaryen_executable(&path, &expected)
+    admit_binaryen_executable(&path, &expected, None)
 }

@@ -5,6 +5,8 @@ ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 CHECK="$ROOT/scripts/dev/check-binaryen-update.sh"
 # shellcheck source=/dev/null
 source "$ROOT/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/ci/ic-tool-pins.sh"
 
 FIXTURE="$(mktemp -d "${TMPDIR:-/tmp}/canic-binaryen-update-check.XXXXXX")"
 trap 'rm -rf "$FIXTURE"' EXIT

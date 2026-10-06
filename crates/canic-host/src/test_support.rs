@@ -103,13 +103,21 @@ pub fn tool_script(template: &str) -> String {
 
 /// Read the repository's installed ICP version for unrelated command fixtures.
 pub fn icp_cli_version() -> &'static str {
+    ic_tool_pin("icp", "linux-x86_64", 1)
+}
+
+/// Project a field from the common reviewed repository setup matrix.
+pub fn ic_tool_pin(tool: &str, host: &str, column: usize) -> &'static str {
     include_str!(concat!(
         env!("CARGO_MANIFEST_DIR"),
-        "/../../tool-versions.env"
+        "/../../ci/ic-tools.tsv"
     ))
     .lines()
-    .find_map(|line| line.strip_prefix("export CANIC_ICP_CLI_VERSION="))
-    .expect("repository ICP CLI pin")
+    .find_map(|line| {
+        let fields: Vec<_> = line.split('\t').collect();
+        (fields.first() == Some(&tool) && fields.get(2) == Some(&host)).then(|| fields[column])
+    })
+    .expect("common repository IC tool pin")
 }
 
 /// Public deterministic signer fixture; never a credential for an external network.

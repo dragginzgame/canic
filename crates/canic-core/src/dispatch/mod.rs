@@ -39,15 +39,23 @@ fn ensure_memory_bootstrap() {
     }
 }
 
-/// Enter shared endpoint instrumentation before invoking the generated handler.
-pub fn enter_endpoint() {
+/// Measure one synchronous handler, preserving exclusive nested accounting.
+pub fn measure_endpoint<T>(call: EndpointCall, invoke: impl FnOnce() -> T) -> T {
     ensure_memory_bootstrap();
-    perf::enter_endpoint();
+    perf::measure_endpoint(call, invoke)
 }
 
-/// Exit shared endpoint instrumentation after the generated handler returns.
-pub fn exit_endpoint(call: EndpointCall) {
-    perf::exit_endpoint(call);
+/// Measure one async handler with invocation-owned frames and checkpoint state.
+#[expect(
+    clippy::future_not_send,
+    reason = "IC endpoints use single-threaded invocation-owned instrumentation"
+)]
+pub async fn measure_endpoint_async<F: std::future::Future>(
+    call: EndpointCall,
+    future: F,
+) -> F::Output {
+    ensure_memory_bootstrap();
+    perf::measure_endpoint_async(call, future).await
 }
 
 /// Enforce cross-cutting endpoint prerequisites before access evaluation.

@@ -329,7 +329,7 @@ mod supported {
         maximum_bytes: usize,
         before_read: impl FnOnce() -> io::Result<()>,
     ) -> Result<Option<Vec<u8>>, BoundedRegularFileReadError> {
-        let Some((mut file, observed_size)) =
+        let Some((file, observed_size)) =
             open_optional_regular_file(path).map_err(BoundedRegularFileReadError::Read)?
         else {
             return Ok(None);
@@ -341,23 +341,22 @@ mod supported {
             BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))
         })?;
 
-        let read_limit = maximum_bytes
-            .checked_add(1)
-            .ok_or(BoundedRegularFileReadError::TooLarge)?;
-        let mut bytes = Vec::with_capacity(
-            usize::try_from(observed_size)
-                .unwrap_or(maximum_bytes)
-                .min(maximum_bytes),
-        );
-        Read::by_ref(&mut file)
-            .take(u64::try_from(read_limit).unwrap_or(u64::MAX))
-            .read_to_end(&mut bytes)
-            .map_err(RegularFileReadError::Io)
-            .map_err(BoundedRegularFileReadError::Read)?;
-        if bytes.len() > maximum_bytes {
-            return Err(BoundedRegularFileReadError::TooLarge);
-        }
-        Ok(Some(bytes))
+        ic_host_tools::artifact::read_opened_file(file, maximum_bytes)
+            .map(Some)
+            .map_err(|error| match error {
+                ic_host_tools::artifact::ArtifactError::LimitExceeded { .. } => {
+                    BoundedRegularFileReadError::TooLarge
+                }
+                ic_host_tools::artifact::ArtifactError::NotRegularFile => {
+                    BoundedRegularFileReadError::Read(RegularFileReadError::NotRegular)
+                }
+                ic_host_tools::artifact::ArtifactError::Io(source) => {
+                    BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))
+                }
+                source => BoundedRegularFileReadError::Read(RegularFileReadError::Io(
+                    io::Error::other(source),
+                )),
+            })
     }
 
     fn open_optional_regular_file(

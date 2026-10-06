@@ -1,9 +1,16 @@
 #!/usr/bin/env bash
 
+_CANIC_REQUIRE_JQ_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
+
 # Resolve one executable without changing PATH or the caller's shell settings.
 resolve_jq_executable() {
     local fallback="$1"
     local selected="${JQ_BIN:-}"
+    if [[ -z "$selected" ]]; then
+        if [[ -x "$_CANIC_REQUIRE_JQ_ROOT/.tools/host/bin/jq" ]]; then
+            selected="$_CANIC_REQUIRE_JQ_ROOT/.tools/host/bin/jq"
+        fi
+    fi
     if [[ -z "$selected" ]]; then
         selected="$(command -v jq)" || selected="$fallback"
     fi

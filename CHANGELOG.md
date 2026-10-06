@@ -10,6 +10,43 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- **Breaking; incompatible with the selected patch target:** adopt `ic-memory
+  0.27`'s current ownership ledger. Diagnostic consumers must replace history
+  fields with current schema metadata; earlier installations require clean
+  reinstall. This change requires a minor release
+  ([#459](https://github.com/dragginzgame/canic/issues/459)).
+
+- **Breaking for direct Core instrumentation callers:** isolate endpoint and
+  checkpoint instruction accounting across async calls. Replace direct enter/exit
+  hooks with scoped measurements; background checkpoints require an owned context
+  ([#99](https://github.com/dragginzgame/canic/issues/99)).
+
+- Remove the obsolete ic-metrics reader feature; read counter 1 through the
+  existing CDK adapter ([ic-metrics #10](https://github.com/dragginzgame/ic-metrics/issues/10)).
+
+- Adopt management-canister types `0.11` in the controlled HTTP runtime probe,
+  preserving its existing pricing and cycle budget.
+
+- Reuse performance keys during repeated observations and collect reports in the
+  map's existing order ([#456](https://github.com/dragginzgame/canic/issues/456),
+  [#451](https://github.com/dragginzgame/canic/issues/451)).
+
+- Adopt published `ic-host-tools 0.1.12` for Host Wasm inspection, Candid
+  normalization, bounded descriptor reads, file hashing, gzip decoding and
+  executable resolution.
+  Preserve Canic admission and install limits; reject trailing compressed data
+  and extra gzip members. Select patched `tar 0.4.46`
+  ([#458](https://github.com/dragginzgame/canic/issues/458)).
+
+- Adopt reviewed shared repository tool setup and pin checks, isolate formatting
+  hooks, validate retained release commits, and consolidate audit methods;
+  preserve macOS Binaryen's runtime library during Rust installation
+  ([#461](https://github.com/dragginzgame/canic/issues/461),
+  [#454](https://github.com/dragginzgame/canic/issues/454),
+  [#453](https://github.com/dragginzgame/canic/issues/453),
+  [#460](https://github.com/dragginzgame/canic/issues/460),
+  [#464](https://github.com/dragginzgame/canic/issues/464)).
+
 - `0.110.53` extracts blob storage into an optional embedded or dedicated adapter,
   adds per-canister application usage reporting, and repairs operator commands,
   repository hygiene, development-tool discovery, validation and build evidence,
@@ -19,8 +56,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   policy-specific callback results, and aligns the independent blob consumer on
   one memory runtime.
 
-- Use published `ic-metrics 0.1.5` arithmetic and the shared Wasm reader, preserving endpoint
-  attribution and report shapes ([#447](https://github.com/dragginzgame/canic/issues/447));
+- Use published `ic-metrics` arithmetic and the existing CDK call-context reader,
+  preserving endpoint attribution and report shapes ([#447](https://github.com/dragginzgame/canic/issues/447));
   standardize SemVer release commands with exact
   resume, atomic branch/tag pushes and retained artifacts. Validation-only
   release failures restart through the same command after source corrections.
@@ -34,7 +71,11 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   current contracts, bind release fixtures to their own identity and explain
   release version mismatches ([#450](https://github.com/dragginzgame/canic/issues/450)).
 - Refresh the embedded allocation peer and its provenance for the selected
-  dependency graph ([#450](https://github.com/dragginzgame/canic/issues/450)).
+  dependency graph; preserve external lock selections during fixture version
+  normalization ([#450](https://github.com/dragginzgame/canic/issues/450)).
+- Align managed admission fixtures with publication-bound application startup
+  and bound imported-pool cycle assertions by observed IC idle charges
+  ([#457](https://github.com/dragginzgame/canic/issues/457)).
 
 ## [0.110.x] - Fleet Runtime Contraction
 

@@ -1,3 +1,9 @@
+//! Module: dto::memory
+//!
+//! Responsibility: expose passive current memory diagnostic contracts.
+//! Does not own: allocation state, ledger storage, or diagnostic collection.
+//! Boundary: ops projects the memory runtime into these Candid response shapes.
+
 use crate::dto::prelude::*;
 
 pub use crate::domain::memory::{
@@ -66,11 +72,12 @@ pub struct MemoryLedgerResponse {
     pub ledger_schema_version: u32,
     pub physical_format_id: u32,
     pub current_generation: u64,
+    /// Exact protected ledger slot in the selected memory runtime.
+    pub ledger_memory_manager_id: u8,
     pub commit_recovery: MemoryCommitRecoveryResponse,
     pub authorities: Vec<MemoryRangeAuthorityEntry>,
     pub memories: Vec<MemoryLedgerMemoryEntry>,
     pub records: Vec<MemoryAllocationRecordEntry>,
-    pub generations: Vec<MemoryLedgerGenerationEntry>,
 }
 
 ///
@@ -131,10 +138,8 @@ pub struct MemoryAllocationRecordEntry {
     pub stable_key: String,
     pub state: MemoryAllocationState,
     pub memory_size: Option<MemoryAllocationSizeEntry>,
-    pub first_generation: u64,
-    pub last_seen_generation: u64,
-    pub retired_generation: Option<u64>,
-    pub schema_history: Vec<MemorySchemaMetadataEntry>,
+    /// Latest declared metadata; the substrate does not retain a schema history.
+    pub schema_version: Option<u32>,
 }
 
 ///
@@ -145,30 +150,6 @@ pub struct MemoryAllocationRecordEntry {
 pub struct MemoryAllocationSizeEntry {
     pub wasm_pages: u64,
     pub bytes: u64,
-}
-
-///
-/// MemorySchemaMetadataEntry
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct MemorySchemaMetadataEntry {
-    pub generation: u64,
-    pub schema_version: Option<u32>,
-    pub schema_fingerprint: Option<String>,
-}
-
-///
-/// MemoryLedgerGenerationEntry
-///
-
-#[derive(CandidType, Clone, Debug, Deserialize)]
-pub struct MemoryLedgerGenerationEntry {
-    pub generation: u64,
-    pub parent_generation: Option<u64>,
-    pub runtime_fingerprint: Option<String>,
-    pub declaration_count: u32,
-    pub committed_at: Option<u64>,
 }
 
 #[cfg(test)]

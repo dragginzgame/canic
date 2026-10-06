@@ -2,6 +2,9 @@ use super::*;
 
 use std::{fs, path::PathBuf, time::SystemTime};
 
+#[cfg(unix)]
+use std::os::unix::fs::PermissionsExt;
+
 #[test]
 fn repository_binaryen_authority_matches_every_supported_projection() {
     let pins = include_str!(concat!(
@@ -10,7 +13,7 @@ fn repository_binaryen_authority_matches_every_supported_projection() {
     ));
     assert_eq!(
         BINARYEN_VERSION,
-        repository_pin(pins, "CANIC_BINARYEN_VERSION")
+        crate::test_support::ic_tool_pin("wasm-opt", "linux-x86_64", 1)
     );
 
     let expected_projections = [
@@ -30,7 +33,15 @@ fn repository_binaryen_authority_matches_every_supported_projection() {
         assert_eq!(authority.archive_platform(), archive_platform);
         assert_eq!(
             authority.archive_sha256(),
-            repository_pin(pins, &format!("CANIC_BINARYEN_SHA256_{pin_suffix}"))
+            crate::test_support::ic_tool_pin(
+                "wasm-opt",
+                match pin_suffix {
+                    "DARWIN_ARM64" => "darwin-arm64",
+                    "DARWIN_X64" => "darwin-x86_64",
+                    _ => "linux-x86_64",
+                },
+                3
+            )
         );
         assert_eq!(
             authority.executable_sha256(),
@@ -38,6 +49,16 @@ fn repository_binaryen_authority_matches_every_supported_projection() {
                 pins,
                 &format!("CANIC_BINARYEN_WASM_OPT_SHA256_{pin_suffix}")
             )
+        );
+        assert_eq!(
+            authority.runtime_library_sha256,
+            match pin_suffix {
+                "LINUX_X64" => None,
+                _ => Some(repository_pin(
+                    pins,
+                    &format!("CANIC_BINARYEN_RUNTIME_LIBRARY_SHA256_{pin_suffix}")
+                )),
+            }
         );
     }
 }
@@ -68,7 +89,7 @@ fn same_version_executable_with_wrong_digest_is_rejected_before_execution() {
     fs::set_permissions(&executable, fs::Permissions::from_mode(0o755))
         .expect("make fake executable runnable");
 
-    let error = admit_binaryen_executable(&executable, &"0".repeat(64))
+    let error = admit_binaryen_executable(&executable, &"0".repeat(64), None)
         .expect_err("wrong executable digest must reject");
     let message = error.to_string();
 
@@ -97,7 +118,8 @@ fn admitted_executable_records_exact_path_version_and_digest() {
         .expect("make fake executable runnable");
     let digest = sha256_file(&executable).expect("hash fake executable");
 
-    let admitted = admit_binaryen_executable(&executable, &digest).expect("admit exact executable");
+    let admitted =
+        admit_binaryen_executable(&executable, &digest, None).expect("admit exact executable");
 
     assert_eq!(admitted.path(), executable);
     assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
@@ -146,6 +168,34 @@ fn canonical_install_precedes_a_path_optimizer() {
     fs::remove_dir_all(root).expect("remove test root");
 }
 
+#[cfg(unix)]
+#[test]
+fn explicit_relative_optimizer_precedes_the_canonical_install() {
+    const CHILD_ENV: &str = "CANIC_TEST_BINARYEN_RELATIVE_CHILD";
+    if std::env::var_os(CHILD_ENV).is_some() {
+        let selected = resolve_executable(OsStr::new("./wasm-opt")).unwrap();
+        assert_eq!(selected, std::env::current_dir().unwrap().join("wasm-opt"));
+        return;
+    }
+    let root = temp_root("relative-selection");
+    let canonical = root.join(".local/bin/wasm-opt");
+    fs::create_dir_all(canonical.parent().unwrap()).unwrap();
+    write_executable(&canonical, "#!/bin/sh\nexit 0\n");
+    write_executable(&root.join("wasm-opt"), "#!/bin/sh\nexit 0\n");
+    let output = std::process::Command::new(std::env::current_exe().unwrap())
+        .args([
+            "--exact",
+            "binaryen::tests::explicit_relative_optimizer_precedes_the_canonical_install",
+        ])
+        .current_dir(&root)
+        .env("HOME", &root)
+        .env(CHILD_ENV, "1")
+        .output()
+        .unwrap();
+    assert!(output.status.success(), "{output:?}");
+    fs::remove_dir_all(root).unwrap();
+}
+
 #[cfg(target_os = "linux")]
 #[test]
 fn staged_installer_closes_its_writer_before_executable_admission() {
@@ -163,11 +213,11 @@ fn staged_installer_closes_its_writer_before_executable_admission() {
     let destination = root.join("bin/wasm-opt");
 
     tool_install::publish_executable(WASM_OPT_TOOL, &candidate, &destination, |path| {
-        admit_binaryen_executable(path, &digest).map(|_| ())
+        admit_binaryen_executable(path, &digest, None).map(|_| ())
     })
     .expect("publish and admit closed staged executable");
     let admitted =
-        admit_binaryen_executable(&destination, &digest).expect("admit published executable");
+        admit_binaryen_executable(&destination, &digest, None).expect("admit published executable");
 
     assert_eq!(admitted.path(), destination);
     assert_eq!(admitted.version_identity(), BINARYEN_VERSION_IDENTITY);
@@ -191,4 +241,41 @@ fn write_executable(path: &Path, contents: &str) {
     fs::write(path, contents).expect("write fake executable");
     fs::set_permissions(path, fs::Permissions::from_mode(0o755))
         .expect("make fake executable executable");
+}
+
+#[cfg(unix)]
+#[test]
+fn runtime_library_identity_is_checked_before_version_execution() {
+    let root = temp_root("library-admission");
+    fs::create_dir_all(root.join("bin")).unwrap();
+    fs::create_dir_all(root.join("lib")).unwrap();
+    let executable = root.join("bin/wasm-opt");
+    let library = root.join("lib/libbinaryen.dylib");
+    let marker = root.join("executed");
+    write_executable(
+        &executable,
+        &crate::test_support::tool_script(&format!(
+            "#!/bin/sh\nprintf executed > '{}'\nprintf '@BINARYEN_IDENTITY@\\n'\n",
+            marker.display()
+        )),
+    );
+    fs::write(&library, b"qualified runtime").unwrap();
+    let executable_digest = sha256_file(&executable).unwrap();
+    let library_digest = sha256_file(&library).unwrap();
+    fs::write(&library, b"modified runtime").unwrap();
+    std::assert_matches!(
+        admit_binaryen_executable(&executable, &executable_digest, Some(&library_digest)),
+        Err(BinaryenToolError::RuntimeLibraryHashMismatch { .. })
+    );
+    assert!(!marker.exists());
+    fs::remove_file(&library).unwrap();
+    std::assert_matches!(
+        admit_binaryen_executable(&executable, &executable_digest, Some(&library_digest)),
+        Err(BinaryenToolError::Io { source, .. }) if source.kind() == io::ErrorKind::NotFound
+    );
+    assert!(!marker.exists());
+    fs::write(&library, b"qualified runtime").unwrap();
+    admit_binaryen_executable(&executable, &executable_digest, Some(&library_digest)).unwrap();
+    assert!(marker.exists());
+    fs::remove_dir_all(root).unwrap();
 }

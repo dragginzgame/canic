@@ -1,5 +1,12 @@
 # Canic Meta-Audit Contract
 
+The structural methods adopted through [the shared catalog](../../audits/README.md)
+use that snapshot's finding-based report and execution contract, with product
+obligations in [METHODS.md](METHODS.md). Their new overlays take precedence over
+older score/tier/report templates below. Historical measurements and domain
+methods retain their exact evidence identities; adoption does not execute a
+product audit or authorize repairs, broad gates or deployment.
+
 Method ID: `CANIC-META-001`
 
 Method version: `1`

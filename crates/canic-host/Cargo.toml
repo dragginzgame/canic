@@ -36,6 +36,7 @@ getrandom = { workspace = true }
 hmac = { workspace = true }
 ic-agent = { workspace = true }
 ic-certification = { workspace = true }
+ic-host-tools = { workspace = true }
 ic-query = { workspace = true }
 ic-testkit = { workspace = true, optional = true }
 icrc-ledger-types = { workspace = true }

@@ -8,16 +8,13 @@ use crate::canister_build::WasmArtifactMetrics;
 use std::{collections::BTreeMap, fmt, fs, path::Path};
 
 use canic_core::ids::BuildNetwork;
+use ic_host_tools::wasm::{ExportKind, InspectionError, InspectionLimits};
 
 pub(super) const SUPPORTED_CODE_SECTION_LIMIT_BYTES: usize = 10 * 1024 * 1024;
 pub(super) const SUPPORTED_DEFINED_FUNCTION_LIMIT: u32 = 50_000;
 const IC_WASM_CODE_SECTION_WARNING_BYTES: usize = 9 * 1024 * 1024 + 256 * 1024;
+#[cfg(test)]
 const WASM_HEADER: &[u8; 8] = b"\0asm\x01\0\0\0";
-const WASM_CUSTOM_SECTION_ID: u8 = 0;
-const WASM_FUNCTION_SECTION_ID: u8 = 3;
-const WASM_EXPORT_SECTION_ID: u8 = 7;
-const WASM_CODE_SECTION_ID: u8 = 10;
-const WASM_DATA_SECTION_ID: u8 = 11;
 const PUBLIC_CANDID_METADATA_SECTION: &str = "icp:public candid:service";
 
 #[derive(Clone, Debug, Eq, PartialEq)]
@@ -36,89 +33,21 @@ struct WasmStructure {
 
 #[derive(Debug, Eq, PartialEq)]
 enum WasmCodeSectionError {
-    DuplicateCodeSection,
-
-    DuplicateDataSection,
-
-    DuplicateExport {
-        name: String,
-    },
-
-    DuplicateExportSection,
-
-    DuplicateFunctionSection,
-
-    FunctionLimitExceeded {
-        actual: u32,
-        limit: u32,
-    },
-
-    InvalidHeader,
-
-    InvalidName {
-        offset: usize,
-    },
-
-    InvalidSectionPayload {
-        section_id: u8,
-        offset: usize,
-    },
-
-    InvalidSectionSize {
-        offset: usize,
-    },
-
-    LimitExceeded {
-        actual: usize,
-        limit: usize,
-    },
-
-    TruncatedSection {
-        offset: usize,
-        declared: usize,
-        remaining: usize,
-    },
+    FunctionLimitExceeded { actual: u32, limit: u32 },
+    LimitExceeded { actual: usize, limit: usize },
 }
 
 impl fmt::Display for WasmCodeSectionError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::DuplicateCodeSection => write!(formatter, "duplicate Wasm code section"),
-            Self::DuplicateDataSection => write!(formatter, "duplicate Wasm data section"),
-            Self::DuplicateExport { name } => {
-                write!(formatter, "duplicate Wasm export name {name}")
-            }
-            Self::DuplicateExportSection => write!(formatter, "duplicate Wasm export section"),
-            Self::DuplicateFunctionSection => {
-                write!(formatter, "duplicate Wasm function section")
-            }
             Self::FunctionLimitExceeded { actual, limit } => write!(
                 formatter,
                 "Wasm defines {actual} functions, exceeding the supported limit of {limit}"
             ),
-            Self::InvalidHeader => write!(formatter, "invalid Wasm module header"),
-            Self::InvalidName { offset } => {
-                write!(formatter, "invalid UTF-8 Wasm name at byte {offset}")
-            }
-            Self::InvalidSectionPayload { section_id, offset } => write!(
-                formatter,
-                "invalid Wasm section {section_id} payload at byte {offset}"
-            ),
-            Self::InvalidSectionSize { offset } => {
-                write!(formatter, "invalid Wasm section size at byte {offset}")
-            }
             Self::LimitExceeded { actual, limit } => write!(
                 formatter,
                 "Wasm code section is {actual} bytes, exceeding the supported limit of {limit} bytes by {} bytes",
                 actual - limit
-            ),
-            Self::TruncatedSection {
-                offset,
-                declared,
-                remaining,
-            } => write!(
-                formatter,
-                "Wasm section at byte {offset} declares {declared} bytes with only {remaining} remaining"
             ),
         }
     }
@@ -227,211 +156,51 @@ pub(super) fn wasm_contract_snapshot(
 }
 
 #[cfg(test)]
-fn wasm_code_section_size(wasm: &[u8]) -> Result<usize, WasmCodeSectionError> {
+fn wasm_code_section_size(wasm: &[u8]) -> Result<usize, InspectionError> {
     Ok(inspect_wasm(wasm)?.code_section_bytes)
 }
 
-fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure, WasmCodeSectionError> {
-    if !wasm.starts_with(WASM_HEADER) {
-        return Err(WasmCodeSectionError::InvalidHeader);
-    }
-
-    let mut cursor = WASM_HEADER.len();
-    let mut code_section_bytes = None;
-    let mut data_section_bytes = None;
-    let mut defined_functions = None;
-    let mut exports = None;
-    let mut public_candid_metadata = Vec::new();
-    while cursor < wasm.len() {
-        let section_offset = cursor;
-        let section_id = wasm[cursor];
-        cursor += 1;
-        let section_size = read_section_size(wasm, &mut cursor)?;
-        let remaining = wasm.len() - cursor;
-        if section_size > remaining {
-            return Err(WasmCodeSectionError::TruncatedSection {
-                offset: section_offset,
-                declared: section_size,
-                remaining,
-            });
-        }
-        let payload = &wasm[cursor..cursor + section_size];
-        match section_id {
-            WASM_CUSTOM_SECTION_ID => {
-                let (name, contents) = read_custom_section(payload, section_offset)?;
-                if name == PUBLIC_CANDID_METADATA_SECTION {
-                    public_candid_metadata.push(contents.to_vec());
-                }
-            }
-            WASM_FUNCTION_SECTION_ID => {
-                if defined_functions
-                    .replace(read_vector_count(payload, section_id, section_offset)?)
-                    .is_some()
-                {
-                    return Err(WasmCodeSectionError::DuplicateFunctionSection);
-                }
-            }
-            WASM_EXPORT_SECTION_ID => {
-                if exports
-                    .replace(read_exports(payload, section_offset)?)
-                    .is_some()
-                {
-                    return Err(WasmCodeSectionError::DuplicateExportSection);
-                }
-            }
-            WASM_CODE_SECTION_ID => {
-                if code_section_bytes.replace(section_size).is_some() {
-                    return Err(WasmCodeSectionError::DuplicateCodeSection);
-                }
-                let code_functions = read_vector_count(payload, section_id, section_offset)?;
-                if defined_functions.is_some_and(|functions| functions != code_functions) {
-                    return Err(WasmCodeSectionError::InvalidSectionPayload {
-                        section_id,
-                        offset: section_offset,
-                    });
-                }
-                defined_functions = Some(code_functions);
-            }
-            WASM_DATA_SECTION_ID if data_section_bytes.replace(section_size).is_some() => {
-                return Err(WasmCodeSectionError::DuplicateDataSection);
-            }
-            _ => {}
-        }
-        cursor += section_size;
-    }
-
+fn inspect_wasm(wasm: &[u8]) -> Result<WasmStructure, InspectionError> {
+    // Every section/entry consumes source bytes. These bounds preserve the
+    // existing artifact-size admission while bounding shared parser storage.
+    let facts = ic_host_tools::wasm::inspect(
+        wasm,
+        InspectionLimits {
+            module_bytes: wasm.len(),
+            sections: wasm.len() / 2,
+            exports: u32::try_from(wasm.len()).unwrap_or(u32::MAX),
+            custom_sections: wasm.len() / 2,
+        },
+    )?;
+    let exports = facts
+        .exports
+        .into_iter()
+        .map(|(name, export)| {
+            let kind = match export.kind {
+                ExportKind::Function => 0,
+                ExportKind::Table => 1,
+                ExportKind::Memory => 2,
+                ExportKind::Global => 3,
+                ExportKind::Tag => 4,
+            };
+            (name.to_owned(), kind)
+        })
+        .collect();
+    let public_candid_metadata = facts
+        .custom_sections
+        .into_iter()
+        .filter(|section| section.name == PUBLIC_CANDID_METADATA_SECTION)
+        .map(|section| section.data.to_vec())
+        .collect();
     Ok(WasmStructure {
-        code_section_bytes: code_section_bytes.unwrap_or(0),
-        data_section_bytes: data_section_bytes.unwrap_or(0),
-        defined_functions: defined_functions.unwrap_or(0),
+        code_section_bytes: facts.code_section_bytes,
+        data_section_bytes: facts.data_section_bytes,
+        defined_functions: facts.defined_functions,
         contract: WasmContractSnapshot {
-            exports: exports.unwrap_or_default(),
+            exports,
             public_candid_metadata,
         },
     })
-}
-
-fn read_custom_section(
-    payload: &[u8],
-    section_offset: usize,
-) -> Result<(&str, &[u8]), WasmCodeSectionError> {
-    let mut cursor = 0;
-    let name = read_name(payload, &mut cursor, section_offset)?;
-    Ok((name, &payload[cursor..]))
-}
-
-fn read_exports(
-    payload: &[u8],
-    section_offset: usize,
-) -> Result<BTreeMap<String, u8>, WasmCodeSectionError> {
-    let mut cursor = 0;
-    let count =
-        read_u32(payload, &mut cursor).ok_or(WasmCodeSectionError::InvalidSectionPayload {
-            section_id: WASM_EXPORT_SECTION_ID,
-            offset: section_offset,
-        })?;
-    let mut exports = BTreeMap::new();
-    for _ in 0..count {
-        let name = read_name(payload, &mut cursor, section_offset)?.to_string();
-        let kind =
-            payload
-                .get(cursor)
-                .copied()
-                .ok_or(WasmCodeSectionError::InvalidSectionPayload {
-                    section_id: WASM_EXPORT_SECTION_ID,
-                    offset: section_offset,
-                })?;
-        cursor += 1;
-        read_u32(payload, &mut cursor).ok_or(WasmCodeSectionError::InvalidSectionPayload {
-            section_id: WASM_EXPORT_SECTION_ID,
-            offset: section_offset,
-        })?;
-        if exports.insert(name.clone(), kind).is_some() {
-            return Err(WasmCodeSectionError::DuplicateExport { name });
-        }
-    }
-    if cursor != payload.len() {
-        return Err(WasmCodeSectionError::InvalidSectionPayload {
-            section_id: WASM_EXPORT_SECTION_ID,
-            offset: section_offset,
-        });
-    }
-    Ok(exports)
-}
-
-fn read_name<'a>(
-    bytes: &'a [u8],
-    cursor: &mut usize,
-    section_offset: usize,
-) -> Result<&'a str, WasmCodeSectionError> {
-    let name_offset = section_offset + *cursor;
-    let length = read_u32(bytes, cursor).ok_or(WasmCodeSectionError::InvalidSectionPayload {
-        section_id: WASM_CUSTOM_SECTION_ID,
-        offset: section_offset,
-    })? as usize;
-    let end = cursor
-        .checked_add(length)
-        .filter(|end| *end <= bytes.len())
-        .ok_or(WasmCodeSectionError::InvalidSectionPayload {
-            section_id: WASM_CUSTOM_SECTION_ID,
-            offset: section_offset,
-        })?;
-    let name = std::str::from_utf8(&bytes[*cursor..end]).map_err(|_| {
-        WasmCodeSectionError::InvalidName {
-            offset: name_offset,
-        }
-    })?;
-    *cursor = end;
-    Ok(name)
-}
-
-fn read_vector_count(
-    payload: &[u8],
-    section_id: u8,
-    section_offset: usize,
-) -> Result<u32, WasmCodeSectionError> {
-    let mut cursor = 0;
-    read_u32(payload, &mut cursor).ok_or(WasmCodeSectionError::InvalidSectionPayload {
-        section_id,
-        offset: section_offset,
-    })
-}
-
-fn read_section_size(wasm: &[u8], cursor: &mut usize) -> Result<usize, WasmCodeSectionError> {
-    let offset = *cursor;
-    let mut value = 0_u32;
-    for index in 0..5 {
-        let Some(byte) = wasm.get(*cursor).copied() else {
-            return Err(WasmCodeSectionError::InvalidSectionSize { offset });
-        };
-        *cursor += 1;
-
-        if index == 4 && byte & 0xf0 != 0 {
-            return Err(WasmCodeSectionError::InvalidSectionSize { offset });
-        }
-        value |= u32::from(byte & 0x7f) << (index * 7);
-        if byte & 0x80 == 0 {
-            return Ok(value as usize);
-        }
-    }
-
-    Err(WasmCodeSectionError::InvalidSectionSize { offset })
-}
-
-fn read_u32(bytes: &[u8], cursor: &mut usize) -> Option<u32> {
-    let mut value = 0_u32;
-    for index in 0..5 {
-        let byte = bytes.get(*cursor).copied()?;
-        *cursor += 1;
-        if index == 4 && byte & 0xf0 != 0 {
-            return None;
-        }
-        value |= u32::from(byte & 0x7f) << (index * 7);
-        if byte & 0x80 == 0 {
-            return Some(value);
-        }
-    }
-    None
 }
 
 const fn validate_wasm_code_section_size(size: usize) -> Result<(), WasmCodeSectionError> {
@@ -454,43 +223,44 @@ mod tests {
 
     #[test]
     fn measures_the_exact_code_section_payload() {
-        let wasm = [WASM_HEADER.as_slice(), &[1, 1, 0], &[10, 3, 1, 2, 3]].concat();
+        let wasm = [
+            WASM_HEADER.as_slice(),
+            &[3, 2, 1, 0],
+            &[10, 4, 1, 2, 0, 0x0b],
+        ]
+        .concat();
 
-        assert_eq!(wasm_code_section_size(&wasm), Ok(3));
+        assert_eq!(wasm_code_section_size(&wasm).unwrap(), 4);
     }
 
     #[test]
     fn rejects_duplicate_code_sections() {
         let wasm = [WASM_HEADER.as_slice(), &[10, 1, 0, 10, 1, 0]].concat();
 
-        assert_eq!(
+        assert!(matches!(
             wasm_code_section_size(&wasm),
-            Err(WasmCodeSectionError::DuplicateCodeSection)
-        );
+            Err(InspectionError::Parse(_))
+        ));
     }
 
     #[test]
     fn rejects_invalid_section_size_encoding() {
         let wasm = [WASM_HEADER.as_slice(), &[1, 0x80, 0x80, 0x80, 0x80, 0x10]].concat();
 
-        assert_eq!(
+        assert!(matches!(
             wasm_code_section_size(&wasm),
-            Err(WasmCodeSectionError::InvalidSectionSize { offset: 9 })
-        );
+            Err(InspectionError::Parse(_))
+        ));
     }
 
     #[test]
     fn rejects_truncated_sections() {
         let wasm = [WASM_HEADER.as_slice(), &[10, 3, 1, 2]].concat();
 
-        assert_eq!(
+        assert!(matches!(
             wasm_code_section_size(&wasm),
-            Err(WasmCodeSectionError::TruncatedSection {
-                offset: 8,
-                declared: 3,
-                remaining: 2,
-            })
-        );
+            Err(InspectionError::Parse(_))
+        ));
     }
 
     #[test]

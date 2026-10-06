@@ -15,8 +15,9 @@ not create a support claim.
 The supported cells cover the Canic CLI, host/build helpers, native checks and
 tests, native release packages, and IC canister Wasm production. Existing CI
 selects fixed `ubuntu-24.04`, `macos-15` and `macos-15-intel` runner images. The Rust toolchain versions,
-downloaded tool versions, and archive digests are fixed by the workflow and
-`tool-versions.env`.
+downloaded tool versions, and archive digests are fixed by the workflow,
+reviewed `ci/ic-tools.tsv`/`ci/tool-versions.env`, and Canic's
+`tool-versions.env` executable and Cargo/lint identities.
 The MSRV, ordinary-check and release-build lanes are native-target evidence.
 Installing a Wasm target does not itself constitute Canister evidence; the
 PocketIC lane owns CI's Wasm compilation and execution evidence.
@@ -30,7 +31,8 @@ have passed macOS validation.
 
 Maintainer Make and shell automation requires Bash 4.4 or newer, GNU coreutils,
 GNU sed, jq and ripgrep. On macOS install them with
-`brew install bash coreutils gnu-sed jq ripgrep` and put Bash's `bin`, coreutils'
+`brew install bash coreutils gnu-sed ripgrep`, then run `make install-tools` for
+the reviewed repository JSON/YAML and IC toolsets. Put Bash's `bin`, coreutils'
 `libexec/gnubin` and GNU sed's `libexec/gnubin` from `brew --prefix <formula>`
 before system tools on `PATH`. This is a maintainer-runner prerequisite; installed
 Canic CLI users do not need a replacement shell. Both macOS CI cells select these
@@ -48,6 +50,8 @@ not prove these native filesystem behaviors.
 
 Durable file creation uses the portable Rustix mode type. The `macos-host`
 matrix installs and runs the pinned ICP CLI, ic-wasm, Binaryen and PocketIC tools,
+qualifies the Rust Binaryen bundle installer and SDK executable resolution,
+and verifies isolated hook preservation and safe setup. It
 checks Host/CLI compilation, native durability, backup persistence and restore
 recovery, and builds a representative application canister through the CLI. It
 also checks the Control Plane's Wasm target. Its first successful

@@ -1,41 +1,73 @@
 # Shared Tooling adoption
 
-The [manifest](../../.shared-tooling.snapshot) records eighteen files from clean
-reviewed revision `c0206f1943238e21bd00fbe01658e6a0864c24fa`.
-[Root AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
-the upstream distribution helper; verify the snapshot before release validation.
+The [manifest](../../.shared-tooling.snapshot) records 41 files from reviewed
+committed revision `a37771f1b6b5fc9a88ed6ab3b705bdda35cd8fa3`.
+[AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
+the upstream distribution helper; verify exact snapshot bytes and executable
+modes before release validation. Dirty sibling source is never inherited.
+
+## Repository setup
+
+`make install-tools` explicitly provisions pinned jq/yq and the complete common
+IC toolset under `.tools/host/bin` and `.tools/ic/bin`. `make tools-check` verifies
+bytes and versions offline. Make and CI select these paths; direct shell use
+needs the export in [INSTALLING.md](../../INSTALLING.md). Ordinary validation
+and PocketIC test entrypoints check prepared tools without downloading them.
+
+`ci/ic-tools.tsv` owns common versions and archive digests. Root
+`tool-versions.env` retains Canic Cargo/lint pins, Binaryen executable/runtime-library
+digests and PocketIC executable digests. The shell projection reads the matrix; it defines no independent
+version. PocketIC lock/server alignment, Host exact tool admission and packaged
+`canic toolchain install` remain product-owned. Shared setup is qualified on
+Linux; native macOS CI owns both architectures' actual execution evidence.
+The declaration checker runs in CI and release invariants. Maintained independent
+workspaces retain their own lockfiles; negative role-contract templates are
+materialized only by their owner tests. Existing exact requirements have
+[scoped exceptions](../../ci/dependency-pinning-exceptions.json), governed by
+[CI policy](ci-deployment.md).
+
+The existing standalone Linux ARM64 ic-wasm archive pin stays Canic-owned because
+the common complete toolset excludes that host. It remains install-capable, without
+establishing Canic release support or complete-toolset availability there.
+
+## Release recovery
 
 Standard `make release-patch`, `release-minor` and `release-major` use the
 [common release contract](../releases.md), with `RELEASE_REMOTE=origin` and
-`RELEASE_BRANCH=main`. Every standard increment runs complete validation. The
-runner owns the Git effects and retained recovery plan; consumer adapters retain
-Cargo/installer metadata and source-bound release evidence. Package publication
-and artifact cleanup remain separate. The explicit non-runtime fast preparation
-lane remains independently governed; it is never selected by a standard command.
+`RELEASE_BRANCH=main`. They are maintainer-owned because they create commits.
+Every standard increment uses complete validation; package publication and
+artifact cleanup remain separate. Canic retains its validation evidence,
+successful/failed logs and tested compiler-cache failure fallback.
 
-After a preflight or validation-only failure, correct and commit the source, then
-rerun the same standard release target. It repeats preflight and complete
-validation against current source. An older preparation-free plan is preserved
-unchanged in a unique `.git/release-state/X.Y.Z.attempt.*/` directory; do not delete
-it or require exact-source resume merely because validation failed. The runner
-checks the base version, destination, saved tree/file set and local/remote tags
-before accepting that restart. New durable plans begin immediately before
-preparation, after validation passes.
+Rerunning a normal target selects and reconciles unfinished intent before
+computing another increment. Preparation-free failures restart current-source
+preflight and validation; earlier evidence is retained. Prepared intent keeps
+its exact candidate, source, UTC date and destination. When newer descendant
+fixes or another increment are selected, the runner reconciles the older release
+first, then validates the next candidate separately. It stops on identity,
+payload, destination, unknown remote history and concurrency conflicts.
 
-Once preparation has begun, inspect `.git/release-state/X.Y.Z.plan` and its lock owner before
-`make release-resume VERSION=X.Y.Z`. Resume retains source, candidate, UTC date
-and destination, reconciling replies lost after commit, tag or push.
+Late Canic checks read archived metadata and structured validation evidence from
+`RELEASE_COMMIT`, which may precede HEAD. Prepared checks retain their current
+worktree/index boundary. The exact annotated tag must identify that selected
+commit. `make release-resume VERSION=X.Y.Z` remains an explicit recovery entry.
+No adoption check creates real commits, tags, pushes or deployment effects.
 
-Snapshot integrity and release-runner adoption do not establish complete baseline
-implementation. The reviewed upstream formatting hook rejects any tracked
-symlink, including Canic's historical audit links. Canic retains its existing
-hook and installer until that integration is resolved; neither is declared in
-this snapshot. No historical evidence links were removed to accommodate the
-hook. Native macOS qualification remains separate from Linux command-stub checks.
+## Hooks and audits
 
-Canic uses published registry `ic-metrics 0.1.5` with feature `ic` for shared
-arithmetic and the Wasm call-context reader. Native zero and exclusive endpoint
-attribution remain consumer-owned; no sibling checkout is required.
-Four endpoint-accounting tests and strict selected core Clippy passed during
-extraction. Command stubs exercise standard entry points and runner recovery;
-Linux passes do not qualify native macOS or live IC measurements.
+The Canic-owned hook adapts the reviewed isolated formatter because the shared
+hook rejects this checkout's historical audit symlinks. It exports only regular
+stage-zero blobs, leaves unrelated symlinks in the real index and rejects selected
+symlinks, submodules and unresolved entries. It rejects partial staging and
+checks concurrent changes before refreshing selected index entries. The unchanged
+shared installer preserves an existing hook configuration. Adoption does not
+activate Git configuration; `make install-hooks` remains explicit.
+
+Generic reviews use the [shared methods](../../audits/README.md) with the
+[local catalog](../audits/METHODS.md) supplying Canic obligations. Superseded
+scored definitions remain historical; changed comparisons are non-comparable.
+Adoption is not a fresh product audit or a broad validation gate.
+
+The [adoption walk](../audits/reports/2026-10/2026-10-06/shared-method-adoption.md)
+maps the retired obligations and checks a historical report against the new
+shared methods without relabeling its evidence.

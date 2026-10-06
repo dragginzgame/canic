@@ -347,7 +347,7 @@ fn register_lifecycle_once(
             let task = task.take();
             async move {
                 match task {
-                    Some(task) => task.await,
+                    Some(task) => crate::perf::with_async_context(task).await,
                     None => OnceRunResult::new(
                         TimerCompletion::invariant_failure(0),
                         OnceDecision::Stop,

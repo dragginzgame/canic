@@ -11,18 +11,14 @@ mod tests;
 use crate::{
     output_with_executable_busy_retry,
     tool_install::{self, ArchiveFormat, InstallError, InstallSpec, sha256_file},
+    tool_resolution,
 };
 use std::{
-    env,
-    ffi::OsStr,
-    fs, io,
+    env, io,
     path::{Path, PathBuf},
 };
 
 use thiserror::Error as ThisError;
-
-#[cfg(unix)]
-use std::os::unix::fs::PermissionsExt;
 
 pub const IC_WASM_REPAIR_COMMAND: &str = "canic toolchain install";
 pub const IC_WASM_TOOL: &str = "ic-wasm";
@@ -303,6 +299,7 @@ pub fn install_required_ic_wasm() -> Result<IcWasmExecutable, IcWasmToolError> {
         archive_sha256: authority.archive_sha256(),
         member: &format!("{}/{}", authority.package_name(), IC_WASM_TOOL),
         format: ArchiveFormat::Xz,
+        runtime_library: None,
     };
     tool_install::install(&spec, &install_path, admit_ic_wasm_executable)
 }
@@ -329,7 +326,13 @@ fn resolve_distribution_executable(path: &Path) -> Result<PathBuf, IcWasmToolErr
     let candidates = npm_binary_candidates(path, &cwd, env::consts::OS, env::consts::ARCH)?;
     for candidate in candidates {
         if candidate.exists() {
-            return canonical_executable(&candidate);
+            return tool_resolution::resolve(&candidate, &[])
+                .map_err(|source| IcWasmToolError::Io {
+                    operation: "resolve ic-wasm distribution executable",
+                    path: candidate.clone(),
+                    source,
+                })?
+                .ok_or(IcWasmToolError::RequestedExecutableMissing { path: candidate });
         }
     }
     Err(IcWasmToolError::RequestedExecutableMissing {
@@ -365,73 +368,44 @@ fn npm_binary_candidates(
 }
 
 fn resolve_selected_executable() -> Result<PathBuf, IcWasmToolError> {
-    match default_ic_wasm_install_path() {
-        Ok(path) if is_executable(&path) => return canonical_executable(&path),
-        Ok(_) | Err(IcWasmToolError::MissingHome) => {}
-        Err(error) => return Err(error),
+    let canonical = default_ic_wasm_install_path().ok();
+    let mut directories = Vec::new();
+    if let Some(parent) = canonical.as_ref().and_then(|path| path.parent()) {
+        directories.push(parent.to_path_buf());
     }
-    if let Some(path) = executable_on_path(OsStr::new(IC_WASM_TOOL))? {
+    if let Some(path) = env::var_os("PATH") {
+        directories.extend(env::split_paths(&path));
+    }
+    let selected =
+        tool_resolution::resolve(Path::new(IC_WASM_TOOL), &directories).map_err(|source| {
+            IcWasmToolError::Io {
+                operation: "resolve ic-wasm executable",
+                path: PathBuf::from(IC_WASM_TOOL),
+                source,
+            }
+        })?;
+    if let Some(path) = selected {
         return Ok(path);
     }
-    match default_ic_wasm_install_path() {
-        Ok(path) if is_executable(&path) => canonical_executable(&path),
-        Ok(canonical_path) if home_is_root() => {
+    match canonical {
+        Some(canonical_path) if home_is_root() => {
             Err(IcWasmToolError::MissingToolWithRootHome { canonical_path })
         }
-        Ok(canonical_path) => Err(IcWasmToolError::MissingTool { canonical_path }),
-        Err(IcWasmToolError::MissingHome) => Err(IcWasmToolError::MissingToolWithoutHome),
-        Err(error) => Err(error),
-    }
-}
-
-fn executable_on_path(command: &OsStr) -> Result<Option<PathBuf>, IcWasmToolError> {
-    let Some(path) = env::var_os("PATH") else {
-        return Ok(None);
-    };
-    for directory in env::split_paths(&path) {
-        let candidate = directory.join(command);
-        if is_executable(&candidate) {
-            return canonical_executable(&candidate).map(Some);
-        }
-    }
-    Ok(None)
-}
-
-fn canonical_executable(path: &Path) -> Result<PathBuf, IcWasmToolError> {
-    if !is_executable(path) {
-        return Err(IcWasmToolError::RequestedExecutableMissing {
-            path: path.to_path_buf(),
-        });
-    }
-    fs::canonicalize(path).map_err(|source| IcWasmToolError::Io {
-        operation: "resolve ic-wasm executable",
-        path: path.to_path_buf(),
-        source,
-    })
-}
-
-fn is_executable(path: &Path) -> bool {
-    let Ok(metadata) = fs::metadata(path) else {
-        return false;
-    };
-    if !metadata.is_file() {
-        return false;
-    }
-    #[cfg(unix)]
-    {
-        metadata.permissions().mode() & 0o111 != 0
-    }
-    #[cfg(not(unix))]
-    {
-        false
+        Some(canonical_path) => Err(IcWasmToolError::MissingTool { canonical_path }),
+        None => Err(IcWasmToolError::MissingToolWithoutHome),
     }
 }
 
 fn admit_ic_wasm_executable(path: &Path) -> Result<IcWasmExecutable, IcWasmToolError> {
-    let path = canonical_executable(path)?;
-    if !is_executable(&path) {
-        return Err(IcWasmToolError::NotExecutable { path });
-    }
+    let path = tool_resolution::resolve(path, &[])
+        .map_err(|source| IcWasmToolError::Io {
+            operation: "resolve ic-wasm executable",
+            path: path.to_path_buf(),
+            source,
+        })?
+        .ok_or_else(|| IcWasmToolError::RequestedExecutableMissing {
+            path: path.to_path_buf(),
+        })?;
     let mut command = crate::build_environment::command(&path);
     command.arg("--version");
     let output = output_with_executable_busy_retry(&mut command).map_err(|source| {
@@ -464,6 +438,5 @@ fn home_is_root() -> bool {
 
 #[cfg(test)]
 pub(crate) fn resolve_test_ic_wasm(command: &str) -> Result<IcWasmExecutable, IcWasmToolError> {
-    let path = canonical_executable(Path::new(command))?;
-    admit_ic_wasm_executable(&path)
+    admit_ic_wasm_executable(Path::new(command))
 }

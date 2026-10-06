@@ -222,19 +222,15 @@ fn authenticated_endpoint_expansion_fences_before_access_and_dispatch() {
         .find("eval_access")
         .expect("expanded endpoint must evaluate access");
     let enter = expanded
-        .find("enter_endpoint")
+        .find("measure_endpoint_async")
         .expect("expanded endpoint must enter instrumentation after access");
     let impl_call = expanded
         .find("__canic_impl_write")
         .expect("expanded endpoint must call implementation");
-    let exit = expanded
-        .find("exit_endpoint")
-        .expect("expanded endpoint must exit instrumentation after implementation");
 
     assert!(fence < access);
     assert!(access < enter);
     assert!(enter < impl_call);
-    assert!(impl_call < exit);
     assert!(compact.contains("::canic::application_scope!(\"write\").as_str()"));
     assert!(!compact.contains("authenticated_with_scope(\"write\")"));
 }

@@ -3,7 +3,8 @@
 use super::*;
 use crate::storage::stable::env::{Env, EnvData, EnvRecord};
 use ic_memory::{
-    AllocationDeclaration, AllocationHistory, AllocationLedger, MemoryManagerSlot, SchemaMetadata,
+    AllocationDeclaration, AllocationLedger, AllocationRetirement, MemoryManagerSlot,
+    SchemaMetadata,
     ic_stable_structures::{
         Memory, VectorMemory,
         memory_manager::{MemoryId, MemoryManager},
@@ -229,20 +230,21 @@ fn memory_allocation_record_response_includes_live_backing_memory_size() {
         "app.users.v1",
         MemoryManagerSlot::new(100).expect("usable slot"),
         None,
-        SchemaMetadata::default(),
+        SchemaMetadata::new(Some(7)).expect("current schema"),
     )
     .expect("declaration");
-    let ledger = AllocationLedger::new_committed(0, AllocationHistory::default())
+    let ledger = AllocationLedger::new(0, Vec::new())
         .expect("genesis ledger")
-        .stage_reservation_generation(&[declaration], None)
+        .stage_reservation_generation(&[declaration])
         .expect("reservation generation");
     let record = DiagnosticRecord {
-        allocation: ledger.allocation_history().records()[0].clone(),
+        allocation: ledger.records()[0].clone(),
         memory_size: Some(DiagnosticMemorySize::from_wasm_pages(3)),
     };
 
     let response = memory_allocation_record_response(record);
 
+    assert_eq!(response.schema_version, Some(7));
     assert_eq!(
         response.memory_size,
         Some(MemoryAllocationSizeEntry {
@@ -273,12 +275,12 @@ fn memory_allocation_record_response_omits_unmeasured_sizes() {
         SchemaMetadata::default(),
     )
     .expect("declaration");
-    let ledger = AllocationLedger::new_committed(0, AllocationHistory::default())
+    let ledger = AllocationLedger::new(0, Vec::new())
         .expect("genesis ledger")
-        .stage_reservation_generation(&[declaration], None)
+        .stage_reservation_generation(&[declaration])
         .expect("reservation generation");
     let record = DiagnosticRecord {
-        allocation: ledger.allocation_history().records()[0].clone(),
+        allocation: ledger.records()[0].clone(),
         memory_size: None,
     };
 
@@ -494,16 +496,55 @@ fn receipt_capacity_growth_exhaustion_preserves_store_and_typed_ops_failure() {
 }
 
 #[test]
-fn memory_ledger_generation_response_preserves_current_fields() {
-    let response = memory_ledger_generation_response(
-        GenerationRecord::new(7, 6, Some("host-build".to_string()), 4, Some(123))
-            .expect("current generation record"),
+fn ledger_snapshot_preserves_anchor_commit_evidence_and_current_schema_over_candid() {
+    MemoryRegistryOps::init_registry().expect("bootstrap canonical memory runtime");
+    let source = ledger::try_snapshot().unwrap();
+    let response = MemoryRegistryOps::ledger_snapshot().unwrap();
+    let bytes = candid::encode_one(&response).expect("ledger response Candid");
+    let decoded: MemoryLedgerResponse = candid::decode_one(&bytes).expect("current Candid");
+    assert_eq!(decoded.current_generation, source.export.current_generation);
+    assert_eq!(
+        decoded.ledger_memory_manager_id,
+        source.export.ledger_anchor.id()
     );
-    let bytes = candid::encode_one(&response).expect("generation response Candid");
-    let decoded: MemoryLedgerGenerationEntry = candid::decode_one(&bytes).expect("current Candid");
-    assert_eq!(decoded.generation, 7);
-    assert_eq!(decoded.parent_generation, Some(6));
-    assert_eq!(decoded.runtime_fingerprint.as_deref(), Some("host-build"));
-    assert_eq!(decoded.declaration_count, 4);
-    assert_eq!(decoded.committed_at, Some(123));
+    assert_eq!(
+        decoded.commit_recovery.authoritative_generation,
+        Some(decoded.current_generation)
+    );
+    assert_eq!(decoded.records.len(), source.export.records.len());
+    for (row, original) in decoded.records.iter().zip(source.export.records) {
+        assert_eq!(row.memory_manager_id, Some(original.allocation.slot().id()));
+        assert_eq!(row.stable_key, original.allocation.stable_key().as_str());
+        assert_eq!(
+            row.schema_version,
+            original.allocation.schema().schema_version()
+        );
+    }
+}
+
+#[test]
+fn retired_allocation_projection_keeps_its_slot_and_latest_schema() {
+    let slot = MemoryManagerSlot::new(100).unwrap();
+    let key = "app.users.v1";
+    let declaration = AllocationDeclaration::new(
+        key,
+        slot.clone(),
+        None,
+        SchemaMetadata::new(Some(7)).unwrap(),
+    )
+    .unwrap();
+    let ledger = AllocationLedger::new(0, Vec::new())
+        .unwrap()
+        .stage_reservation_generation(&[declaration])
+        .unwrap()
+        .stage_retirement_generation(&AllocationRetirement::new(key, slot).unwrap())
+        .unwrap();
+    let response = memory_allocation_record_response(DiagnosticRecord {
+        allocation: ledger.records()[0].clone(),
+        memory_size: None,
+    });
+    assert_eq!(response.memory_manager_id, Some(100));
+    assert_eq!(response.stable_key, key);
+    assert_eq!(response.state, MemoryAllocationState::Retired);
+    assert_eq!(response.schema_version, Some(7));
 }

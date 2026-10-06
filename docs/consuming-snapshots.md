@@ -32,9 +32,14 @@ File paths are intentionally identical in source and consumer. A repository
 that needs a different path or behavior owns an adapter rather than a patched
 shared copy.
 
-The declared destination files will be overwritten. Inspect their current
-contents and preserve unrelated edits before refreshing. Only declare paths
-owned by the shared snapshot; the consumer's `AGENTS.md` remains local.
+Refresh checks every declared destination before replacing any file. It refuses
+to overwrite staged or unstaged changes, deletions, or existing untracked/ignored
+files. Preserve or reconcile those changes before retrying; unrelated dirty paths
+remain allowed. A destination already matching the selected source bytes and
+executable state is safe to retry, including after an interrupted refresh. Only
+declare paths owned by the shared snapshot; the consumer's `AGENTS.md` remains local.
+The manifest is reviewed configuration: an intentional file-set edit is read as
+input and replaced with the resulting manifest, rather than rejected as dirty work.
 
 ## Refresh
 
@@ -95,17 +100,32 @@ the required verifiers, adding any selected tools to the same command:
   --file DRAGGINZGAME.md \
   --file rules/changelogs.md \
   --file rules/cargo-dependencies.md \
+  --file rules/dependency-pinning.md \
   --file rules/git-hooks.md \
+  --file rules/agent-maintenance.md \
+  --file audits/README.md \
+  --file audits/code-hygiene.md \
+  --file audits/flow-convergence-and-duplication.md \
+  --file audits/complexity-and-technical-debt.md \
+  --file audits/module-surface-hardening.md \
+  --file audits/module-cleanup.md \
   --file docs/releases.md \
   --file scripts/ci/run-release.sh \
   --file scripts/ci/next-release-version.sh \
   --file scripts/ci/finalize-release-changelog.awk \
+  --file scripts/ci/check-dependency-pins.sh \
+  --file scripts/ci/dependency-pins.jq \
   --file docs/principles/README.md \
   --file docs/principles/decision-artifact-discipline.md \
   --file docs/principles/reviewable-changes.md \
   --file docs/principles/rust-code-hygiene.md \
   --file docs/principles/simplicity-and-maintainability.md \
   --file docs/consuming-snapshots.md \
+  --file docs/provenance.md \
+  --file docs/ic-tools.md \
+  --file docs/local-setup.md \
+  --file ci/ic-tools.tsv \
+  --file ci/tool-versions.env \
   --file docs/supported-hosts.md \
   --file scripts/ci/verify-file-checksum.sh \
   --file scripts/ci/verify-shared-tooling-snapshot.sh
@@ -135,3 +155,96 @@ Release adoption also requires aligning the consumer's entry points, adapters,
 instructions and checks with the [release contract](releases.md), including
 artifact retention and the exact atomic branch/tag push. A passing snapshot
 check alone does not verify those behaviors.
+Pinning adoption also requires the checker and its jq module, prepared Git/jq/yq
+tools (and Cargo for Rust workspaces), a CI/release invocation, and consumer-owned
+qualification for locked builds and external inputs. Consumers may also vendor
+`scripts/ci/install-yq.sh` with the checksum helper; choose and record their own
+reviewed version and platform digests. Resolve existing exceptions under the
+[pinning policy](../rules/dependency-pinning.md) before claiming adoption.
+
+## Audit method adoption
+
+Include the complete `audits/` file set above when adopting this baseline, so
+its method links work offline. The snapshot's reviewed source revision identifies
+the common contract; do not read methods from a moving sibling checkout or copy
+uncommitted documents and attribute them to an older revision.
+
+For each selected existing local audit, map its questions to the shared method
+and retain product-specific obligations in a local overlay under the consumer's
+existing audit directory. Link to the vendored `audits/` definition and record
+local source roots, authority boundaries, focused checks, allowed measurement
+methods and report destination. Resolve conflicts with the common contract,
+including automatic fixes, unconditional broad gates and composite scores.
+
+Replace duplicated generic prose only after the snapshot is installed. Update
+local catalogs, entrypoints and any method fingerprints in the same batch.
+Where a frozen method is needed to reproduce earlier reports, preserve its old
+identity as historical and ineligible for new runs; do not label historical
+scores comparable to the new method. Keep domain-specific audits and executed
+reports in their existing repository. This does not migrate report trees,
+introduce shared runtime measurement tooling, or retire distinct safety proofs.
+
+Verify snapshot integrity, local links, obligation coverage and method selection
+by walking a representative existing report against the new method and overlay.
+Record this as an adoption review, not a newly executed product audit. Script or
+product behavior changes need their own relevant validation and host evidence;
+documentation adoption alone does not call for full CI or native builds.
+
+## Local IC tool adoption
+
+After the new files are committed and reviewed, add `ci/ic-tools.tsv`,
+`scripts/dev/install-ic-tools.sh`, `scripts/ci/verify-evidence-checksums.sh` and
+`scripts/ci/verify-file-checksum.sh` to the snapshot, with `docs/ic-tools.md`.
+Also include `scripts/dev/install-host-tools.sh`, `ci/tool-versions.env` and
+`docs/local-setup.md` for the pinned jq/yq setup. Add `/.tools/` to the consumer's
+ignore rules. Expose these targets:
+
+```makefile
+IC_TOOL_PINS ?= ci/ic-tools.tsv
+HOST_TOOL_VERSIONS ?= ci/tool-versions.env
+export PATH := $(CURDIR)/.tools/host/bin:$(CURDIR)/.tools/ic/bin:$(PATH)
+
+.PHONY: install-tools tools-check install-host-tools host-tools-check install-ic-tools ic-tools-check
+install-tools:
+	+$(MAKE) --no-print-directory install-host-tools
+	+$(MAKE) --no-print-directory install-ic-tools
+
+tools-check:
+	+$(MAKE) --no-print-directory host-tools-check
+	+$(MAKE) --no-print-directory ic-tools-check
+
+install-host-tools:
+	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)"
+
+host-tools-check:
+	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)" --check
+
+install-ic-tools:
+	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)"
+
+ic-tools-check:
+	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)" --check
+```
+
+Review pins against existing qualified versions before activation. A local
+exception uses its own explicitly selected matrix outside the snapshot; remove
+superseded pin ownership rather than maintaining two independent selections.
+Update local setup/CI callers to use `.tools/host/bin` and `.tools/ic/bin`; CI
+must put these paths on its own PATH after explicit setup. Remove separate
+package-manager jq/yq selections and preserve one owner for each parser pin.
+The existing single-yq installer remains available to consumers that need only
+that standalone parser; it accepts caller-owned pins rather than defining them.
+Document the [system bootstrap prerequisites](local-setup.md#bootstrap-prerequisites)
+and retain product-specific
+alignment checks. Retire duplicated installer bodies once callers have moved;
+do not patch vendored files. Keep package-manager setup for unrelated tools.
+
+Qualify explicit installation and offline checking on the consumer's declared
+native hosts, plus relevant product checks for changed tool selections. Do not
+claim deployment or PocketIC client/server compatibility from `--version` alone.
+Snapshot integrity and consumer adoption remain separate from upstream fixtures.
+
+The evidence-manifest helper can also be adopted independently with the existing
+checksum verifier. The nonempty Cargo test helper and exact release-tag checker
+have no shared helper dependencies. Consumers keep test arguments, manifest
+selection and publication/release authority in their adapters.

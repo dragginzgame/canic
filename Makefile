@@ -18,9 +18,10 @@
 
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
+IC_TOOL_PINS ?= ci/ic-tools.tsv
+HOST_TOOL_VERSIONS ?= ci/tool-versions.env
+export PATH := $(CURDIR)/.tools/host/bin:$(CURDIR)/.tools/ic/bin:$(PATH)
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
-BINARYEN_INSTALL_DIR ?= $(HOME)/.local/bin
-IC_WASM_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 ACTIONLINT_BIN ?= $(ACTIONLINT_INSTALL_DIR)/actionlint
 SHELLCHECK_BIN ?= $(SHELLCHECK_INSTALL_DIR)/shellcheck
@@ -66,8 +67,10 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain"
+	@echo "  install-tools    Install pinned repository JSON/YAML and IC tools"
+	@echo "  tools-check      Verify repository tool bytes and versions offline"
 	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
-	@echo "  update-dev       Pin the latest stable ICP CLI, report Binaryen updates, and synchronize development tools"
+	@echo "  update-dev       Synchronize reviewed development tools and report Binaryen updates"
 	@echo ""
 	@echo "Version Management:"
 	@echo "  version          Show current version"
@@ -131,19 +134,37 @@ install:
 # Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain.
 install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" \
-		BINARYEN_INSTALL_DIR="$(BINARYEN_INSTALL_DIR)" IC_WASM_INSTALL_DIR="$(IC_WASM_INSTALL_DIR)" \
 		bash scripts/dev/install_dev.sh
+
+.PHONY: install-tools tools-check install-host-tools host-tools-check install-ic-tools ic-tools-check dependency-pins-gate
+install-tools:
+	+$(MAKE) --no-print-directory install-host-tools
+	+$(MAKE) --no-print-directory install-ic-tools
+
+tools-check:
+	+$(MAKE) --no-print-directory host-tools-check
+	+$(MAKE) --no-print-directory ic-tools-check
+
+install-host-tools:
+	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)"
+host-tools-check:
+	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)" --check
+install-ic-tools:
+	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)"
+ic-tools-check:
+	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)" --check
+
+dependency-pins-gate:
+	bash scripts/ci/check-dependency-pins.sh
 
 # Configure the one repository-owned hook without installing the full toolchain.
 install-hooks:
 	bash scripts/dev/install-git-hooks.sh
 
-# Pin the latest stable ICP CLI, report Binaryen drift, then synchronize tools.
+# Synchronize reviewed pins and report Binaryen drift without rewriting the snapshot.
 update-dev:
-	bash scripts/dev/update-icp-cli-pin.sh
 	bash scripts/dev/check-binaryen-update.sh
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" \
-		BINARYEN_INSTALL_DIR="$(BINARYEN_INSTALL_DIR)" IC_WASM_INSTALL_DIR="$(IC_WASM_INSTALL_DIR)" \
 		bash scripts/dev/install_dev.sh --update-prereqs
 	cargo install --quiet \
 		"cargo-audit@$(CANIC_CARGO_AUDIT_VERSION)" \
@@ -162,9 +183,9 @@ update-dev:
 	"$(CARGO_INSTALL_BIN_DIR)/rg" --version
 	"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version
 	"$(CARGO_INSTALL_BIN_DIR)/sccache" --version
-	"$(CARGO_INSTALL_BIN_DIR)/icp" --version
-	"$(IC_WASM_INSTALL_DIR)/ic-wasm" --version
-	"$(BINARYEN_INSTALL_DIR)/wasm-opt" --version
+	"$(CURDIR)/.tools/ic/bin/icp" --version
+	"$(CURDIR)/.tools/ic/bin/ic-wasm" --version
+	"$(CURDIR)/.tools/ic/bin/wasm-opt" --version
 	bash scripts/ci/check-dependency-risk-inventory.sh
 
 #
@@ -273,6 +294,7 @@ validate:
 
 check-invariants:
 	+@$(VALIDATION_RUNNER) \
+		dependency-pins-gate \
 		layering-gate \
 		current-document-semantics-gate \
 		dependency-risk-inventory-test \
@@ -287,6 +309,7 @@ check-invariants:
 # independent preflight or security failure before gating expensive jobs.
 ci-preflight:
 	+@$(VALIDATION_RUNNER) \
+		dependency-pins-gate \
 		lint-workflows \
 		shellcheck \
 		layering-gate \
@@ -335,9 +358,11 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-runner.sh
 	bash scripts/ci/check-release-integrity-contract.sh
 	bash scripts/ci/test-require-jq.sh
-	bash scripts/ci/test-binaryen-install.sh
+	bash scripts/ci/test-ic-tools.sh
+	bash scripts/ci/test-host-tools.sh
 	bash scripts/ci/test-dev-tool-recipes.sh
 	bash scripts/ci/test-release-tools.sh
+	bash scripts/ci/test-release-commit-view.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
 	bash scripts/ci/test-release-validation-lane.sh
@@ -489,8 +514,12 @@ release-verify:
 	+CARGO_NET_OFFLINE=true $(MAKE) --no-print-directory validate
 release-prepare-version:
 	@CANIC_RELEASE_VALIDATED=1 CANIC_RELEASE_VALIDATED_HEAD="$(RELEASE_SOURCE)" CANIC_RELEASE_VALIDATION_KIND=complete CANIC_RELEASE_DATE="$(RELEASE_DATE)" bash scripts/ci/bump-version.sh "$(RELEASE_KIND)"
-release-prepared-check release-committed-check release-tagged-check:
+release-prepared-check:
 	@bash scripts/ci/check-release-candidate.sh
+release-committed-check:
+	@bash scripts/release/adapter.sh committed
+release-tagged-check:
+	@bash scripts/release/adapter.sh tagged
 release-files:
 	@bash scripts/release/adapter.sh files
 release-commit-check:

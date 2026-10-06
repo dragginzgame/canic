@@ -30,6 +30,8 @@ TAG_DELETE_TEST="$ROOT/scripts/ci/test-delete-github-tags-up-to.sh"
 release_clean_recipe="$(sed -n '/^release-clean:/,/^$/p' "$ROOT/Makefile")"
 # shellcheck source=/dev/null
 source "$ROOT/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/ci/ic-tool-pins.sh"
 
 fail() {
     echo "release tool behavior failed: $1" >&2
@@ -270,6 +272,9 @@ mkdir -p "$authority_fixture/scripts/ci" "$authority_fixture/.github/workflows"
 cp "$ROOT/scripts/ci/check-release-integrity-contract.sh" \
     "$ROOT/scripts/ci/check-pocketic-version-alignment.sh" "$authority_fixture/scripts/ci/"
 cp "$ROOT/Cargo.lock" "$ROOT/rust-toolchain.toml" "$authority_fixture/"
+mkdir -p "$authority_fixture/ci"
+cp "$ROOT/ci/ic-tools.tsv" "$authority_fixture/ci/"
+cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$authority_fixture/scripts/ci/"
 cp "$ROOT/.github/workflows/ci.yml" "$authority_fixture/.github/workflows/"
 awk '{gsub(/ /, "\t"); print}' "$ROOT/.github/CODEOWNERS" >"$authority_fixture/.github/CODEOWNERS"
 sed 's/^\(export CANIC_[A-Z0-9_]*=\)\(.*\)$/\1"\2"/' \
@@ -280,8 +285,8 @@ env -u POCKET_IC_BIN bash "$authority_fixture/scripts/ci/check-release-integrity
     fail "authority guard rejected equivalent whitespace, quoting or unrelated source"
 cp "$authority_fixture/tool-versions.env" "$tmp_dir/authority-pins"
 for corruption in \
-    'export CANIC_IC_WASM_VERSION=latest' \
-    'export CANIC_IC_WASM_SHA256_LINUX_X64=invalid'; do
+    'export CANIC_CANDID_EXTRACTOR_VERSION=latest' \
+    'export CANIC_BINARYEN_WASM_OPT_SHA256_LINUX_X64=invalid'; do
     cp "$tmp_dir/authority-pins" "$authority_fixture/tool-versions.env"
     printf '%s\n' "$corruption" >>"$authority_fixture/tool-versions.env"
     if env -u POCKET_IC_BIN bash "$authority_fixture/scripts/ci/check-release-integrity-contract.sh" >/dev/null 2>&1; then

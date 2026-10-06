@@ -93,15 +93,26 @@ unmaintained direct dependencies remain blocking.
 
 Shell validation, release and reporting tools share `scripts/ci/require-jq.sh`.
 They use `JQ_BIN` when explicitly set to an executable path; otherwise they
-resolve `jq` on `PATH`, then `$HOME/.local/bin/jq`. Missing or invalid explicit
+select prepared `.tools/host/bin/jq`, resolve `jq` on `PATH`, then use
+`$HOME/.local/bin/jq`. Missing or invalid explicit
 executables fail before JSON processing. The selected absolute path is exported
 to child scripts and survives working-directory changes without modifying PATH.
 
-`install-dev` and `update-dev` pass `BINARYEN_INSTALL_DIR` and
-`IC_WASM_INSTALL_DIR` to their installers; both default to `$HOME/.local/bin`.
-The final `update-dev` probes execute the installed tools by those paths, with
-ICP under the Cargo installation directory. They do not depend on child-shell
-PATH changes reaching Make or alter the user's shell profile.
+`install-dev`, `update-dev` and `install-tools` use the unchanged reviewed shared
+installers for repository-local `.tools/host` and `.tools/ic` toolsets. The common
+matrix owns versions and archive checksums. Make and CI select their `bin`
+directories explicitly; offline `tools-check` verifies prepared bytes and
+versions. Setup never changes the user's shell profile or auto-selects latest
+versions. Packaged `canic toolchain install` retains its separate governed
+`$HOME/.local/bin` installation and executable admission policy.
+
+The [scoped dependency exceptions](../../ci/dependency-pinning-exceptions.json)
+preserve existing exact qualified protocol selections and immutable historical
+qualification workspaces. The [shared pinning rules](../../rules/dependency-pinning.md)
+own their record shape. A changed exception needs exact dependency/value, concrete
+reason, linked evidence and focused owner qualification; there is no blanket
+workspace exemption. Negative role-contract manifests are templates named
+`Cargo.toml.fixture`; the owning test materializes them into isolated workspaces.
 
 The ordinary CI job also installs the internal Rust toolchain's
 `wasm32-unknown-unknown` target and checksum-bound `ic-wasm`. Host build-cache
@@ -174,9 +185,12 @@ The repository owns one `pre-commit` hook, configured by `make install-dev` or
 builds, validation, versioning, commits, or pushes. A partially staged file
 rejects before formatting because formatting the working copy cannot prove the
 staged snapshot. After successful formatting, the hook refreshes the index only
-for files that were already staged and tracked files that were clean before the
-formatter changed them. It never stages pre-existing unstaged edits and rejects
-if formatting changes such a file. Therefore `git add .` followed by
+for files that were already selected. Canic's local adapter exports only regular
+stage-zero files to the scratch view. Historical unrelated symlinks remain in the
+real index without exposing their targets to formatting; selected symlinks,
+submodules and unresolved entries reject. Formatter failures preserve the real
+worktree and index; concurrent selected-file or index changes reject before
+publication. It never stages pre-existing unstaged edits. Therefore `git add .` followed by
 `git commit` commits the formatted snapshot without a second staging pass, while
 unrelated unstaged content remains byte-for-byte unchanged. `make fmt-check`
 remains in validation and CI so hook bypass does not weaken the release

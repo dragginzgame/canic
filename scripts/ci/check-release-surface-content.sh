@@ -14,6 +14,13 @@ version="${2:?release version required}"
 release_date="${3:?release date required}"
 scratch="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-content.XXXXXX")"
 trap 'rm -rf "$scratch"' EXIT
+actual_root="$ROOT"
+if [[ -n "${4:-}" ]]; then
+    [[ "$4" =~ ^([0-9a-f]{40}|[0-9a-f]{64})$ ]] || exit 2
+    actual_root="$scratch/committed"
+    mkdir "$actual_root"
+    git -C "$ROOT" archive "$4" | tar -xf - -C "$actual_root"
+fi
 
 # jq expressions use literal variable names.
 # shellcheck disable=SC2016
@@ -23,31 +30,32 @@ trap 'rm -rf "$scratch"' EXIT
     .schema == 1 and .source == $source and .version == $version and .date == $date and
     (.date | type == "string" and test("^[0-9]{4}-[0-9]{2}-[0-9]{2}$")) and
     (.gate == "complete" or .gate == "fast"))
-' "$ROOT/release-validation.json" >/dev/null
-git -C "$ROOT" archive "$source" | tar -xf - -C "$scratch"
+' "$actual_root/release-validation.json" >/dev/null
+mkdir "$scratch/expected"
+git -C "$ROOT" archive "$source" | tar -xf - -C "$scratch/expected"
 (
-    cd "$scratch"
-    cargo metadata --locked --offline --no-deps --format-version 1 > "$scratch/metadata.json"
-    cp -p Cargo.lock "$scratch/source.lock"
+    cd "$scratch/expected"
+    cargo metadata --locked --offline --no-deps --format-version 1 > "$scratch/expected/metadata.json"
+    cp -p Cargo.lock "$scratch/expected/source.lock"
     previous="$(cargo get workspace.package.version)"
     cargo set-version --workspace --offline "$version" >/dev/null
-    perl "$ROOT/scripts/release/retain-lock-selection.pl" "$scratch/metadata.json" "$scratch/source.lock" "$previous" "$version" > Cargo.lock
+    perl "$ROOT/scripts/release/retain-lock-selection.pl" "$scratch/expected/metadata.json" "$scratch/expected/source.lock" "$previous" "$version" > Cargo.lock
 )
 while IFS= read -r -d '' manifest; do
-    relative="${manifest#"$scratch/"}"
-    cmp -s "$manifest" "$ROOT/$relative" || {
+    relative="${manifest#"$scratch/expected/"}"
+    cmp -s "$manifest" "$actual_root/$relative" || {
         echo "release content differs from the governed version change: $relative" >&2
         exit 1
     }
-done < <(find "$scratch" -name Cargo.toml -type f -print0)
-cmp -s "$scratch/Cargo.lock" "$ROOT/Cargo.lock" || {
+done < <(find "$scratch/expected" -name Cargo.toml -type f -print0)
+cmp -s "$scratch/expected/Cargo.lock" "$actual_root/Cargo.lock" || {
     echo 'release lock graph differs from the governed version change' >&2
     exit 1
 }
 sed -E \
     "s#CANIC_CLI_VERSION=\"\\\$\\{CANIC_CLI_VERSION:-[0-9]+\\.[0-9]+\\.[0-9]+\\}\"#CANIC_CLI_VERSION=\"\\\${CANIC_CLI_VERSION:-$version}\"#" \
-    "$scratch/scripts/dev/install_dev.sh" >"$scratch/expected-installer"
-cmp -s "$scratch/expected-installer" "$ROOT/scripts/dev/install_dev.sh" || {
+    "$scratch/expected/scripts/dev/install_dev.sh" >"$scratch/expected-installer"
+cmp -s "$scratch/expected-installer" "$actual_root/scripts/dev/install_dev.sh" || {
     echo 'release installer differs from the governed version change' >&2
     exit 1
 }

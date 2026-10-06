@@ -102,6 +102,8 @@ pub mod metrics {
 
 /// Low-level operational helpers
 pub mod ops {
+    /// Give a background future its own instruction checkpoint context across awaits.
+    pub use crate::__internal::core::perf::with_async_context as with_async_perf_context;
     pub use crate::{__internal::core::log, perf};
 }
 

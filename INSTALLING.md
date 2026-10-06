@@ -93,22 +93,31 @@ The maintained range is `icp-cli >=1.5.0, <2.0.0`; the maintainer toolchain curr
 ```bash
 which icp
 icp --version
-bash scripts/ci/install-icp-cli.sh
+make install-ic-tools
 ```
 
-The installer writes the verified binary to `~/.cargo/bin/icp` by default.
-If another `icp` appears earlier on `PATH`, the shell may still run the older
-binary. Check with `type -a icp`, then select the installed binary in the
-current shell:
+Repository setup installs the reviewed common IC toolset under `.tools/ic/bin`
+and the pinned JSON/YAML parsers under `.tools/host/bin`. Use explicit setup and
+then offline verification:
 
 ```bash
-export PATH="$HOME/.cargo/bin:$PATH"
-hash -r
-icp -V
+make install-tools
+make tools-check
+export PATH="$PWD/.tools/host/bin:$PWD/.tools/ic/bin:$PATH"
 ```
 
-For future shells, put `~/.cargo/bin` before the other `icp` location in your
-shell startup configuration.
+Make selects these paths automatically; direct shell commands need the export.
+Ordinary validation never installs tools. Existing complete toolsets and failed
+installation candidates are retained. The reviewed matrix is `ci/ic-tools.tsv`;
+refresh its Shared Tooling snapshot to adopt changed pins. `make update-dev`
+synchronizes reviewed tools and reports Binaryen drift without rewriting pins.
+Rust/Cargo tools and system bootstrap packages remain separate; see
+[local setup](docs/local-setup.md) and [IC tools](docs/ic-tools.md).
+
+Packaged CLI users still use `canic toolchain install` without a checkout.
+On macOS, Binaryen retains its `bin/wasm-opt` and `lib/libbinaryen.dylib` layout
+and qualifies the complete staged bundle before selecting the installed symlink.
+Admission verifies both executable and runtime-library digests before execution.
 
 Custom connected networks must declare their exact root key. Enroll that trust
 through Canic before Fleet observation or mutation. Obtain the expected SHA-256

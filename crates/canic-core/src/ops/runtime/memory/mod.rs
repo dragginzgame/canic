@@ -16,15 +16,14 @@ use crate::{
     dto::memory::{
         MemoryAllocationEntry, MemoryAllocationRangeClaim, MemoryAllocationRecordEntry,
         MemoryAllocationSizeEntry, MemoryAllocationsResponse, MemoryCommitRecoveryResponse,
-        MemoryCommitSlotResponse, MemoryLedgerGenerationEntry, MemoryLedgerMemoryEntry,
-        MemoryLedgerResponse, MemoryRangeAuthorityEntry, MemorySchemaMetadataEntry,
+        MemoryCommitSlotResponse, MemoryLedgerMemoryEntry, MemoryLedgerResponse,
+        MemoryRangeAuthorityEntry,
     },
     memory::{self, ledger, registry::MemoryRegistryError},
 };
 use ic_memory::{
     AllocationState, CommitRecoveryError, CommitSlotDiagnostic, CommitStoreDiagnostic,
-    DiagnosticMemorySize, DiagnosticRecord, GenerationRecord, MemoryManagerRangeMode,
-    SchemaMetadataRecord,
+    DiagnosticMemorySize, DiagnosticRecord, MemoryManagerRangeMode,
 };
 use thiserror::Error as ThisError;
 
@@ -137,22 +136,15 @@ impl MemoryRegistryOps {
             .map(memory_allocation_record_response)
             .collect();
         let memories = memory_ledger_memory_entries(&records);
-        let generations = snapshot
-            .export
-            .generations
-            .into_iter()
-            .map(memory_ledger_generation_response)
-            .collect();
-
         Ok(MemoryLedgerResponse {
             ledger_schema_version: crate::memory::ledger::MEMORY_LEDGER_SCHEMA_VERSION,
             physical_format_id: crate::memory::ledger::MEMORY_PHYSICAL_FORMAT_ID,
             current_generation: snapshot.export.current_generation,
+            ledger_memory_manager_id: snapshot.export.ledger_anchor.id(),
             commit_recovery: commit_recovery_response(snapshot.export.commit_recovery),
             authorities,
             memories,
             records,
-            generations,
         })
     }
 }
@@ -253,14 +245,7 @@ fn memory_allocation_record_response(record: DiagnosticRecord) -> MemoryAllocati
         stable_key: allocation.stable_key().as_str().to_string(),
         state: memory_allocation_state_response(allocation_state),
         memory_size,
-        first_generation: allocation.first_generation(),
-        last_seen_generation: allocation.last_seen_generation(),
-        retired_generation: allocation_retired_generation(allocation_state),
-        schema_history: allocation
-            .schema_history()
-            .iter()
-            .map(memory_schema_metadata_response)
-            .collect(),
+        schema_version: allocation.schema().schema_version(),
     }
 }
 
@@ -308,34 +293,7 @@ const fn memory_allocation_state_response(state: AllocationState) -> MemoryAlloc
     match state {
         AllocationState::Reserved => MemoryAllocationState::Reserved,
         AllocationState::Active => MemoryAllocationState::Active,
-        AllocationState::Retired { .. } => MemoryAllocationState::Retired,
-    }
-}
-
-const fn allocation_retired_generation(state: AllocationState) -> Option<u64> {
-    match state {
-        AllocationState::Retired { generation } => Some(generation),
-        AllocationState::Reserved | AllocationState::Active => None,
-    }
-}
-
-const fn memory_schema_metadata_response(
-    record: &SchemaMetadataRecord,
-) -> MemorySchemaMetadataEntry {
-    MemorySchemaMetadataEntry {
-        generation: record.generation(),
-        schema_version: record.schema().schema_version(),
-        schema_fingerprint: None,
-    }
-}
-
-fn memory_ledger_generation_response(generation: GenerationRecord) -> MemoryLedgerGenerationEntry {
-    MemoryLedgerGenerationEntry {
-        generation: generation.generation(),
-        parent_generation: Some(generation.parent_generation()),
-        runtime_fingerprint: generation.runtime_fingerprint().map(str::to_string),
-        declaration_count: generation.declaration_count(),
-        committed_at: generation.committed_at(),
+        AllocationState::Retired => MemoryAllocationState::Retired,
     }
 }
 

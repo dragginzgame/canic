@@ -4,6 +4,8 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 # shellcheck source=/dev/null
 source "$ROOT/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/ci/ic-tool-pins.sh"
 
 LATEST_RELEASE_URL="https://github.com/WebAssembly/binaryen/releases/latest"
 

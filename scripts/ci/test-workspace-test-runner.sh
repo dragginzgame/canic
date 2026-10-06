@@ -10,6 +10,9 @@ cp "$ROOT/scripts/ci/run-workspace-tests.sh" \
     "$ROOT/scripts/ci/list-internal-native-tests.sh" \
     "$ROOT/scripts/ci/workspace-test-inventory.tsv" "$fixture/scripts/ci/"
 cp "$ROOT/tool-versions.env" "$fixture/"
+mkdir -p "$fixture/ci" "$fixture/scripts/ci"
+cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
+cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 
 # Exercise the real runner's ordering, exit and cleanup boundaries without
 # building crates, opening sockets or executing canisters.

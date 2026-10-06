@@ -1203,6 +1203,8 @@ fn memory_ledger_dto_candid_shape_includes_backing_memory_size() {
 
     assert!(
         ledger_env.contains("memories : vec MemoryLedgerMemoryEntry")
+            && ledger_env.contains("ledger_memory_manager_id : nat8")
+            && ledger_env.contains("schema_version : opt nat32")
             && ledger_env.contains("type MemoryLedgerMemoryEntry = record")
             && ledger_env.contains("memory_manager_id : nat8")
             && ledger_env.contains("stable_key : text")

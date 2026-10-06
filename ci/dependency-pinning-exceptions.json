@@ -1,0 +1,66 @@
+[
+  {
+    "rule": "cargo-exact",
+    "file": "Cargo.toml",
+    "subject": "ic-agent",
+    "value": "=0.49.2",
+    "reason": "Retain the qualified deposit/certification and native identity protocol boundary; changing this selection needs focused protocol qualification.",
+    "evidence": "docs/design/0.110-fleet-runtime-contraction/0.110-design.md"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "Cargo.toml",
+    "subject": "ic-secp256k1",
+    "value": "=0.3.0",
+    "reason": "Retain the qualified host batch-signature boundary and its concrete upstream public signing API.",
+    "evidence": "docs/audits/reports/2026-09/2026-09-28/pr32-toko-auth.md"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "integrations/blob-service/Cargo.toml",
+    "subject": "ic-blob-storage",
+    "value": "=0.14.9",
+    "reason": "The independent optional blob integration is bound to the qualified 0.14.9/0.25 memory composition; its current-runtime adoption has a separate owner.",
+    "evidence": "docs/features/blob-storage/README.md"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/Cargo.toml",
+    "subject": "candid",
+    "value": "=0.10.36",
+    "reason": "Immutable historical synthetic qualification harness; preserve the exact recorded dependency selection for reproduction.",
+    "evidence": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/result.json"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/Cargo.toml",
+    "subject": "ic-testkit",
+    "value": "=0.10.0",
+    "reason": "Immutable historical synthetic qualification harness; preserve the exact recorded dependency selection for reproduction.",
+    "evidence": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/result.json"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/Cargo.toml",
+    "subject": "pocket-ic",
+    "value": "=16.0.0",
+    "reason": "Immutable historical synthetic qualification harness; preserve the exact recorded dependency selection for reproduction.",
+    "evidence": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/result.json"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/Cargo.toml",
+    "subject": "sha2",
+    "value": "=0.10.9",
+    "reason": "Immutable historical synthetic qualification harness; preserve the exact recorded dependency selection for reproduction.",
+    "evidence": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/result.json"
+  },
+  {
+    "rule": "cargo-exact",
+    "file": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/Cargo.toml",
+    "subject": "wasmparser",
+    "value": "=0.247.0",
+    "reason": "Immutable historical synthetic qualification harness; preserve the exact recorded dependency selection for reproduction.",
+    "evidence": "docs/audits/reports/2026-09/2026-09-24/release-binding-feasibility/result.json"
+  }
+]

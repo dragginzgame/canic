@@ -9,6 +9,8 @@ source "$ROOT/scripts/ci/native-icp-lib.sh"
 required_version="$(
     # shellcheck source=/dev/null
     source "$ROOT/tool-versions.env"
+    # shellcheck source=/dev/null
+    source "$ROOT/scripts/ci/ic-tool-pins.sh"
     printf '%s' "$CANIC_ICP_CLI_VERSION"
 )"
 fixture="$(mktemp -d)"

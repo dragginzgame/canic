@@ -205,6 +205,8 @@ start_owned_pocketic_server() {
     required_icp_version="$(
         # shellcheck source=/dev/null
         source "$ROOT/tool-versions.env"
+        # shellcheck source=/dev/null
+        source "$ROOT/scripts/ci/ic-tool-pins.sh"
         printf '%s' "$CANIC_ICP_CLI_VERSION"
     )"
     use_native_test_icp "$CANIC_TEST_SCRATCH" "$required_icp_version"
@@ -738,7 +740,9 @@ if [ "$PLAN_ONLY" -eq 0 ]; then
     # metadata. Populate the complete locked graph once so results do not depend on
     # whether the restored Cargo cache contains every target and host/build package.
     if [[ ("$MODE" == "full" || "$MODE" == "pocketic" || "$MODE" == "targeted-pocketic") && -z "${POCKET_IC_BIN:-}" ]]; then
-        POCKET_IC_BIN="$(bash scripts/ci/install-pocketic.sh)"
+        bash scripts/dev/install-ic-tools.sh --check >/dev/null
+        POCKET_IC_BIN="$ROOT/.tools/ic/bin/pocket-ic"
+        bash scripts/ci/check-pocketic-version-alignment.sh
         export POCKET_IC_BIN
         echo "==> using pinned PocketIC server binary: $POCKET_IC_BIN"
     else

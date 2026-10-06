@@ -91,7 +91,7 @@ impl RootIssuerRenewalWorkflow {
             return false;
         };
         ic_cdk::futures::spawn(async move {
-            let result = Self::run_scheduled().await;
+            let result = crate::perf::with_async_context(Self::run_scheduled()).await;
             let _ = AsyncJobWorkflow::finish(attempt, result);
         });
         true
@@ -339,7 +339,7 @@ impl RootIssuerRenewalWorkflow {
         let registration = register_once(
             Self::timer_identity()?,
             DeclarationLifetime::Retained,
-            |_context: OnceContext| async { Self::run_registered().await },
+            |_context: OnceContext| crate::perf::with_async_context(Self::run_registered()),
         )?;
         retain_owned_once(&RENEWAL_TIMER, registration)
     }

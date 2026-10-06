@@ -45,3 +45,6 @@ target/
 .canic
 .backups
 node_modules/
+
+/.tools/
+/.shared-tooling-refresh.*/

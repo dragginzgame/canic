@@ -15,3 +15,5 @@
 /tool-versions.env @dragginzgame
 /docs/governance/ci-deployment.md @dragginzgame
 /docs/governance/supported-platforms.md @dragginzgame
+
+/ci/ @dragginzgame

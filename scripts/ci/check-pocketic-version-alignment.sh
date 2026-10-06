@@ -12,6 +12,8 @@ fi
 
 # shellcheck source=/dev/null
 source "$TOOLS"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/ci/ic-tool-pins.sh"
 
 locked_versions=()
 while IFS= read -r version; do
@@ -42,7 +44,7 @@ fi
 
 locked_version="${locked_versions[0]}"
 if [ "$locked_version" != "$CANIC_POCKET_IC_VERSION" ]; then
-    echo "PocketIC version alignment failed: Cargo.lock resolves $locked_version but tool-versions.env pins $CANIC_POCKET_IC_VERSION" >&2
+    echo "PocketIC version alignment failed: Cargo.lock resolves $locked_version but ci/ic-tools.tsv pins $CANIC_POCKET_IC_VERSION" >&2
     exit 1
 fi
 

@@ -3,6 +3,295 @@
 This file records implementation and validation handoffs. Track bugs, review
 findings and follow-up work in [GitHub issues](https://github.com/dragginzgame/canic/issues).
 
+## Management-canister types adoption — 2026-10-06
+
+The direct workspace requirement now selects registry `ic-management-canister-types
+0.11`, locked at `0.11.0`. Its only direct consumer is the runtime probe; HTTP
+requests explicitly retain pricing version 1 to match their existing cycle quote.
+`ic-agent` keeps its required transitive `0.8.0`. The initial types update
+preserved other selections; later concurrent maintainer updates are retained.
+
+Strict native runtime-probe Clippy and the exact governed interleaving PocketIC
+case pass. A freshness check found the retained allocation peer differed from
+the current checkout. Its refresh confirms reproducible bytes; the owning
+managed-component-group child-lifecycle PocketIC case then passes, including
+independent embedded-peer verification and same-release restoration
+([#450](https://github.com/dragginzgame/canic/issues/450)). Evidence is retained under
+`target/review-validation/management-types-*`. The initial direct Wasm lint
+attempt hit the canonical role-build guard; governed fixture builds qualify the
+actual Wasm. The initial sandboxed PocketIC attempt could not bind localhost;
+the permitted exact retry passes. Earlier failures remain retained.
+
+After the first qualification, concurrent updates selected Host Tools 0.1.13,
+Memory 0.28.1, Query 0.47.3 and Testkit 0.19.1. Explicit locked cache preparation,
+peer refresh, strict native fixture Clippy and both exact PocketIC cases pass
+again on that graph. Final logs use `management-types-current-*`; earlier logs
+and the intermediate peer receipt retain their original graph identity.
+The final lock SHA-256 is
+`7362388043d5c6d5eeae08f02c0c19c11cf712f0f4159181669916768501beef`;
+peer source digest is `b364527eb41a5a38fe25d202d74cee205fdfa56d04d29ac3ebb2002f2ec05be6`
+and artifact SHA-256 is `00c23d513a6729c4de613c6dc2ed4093962bfda670cb928fbb9b79c62925c1e9`.
+Manifest, lock and probe hashes remained unchanged through final qualification.
+Changes are uncommitted and extend both pending 0.110.53 notes. This compatible
+dependency/fixture update does not resolve the complete batch's #457 or #459
+boundary; no broad validation, release, Git publication or deployment ran.
+
+## Consumer-owned instruction reader — 2026-10-06
+
+The performance adapter now calls the existing CDK counter-1 API directly and
+removes ic-metrics' `ic` feature selection. Published 0.1 arithmetic stays selected
+until the shared library's arithmetic-only 0.2 publication. Native zero, exclusive
+nesting, async invocation/checkpoint identity and report fields are unchanged.
+[ic-metrics #10](https://github.com/dragginzgame/ic-metrics/issues/10) coordinates the cut and later registry adoption.
+This compatible adapter edit extends both pending 0.110.53 notes; independent
+breaking changes and the human-owned minor boundary remain as recorded below.
+On the current concurrent locked graph (ic-memory 0.28.0, ic-testkit 0.19.0),
+strict Core library/tests and Wasm library Clippy pass, along with eight named
+performance tests. The single governed PocketIC
+`interleaved_endpoint_and_checkpoint_metrics_preserve_call_contexts` case passes
+against actual IC counters in both completion orders, after its inventory
+preflight. Manifest/lock/performance-source hashes stayed unchanged. Inputs,
+source hashes and logs are retained in ic-metrics'
+`target/evidence/arithmetic-cut-020/canic/`. This is focused Linux/IC proof; older
+hosted results do not qualify this worktree and no full local gate ran. The
+prepared shared adapter still needs its own release and coordinated adoption;
+a later concurrent fixture/PocketIC graph edit adding management types 0.11 was
+rechecked with strict native runtime-probe lint and the same exact governed IC
+case. Five new input hashes match; the runner used its admitted Wasm cache.
+An attempted direct fixture Wasm check was rejected by the canonical build guard
+and retained in the separate recheck log; the guard was not bypassed. No
+commit, real staging, version change or publication ran.
+
+## Shared Tooling and Host SDK delegation — 2026-10-06
+
+The maintainer accepted working through the delegation audit. Canic now adopts
+41 exact files from committed Shared Tooling
+`a37771f1b6b5fc9a88ed6ab3b705bdda35cd8fa3`; dirty sibling work was excluded.
+Explicit repository tool setup/offline checking and CI use the common matrix,
+retiring duplicate IC installers and implicit PocketIC downloads. The declaration
+checker preserves scoped existing exact requirements. Eight negative role-contract
+manifests become `.fixture` templates materialized by their owning tests.
+The checker passes against an isolated reviewed index/object view; the real index
+is unchanged, so its normal file inventory reflects these renames only after the
+maintainer records them. This delegation work preserves dependency selections
+and package versions; concurrent maintainer dependency updates were retained.
+
+Host delegates executable filesystem resolution to the existing registry
+`ic-host-tools 0.1.12`, retaining preferred installation order, literal paths,
+npm distribution policy and selected-candidate admission. Rust Binaryen
+installation retains the macOS executable/library bundle and atomically selects
+it only after qualification. Archive-derived library hashes join executable
+admission before version execution. The
+[library authority evidence](../audits/reports/2026-10/2026-10-06/binaryen-library-authority.md)
+records both reviewed macOS archives without claiming native execution.
+
+Late release checks validate the selected commit's archived metadata, source-bound
+receipt, version/date, exact Cargo transaction and annotated tag independently
+of newer HEAD/worktree metadata. The shared runner retains unfinished-intent
+reconciliation. Canic's isolated formatting adapter omits unrelated historical
+symlinks from its scratch view while preserving their real index entries; the
+unchanged shared installer refuses to replace existing hook configuration.
+Generic audit definitions now use shared methods with local product overlays;
+frozen reports/definitions remain historical and changed comparisons are
+non-comparable. The [adoption walk](../audits/reports/2026-10/2026-10-06/shared-method-adoption.md)
+maps retained obligations without rerunning a product audit.
+
+Twenty-seven focused Host tests pass, covering installation/admission, executable
+resolution and role-template materialization. Final qualification preserves the
+concurrently selected Host Tools 0.1.12, Memory 0.28.0, Metrics 0.1.9, Query 0.47.2,
+Testkit 0.19.0 and Timers 0.13.5. The manifest and lock remained byte-identical
+through all final tests and strict Host library/test Clippy, all features and
+locked/offline. Evidence is retained in
+`target/review-validation/host-delegation-final.log` and
+`host-delegation-graph.sha256`; lock SHA-256 is
+`e874292b9366fe9aa7ff87f237edcf3aa805c68afed804d98fd5d8f5a7a606b5`.
+Earlier attempts were stopped when dependency inputs changed; one template
+attempt lacked offline child resolution. Actual Linux
+shared setup/offline verification, installer fixtures, hook preservation/setup,
+release recovery/recipe/lane fixtures, declaration checks, snapshot/catalog/link
+checks, scoped shell/workflow lint and formatting pass. Native macOS CI now owns
+the actual Rust installer, resolver and hook proofs on both architectures;
+those executions remain outstanding. No full workspace or deployment gate ran.
+
+The ready in-repository delegation work is reviewable and uncommitted:
+[#461](https://github.com/dragginzgame/canic/issues/461),
+[#458](https://github.com/dragginzgame/canic/issues/458),
+[#464](https://github.com/dragginzgame/canic/issues/464),
+[#453](https://github.com/dragginzgame/canic/issues/453),
+[#454](https://github.com/dragginzgame/canic/issues/454) and
+[#460](https://github.com/dragginzgame/canic/issues/460) own the respective work.
+Complete bounded Candid/process/Git delegation still needs trusted executable
+authority and explicit source/output/deadline/environment bounds; current Candid
+normalization remains delegated. Whole release-batch push/publication readiness
+is still unestablished because #457 remains unresolved and the memory/performance
+hard cuts require the human-owned minor boundary in #459. Both changelog views
+extend the existing pending 0.110.53 entry and preserve that version conflict.
+No commit, real staging, tag, push, repository version transaction, live deployment or sibling
+mutation occurred; retained release/build artifacts remain intact.
+
+## Invocation-owned performance accounting — 2026-10-06
+
+[#99](https://github.com/dragginzgame/canic/issues/99) is implemented and qualified
+in the uncommitted checkout. Each async endpoint owns its frames and checkpoint
+baseline, activated only during its future polls. Synchronous nested work retains
+exclusive accounting. Pending polls, cancellation and native unwind restore the
+enclosing context. Lifecycle and issuer-renewal futures establish their own
+checkpoint contexts; application futures can use `api::ops::with_async_perf_context`
+within one IC call context. Unscoped checkpoints produce no sample.
+
+All eight focused Core perf tests, fifteen endpoint expansion tests and the
+public checkpoint-macro test pass. Strict native Core/Macros/Facade/Internal
+target Clippy and runtime-probe Wasm Clippy pass, locked/offline. The real IC
+interleaving proof passes with both completion orders: endpoint totals and first
+and resumed checkpoints remain within independent call-context counter brackets.
+Final evidence is under `target/test-runs/20261006T104815Z-577601.ww6EVz/`.
+The refreshed public embedded peer also passes the child lifecycle and same-release
+restoration case at `target/test-runs/20261006T105343Z-643154.mFIi0e/`.
+Refresh reproduces the exact bytes and independent fixture verification passes.
+
+Final qualification preserves the concurrent lock selections `ic-metrics 0.1.8`,
+`ic-host-tools 0.1.10`, `ic-query 0.47.1`, `ic-memory 0.27.1` and `ic-timers 0.13.5`.
+The receipt binds lock `2614292dc4b16c44727a8c19e87e25076142c274e648181e49df3b5a55383771`,
+source digest `be653be572dd1b49a050258add0f3b8bb9bdb1c7d61dbebc637b481686cb2be8`
+and artifact `a3c17fb4d944b0a0123ed3614b3eb72c30ad06e4191d6251c6bfbe491a548d2b`.
+Earlier lookup cost figures bind their pre-repair sources, not these wrappers.
+No complete workspace, macOS, release or deployment gate ran for this repair.
+
+Direct Core dispatch enter/exit callers must adopt scoped measurement, and
+background checkpoint callers must establish a context. The instrumentation
+hard cut joins the memory hard cut in requiring a minor release; the selected
+pending `0.110.53` patch remains incompatible. Both changelog views record this.
+Package versions remain 0.110.52. Full-batch push/publication readiness remains
+unestablished while [#457](https://github.com/dragginzgame/canic/issues/457) and the
+human-owned minor boundary described in [#459](https://github.com/dragginzgame/canic/issues/459)
+remain unresolved.
+
+## Host tools adoption — 2026-10-06
+
+The initial Host adoption selected published registry `ic-host-tools 0.1.9` for Wasm
+structural inspection, Candid normalization, bounded admitted-descriptor reads,
+tool-file SHA-256 and gzip decoding. Canic retains admission, install limits,
+exact transform contracts and artifact publication. Trailing compressed bytes
+and extra gzip members are rejected; original file I/O error kinds are retained.
+Seven superseded local readers/normalizers are removed. Public ICP response
+decoding retains its detailed Canic error payloads; that API is not changed here.
+
+All 44 selected Host tests pass with default features against `ic-memory 0.27.1`,
+`ic-query 0.47.0`, `ic-metrics 0.1.7` and `ic-timers 0.13.5` in the primary
+checkout, after an isolated 0.26.2 diagnostic run. The installed
+real-extractor test remains intentionally ignored; native extractor fixtures
+cover normalization/cache behavior. Warning-denied Clippy passes for all
+Core/Host/Internal targets/features on the final Host tools 0.1.9 graph and for
+the changed Canic protocol target. Core Wasm library Clippy also passes; the Host
+SDK is excluded from that runtime graph. No full workspace or macOS gate ran.
+
+The [adoption](https://github.com/dragginzgame/canic/issues/458) is uncommitted.
+Host tools 0.1.8's exact `tar 0.4.40` constraint initially failed the dependency
+gate. Published 0.1.9 permits selecting patched `tar 0.4.46`; the prior rustix
+1.1.5 selection is restored. Current RustSec audit and Canic's dependency-risk
+gate pass with zero vulnerabilities and the two previously reviewed transitive
+warnings. [Upstream #3](https://github.com/dragginzgame/ic-host-tools/issues/3)
+records the remaining minimum-version recommendation. No Cargo override,
+advisory exception or sibling repository edit is introduced.
+
+## Current memory ledger adoption — 2026-10-06
+
+The maintainer explicitly requested completing the concurrent `ic-memory 0.27`
+selection. The lock now resolves published `0.27.1`. Core removes upstream
+history projections and reports the exact ledger anchor, checked commit counter,
+recovery slots, retained ownership/state and latest declared schema version.
+The memory DTO module moves to `dto/memory/mod.rs`; its ordinary module identity
+is unchanged. Current retirement preserves claimed IDs. No history is fabricated.
+
+All 15 focused memory adapter tests, four stable-memory ABI guards and the
+selected public memory Candid-shape test pass with all features, locked/offline
+on the final graph. The memory DTO enum round-trip and Core Wasm Clippy also pass.
+The
+[migration](https://github.com/dragginzgame/canic/issues/459) changes public
+diagnostic DTOs and persisted ledger bytes, requiring updated consumers and
+clean reinstall. Shared Tooling therefore requires a minor release; the selected
+`0.110.53` patch conflicts with this hard cut. Both draft changelog views flag
+that conflict. Package versions remain 0.110.52; no minor closeout verdict,
+version transaction, Git publication or deployment is implied.
+
+The two optional blob consumer workspaces still select `ic-memory 0.25` with
+`ic-blob-storage 0.14.9`; their earlier composition proof is not current for
+Core 0.27. [#444](https://github.com/dragginzgame/canic/issues/444) owns that
+independent integration boundary. Full-batch push/publication readiness is not
+established.
+
+## Focused PocketIC fixture correction — 2026-10-06
+
+The retained governed run is
+`target/test-runs/20261006T073404Z-1450918.6mpRHX/10.log`. Synthetic lifecycle
+fixtures now complete receiver opening and startup release before admission
+checks. The imported-pool fixture allows only observed, time-bounded IC idle
+debit for its unclaimed empty asset. These changes are uncommitted and extend
+the pending 0.110.53 notes; formatting and whitespace checks pass.
+
+The first exact direct-ingress regression stopped in locked dependency prefetch,
+before compilation or PocketIC: the concurrently edited manifest requires
+`ic-memory 0.27`, while that attempt's lockfile retained `0.26.2`. The memory
+adoption above now aligns source and lock. All four corrected cases pass through
+the exact governed runner: the three managed-admission journeys and the imported
+pool refresh/claim cycle test. Their retained evidence is respectively under
+`target/test-runs/20261006T093356Z-3530354.CKWSCe/`,
+`20261006T093753Z-3580448.IoXrQi/`, `20261006T093933Z-3613230.RLnY5O/`
+and `20261006T094310Z-3695898.XNCKeX/`. The refreshed embedded peer's child lifecycle
+proof also passes at `20261006T093937Z-3614558.5bMOM6/`. These PocketIC proofs used
+Host tools 0.1.8 and the current memory/metrics/query/timer selections before the
+compatible Host dependency correction. Dependency/performance edits are preserved.
+[#457](https://github.com/dragginzgame/canic/issues/457) retains the two initial
+working-Fleet membership stalls; their retry policy is unchanged. Full-batch
+push/publication readiness is not established;
+no broad gate, version transaction or Git publication ran for this correction.
+
+## Fixture lock preservation — 2026-10-06
+
+Final Host tools qualification exposed an embedded-peer producer defect:
+`cargo update --workspace --offline` could reselect external packages while
+normalizing Canic's private fixture version. The producer now derives workspace
+ownership from Cargo metadata, rewrites only owned manifest/lock identities and
+exact local references, and requires Cargo to accept the snapshot with
+`--locked --offline`. External registry/Git selections and unrelated path
+requirements remain unchanged, including version-coincident dependencies and
+registry-qualified references.
+
+Four focused normalizer/evidence tests and the explicit real-Wasm reproduction
+across paths and fixture versions pass; the latter also rejects changed producer
+code and verifies primary manifest/lock bytes remain intact. Internal strict
+Clippy passes after the change. Final refresh reproduces the artifact bytes
+and independent verification passes. The receipt binds primary lock SHA-256
+`ab80dd031ceeb0edb3fedc2524f75fa07930b6fa9bf577b5446345547b5e3727`,
+producer lock `5603ed4a9b66186678d199a31286366fd90778f8c50a804b72155fade933f244`,
+source digest `a6e01e9e432f74fff102f31c483b6730003401a0f3b384eb0e7bfa59e5a9af74`
+and artifact `65fd3923632b950b0da11c5e7634609f1d4edd8e829ee01d37a53f2c9c53c34a`.
+The compatible SDK correction leaves the previously qualified PocketIC peer
+bytes unchanged. [#450](https://github.com/dragginzgame/canic/issues/450) owns
+this producer correction; #458/#459 own the integrations. Changes remain
+uncommitted and the full-batch blockers above remain open.
+
+## Performance lookup work — 2026-10-06
+
+The compatible pending 0.110.53 batch borrows repeated endpoint/checkpoint keys
+and collects performance entries in the map's existing order. Public keys,
+report ordering, zero/saturation/reset contracts and attribution functions are
+preserved. The [evidence record](../audits/reports/2026-10/2026-10-06/metrics-lookup.md)
+binds sources, dependencies, artifacts and focused commands.
+
+In actual local IC fixtures, repeated endpoint/checkpoint instructions fall
+about 53%/60%, and raw Wasm shrinks 3,698 bytes. New-key instructions rise about
+85% because a borrowed miss is followed by owned insertion. These changes favor
+stable keys; they are not whole-managed-canister or universal savings.
+
+Native/Wasm strict Core Clippy, all five selected perf tests and the Rust 1.91
+Wasm library check pass after formatting. Package versions and dependency
+selections are unchanged; the implementation and notes remain uncommitted.
+No broad gate, macOS execution, release or publication ran for this batch.
+A real async interleaving probe confirms both endpoint totals are outside their
+own IC intervals. [#99](https://github.com/dragginzgame/canic/issues/99#issuecomment-6012668977)
+records that earlier evidence; the repair and current qualification appear above.
+
 ## Embedded allocation peer refresh — 2026-10-06
 
 The maintainer's retained run

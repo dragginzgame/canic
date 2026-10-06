@@ -6,10 +6,10 @@
 mod tests;
 
 use crate::release_set::{GZIP_MAGIC, WASM_MAGIC};
-use std::io::{self, Read};
+use std::io;
 
 use canic_core::cdk::utils::hash::sha256_hex;
-use flate2::read::GzDecoder;
+use ic_host_tools::artifact::{ArtifactError, GzipError, decode_gzip};
 
 ///
 /// QualifiedRepresentation
@@ -66,11 +66,15 @@ pub(in crate::release_set) fn qualify_representation(
         .map_err(|_| RepresentationError::ArtifactSizeOverflow { kind: "raw Wasm" })?;
     let wasm_gz_size_bytes = u64::try_from(wasm_gz.len())
         .map_err(|_| RepresentationError::ArtifactSizeOverflow { kind: "gzip Wasm" })?;
-    let mut decoded = Vec::new();
-    GzDecoder::new(wasm_gz)
-        .take(wasm_size_bytes.saturating_add(1))
-        .read_to_end(&mut decoded)
-        .map_err(|source| RepresentationError::InvalidGzip { source })?;
+    let decoded =
+        decode_gzip(wasm_gz, wasm_gz.len(), wasm.len()).map_err(|source| match source {
+            GzipError::Decode(ArtifactError::LimitExceeded { .. }) => {
+                RepresentationError::RepresentationMismatch
+            }
+            source => RepresentationError::InvalidGzip {
+                source: io::Error::new(io::ErrorKind::InvalidData, source),
+            },
+        })?;
     if decoded != wasm {
         return Err(RepresentationError::RepresentationMismatch);
     }

@@ -3027,6 +3027,13 @@ exec icp "$@"
         let retained = root_pool_status(&pic, fixture.root_id);
         assert_eq!(retained.ready, 2);
         assert_eq!(retained.failed, 0);
+        let small_status = pic
+            .canister_status(small, Some(fixture.root_id))
+            .expect("observe idle charges for the unclaimed empty pool asset");
+        let small_idle_allowance =
+            u128::try_from(small_status.idle_cycles_burned_per_day.0).unwrap();
+        assert!(small_idle_allowance < 2_000_000_000_000);
+        let retained_at_ns = pic.get_time().as_nanos_since_unix_epoch();
         let small_retained_balance = pic.cycle_balance(small);
         let large_retained_balance = pic.cycle_balance(large);
         assert!((2_000_000_000_000..2_010_000_000_000).contains(&small_retained_balance));
@@ -3158,7 +3165,10 @@ exec icp "$@"
             large_entry.status,
             CanisterPoolAssetStatus::Workload { .. }
         ));
-        assert_eq!(pic.cycle_balance(small), small_retained_balance);
+        // The empty Ready asset cannot execute application work, but IC idle
+        // charges still accrue while Root upgrades and provisions its sibling.
+        assert!(pic.get_time().as_nanos_since_unix_epoch() - retained_at_ns < 86_400_000_000_000);
+        assert_stopped_fixture_balance(&pic, small, small_retained_balance, small_idle_allowance);
     }
 
     #[test]

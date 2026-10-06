@@ -10,6 +10,24 @@ Global run, state, safety, comparison, evidence, and retention rules are in
 [META-AUDIT.md](META-AUDIT.md). Prepared/frozen content identities are recorded
 in [method-fingerprints-v1.md](method-fingerprints-v1.md).
 
+## Shared structural method ownership
+
+The reviewed [shared methods](../../audits/README.md) at snapshot
+`a37771f1b6b5fc9a88ed6ab3b705bdda35cd8fa3` own generic review questions,
+finding severity and report verdicts for the structural overlays below.
+The local definitions retain Canic scope, product obligations and selected proofs.
+They supersede the historical scored definitions; changed comparisons are
+`N/A (method change)`. Auth, lifecycle, layering, paid-effect safety and measured
+instruction/Wasm methods remain independent property owners.
+
+| Local entrypoint | Shared method | Retained Canic obligation |
+| --- | --- | --- |
+| Code hygiene governance | [Code hygiene](../../audits/code-hygiene.md) | Local Rust style, typed failures and generated/host/runtime source boundaries |
+| DRY consolidation | [Flow convergence](../../audits/flow-convergence-and-duplication.md) | CLI/Host/Backup/runtime producer-to-result ownership and protective separation |
+| Complexity and change friction | [Complexity/debt](../../audits/complexity-and-technical-debt.md) | Current axes and actual edit evidence; historical measurement inputs stay local |
+| Module structure and surface hardening | [Module hardening](../../audits/module-surface-hardening.md) | Facade/generated consumers, visibility, runtime shape and retained recovery |
+| Finding-backed cleanup | [Module cleanup](../../audits/module-cleanup.md) | Targeted proofs, generator propagation, changelog and complete deletion inventory |
+
 ## Mandatory Trace Protocol
 
 [CANIC-MANDATORY-TRACE-001/v1](mandatory-trace-protocol.md) owns the common
@@ -42,13 +60,13 @@ retained-method owner below.
 | `access-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns access-boundary placement; run after access or endpoint-auth changes. |
 | `bootstrap-lifecycle-symmetry.md` | `revise` | `CANIC-LIFECYCLE-001/v4` | invariant/manual | Lifecycle boundary; run after lifecycle, restore, bootstrap, timer, or start-macro changes. |
 | `capability-surface.md` | `revise` | `CANIC-CAPABILITY-SURFACE-001/v2` | trend/invariant | Public capability and generated endpoint surface; run after endpoint bundle/Candid changes. |
-| `change-friction.md` | `retain` | `CANIC-CHANGE-FRICTION-001/v3` | trend/manual | Reproducible empirical edit blast radius with an exhaustive map, frozen sample, and one score; run for hardening/refactor planning. |
-| `complexity-accretion.md` | `retain` | `CANIC-COMPLEXITY-001/v3` | trend/manual | Structural complexity with deterministic scope/counters/scoring; run after cross-cutting model/control-flow growth. |
+| `change-friction.md` | `retain` | `CANIC-CHANGE-FRICTION-001/v4` | trend/manual | Observed edit blast radius with an exhaustive owner map and concrete change rehearsals; run for hardening/refactor planning. |
+| `complexity-accretion.md` | `retain` | `CANIC-COMPLEXITY-001/v4` | trend/manual | Current decision axes, ownership spread and finding-based debt review; run after cross-cutting model/control-flow growth. |
 | `dependency-hygiene.md` | `revise` | `CANIC-DEPENDENCY-001/v3` | invariant/trend | Cargo graph, feature, advisory, declared-license metadata, and lockfile posture; run after dependency/package graph changes and before closeout. |
-| `dry-consolidation.md` | `revise` | `CANIC-DUPLICATION-001/v1` | manual | Duplicate behavior/authority; run after broad host/CLI/runtime workflow work. |
+| `dry-consolidation.md` | `revise` | `CANIC-DUPLICATION-001/v3` | manual | Duplicate behavior/authority; run after broad host/CLI/runtime workflow work. |
 | `instruction-footprint.md` | `retain` | `CANIC-INSTRUCTION-001/v3` | measured | Fixed authoritative update/install instruction roster and checkpoint coverage; run after relevant hot-path changes or explicit perf review. |
 | `layer-violations.md` | `revise` | `CANIC-LAYERING-001/v2` | invariant/manual | Canonical architecture owner; run after layer, data-shape, conversion, endpoint, workflow, policy, ops, or model changes. |
-| `module-structure.md` | `revise` | `CANIC-STRUCTURE-001/v2` | invariant/trend | Module topology and visibility; run after crate/module/public-surface changes. |
+| `module-structure.md` | `revise` | `CANIC-STRUCTURE-001/v3` | invariant/trend | Module topology and visibility; run after crate/module/public-surface changes. |
 | `ops-purity.md` | `merge` | `CANIC-LAYERING-001/v2` | invariant | Layering owns ops responsibility and side-effect placement. |
 | `publish-surface.md` | `revise` | `CANIC-PUBLISH-001/v2` | invariant/trend | Published package and downstream contract; run after features, packaging, docs.rs, examples, or public crate changes. |
 | `security-boundary-ordering.md` | `revise` | `CANIC-AUTH-ORDERING-001/v1` | invariant/manual | Cross-stage auth/replay/capability order; run after security-boundary sequencing changes. |
@@ -77,7 +95,7 @@ release-line closeout.
 
 | Candidate | Disposition | Outcome |
 | --- | --- | --- |
-| `module-surface-hardening.md` | `manual_only` | `CANIC-MODULE-SURFACE-001/v2.3`; versioned reviewer protocol for requested module-surface work. |
+| `module-surface-hardening.md` | `manual_only` | `CANIC-MODULE-SURFACE-001/v2.4`; versioned reviewer protocol for requested module-surface work. |
 | `module-cleanup-runner.md` | `retire` | Retired as an independent audit. It remains only as a finding-backed implementation workflow and cannot issue a separate audit verdict. |
 
 ## Operational Candidates

@@ -1,6 +1,7 @@
 #![expect(clippy::unused_async)]
 
 mod history_cost;
+mod perf_context;
 mod process_fixture;
 
 use canic::{

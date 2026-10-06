@@ -4,11 +4,13 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 # shellcheck source=scripts/ci/require-jq.sh
-source "$ROOT/scripts/ci/require-jq.sh"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-jq-selection.XXXXXX")"
 trap 'rm -rf "$fixture"' EXIT
 real_bash="$(command -v bash)"
 mkdir -p "$fixture/path" "$fixture/empty" "$fixture/custom tools"
+mkdir -p "$fixture/scripts/ci"
+cp "$ROOT/scripts/ci/require-jq.sh" "$fixture/scripts/ci/"
+source "$fixture/scripts/ci/require-jq.sh"
 for executable in path/jq 'custom tools/jq' fallback; do
     printf '#!/bin/sh\nprintf "%%s\\n" "$0"\n' >"$fixture/$executable"
     chmod +x "$fixture/$executable"
@@ -50,4 +52,13 @@ chmod -x "$fixture/fallback"
         exit 1
     fi
 )
-echo 'jq selection: explicit path, PATH, fallback, spaces, directory changes and refusal passed'
+mkdir -p "$fixture/.tools/host/bin"
+cp "$fixture/path/jq" "$fixture/.tools/host/bin/jq"
+(
+    unset JQ_BIN
+    PATH="$fixture/path"
+    [[ "$(resolve_jq_executable "$fixture/fallback")" == "$fixture/.tools/host/bin/jq" ]]
+    JQ_BIN="$fixture/custom tools/jq"
+    [[ "$(resolve_jq_executable "$fixture/fallback")" == "$JQ_BIN" ]]
+)
+echo 'jq selection: explicit path, prepared repository tool, PATH, fallback and refusal passed'

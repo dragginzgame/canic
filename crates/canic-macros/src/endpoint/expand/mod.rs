@@ -107,12 +107,14 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
     } else {
         dispatch_call
     };
+    let async_context_lint = async_context_attribute(impl_async);
 
     quote! {
         #payload_registration
 
         #(#attrs)*
         #[expect(clippy::missing_const_for_fn, clippy::unnecessary_wraps)]
+        #async_context_lint
         #cdk_attr
         #vis #wrapper_sig {
             #call_decl
@@ -128,6 +130,16 @@ pub(super) fn expand(kind: EndpointKind, args: ValidatedArgs, mut func: ItemFn) 
 
         #raw_adapter
     }
+}
+
+// Async instrumentation is deliberately local to the single-threaded IC executor.
+fn async_context_attribute(impl_async: bool) -> Option<TokenStream2> {
+    impl_async.then(|| quote! {
+        #[expect(
+            clippy::future_not_send,
+            reason = "IC endpoint instrumentation retains invocation state on one canister thread"
+        )]
+    })
 }
 
 fn wrapper_signature(original: &Signature, asynchronous: bool, reject_access: bool) -> Signature {
@@ -294,17 +306,18 @@ fn dispatch_call(
     impl_name: syn::Ident,
     args: &[TokenStream2],
 ) -> TokenStream2 {
-    let implementation = if wrapper_async && impl_async {
-        quote!(#impl_name(#(#args),*).await)
+    if wrapper_async && impl_async {
+        quote! {
+            ::canic::__internal::core::dispatch::measure_endpoint_async(
+                #call, async { #impl_name(#(#args),*).await }
+            ).await
+        }
     } else {
-        quote!(#impl_name(#(#args),*))
-    };
-
-    quote! {
-        ::canic::__internal::core::dispatch::enter_endpoint();
-        let __canic_result = #implementation;
-        ::canic::__internal::core::dispatch::exit_endpoint(#call);
-        __canic_result
+        quote! {
+            ::canic::__internal::core::dispatch::measure_endpoint(
+                #call, || #impl_name(#(#args),*)
+            )
+        }
     }
 }
 

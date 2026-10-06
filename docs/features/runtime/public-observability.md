@@ -118,7 +118,13 @@ history, constructing stores, growing memory, writing, or advancing the ledger
 generation. Canic requires an already bootstrapped runtime.
 The 0.14.1 adoption preserves this reporting path and passes its native accounting
 regressions; it does not supply a new IC instruction/cycle measurement.
-`MemoryQuery::ledger()` remains the separate full historical diagnostic API.
+`MemoryQuery::ledger()` is the separate current-ledger diagnostic API. With
+`ic-memory 0.27`, it reports the exact ledger memory ID, checked commit counter
+and recovery slots, retained ownership/state and latest declared schema version.
+It does not report generation events, allocation observation/retirement counters
+or schema history. Retired allocations retain their identity and memory ID.
+The API/ledger hard cut requires updated diagnostic consumers and clean reinstall
+for earlier releases; it adds no predecessor decoding or migration path.
 
 `physical_extent.bytes` measures allocated IC stable memory in canister
 execution and the supplied backing-memory extent in native execution. Format
@@ -264,6 +270,17 @@ and no assignment keys. These ordered prefixes are independent of insertion
 order. Performance and occupancy emit two public rows per input; a sentinel row
 signals truncation. Each family retains the first 256 selected rows and sorts
 that bounded selection by name and canister dimension for reads.
+
+Endpoint instruction measurements belong to each invocation, including its async
+resumptions. Synchronous nested endpoint work is subtracted from its parent;
+unrelated async calls never share frames or checkpoint baselines. `perf!` measures
+from the start of its owned invocation or the previous checkpoint in that same
+invocation. Generated endpoints and framework lifecycle/renewal tasks establish
+this context. Application background futures can wrap their work with
+`canic::api::ops::with_async_perf_context`. Keep each wrapped future within one
+IC call context; migratory tasks need a fresh scope for each method context.
+An unscoped checkpoint produces no sample. A measured zero remains distinct from
+missing interval evidence.
 
 The complete public series name, including family prefix and suffix, must fit
 128 bytes. Oversized checkpoint/role labels remain valid internal instrumentation

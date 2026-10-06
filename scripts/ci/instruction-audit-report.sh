@@ -6,6 +6,8 @@ cd "$ROOT"
 ORIGINAL_ARGS=("$@")
 # shellcheck source=/dev/null
 source "$ROOT/tool-versions.env"
+# shellcheck source=/dev/null
+source "$ROOT/scripts/ci/ic-tool-pins.sh"
 
 METHOD_ID="CANIC-INSTRUCTION-001"
 METHOD_VERSION="3"
@@ -202,14 +204,8 @@ ARTIFACTS_DIR="$DAY_DIR/artifacts/$RUN_STEM"
 mkdir -p "$ARTIFACTS_DIR"
 
 if [[ -z "${POCKET_IC_BIN:-}" ]]; then
-  for candidate in \
-    "$ROOT/.tmp/test-runtime/pocket-ic-server-$CANIC_POCKET_IC_VERSION/pocket-ic" \
-    "/tmp/pocket-ic-server-$CANIC_POCKET_IC_VERSION/pocket-ic"; do
-    if [[ -x "$candidate" ]]; then
-      export POCKET_IC_BIN="$candidate"
-      break
-    fi
-  done
+  bash scripts/dev/install-ic-tools.sh --check >/dev/null
+  export POCKET_IC_BIN="$ROOT/.tools/ic/bin/pocket-ic"
 fi
 if [[ -z "${POCKET_IC_BIN:-}" || ! -x "$POCKET_IC_BIN" ]]; then
   echo "error: pinned PocketIC $CANIC_POCKET_IC_VERSION executable is unavailable; set POCKET_IC_BIN" >&2
