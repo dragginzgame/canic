@@ -15,7 +15,7 @@ case "${1:-}" in
         done < "$paths"
         bash scripts/ci/check-release-draft-ready.sh "${RELEASE_KIND:?}"
         cargo set-version --help >/dev/null
-        cargo fetch --locked --offline
+        cargo fetch --locked
         ;;
     files)
         printf '%s\0' Cargo.toml Cargo.lock scripts/dev/install_dev.sh release-validation.json CHANGELOG.md "docs/changelog/${RELEASE_VERSION%.*}.md"

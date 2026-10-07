@@ -361,6 +361,7 @@ release-integrity-contract-gate:
 	bash scripts/ci/test-release-commit-view.sh
 	bash scripts/ci/test-commit-release.sh
 	bash scripts/ci/test-release-recipes.sh
+	bash scripts/release/test-preflight.sh
 	bash scripts/ci/test-release-validation-lane.sh
 	bash scripts/ci/check-publish-manifest-boundary.sh
 	bash scripts/ci/test-publish-manifest-boundary.sh

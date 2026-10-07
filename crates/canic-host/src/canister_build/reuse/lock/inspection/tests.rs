@@ -1,6 +1,32 @@
 use super::*;
 use crate::test_support::temp_dir;
 
+#[test]
+fn process_text_reading_preserves_exact_bounds_and_utf8_refusal() {
+    let root = temp_dir("bounded-process-text");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("stat");
+    fs::write(&path, b"process").unwrap();
+    assert_eq!(bounded_text(&path, 7).as_deref(), Some("process"));
+    assert_eq!(bounded_text(&path, 6), None);
+    fs::write(&path, [0xff]).unwrap();
+    assert_eq!(bounded_text(&path, 1), None);
+    fs::write(&path, []).unwrap();
+    assert_eq!(bounded_text(&path, 0).as_deref(), Some(""));
+    fs::remove_file(&path).unwrap();
+    assert_eq!(bounded_text(&path, 7), None);
+    fs::remove_dir_all(root).unwrap();
+}
+
+#[cfg(target_os = "linux")]
+#[test]
+fn process_text_reads_procfs_bytes_despite_zero_metadata_length() {
+    let path = Path::new("/proc/self/stat");
+    assert_eq!(fs::metadata(path).unwrap().len(), 0);
+    let contents = bounded_text(path, 4096).unwrap();
+    assert!(parse_process(std::process::id(), &contents).is_some());
+}
+
 fn stat(pid: u32, name: &str, state: &str, start: u64, cpu: u64) -> String {
     let mut fields = vec!["0".to_string(); 20];
     fields[0] = state.into();

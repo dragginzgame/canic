@@ -1,4 +1,18 @@
-use std::{fs, path::Path};
+//! Module: canister_build::candid
+//!
+//! Responsibility: bounded compiled declaration extraction and normalization.
+//! Does not own: tool admission, cache identity or artifact publication.
+//! Boundary: the shared process engine captures the Canic-selected extractor.
+
+use std::{fs, path::Path, time::Duration};
+
+use ic_host_process::tool::{OutputLimits, capture_command};
+
+const EXTRACTION_LIMITS: OutputLimits = OutputLimits {
+    stdout_bytes: crate::MAX_DOCUMENT_READ_BYTES,
+    stderr_bytes: 64 * 1024,
+    timeout: Duration::from_secs(120),
+};
 
 /// Extract the compiled declaration through the canonical tool and normalize whitespace.
 pub fn extract_candid_bytes(debug_wasm_path: &Path) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
@@ -9,28 +23,13 @@ pub(super) fn extract_candid_with_tool(
     debug_wasm_path: &Path,
     extractor: &Path,
 ) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
-    let output = crate::build_environment::command(extractor)
-        .arg(debug_wasm_path)
-        .output()
-        .map_err(|err| {
-            format!(
-                "failed to run candid-extractor for {}: {err}",
-                debug_wasm_path.display()
-            )
-        })?;
-
-    if !output.status.success() {
-        return Err(format!(
-            "candid-extractor failed for {}: {}",
-            debug_wasm_path.display(),
-            String::from_utf8_lossy(&output.stderr)
-        )
-        .into());
-    }
+    let mut command = crate::build_environment::command(extractor);
+    command.arg(debug_wasm_path);
+    let output = capture_command(&mut command, EXTRACTION_LIMITS)?;
 
     // Normalization can add one terminal newline, but never expands the
-    // captured declaration beyond that. Process admission remains Canic-owned.
-    let limit = output.stdout.len().saturating_add(1);
+    // admitted capture beyond that. Process admission remains Canic-owned.
+    let limit = EXTRACTION_LIMITS.stdout_bytes + 1;
     Ok(ic_host_tools::candid::normalize(&output.stdout, limit)?.into_bytes())
 }
 
@@ -56,6 +55,9 @@ pub(super) fn remove_stale_icp_candid_sidecars(artifact_root: &Path) -> std::io:
 
 #[cfg(test)]
 mod tests {
+    use super::*;
+    use crate::test_support::temp_dir;
+    use ic_host_process::tool::{ExecutionFailure, OutputStream, ToolError};
     use ic_host_tools::candid::normalize;
 
     #[test]
@@ -64,5 +66,70 @@ mod tests {
             normalize(b"//  \nservice : {  \n  method : () -> ();\t\n}", 1024).unwrap(),
             "//\nservice : {\n  method : () -> ();\n}\n"
         );
+    }
+
+    #[cfg(unix)]
+    fn run_extractor_script(script: &str) -> Result<Vec<u8>, Box<dyn std::error::Error>> {
+        let root = temp_dir("bounded-candid-extractor");
+        fs::create_dir_all(&root).unwrap();
+        // The shell is the substituted extractor; avoid executing newly written fixture bytes.
+        let wasm = root.join("compiled.wasm");
+        let input = format!("{script}\n");
+        fs::write(&wasm, &input).unwrap();
+        let result = extract_candid_with_tool(&wasm, Path::new("/bin/sh"));
+        assert_eq!(fs::read(&wasm).unwrap(), input.as_bytes());
+        fs::remove_dir_all(root).unwrap();
+        result
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extractor_failure_retains_shared_status_and_diagnostics() {
+        let error =
+            run_extractor_script("printf 'partial declaration'; printf 'diagnostic' >&2; exit 23")
+                .unwrap_err();
+        let error = error.downcast::<ToolError>().unwrap();
+        let failure = error.execution_error().unwrap();
+        assert!(
+            matches!(failure.failure, ExecutionFailure::ExitStatus),
+            "{failure:?}"
+        );
+        assert_eq!(failure.evidence.status.unwrap().code(), Some(23));
+        assert_eq!(failure.evidence.stdout, b"partial declaration");
+        assert_eq!(failure.evidence.stderr, b"diagnostic");
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extractor_capture_refuses_oversized_output_without_returning_partial_candid() {
+        for (stream, limit, redirect) in [
+            (OutputStream::Stdout, EXTRACTION_LIMITS.stdout_bytes, ""),
+            (OutputStream::Stderr, EXTRACTION_LIMITS.stderr_bytes, ">&2"),
+        ] {
+            let error = run_extractor_script(&format!(
+                "perl -e 'print \"x\" x $ARGV[0]' {} {redirect}",
+                limit + 1
+            ))
+            .unwrap_err();
+            let error = error.downcast::<ToolError>().unwrap();
+            assert!(matches!(
+                error.execution_error().unwrap().failure,
+                ExecutionFailure::OutputLimit { stream: actual } if actual == stream
+            ));
+        }
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn extractor_capture_preserves_normalization_and_refuses_non_utf8() {
+        assert_eq!(
+            run_extractor_script("printf 'service : {}  '").unwrap(),
+            b"service : {}\n"
+        );
+        let error = run_extractor_script("printf '\\377'").unwrap_err();
+        assert!(matches!(
+            error.downcast_ref::<ic_host_tools::candid::NormalizationError>(),
+            Some(ic_host_tools::candid::NormalizationError::Utf8(_))
+        ));
     }
 }

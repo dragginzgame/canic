@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](http://semver.org/).
 
 Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
 
+- Prepare the locked Cargo dependency cache before offline release validation,
+  preserving explicit offline policy and existing dependency selections
+  ([#486](https://github.com/dragginzgame/canic/issues/486)).
+
 - Accept Wasm code sections up to the IC's current 12 MiB ceiling while
   preserving pre-publication rejection and artifact-set protection
   ([#476](https://github.com/dragginzgame/canic/issues/476)).
@@ -46,6 +50,7 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Observatory query capture and remove its copied process engine.
   Delegate Wasm transform staging to Host 0.4.1 and Observatory rendering limits
   to the shared bounded writer, preserving artifact and output validation.
+  Bound compiled Candid capture and delegate process-evidence stream collection.
   **Breaking for response-error callers:** match the shared codec error through
   `IcpJsonResponseError::Envelope` instead of local JSON/hex variants.
   These public hard cuts add to the minor-release requirement

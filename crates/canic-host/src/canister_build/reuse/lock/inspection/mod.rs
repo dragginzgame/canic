@@ -8,14 +8,16 @@
 mod tests;
 
 use super::{BuildLockOwner, read_owner};
-use serde::{Deserialize, Serialize};
+
 #[cfg(target_os = "linux")]
 use std::os::unix::fs::MetadataExt;
 use std::{
-    fs,
-    io::{self, Read},
+    fs, io,
     path::{Path, PathBuf},
 };
+
+use ic_host_artifacts::artifact::read_reader;
+use serde::{Deserialize, Serialize};
 
 /// Identity bound to a boot, PID namespace and process birth, rather than a reusable PID alone.
 #[derive(Clone, Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -154,13 +156,7 @@ pub(super) fn current_identity() -> Option<BuildProcessIdentity> {
 }
 
 fn bounded_text(path: &Path, limit: u64) -> Option<String> {
-    let mut bytes = Vec::new();
-    fs::File::open(path)
-        .ok()?
-        .take(limit + 1)
-        .read_to_end(&mut bytes)
-        .ok()?;
-    (bytes.len() as u64 <= limit).then_some(())?;
+    let bytes = read_reader(fs::File::open(path).ok()?, usize::try_from(limit).ok()?).ok()?;
     String::from_utf8(bytes).ok()
 }
 

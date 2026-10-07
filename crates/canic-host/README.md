@@ -9,14 +9,20 @@ Normal operators use the installed `canic` binary. Direct Rust consumers may
 use the build and `fleet_ensure` modules when embedding the same current
 contract.
 
-Generic host mechanics use the published IC Host Tooling 0.3 packages:
+Generic host mechanics use the published IC Host Tooling 0.4 packages:
 `ic-host-artifacts` owns Wasm inspection, gzip encoding/decoding and bounded
 stream reads, copying and hashing; `ic-host-fs` owns regular/private reads,
 path observations, durable publication and descriptor locks,
-`ic-host-process` owns executable resolution, and `ic-host-tools` owns Candid
-normalization and ICP JSON/hex envelope decoding. Direct consumers import filesystem operations from
+`ic-host-process` owns executable resolution and bounded capture, and
+`ic-host-tools` owns Candid normalization and ICP JSON/hex envelope decoding.
+Direct consumers import reads from `ic_host_fs::read` and publication/locks from
 `ic_host_fs::durable`. Canic retains schemas, authority, byte budgets, tool pins,
 transaction ordering and interruption recovery.
+
+Compiled Candid extraction retains at most 16 MiB of stdout and 64 KiB of
+diagnostics, with a 120-second capture deadline. Failed or over-budget extraction
+returns the shared typed process error and bounded evidence; it publishes no
+partial declaration or cache record. Normalization can add one final newline.
 
 Direct response-error consumers match
 `IcpJsonResponseError::Envelope(ic_host_tools::response::ResponseError)` for

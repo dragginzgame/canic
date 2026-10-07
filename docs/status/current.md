@@ -1,5 +1,39 @@
 # Current handoff — 2026-10-07
 
+The release preflight cache defect is implemented and closed in
+[#486](https://github.com/dragginzgame/canic/issues/486). The adapter prepares the
+selected cache with `cargo fetch --locked` after source/draft/tool admission,
+preserves explicit Cargo offline policy, and leaves validation offline. The new
+private regression is registered in the release-integrity gate. That complete
+focused gate passes, including cold/warm cache, refusal, phase-order and unchanged
+manifest/lock fixture evidence. No actual release or registry publication ran.
+
+Further Host cleanup under [#458](https://github.com/dragginzgame/canic/issues/458)
+delegates process-evidence collection to the bounded stream reader, preserving
+procfs opens and unknown/UTF-8 policy. Compiled Candid now uses shared bounded
+capture: 16 MiB stdout, 64 KiB diagnostics and a 120-second deadline. Original
+typed extraction errors and cache/environment/source checks remain. All 11
+selected build-lock tests and 12 Candid/cache tests pass. The separately selected
+installed-extractor case also passes: fresh, reused and parallel declarations
+match. It uses one synthetic Wasm declaration, not a managed canister journey.
+Host all-target/all-feature warning-denied Clippy, scoped rustfmt, ShellCheck,
+Bash syntax and diff hygiene pass. Logs remain under
+`target/review-validation/cache-reader-followup-20261007/`.
+
+These changes are uncommitted on maintainer-owned base
+`b420704efd60835583871e1b98d072c5f5e45c92`, which includes the preceding named-output
+cleanup. Both 0.110.53 draft changelog views are updated; workspace version remains
+0.110.52. Manifest SHA-256 is
+`4bb3ebb4f2dd3f78a7bd9d64996526c15a7b4f6ed898bb4ba4eef124390caa47`;
+lock SHA-256 is
+`be7245a7fea9cb6a869252062bac9f0673c8d0bb1cdc64f3848f37c73b952bf9`.
+Neither selection changed. No broad validation, Git commit, version, publication
+or deployment ran. Existing [#444](https://github.com/dragginzgame/canic/issues/444)
+managed alignment and [#459](https://github.com/dragginzgame/canic/issues/459)
+human-owned minor boundary still prevent whole-batch push/publication readiness.
+
+## Earlier named-output qualification — 2026-10-07
+
 Host 0.4.1 cleanup is implemented under
 [#458](https://github.com/dragginzgame/canic/issues/458). Shrink and optimization
 delegate staging, cleanup and durable replacement to `write_named_with`, with
