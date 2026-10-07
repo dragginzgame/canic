@@ -12,12 +12,7 @@ SHELLCHECK_INSTALL_DIR="${SHELLCHECK_INSTALL_DIR:-$HOME/.local/bin}"
 CANIC_DEV_TOOLS=(
     "cargo-watch@$CANIC_CARGO_WATCH_VERSION"
     "cargo-edit@$CANIC_CARGO_EDIT_VERSION"
-    "cargo-sort@$CANIC_CARGO_SORT_VERSION"
-    "cargo-sort-derives@$CANIC_CARGO_SORT_DERIVES_VERSION"
     "sccache@$CANIC_SCCACHE_VERSION"
-)
-CANIC_WASM_TOOLS=(
-    "candid-extractor@$CANIC_CANDID_EXTRACTOR_VERSION"
 )
 
 blue() {
@@ -78,35 +73,6 @@ install_cargo_tools() {
     cargo_toolchain install --quiet --locked "${tools[@]}"
 }
 
-install_or_update_ripgrep() {
-    local version_output=""
-
-    if command -v rg >/dev/null 2>&1; then
-        version_output="$(rg --version 2>/dev/null | head -n 1)"
-        if [ "$version_output" = "ripgrep $CANIC_RIPGREP_VERSION" ] &&
-            rg --pcre2-version >/dev/null 2>&1; then
-            green "rg ready: $version_output with PCRE2"
-            return 0
-        fi
-    fi
-
-    yellow "ripgrep with PCRE2:"
-    cyan_command "cargo +$CANIC_RUST_TOOLCHAIN install --quiet --locked --force --features pcre2 ripgrep@$CANIC_RIPGREP_VERSION"
-    cargo_toolchain install --quiet --locked --force --features pcre2 \
-        "ripgrep@$CANIC_RIPGREP_VERSION"
-    require_command rg
-    version_output="$(rg --version 2>&1 | head -n 1)"
-    [ "$version_output" = "ripgrep $CANIC_RIPGREP_VERSION" ] || {
-        red "unexpected ripgrep version: $version_output"
-        exit 1
-    }
-    rg --pcre2-version >/dev/null 2>&1 || {
-        red "ripgrep was installed without required PCRE2 support"
-        exit 1
-    }
-    green "rg ready: $version_output with PCRE2"
-}
-
 install_or_update_actionlint() {
     local bin
 
@@ -149,9 +115,8 @@ install_or_update_shellcheck() {
 
 install_repository_tools() {
     yellow "Repository JSON/YAML and IC tools:"
-    bash "$ROOT_DIR/scripts/dev/install-host-tools.sh"
-    bash "$ROOT_DIR/scripts/dev/install-ic-tools.sh"
-    export PATH="$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$PATH"
+    make -C "$ROOT_DIR" --no-print-directory install-tools
+    export PATH="$ROOT_DIR/.tools/host/bin:$ROOT_DIR/.tools/ic/bin:$ROOT_DIR/.tools/rust/bin:$PATH"
     hash -r 2>/dev/null || true
 }
 
@@ -175,13 +140,6 @@ configure_git_formatting_hook_if_present() {
 }
 
 main() {
-    if [ "${1:-}" = "--ensure-ripgrep" ]; then
-        require_command cargo
-        ensure_cargo_bin_on_path
-        install_or_update_ripgrep
-        return 0
-    fi
-
     if [ "${1:-}" = "--update-prereqs" ]; then
         blue "Checking Python, shell lint, workflow lint, ICP CLI, and Wasm prerequisites"
         require_python
@@ -215,8 +173,6 @@ main() {
     install_cargo_tools "Rust development tools" "${CANIC_DEV_TOOLS[@]}"
     require_command sccache
     green "sccache ready: $(sccache --version 2>&1)"
-    install_or_update_ripgrep
-    install_cargo_tools "Wasm and Candid tools" "${CANIC_WASM_TOOLS[@]}"
     install_or_update_shellcheck
     install_or_update_actionlint
     install_repository_tools

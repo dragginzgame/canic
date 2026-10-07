@@ -15,6 +15,7 @@ use crate::local_fleet::{
     },
     view::{LocalCanisterView, LocalFleetView},
 };
+use ic_host_fs::durable;
 
 use candid::Principal;
 use canic_core::cdk::utils::hash::hex_bytes;
@@ -23,7 +24,6 @@ use sha2_host::{Digest, Sha256};
 #[cfg(unix)]
 use std::os::unix::fs::{DirBuilderExt, OpenOptionsExt};
 
-use ic_host_fs::durable;
 use std::{
     collections::BTreeSet,
     fs::{self, File, OpenOptions},
@@ -71,7 +71,9 @@ pub fn lock_directory(root: &Path, name: &str) -> Result<(PathBuf, File), LocalF
 
 /// Read only the maintained record, with a finite no-follow document bound.
 pub fn read_record(directory: &Path) -> Result<Option<LocalFleetRecord>, LocalFleetError> {
-    match durable::read_regular_bytes(&directory.join("environment.json"), 1024 * 1024) {
+    match ic_host_fs::read::read_file_no_follow(&directory.join("environment.json"), 1024 * 1024)
+        .map_err(std::io::Error::from)
+    {
         Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.into()),

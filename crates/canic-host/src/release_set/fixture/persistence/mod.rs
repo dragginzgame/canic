@@ -13,6 +13,9 @@ use crate::{
     release_build::{ReleaseBuildPlanState, load_release_build_plan},
     release_set::validate_release_artifact_relative_path,
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::{
     cdk::utils::hash::hex_bytes,
@@ -26,11 +29,6 @@ use std::{
     collections::BTreeMap,
     fs, io,
     path::{Path, PathBuf},
-};
-
-use ic_host_fs::durable::{
-    BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
-    read_optional_regular_bytes_bounded,
 };
 
 ///
@@ -188,16 +186,14 @@ pub(super) fn read_workspace_file(
             return Err(FixtureArtifactError::Symlink(parent));
         }
     }
-    match read_optional_regular_bytes_bounded(&path, limit) {
+    match read_optional_file_no_follow(&path, limit) {
         Ok(Some(bytes)) => Ok(bytes),
         Ok(None) => Err(FixtureArtifactError::Io {
             path,
             source: io::ErrorKind::NotFound.into(),
         }),
-        Err(BoundedRegularFileReadError::TooLarge) => Err(FixtureStoreError::Bounds.into()),
-        Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))) => {
-            Err(FixtureArtifactError::Io { path, source })
-        }
+        Err(ArtifactError::LimitExceeded { .. }) => Err(FixtureStoreError::Bounds.into()),
+        Err(ArtifactError::Io(source)) => Err(FixtureArtifactError::Io { path, source }),
         Err(_) => Err(FixtureArtifactError::Path(path)),
     }
 }

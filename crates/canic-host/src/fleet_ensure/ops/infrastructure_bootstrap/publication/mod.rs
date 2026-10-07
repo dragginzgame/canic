@@ -15,12 +15,12 @@ use crate::fleet_ensure::{
     },
     policy::expected_plan_sha256,
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
 
 use candid::Principal;
 use sha2_host::{Digest, Sha256};
 use std::path::{Component, Path, PathBuf};
-
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, read_regular_bytes, write_bytes};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_SEED_BYTES: usize = 1024 * 1024;
@@ -44,7 +44,7 @@ pub(in crate::fleet_ensure) fn bind(
         .to_str()
         .ok_or_else(invalid)?;
     let path = target(paths, relative)?;
-    let bytes = read_regular_bytes(&path, MAX_SEED_BYTES)?;
+    let bytes = read_file_no_follow(&path, MAX_SEED_BYTES).map_err(std::io::Error::from)?;
     let original = String::from_utf8(bytes).map_err(|_| invalid())?;
     seed_projection(desired, &original, None).map_err(|_| invalid())?;
     let mut result = source.clone();
@@ -132,8 +132,8 @@ pub(in crate::fleet_ensure) fn read(
     paths: &EnsurePaths,
     digest: &str,
 ) -> Result<Option<InfrastructureBootstrapPublicationRecord>, InfrastructureBootstrapError> {
-    let Some(bytes) = read_optional_regular_bytes_bounded(&path(paths, digest)?, MAX_BYTES)
-        .map_err(|_| invalid())?
+    let Some(bytes) =
+        read_optional_file_no_follow(&path(paths, digest)?, MAX_BYTES).map_err(|_| invalid())?
     else {
         return Ok(None);
     };
@@ -151,7 +151,8 @@ pub(in crate::fleet_ensure) fn read(
         .ok_or_else(invalid)?;
     let seed = source.estate_seed.as_ref().ok_or_else(invalid)?;
     validate_seed(desired, source)?;
-    let receipt_bytes = read_regular_bytes(&terminal::path(paths, &record.plan), MAX_BYTES)?;
+    let receipt_bytes = read_file_no_follow(&terminal::path(paths, &record.plan), MAX_BYTES)
+        .map_err(std::io::Error::from)?;
     let receipt: crate::fleet_ensure::model::infrastructure_bootstrap::InfrastructureBootstrapTerminalRecord = serde_json::from_slice(&receipt_bytes)?;
     let coordinator = &desired.bootstrap.as_ref().ok_or_else(invalid)?.coordinator;
     if record.schema_version != 1
@@ -211,10 +212,10 @@ pub(in crate::fleet_ensure) fn publish(
         plan: plan.clone(),
         after_sha256: hash(replacement.as_bytes()),
         replacement,
-        terminal_receipt_sha256: hash(&read_regular_bytes(
-            &terminal::path(paths, plan),
-            MAX_BYTES,
-        )?),
+        terminal_receipt_sha256: hash(
+            &read_file_no_follow(&terminal::path(paths, plan), MAX_BYTES)
+                .map_err(std::io::Error::from)?,
+        ),
         coordinator,
         completed: false,
     };
@@ -236,7 +237,7 @@ fn finish(
         .and_then(|source| source.estate_seed.as_ref())
         .ok_or_else(invalid)?;
     let destination = target(paths, &seed.relative_path)?;
-    let bytes = read_regular_bytes(&destination, MAX_SEED_BYTES)?;
+    let bytes = read_file_no_follow(&destination, MAX_SEED_BYTES).map_err(std::io::Error::from)?;
     if hash(&bytes) != record.after_sha256 {
         if bytes != seed.original.as_bytes() {
             return Err(invalid());

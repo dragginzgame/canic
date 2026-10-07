@@ -21,6 +21,7 @@ use crate::fleet_ensure::{
         infrastructure_bootstrap::inspection,
     },
 };
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
@@ -28,8 +29,6 @@ use std::{
     fs,
     path::{Component, Path, PathBuf},
 };
-
-use ic_host_fs::durable::read_regular_bytes;
 
 pub(super) const MAX_BYTES: usize = 8 * 1024 * 1024;
 const MAX_OWNERS: usize = 4096;
@@ -166,7 +165,7 @@ fn read(
     relative: &str,
 ) -> Result<(Vec<u8>, Owner), CapacityImportJournalError> {
     let path = path(paths, relative)?;
-    let bytes = read_regular_bytes(&path, MAX_BYTES)?;
+    let bytes = read_file_no_follow(&path, MAX_BYTES).map_err(std::io::Error::from)?;
     let owner = if relative == "capacity-import.json" {
         Owner::Import(Box::new(serde_json::from_slice(&bytes)?))
     } else if relative.starts_with("infrastructure-bootstrap-inspections/") {

@@ -15,11 +15,11 @@ use crate::component_operation::{
     policy::validate_label,
     view::{ComponentObservation, ComponentProgressObservation},
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::path::{Path, PathBuf};
-
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 const MAX_RECORD_BYTES: usize = 4 * 1024 * 1024;
 
@@ -101,7 +101,7 @@ fn seal(record: &mut ComponentOperationRecord) -> Result<(), ComponentOperationE
 
 /// Read and verify one bounded current record without following a symlink.
 pub fn read(path: &Path) -> Result<Option<ComponentOperationRecord>, ComponentOperationError> {
-    let bytes = match read_regular_bytes(path, MAX_RECORD_BYTES) {
+    let bytes = match read_file_no_follow(path, MAX_RECORD_BYTES).map_err(std::io::Error::from) {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),

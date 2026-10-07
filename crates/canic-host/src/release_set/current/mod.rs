@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::{
@@ -17,6 +18,9 @@ use crate::{
         },
     },
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::{
     bootstrap::compiled::ComponentTopology,
@@ -29,9 +33,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ic_host_fs::durable::{
-    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-};
 use thiserror::Error as ThisError;
 
 pub const CURRENT_RELEASE_SET_MANIFEST_FILE: &str = "current-release-set-manifest.json";
@@ -220,25 +221,15 @@ fn load_optional(
     path: &Path,
     release_build_id: ReleaseBuildId,
 ) -> Result<Option<PersistedCurrentReleaseSetManifest>, CurrentReleaseSetManifestError> {
-    let bytes = match read_optional_regular_bytes(path) {
+    let bytes = match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(value) => value,
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(CurrentReleaseSetManifestError::Unsafe(path.to_path_buf()));
         }
-        Err(RegularFileReadError::Io(source)) => {
+        Err(source) => {
             return Err(CurrentReleaseSetManifestError::Io {
                 path: path.to_path_buf(),
-                source,
-            });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(CurrentReleaseSetManifestError::Io {
-                path: path.to_path_buf(),
-                source: io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "safe file reads are unavailable",
-                ),
+                source: source.into(),
             });
         }
     };

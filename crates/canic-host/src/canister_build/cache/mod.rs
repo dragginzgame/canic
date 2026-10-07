@@ -16,7 +16,7 @@ use std::{
     time::{Duration, Instant},
 };
 
-use ic_host_fs::durable::{RegularFileLockError, lock_regular_file_with_parents};
+use ic_host_fs::durable::lock_regular_file_with_parents;
 
 const DEFAULT_WASM_TARGET_RELATIVE: &str = "target/canic-wasm";
 const CANISTER_BUILD_LOCK_RELATIVE: &str = ".canic/locks/canister-artifact-build.lock";
@@ -164,27 +164,7 @@ pub fn canister_build_target_root(workspace_root: &Path) -> PathBuf {
 /// Lock the complete shared Cargo-target build and artifact-materialization boundary.
 pub fn lock_canister_build_target(workspace_root: &Path) -> io::Result<fs::File> {
     let path = workspace_root.join(CANISTER_BUILD_LOCK_RELATIVE);
-    lock_regular_file_with_parents(&path).map_err(|error| match error {
-        RegularFileLockError::NotRegular => io::Error::new(
-            io::ErrorKind::InvalidData,
-            format!(
-                "Canic artifact-build lock is not a regular file: {}",
-                path.display()
-            ),
-        ),
-        RegularFileLockError::Io(source) => io::Error::new(
-            source.kind(),
-            format!(
-                "failed to lock Canic artifact-build target {}: {source}",
-                path.display()
-            ),
-        ),
-        #[cfg(windows)]
-        RegularFileLockError::UnsupportedPlatform => io::Error::new(
-            io::ErrorKind::Unsupported,
-            "Canic artifact-build locking is unsupported on Windows",
-        ),
-    })
+    lock_regular_file_with_parents(&path).map_err(io::Error::from)
 }
 
 fn resolve_canister_build_target_root(

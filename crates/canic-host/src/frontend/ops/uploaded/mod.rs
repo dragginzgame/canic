@@ -11,12 +11,11 @@ use crate::{
     },
     icp::IcpCli,
 };
+use ic_host_fs::read::read_file_no_follow;
 
 use candid::{CandidType, Deserialize, Nat, Principal};
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::time::{Duration, Instant};
-
-use ic_host_fs::durable::read_regular_bytes;
 
 ///
 /// FrontendAssetReader
@@ -61,10 +60,11 @@ pub fn prepare_uploaded(
             sha256: file.sha256.clone(),
         })
         .collect::<Vec<_>>();
-    let bytes = read_regular_bytes(
+    let bytes = read_file_no_follow(
         &input.directory.join("canic-frontend.json"),
         MAX_FRONTEND_FILE_BYTES,
-    )?;
+    )
+    .map_err(std::io::Error::from)?;
     if serde_json::from_slice::<FrontendManifestRecord>(&bytes)? != manifest {
         return Err(FrontendError::Integrity);
     }

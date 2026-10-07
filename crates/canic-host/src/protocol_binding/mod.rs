@@ -8,10 +8,13 @@ mod release;
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
     icp::existing_local_canister_candid_path, registry::RegistryEntry,
     release_set::CanicInfrastructureArtifactEntry,
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::{
     ids::CanisterRole,
@@ -20,7 +23,6 @@ use canic_core::{
 use serde::{Deserialize, Serialize};
 use std::{collections::BTreeSet, io, path::PathBuf};
 
-use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 use thiserror::Error as ThisError;
 
 pub use release::{ReleaseProtocolBindingError, resolve_release_registry_protocol_binding};
@@ -185,7 +187,7 @@ pub(crate) fn resolve_protocol_binding(
             canister: target.to_string(),
         });
     }
-    let candid = match read_optional_regular_bytes(&candid_path) {
+    let candid = match read_optional_file_no_follow(&candid_path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
             return Err(ProtocolBindingError::MissingCandid {
@@ -193,13 +195,15 @@ pub(crate) fn resolve_protocol_binding(
                 role: binding.role.to_string(),
             });
         }
-        Err(RegularFileReadError::Io(source)) => {
+        Err(ArtifactError::NotRegularFile) => {
+            return Err(ProtocolBindingError::UnsafeCandid { path: candid_path });
+        }
+        Err(source) => {
             return Err(ProtocolBindingError::ReadCandid {
                 path: candid_path,
-                source,
+                source: source.into(),
             });
         }
-        Err(_) => return Err(ProtocolBindingError::UnsafeCandid { path: candid_path }),
     };
     let observed = derive_protocol_profile_hashes(
         &binding.release_identity,

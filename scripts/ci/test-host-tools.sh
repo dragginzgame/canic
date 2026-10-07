@@ -157,4 +157,48 @@ TEST_RG_VERSION=15.2.00 refuse install --with-ripgrep
 [[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
 install --with-ripgrep > /dev/null 2>&1
 [[ "$(readlink "$consumer/.tools/host")" != "$original" ]] || exit 1
+
+# The optional cloc payload is identical on every host and needs no native build.
+cat > "$fixture/cloc" <<'SCRIPT'
+#!/usr/bin/env bash
+echo executed >> "$HOST_TOOLS_FIXTURE/executions"
+echo "${TEST_CLOC_VERSION:-2.10}"
+exit "${TEST_CLOC_STATUS:-0}"
+SCRIPT
+cp "$fixture/cloc" "$fixture/assets/cloc-2.10.pl"
+digest="$(shasum -a 256 "$fixture/cloc")"
+printf 'export SHARED_TOOLING_CLOC_VERSION=2.10\nexport SHARED_TOOLING_CLOC_SHA256=%s\n' "${digest%% *}" >> "$pins"
+for host in Linux:x86_64 Linux:arm64 Darwin:x86_64 Darwin:arm64; do
+    export TEST_OS="${host%:*}" TEST_ARCH="${host#*:}"
+    consumer="$fixture/cloc-$host"; mkdir "$consumer"
+    # Adding cloc upgrades an existing authenticated selection atomically.
+    install --with-ripgrep
+    original="$(readlink "$consumer/.tools/host")"
+    refuse install --with-ripgrep --with-cloc --check
+    [[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+    install --with-ripgrep --with-cloc
+    [[ "$(readlink "$consumer/.tools/host")" != "$original" && -d "$consumer/.tools/$original" ]] || exit 1
+    before="$(wc -l < "$fixture/downloads")"
+    install --with-ripgrep --with-cloc --check
+    install --with-ripgrep --with-cloc
+    [[ "$(wc -l < "$fixture/downloads")" == "$before" ]] || exit 1
+done
+original="$(readlink "$consumer/.tools/host")"
+TEST_CLOC_STATUS=9 refuse install --with-ripgrep --with-cloc --check
+TEST_CLOC_VERSION=2.100 refuse install --with-ripgrep --with-cloc
+[[ "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+echo corrupt >> "$consumer/.tools/host/bin/cloc"
+: > "$fixture/executions"
+refuse install --with-ripgrep --with-cloc --check
+[[ ! -s "$fixture/executions" ]] || exit 1
+echo corrupt >> "$fixture/assets/cloc-2.10.pl"
+refuse install --with-ripgrep --with-cloc
+[[ ! -s "$fixture/executions" && "$(readlink "$consumer/.tools/host")" == "$original" ]] || exit 1
+cp "$fixture/cloc" "$fixture/assets/cloc-2.10.pl"
+install --with-ripgrep --with-cloc
+# cloc can be selected without ripgrep, and a parser-only pin file stays valid.
+consumer="$fixture/cloc-only"; mkdir "$consumer"
+install --with-cloc
+install --with-cloc --check
+[[ ! -e "$consumer/.tools/host/bin/rg" ]] || exit 1
 echo 'Host tool installation, offline checks and retained failure tests passed'

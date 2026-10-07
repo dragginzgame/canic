@@ -16,11 +16,19 @@
         test-auth test-auth-chain-key test-cli test-runtime-fast \
         cloc
 
+.DEFAULT_GOAL := help
+
 CARGO_INSTALL_BIN_DIR ?= $(if $(CARGO_HOME),$(CARGO_HOME),$(HOME)/.cargo)/bin
 include tool-versions.env
+include ci/tool-versions.env
 IC_TOOL_PINS ?= ci/ic-tools.tsv
 HOST_TOOL_VERSIONS ?= ci/tool-versions.env
-export PATH := $(CURDIR)/.tools/host/bin:$(CURDIR)/.tools/ic/bin:$(PATH)
+CLOC_REPORT := $(CURDIR)/scripts/dev/report-cloc.sh
+include make/tools.mk
+
+# Rust setup shares the reviewed formatter/Candid tool selection.
+install-tools: install-rust-tools
+tools-check: rust-tools-check
 ACTIONLINT_INSTALL_DIR ?= $(HOME)/.local/bin
 SHELLCHECK_INSTALL_DIR ?= $(HOME)/.local/bin
 ACTIONLINT_BIN ?= $(ACTIONLINT_INSTALL_DIR)/actionlint
@@ -50,7 +58,7 @@ export SCCACHE_IDLE_TIMEOUT
 endif
 export CANIC_SCCACHE_BIN
 export RUSTC_WRAPPER
-VALIDATION_RUNNER := bash scripts/ci/run-validation-targets.sh
+VALIDATION_RUNNER := bash scripts/ci/run-canic-validation-targets.sh
 RELEASE_VALIDATION_LANE := bash scripts/ci/run-release-validation-lane.sh
 
 # Check for clean git state
@@ -67,7 +75,7 @@ help:
 	@echo "Setup / Installation:"
 	@echo "  install          Install only the local canic CLI binary"
 	@echo "  install-dev      Install the shared Rust/Cargo/ripgrep/ShellCheck/actionlint/ICP CLI/Binaryen/Canic toolchain"
-	@echo "  install-tools    Install pinned repository JSON/YAML and IC tools"
+	@echo "  install-tools    Install pinned repository host and IC tools"
 	@echo "  tools-check      Verify repository tool bytes and versions offline"
 	@echo "  install-hooks    Configure the repository formatting-only pre-commit hook"
 	@echo "  update-dev       Synchronize reviewed development tools and report Binaryen updates"
@@ -136,24 +144,7 @@ install-dev:
 	ACTIONLINT_INSTALL_DIR="$(ACTIONLINT_INSTALL_DIR)" SHELLCHECK_INSTALL_DIR="$(SHELLCHECK_INSTALL_DIR)" \
 		bash scripts/dev/install_dev.sh
 
-.PHONY: install-tools tools-check install-host-tools host-tools-check install-ic-tools ic-tools-check dependency-pins-gate
-install-tools:
-	+$(MAKE) --no-print-directory install-host-tools
-	+$(MAKE) --no-print-directory install-ic-tools
-
-tools-check:
-	+$(MAKE) --no-print-directory host-tools-check
-	+$(MAKE) --no-print-directory ic-tools-check
-
-install-host-tools:
-	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)"
-host-tools-check:
-	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)" --check
-install-ic-tools:
-	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)"
-ic-tools-check:
-	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)" --check
-
+.PHONY: dependency-pins-gate
 dependency-pins-gate:
 	bash scripts/ci/check-dependency-pins.sh --cargo-inheritance
 
@@ -173,15 +164,12 @@ update-dev:
 		"cargo-expand@$(CANIC_CARGO_EXPAND_VERSION)" \
 		"cargo-machete@$(CANIC_CARGO_MACHETE_VERSION)" \
 		"cargo-llvm-lines@$(CANIC_CARGO_LLVM_LINES_VERSION)" \
-		"cargo-sort@$(CANIC_CARGO_SORT_VERSION)" \
 		"cargo-tarpaulin@$(CANIC_CARGO_TARPAULIN_VERSION)" \
-		"cargo-sort-derives@$(CANIC_CARGO_SORT_DERIVES_VERSION)" \
-		"candid-extractor@$(CANIC_CANDID_EXTRACTOR_VERSION)" \
 		"sccache@$(CANIC_SCCACHE_VERSION)" \
 		--locked
-	bash scripts/dev/install_dev.sh --ensure-ripgrep
-	"$(CARGO_INSTALL_BIN_DIR)/rg" --version
-	"$(CARGO_INSTALL_BIN_DIR)/rg" --pcre2-version
+	+$(MAKE) --no-print-directory install-rust-tools
+	"$(CURDIR)/.tools/host/bin/rg" --version
+	"$(CURDIR)/.tools/host/bin/rg" --pcre2-version
 	"$(CARGO_INSTALL_BIN_DIR)/sccache" --version
 	"$(CURDIR)/.tools/ic/bin/icp" --version
 	"$(CURDIR)/.tools/ic/bin/ic-wasm" --version
@@ -383,7 +371,7 @@ release-validation-matrix-gate:
 
 validation-runner-gate:
 	bash scripts/ci/test-sccache-wrapper.sh
-	bash scripts/ci/test-validation-target-runner.sh
+	bash scripts/ci/test-canic-validation-targets.sh
 	bash scripts/ci/test-workspace-cargo.sh
 	bash scripts/ci/test-workspace-test-runner.sh
 	bash scripts/ci/test-pocketic-workers.sh
@@ -470,13 +458,13 @@ clippy:
 	$(CARGO_ENV) bash scripts/ci/run-workspace-cargo.sh clippy -D warnings
 
 fmt:
-	bash scripts/ci/check-format-tools.sh "$(CANIC_CARGO_SORT_VERSION)"
+	bash scripts/ci/check-format-tools.sh "$(SHARED_TOOLING_CARGO_SORT_VERSION)"
 	cargo sort --workspace
 	cargo sort-derives
 	cargo fmt --all
 
 fmt-check:
-	bash scripts/ci/check-format-tools.sh "$(CANIC_CARGO_SORT_VERSION)"
+	bash scripts/ci/check-format-tools.sh "$(SHARED_TOOLING_CARGO_SORT_VERSION)"
 	cargo sort --workspace --check
 	cargo sort-derives --check
 	cargo fmt --all -- --check
@@ -497,9 +485,6 @@ clean-wasm:
 	rm -rf -- target/standalone-payload_limit_probe
 	rm -rf -- target/standalone-root-probe
 	rm -rf -- target/standalone-scaling_probe
-
-cloc:
-	bash scripts/dev/report-cloc.sh
 
 # Shared Tooling owns the standard release order and Git effects.
 RELEASE_REMOTE ?= origin

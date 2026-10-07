@@ -8,6 +8,7 @@ use canic_host::{
         workflow::LocalFleetSession,
     },
 };
+use ic_host_fs::durable;
 
 use serde::Deserialize;
 use std::{
@@ -15,8 +16,6 @@ use std::{
     io::{self, BufRead, Read, Write},
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable;
 
 /// A caller selects all effects explicitly; the example owns no application build recipe.
 #[derive(Deserialize)]
@@ -68,7 +67,7 @@ fn main() -> Result<(), Box<dyn Error>> {
         [mode, root, config, icp] if mode == "run" => {
             let root = Path::new(root).canonicalize()?;
             let config: LocalFleetConfig = serde_json::from_slice(
-                &durable::read_regular_bytes(&root.join(config), 65_536)?)?;
+                &ic_host_fs::read::read_file_no_follow(&root.join(config), 65_536).map_err(std::io::Error::from)?)?;
             run(&root, &config, icp)
         }
         [mode, root, name, session] if mode == "reset" => {
@@ -127,16 +126,18 @@ fn execute(
         }
         Command::Allocate { input } => emit(&session.allocate(&input)?),
         Command::Converge { desired } => {
-            let desired: DesiredFleet = toml::from_slice(&durable::read_regular_bytes(
-                &root.join(desired),
-                4 * 1024 * 1024,
-            )?)?;
+            let desired: DesiredFleet = toml::from_slice(
+                &ic_host_fs::read::read_file_no_follow(&root.join(desired), 4 * 1024 * 1024)
+                    .map_err(std::io::Error::from)?,
+            )?;
             emit(&session.converge_fleet(root, &desired, icp)?)
         }
         Command::Discover { fleet } => emit(&session.discover(root, &fleet)?),
         Command::Frontend { fleet, input, out } => {
-            let input: FrontendEnvironmentInput =
-                serde_json::from_slice(&durable::read_regular_bytes(&root.join(input), 65_536)?)?;
+            let input: FrontendEnvironmentInput = serde_json::from_slice(
+                &ic_host_fs::read::read_file_no_follow(&root.join(input), 65_536)
+                    .map_err(std::io::Error::from)?,
+            )?;
             let status = session.status()?;
             let gateway_matches =
                 input.api_origin.trim_end_matches('/') == status.gateway.trim_end_matches('/');

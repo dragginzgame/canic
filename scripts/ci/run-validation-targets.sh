@@ -1,48 +1,100 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -eq 0 ]]; then
-    echo "usage: scripts/ci/run-validation-targets.sh <make-target>..." >&2
-    exit 2
-fi
+usage() {
+    echo "usage: run-validation-targets.sh [--fail-fast] <make-target>..." >&2
+}
 
 RUNNER_SOURCE="${BASH_SOURCE[0]}"
 bash "$(dirname "$RUNNER_SOURCE")/check-make-execution.sh"
-ROOT="${CANIC_VALIDATION_ROOT:-$(cd "$(dirname "$RUNNER_SOURCE")/../.." && pwd)}"
-if [[ "${CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH:-}" != "$RUNNER_SOURCE" ]]; then
-    RUNNER_SNAPSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/canic-validation-runner.XXXXXX")"
+REPOSITORY_ROOT="${VALIDATION_REPOSITORY_ROOT:-$(cd "$(dirname "$RUNNER_SOURCE")/../.." && pwd)}"
+if [[ "${VALIDATION_RUNNER_SNAPSHOT_PATH:-}" != "$RUNNER_SOURCE" ]]; then
+    RUNNER_SNAPSHOT_DIR="$(mktemp -d "${TMPDIR:-/tmp}/validation-runner.XXXXXX")"
     RUNNER_SNAPSHOT="$RUNNER_SNAPSHOT_DIR/run-validation-targets.sh"
     trap 'rm -rf "$RUNNER_SNAPSHOT_DIR"' EXIT
     cp "$RUNNER_SOURCE" "$RUNNER_SNAPSHOT"
     cp "$(dirname "$RUNNER_SOURCE")/check-make-execution.sh" "$RUNNER_SNAPSHOT_DIR/"
     bash -n "$RUNNER_SNAPSHOT"
     snapshot_status=0
-    CANIC_VALIDATION_ROOT="$ROOT" \
-        CANIC_VALIDATION_RUNNER_SNAPSHOT_PATH="$RUNNER_SNAPSHOT" \
+    VALIDATION_REPOSITORY_ROOT="$REPOSITORY_ROOT" \
+        VALIDATION_RUNNER_SNAPSHOT_PATH="$RUNNER_SNAPSHOT" \
         bash "$RUNNER_SNAPSHOT" "$@" || snapshot_status=$?
     exit "$snapshot_status"
 fi
 
-FAILURE_LOG_ROOT="${CANIC_VALIDATION_FAILURE_LOG_DIR:-$ROOT/target/validation-failures}"
+# These values identify only this runner's temporary source snapshot. Targets
+# may invoke a logger in another checkout; let that invocation choose its root.
+# Keep release selections, failure-log policy and nesting depth inherited.
+unset VALIDATION_REPOSITORY_ROOT VALIDATION_RUNNER_SNAPSHOT_PATH
+
+FAIL_FAST=false
+if [[ "${1:-}" == "--fail-fast" ]]; then
+    FAIL_FAST=true
+    shift
+fi
+
+if [[ $# -eq 0 ]]; then
+    usage
+    exit 2
+fi
+
+# Admit the complete goal list before creating logs or running any target.
+# Make still interprets assignments after --; neither assignments nor options
+# are validation goals. The caller's normal exported variables remain intact.
+for target in "$@"; do
+    case "$target" in
+        ''|-*|*=*|*$'\t'*|*$'\n'*|*$'\r'*)
+            echo 'validation requires named Make targets, not options, assignments or control characters' >&2
+            exit 2
+            ;;
+    esac
+done
+
+retain_all_logs=false
+if [[ -n "${VALIDATION_LOG_DIR:-}" ]]; then
+    # One directory per invocation, including nested invocations. Never replace a
+    # previous run or delete consumer-selected evidence on success.
+    mkdir -p "$VALIDATION_LOG_DIR"
+    LOG_ROOT="$(cd "$VALIDATION_LOG_DIR" && pwd -P)"
+    LOG_DIR="$(mktemp -d "$LOG_ROOT/validation.XXXXXX")"
+    retain_all_logs=true
+    printf 'target\tresult\tseconds\tlog\n' > "$LOG_DIR/timings.tsv"
+    printf 'Validation logs and timings: %s\n' "$LOG_DIR"
+else
+    LOG_DIR="$(mktemp -d "${TMPDIR:-/tmp}/validation.XXXXXX")"
+fi
+preserve_temporary_logs=true
+retention_failed=false
+cleanup_logs() {
+    if [[ "$preserve_temporary_logs" == true ]]; then
+        printf 'Validation logs retained at: %s\n' "$LOG_DIR" >&2
+    else
+        rm -rf "$LOG_DIR"
+    fi
+}
+trap cleanup_logs EXIT
+trap 'exit 130' INT
+trap 'exit 143' TERM
+FAILURE_LOG_ROOT="${VALIDATION_FAILURE_LOG_DIR:-$REPOSITORY_ROOT/target/validation-failures}"
 FAILURE_RUN_ID="$(date -u +%Y%m%dT%H%M%SZ)-$$"
-RUN_LOG_ROOT="${CANIC_VALIDATION_LOG_DIR:-$ROOT/target/validation-runs}"
-mkdir -p "$RUN_LOG_ROOT"
-LOG_DIR="$(mktemp -d "$RUN_LOG_ROOT/$FAILURE_RUN_ID.XXXXXX")"
-printf 'target\tresult\tseconds\tlog\n' >"$LOG_DIR/timings.tsv"
-printf 'Validation logs and timings: %s\n' "$LOG_DIR"
 
-RUNNER_DEPTH="${CANIC_VALIDATION_RUNNER_DEPTH:-0}"
-export CANIC_VALIDATION_RUNNER_DEPTH="$((RUNNER_DEPTH + 1))"
+RUNNER_DEPTH="${VALIDATION_RUNNER_DEPTH:-0}"
+export VALIDATION_RUNNER_DEPTH="$((RUNNER_DEPTH + 1))"
 MAX_FAILURE_DETAIL_LINES=160
-FAILURE_PATTERN='^\[CANIC-TEST:E001\]|---- .* stdout ----|^test .* \.\.\. FAILED$|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:([[:space:]]|$)|target failed|make(\[[0-9]+\])?: \*\*\*'
-
-# The validation pipeline makes child stderr non-interactive. Preserve readable
-# test-progress colors when the outer runner is attached to a real terminal.
-if [[ -t 1 && -z "${NO_COLOR:-}" && "${TERM:-dumb}" != "dumb" ]]; then
-    export CANIC_TEST_COLOR="${CANIC_TEST_COLOR:-always}"
+FAILURE_PATTERN='---- .* stdout ----|^test .* \.\.\. FAILED$|failures:|test result: FAILED|error(\[[A-Z0-9]+\])?:([^:]|$)|target failed|make(\[[0-9]+\])?: \*\*\*'
+FAILURE_EVENT_PREFIX="${VALIDATION_FAILURE_EVENT_PREFIX:-}"
+if [[ -n "$FAILURE_EVENT_PREFIX" ]]; then
+    if [[ "$FAILURE_EVENT_PREFIX" == *$'\n'* || "$FAILURE_EVENT_PREFIX" == *$'\r'* ]]; then
+        echo 'failure event prefix must be a single line' >&2
+        exit 2
+    fi
+    # The consumer supplies a literal line prefix, never a regular expression.
+    escaped_prefix="$(printf '%s' "$FAILURE_EVENT_PREFIX" | sed 's/[][\\.^$*+?{}()|]/\\&/g')"
+    FAILURE_PATTERN="^$escaped_prefix|$FAILURE_PATTERN"
 fi
 
 failed_targets=()
+failure_status=0
 targets=()
 results=()
 elapsed_seconds=()
@@ -74,8 +126,13 @@ print_retained_error_line() {
 is_live_failure_line() {
     local line="$1"
 
+    if [[ -n "$FAILURE_EVENT_PREFIX" && "$line" == "$FAILURE_EVENT_PREFIX"* ]]; then
+        return 0
+    fi
+
     case "$line" in
-        "[CANIC-TEST:E001] "* | "error:" | *"error: "* | *"error["* | *"rustc-LLVM ERROR"* | \
+        # Rust paths such as error::tests are names, not diagnostics.
+        *"error:"[!:]* | *"error:" | *"error["* | *"rustc-LLVM ERROR"* | \
             *"test result: FAILED"* | test\ *" ... FAILED" | *"fatal:"* | \
             *"FAILED:"* | *"Target failed:"* | *"No such file or directory"* | \
             *"❌"* | *"🚨"* | \
@@ -122,7 +179,11 @@ print_failure_detail() {
     # matching remains deterministic while the live output stays colored.
     LC_ALL=C sed $'s/\033\[[0-9;]*[[:alpha:]]//g' "$log" >"$clean_log"
 
-    inherited="$(rg '^\[ERR:[^]]+\]' "$clean_log" || true)"
+    if command -v rg >/dev/null 2>&1; then
+        inherited="$(rg '^\[ERR:[^]]+\]' "$clean_log" || true)"
+    else
+        inherited="$(grep -E '^\[ERR:[^]]+\]' "$clean_log" || true)"
+    fi
     if [[ -n "$inherited" ]]; then
         while IFS= read -r line; do
             print_retained_error_line "$line"
@@ -135,13 +196,22 @@ print_failure_detail() {
     fi
 
     print_error_line "$target" "Target failed"
-    details="$(rg --color never --no-heading -C 4 -- "$FAILURE_PATTERN" "$clean_log" || true)"
+    if command -v rg >/dev/null 2>&1; then
+        details="$(rg --color never --no-heading -C 4 -- "$FAILURE_PATTERN" "$clean_log" || true)"
+    else
+        details="$(grep -E -C 4 -- "$FAILURE_PATTERN" "$clean_log" || true)"
+    fi
     if [[ -z "$details" ]]; then
         details="$(tail -n 80 "$clean_log")"
     fi
 
     while IFS= read -r line; do
-        print_error_line "$target" "$line"
+        if is_live_failure_line "$line"; then
+            print_error_line "$target" "$line"
+        else
+            # Retain useful context without labelling it as an error.
+            printf '[%s] %s\n' "$target" "$line"
+        fi
     done < <(printf '%s\n' "$details" | tail -n "$((MAX_FAILURE_DETAIL_LINES - 1))")
 }
 
@@ -170,7 +240,7 @@ write_github_summary() {
         echo "| Result | Seconds | Target |"
         echo "| --- | ---: | --- |"
         for index in "${!targets[@]}"; do
-            printf '| %s | %s | `%s` |\n' \
+            printf "| %s | %s | \`%s\` |\n" \
                 "${results[$index]}" \
                 "${elapsed_seconds[$index]}" \
                 "${targets[$index]}"
@@ -201,12 +271,23 @@ for target in "$@"; do
         printf '\n==> %s\n' "$target"
     fi
 
-    if make --no-print-directory -C "$ROOT" "$target" 2>&1 |
+    if make --no-print-directory -C "$REPOSITORY_ROOT" -- "$target" 2>&1 |
         tee "$log" |
         annotate_live_output "$target"; then
         result="PASS"
         retained_log=""
     else
+        # Capture the pipeline before diagnostics overwrite PIPESTATUS. Preserve
+        # Make's status; if only logging failed, preserve that nonzero status.
+        pipeline_status=("${PIPESTATUS[@]}")
+        if [[ "$failure_status" == 0 ]]; then
+            for component_status in "${pipeline_status[@]}"; do
+                if [[ "$component_status" != 0 ]]; then
+                    failure_status="$component_status"
+                    break
+                fi
+            done
+        fi
         failed_targets+=("$target")
         result="FAIL"
         retained_log="$(persist_failure_log "$log" "$target" "${#targets[@]}")"
@@ -215,8 +296,11 @@ for target in "$@"; do
         if [[ -n "$retained_log" ]]; then
             print_error_line "$target" "Full failure log retained at: $retained_log"
         else
+            retention_failed=true
+            retained_log="$log"
             print_error_line "$target" \
                 "Unable to retain the complete failure log under: $FAILURE_LOG_ROOT"
+            print_error_line "$target" "Full failure log retained at: $retained_log"
         fi
         print_failure_detail "$log" "$target"
     fi
@@ -227,11 +311,19 @@ for target in "$@"; do
     elapsed_seconds+=("$elapsed")
     logs+=("$log")
     retained_logs+=("$retained_log")
-    printf '%s\t%s\t%s\t%s\n' "$target" "$result" "$elapsed" "$log" >>"$LOG_DIR/timings.tsv"
+    if [[ "$retain_all_logs" == true ]]; then
+        printf '%s\t%s\t%s\t%s\n' "$target" "$result" "$elapsed" "$log" >> "$LOG_DIR/timings.tsv"
+    fi
     if [[ "${GITHUB_ACTIONS:-}" == "true" && "$RUNNER_DEPTH" == "0" ]]; then
         printf '::endgroup::\n'
     fi
+
+    if [[ "$result" == "FAIL" && "$FAIL_FAST" == "true" ]]; then
+        break
+    fi
 done
+
+if [[ "$retention_failed" == false && "$retain_all_logs" == false ]]; then preserve_temporary_logs=false; fi
 
 printf '\nValidation summary:\n'
 for index in "${!targets[@]}"; do
@@ -247,7 +339,6 @@ for index in "${!targets[@]}"; do
 done
 
 write_github_summary
-printf 'Retained validation logs and timings: %s\n' "$LOG_DIR"
 
 if [[ ${#failed_targets[@]} -ne 0 ]]; then
     highlighted_failure_log="$(persist_highlighted_failure_log)"
@@ -278,7 +369,7 @@ if [[ ${#failed_targets[@]} -ne 0 ]]; then
     fi
     echo >&2
     print_error_line summary "VALIDATION FAILED: ${failed_targets[*]}" >&2
-    exit 1
+    exit "$failure_status"
 fi
 
 echo "VALIDATION PASSED: all requested targets succeeded."

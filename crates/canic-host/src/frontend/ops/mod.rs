@@ -19,6 +19,7 @@ use crate::{
     network::{frontend_root_key, resolve_canonical_network_id_from_root},
     protocol_binding::resolve_registry_protocol_binding,
 };
+use ic_host_fs::read::read_file_no_follow;
 
 use candid::TypeEnv;
 use candid_parser::{
@@ -28,8 +29,6 @@ use candid_parser::{
 };
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use std::{collections::BTreeMap, path::Path};
-
-use ic_host_fs::durable::read_regular_bytes;
 
 pub use bundle::{manifest_digest, publish_bundle, verify_bundle};
 pub use capacity::{asset_capacity, payload_inventory};
@@ -42,10 +41,9 @@ pub const MAX_FRONTEND_BUNDLE_BYTES: usize = 32 * 1024 * 1024;
 
 /// Decode only the bounded public input contract; unknown authority fields reject.
 pub fn read_input(path: &Path) -> Result<FrontendEnvironmentInput, FrontendError> {
-    Ok(serde_json::from_slice(&read_regular_bytes(
-        path,
-        MAX_FRONTEND_FILE_BYTES,
-    )?)?)
+    Ok(serde_json::from_slice(
+        &read_file_no_follow(path, MAX_FRONTEND_FILE_BYTES).map_err(std::io::Error::from)?,
+    )?)
 }
 
 /// Project a verified terminal review and its selected network into export facts.
@@ -177,7 +175,8 @@ pub fn prepare_bundle(
             return Err(FrontendError::Role(selected.role.to_string()));
         };
         let protocol = resolve_registry_protocol_binding(root, &input.environment, entry)?;
-        let candid = read_regular_bytes(protocol.candid_path(), MAX_FRONTEND_FILE_BYTES)?;
+        let candid = read_file_no_follow(protocol.candid_path(), MAX_FRONTEND_FILE_BYTES)
+            .map_err(std::io::Error::from)?;
         if sha256_hex(&candid) != hex_bytes(protocol.binding().candid_sha256) {
             return Err(FrontendError::Integrity);
         }

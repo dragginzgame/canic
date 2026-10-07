@@ -7,19 +7,20 @@
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::canister_build::CanisterBuildProfile;
 use crate::entropy::{EntropyError, random_bytes_32};
 use canic_core::ids::{BuildNetwork, ReleaseBuildId, ReleaseBuildNonce};
 use ciborium::Value;
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::{create_new_bytes_with_parents, write_bytes};
+use ic_host_fs::read::read_optional_file_no_follow;
 use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
 };
 
-use ic_host_fs::durable::{
-    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes, write_bytes,
-};
 use thiserror::Error as ThisError;
 
 const PLAN_HASH_DOMAIN: &[u8] = b"canic:release-build:plan\0";
@@ -499,25 +500,17 @@ fn exact_digest(
 }
 
 fn read_plan_bytes(path: &Path) -> Result<Vec<u8>, ReleaseBuildPlanError> {
-    match read_optional_regular_bytes(path) {
+    match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => Ok(bytes),
         Ok(None) => Err(ReleaseBuildPlanError::Missing {
             path: path.to_path_buf(),
         }),
-        Err(RegularFileReadError::NotRegular) => Err(ReleaseBuildPlanError::UnsafeFile {
+        Err(ArtifactError::NotRegularFile) => Err(ReleaseBuildPlanError::UnsafeFile {
             path: path.to_path_buf(),
         }),
-        Err(RegularFileReadError::Io(source)) => Err(ReleaseBuildPlanError::Io {
+        Err(source) => Err(ReleaseBuildPlanError::Io {
             path: path.to_path_buf(),
-            source,
-        }),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => Err(ReleaseBuildPlanError::Io {
-            path: path.to_path_buf(),
-            source: io::Error::new(
-                io::ErrorKind::Unsupported,
-                "no-follow release-build reads are unsupported on this platform",
-            ),
+            source: source.into(),
         }),
     }
 }

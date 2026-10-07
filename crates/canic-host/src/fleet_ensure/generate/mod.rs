@@ -11,6 +11,7 @@ mod startup_funding;
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
     canister_protocol::query_with_candid,
     component_topology::{
@@ -39,6 +40,9 @@ use crate::{
     },
     subnet_catalog::MainnetCatalogClient,
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use candid::{Nat, Principal};
 use canic_core::{
@@ -66,9 +70,6 @@ use std::{
     time::{SystemTime, UNIX_EPOCH},
 };
 
-use ic_host_fs::durable::{
-    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-};
 use thiserror::Error as ThisError;
 
 const MAX_GENERATOR_INPUT_BYTES: usize = 1024 * 1024;
@@ -264,13 +265,6 @@ pub enum FleetGenerateError {
         #[source]
         source: std::io::Error,
     },
-
-    #[cfg(not(unix))]
-    #[error(
-        "artifact Candid sidecar cannot be read without following links on this platform: {}",
-        path.display()
-    )]
-    CandidUnsupportedPlatform { path: PathBuf },
 
     #[error(
         "artifact Candid sidecar digest differs from release authority at {}: expected {expected:?}, observed {observed:?}",
@@ -515,25 +509,18 @@ pub fn initialize_fresh_estate_seed(
 }
 
 fn read_seed(path: &Path) -> Result<Option<EstateSeed>, FleetGenerateError> {
-    let bytes = match read_optional_regular_bytes(path) {
+    let bytes = match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(bytes) => bytes,
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(FleetGenerateError::UnsafeInput {
                 path: path.to_path_buf(),
                 reason: "not a regular no-follow file",
             });
         }
-        Err(RegularFileReadError::Io(source)) => {
+        Err(source) => {
             return Err(FleetGenerateError::Read {
                 path: path.to_path_buf(),
-                source,
-            });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(FleetGenerateError::UnsafeInput {
-                path: path.to_path_buf(),
-                reason: "safe no-follow reads are unsupported on this platform",
+                source: source.into(),
             });
         }
     };
@@ -2383,23 +2370,19 @@ fn candid_sidecar(
 ) -> Result<String, FleetGenerateError> {
     let wasm = root.join(&artifact.wasm_relative_path);
     let path = wasm.with_extension("did");
-    let bytes = match read_optional_regular_bytes(&path) {
+    let bytes = match read_optional_file_no_follow(&path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
             return Err(FleetGenerateError::CandidMissing { path });
         }
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(FleetGenerateError::CandidNotRegular { path });
         }
-        Err(RegularFileReadError::Io(error)) => {
+        Err(source) => {
             return Err(FleetGenerateError::CandidRead {
                 path,
-                source: error,
+                source: source.into(),
             });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(FleetGenerateError::CandidUnsupportedPlatform { path });
         }
     };
     let actual: [u8; 32] = Sha256::digest(bytes).into();
@@ -2437,7 +2420,7 @@ fn load_toml<T: for<'de> Deserialize<'de>>(
     path: &Path,
     _kind: &'static str,
 ) -> Result<T, FleetGenerateError> {
-    let bytes = match read_optional_regular_bytes(path) {
+    let bytes = match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
             return Err(FleetGenerateError::Read {
@@ -2445,23 +2428,16 @@ fn load_toml<T: for<'de> Deserialize<'de>>(
                 source: std::io::Error::new(std::io::ErrorKind::NotFound, "input is missing"),
             });
         }
-        Err(RegularFileReadError::Io(source)) => {
-            return Err(FleetGenerateError::Read {
-                path: path.to_path_buf(),
-                source,
-            });
-        }
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(FleetGenerateError::UnsafeInput {
                 path: path.to_path_buf(),
                 reason: "path is not a regular no-follow file",
             });
         }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(FleetGenerateError::UnsafeInput {
+        Err(source) => {
+            return Err(FleetGenerateError::Read {
                 path: path.to_path_buf(),
-                reason: "no-follow reads are unsupported on this platform",
+                source: source.into(),
             });
         }
     };

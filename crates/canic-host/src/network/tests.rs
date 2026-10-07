@@ -1,4 +1,5 @@
 use super::*;
+use crate::MAX_DOCUMENT_READ_BYTES;
 #[cfg(unix)]
 use crate::test_support::create_fifo;
 use crate::test_support::temp_dir;
@@ -314,4 +315,22 @@ fn enrollment_rejects_fifo_root_key_input_without_writing() {
     assert!(!root.join(CANIC_STATE_DIRECTORY).exists());
     fs::remove_file(fifo_path).expect("remove FIFO");
     fs::remove_dir_all(root).expect("remove fixture");
+}
+
+#[test]
+fn document_read_budget_rejects_oversize_without_replacing_source() {
+    let root = temp_dir("canic-host-040-document-limit");
+    fs::create_dir_all(&root).unwrap();
+    let path = root.join("profile.json");
+    let size = MAX_DOCUMENT_READ_BYTES as u64 + 1;
+    fs::File::create(&path).unwrap().set_len(size).unwrap();
+    let error = read_regular_file(&path, FilePurpose::Profile).unwrap_err();
+    let NetworkIdentityError::Io { source, .. } = error else {
+        panic!("expected retained read cause");
+    };
+    assert!(
+        matches!(source.get_ref().unwrap().downcast_ref::<ArtifactError>(), Some(ArtifactError::LimitExceeded { limit }) if *limit == MAX_DOCUMENT_READ_BYTES as u64)
+    );
+    assert_eq!(fs::metadata(&path).unwrap().len(), size);
+    fs::remove_dir_all(root).unwrap();
 }

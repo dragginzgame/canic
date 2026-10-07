@@ -7,6 +7,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
     release_build::{ReleaseBuildPlanError, ReleaseBuildPlanState, load_release_build_plan},
     release_set::artifact::{
@@ -14,14 +15,13 @@ use crate::{
         materialize_qualified_release_artifact,
     },
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use std::{
     io,
     path::{Path, PathBuf},
-};
-
-use ic_host_fs::durable::{
-    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
 };
 
 use canic_core::{
@@ -356,27 +356,17 @@ fn load_optional_retained_union(
     path: &Path,
     release_build_id: ReleaseBuildId,
 ) -> Result<Option<PersistedApplicationArtifactUnion>, ApplicationArtifactUnionPersistenceError> {
-    let bytes = match read_optional_regular_bytes(path) {
+    let bytes = match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(bytes) => bytes,
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(ApplicationArtifactUnionPersistenceError::UnsafeUnion {
                 path: path.to_path_buf(),
             });
         }
-        Err(RegularFileReadError::Io(source)) => {
+        Err(source) => {
             return Err(ApplicationArtifactUnionPersistenceError::UnionIo {
                 path: path.to_path_buf(),
-                source,
-            });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(ApplicationArtifactUnionPersistenceError::UnionIo {
-                path: path.to_path_buf(),
-                source: io::Error::new(
-                    io::ErrorKind::Unsupported,
-                    "regular no-follow union reads are unsupported",
-                ),
+                source: source.into(),
             });
         }
     };

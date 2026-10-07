@@ -16,7 +16,8 @@ use crate::observatory::{
 };
 use std::{collections::BTreeMap, path::Path};
 
-use ic_host_artifacts::artifact::{ArtifactError, read_reader};
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::read_file;
 
 /// Read one private report within a fixed byte envelope before deserializing it.
 pub fn read_snapshot(
@@ -26,12 +27,10 @@ pub fn read_snapshot(
     if !(1024..=16 * 1024 * 1024).contains(&maximum_bytes) {
         return Err(ObservatoryError::Bound("snapshot bytes"));
     }
-    let bytes =
-        read_reader(std::fs::File::open(path)?, maximum_bytes).map_err(|error| match error {
-            ArtifactError::LimitExceeded { .. } => ObservatoryError::Bound("snapshot bytes"),
-            ArtifactError::Io(error) => error.into(),
-            error => std::io::Error::other(error).into(),
-        })?;
+    let bytes = read_file(path, maximum_bytes).map_err(|error| match error {
+        ArtifactError::LimitExceeded { .. } => ObservatoryError::Bound("snapshot bytes"),
+        error => std::io::Error::from(error).into(),
+    })?;
     Ok(serde_json::from_slice(&bytes)?)
 }
 

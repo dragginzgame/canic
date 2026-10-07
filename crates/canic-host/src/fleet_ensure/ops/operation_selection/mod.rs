@@ -152,7 +152,7 @@ pub(in crate::fleet_ensure) fn completed(
 }
 
 pub(in crate::fleet_ensure::ops) fn read(path: &Path) -> Result<Option<Value>, EnsureStateError> {
-    let bytes = ic_host_fs::durable::read_optional_regular_bytes_bounded(path, 32 * 1024 * 1024)
+    let bytes = ic_host_fs::read::read_optional_file_no_follow(path, 32 * 1024 * 1024)
         .map_err(|_| EnsureStateError::InvalidTerminalSource)?;
     bytes
         .map(|bytes| {

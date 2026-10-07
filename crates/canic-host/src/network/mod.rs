@@ -7,10 +7,14 @@
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::icp_config::{IcpConfigError, resolve_icp_build_network_from_root};
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_artifacts::artifact::Sha256Digest;
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::ids::{BuildNetwork, CanonicalNetworkId};
-use ic_host_artifacts::artifact::Sha256Digest;
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 use std::{
     io,
@@ -18,9 +22,6 @@ use std::{
     time::{SystemTime, SystemTimeError, UNIX_EPOCH},
 };
 
-use ic_host_fs::durable::{
-    RegularFileReadError, create_new_bytes_with_parents, read_optional_regular_bytes,
-};
 use thiserror::Error as ThisError;
 
 const CANIC_STATE_DIRECTORY: &str = ".canic";
@@ -161,9 +162,6 @@ pub enum NetworkIdentityError {
 
     #[error("system clock is before the Unix epoch: {0}")]
     Clock(#[from] SystemTimeError),
-
-    #[error("secure network trust files are unsupported on platform {0}")]
-    UnsupportedPlatform(&'static str),
 }
 
 /// Enroll an exact non-mainnet trust anchor and publish its environment profile.
@@ -576,21 +574,17 @@ enum FilePurpose {
 }
 
 fn read_regular_file(path: &Path, purpose: FilePurpose) -> Result<Vec<u8>, NetworkIdentityError> {
-    match read_optional_regular_bytes(path) {
+    match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => Ok(bytes),
         Ok(None) => Err(NetworkIdentityError::Io {
             path: path.to_path_buf(),
             source: io::Error::from(io::ErrorKind::NotFound),
         }),
-        Err(RegularFileReadError::NotRegular) => Err(non_regular_file_error(path, purpose)),
-        Err(RegularFileReadError::Io(source)) => Err(NetworkIdentityError::Io {
+        Err(ArtifactError::NotRegularFile) => Err(non_regular_file_error(path, purpose)),
+        Err(source) => Err(NetworkIdentityError::Io {
             path: path.to_path_buf(),
-            source,
+            source: source.into(),
         }),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => Err(
-            NetworkIdentityError::UnsupportedPlatform(std::env::consts::OS),
-        ),
     }
 }
 

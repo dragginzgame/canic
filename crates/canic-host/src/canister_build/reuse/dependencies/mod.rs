@@ -63,7 +63,8 @@ pub(super) fn append_observed_cargo_inputs(
             if path.extension().and_then(|value| value.to_str()) != Some("d") {
                 continue;
             }
-            let bytes = ic_host_fs::durable::read_regular_bytes(&path, 16 * 1024 * 1024)?;
+            let bytes = ic_host_fs::read::read_file_no_follow(&path, 16 * 1024 * 1024)
+                .map_err(std::io::Error::from)?;
             let text = std::str::from_utf8(&bytes)
                 .map_err(|error| BuildReuseError::Evidence(error.to_string()))?;
             for input in dependency_paths(text)? {
@@ -92,7 +93,9 @@ fn append_generated_exports(
             continue;
         }
         let record = entry.path().join("output");
-        let bytes = match ic_host_fs::durable::read_regular_bytes(&record, 16 * 1024 * 1024) {
+        let bytes = match ic_host_fs::read::read_file_no_follow(&record, 16 * 1024 * 1024)
+            .map_err(std::io::Error::from)
+        {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == std::io::ErrorKind::NotFound => continue,
             Err(error) => return Err(error.into()),

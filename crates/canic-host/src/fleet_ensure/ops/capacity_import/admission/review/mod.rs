@@ -40,6 +40,7 @@ use crate::{
     },
     icp::IcpCli,
 };
+use ic_host_fs::read::read_file_no_follow;
 
 use candid::Principal;
 use canic_core::{
@@ -49,8 +50,6 @@ use canic_core::{
 };
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-
-use ic_host_fs::durable::read_regular_bytes;
 
 /// Frozen free-query admission, retained until the initial management samples are committed.
 pub(in crate::fleet_ensure) struct ReviewSurvey {
@@ -74,7 +73,8 @@ impl ReviewSurvey {
         state: &FleetEnsureStateRecord,
         icp: &IcpCli,
     ) -> Result<Self, CapacityImportJournalError> {
-        let bytes = read_regular_bytes(&paths.workspace.join(&request.declarations), 256 * 1024)?;
+        let bytes = read_file_no_follow(&paths.workspace.join(&request.declarations), 256 * 1024)
+            .map_err(std::io::Error::from)?;
         let text =
             String::from_utf8(bytes).map_err(|_| CapacityImportJournalError::DispositionInvalid)?;
         let declarations = declarations::parse(&text)?;
@@ -497,7 +497,9 @@ fn request_digest(
         &paths.workspace.join(&request.policy),
         &paths.workspace.join(&request.seed),
     ] {
-        hash.update(Sha256::digest(read_regular_bytes(path, 8 * 1024 * 1024)?));
+        hash.update(Sha256::digest(
+            read_file_no_follow(path, 8 * 1024 * 1024).map_err(std::io::Error::from)?,
+        ));
     }
     Ok(hash.finalize().into())
 }

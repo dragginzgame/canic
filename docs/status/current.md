@@ -1,5 +1,45 @@
 # Current handoff — 2026-10-07
 
+Both remaining initial-membership regressions in
+[#457](https://github.com/dragginzgame/canic/issues/457) now pass. The inherited
+fixture change uses normal Host observation pacing while establishing the source
+Fleet, allowing scheduled lifecycle retries to run before the finite stalled-
+observation budget expires. Production retry policy and observation limits are
+unchanged. Retained traces show temporary ComponentMembership/E140 responses
+followed by successful membership and working-Fleet preparation.
+
+The exact governed PocketIC cases
+`pic::fleet_registry::baseline::tests::generated_reinstall_recovers_lost_install_and_reaches_working_fleet`
+and
+`pic::fleet_registry::baseline::tests::completed_reset::completed_estate_reset_recovers_and_replays`
+pass end to end in 436.54s and 232.93s. They qualify real installation, lost replies,
+interrupted reset recovery, terminal conservation and effect-free replay. Both
+inventory preflights and normal invocation-owned server/scratch cleanup pass.
+Logs remain under `target/test-runs/20261007T104828Z-48662.ZdEuZq/` and
+`target/test-runs/20261007T105819Z-118038.5FJlmQ/`. Warning-denied Clippy passes
+for Internal Testing's all-target/all-feature selection; scoped rustfmt passes.
+Its lint log remains under `target/review-validation/membership-pacing-20261007/`.
+
+This qualification uses the later retained graph: Memory 0.31.0, Metrics 0.2.7,
+Timers 0.14.8, Query 0.47.9, Testkit 0.20.0 and direct Host 0.4.0. Manifest SHA-256
+is `bda220b51c2aa13a7e683311c7b3ad1fb06bb100a2580402ea3ac83377609963`;
+lock SHA-256 is `79bbf0dc318297f3a28a449e8d54f5dbc8cd05e2a88aa565767ce4eab85873bb`.
+Those inputs and the affected fixture source stayed unchanged through both cases
+and lint. These two managed journeys do not requalify the embedded peer, independent
+blob consumers, native macOS or the complete workspace. Routine fixture-only
+qualification adds no changelog entry. Existing dirty work remains uncommitted;
+no broad gate, version, publication or deployment ran. The managed Blob alignment
+in [#444](https://github.com/dragginzgame/canic/issues/444) and the human-owned minor
+boundary in [#459](https://github.com/dragginzgame/canic/issues/459) still prevent
+declaring the complete batch push/publication ready; the selected 0.110.53 draft
+stays. Published Blob 0.16.0 is now available for Memory 0.30, but its `^0.30`
+requirement cannot unify with this checkout's Memory 0.31. The independent adapter
+still selects Blob 0.15.2 and Memory 0.28; this continuation did not change it or
+its locks. The [upstream alignment record](https://github.com/dragginzgame/ic-blob-storage/issues/20)
+and #444 own that remaining composition boundary.
+
+## Earlier native and embedded-peer qualification — 2026-10-07
+
 The latest ordinary native validation failures are repaired under
 [#450](https://github.com/dragginzgame/canic/issues/450). Three release-receipt
 tests had obsolete Cargo stubs and invalid empty metadata/comment-only lock

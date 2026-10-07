@@ -12,13 +12,11 @@ use crate::fleet_ensure::{
         infrastructure_bootstrap::{InfrastructureBootstrapError, terminal},
     },
 };
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
 
 use candid::Principal;
 use std::{collections::BTreeSet, path::Path};
-
-use ic_host_fs::durable::{
-    create_new_bytes_with_parents, read_optional_regular_bytes_bounded, read_regular_bytes,
-};
 
 const MAX_BYTES: usize = 8 * 1024 * 1024;
 
@@ -42,12 +40,11 @@ pub(in crate::fleet_ensure) fn prepare(
         .with_file_name("infrastructure-bootstrap-completed")
         .join(&plan.plan_sha256);
     let archived_state = archive.join("state.json");
-    let original_state = match read_optional_regular_bytes_bounded(&archived_state, MAX_BYTES)
-        .map_err(|_| invalid())?
-    {
-        Some(bytes) => serde_json::from_slice(&bytes)?,
-        None => state.clone(),
-    };
+    let original_state =
+        match read_optional_file_no_follow(&archived_state, MAX_BYTES).map_err(|_| invalid())? {
+            Some(bytes) => serde_json::from_slice(&bytes)?,
+            None => state.clone(),
+        };
     if state.principals != original_state.principals
         || state.pending_principals != original_state.pending_principals
         || state.topology != original_state.topology
@@ -59,23 +56,23 @@ pub(in crate::fleet_ensure) fn prepare(
     verify_imports(paths, plan, &original_state)?;
     retain(
         &archive.join("plan.json"),
-        &read_regular_bytes(&paths.plan, MAX_BYTES)?,
+        &read_file_no_follow(&paths.plan, MAX_BYTES).map_err(std::io::Error::from)?,
     )?;
     retain(
         &archive.join("journal.json"),
-        &read_regular_bytes(&paths.journal, MAX_BYTES)?,
+        &read_file_no_follow(&paths.journal, MAX_BYTES).map_err(std::io::Error::from)?,
     )?;
     if !archived_state.try_exists()? {
         retain(
             &archived_state,
-            &read_regular_bytes(&paths.state, MAX_BYTES)?,
+            &read_file_no_follow(&paths.state, MAX_BYTES).map_err(std::io::Error::from)?,
         )?;
     }
     Ok(())
 }
 
 fn retain(path: &Path, bytes: &[u8]) -> Result<(), InfrastructureBootstrapError> {
-    match read_optional_regular_bytes_bounded(path, MAX_BYTES)
+    match read_optional_file_no_follow(path, MAX_BYTES)
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
     {
         Some(existing) if existing == bytes => Ok(()),
@@ -191,7 +188,7 @@ fn read_import(
     path: &Path,
     records: &mut Vec<CapacityImportJournalRecord>,
 ) -> Result<(), InfrastructureBootstrapError> {
-    if let Some(bytes) = read_optional_regular_bytes_bounded(path, MAX_BYTES)
+    if let Some(bytes) = read_optional_file_no_follow(path, MAX_BYTES)
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
     {
         let record = serde_json::from_slice(&bytes)?;
@@ -218,18 +215,19 @@ pub(in crate::fleet_ensure) fn verify_origin(
         return Err(invalid());
     }
     let directory = entry.path();
-    let original: FleetEnsurePlan = serde_json::from_slice(&read_regular_bytes(
-        &directory.join("plan.json"),
-        MAX_BYTES,
-    )?)?;
+    let original: FleetEnsurePlan = serde_json::from_slice(
+        &read_file_no_follow(&directory.join("plan.json"), MAX_BYTES)
+            .map_err(std::io::Error::from)?,
+    )?;
     let journal = crate::fleet_ensure::ops::decode_journal(
         paths,
-        &read_regular_bytes(&directory.join("journal.json"), MAX_BYTES)?,
+        &read_file_no_follow(&directory.join("journal.json"), MAX_BYTES)
+            .map_err(std::io::Error::from)?,
     )?;
-    let original_state: FleetEnsureStateRecord = serde_json::from_slice(&read_regular_bytes(
-        &directory.join("state.json"),
-        MAX_BYTES,
-    )?)?;
+    let original_state: FleetEnsureStateRecord = serde_json::from_slice(
+        &read_file_no_follow(&directory.join("state.json"), MAX_BYTES)
+            .map_err(std::io::Error::from)?,
+    )?;
     if original.scope != FleetEnsurePlanScope::InfrastructureBootstrap
         || plan.scope != FleetEnsurePlanScope::Full
         || original.plan_sha256 != crate::fleet_ensure::policy::expected_plan_sha256(&original)

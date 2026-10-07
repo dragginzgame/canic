@@ -10,6 +10,7 @@ mod serialization;
 mod tests;
 
 use super::{BuildReuseProgress, WorkspaceBuildContext};
+use ic_host_fs::durable::lock_file_with_progress;
 use serde::{Deserialize, Serialize};
 use std::{
     fs,
@@ -18,8 +19,6 @@ use std::{
     sync::Mutex,
     time::{Duration, Instant, SystemTime, UNIX_EPOCH},
 };
-
-use ic_host_fs::durable::lock_file_with_progress;
 
 pub use inspection::{
     BuildLockInspection, BuildProcessActivity, BuildProcessIdentity, BuildProcessKind,
@@ -79,7 +78,8 @@ impl BuildLock {
                 elapsed,
                 inspection: inspection::inspect_open_file(file, lock_path.clone()),
             }))
-        })?;
+        })
+        .map_err(std::io::Error::from)?;
         // A pending cancellation must not start another build or clear another owner's metadata.
         progress(BuildReuseProgress::LockFinished(started.elapsed()))?;
         let now = unix_seconds();

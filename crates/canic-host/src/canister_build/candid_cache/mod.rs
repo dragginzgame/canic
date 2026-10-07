@@ -13,14 +13,14 @@ use super::{
     reuse::{BuildReuseError, file_hash, require_native_tool, resolve_tool},
 };
 use canic_core::cdk::utils::hash::hex_bytes;
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 use serde::{Deserialize, Serialize};
 use sha2_host::{Digest, Sha256};
 use std::{
     io,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 // This bounds optional cache I/O, not accepted Candid size. Larger results are extracted normally.
 const CACHE_RECORD_LIMIT: usize = 4 * 1024 * 1024;
@@ -191,11 +191,12 @@ impl CandidExtractionCache {
     }
 
     fn load(&self, path: &Path, wasm_sha256: &str) -> Result<Option<Vec<u8>>, BuildReuseError> {
-        let bytes = match read_regular_bytes(path, CACHE_RECORD_LIMIT) {
-            Ok(bytes) => bytes,
-            Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
-            Err(error) => return Err(error.into()),
-        };
+        let bytes =
+            match read_file_no_follow(path, CACHE_RECORD_LIMIT).map_err(std::io::Error::from) {
+                Ok(bytes) => bytes,
+                Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
+                Err(error) => return Err(error.into()),
+            };
         let record: CandidExtractionRecord = serde_json::from_slice(&bytes)?;
         if record.schema_version != 1
             || record.identity != self.identity

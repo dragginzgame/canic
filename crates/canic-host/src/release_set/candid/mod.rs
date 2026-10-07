@@ -6,6 +6,7 @@
 #[cfg(test)]
 mod tests;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::{
     release_build::{ReleaseBuildPlanError, validate_finalized_release_build_manifest},
     release_set::{
@@ -15,10 +16,10 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use std::path::{Path, PathBuf};
-
-use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 
 use canic_core::ids::ReleaseBuildId;
 use sha2_host::{Digest, Sha256};
@@ -145,12 +146,12 @@ fn read_contained_candid(root: &Path, path: &Path) -> Result<Vec<u8>, BuiltCandi
     {
         return Err(unsafe_path());
     }
-    match read_optional_regular_bytes(path) {
+    match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => Ok(bytes),
-        Err(RegularFileReadError::Io(source)) => Err(BuiltCandidError::Read {
+        Ok(None) | Err(ArtifactError::NotRegularFile) => Err(unsafe_path()),
+        Err(source) => Err(BuiltCandidError::Read {
             path: path.to_path_buf(),
-            source,
+            source: source.into(),
         }),
-        _ => Err(unsafe_path()),
     }
 }

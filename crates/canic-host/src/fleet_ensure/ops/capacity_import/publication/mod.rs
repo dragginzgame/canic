@@ -24,6 +24,8 @@ use crate::fleet_ensure::{
         },
     },
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::{
     cdk::utils::hash::{decode_hex, hex_bytes},
@@ -34,8 +36,6 @@ use std::{
     collections::BTreeMap,
     path::{Component, Path, PathBuf},
 };
-
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 const MAX_DOCUMENT_BYTES: usize = 1024 * 1024;
 pub(super) const MAX_STATUS_HEX_BYTES: usize = 512 * 1024;
@@ -101,8 +101,10 @@ fn bind_kind(
     if policy_path == seed_path {
         return Err(conflict());
     }
-    let policy_bytes = read_regular_bytes(&target(paths, &policy_path)?, MAX_DOCUMENT_BYTES)?;
-    let seed_bytes = read_regular_bytes(&target(paths, &seed_path)?, MAX_DOCUMENT_BYTES)?;
+    let policy_bytes = read_file_no_follow(&target(paths, &policy_path)?, MAX_DOCUMENT_BYTES)
+        .map_err(std::io::Error::from)?;
+    let seed_bytes = read_file_no_follow(&target(paths, &seed_path)?, MAX_DOCUMENT_BYTES)
+        .map_err(std::io::Error::from)?;
     let inventory =
         inventory_projection(&journal.plan, &policy_bytes, &seed_bytes, publication_kind)
             .map_err(|error| CapacityImportJournalError::InventoryProjection(Box::new(error)))?;
@@ -406,7 +408,8 @@ pub fn publish(
     let review = &journal.operation.as_ref().ok_or_else(conflict)?.review;
     for document in [&review.policy, &review.seed] {
         let path = target(paths, &document.relative_path)?;
-        let current = read_regular_bytes(&path, MAX_DOCUMENT_BYTES)?;
+        let current =
+            read_file_no_follow(&path, MAX_DOCUMENT_BYTES).map_err(std::io::Error::from)?;
         if current == document.replacement.as_bytes() {
             continue;
         }
@@ -436,7 +439,8 @@ pub fn verify_inputs(
     }
     for document in [&review.policy, &review.seed] {
         let bytes =
-            read_regular_bytes(&target(paths, &document.relative_path)?, MAX_DOCUMENT_BYTES)?;
+            read_file_no_follow(&target(paths, &document.relative_path)?, MAX_DOCUMENT_BYTES)
+                .map_err(std::io::Error::from)?;
         if bytes != document.original.as_bytes()
             && !(allow_replacement && bytes == document.replacement.as_bytes())
         {

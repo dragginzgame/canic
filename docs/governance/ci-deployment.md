@@ -99,7 +99,8 @@ executables fail before JSON processing. The selected absolute path is exported
 to child scripts and survives working-directory changes without modifying PATH.
 
 `install-dev`, `update-dev` and `install-tools` use the unchanged reviewed shared
-installers for repository-local `.tools/host` and `.tools/ic` toolsets. The common
+`make/tools.mk` recipes for repository-local `.tools/host`, `.tools/ic` and
+`.tools/rust` toolsets. The common
 matrix owns versions and archive checksums. Make and CI select their `bin`
 directories explicitly; offline `tools-check` verifies prepared bytes and
 versions. Setup never changes the user's shell profile or auto-selects latest

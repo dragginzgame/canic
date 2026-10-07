@@ -6,10 +6,10 @@
 mod tests;
 
 use canic_core::cdk::utils::hash::sha256_hex;
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::{read_file_no_follow, read_optional_file_no_follow};
 use serde::{Deserialize, Serialize};
 use std::path::Path;
-
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, read_regular_bytes, write_bytes};
 
 /// Derivation identity committed after the complete parent lock is durably installed.
 #[derive(Debug, Deserialize, Eq, PartialEq, Serialize)]
@@ -25,14 +25,14 @@ pub(super) fn refresh_seed(
     parent: &Path,
     manifest: &[u8],
 ) -> Result<(), Box<dyn std::error::Error>> {
-    let bytes = read_regular_bytes(parent, 16 * 1024 * 1024)?;
+    let bytes = read_file_no_follow(parent, 16 * 1024 * 1024).map_err(std::io::Error::from)?;
     let expected = GeneratedLockSeedRecord {
         schema_version: 1,
         parent_lock_sha256: sha256_hex(&bytes),
         manifest_sha256: sha256_hex(manifest),
     };
     let record = directory.join("lock-seed.json");
-    let retained = read_optional_regular_bytes_bounded(&record, 4096)
+    let retained = read_optional_file_no_follow(&record, 4096)
         .map_err(|error| {
             format!(
                 "cannot read generated lock seed {}: {error:?}",
@@ -42,7 +42,7 @@ pub(super) fn refresh_seed(
         .and_then(|bytes| serde_json::from_slice::<GeneratedLockSeedRecord>(&bytes).ok());
     let lock = directory.join("Cargo.lock");
     if retained.as_ref() == Some(&expected)
-        && read_optional_regular_bytes_bounded(&lock, 16 * 1024 * 1024)
+        && read_optional_file_no_follow(&lock, 16 * 1024 * 1024)
             .map_err(|error| format!("cannot read generated lock {}: {error:?}", lock.display()))?
             .is_some()
     {

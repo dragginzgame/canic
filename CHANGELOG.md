@@ -35,13 +35,15 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   map's existing order ([#456](https://github.com/dragginzgame/canic/issues/456),
   [#451](https://github.com/dragginzgame/canic/issues/451)).
 
-- Adopt the published IC Host Tooling 0.3 split for artifact inspection,
+- Adopt published IC Host Tooling 0.4 for artifact inspection,
   filesystem publication and locks, executable resolution and Candid formats.
   Remove Canic's copied durable-file engine and public `durable_io` surface;
   direct callers use `ic-host-fs`. Preserve Canic admission, install limits and
   journal ordering. Stream gzip publication and file hashing through shared
   mechanics; use the shared strict lowercase digest parser and encoder.
   Delegate Backup stream hashing/copy, bounded evidence reads and path observations.
+  Use the shared bounded filesystem readers and typed lock errors; delegate
+  Observatory query capture and remove its copied process engine.
   **Breaking for response-error callers:** match the shared codec error through
   `IcpJsonResponseError::Envelope` instead of local JSON/hex variants.
   These public hard cuts add to the minor-release requirement
@@ -53,7 +55,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   Verify snapshots independently, bind release pushes to the captured URL and
   inspect CI by exact commit. Replace stale native CI selection with guarded
   recovery tests. Reject Make modes that skip execution or ignore failures;
-  use shared Cargo-member LOC reporting with build-output exclusion. Preserve
+  delegate retained validation logs and timings and adopt common setup/LOC Make
+  recipes, retiring copied logger tests and tool installs/pins. Preserve
   App, framework-fixture and independent blob layouts through approved boundaries.
   Isolate formatting hooks, validate retained release commits and
   consolidate audit methods;

@@ -5,11 +5,12 @@
 //! Boundary: retain keyed comparison tags only; keep their random key private and local.
 
 use hmac::{Hmac, KeyInit, Mac};
+use ic_host_fs::durable::create_private_bytes_with_parents;
+use ic_host_fs::read::read_private_bytes;
 use serde::{Deserialize, Serialize};
 use sha2_host::Sha256;
 use std::{collections::BTreeMap, ffi::OsString, path::Path};
 
-use ic_host_fs::durable::{create_private_bytes_with_parents, read_private_bytes};
 use thiserror::Error;
 
 const KEY_PATH: &str = ".canic/local-secrets/build-environment.key";
@@ -69,6 +70,7 @@ impl EnvironmentComparison {
         inputs: &[(OsString, OsString)],
     ) -> Result<Self, CaptureFailure> {
         let mut key = read_private_bytes::<32>(&root.join(KEY_PATH))
+            .map_err(|_| CaptureFailure::LocalKeyUnavailable)?
             .ok_or(CaptureFailure::LocalKeyUnavailable)?;
         let result = Self::with_key(&key, inputs);
         key.fill(0);

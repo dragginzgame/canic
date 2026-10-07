@@ -33,12 +33,16 @@ pub mod retained_contract;
 pub(super) mod startup_funding;
 pub(super) mod terminal;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::fleet_ensure::model::{
     DesiredCanisterKind, DesiredFleet, DesiredFleetArtifacts, EffectRecord, EnsureAction,
     FLEET_ENSURE_SCHEMA_VERSION, FleetEnsureJournalRecord, FleetEnsurePlan, FleetEnsureStateRecord,
     FleetObservation, ProtocolArtifactDigests, RetainedRootStartAuthorityRecord,
     RootManagementObservation, RootOwnedCanisterLifecycle,
 };
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::{RegularFileLockError, lock_regular_file_with_parents, write_bytes};
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::{
     cdk::{types::Cycles, utils::hash::sha256_hex},
@@ -52,10 +56,6 @@ use std::{
     path::{Path, PathBuf},
 };
 
-use ic_host_fs::durable::{
-    RegularFileLockError, RegularFileReadError, lock_regular_file_with_parents,
-    read_optional_regular_bytes, write_bytes,
-};
 use thiserror::Error as ThisError;
 
 #[cfg(feature = "local-fleet")]
@@ -998,18 +998,14 @@ where
 }
 
 fn read_document_bytes(path: &Path) -> Result<Option<Vec<u8>>, EnsureStateError> {
-    match read_optional_regular_bytes(path) {
+    match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(bytes) => Ok(bytes),
-        Err(RegularFileReadError::NotRegular) => Err(EnsureStateError::Unsafe {
+        Err(ArtifactError::NotRegularFile) => Err(EnsureStateError::Unsafe {
             path: path.to_path_buf(),
         }),
-        Err(RegularFileReadError::Io(source)) => Err(EnsureStateError::Io {
+        Err(source) => Err(EnsureStateError::Io {
             path: path.to_path_buf(),
-            source,
-        }),
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => Err(EnsureStateError::Unsafe {
-            path: path.to_path_buf(),
+            source: source.into(),
         }),
     }
 }

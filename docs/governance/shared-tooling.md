@@ -1,7 +1,7 @@
 # Shared Tooling adoption
 
-The [manifest](../../.shared-tooling.snapshot) records 68 files from reviewed
-committed revision `25e7ce83149e081e4dcc52c55c33724e44153f2a` (0.1.14).
+The [manifest](../../.shared-tooling.snapshot) records 75 files from reviewed
+committed revision `a3430b34b32a60f3b245a2b4f7e2f5321556fe56` (committed 0.1.18 draft).
 [AGENTS.md](../../AGENTS.md) retains the product overlay. Refresh only through
 the upstream distribution helper; verify exact snapshot bytes and executable
 modes before release validation. Dirty sibling source is never inherited. The
@@ -24,8 +24,9 @@ adoption does not move packages or merge independently selected managed graphs;
 
 ## Repository setup
 
-`make install-tools` explicitly provisions pinned jq/yq and the complete common
-IC toolset under `.tools/host/bin` and `.tools/ic/bin`. `make tools-check` verifies
+`make install-tools` explicitly provisions the complete pinned host, IC and common
+Rust toolsets through `make/tools.mk`, under `.tools/host/bin`, `.tools/ic/bin`
+and `.tools/rust/bin`. `make tools-check` verifies
 bytes and versions offline. Make and CI select these paths; direct shell use
 needs the export in [INSTALLING.md](../../INSTALLING.md). Ordinary validation
 and PocketIC test entrypoints check prepared tools without downloading them.
@@ -51,17 +52,20 @@ establishing Canic release support or complete-toolset availability there.
 Release dispatch, the Canic validation logger, formatting hooks and hook installation
 use the canonical Make-execution guard. It qualifies actual recipe execution and
 failure propagation, refusing ignore-errors, dry-run, question, touch and
-version-only modes before consumer effects. Canic's logger keeps retained success
-logs, timing rows and structured failure events pending
-[shared convergence](https://github.com/dragginzgame/shared-tooling/issues/37).
+version-only modes before consumer effects. The canonical validation logger now
+owns retained success/failure logs, timing rows, literal structured-event matching
+and nested snapshot routing. The thin `run-canic-validation-targets.sh` adapter
+selects Canic's `[CANIC-TEST:E001]` identity, retained-log default and terminal colors;
+configuration uses the shared `VALIDATION_*` fields. Its actual Make wiring has
+one product-specific fixture. Generic logger regressions belong to Shared Tooling;
+the overlapping local suite is removed.
 
 `make cloc` uses the canonical metadata-derived workspace-member reporter through
 a thin Canic JSON-tool projection that preserves `JQ_BIN` and prepared-tool selection;
 `apps/`, `crates/` and framework fixtures share that inventory. Cargo's selected
 output directory is excluded from both LOC and test-function counts, including
-custom paths. The unchanged shared fixture passes from a neutral directory;
-invoking it within Canic inherits Canic's Cargo configuration and exposes the
-[fixture isolation limitation](https://github.com/dragginzgame/shared-tooling/issues/31#issuecomment-6033151305).
+custom paths and symlink aliases. The canonical fixture now isolates its Cargo
+configuration and manifest, including when invoked from the Canic checkout.
 The reporter's actual Canic member roster is qualified independently. Reporting
 needs explicit prepared `cargo` and `cloc`; direct canonical calls also need `jq`
 on PATH. Adoption does not install cloc into the user's environment.
@@ -71,7 +75,10 @@ versions, archive digests and destinations; the shared installer owns download,
 verification and installation mechanics. CI and developer setup use that adapter.
 Linux installations pass in isolated evidence directories. Native macOS execution
 remains upstream CI evidence; local fixtures qualify the four host pin selections.
-The shared ripgrep installer is not selected; Canic's Cargo-installed pin remains.
+Shared host setup now owns ripgrep with PCRE2 and cloc; their duplicate Cargo/
+package-manager selections are removed. Shared Rust setup owns cargo-sort,
+cargo-sort-derives and candid-extractor; Canic's other Cargo/lint tools and
+packaged operator-tool admission remain product-owned.
 
 The read-only `scripts/dev/gh-ci.sh` helper now comes from the snapshot. Explicit
 `--commit HEAD --all-workflows --limit 100` inspects the exact committed source;

@@ -76,6 +76,15 @@ The release runner, validation logger and formatting hook require
 `scripts/ci/check-make-execution.sh`. Include it when adding or refreshing any of
 those entrypoints; existing manifests need that explicit file-set addition.
 
+Consumers running the tooling LOC regression vendor `scripts/ci/test-cloc-tooling.sh`,
+`scripts/dev/cloc-tooling.pl` and `scripts/ci/verify-file-checksum.sh`, in addition
+to their normal snapshot verifier. That test runs against adopted working-tree
+bytes before a consumer commit and does not need the distribution helper.
+`test-cloc-tooling-distribution.sh` remains upstream-only: it qualifies actual
+committed exporter/verifier integration and the consumer fixture's independence.
+`test-cloc-fixture-contexts.sh` is the upstream admission check for the reusable
+LOC fixtures under enclosing Git/Cargo configuration.
+
 When refreshing `install-actionlint.sh`, `install-shellcheck.sh`, `install-gitleaks.sh`,
 `install-sccache.sh` or `install-yq.sh`, also declare `scripts/ci/install-ci-tool.sh`
 and the existing `scripts/ci/verify-file-checksum.sh`. These entry points share that
@@ -215,43 +224,60 @@ documentation adoption alone does not call for full CI or native builds.
 After the new files are committed and reviewed, add `ci/ic-tools.tsv`,
 `scripts/dev/install-ic-tools.sh`, `scripts/ci/verify-evidence-checksums.sh` and
 `scripts/ci/verify-file-checksum.sh` to the snapshot, with `docs/ic-tools.md`.
-Also include `scripts/dev/install-host-tools.sh`, `ci/tool-versions.env` and
-`docs/local-setup.md` for the pinned jq/yq setup. Add `/.tools/` to the consumer's
-ignore rules. Expose these targets:
+Also include `make/tools.mk`, `scripts/dev/install-host-tools.sh`,
+`scripts/dev/cloc.sh`, `scripts/dev/cloc-tooling.pl`, `ci/tool-versions.env` and `docs/local-setup.md` for the
+common commands and pinned host setup. Adopt the complete
+[required tool inventory](local-setup.md#required-tool-inventory), including
+ripgrep and cloc pins, and add `/.tools/` to the consumer's ignore rules. Remove
+the consumer's duplicate setup/check/LOC recipes and include the shared commands
+once in its root Makefile:
 
 ```makefile
-IC_TOOL_PINS ?= ci/ic-tools.tsv
-HOST_TOOL_VERSIONS ?= ci/tool-versions.env
-export PATH := $(CURDIR)/.tools/host/bin:$(CURDIR)/.tools/ic/bin:$(PATH)
-
-.PHONY: install-tools tools-check install-host-tools host-tools-check install-ic-tools ic-tools-check
-install-tools:
-	+$(MAKE) --no-print-directory install-host-tools
-	+$(MAKE) --no-print-directory install-ic-tools
-
-tools-check:
-	+$(MAKE) --no-print-directory host-tools-check
-	+$(MAKE) --no-print-directory ic-tools-check
-
-install-host-tools:
-	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)"
-
-host-tools-check:
-	bash scripts/dev/install-host-tools.sh --versions "$(HOST_TOOL_VERSIONS)" --check
-
-install-ic-tools:
-	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)"
-
-ic-tools-check:
-	bash scripts/dev/install-ic-tools.sh --pins "$(IC_TOOL_PINS)" --check
+include make/tools.mk
 ```
+
+That include supplies `install-tools`, `tools-check`, `install-host-tools`,
+`host-tools-check`, `install-ic-tools`, `ic-tools-check`, `cloc` and `cloc-tooling`, plus the
+checkout-local PATH. It preserves the consumer's default Make goal; including it
+does not trigger installation. Future changes to these recipes and tool
+selections arrive with the reviewed snapshot rather than another copied recipe.
+Existing checkouts need an explicit snapshot refresh and installation to receive
+new files and executables; they never execute a mutable sibling checkout.
+
+For the shared Cargo-installed set, also vendor `scripts/dev/install-rust-tools.sh`
+and the three `SHARED_TOOLING_CARGO_SORT_VERSION`, `SHARED_TOOLING_CARGO_SORT_DERIVES_VERSION`
+and `SHARED_TOOLING_CANDID_EXTRACTOR_VERSION` pins in the selected versions file.
+The include provides `install-rust-tools` and `rust-tools-check`; Rust consumers
+attach these to their aggregate commands as shown in
+[Rust setup](local-setup.md#rust-development-tools). Retire their duplicate
+Cargo-tool install recipes and version constants after qualified adoption.
+
+Defaults use scripts and pins at the checkout root. For a snapshot stored below
+that root, set `SHARED_TOOLING_ROOT` to its reviewed local directory before the
+include, and include its `make/tools.mk`. `HOST_TOOL_VERSIONS` and `IC_TOOL_PINS`
+select consumer-owned pin exceptions; their defaults remain the checkout's
+`ci/tool-versions.env` and `ci/ic-tools.tsv`. Installations always target the
+consumer checkout. Include `make/tools.mk` in any isolated Makefile export,
+including the extra inputs to `check-release-commands.sh`.
+
+`make cloc` reports the consumer's root Cargo workspace and requires its prepared
+Rust toolchain. Shared Tooling itself selects `CLOC_REPORT` and `CLOC_ROOT` before
+the include to summarize sibling workspaces; consumers normally use the defaults.
+Installing the raw cloc executable alone does not add these Make commands.
+`make cloc-tooling` scans sibling CI and tooling, including non-Rust repositories;
+`CLOC_PARENT` selects its parent directory. It needs Git, cloc and core Perl
+modules, with no Cargo dependency or consumer command execution.
 
 Review pins against existing qualified versions before activation. A local
 exception uses its own explicitly selected matrix outside the snapshot; remove
 superseded pin ownership rather than maintaining two independent selections.
-Update local setup/CI callers to use `.tools/host/bin` and `.tools/ic/bin`; CI
-must put these paths on its own PATH after explicit setup. Remove separate
-package-manager jq/yq selections and preserve one owner for each parser pin.
+Update local setup/CI callers to use `.tools/host/bin` and `.tools/ic/bin`, plus
+`.tools/rust/bin` when adopting the Cargo-installed set; CI
+must invoke the same Make installation/check targets and put these paths on its
+own PATH after explicit setup. Document the shell export for direct interactive commands;
+installation and Make exports do not change the user's terminal PATH. Remove
+separate package-manager jq/yq/ripgrep/cloc selections and preserve one owner
+for each tool pin.
 The existing single-yq installer remains available to consumers that need only
 that standalone parser; it accepts caller-owned pins rather than defining them.
 Document the [system bootstrap prerequisites](local-setup.md#bootstrap-prerequisites)

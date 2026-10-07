@@ -21,13 +21,13 @@ use crate::fleet_ensure::{
         read_current, write_current,
     },
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use candid::Principal;
 use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
 use std::{collections::BTreeSet, path::Path};
-
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 /// Read current reset authority after selection establishes its current owner.
 pub(in crate::fleet_ensure) fn read(
@@ -190,7 +190,7 @@ pub(in crate::fleet_ensure) fn import_request(
     let bytes = toml::to_string(&declaration)
         .map_err(|_| EnsureStateError::InvalidTerminalSource)?
         .into_bytes();
-    match read_optional_regular_bytes_bounded(&declarations, 256 * 1024).map_err(|_| {
+    match read_optional_file_no_follow(&declarations, 256 * 1024).map_err(|_| {
         EnsureStateError::Unsafe {
             path: declarations.clone(),
         }

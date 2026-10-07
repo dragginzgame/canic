@@ -7,9 +7,9 @@ owned APIs, canister identities, validation gates and deployment configuration.
 ## Standard layout
 
 Every repository containing maintained Rust packages uses a virtual root,
-including repositories with only one package. Packages may live under `crates/`
-or `apps/`, according to their ownership; repositories need only the trees they
-use:
+including repositories with only one package. The standard package locations
+are `crates/` and `apps/`, according to ownership, with explicit approved layout
+exceptions below. Repositories need only the trees they use:
 
 ```text
 Cargo.toml                 # Virtual workspace; no [package]
@@ -77,8 +77,32 @@ An approved independent workspace uses the same virtual-root and `crates/` or
 `apps/` choices relative to its own root. For example, an approved
 `testing/Cargo.toml` owns `testing/crates/<package-name>/` and `testing/Cargo.lock`.
 Keeping a package outside these shapes, or keeping a root package, requires an
-explicit layout exception as well. A path's existing name or use as a test,
-example or canister is not implicit approval.
+explicit layout exception as well. Approval may be recorded in this shared rule
+or in the local `AGENTS.md`; reference a shared approval in the local overlay when
+adopting it, without requesting that approval again. A path's existing name or
+use as a test, example or canister is not implicit approval.
+
+### Approved IcyDB layout
+
+The maintainer explicitly approved retaining IcyDB's role-based package layout
+on 2026-10-07, following reversal of the crates-only moves. IcyDB may keep:
+
+- `crates/` for its library and tool packages;
+- `canisters/` for its audit, demonstration and test canisters;
+- `schema/` for its schema and fixture packages; and
+- `testing/` for its test harnesses and support packages.
+
+This is an approved physical-layout exception. It requires no relocation into
+`crates/` or `apps/` as part of shared-tooling adoption or routine maintenance.
+Keep the virtual root, one selected workspace graph and lockfile, root-owned
+versions/dependencies, package identities and complete member coverage. These
+requirements apply across all four trees; directory names do not waive them.
+
+Record the approval's reference during normal governance adoption. That
+documentation step does not make permission to retain the layout conditional on
+another approval or a package move. Any proposed IcyDB layout redesign must be
+clearly labelled optional feedback, explain a concrete problem, benefit and
+migration cost, and receive separate explicit maintainer approval before edits.
 
 ## Adoption and verification
 
@@ -87,7 +111,7 @@ Coordinate consumer work through issues and preserve unrelated working changes.
 In the owning repository's authorized change:
 
 1. Inventory maintained manifests, workspace roots, selected lockfiles and
-   approved exceptions. Retain packages already in either standard layout;
+   approved exceptions. Retain packages already in a standard or approved layout;
    application grouping alone is not a reason to flatten packages into `crates/`.
    Record old-to-new package paths before any necessary moves.
 2. Update workspace membership, dependency paths, package include/readme/license
@@ -96,8 +120,9 @@ In the owning repository's authorized change:
    maintained scaffolding at its generator. Retire obsolete source locations
    rather than leaving duplicate packages or symlink aliases.
    Formatting, release inventories and source checks must cover all declared
-   workspace members in both trees, using Cargo metadata or a verified member
-   inventory rather than assuming every package matches `crates/*`.
+   workspace members, including approved layout trees, using Cargo metadata or
+   a verified member inventory rather than assuming every package matches
+   `crates/*` or `apps/*`.
 3. Preserve package names, versions, APIs, features, publication policy, canister
    identities and selected dependencies. Review packaging contents and
    `CARGO_MANIFEST_DIR`-relative inputs; a successful directory move alone does

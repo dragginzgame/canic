@@ -202,9 +202,14 @@ Consumer choices described in those guides remain subject to this baseline.
 ## Rust workspaces and portable tooling
 
 - Provide [local developer setup](docs/local-setup.md) through explicit
-  `make install-tools` and offline `make tools-check`, including pinned jq and
-  Mike Farah yq under `.tools/host/bin`. Make/CI callers select the local tools;
-  document system bootstrap packages and product toolchains separately.
+  `make install-tools` and offline `make tools-check`, following the
+  [required tool inventory](docs/local-setup.md#required-tool-inventory).
+  The host set includes pinned jq, Mike Farah yq, ripgrep with PCRE2 and cloc
+  under `.tools/host/bin`. Make/CI installation and check callers select the
+  complete set and their own checkout's local paths; document interactive shell
+  PATH setup, system bootstrap packages and product toolchains separately.
+  Adopt `make/tools.mk` from the reviewed snapshot for these common commands
+  and LOC reporting, replacing copied recipes; CI calls the same targets.
 - Provide the [common local IC executable setup](docs/ic-tools.md) through
   `make install-ic-tools` and offline `make ic-tools-check`. Keep the common tool
   names available under the checkout's `.tools/ic/bin`, with one reviewed pin
@@ -221,6 +226,8 @@ Consumer choices described in those guides remain subject to this baseline.
   trees, including component packages grouped beneath an App. Both inherit from
   the same root. Approved independent workspaces use those shapes relative to
   their own roots; other layouts need explicit exceptions.
+  The rule explicitly approves IcyDB's existing `crates/`, `canisters/`, `schema/`
+  and `testing/` layout; adoption does not require relocating those packages.
   Repositories without Rust packages do not need a Cargo workspace.
 - Cargo workspace members inherit package versions from the root. Apply the
   [Cargo dependency rules](rules/cargo-dependencies.md): every direct dependency

@@ -6,7 +6,10 @@
 
 mod ordinary;
 
+use crate::MAX_DOCUMENT_READ_BYTES;
 use crate::fleet_ensure::ops::bounded_observations;
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use super::TerminalFleetInventory;
 use super::current_protocol::{
@@ -73,8 +76,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 
 const CHILD_PAGE_LIMIT: u64 = 1_000;
 
@@ -1949,7 +1950,7 @@ fn verify_protocol(
     path: &Path,
     binding: &RegistryProtocolBinding,
 ) -> Result<(), CurrentProtocolError> {
-    let bytes = match read_optional_regular_bytes(path) {
+    let bytes = match read_optional_file_no_follow(path, MAX_DOCUMENT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
             return Err(CurrentProtocolError::ReadCandid {
@@ -1960,22 +1961,16 @@ fn verify_protocol(
                 ),
             });
         }
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(CurrentProtocolError::ProtocolSidecarNotRegular {
                 path: path.to_path_buf(),
             });
         }
-        Err(RegularFileReadError::Io(source)) => {
+        Err(source) => {
             return Err(CurrentProtocolError::ReadCandid {
                 path: path.to_path_buf(),
-                source,
+                source: source.into(),
             });
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(inventory_error(
-                "regular no-follow protocol sidecar reads are unsupported",
-            ));
         }
     };
     let observed = derive_protocol_profile_hashes(

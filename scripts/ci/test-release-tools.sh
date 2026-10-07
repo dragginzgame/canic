@@ -288,7 +288,7 @@ env -u POCKET_IC_BIN bash "$authority_fixture/scripts/ci/check-release-integrity
     fail "authority guard rejected equivalent whitespace, quoting or unrelated source"
 cp "$authority_fixture/tool-versions.env" "$tmp_dir/authority-pins"
 for corruption in \
-    'export CANIC_CANDID_EXTRACTOR_VERSION=latest' \
+    'export SHARED_TOOLING_CANDID_EXTRACTOR_VERSION=latest' \
     'export CANIC_BINARYEN_WASM_OPT_SHA256_LINUX_X64=invalid'; do
     cp "$tmp_dir/authority-pins" "$authority_fixture/tool-versions.env"
     printf '%s\n' "$corruption" >>"$authority_fixture/tool-versions.env"

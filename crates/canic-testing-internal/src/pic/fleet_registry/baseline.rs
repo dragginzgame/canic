@@ -8688,12 +8688,14 @@ esac
             let desired_identity = desired_sha256(&desired);
             phase = phase.next("initial_working_fleet");
             prepare_ready_imports(&pic, root, operator, &pools);
+            // Real lifecycle retries use second-scale backoff; accelerated polls can
+            // exhaust the observation budget before the next retained retry runs.
             let mut platform = literal_zero_journey_platform(
                 &desired,
                 &icp_wrapper,
                 &adapter_root,
                 local_replica.clone(),
-                true,
+                false,
             );
             let mut initial = fleet_ensure_workflow::plan(
                 &adapter_root,
@@ -8740,7 +8742,23 @@ esac
                 &initial.plan.plan_sha256,
                 &mut platform,
             )
-            .expect("establish a working Fleet before generated reinstall");
+            .unwrap_or_else(|error| {
+                for target in std::iter::once(root).chain(pools.iter().copied()) {
+                    let sender = if target == root { operator } else { root };
+                    match pic.fetch_canister_logs(target, sender) {
+                        Ok(records) => {
+                            for record in records {
+                                eprintln!(
+                                    "[ACTIVATION-LOG {target}] {}",
+                                    String::from_utf8_lossy(&record.content)
+                                );
+                            }
+                        }
+                        Err(log_error) => eprintln!("[ACTIVATION-LOG {target}] {log_error:?}"),
+                    }
+                }
+                panic!("establish a working Fleet before generated reinstall: {error:?}");
+            });
             assert!(working.terminal);
             assert!(working.actual_conservation.is_some());
             let pool = root_pool_status_as(&pic, root, operator);

@@ -11,7 +11,8 @@ use crate::fleet_ensure::{
     model::attempt_recovery::AttemptRecoveryReviewRecord,
     ops::{EnsurePaths, capacity_import::journal::CapacityImportJournalError},
 };
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
 use sha2_host::{Digest, Sha256};
@@ -39,7 +40,7 @@ pub(in crate::fleet_ensure) fn review(
     if bytes.len() > owner::MAX_BYTES {
         return Err(CapacityImportJournalError::Integrity);
     }
-    match ic_host_fs::durable::read_optional_regular_bytes_bounded(&path, owner::MAX_BYTES)
+    match ic_host_fs::read::read_optional_file_no_follow(&path, owner::MAX_BYTES)
         .map_err(|_| CapacityImportJournalError::Integrity)?
     {
         Some(bytes) if serde_json::from_slice::<AttemptRecoveryReviewRecord>(&bytes)? != review => {
@@ -58,7 +59,8 @@ pub(in crate::fleet_ensure) fn apply(
     fleet: &str,
     approved: [u8; 32],
 ) -> Result<AttemptRecoveryReviewRecord, CapacityImportJournalError> {
-    let bytes = read_regular_bytes(&review_path(paths, approved), owner::MAX_BYTES)?;
+    let bytes = read_file_no_follow(&review_path(paths, approved), owner::MAX_BYTES)
+        .map_err(std::io::Error::from)?;
     let review: AttemptRecoveryReviewRecord = serde_json::from_slice(&bytes)?;
     let owners = review
         .owners

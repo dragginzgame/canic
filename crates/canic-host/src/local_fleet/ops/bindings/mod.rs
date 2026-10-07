@@ -1,11 +1,10 @@
 //! Materialize exact sealed Candid into the maintained selected-environment binding layout.
 
 use crate::{fleet_ensure::model::DesiredFleet, local_fleet::LocalFleetError, release_set};
+use ic_host_fs::durable;
 
 use canic_core::cdk::utils::hash::{hex_bytes, sha256_hex};
 use std::path::Path;
-
-use ic_host_fs::durable;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
     LocalFleetError::Preparation(error.to_string())
@@ -72,10 +71,11 @@ fn publish(
     crate::component_operation::policy::validate_label(role)
         .map_err(|_| LocalFleetError::Identity)?;
     release_set::validate_release_artifact_relative_path(wasm).map_err(failure)?;
-    let bytes = durable::read_regular_bytes(
+    let bytes = ic_host_fs::read::read_file_no_follow(
         &workspace.join(wasm).with_extension("did"),
         crate::frontend::ops::MAX_FRONTEND_FILE_BYTES,
-    )?;
+    )
+    .map_err(std::io::Error::from)?;
     if sha256_hex(&bytes) != hex_bytes(digest) {
         return Err(LocalFleetError::Identity);
     }

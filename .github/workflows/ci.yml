@@ -36,11 +36,10 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
-          bash scripts/dev/install-host-tools.sh
+          make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
-          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
           ACTIONLINT_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh actionlint)"
           SHELLCHECK_BIN="$(bash scripts/ci/install-pinned-ci-tool.sh shellcheck)"
           echo "ACTIONLINT_BIN=$ACTIONLINT_BIN" >> "$GITHUB_ENV"
@@ -91,7 +90,7 @@ jobs:
       - name: Install supported maintainer shell tools
         shell: bash
         run: |
-          brew install bash coreutils gnu-sed ripgrep
+          brew install bash coreutils gnu-sed
           {
             echo "$(brew --prefix bash)/bin"
             echo "$(brew --prefix coreutils)/libexec/gnubin"
@@ -106,16 +105,17 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
-          bash scripts/dev/install-host-tools.sh
+          make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
-          bash scripts/dev/install-ic-tools.sh
+          make install-rust-tools
+          echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
+          make install-ic-tools
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
           pocket_bin="$GITHUB_WORKSPACE/.tools/ic/bin/pocket-ic"
           "$pocket_bin" --version
           echo "POCKET_IC_BIN=$pocket_bin" >> "$GITHUB_ENV"
-          cargo install cargo-sort --version "$CANIC_CARGO_SORT_VERSION" --locked
       - name: Qualify isolated formatting and safe hook setup
         shell: bash
         run: bash scripts/ci/test-git-hooks.sh
@@ -162,11 +162,10 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
-          bash scripts/dev/install-host-tools.sh
+          make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-audit --version "$CANIC_CARGO_AUDIT_VERSION" --locked
-          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Check security tools
         shell: bash
         run: |
@@ -239,11 +238,12 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
-          bash scripts/dev/install-host-tools.sh
+          make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install cargo-sort --version "$CANIC_CARGO_SORT_VERSION" --locked
-          cargo install cargo-sort-derives --version "$CANIC_CARGO_SORT_DERIVES_VERSION" --locked
+          make install-rust-tools
+          echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
       - name: Check formatting tools
         shell: bash
         run: |
@@ -305,16 +305,15 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
-          bash scripts/dev/install-host-tools.sh
+          make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
           cargo install cargo-edit --version "$CANIC_CARGO_EDIT_VERSION" --locked
-          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
       - name: Install ordinary test Wasm prerequisites
         shell: bash
         run: |
           rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
-          bash scripts/dev/install-ic-tools.sh
+          make install-ic-tools
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
       - name: Check ordinary test helper tools
         shell: bash
@@ -375,17 +374,18 @@ jobs:
         shell: bash
         run: |
           source tool-versions.env
-          bash scripts/dev/install-host-tools.sh
+          make install-host-tools
           echo "$GITHUB_WORKSPACE/.tools/host/bin" >> "$GITHUB_PATH"
           export PATH="$GITHUB_WORKSPACE/.tools/host/bin:$PATH"
-          cargo install candid-extractor --version "$CANIC_CANDID_EXTRACTOR_VERSION" --locked
-          cargo install ripgrep --version "$CANIC_RIPGREP_VERSION" --locked --features pcre2
+          make install-rust-tools
+          echo "$GITHUB_WORKSPACE/.tools/rust/bin" >> "$GITHUB_PATH"
+          export PATH="$GITHUB_WORKSPACE/.tools/rust/bin:$PATH"
       - name: Install wasm target
         shell: bash
         run: |
           echo "RUSTUP_TOOLCHAIN=$CANIC_INTERNAL_TOOLCHAIN" >> "$GITHUB_ENV"
           rustup target add --toolchain "$CANIC_INTERNAL_TOOLCHAIN" wasm32-unknown-unknown
-          bash scripts/dev/install-ic-tools.sh
+          make install-ic-tools
           echo "$GITHUB_WORKSPACE/.tools/ic/bin" >> "$GITHUB_PATH"
       - name: Check PocketIC test helper tools
         run: |
@@ -407,7 +407,7 @@ jobs:
       - name: Verify and select prepared PocketIC server
         shell: bash
         run: |
-          bash scripts/dev/install-ic-tools.sh --check
+          make install-ic-tools --check
           BIN="$GITHUB_WORKSPACE/.tools/ic/bin/pocket-ic"
           echo "POCKET_IC_BIN=$BIN" >> "$GITHUB_ENV"
       - name: Check runner disk before PocketIC tests

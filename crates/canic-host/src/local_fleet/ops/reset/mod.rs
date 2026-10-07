@@ -1,13 +1,14 @@
 //! Exact-session local state discard with interruption and terminal replay records.
 
 use crate::local_fleet::{LocalFleetError, model::LocalResetRecord, ops};
+use ic_host_fs::durable;
 
 use std::{fs, path::Path};
 
-use ic_host_fs::durable;
-
 fn read(directory: &Path) -> Result<Option<LocalResetRecord>, LocalFleetError> {
-    match durable::read_regular_bytes(&directory.join("reset.json"), 4096) {
+    match ic_host_fs::read::read_file_no_follow(&directory.join("reset.json"), 4096)
+        .map_err(std::io::Error::from)
+    {
         Ok(bytes) => Ok(Some(serde_json::from_slice(&bytes)?)),
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
         Err(error) => Err(error.into()),

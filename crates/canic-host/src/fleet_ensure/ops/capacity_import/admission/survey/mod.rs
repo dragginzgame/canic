@@ -14,6 +14,8 @@ use crate::fleet_ensure::{
         capacity_import::journal::{CapacityImportJournalError, CapacityImportJournalStore},
     },
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use candid::Principal;
 use canic_core::{cdk::utils::hash::hex_bytes, ids::MAX_FLEET_CAPACITY_IMPORT_SOURCES};
@@ -21,8 +23,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::PathBuf,
 };
-
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 pub(in crate::fleet_ensure) const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
 /// Initial planning may issue at most this many status requests per exact physical ID.
@@ -61,7 +61,7 @@ impl<'a> CapacityImportSurveyStore<'a> {
             .plan
             .with_file_name("capacity-import-surveys")
             .join(format!("{}.json", hex_bytes(digest)));
-        let Some(bytes) = read_optional_regular_bytes_bounded(&path, MAXIMUM_BYTES)
+        let Some(bytes) = read_optional_file_no_follow(&path, MAXIMUM_BYTES)
             .map_err(|_| CapacityImportJournalError::Integrity)?
         else {
             return Ok(None);
@@ -132,7 +132,7 @@ impl<'a> CapacityImportSurveyStore<'a> {
             .plan
             .with_file_name(directory)
             .join(format!("{}.json", hex_bytes(request_sha256)));
-        let retained = read_optional_regular_bytes_bounded(&path, MAXIMUM_BYTES)
+        let retained = read_optional_file_no_follow(&path, MAXIMUM_BYTES)
             .map_err(|_| CapacityImportJournalError::Integrity)?;
         let record = match retained {
             Some(bytes) => serde_json::from_slice(&bytes)?,

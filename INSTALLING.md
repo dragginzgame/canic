@@ -97,13 +97,14 @@ make install-ic-tools
 ```
 
 Repository setup installs the reviewed common IC toolset under `.tools/ic/bin`
-and the pinned JSON/YAML parsers under `.tools/host/bin`. Use explicit setup and
+and the pinned jq/yq/ripgrep/cloc set under `.tools/host/bin`. The shared Cargo
+formatter/Candid set lives under `.tools/rust/bin`. Use explicit setup and
 then offline verification:
 
 ```bash
 make install-tools
 make tools-check
-export PATH="$PWD/.tools/host/bin:$PWD/.tools/ic/bin:$PATH"
+export PATH="$PWD/.tools/host/bin:$PWD/.tools/ic/bin:$PWD/.tools/rust/bin:$PATH"
 ```
 
 Make selects these paths automatically; direct shell commands need the export.
@@ -111,7 +112,7 @@ Ordinary validation never installs tools. Existing complete toolsets and failed
 installation candidates are retained. The reviewed matrix is `ci/ic-tools.tsv`;
 refresh its Shared Tooling snapshot to adopt changed pins. `make update-dev`
 synchronizes reviewed tools and reports Binaryen drift without rewriting pins.
-Rust/Cargo tools and system bootstrap packages remain separate; see
+Product Cargo tools and system bootstrap packages remain separate; see
 [local setup](docs/local-setup.md) and [IC tools](docs/ic-tools.md).
 
 Packaged CLI users still use `canic toolchain install` without a checkout.

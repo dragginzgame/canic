@@ -136,12 +136,11 @@ fn load_role_source(
             source,
         })?;
     let manifest = package_root.join("Cargo.toml");
-    let bytes =
-        ic_host_fs::durable::read_regular_bytes(&manifest, document_limit()).map_err(|source| {
-            FixtureArtifactError::Io {
-                path: manifest.clone(),
-                source,
-            }
+    let bytes = ic_host_fs::read::read_file_no_follow(&manifest, document_limit())
+        .map_err(std::io::Error::from)
+        .map_err(|source| FixtureArtifactError::Io {
+            path: manifest.clone(),
+            source,
         })?;
     let hash = sha256_hex(&bytes);
     if selected

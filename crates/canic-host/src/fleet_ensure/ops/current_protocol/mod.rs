@@ -15,6 +15,7 @@ use super::{
     EffectObservation, EffectOutcome, EffectRetry,
     canic_init::{self, CanicInitError},
 };
+use crate::MAX_ARTIFACT_READ_BYTES;
 use crate::{
     canister_protocol::{CanisterProtocolError, call_with_candid, query_with_candid},
     component_topology::{
@@ -2451,23 +2452,15 @@ fn read_qualified_artifact(
             "Store artifact escapes the workspace".to_string(),
         ));
     }
-    let bytes = ic_host_fs::durable::read_optional_regular_bytes(&path)
+    let bytes = ic_host_fs::read::read_optional_file_no_follow(&path, MAX_ARTIFACT_READ_BYTES)
         .map_err(|error| match error {
-            ic_host_fs::durable::RegularFileReadError::NotRegular => {
+            ic_host_artifacts::artifact::ArtifactError::NotRegularFile => {
                 CurrentProtocolError::Configuration(format!(
                     "Store artifact is not a regular no-follow file: {}",
                     path.display()
                 ))
             }
-            ic_host_fs::durable::RegularFileReadError::Io(source) => {
-                CurrentProtocolError::Configuration(source.to_string())
-            }
-            #[cfg(not(unix))]
-            ic_host_fs::durable::RegularFileReadError::UnsupportedPlatform => {
-                CurrentProtocolError::Configuration(
-                    "Store artifact reads are unsupported on this platform".to_string(),
-                )
-            }
+            source => CurrentProtocolError::Configuration(source.to_string()),
         })?
         .ok_or_else(|| {
             CurrentProtocolError::Configuration(format!("missing {}", path.display()))

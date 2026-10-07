@@ -21,13 +21,13 @@ use crate::{
     },
     icp::IcpCli,
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use candid::{Nat, Principal};
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes};
 use sha2_host::{Digest, Sha256};
 use std::collections::{BTreeMap, BTreeSet};
-
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 const MAXIMUM_BYTES: usize = 2 * 1024 * 1024;
 
@@ -294,7 +294,7 @@ fn retain_request(
         .plan
         .with_file_name("infrastructure-bootstrap-survey.json");
     if let Some(bytes) =
-        read_optional_regular_bytes_bounded(&path, MAXIMUM_BYTES).map_err(|_| invalid())?
+        read_optional_file_no_follow(&path, MAXIMUM_BYTES).map_err(|_| invalid())?
     {
         let record: InfrastructureBootstrapSurveyRecord = serde_json::from_slice(&bytes)?;
         if record.schema_version != 1 || record.request_sha256 != request_sha256 {

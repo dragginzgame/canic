@@ -12,6 +12,7 @@ use crate::fleet_ensure::{
         EnsurePaths, EnsureStateError, is_sha256, operation_selection, read_current, write_current,
     },
 };
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
@@ -19,8 +20,6 @@ use std::{
     fs,
     path::{Component, Path, PathBuf},
 };
-
-use ic_host_fs::durable::read_optional_regular_bytes_bounded;
 
 pub(in crate::fleet_ensure) use reset::ResetRetirement;
 
@@ -244,7 +243,7 @@ fn intent_path(paths: &EnsurePaths) -> Result<PathBuf, EnsureStateError> {
     Ok(history(paths)?.join("retirement-intent.json"))
 }
 fn read(path: &Path) -> Result<Option<Vec<u8>>, EnsureStateError> {
-    read_optional_regular_bytes_bounded(path, MAX_BYTES)
+    read_optional_file_no_follow(path, MAX_BYTES)
         .map_err(|_| EnsureStateError::Unsafe { path: path.into() })
 }
 fn sync(path: &Path) -> Result<(), EnsureStateError> {

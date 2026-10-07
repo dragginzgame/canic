@@ -7,6 +7,7 @@ use crate::{
     },
     local_fleet::{LocalFleetError, model::*, view::LocalRootInstallationView},
 };
+use ic_host_fs::durable;
 
 use candid::Principal;
 use canic_core::{cdk::utils::hash::sha256_hex, ids::CanonicalNetworkId};
@@ -14,8 +15,6 @@ use std::{
     collections::{BTreeMap, BTreeSet},
     path::Path,
 };
-
-use ic_host_fs::durable;
 
 fn failure(error: impl std::fmt::Display) -> LocalFleetError {
     LocalFleetError::Preparation(error.to_string())
@@ -85,7 +84,9 @@ pub fn begin(
     let source_sha256 = sha256_hex(&serde_json::to_vec(source)?);
     let workspace_root = workspace.canonicalize()?;
     let path = directory.join("preparation.json");
-    match durable::read_regular_bytes(&path, 4 * 1024 * 1024) {
+    match ic_host_fs::read::read_file_no_follow(&path, 4 * 1024 * 1024)
+        .map_err(std::io::Error::from)
+    {
         Ok(bytes) => {
             let retained: LocalPreparationRecord = serde_json::from_slice(&bytes)?;
             if retained.schema_version != 1
@@ -248,10 +249,11 @@ pub fn root_installations(
                 .find(|canister| canister.name == name)
                 .ok_or(LocalFleetError::Identity)?;
             let path = configured.wasm.as_ref().ok_or(LocalFleetError::Identity)?;
-            let wasm = durable::read_regular_bytes(
+            let wasm = ic_host_fs::read::read_file_no_follow(
                 &preparation.workspace_root.join(path),
                 32 * 1024 * 1024,
-            )?;
+            )
+            .map_err(std::io::Error::from)?;
             let wasm_sha256 = sha256_hex(&wasm);
             let arguments = ensure_ops::compile_arguments(&ensure_ops::CanicInitRequest {
                 desired,

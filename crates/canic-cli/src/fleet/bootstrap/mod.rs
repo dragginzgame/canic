@@ -31,11 +31,10 @@ use canic_host::{
     icp::IcpCli,
     icp_config::resolve_current_canic_icp_root,
 };
+use ic_host_fs::read::read_file_no_follow;
 
 use clap::{ArgAction, ArgMatches, Command};
 use std::{ffi::OsString, path::PathBuf};
-
-use ic_host_fs::durable::read_regular_bytes;
 
 pub(super) fn command() -> Command {
     let mut command = Command::new("bootstrap").bin_name("canic fleet bootstrap")
@@ -389,10 +388,10 @@ fn review(
         workspace,
         &PathBuf::from(required_string(matches, "declarations")),
     );
-    let declarations = String::from_utf8(read_regular_bytes(&declaration_path, 256 * 1024)?)
-        .map_err(|_| {
-            FleetCommandError::Usage("bootstrap declarations must be UTF-8 TOML".into())
-        })?;
+    let declarations = String::from_utf8(
+        read_file_no_follow(&declaration_path, 256 * 1024).map_err(std::io::Error::from)?,
+    )
+    .map_err(|_| FleetCommandError::Usage("bootstrap declarations must be UTF-8 TOML".into()))?;
     let icp = IcpCli::new(executable, Some(environment.into()))
         .with_identity(identity)
         .with_cwd(workspace);

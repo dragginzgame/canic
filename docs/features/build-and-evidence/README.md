@@ -71,6 +71,14 @@ The code-section ceiling follows the
 it is distinct from the IC's 100 MiB total-module limit. The size warning starts
 with 768 KiB of remaining code-section headroom.
 
+Host persistence and protocol documents use bounded no-follow readers from
+`ic-host-fs`: the general document envelope is 16 MiB and the artifact read
+envelope is 128 MiB. Smaller format limits still apply. These are local read
+budgets, separate from replica installation limits. Oversized or unsafe inputs
+are refused without replacing the selected file; native I/O and typed admission
+causes remain available to callers. Canic retains path confinement, artifact
+identity, publication ordering and same-operation recovery.
+
 ## Boundary
 
 Build provenance is not runtime attestation. Evidence and policy commands do

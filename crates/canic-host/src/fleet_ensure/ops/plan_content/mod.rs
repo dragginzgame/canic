@@ -10,15 +10,13 @@ mod tests;
 
 use super::{EnsurePaths, EnsureStateError};
 use crate::fleet_ensure::model::{CurrentFleetProtocolAction, EnsureAction, FleetEnsurePlan};
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::{decode_hex, hex_bytes, wasm_hash};
 use serde_json::{Map, Value};
 use std::{collections::BTreeMap, io};
-
-use ic_host_fs::durable::{
-    BoundedRegularFileReadError, RegularFileReadError, create_new_bytes_with_parents,
-    read_optional_regular_bytes_bounded,
-};
 
 type ChunkSetKey = (String, String);
 
@@ -275,20 +273,19 @@ fn read_object(
     }
     let maximum_bytes = usize::try_from(expected_size)
         .map_err(|_| EnsureStateError::StoreChunkMismatch { path: path.clone() })?;
-    let bytes = match read_optional_regular_bytes_bounded(&path, maximum_bytes) {
+    let bytes = match read_optional_file_no_follow(&path, maximum_bytes) {
         Ok(Some(bytes)) => bytes,
-        Ok(None) | Err(BoundedRegularFileReadError::Read(RegularFileReadError::NotRegular)) => {
+        Ok(None) | Err(ArtifactError::NotRegularFile) => {
             return Err(EnsureStateError::StoreChunkUnavailable { path });
         }
-        Err(BoundedRegularFileReadError::TooLarge) => {
+        Err(ArtifactError::LimitExceeded { .. }) => {
             return Err(EnsureStateError::StoreChunkMismatch { path });
         }
-        Err(BoundedRegularFileReadError::Read(RegularFileReadError::Io(source))) => {
-            return Err(EnsureStateError::Io { path, source });
-        }
-        #[cfg(not(unix))]
-        Err(BoundedRegularFileReadError::Read(RegularFileReadError::UnsupportedPlatform)) => {
-            return Err(EnsureStateError::StoreChunkUnavailable { path });
+        Err(source) => {
+            return Err(EnsureStateError::Io {
+                path,
+                source: source.into(),
+            });
         }
     };
     if validate_chunk(&bytes, expected, expected_size).is_err() {

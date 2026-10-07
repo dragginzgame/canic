@@ -11,6 +11,8 @@ use crate::fleet_ensure::{
     ops::{EnsurePaths, EnsureStateError, is_sha256, operation_selection},
     policy::validate_path_labels,
 };
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use serde_json::Value;
@@ -19,8 +21,6 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::{create_new_bytes_with_parents, read_optional_regular_bytes_bounded};
 
 const MAX_FILE_BYTES: usize = 32 * 1024 * 1024;
 const MAX_ARCHIVE_BYTES: usize = 256 * 1024 * 1024;
@@ -259,8 +259,8 @@ impl Snapshot {
                 .join(digest),
         ];
         for original in candidates {
-            if let Some(bytes) = read_optional_regular_bytes_bounded(&original, MAX_FILE_BYTES)
-                .map_err(|_| invalid())?
+            if let Some(bytes) =
+                read_optional_file_no_follow(&original, MAX_FILE_BYTES).map_err(|_| invalid())?
             {
                 // Preserve what exists. Historical references are evidence, not
                 // current artifact qualification or a reason to rebuild old Wasm.
@@ -295,7 +295,7 @@ impl Snapshot {
 }
 
 fn read(path: &Path) -> Result<Vec<u8>, EnsureStateError> {
-    read_optional_regular_bytes_bounded(path, MAX_FILE_BYTES)
+    read_optional_file_no_follow(path, MAX_FILE_BYTES)
         .map_err(|_| invalid())?
         .ok_or_else(invalid)
 }

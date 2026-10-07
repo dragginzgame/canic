@@ -7,7 +7,9 @@ trap 'rm -rf "$fixture"' EXIT
 mkdir -p "$fixture/bin" "$fixture/scripts/ci"
 cp "$ROOT/tool-versions.env" "$fixture/"
 mkdir -p "$fixture/ci" "$fixture/scripts/ci"
-cp "$ROOT/ci/ic-tools.tsv" "$fixture/ci/"
+cp "$ROOT/ci/ic-tools.tsv" "$ROOT/ci/tool-versions.env" "$fixture/ci/"
+mkdir -p "$fixture/make"
+cp "$ROOT/make/tools.mk" "$fixture/make/"
 cp "$ROOT/scripts/ci/ic-tool-pins.sh" "$fixture/scripts/ci/"
 cat >"$fixture/bin/record" <<'SH'
 #!/usr/bin/env bash

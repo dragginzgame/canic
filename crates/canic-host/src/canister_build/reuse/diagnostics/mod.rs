@@ -13,6 +13,8 @@ use crate::canister_build::{
     WorkspaceBuildContext,
     reuse::{hash_field, snapshot::BuildInputSnapshot},
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
 use serde::{Deserialize, Serialize};
@@ -22,8 +24,6 @@ use std::{
     ffi::OsString,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 pub(super) use rejection::{InputLocations, retain_rejection};
 
@@ -111,7 +111,8 @@ impl InputDiagnostics {
     }
 
     pub(super) fn explain_miss(&self, directory: &Path) -> String {
-        let previous = read_regular_bytes(&directory.join("last-input-diagnostics.json"), LIMIT)
+        let previous = read_file_no_follow(&directory.join("last-input-diagnostics.json"), LIMIT)
+            .map_err(std::io::Error::from)
             .ok()
             .and_then(|bytes| serde_json::from_slice::<Self>(&bytes).ok())
             .filter(|record| record.schema_version == 1);

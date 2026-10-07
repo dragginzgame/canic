@@ -9,12 +9,12 @@ use crate::fleet_ensure::{
     ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
     view::infrastructure_bootstrap::InfrastructureBootstrapObservation,
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use serde::Serialize;
 use sha2_host::{Digest, Sha256};
 use std::path::PathBuf;
-
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
 
 const MAXIMUM_BYTES: usize = 4 * 1024 * 1024;
 
@@ -77,7 +77,7 @@ pub(in crate::fleet_ensure) fn retain(
         return Err(InfrastructureBootstrapError::Integrity);
     }
     let destination = path(paths, plan);
-    if let Some(original) = read_optional_regular_bytes_bounded(&destination, MAXIMUM_BYTES)
+    if let Some(original) = read_optional_file_no_follow(&destination, MAXIMUM_BYTES)
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
     {
         if original != bytes {
@@ -109,7 +109,7 @@ pub(in crate::fleet_ensure) fn read_receipt(
     if plan.infrastructure_bootstrap.is_none() {
         return Ok(None);
     }
-    let Some(bytes) = read_optional_regular_bytes_bounded(&path(paths, plan), MAXIMUM_BYTES)
+    let Some(bytes) = read_optional_file_no_follow(&path(paths, plan), MAXIMUM_BYTES)
         .map_err(|_| InfrastructureBootstrapError::Integrity)?
     else {
         return Ok(None);

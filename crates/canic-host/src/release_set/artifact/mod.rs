@@ -8,12 +8,13 @@ mod representation;
 
 pub(in crate::release_set) use representation::{RepresentationError, qualify_representation};
 
+use crate::MAX_ARTIFACT_READ_BYTES;
+use ic_host_artifacts::artifact::ArtifactError;
+use ic_host_fs::read::read_optional_file_no_follow;
 use std::{
     fs, io,
     path::{Component, Path},
 };
-
-use ic_host_fs::durable::{RegularFileReadError, read_optional_regular_bytes};
 
 use canic_core::ids::ReleaseBuildId;
 
@@ -85,7 +86,7 @@ pub(in crate::release_set) fn materialize_qualified_release_artifact(
         return Err(ReleaseArtifactMaterializationError::OutsideRoot);
     }
 
-    let bytes = match read_optional_regular_bytes(path) {
+    let bytes = match read_optional_file_no_follow(path, MAX_ARTIFACT_READ_BYTES) {
         Ok(Some(bytes)) => bytes,
         Ok(None) => {
             return Err(ReleaseArtifactMaterializationError::Read(io::Error::new(
@@ -93,18 +94,11 @@ pub(in crate::release_set) fn materialize_qualified_release_artifact(
                 "artifact is missing",
             )));
         }
-        Err(RegularFileReadError::NotRegular) => {
+        Err(ArtifactError::NotRegularFile) => {
             return Err(ReleaseArtifactMaterializationError::UnsafeFile);
         }
-        Err(RegularFileReadError::Io(source)) => {
-            return Err(ReleaseArtifactMaterializationError::Read(source));
-        }
-        #[cfg(not(unix))]
-        Err(RegularFileReadError::UnsupportedPlatform) => {
-            return Err(ReleaseArtifactMaterializationError::Read(io::Error::new(
-                io::ErrorKind::Unsupported,
-                "regular no-follow artifact reads are unsupported",
-            )));
+        Err(source) => {
+            return Err(ReleaseArtifactMaterializationError::Read(source.into()));
         }
     };
 

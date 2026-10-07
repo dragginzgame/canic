@@ -7,6 +7,10 @@ use std::{
     time::Duration,
 };
 
+// Bound host document/artifact allocation independently of semantic format limits.
+const MAX_DOCUMENT_READ_BYTES: usize = 16 * 1024 * 1024;
+const MAX_ARTIFACT_READ_BYTES: usize = 128 * 1024 * 1024;
+
 const EXECUTABLE_BUSY_RETRY_ATTEMPTS: usize = 8;
 const EXECUTABLE_BUSY_RETRY_DELAY: Duration = Duration::from_millis(10);
 

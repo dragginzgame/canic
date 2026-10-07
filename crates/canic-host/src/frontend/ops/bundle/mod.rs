@@ -8,6 +8,8 @@ use crate::frontend::{
     ops::{MAX_FRONTEND_BUNDLE_BYTES, MAX_FRONTEND_FILE_BYTES},
     view::FrontendBundleView,
 };
+use ic_host_fs::durable::create_new_bytes_with_parents;
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::cdk::utils::hash::sha256_hex;
 use std::{
@@ -15,8 +17,6 @@ use std::{
     fs,
     path::{Component, Path},
 };
-
-use ic_host_fs::durable::{create_new_bytes_with_parents, read_regular_bytes};
 
 /// Digest all typed browser data and file identities, excluding the self digest.
 pub fn manifest_digest(manifest: &FrontendManifestRecord) -> Result<String, FrontendError> {
@@ -62,7 +62,9 @@ fn retain_file(path: &Path, bytes: &[u8]) -> Result<(), FrontendError> {
     match create_new_bytes_with_parents(path, bytes) {
         Ok(()) => Ok(()),
         Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            if read_regular_bytes(path, MAX_FRONTEND_FILE_BYTES)? != bytes {
+            if read_file_no_follow(path, MAX_FRONTEND_FILE_BYTES).map_err(std::io::Error::from)?
+                != bytes
+            {
                 return Err(FrontendError::Integrity);
             }
             Ok(())
@@ -136,10 +138,13 @@ pub fn verify_bundle(
     directory: &Path,
     expected_digest: &str,
 ) -> Result<FrontendManifestRecord, FrontendError> {
-    let manifest: FrontendManifestRecord = serde_json::from_slice(&read_regular_bytes(
-        &safe_file(directory, "canic-frontend.json")?,
-        MAX_FRONTEND_FILE_BYTES,
-    )?)?;
+    let manifest: FrontendManifestRecord = serde_json::from_slice(
+        &read_file_no_follow(
+            &safe_file(directory, "canic-frontend.json")?,
+            MAX_FRONTEND_FILE_BYTES,
+        )
+        .map_err(std::io::Error::from)?,
+    )?;
     if manifest.schema_version != 1 {
         return Err(FrontendError::Schema);
     }
@@ -159,7 +164,8 @@ pub fn verify_bundle(
             return Err(FrontendError::Integrity);
         }
         let bytes =
-            read_regular_bytes(&safe_file(directory, &file.path)?, MAX_FRONTEND_FILE_BYTES)?;
+            read_file_no_follow(&safe_file(directory, &file.path)?, MAX_FRONTEND_FILE_BYTES)
+                .map_err(std::io::Error::from)?;
         total = total.saturating_add(bytes.len());
         if total > MAX_FRONTEND_BUNDLE_BYTES {
             return Err(FrontendError::Bound("bundle bytes"));

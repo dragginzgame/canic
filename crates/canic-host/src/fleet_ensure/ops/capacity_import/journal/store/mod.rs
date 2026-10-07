@@ -20,14 +20,14 @@ use crate::fleet_ensure::{
         lock_capacity_import_operation,
     },
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 
 use std::{
     fs::File,
     io,
     path::{Path, PathBuf},
 };
-
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 
 const MAXIMUM_JOURNAL_BYTES: usize = 8 * 1024 * 1024;
 
@@ -139,8 +139,11 @@ impl CapacityImportJournalStore {
                         "{}.json",
                         canic_core::cdk::utils::hash::hex_bytes(digest)
                     ));
-                let bytes = read_regular_bytes(&self.path, MAXIMUM_JOURNAL_BYTES)?;
-                match read_regular_bytes(&archive, MAXIMUM_JOURNAL_BYTES) {
+                let bytes = read_file_no_follow(&self.path, MAXIMUM_JOURNAL_BYTES)
+                    .map_err(std::io::Error::from)?;
+                match read_file_no_follow(&archive, MAXIMUM_JOURNAL_BYTES)
+                    .map_err(std::io::Error::from)
+                {
                     Ok(retained) if retained != bytes => {
                         return Err(CapacityImportJournalError::Conflict);
                     }
@@ -346,7 +349,8 @@ pub(in crate::fleet_ensure::ops) fn require_no_approved_import(
 }
 
 fn read_at(path: &Path) -> Result<Option<CapacityImportJournalRecord>, CapacityImportJournalError> {
-    let bytes = match read_regular_bytes(path, MAXIMUM_JOURNAL_BYTES) {
+    let bytes = match read_file_no_follow(path, MAXIMUM_JOURNAL_BYTES).map_err(std::io::Error::from)
+    {
         Ok(bytes) => bytes,
         Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
         Err(error) => return Err(error.into()),

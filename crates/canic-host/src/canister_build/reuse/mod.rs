@@ -22,6 +22,8 @@ use crate::{
         load_persisted_current_release_set_manifest,
     },
 };
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_file_no_follow;
 
 use canic_core::{cdk::utils::hash::hex_bytes, ids::ReleaseBuildId};
 use serde::{Deserialize, Serialize};
@@ -36,7 +38,6 @@ use std::{
     time::Duration,
 };
 
-use ic_host_fs::durable::{read_regular_bytes, write_bytes};
 use thiserror::Error;
 
 pub use lock::{
@@ -203,7 +204,9 @@ impl CompleteBuildReuse {
     /// Return a hit only after checking every recorded output and all release manifest bindings.
     pub fn load(&self) -> Result<Option<ReusedCompleteBuild>, BuildReuseError> {
         self.lock.phase(BuildLockPhase::VerifyingOutputs);
-        let bytes = match read_regular_bytes(&self.record_path, RECORD_LIMIT) {
+        let bytes = match read_file_no_follow(&self.record_path, RECORD_LIMIT)
+            .map_err(std::io::Error::from)
+        {
             Ok(bytes) => bytes,
             Err(error) if error.kind() == io::ErrorKind::NotFound => return Ok(None),
             Err(error) => return Err(error.into()),

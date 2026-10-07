@@ -12,7 +12,8 @@ use crate::fleet_ensure::{
     },
     ops::{EnsurePaths, infrastructure_bootstrap::InfrastructureBootstrapError},
 };
-use ic_host_fs::durable::{read_optional_regular_bytes_bounded, write_bytes};
+use ic_host_fs::durable::write_bytes;
+use ic_host_fs::read::read_optional_file_no_follow;
 
 use canic_core::cdk::utils::hash::hex_bytes;
 
@@ -38,7 +39,7 @@ fn read(
     source_sha256: [u8; 32],
 ) -> Result<Option<InfrastructureBootstrapInspectionRecord>, InfrastructureBootstrapError> {
     let Some(bytes) =
-        read_optional_regular_bytes_bounded(&record_path(paths, source_sha256), MAXIMUM_BYTES)
+        read_optional_file_no_follow(&record_path(paths, source_sha256), MAXIMUM_BYTES)
             .map_err(|_| InfrastructureBootstrapError::Integrity)?
     else {
         return Ok(None);
