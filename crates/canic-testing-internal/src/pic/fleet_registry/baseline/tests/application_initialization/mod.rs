@@ -17,7 +17,8 @@ enum Command {
 )]
 pub(super) fn production_initialization_recovers_exact_target_bytes() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let config_path =
         workspace.join("canisters/test/managed_lifecycle_probe/canic.initialization.toml");
     let profile = crate::pic::artifacts::CanicWasmBuildProfile::Fast;

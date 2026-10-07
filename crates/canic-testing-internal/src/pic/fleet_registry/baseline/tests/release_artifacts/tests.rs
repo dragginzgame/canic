@@ -7,7 +7,8 @@ use std::time::SystemTime;
 #[test]
 #[ignore = "focused qualification resolves the real fixture Cargo graphs"]
 pub fn batched_fixture_role_evidence_matches_isolated_validation() {
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let path = workspace.join("apps/test/test-configs/generated-mixed-topology.toml");
     let snapshot = AppConfigSnapshot::load(&path).unwrap();
     let roles = snapshot
@@ -71,7 +72,8 @@ pub fn batched_fixture_role_evidence_matches_isolated_validation() {
 
 #[test]
 pub fn journey_edits_reuse_artifacts_but_build_helper_edits_invalidate() {
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let root = std::env::temp_dir().join(format!(
         "canic-build-helper-cache-{}-{}",
         std::process::id(),

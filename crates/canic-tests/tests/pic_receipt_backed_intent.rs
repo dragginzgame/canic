@@ -619,4 +619,5 @@ fn build_canisters(workspace_root: &Path) -> &'static InternalTestWasms {
 
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo")
 }

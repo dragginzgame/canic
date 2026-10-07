@@ -920,6 +920,7 @@ const fn test_subnet(byte: u8) -> SubnetId {
 
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo")
 }
 
 /// Exact read transport used by Coordinator fixtures after endpoint separation.

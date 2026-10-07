@@ -2024,7 +2024,8 @@ exec icp "$@"
     fn persistent_local_fleet_converges_two_roots_through_public_host() {
         use canic_host::local_fleet::{model::LocalFleetConfig, workflow::LocalFleetSession};
         let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = workspace.join("canisters/audit/root_probe/local_fleet.toml");
         let config = AppConfigSnapshot::load(&config_path).unwrap();
         let deployment = config
@@ -2536,7 +2537,8 @@ exec icp "$@"
     #[ignore = "focused build qualification requires installed Wasm and artifact tools"]
     fn pipelined_release_artifacts_match_serial_builds() {
         let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let adapter_root = literal_zero_adapter_root(&workspace);
         std::fs::create_dir_all(&adapter_root).unwrap();
         let _cleanup = TestDirectoryCleanup(adapter_root.clone());
@@ -2625,7 +2627,8 @@ exec icp "$@"
 
     #[test]
     fn reinstall_fixture_release_cache_binds_distinct_repeatable_identities() {
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let root = std::env::temp_dir().join(format!(
             "canic-reinstall-cache-{}-{}",
             std::process::id(),
@@ -2719,7 +2722,8 @@ exec icp "$@"
 
     #[test]
     fn generated_release_cache_restores_fixture_authority_without_source_rebuild() {
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let root = std::env::temp_dir().join(format!(
             "canic-fixture-authority-cache-{}-{}",
             std::process::id(),
@@ -2967,7 +2971,8 @@ exec icp "$@"
     )]
     fn historical_pool_assets_upgrade_refresh_and_claim_without_losing_cycles() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
         let root_wasm = build_five_trillion_component_root_wasm();
         let coordinator_wasm = build_test_coordinator_wasm();
@@ -3180,7 +3185,8 @@ exec icp "$@"
     )]
     fn fresh_five_component_acceptance_seeds_the_root_owned_pool_before_effects() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = five_component_root_canister_config_path(&workspace_root);
         let (root_wasm, cycles_ledger_wasm) = build_mainnet_five_component_refill_wasms();
         let coordinator_wasm = build_test_coordinator_wasm();
@@ -4345,7 +4351,8 @@ exec icp "$@"
     )]
     fn prepared_root_initial_shard_bootstrap_reaches_terminal_component_membership() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         root_membership::assert_candid_contract(&operator_cli_root_candid(&workspace_root));
         let config_path = initial_shard_root_canister_config_path(&workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load initial-Shard config");
@@ -5076,7 +5083,8 @@ exec icp "$@"
     #[test]
     fn root_restart_reconciles_held_store_grant_and_revocation_replies() {
         let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = initial_shard_root_canister_config_path(&workspace);
         let config = AppConfigSnapshot::load(&config_path).unwrap();
         let root_wasm = build_initial_shard_root_wasm();
@@ -5301,7 +5309,8 @@ exec icp "$@"
     #[test]
     fn pending_fixture_automatically_funds_within_configured_allowance() {
         let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = workspace.join("apps/test/test-configs/fixture-automatic-funding.toml");
         let config = AppConfigSnapshot::load(&config_path).unwrap();
         let root_wasm = crate::pic::artifacts::build_generated_fleet_wasm(
@@ -5530,7 +5539,8 @@ exec icp "$@"
     #[test]
     fn fixture_bearing_root_retirement_conserves_assets_and_cycles() {
         let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = initial_shard_root_canister_config_path(&workspace);
         let pic = build_pic();
         let coordinator = pic.create_canister();
@@ -5606,7 +5616,8 @@ exec icp "$@"
     )]
     fn current_store_bootstraps_application_catalog_and_replays_zero_effects() {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = five_component_root_canister_config_path(&workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load five-Component config");
         let configuration = config
@@ -6019,7 +6030,8 @@ exec icp "$@"
     )]
     fn assert_five_component_activation(fault: ActivationFailureFixture) {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = five_component_root_canister_config_path(&workspace_root);
         let config = AppConfigSnapshot::load(&config_path).expect("load five-Component config");
         let configuration = config
@@ -6460,7 +6472,8 @@ exec icp "$@"
         ready: u32,
     ) {
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = workspace_root.join(config_relative);
         let workload = components + descendants;
         let pool_count = workload + ready;
@@ -6695,6 +6708,7 @@ exec icp "$@"
     #[cfg(test)]
     fn frontend_consumer_script() -> PathBuf {
         workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo")
             .join("crates/canic-host/examples/frontend-consumer/qualify.mjs")
     }
 
@@ -6798,6 +6812,7 @@ exec icp "$@"
         std::fs::create_dir_all(root.join("apps/frontend")).unwrap();
         std::fs::copy(
             workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                .expect("discover Canic test workspace through Cargo")
                 .join("canisters/audit/root_probe/frontend.toml"),
             root.join("apps/frontend/canic.toml"),
         )
@@ -7167,7 +7182,8 @@ exec icp "$@"
     ) -> canic_host::protocol_binding::RegistryProtocolBinding {
         let wasm_path = directory.join(format!("{role}.wasm"));
         std::fs::write(&wasm_path, wasm).unwrap();
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let candid = if role == "root" {
             operator_cli_root_candid(&workspace)
         } else {
@@ -7650,7 +7666,10 @@ esac
         std::fs::write(directory.join("icp.yaml"), "canisters: []\n").unwrap();
         std::fs::create_dir_all(directory.join("apps/test")).unwrap();
         std::fs::copy(
-            root_canister_config_path(&workspace_root_for(env!("CARGO_MANIFEST_DIR"))),
+            root_canister_config_path(
+                &workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                    .expect("discover Canic test workspace through Cargo"),
+            ),
             directory.join("apps/test/canic.toml"),
         )
         .unwrap();
@@ -8044,7 +8063,8 @@ esac
         };
         let journey_started_at = Instant::now();
         let _unit_test_serial = crate::pic::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = workspace_root.join(match (funding, initial_workload_count) {
             (FundingJourney::CompletedReset, completed_reset::INCIDENT_WORKLOADS) => {
                 "canisters/audit/root_probe/import-estate.toml"
@@ -9702,7 +9722,8 @@ esac
 
     #[cfg(test)]
     fn selected_reinstall_artifacts(input: &ReinstallJourney<'_>) -> LiteralZeroReleaseArtifacts {
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config = AppConfigSnapshot::load(input.config).unwrap();
         let configuration = config
             .model()
@@ -9924,7 +9945,8 @@ esac
             )
             .expect("fund the retained Root Ledger account");
         transfer.expect("fixture Ledger funding");
-        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config = AppConfigSnapshot::load(input.config).unwrap();
         let configuration = config
             .model()
@@ -11239,7 +11261,8 @@ exec '{}' "$@"
         // sealed artifacts. Copying only the TOML loses those paths at terminal
         // protocol validation, after the paid deployment has already completed.
         let source_directory = root.join("app-source");
-        let source_workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let source_workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         #[cfg(unix)]
         if source_directory.symlink_metadata().is_ok() {
             assert_eq!(
@@ -13685,7 +13708,8 @@ cycles = "80T"
         let store_fixture = build_root_store_fixture();
         let pic = build_pic();
         let created_assets = std::cell::RefCell::new(Vec::new());
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let config_path = root_canister_config_path(&workspace_root);
         let fixture = install_bootstrapped_root_with_config_and_pool_setup(
             &pic,
@@ -17392,7 +17416,8 @@ cycles = "80T"
     }
 
     fn build_test_coordinator_wasm() -> Vec<u8> {
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         build_canonical_fleet_coordinator_wasm(&workspace_root)
     }
 
@@ -17526,7 +17551,8 @@ cycles = "80T"
     fn build_test_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
         static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
         WASMS.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                .expect("discover Canic test workspace through Cargo");
             let config_path = root_canister_config_path(&workspace_root);
             build_component_fixture_wasms(
                 &workspace_root,
@@ -17541,7 +17567,8 @@ cycles = "80T"
     fn build_five_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
         static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
         WASMS.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                .expect("discover Canic test workspace through Cargo");
             let config_path = five_component_root_canister_config_path(&workspace_root);
             build_component_fixture_wasms(
                 &workspace_root,
@@ -17556,7 +17583,8 @@ cycles = "80T"
     fn build_initial_shard_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
         static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
         WASMS.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                .expect("discover Canic test workspace through Cargo");
             let config_path = initial_shard_root_canister_config_path(&workspace_root);
             build_component_fixture_wasms(
                 &workspace_root,
@@ -17578,7 +17606,8 @@ cycles = "80T"
     fn build_five_trillion_component_wasms() -> &'static BTreeMap<CanisterRole, Vec<u8>> {
         static WASMS: OnceLock<BTreeMap<CanisterRole, Vec<u8>>> = OnceLock::new();
         WASMS.get_or_init(|| {
-            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+            let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+                .expect("discover Canic test workspace through Cargo");
             let config_path = five_trillion_component_root_canister_config_path(&workspace_root);
             build_component_fixture_wasms(
                 &workspace_root,

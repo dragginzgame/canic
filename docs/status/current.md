@@ -1,5 +1,28 @@
 # Current handoff — 2026-10-07
 
+The six reported Clippy E0308 errors are repaired under
+[#450](https://github.com/dragginzgame/canic/issues/450). Selected IC Testkit 0.21.0
+returns a fallible Cargo-discovered workspace root. All affected callers in
+Internal Testing and Canic Tests now explicitly require successful discovery,
+including governed/test-only cases missed by ordinary library compilation.
+No path fallback, compatibility wrapper or dependency change was added.
+
+Warning-denied Clippy passes for both affected packages with all targets and all
+features, including governed case compilation. Offline Cargo discovery resolves
+both packages to the Canic root; scoped rustfmt and diff hygiene pass. This is
+compile/lint evidence, not execution of PocketIC journeys or broad validation.
+Logs remain under `target/review-validation/testkit-workspace-result-20261007/`.
+Fixture propagation and this handoff remain uncommitted on maintainer-owned base
+`900ef517695a14423764910e22ae7c22af4a41a3`. Routine fixture-only changes add no
+changelog entry. Manifest SHA-256 remains
+`0113b7c6deb72aea98f80dabbe8d244b46b19db894f352b5076969cdeb5c1962`;
+lock SHA-256 remains
+`8f44021d2c12aa741bb952d663f605bd6ef3093c7786364106b770a2cef9cdd5`.
+No Git commit, version, release or publication ran. Whole-batch push/publication
+readiness remains subject to the recorded managed and minor-boundary findings.
+
+## Earlier nested-Make fixture qualification — 2026-10-07
+
 The maintainer's nested release-integrity failure is repaired under
 [#450](https://github.com/dragginzgame/canic/issues/450). The new preflight fixture
 inherited GNU Make release assignments, which overrode its private version and

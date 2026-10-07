@@ -156,7 +156,8 @@ placement.minimum_distinct_roots = 2
     #[test]
     fn coordinator_commits_joining_roots_and_replays_original_receipts() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
         let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
         let coordinator = pic.create_canister();
@@ -250,7 +251,8 @@ placement.minimum_distinct_roots = 2
     #[test]
     fn standalone_coordinator_prepares_from_its_durable_compiled_configuration() {
         let _unit_test_serial = super::super::acquire_pic_unit_test_serial_guard();
-        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+        let workspace_root = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+            .expect("discover Canic test workspace through Cargo");
         let wasm = build_canonical_fleet_coordinator_wasm(&workspace_root);
         let pic = start_pocket_ic(PocketIcBuilder::new().with_application_subnet());
         let coordinator = pic.create_canister();

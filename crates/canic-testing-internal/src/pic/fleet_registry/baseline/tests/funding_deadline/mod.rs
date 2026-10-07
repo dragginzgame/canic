@@ -30,7 +30,8 @@ enum Response {
 )]
 pub(super) fn child_grant_refreshes_root_funding_deadline_without_repeating_credit() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();

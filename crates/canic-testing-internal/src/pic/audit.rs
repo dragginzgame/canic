@@ -90,4 +90,5 @@ fn build_probe_wasm(
 
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo")
 }

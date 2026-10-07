@@ -147,7 +147,8 @@ fn cfg_classification_only_excludes_impossible_non_test_branches() {
 
 #[test]
 fn real_host_policy_tests_are_outside_the_fixture_producer() {
-    let workspace = ic_testkit::artifacts::workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = ic_testkit::artifacts::workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let host = workspace.join("crates/canic-host");
     let excluded = standalone_test_sources(&host).unwrap();
     assert!(excluded.contains(&host.join("src/fleet_ensure/policy/tests.rs")));

@@ -16,7 +16,8 @@ const GRANT: u128 = 1_000_000_000_000;
 #[test]
 pub(super) fn sibling_topups_retain_distinct_receipts_after_both_replies_are_lost() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let config_path = workspace.join("apps/test/test-configs/fixture-sibling-funding.toml");
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();

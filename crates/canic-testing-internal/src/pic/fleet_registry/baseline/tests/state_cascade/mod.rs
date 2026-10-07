@@ -60,7 +60,8 @@ enum StoreAdminCommand {
 #[test]
 pub(super) fn live_state_cascade_preserves_partial_outcomes_and_retry() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();

@@ -37,7 +37,8 @@ use std::sync::{Arc, Mutex};
 pub(in crate::pic::fleet_registry::baseline::tests) fn host_import_transport_recovers_signed_handoff_and_root_progress()
  {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let directory = literal_zero_adapter_root(&workspace).join("capacity-import-transport");
     let _cleanup = TestDirectoryCleanup(directory.clone());
     let (wrapper, operator, _) = prepare_isolated_icp(&directory);

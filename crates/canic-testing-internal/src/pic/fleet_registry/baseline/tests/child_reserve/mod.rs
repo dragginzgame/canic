@@ -21,7 +21,8 @@ enum Response {
 #[test]
 pub(super) fn initial_child_failure_reaches_coordinator_and_recovers_same_claim() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let mut pic = build_management_pic();
@@ -124,7 +125,8 @@ fn assert_host_origin(
     plan: &CompiledCurrentComponentProvisioning,
     expected: &canic::dto::component_provisioning::ProvisioningFailureOrigin,
 ) {
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let directory = literal_zero_adapter_root(&workspace).join("child-origin");
     let _cleanup = TestDirectoryCleanup(directory.clone());
     let (wrapper, operator, _) = prepare_isolated_icp(&directory);
@@ -245,7 +247,8 @@ fn provisioning_status(
 #[test]
 pub(super) fn low_native_reserve_retains_child_failure_and_recovers_same_claim() {
     let _serial = crate::pic::acquire_pic_unit_test_serial_guard();
-    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"));
+    let workspace = workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo");
     let config_path = initial_shard_root_canister_config_path(&workspace);
     let config = AppConfigSnapshot::load(&config_path).unwrap();
     let pic = build_pic();

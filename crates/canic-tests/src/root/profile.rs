@@ -51,6 +51,7 @@ impl RootSetupProfile {
 // Return the shared repo root for root-harness artifact and config discovery.
 fn workspace_root() -> PathBuf {
     workspace_root_for(env!("CARGO_MANIFEST_DIR"))
+        .expect("discover Canic test workspace through Cargo")
 }
 
 fn profile_build_config_path(profile: RootSetupProfile, workspace_root: &Path) -> PathBuf {
