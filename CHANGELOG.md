@@ -91,8 +91,8 @@ Detailed notes: [docs/changelog/0.110.md](docs/changelog/0.110.md)
   discovery, compiled receiver permissions and publication-bound application
   startup. It also adopts ic-memory’s checked allocation-slot API and ic-timers’
   policy-specific callback results, and aligns dedicated and embedded blob consumers
-  with published Blob 0.17.1 on the current Memory/Timers/Metrics runtime, retaining
-  durable target-bound production initialization
+  with published Blob 0.17.1 on the current Memory/Timers/Metrics runtime and its
+  documented pinning exception, retaining durable target-bound production initialization
   ([#444](https://github.com/dragginzgame/canic/issues/444)).
 
 - Use published `ic-metrics` arithmetic and the existing CDK call-context reader,

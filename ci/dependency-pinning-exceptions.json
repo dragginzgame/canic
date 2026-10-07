@@ -19,8 +19,8 @@
     "rule": "cargo-exact",
     "file": "integrations/blob-service/Cargo.toml",
     "subject": "ic-blob-storage",
-    "value": "=0.15.2",
-    "reason": "The independent managed blob adapter selects published service 0.15.2 and the single Memory 0.28 runtime; focused Canic composition evidence owns this exact selection.",
+    "value": "=0.17.1",
+    "reason": "Retain the qualified managed Blob 0.17.1 lifecycle and service protocol boundary with the single Memory 0.31.1 runtime; changing this exact selection requires renewed managed composition qualification.",
     "evidence": "docs/features/blob-storage/README.md"
   },
   {

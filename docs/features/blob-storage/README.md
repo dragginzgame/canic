@@ -38,6 +38,11 @@ under `[workspace.dependencies]`. Its package inherits that declaration with
 `ic-blob-storage.workspace = true`. The two consumer examples depend on the
 adapter and resolve that same pin through their own lockfiles.
 
+The exact requirement retains the qualified service protocol and lifecycle
+composition with the single Memory runtime. Adopting another service release
+requires renewed managed composition qualification and updating the matching
+dependency-pinning exception.
+
 `canic.toml` configures Apps, roles, topology and runtime policy; it does not select
 Rust crate versions. The adapter is deliberately outside Canic's main Cargo
 workspace, so it cannot inherit that workspace's dependencies. Adding an unused

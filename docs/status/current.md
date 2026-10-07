@@ -3,8 +3,9 @@
 Current work qualifies the Blob/Memory integration requested under
 [#444](https://github.com/dragginzgame/canic/issues/444) and
 [#459](https://github.com/dragginzgame/canic/issues/459). Earlier Host/Backup
-cleanup and fixture work remain intact. Changes remain uncommitted on maintainer-owned
-`4bee0f8f69c80825e41d6100bde7575c5002980d`. Workspace packages remain `0.110.52`;
+cleanup and fixture work remain intact. The maintainer committed that integration at
+`aec62712f`; the subsequent dependency-pinning metadata repair remains uncommitted.
+Workspace packages remain `0.110.52`;
 the existing `0.110.53` changelog draft is extended rather than allocating another
 patch. Earlier Backup adoption, fixture refresh and incoming dependency changes
 are preserved. This handoff describes evidence; GitHub issues own follow-up work.
@@ -46,6 +47,12 @@ runtime identity across all eight application/infrastructure graphs. Dedicated
 and embedded PocketIC proofs pass complete service Candid parity, installation,
 caller/tenant refusals, lost mutation-response reconciliation, aggregate metrics,
 same-release restoration and repeated current-instance recovery.
+
+The reported dependency-pins failure came from the exception still naming Blob
+0.15.2 after the adapter adopted 0.17.1. The matching exact-selector exception and
+its current lifecycle/protocol rationale are repaired; `make dependency-pins-gate`
+passes with Cargo inheritance checks. Manifests, selected versions and all
+lockfiles remain unchanged. This focused gate is not a new broad validation receipt.
 
 The exact production Root initializer case passes in 192.98s (328s governed
 invocation). It covers held allocation, exact 16,384-byte target binding,
