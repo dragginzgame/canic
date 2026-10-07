@@ -1,5 +1,29 @@
 # Current handoff — 2026-10-07
 
+The maintainer's nested release-integrity failure is repaired under
+[#450](https://github.com/dragginzgame/canic/issues/450). The new preflight fixture
+inherited GNU Make release assignments, which overrode its private version and
+caused correct source admission to refuse before draft/Cargo events. It now clears
+the parent Make control variables before private invocations. Its owning gate
+deliberately supplies conflicting release values to retain this regression.
+
+The complete focused release-integrity gate passes with inherited
+`RELEASE_PREVIOUS=0.110.52`, `RELEASE_KIND=patch`, `RELEASE_VERSION=0.110.53` and
+`CARGO_NET_OFFLINE=true`. Separate conflicting-value and dry-run/injected-Makefile
+checks, scoped ShellCheck, Bash syntax and diff hygiene pass. Logs remain under
+`target/review-validation/preflight-make-context-20261007/`; the original failed
+fixture is preserved. Only the fixture, its gate invocation and this handoff
+change, uncommitted on maintainer-owned base
+`6a4020a72002c857614d7198877df4c17c628a55`. Routine fixture-only work adds no
+changelog entry. Production cache preparation and caller offline policy are
+unchanged; no broad validation, actual release, Git commit or publication ran.
+This repair does not establish whole-batch push/publication readiness under the
+existing managed-alignment and minor-boundary findings below. Earlier Host
+qualification remains bound to its recorded graph, rather than the newer graph
+committed by the maintainer.
+
+## Earlier bounded-capture qualification — 2026-10-07
+
 The release preflight cache defect is implemented and closed in
 [#486](https://github.com/dragginzgame/canic/issues/486). The adapter prepares the
 selected cache with `cargo fetch --locked` after source/draft/tool admission,

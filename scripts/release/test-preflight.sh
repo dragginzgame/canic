@@ -1,6 +1,9 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+# Private Make invocations must not inherit the caller's release arguments or injected files.
+unset MAKEFLAGS MFLAGS MAKEOVERRIDES GNUMAKEFLAGS MAKEFILES
+
 # Exercise the actual Make/adapter boundary with private Cargo-cache and Git substitutes.
 root="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 fixture="$(mktemp -d "${TMPDIR:-/tmp}/canic-release-preflight.XXXXXX")"
